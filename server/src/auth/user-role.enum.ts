@@ -1,0 +1,20 @@
+/**
+ * Enum for all allowed user roles in the system.
+ */
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  CHEF_EQUIPE = 'CHEF_EQUIPE',
+  GESTIONNAIRE = 'GESTIONNAIRE',
+  CUSTOMER_SERVICE = 'CUSTOMER_SERVICE',
+  FINANCE = 'FINANCE',
+}
+
+/**
+ * Validate if a given role is a valid UserRole.
+ * Throws an error if not valid.
+ */
+export function assertValidRole(role: string): asserts role is UserRole {
+  if (!Object.values(UserRole).includes(role as UserRole)) {
+    throw new Error(`Invalid role: ${role}`);
+  }
+}

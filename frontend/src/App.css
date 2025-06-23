@@ -1,0 +1,393 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+/* Dashboard horizontal scroll slider for modules */
+.dashboard-modules-scroll {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  gap: 1rem;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #1976d2 #e0e0e0;
+}
+.dashboard-modules-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.dashboard-modules-scroll::-webkit-scrollbar-thumb {
+  background: #1976d2;
+  border-radius: 4px;
+}
+.dashboard-modules-scroll::-webkit-scrollbar-track {
+  background: #e0e0e0;
+  border-radius: 4px;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+
+
+/**/
+.contracts-page {
+  max-width: 1200px; /* Increased from 1000px */
+  margin: 60px auto; /* Increased top margin */
+  background: #fff;
+  border-radius: 24px; /* More rounded corners */
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1); /* More pronounced shadow */
+  padding: 48px 40px; /* More padding */
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; /* Modern font stack */
+}
+
+.contracts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px; /* Increased spacing */
+}
+
+.contracts-title {
+  font-size: 2.5rem; /* Larger title */
+  font-weight: 800; /* Bolder font */
+  color: #1976d2;
+  letter-spacing: -0.5px; /* Slightly tighter letter spacing */
+  text-shadow: 0 2px 4px rgba(25, 118, 210, 0.1); /* Subtle text shadow */
+}
+
+.contracts-add-btn {
+  background: linear-gradient(90deg, #1976d2 60%, #42a5f5 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px; /* More rounded */
+  padding: 12px 28px; /* Larger button */
+  font-size: 1.1rem; /* Larger text */
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.2); /* More pronounced shadow */
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother transition */
+}
+
+.contracts-add-btn:hover {
+  background: linear-gradient(90deg, #1565c0 60%, #1976d2 100%);
+  transform: translateY(-2px); /* Lift effect */
+  box-shadow: 0 6px 16px rgba(25, 118, 210, 0.3); /* Enhanced shadow on hover */
+}
+
+.contracts-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px; /* More spacing between elements */
+  background: #f7f9fc;
+  padding: 20px 24px; /* More padding */
+  border-radius: 12px; /* More rounded */
+  margin-bottom: 32px; /* More spacing below */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* Slightly stronger shadow */
+  border: 1px solid rgba(0,0,0,0.05); /* Subtle border */
+}
+
+.contracts-filter-bar input,
+.contracts-filter-bar select {
+  border: 1.5px solid #d1d5db;
+  border-radius: 0.8rem; /* Slightly more rounded */
+  padding: 0.8rem 1.2rem; /* More padding */
+  font-size: 1.05rem; /* Slightly larger font */
+  background: #f8fafc;
+  color: #334155;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother transition */
+  outline: none;
+  min-width: 160px; /* Wider inputs */
+}
+
+.contracts-filter-bar input:focus,
+.contracts-filter-bar select:focus {
+  border: 1.5px solid #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.2); /* More pronounced focus */
+  background: #fff;
+  transform: scale(1.01); /* Subtle zoom effect */
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.25); /* Slightly darker backdrop */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px); /* Blur effect for modern browsers */
+}
+
+.contract-modal-form {
+  background: #f8fafc;
+  padding: 36px 32px 28px; /* More padding */
+  border-radius: 20px; /* More rounded */
+  width: 100%;
+  max-width: 480px; /* Slightly wider */
+  box-shadow: 0 12px 40px rgba(31, 38, 135, 0.25); /* More pronounced shadow */
+  position: relative;
+  border: 1px solid rgba(255,255,255,0.3); /* Subtle border */
+  transform: scale(1.02); /* Slightly larger */
+  transition: all 0.3s ease-out; /* Smooth appearance */
+}
+
+@media (max-width: 768px) { /* Updated breakpoint */
+  .contracts-page {
+    margin: 40px auto;
+    padding: 36px 28px;
+    max-width: 95vw;
+  }
+  
+  .contracts-title {
+    font-size: 2rem;
+  }
+  
+  .contract-modal-form {
+    max-width: 90vw;
+    padding: 28px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .contracts-filter-bar {
+    flex-direction: column; /* Stack filter elements on small screens */
+    align-items: stretch;
+  }
+  
+  .contracts-filter-bar input,
+  .contracts-filter-bar select {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+
+
+
+
+/* aanlycts css */
+
+/* === Analytics God-like Dashboard Styles === */
+
+/* KPI Boxes */
+.kpi-box,
+.bg-blue-50.border-blue-200 {
+  background: linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 100%);
+  border: 1.5px solid #2563eb;
+  border-radius: 1rem;
+  box-shadow: 0 2px 12px 0 rgba(37,99,235,0.08);
+  padding: 1.5rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: box-shadow 0.2s;
+}
+.kpi-box:hover,
+.bg-blue-50.border-blue-200:hover {
+  box-shadow: 0 4px 24px 0 rgba(37,99,235,0.16);
+}
+.kpi-label,
+.text-sm.text-blue-900 {
+  font-size: 1rem;
+  color: #1e293b;
+  margin-top: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.kpi-value,
+.text-lg.text-blue-700 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.01em;
+}
+
+/* Analytics Card/Panel */
+.analytics-panel,
+.bg-white.rounded.shadow {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 2px 16px 0 rgba(0,0,0,0.06);
+  padding: 2rem 1.5rem;
+  margin-bottom: 2rem;
+}
+
+/* Analytics Table */
+.analytics-table,
+.w-full.border.rounded {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #f8fafc;
+  box-shadow: 0 1px 6px 0 rgba(37,99,235,0.06);
+}
+.analytics-table th,
+.w-full.border.rounded th {
+  background: #e0e7ff;
+  color: #2563eb;
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid #2563eb;
+}
+.analytics-table td,
+.w-full.border.rounded td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  color: #1e293b;
+}
+.analytics-table tr:last-child td,
+.w-full.border.rounded tr:last-child td {
+  border-bottom: none;
+}
+
+/* Analytics Filters */
+.analytics-filters,
+.flex.gap-4.mb-6,
+.flex.gap-4.mb-4 {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+.analytics-filters input,
+.analytics-filters select,
+.flex.gap-4.mb-6 input,
+.flex.gap-4.mb-6 select,
+.flex.gap-4.mb-4 input,
+.flex.gap-4.mb-4 select {
+  border: 1.5px solid #2563eb;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.2s;
+}
+.analytics-filters input:focus,
+.analytics-filters select:focus,
+.flex.gap-4.mb-6 input:focus,
+.flex.gap-4.mb-6 select:focus,
+.flex.gap-4.mb-4 input:focus,
+.flex.gap-4.mb-4 select:focus {
+  border-color: #1d4ed8;
+}
+
+/* Analytics Buttons */
+.analytics-btn,
+button.bg-blue-600 {
+  background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 1px 4px 0 rgba(37,99,235,0.10);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.analytics-btn:hover,
+button.bg-blue-600:hover {
+  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%);
+  box-shadow: 0 2px 8px 0 rgba(37,99,235,0.18);
+}
+
+/* Analytics Section Titles */
+.analytics-title,
+.text-2xl.font-bold,
+.text-xl.font-bold,
+.text-3xl.font-bold {
+  color: #1d4ed8;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  margin-bottom: 1rem;
+}
+
+/* Analytics Alerts */
+.analytics-alert-critical,
+.inline-block.bg-red-600 {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  font-weight: 700;
+}
+.analytics-alert-warning,
+.inline-block.bg-orange-400 {
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  font-weight: 700;
+}
+
+/* Analytics Chart Container */
+.analytics-chart,
+.bg-white.rounded.shadow.p-4 {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 2px 16px 0 rgba(37,99,235,0.08);
+  padding: 2rem 1.5rem;
+  margin-bottom: 2rem;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+  .analytics-panel,
+  .bg-white.rounded.shadow,
+  .analytics-chart,
+  .bg-white.rounded.shadow.p-4 {
+    padding: 1rem 0.5rem;
+  }
+  .kpi-box,
+  .bg-blue-50.border-blue-200 {
+    padding: 1rem 0.5rem;
+  }
+  .analytics-filters,
+  .flex.gap-4.mb-6,
+  .flex.gap-4.mb-4 {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+}
+
+/* === End Analytics God-like Styles === */
