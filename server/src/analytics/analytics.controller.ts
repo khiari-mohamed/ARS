@@ -14,7 +14,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
 import { UseGuards } from '@nestjs/common';
-
+import { Body, Post } from '@nestjs/common';
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {
   return req.user || { id: 'demo', role: 'SUPER_ADMIN' };
@@ -191,12 +191,10 @@ export class AnalyticsController {
     return this.analyticsService.getReassignmentAI(parsed);
   }
 
-  @Get('ai/performance')
-  async getPerformanceAI(@Query('payload') payload: string) {
-    let parsed: any = {};
-    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
-    return this.analyticsService.getPerformanceAI(parsed);
-  }
+ @Post('ai/performance')
+async getPerformanceAI(@Body() payload: any) {
+  return this.analyticsService.getPerformanceAI(payload);
+}
 
   @Get('ai/compare-performance')
   async getComparePerformanceAI(@Query('payload') payload: string) {
