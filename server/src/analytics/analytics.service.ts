@@ -144,7 +144,7 @@ async getActualPerformance(filters: any, user: any) {
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
     }
     // Only include non-deleted bordereaux
-    where.deletedAt = null;
+    //where.deletedAt = null;
     const bsPerDay = await this.prisma.bordereau.groupBy({
       by: ['createdAt'],
       _count: { id: true },
