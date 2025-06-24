@@ -22,15 +22,28 @@ import { Response, Request } from 'express';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UserRole } from '../auth/user-role.enum';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('clients')
-@UseGuards(RolesGuard)
 export class ClientController {
   constructor(private readonly clientService: ClientService) {}
 
+
+
   @Post()
-  @Roles('admin', 'manager')
-  create(@Body() dto: CreateClientDto) {
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
+  async create(@Body() dto: CreateClientDto) {
+    // Validate input
+    if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number' || !dto.accountManagerId) {
+      throw new Error('All fields (name, reglementDelay, reclamationDelay, accountManagerId) are required.');
+    }
+    // Check for unique client name
+    const existing = await this.clientService.findByName(dto.name);
+    if (existing) {
+      throw new Error('A client with this name already exists.');
+    }
     return this.clientService.create(dto);
   }
 
@@ -46,13 +59,13 @@ export class ClientController {
   }
 
   @Patch(':id')
-  @Roles('admin', 'manager')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
   update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
     return this.clientService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('admin')
+  @Roles(UserRole.ADMINISTRATEUR)
   remove(@Param('id') id: string) {
     return this.clientService.remove(id);
   }
@@ -69,7 +82,7 @@ export class ClientController {
 
   // Export clients to Excel
   @Post('export/excel')
-  @Roles('admin', 'manager')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
   async exportExcel(@Body() query: SearchClientDto, @Res() res: Response) {
     const buffer = await this.clientService.exportToExcel(query);
     res.set({
@@ -81,7 +94,7 @@ export class ClientController {
 
   // Export clients to PDF
   @Post('export/pdf')
-  @Roles('admin', 'manager')
+ @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
   async exportPDF(@Body() query: SearchClientDto, @Res() res: Response) {
     const buffer = await this.clientService.exportToPDF(query);
     res.set({
@@ -99,7 +112,7 @@ export class ClientController {
 
   // External API sync endpoint (stub)
   @Post(':id/sync-external')
-  @Roles('admin')
+  @Roles(UserRole.ADMINISTRATEUR)
   async syncExternal(@Param('id') id: string) {
     return this.clientService.syncWithExternal(id);
   }
@@ -124,7 +137,7 @@ export class ClientController {
   // --- GED: Upload contract document ---
   @Post(':id/upload-contract')
   @UseInterceptors(FileInterceptor('file'))
-  @Roles('admin', 'manager')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
   async uploadContract(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -141,7 +154,7 @@ export class ClientController {
 
   // --- SLA Config ---
   @Patch(':id/sla-config')
-  @Roles('admin', 'manager')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
   updateSlaConfig(@Param('id') id: string, @Body() config: any) {
     return this.clientService.updateSlaConfig(id, config);
   }

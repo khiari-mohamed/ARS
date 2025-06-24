@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsInt } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, IsOptional, IsObject } from 'class-validator';
 
 export class CreateClientDto {
   @IsNotEmpty()
@@ -16,4 +16,8 @@ export class CreateClientDto {
   @IsNotEmpty()
   @IsString()
   accountManagerId: string;
+
+  @IsOptional()
+  @IsObject()
+  slaConfig?: any; // For alert threshold/SLA config
 }

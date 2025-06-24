@@ -10,6 +10,13 @@ export class UsersService {
   }
 
   async create(data: { email: string; password: string; fullName: string; role: string }) {
+    // Ensure email is unique
+    const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
+    if (existing) {
+      throw new Error('A user with this email already exists.');
+    }
+    // Ensure role is valid (reuse assertValidRole if needed)
+    // Password should already be hashed by controller or AuthService
     const user = await this.prisma.user.create({ data });
     await this.logAction(user.id, 'USER_CREATE', { data: { ...data, password: undefined } });
     return user;

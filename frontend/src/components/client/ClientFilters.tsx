@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { TextField, Button, Grid } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { TextField, Button, Grid, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { LocalAPI } from '../../services/axios';
 
 interface Props {
   onChange: (filters: { name?: string; accountManagerId?: string }) => void;
@@ -8,6 +9,13 @@ interface Props {
 const ClientFilters: React.FC<Props> = ({ onChange }) => {
   const [name, setName] = useState('');
   const [accountManagerId, setAccountManagerId] = useState('');
+  const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
+
+  useEffect(() => {
+    LocalAPI.get('/users', { params: { role: 'CHEF_EQUIPE' } })
+      .then(res => setManagers(res.data || []))
+      .catch(() => setManagers([]));
+  }, []);
 
   const handleSearch = () => {
     onChange({
@@ -33,12 +41,20 @@ const ClientFilters: React.FC<Props> = ({ onChange }) => {
         />
       </Grid>
       <Grid >
-        <TextField
-          label="Account Manager ID"
-          value={accountManagerId}
-          onChange={e => setAccountManagerId(e.target.value)}
-          size="small"
-        />
+        <FormControl size="small" fullWidth>
+          <InputLabel id="accountManagerId-label">Account Manager</InputLabel>
+          <Select
+            labelId="accountManagerId-label"
+            value={accountManagerId}
+            onChange={e => setAccountManagerId(e.target.value)}
+            label="Account Manager"
+          >
+            <MenuItem value=""><em>All</em></MenuItem>
+            {managers.map(m => (
+              <MenuItem key={m.id} value={m.id}>{m.fullName}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </Grid>
       <Grid>
         <Button variant="contained" color="primary" onClick={handleSearch}>Search</Button>

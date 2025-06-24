@@ -34,7 +34,7 @@ export class AlertsService {
     }
     const bordereaux = await this.prisma.bordereau.findMany({
       where,
-      include: { courriers: true, virement: true },
+      include: { courriers: true, virement: true, contract: true, client: true },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -44,10 +44,14 @@ export class AlertsService {
       const daysSinceReception = b.dateReception ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) : 0;
       let level: 'green' | 'orange' | 'red' = 'green';
       let reason = 'On time';
-      if (b.statut !== 'CLOTURE' && daysSinceReception > 5) {
+      // Use SLA threshold from client or contract if available
+      let slaThreshold = 5;
+      if (b.contract && typeof b.contract.delaiReglement === 'number') slaThreshold = b.contract.delaiReglement;
+      else if (b.client && typeof b.client.reglementDelay === 'number') slaThreshold = b.client.reglementDelay;
+      if (b.statut !== 'CLOTURE' && daysSinceReception > slaThreshold) {
         level = 'red';
         reason = 'SLA breach';
-      } else if (b.statut !== 'CLOTURE' && daysSinceReception > 3) {
+      } else if (b.statut !== 'CLOTURE' && daysSinceReception > slaThreshold - 2) {
         level = 'orange';
         reason = 'Risk of delay';
       }
@@ -55,6 +59,8 @@ export class AlertsService {
         bordereau: b,
         alertLevel: level,
         reason,
+        slaThreshold,
+        daysSinceReception,
       };
     });
 
@@ -185,12 +191,16 @@ export class AlertsService {
     });
     for (const user of users) {
       if (user.email) {
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || 'noreply@example.com',
-          to: user.email,
-          subject: '[ALERT] Notification',
-          text: message,
-        });
+        try {
+          await transporter.sendMail({
+            from: process.env.SMTP_FROM || 'noreply@example.com',
+            to: user.email,
+            subject: '[ALERT] Notification',
+            text: message + '\n' + JSON.stringify(alert, null, 2),
+          });
+        } catch (err) {
+          console.error(`[ALERT][EMAIL] Failed to send to ${user.email}:`, err);
+        }
       }
     }
     // Log alert event

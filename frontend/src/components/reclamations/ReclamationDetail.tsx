@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useReclamation, useReclamationHistory, useAssignReclamation, useUpdateReclamation } from '../../hooks/useReclamations';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ReclamationStatus } from '../../types/reclamation.d';
 import { fetchUsers, User } from '../../api/usersApi';
 import { Document } from '../../types/document.d';
+import { escalateReclamation, fetchAutoReplySuggestion, fetchReclamationAIAnalysis } from '../../api/reclamationsApi';
 
 // Import the correct type for history items if available
 // If not, define it here:
@@ -51,8 +52,37 @@ export const ReclamationDetail: React.FC<Props> = ({ id }) => {
   // For document preview
   const [docModalOpen, setDocModalOpen] = useState(false);
 
+  // Escalation state
+  const [escalating, setEscalating] = useState(false);
+  const [escalateError, setEscalateError] = useState<string | null>(null);
+  // Auto-reply AI
+  const [autoReply, setAutoReply] = useState<string | null>(null);
+  const [autoReplyLoading, setAutoReplyLoading] = useState(false);
+  // AI Analysis
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+
   // Fetch users for assignment
   const { data: users = [] } = useQuery<User[]>(['users'], fetchUsers);
+
+  // Fetch auto-reply suggestion
+  useEffect(() => {
+    if (!rec?.id) return;
+    setAutoReplyLoading(true);
+    fetchAutoReplySuggestion(rec.id)
+      .then(res => setAutoReply(res.suggestion))
+      .catch(() => setAutoReply(null))
+      .finally(() => setAutoReplyLoading(false));
+  }, [rec?.id]);
+
+  // Fetch AI analysis
+  useEffect(() => {
+    setAiAnalysisLoading(true);
+    fetchReclamationAIAnalysis()
+      .then(setAiAnalysis)
+      .catch(() => setAiAnalysis(null))
+      .finally(() => setAiAnalysisLoading(false));
+  }, []);
 
   if (isLoading) return <div>Chargement...</div>;
   if (!rec) return <div>Réclamation introuvable.</div>;
@@ -165,7 +195,29 @@ export const ReclamationDetail: React.FC<Props> = ({ id }) => {
             Affecter à un agent
           </button>
         )}
+        {/* Escalate button for eligible users/statuses */}
+        {canChangeStatus && rec.status !== 'ESCALATED' && (
+          <button
+            className="bg-red-600 text-white px-3 py-1 rounded"
+            disabled={escalating}
+            onClick={async () => {
+              setEscalating(true);
+              setEscalateError(null);
+              try {
+                await escalateReclamation(rec.id);
+                window.location.reload();
+              } catch (e: any) {
+                setEscalateError(e?.message || 'Erreur lors de l\'escalade');
+              } finally {
+                setEscalating(false);
+              }
+            }}
+          >
+            {escalating ? 'Escalade...' : 'Escalader'}
+          </button>
+        )}
       </div>
+      {escalateError && <div style={{ color: 'red' }}>{escalateError}</div>}
       {/* Status Modal */}
       {statusModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
@@ -230,6 +282,31 @@ export const ReclamationDetail: React.FC<Props> = ({ id }) => {
         </div>
       )}
       {/* Comment Box */}
+      {/* AI Auto-Reply Suggestion */}
+      <div className="mt-6">
+        <h4 className="font-semibold mb-1">Suggestion de réponse automatique (IA)</h4>
+        {autoReplyLoading ? (
+          <div>Chargement de la suggestion...</div>
+        ) : autoReply ? (
+          <div style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, marginBottom: 8 }}>
+            <span style={{ fontFamily: 'monospace' }}>{autoReply}</span>
+            <button
+              style={{ marginLeft: 12, fontSize: 13 }}
+              onClick={() => setComment(comment + (comment ? '\n' : '') + autoReply)}
+            >
+              Insérer dans le commentaire
+            </button>
+            <button
+              style={{ marginLeft: 8, fontSize: 13 }}
+              onClick={() => navigator.clipboard.writeText(autoReply)}
+            >
+              Copier
+            </button>
+          </div>
+        ) : (
+          <div style={{ color: '#888' }}>Aucune suggestion disponible.</div>
+        )}
+      </div>
       <div className="mt-6">
         <h4 className="font-semibold mb-1">Ajouter un commentaire / remarque</h4>
         <textarea
@@ -248,6 +325,23 @@ export const ReclamationDetail: React.FC<Props> = ({ id }) => {
         </button>
       </div>
       <hr className="my-4" />
+      {/* AI Analysis Section */}
+      <div className="mb-4">
+        <h3 className="font-semibold">Analyse IA</h3>
+        {aiAnalysisLoading ? (
+          <div>Chargement de l'analyse IA...</div>
+        ) : aiAnalysis && Array.isArray(aiAnalysis.byType) ? (
+          <div style={{ fontSize: 14 }}>
+            <div><b>Par type:</b> {aiAnalysis.byType.map((t: any) => `${t.type}: ${t._count.id}`).join(', ')}</div>
+            <div><b>Par gravité:</b> {aiAnalysis.bySeverity.map((s: any) => `${s.severity}: ${s._count.id}`).join(', ')}</div>
+            <div><b>Résolues:</b> {aiAnalysis.resolved}</div>
+            <div><b>Ouvertes:</b> {aiAnalysis.open}</div>
+            <div><b>Total:</b> {aiAnalysis.total}</div>
+          </div>
+        ) : (
+          <div style={{ color: '#888' }}>Aucune analyse IA disponible.</div>
+        )}
+      </div>
       <h3 className="font-semibold">Historique</h3>
       <ul>
         {history?.map((h: ReclamationHistory) => (

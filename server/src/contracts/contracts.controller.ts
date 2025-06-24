@@ -22,6 +22,13 @@ function getUserFromRequest(req: any) {
   return req.user || { id: 'demo', role: 'SUPER_ADMIN' };
 }
 
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
+import { UseGuards } from '@nestjs/common';
+
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('contracts')
 export class ContractsController {
   constructor(private readonly contractsService: ContractsService) {}
@@ -34,6 +41,21 @@ export class ContractsController {
     @Req() req: any,
   ) {
     const user = getUserFromRequest(req);
+    // Validate input
+    if (!dto.clientId || !dto.clientName || typeof dto.delaiReglement !== 'number' || typeof dto.delaiReclamation !== 'number' || !dto.assignedManagerId || !dto.startDate || !dto.endDate) {
+      throw new Error('All required fields must be provided.');
+    }
+    // Validate client linkage
+    const clientLinked = await this.contractsService.isClientExists(dto.clientId);
+    if (!clientLinked) {
+      throw new Error('Linked client does not exist.');
+    }
+    // Optionally, check for unique contract per client+period
+    // (Business rule: only one active contract per client per period)
+    const overlap = await this.contractsService.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
+    if (overlap) {
+      throw new Error('A contract for this client and period already exists.');
+    }
     return this.contractsService.createContract(dto, file, user);
   }
 

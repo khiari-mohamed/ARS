@@ -1,5 +1,6 @@
 /**
  * Enum for all allowed user roles in the system.
+ * Extend as needed for new roles.
  */
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
@@ -7,6 +8,10 @@ export enum UserRole {
   GESTIONNAIRE = 'GESTIONNAIRE',
   CUSTOMER_SERVICE = 'CUSTOMER_SERVICE',
   FINANCE = 'FINANCE',
+  SCAN_TEAM = 'SCAN_TEAM',
+  BO = 'BO',
+  MANAGER = 'MANAGER',
+  ADMINISTRATEUR = 'ADMINISTRATEUR',
 }
 
 /**

@@ -48,7 +48,17 @@ export const BSProcessingPage: React.FC = () => {
   const { data: escalationRisk } = useEscalationRisk(Number(id));
   const updateBS = useUpdateBS();
   const [docOpen, setDocOpen] = useState(false);
+  const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    // Fetch managers (GESTIONNAIRE) from backend using LocalAPI
+    import('../../services/axios').then(({ LocalAPI }) => {
+      LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
+        .then(res => setManagers(res.data || []))
+        .catch(() => setManagers([]));
+    });
+  }, []);
 
   const handleAction = async (etat: BSStatus) => {
     try {

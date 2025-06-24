@@ -17,6 +17,11 @@ import { GedService } from './ged.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { SearchDocumentDto } from './dto/search-document.dto';
 import { extname } from 'path';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
+import { UseGuards } from '@nestjs/common';
 
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {
@@ -24,13 +29,16 @@ function getUserFromRequest(req: any) {
   return req.user || { id: 'demo', role: 'SUPER_ADMIN' };
 }
 
+
+
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('documents')
 export class GedController {
   constructor(private readonly gedService: GedService) {}
 
   @Post('upload')
   @UseInterceptors(
-    FileInterceptor('file', {
+    FileInterceptor('files', {
       storage: diskStorage({
         destination: './uploads',
         filename: (req, file, cb) => {
@@ -41,13 +49,20 @@ export class GedController {
     }),
   )
   async uploadDocument(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() files: Express.Multer.File | Express.Multer.File[],
     @Body() body: CreateDocumentDto,
     @Req() req: any,
   ) {
-    console.log('UPLOAD DEBUG:', { file, body });
     const user = getUserFromRequest(req);
-    return this.gedService.uploadDocument(file, body, user);
+    // Support both single and multiple file upload
+    if (Array.isArray(files)) {
+      if (files.length === 0) throw new Error('No files uploaded.');
+      return Promise.all(files.map(file => this.gedService.uploadDocument(file, body, user)));
+    } else if (files) {
+      return this.gedService.uploadDocument(files, body, user);
+    } else {
+      throw new Error('No file(s) uploaded.');
+    }
   }
 
   // TEMP: Seed demo user, client, contract, and bordereau for testing

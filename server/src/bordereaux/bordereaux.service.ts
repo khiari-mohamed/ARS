@@ -14,7 +14,10 @@ import { Prisma } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
 import axios from 'axios';
+import { UpdateBulletinSoinDto } from 'src/bulletin-soin/dto/update-bulletin-soin.dto';
 
+
+type BordereauWithMontant = { montant?: number } & any;
 
 @Injectable()
 export class BordereauxService {
@@ -181,81 +184,87 @@ export class BordereauxService {
 
 
   async create(createBordereauDto: CreateBordereauDto): Promise<BordereauResponseDto> {
-  // Build data object, only include fields if defined
-  let {
-  reference,
-  dateReception,
-  clientId,
-  contractId,
-  dateDebutScan,
-  dateFinScan,
-  dateReceptionSante,
-  dateCloture,
-  dateDepotVirement,
-  dateExecutionVirement,
-  delaiReglement,
-  statut,
-  nombreBS,
-  } = createBordereauDto;
-  
-  // Validate clientId
-  const client = await this.prisma.client.findUnique({ where: { id: clientId } });
-  if (!client) throw new BadRequestException('Invalid clientId');
-  
-  // Validate contractId if provided
-  if (contractId) {
-  const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
-  if (!contract) throw new BadRequestException('Invalid contractId');
-  }
-  
-  // --- AUTO-LINK TO ACTIVE CONTRACT IF contractId NOT PROVIDED ---
-  if (!contractId) {
-  // Find the active contract for the client (startDate <= today <= endDate)
-  const today = new Date();
-  const activeContract = await this.prisma.contract.findFirst({
-  where: {
-  clientId,
-  startDate: { lte: today },
-  endDate: { gte: today },
-  },
-  orderBy: { startDate: 'desc' },
-  });
-  if (activeContract) {
-  contractId = activeContract.id;
-  // Optionally, use contract's delaiReglement if not provided
-  if (!delaiReglement && typeof activeContract.delaiReglement === 'number') {
-  delaiReglement = activeContract.delaiReglement;
-  }
-  }
-  }
-  // -------------------------------------------------------------
-  
-  const data: any = {
-  reference,
-  dateReception,
-  clientId,
-  contractId,
-  delaiReglement,
-  nombreBS,
-  };
-  if (statut !== undefined) data.statut = statut;
-  if (dateDebutScan) data.dateDebutScan = dateDebutScan;
-  if (dateFinScan) data.dateFinScan = dateFinScan;
-  if (dateReceptionSante) data.dateReceptionSante = dateReceptionSante;
-  if (dateCloture) data.dateCloture = dateCloture;
-  if (dateDepotVirement) data.dateDepotVirement = dateDepotVirement;
-  if (dateExecutionVirement) data.dateExecutionVirement = dateExecutionVirement;
-  
-  const bordereau = await this.prisma.bordereau.create({
-  data,
-  include: {
-  client: true,
-  contract: true,
-  },
-  });
-  await this.autoAssignBordereau(bordereau.id);
-  await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
-  return BordereauResponseDto.fromEntity(bordereau);
+    // Build data object, only include fields if defined
+    let {
+      reference,
+      dateReception,
+      clientId,
+      contractId,
+      dateDebutScan,
+      dateFinScan,
+      dateReceptionSante,
+      dateCloture,
+      dateDepotVirement,
+      dateExecutionVirement,
+      delaiReglement,
+      statut,
+      nombreBS,
+    } = createBordereauDto;
+
+    // Validate clientId
+    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new BadRequestException('Invalid clientId');
+
+    // Validate contractId if provided
+    if (contractId) {
+      const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
+      if (!contract) throw new BadRequestException('Invalid contractId');
+    }
+
+    // --- AUTO-LINK TO ACTIVE CONTRACT IF contractId NOT PROVIDED ---
+    if (!contractId) {
+      // Find the active contract for the client (startDate <= today <= endDate)
+      const today = new Date();
+      const activeContract = await this.prisma.contract.findFirst({
+        where: {
+          clientId,
+          startDate: { lte: today },
+          endDate: { gte: today },
+        },
+        orderBy: { startDate: 'desc' },
+      });
+      if (activeContract) {
+        contractId = activeContract.id;
+        // Optionally, use contract's delaiReglement if not provided
+        if (!delaiReglement && typeof activeContract.delaiReglement === 'number') {
+          delaiReglement = activeContract.delaiReglement;
+        }
+      }
+    }
+    // -------------------------------------------------------------
+
+    // Business rule: unique reference per client
+    const existing = await this.prisma.bordereau.findFirst({ where: { reference, clientId } });
+    if (existing) {
+      throw new BadRequestException('A bordereau with this reference already exists for this client.');
+    }
+
+    const data: any = {
+      reference,
+      dateReception,
+      clientId,
+      contractId,
+      delaiReglement,
+      nombreBS,
+    };
+    if (statut !== undefined) data.statut = statut;
+    if (dateDebutScan) data.dateDebutScan = dateDebutScan;
+    if (dateFinScan) data.dateFinScan = dateFinScan;
+    if (dateReceptionSante) data.dateReceptionSante = dateReceptionSante;
+    if (dateCloture) data.dateCloture = dateCloture;
+    if (dateDepotVirement) data.dateDepotVirement = dateDepotVirement;
+    if (dateExecutionVirement) data.dateExecutionVirement = dateExecutionVirement;
+
+    const bordereau = await this.prisma.bordereau.create({
+      data,
+      include: {
+        client: true,
+        contract: true,
+      },
+    });
+    await this.autoAssignBordereau(bordereau.id);
+    await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
+    return BordereauResponseDto.fromEntity(bordereau);
   }
   
   async findAll(): Promise<BordereauResponseDto[]> {
@@ -416,31 +425,32 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
    */
   private async autoAssignBordereau(bordereauId: string): Promise<void> {
     try {
-      // 1. Get all available users with role 'Gestionnaire'
+      // 1. Get all available users with role 'GESTIONNAIRE'
       const availableUsers = await this.prisma.user.findMany({
         where: {
-          role: 'Gestionnaire', // Assuming 'Gestionnaire' is a valid role
+          role: 'GESTIONNAIRE',
+          active: true,
         },
       });
-      
       if (availableUsers.length === 0) {
         this.logger.warn('No available users found for auto-assignment');
         return;
       }
-      
-      // 2. Find the user with the lowest current workload
-      // In a real implementation, you would query your assignments table
-      // For now, we'll just pick a random user
-      const randomIndex = Math.floor(Math.random() * availableUsers.length);
-      const selectedUser = availableUsers[randomIndex];
-      
+      // 2. Find the user with the lowest current workload (open bordereaux assigned)
+      const workloads = await Promise.all(availableUsers.map(async user => {
+        const count = await this.prisma.bordereau.count({
+          where: { assignedToUserId: user.id, statut: { not: 'CLOTURE' } },
+        });
+        return { user, count };
+      }));
+      workloads.sort((a, b) => a.count - b.count);
+      const selectedUser = workloads[0].user;
       // 3. Assign the bordereau to the selected user
       await this.assignBordereau({
         bordereauId,
         assignedToUserId: selectedUser.id,
-        notes: 'Auto-assigned based on workload',
+        notes: 'Auto-assigned based on lowest workload',
       });
-      
       this.logger.log(`Auto-assigned bordereau ${bordereauId} to user ${selectedUser.id}`);
     } catch (error) {
       this.logger.error(`Error auto-assigning bordereau ${bordereauId}: ${error.message}`);
@@ -724,15 +734,41 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     return bs;
   }
 
-  async updateBS(bsId: string, dto: UpdateBSDto) {
-    const bs = await this.prisma.bulletinSoin.update({
-      where: { id: bsId },
-      data: dto,
-      include: { owner: true },
-    });
-    await this.updateBordereauStatusFromBS(bs.bordereauId);
-    return bs;
+  async updateBS(bsId: string, dto: UpdateBulletinSoinDto) {
+  // Validate BS exists
+  const existing = await this.prisma.bulletinSoin.findUnique({ where: { id: bsId } });
+  if (!existing) throw new Error('BS not found.');
+  // Only allow valid status transitions
+  if (dto.etat && !['IN_PROGRESS', 'VALIDATED', 'REJECTED'].includes(dto.etat)) {
+    throw new Error('Invalid BS status transition.');
   }
+  // Only pass allowed fields to Prisma
+  const updateData: any = {};
+  if (dto.etat) updateData.etat = dto.etat;
+  if (dto.ownerId) updateData.ownerId = dto.ownerId;
+  if (dto.observationGlobal) updateData.observationGlobal = dto.observationGlobal;
+  // Add other fields from your model as needed
+
+  const bs = await this.prisma.bulletinSoin.update({
+    where: { id: bsId },
+    data: updateData,
+    include: { owner: true },
+  });
+
+  // Audit log for status change
+  if (dto.etat && dto.etat !== existing.etat) {
+    await this.prisma.actionLog.create({
+      data: {
+        bordereauId: bs.bordereauId,
+        action: 'BS_STATUS_CHANGE',
+        timestamp: new Date(),
+        details: { bsId, from: existing.etat, to: dto.etat },
+      },
+    });
+  }
+  await this.updateBordereauStatusFromBS(bs.bordereauId);
+  return bs;
+}
 
   // Calculate BS progress and update Bordereau status
   async updateBordereauStatusFromBS(bordereauId: string) {
@@ -965,8 +1001,27 @@ async updateThresholds(id: string, thresholds: any) {
  * Get AI recommendations (stub)
  */
 async getAIRecommendations(): Promise<{ message: string; recommendations?: any[] }> {
-  // Placeholder for future AI integration
-  return { message: 'AI recommendations not implemented yet.' };
+// Example: Prioritize bordereaux by risk (SLA breach, overdue, high montant, etc.)
+const bordereaux = await this.prisma.bordereau.findMany({
+where: { statut: { not: 'CLOTURE' } },
+include: { client: true, contract: true },
+});
+// Simple scoring: overdue +2, close to SLA +1, montant > 10k +1
+const now = new Date();
+const recommendations = bordereaux.map(b => {
+let score = 0;
+const daysSinceReception = b.dateReception ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) : 0;
+let slaThreshold = 5;
+if (b.contract && typeof b.contract.delaiReglement === 'number') slaThreshold = b.contract.delaiReglement;
+else if (b.client && typeof b.client.reglementDelay === 'number') slaThreshold = b.client.reglementDelay;
+if (daysSinceReception > slaThreshold) score += 2;
+else if (daysSinceReception > slaThreshold - 2) score += 1;
+const bWithMontant = b as any as { montant?: number };
+if (bWithMontant.montant && bWithMontant.montant > 10000) score += 1;
+return { id: b.id, reference: b.reference, score, daysSinceReception, slaThreshold };
+});
+recommendations.sort((a, b) => b.score - a.score);
+return { message: 'AI prioritization complete.', recommendations };
 }
 
 // --- Full-Text Search ---

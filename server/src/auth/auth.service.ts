@@ -52,6 +52,11 @@ export class AuthService {
     if (!isPasswordComplex(data.password)) {
       throw new BadRequestException('Password does not meet complexity requirements.');
     }
+    // Check for existing user
+    const existing = await this.usersService.findByEmail(data.email);
+    if (existing) {
+      throw new BadRequestException('A user with this email already exists.');
+    }
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const user = await this.usersService.create({ ...data, password: hashedPassword });
     await this.usersService.logAction(user.id, 'REGISTER');

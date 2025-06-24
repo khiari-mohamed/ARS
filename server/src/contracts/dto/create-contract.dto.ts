@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsInt, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, IsOptional, IsDateString } from 'class-validator';
 
 export class CreateContractDto {
   @IsNotEmpty()
@@ -29,16 +29,15 @@ export class CreateContractDto {
   @IsString()
   assignedManagerId: string;
 
-
   @IsNotEmpty()
-  @IsString()
+  @IsDateString()
   startDate: string; // ISO string
 
   @IsNotEmpty()
-  @IsString()
+  @IsDateString()
   endDate: string; // ISO string
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   signatureDate?: string; // ISO string
 }

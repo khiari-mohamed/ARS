@@ -271,7 +271,20 @@ export class ClientService {
     });
   }
 
+  async findByName(name: string) {
+    return this.prisma.client.findUnique({ where: { name } });
+  }
+
   async create(dto: CreateClientDto) {
+    // Ensure unique client name
+    const existing = await this.prisma.client.findUnique({ where: { name: dto.name } });
+    if (existing) {
+      throw new Error('A client with this name already exists.');
+    }
+    // Default SLA config if not provided
+    if (!('slaConfig' in dto)) {
+      (dto as any).slaConfig = { slaThreshold: dto.reglementDelay };
+    }
     return this.prisma.client.create({ data: dto });
   }
 

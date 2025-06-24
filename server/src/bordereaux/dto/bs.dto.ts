@@ -5,6 +5,8 @@ export enum BSStatus {
   VALIDATED = 'VALIDATED',
   REJECTED = 'REJECTED',
 }
+// Only allow these statuses for transitions
+export const ALLOWED_BS_STATUSES = [BSStatus.IN_PROGRESS, BSStatus.VALIDATED, BSStatus.REJECTED];
 
 export class CreateBSDto {
   @IsUUID()
@@ -57,6 +59,9 @@ export class CreateBSDto {
 }
 
 export class UpdateBSDto {
+  etat(etat: any) {
+    throw new Error('Method not implemented.');
+  }
   @IsEnum(BSStatus)
   @IsOptional()
   status?: BSStatus;

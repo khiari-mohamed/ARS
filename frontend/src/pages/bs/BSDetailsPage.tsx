@@ -45,7 +45,17 @@ export const BSDetailsPage: React.FC = () => {
   const { data: slaAlerts } = useSlaAlerts();
   const { data: notifications } = useNotifications();
   const [docOpen, setDocOpen] = useState(false);
+  const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    // Fetch managers (GESTIONNAIRE) from backend using LocalAPI
+    import('../../services/axios').then(({ LocalAPI }) => {
+      LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
+        .then(res => setManagers(res.data || []))
+        .catch(() => setManagers([]));
+    });
+  }, []);
 
   if (isLoading) return <Card loading />;
   if (!bs) return <Card>Introuvable</Card>;

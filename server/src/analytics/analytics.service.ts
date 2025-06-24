@@ -85,6 +85,8 @@ async getActualPerformance(filters: any, user: any) {
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
     }
+    // Only include non-deleted bordereaux
+    where.deletedAt = null;
     const bsPerDay = await this.prisma.bordereau.groupBy({
       by: ['createdAt'],
       _count: { id: true },
@@ -274,7 +276,7 @@ async getActualPerformance(filters: any, user: any) {
   // --- Priority Scoring by IA (simple heuristic) ---
   async getPriorityScoring(user: any, filters: any = {}) {
     this.checkAnalyticsRole(user);
-    // Example: score = # of relances + SLA breach + age
+    // Example: score = SLA breach + montant + age + relances
     const where: any = {};
     if (filters.type) where.type = filters.type;
     if (filters.fromDate || filters.toDate) {
@@ -282,19 +284,28 @@ async getActualPerformance(filters: any, user: any) {
       if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
       if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
     }
-    const items = await this.prisma.bordereau.findMany({ where });
+    const items = await this.prisma.bordereau.findMany({ where, include: { client: true, contract: true } });
     // For each, compute score
-    return items.map(item => {
+    const now = new Date();
+    return await Promise.all(items.map(async item => {
       let score = 0;
-      if (item.delaiReglement > 3) score += 2; // SLA breach
-      // Only check type if it exists on the model
-      if ('type' in item && item.type === 'RECLAMATION') score += 2;
-      if ('type' in item && item.type === 'RELANCE') score += 1;
+      let slaThreshold = 5;
+      if (item.contract && typeof item.contract.delaiReglement === 'number') slaThreshold = item.contract.delaiReglement;
+      else if (item.client && typeof item.client.reglementDelay === 'number') slaThreshold = item.client.reglementDelay;
+      const daysSinceReception = item.dateReception ? (now.getTime() - new Date(item.dateReception).getTime()) / (1000 * 60 * 60 * 24) : 0;
+      if (daysSinceReception > slaThreshold) score += 2;
+      else if (daysSinceReception > slaThreshold - 2) score += 1;
+      // montant scoring removed: field does not exist in model
+      // Count relances (if model supports it)
+      let relances = 0;
+      if (item.id) {
+        relances = await this.prisma.courrier.count({ where: { bordereauId: item.id, type: 'RELANCE' } });
+        score += Math.min(relances, 2);
+      }
       // Age in days
-      const age = (Date.now() - new Date(item.createdAt).getTime()) / (1000*60*60*24);
-      score += Math.min(Math.floor(age / 7), 3); // up to +3 for age
-      return { ...item, priorityScore: score };
-    });
+      score += Math.min(Math.floor(daysSinceReception / 7), 3); // up to +3 for age
+      return { ...item, priorityScore: score, daysSinceReception, slaThreshold, relances };
+    }));
   }
 
   // --- Historical Comparative Analysis ---

@@ -14,6 +14,10 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() body: { email: string; password: string; fullName: string; role: string }) {
+    // Validate input
+    if (!body.email || !body.password || !body.fullName || !body.role) {
+      throw new Error('All fields (email, password, fullName, role) are required.');
+    }
     return this.authService.register(body);
   }
 

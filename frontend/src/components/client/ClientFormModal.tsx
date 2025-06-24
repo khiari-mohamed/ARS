@@ -1,7 +1,8 @@
 // src/components/Client/ClientFormModal.tsx
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Grid, FormHelperText } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Grid, FormHelperText, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { LocalAPI } from '../../services/axios';
 import { Client } from '../../types/client.d';
 
 interface Props {
@@ -19,6 +20,14 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
     accountManagerId: '',
   });
   const [errors, setErrors] = useState<any>({});
+  const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
+
+  useEffect(() => {
+    // Fetch managers (CHEF_EQUIPE) from backend
+    LocalAPI.get('/users', { params: { role: 'CHEF_EQUIPE' } })
+      .then(res => setManagers(res.data || []))
+      .catch(() => setManagers([]));
+  }, []);
 
   useEffect(() => {
     if (client) setForm(client);
@@ -107,16 +116,25 @@ const validate = () => {
             />
           </Grid>
           <Grid>
-            <TextField
-              label="Account Manager ID"
-              name="accountManagerId"
-              value={form.accountManagerId}
-              onChange={handleChange}
-              fullWidth
-              required
-              error={!!errors.accountManagerId}
-              helperText={errors.accountManagerId}
-            />
+            <FormControl fullWidth required error={!!errors.accountManagerId}>
+              <InputLabel id="accountManagerId-label">Account Manager</InputLabel>
+              <Select
+                labelId="accountManagerId-label"
+                name="accountManagerId"
+                value={form.accountManagerId}
+                onChange={e => {
+                  setForm({ ...form, accountManagerId: e.target.value });
+                  setErrors((prev: any) => ({ ...prev, accountManagerId: undefined }));
+                }}
+                label="Account Manager"
+              >
+                <MenuItem value=""><em>None</em></MenuItem>
+                {managers.map(m => (
+                  <MenuItem key={m.id} value={m.id}>{m.fullName}</MenuItem>
+                ))}
+              </Select>
+              {errors.accountManagerId && <FormHelperText>{errors.accountManagerId}</FormHelperText>}
+            </FormControl>
           </Grid>
         </Grid>
       </DialogContent>

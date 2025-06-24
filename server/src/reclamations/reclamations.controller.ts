@@ -15,12 +15,20 @@ import { CreateReclamationDto } from './dto/create-reclamation.dto';
 import { UpdateReclamationDto } from './dto/update-reclamation.dto';
 import { SearchReclamationDto } from './dto/search-reclamation.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
+import { UseGuards } from '@nestjs/common';
 
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {
   return req.user || { id: 'demo', role: 'SUPER_ADMIN' };
 }
 
+
+
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('reclamations')
 export class ReclamationsController {
   constructor(private readonly reclamationsService: ReclamationsService) {}
@@ -33,6 +41,10 @@ export class ReclamationsController {
     @Req() req: any,
   ) {
     const user = getUserFromRequest(req);
+    // Validate input
+    if (!dto.description || !dto.type || !dto.severity || !dto.department) {
+      throw new Error('All required fields (description, type, severity, department) must be provided.');
+    }
     // Attach file path if uploaded
     if (file) dto['evidencePath'] = file.path;
     return this.reclamationsService.createReclamation(dto, user);

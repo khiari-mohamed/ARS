@@ -26,13 +26,17 @@ export class FinanceService {
 
   async createVirement(dto: CreateVirementDto, user: User): Promise<Virement> {
     this.checkFinanceRole(user);
-
+    // Defensive: ensure bordereau exists and is CLOTURE
     const bordereau = await this.prisma.bordereau.findUnique({ where: { id: dto.bordereauId } });
     if (!bordereau) throw new NotFoundException('Bordereau not found');
     if (bordereau.statut !== 'CLOTURE') throw new BadRequestException('Bordereau must be CLOTURE');
+    // Defensive: ensure no duplicate virement for this bordereau
     const existing = await this.prisma.virement.findUnique({ where: { bordereauId: dto.bordereauId } });
     if (existing) throw new BadRequestException('Virement already exists for this bordereau');
-
+    // Defensive: montant must be positive
+    if (dto.montant <= 0) throw new BadRequestException('Montant must be positive.');
+    // Defensive: dateDepot <= dateExecution
+    if (new Date(dto.dateDepot) > new Date(dto.dateExecution)) throw new BadRequestException('dateDepot must be before or equal to dateExecution.');
     const virement = await this.prisma.virement.create({
       data: {
         bordereauId: dto.bordereauId,

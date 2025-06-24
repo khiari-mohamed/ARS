@@ -9,6 +9,11 @@ import { AnalyticsService } from './analytics.service';
 import { AnalyticsKpiDto } from './dto/analytics-kpi.dto';
 import { AnalyticsPerformanceDto } from './dto/analytics-performance.dto';
 import { AnalyticsExportDto } from './dto/analytics-export.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
+import { UseGuards } from '@nestjs/common';
 
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {
@@ -16,6 +21,9 @@ function getUserFromRequest(req: any) {
 }
 
 
+
+
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
@@ -107,6 +115,9 @@ export class AnalyticsController {
   @Get('kpis/daily')
   async getDailyKpis(@Query() query: AnalyticsKpiDto, @Req() req: any) {
     const user = getUserFromRequest(req);
+    // Validate input
+    if (query.fromDate && isNaN(Date.parse(query.fromDate))) throw new Error('Invalid fromDate');
+    if (query.toDate && isNaN(Date.parse(query.toDate))) throw new Error('Invalid toDate');
     return this.analyticsService.getDailyKpis(query, user);
   }
 

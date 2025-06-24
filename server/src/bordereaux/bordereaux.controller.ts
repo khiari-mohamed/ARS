@@ -20,6 +20,13 @@ import { BordereauKPI } from './interfaces/kpi.interface';
 import { CreateBSDto, UpdateBSDto } from './dto/bs.dto';
 import { AuditLogService } from './audit-log.service';
 
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
+import { UseGuards } from '@nestjs/common';
+import { UpdateBulletinSoinDto } from '../bulletin-soin/dto/update-bulletin-soin.dto';
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('bordereaux')
 export class BordereauxController {
   contractsService: any;
@@ -29,8 +36,14 @@ export class BordereauxController {
   ) {}
 
   @Post()
-  create(@Body() createBordereauDto: CreateBordereauDto): Promise<BordereauResponseDto> {
-    return this.bordereauxService.create(createBordereauDto);
+  async create(@Body() createBordereauDto: CreateBordereauDto): Promise<BordereauResponseDto> {
+    // Validate input
+    if (!createBordereauDto.reference || !createBordereauDto.dateReception || !createBordereauDto.clientId || typeof createBordereauDto.delaiReglement !== 'number' || typeof createBordereauDto.nombreBS !== 'number') {
+      throw new Error('All required fields must be provided.');
+    }
+    // Validate client and contract linkage
+    const bordereau = await this.bordereauxService.create(createBordereauDto);
+    return bordereau;
   }
 
   @Get(':id/audit-log')
@@ -154,9 +167,9 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
   }
 
   @Patch('bs/:bsId')
-  updateBS(@Param('bsId') bsId: string, @Body() updateBSDto: UpdateBSDto) {
-    return this.bordereauxService.updateBS(bsId, updateBSDto);
-  }
+  async updateBS(@Param('bsId') bsId: string, @Body() updateBSDto: UpdateBulletinSoinDto) {
+  return this.bordereauxService.updateBS(bsId, updateBSDto);
+}
 
   // --- Documents, Virement, Alerts ---
   @Get(':id/documents')

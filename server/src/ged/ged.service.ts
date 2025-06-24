@@ -76,14 +76,35 @@ export class GedService {
     body: { assignedToUserId?: string; teamId?: string },
     user: User,
   ) {
-    // Only Chef d’équipe or Super Admin can assign
+    // Only Chef d’équipe or Super Admin can assign manually
     if (!['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to assign documents');
+    }
+    // If no assignedToUserId provided, do auto-assignment
+    let assignedToUserId = body.assignedToUserId;
+    if (!assignedToUserId) {
+      // Find all eligible users (SCAN_TEAM, GESTIONNAIRE, active)
+      const eligible = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['SCAN_TEAM', 'GESTIONNAIRE'] },
+          active: true,
+        },
+      });
+      if (eligible.length === 0) throw new ForbiddenException('No eligible users for auto-assignment.');
+      // Assign to user with lowest open documents
+      const workloads = await Promise.all(eligible.map(async user => {
+        const count = await this.prisma.document.count({
+          where: { uploadedById: user.id, status: { not: 'scanned' } },
+        });
+        return { user, count };
+      }));
+      workloads.sort((a, b) => a.count - b.count);
+      assignedToUserId = workloads[0].user.id;
     }
     const doc = await this.prisma.document.update({
       where: { id },
       data: {
-        ...(body.assignedToUserId && { uploadedById: body.assignedToUserId }),
+        uploadedById: assignedToUserId,
         ...(body.teamId && { teamId: body.teamId }),
       },
     });
@@ -93,14 +114,14 @@ export class GedService {
         data: {
           userId: user.id,
           action: 'ASSIGN_DOCUMENT',
-          details: { documentId: id, ...body },
+          details: { documentId: id, assignedToUserId, ...body },
         },
       });
     } catch (e) {
       console.log(`[AUDIT] Document assigned: ${id} by ${user.id}`);
     }
     // Notification
-    await this.notificationService.notify('document_assigned', { document: doc, user, ...body });
+    await this.notificationService.notify('document_assigned', { document: doc, user, assignedToUserId, ...body });
     return doc;
   }
     async getDocumentStats(user: User) {
@@ -159,29 +180,37 @@ export class GedService {
   }
 
   async uploadDocument(
-  file: Express.Multer.File,
-  dto: CreateDocumentDto,
-  user: User,
+    file: Express.Multer.File,
+    dto: CreateDocumentDto,
+    user: User,
   ): Promise<Document> {
-  // Access control: Only Scan Team, Chef d’équipe, Super Admin can upload
-  if (!['SCAN_TEAM', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
-  throw new ForbiddenException('You do not have permission to upload documents');
-  }
-  // Debug log for foreign key values
-  console.log('UPLOAD DEBUG:', {
-  uploadedById: user.id,
-  bordereauId: dto.bordereauId,
-  });
-  const doc = await this.prisma.document.create({
-  data: {
-  name: dto.name,
-  type: dto.type,
-  path: file.path,
-  uploadedById: user.id,
-  bordereauId: dto.bordereauId,
-  status: 'uploaded',
-  },
-  });
+    // Access control: Only Scan Team, Chef d’équipe, Super Admin can upload
+    if (!['SCAN_TEAM', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('You do not have permission to upload documents');
+    }
+    // Validate file type and size (example: max 10MB, allowed types: pdf, jpg, png)
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new ForbiddenException('File type not allowed.');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new ForbiddenException('File size exceeds 10MB limit.');
+    }
+    // Defensive: ensure bordereau exists if bordereauId provided
+    if (dto.bordereauId) {
+      const bordereau = await this.prisma.bordereau.findUnique({ where: { id: dto.bordereauId } });
+      if (!bordereau) throw new ForbiddenException('Linked bordereau does not exist.');
+    }
+    const doc = await this.prisma.document.create({
+      data: {
+        name: dto.name,
+        type: dto.type,
+        path: file.path,
+        uploadedById: user.id,
+        bordereauId: dto.bordereauId,
+        status: 'uploaded',
+      },
+    });
     // Audit log
     try {
       await this.prisma.auditLog.create({

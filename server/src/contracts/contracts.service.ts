@@ -19,8 +19,39 @@ export class ContractsService {
     throw new ForbiddenException('Access denied');
   }
 
+  async isClientExists(clientId: string): Promise<boolean> {
+    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    return !!client;
+  }
+
+  async hasContractOverlap(clientId: string, startDate: string, endDate: string): Promise<boolean> {
+    // Check for overlapping contracts for the same client
+    const overlap = await this.prisma.contract.findFirst({
+      where: {
+        clientId,
+        OR: [
+          {
+            startDate: { lte: endDate },
+            endDate: { gte: startDate },
+          },
+        ],
+      },
+    });
+    return !!overlap;
+  }
+
   async createContract(dto: CreateContractDto, file: Express.Multer.File, user: any) {
     this.checkRole(user, 'create');
+    // Validate client linkage (defensive, should be checked in controller)
+    const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
+    if (!client) {
+      throw new Error('Linked client does not exist.');
+    }
+    // Optionally, check for unique contract per client+period (defensive)
+    const overlap = await this.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
+    if (overlap) {
+      throw new Error('A contract for this client and period already exists.');
+    }
     const contract = await this.prisma.contract.create({
       data: {
         ...dto,

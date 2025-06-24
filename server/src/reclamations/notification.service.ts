@@ -37,6 +37,8 @@ export class NotificationService {
     }
   }
 
+  // Optionally, add in-app notification or webhook logic here
+
   // Uncomment and configure for SMS support
   // async sendSms(to: string, message: string) {
   //   const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);

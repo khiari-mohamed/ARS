@@ -5,6 +5,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../auth/user-role.enum';
 
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -31,8 +32,20 @@ export class UsersController {
   @Roles(UserRole.SUPER_ADMIN)
   @Post()
   async createUser(@Body() body: { email: string; password: string; fullName: string; role: string }) {
-    // Password should be hashed in AuthService, but for admin creation, hash here or delegate
-    return this.usersService.create(body).then(({ password, ...rest }) => rest);
+    // Validate input
+    if (!body.email || !body.password || !body.fullName || !body.role) {
+      throw new Error('All fields (email, password, fullName, role) are required.');
+    }
+    // Check for existing user
+    const existing = await this.usersService.findByEmail(body.email);
+    if (existing) {
+      throw new Error('A user with this email already exists.');
+    }
+    // Hash password
+    const bcrypt = require('bcrypt');
+    const hashed = await bcrypt.hash(body.password, 10);
+    const user = await this.usersService.create({ ...body, password: hashed });
+    return { ...user, password: undefined };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

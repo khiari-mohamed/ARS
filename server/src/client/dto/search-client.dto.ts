@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsObject } from 'class-validator';
 
 export class SearchClientDto {
   @IsOptional()
@@ -8,4 +8,8 @@ export class SearchClientDto {
   @IsOptional()
   @IsString()
   accountManagerId?: string;
+
+  @IsOptional()
+  @IsObject()
+  slaConfig?: any; // For filtering by SLA config if needed
 }

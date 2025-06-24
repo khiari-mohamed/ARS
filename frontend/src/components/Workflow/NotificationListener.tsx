@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Snackbar, Alert } from '@mui/material';
 import io from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:8000'; // backend port is 8000
+const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const NotificationListener: React.FC = () => {
   const [notif, setNotif] = useState<{ open: boolean, message: string, severity: 'warning' | 'info' | 'success' | 'error' }>({ open: false, message: '', severity: 'warning' });

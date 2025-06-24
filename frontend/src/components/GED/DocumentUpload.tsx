@@ -15,8 +15,9 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
     type: 'BS',
     bordereauId: '',
   });
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ [name: string]: 'pending' | 'success' | 'error' }>({});
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
@@ -26,28 +27,44 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      setFiles(Array.from(e.target.files));
+    } else {
+      setFiles([]);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      setError('Please select a file');
+    if (!files.length) {
+      setError('Please select at least one file');
       return;
     }
-    setLoading(true);
+    setUploading(true);
     setError(null);
-    try {
-      await uploadDocument(form, file);
+    const progress: { [name: string]: 'pending' | 'success' | 'error' } = {};
+    for (const file of files) {
+      progress[file.name] = 'pending';
+    }
+    setUploadProgress({ ...progress });
+    let anyError = false;
+    for (const file of files) {
+      try {
+        await uploadDocument(form, file);
+        progress[file.name] = 'success';
+      } catch (err: any) {
+        progress[file.name] = 'error';
+        anyError = true;
+      }
+      setUploadProgress({ ...progress });
+    }
+    setUploading(false);
+    if (!anyError) {
       setForm({ name: '', type: 'BS', bordereauId: '' });
-      setFile(null);
+      setFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
       onUploadSuccess?.();
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Upload failed');
-    } finally {
-      setLoading(false);
+    } else {
+      setError('Some files failed to upload.');
     }
   };
 
@@ -91,16 +108,29 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
         />
       </div>
       <div>
-        <label>File</label>
+        <label>File(s)</label>
         <input
           type="file"
           ref={fileInputRef}
           onChange={handleFileChange}
           required
+          multiple
         />
       </div>
-      <button type="submit" disabled={loading}>
-        {loading ? 'Uploading...' : 'Upload'}
+      {files.length > 0 && (
+        <ul style={{ margin: '8px 0', padding: 0, listStyle: 'none' }}>
+          {files.map(f => (
+            <li key={f.name} style={{ fontSize: 13 }}>
+              {f.name}
+              {uploadProgress[f.name] === 'success' && <span style={{ color: 'green', marginLeft: 8 }}>✓</span>}
+              {uploadProgress[f.name] === 'error' && <span style={{ color: 'red', marginLeft: 8 }}>✗</span>}
+              {uploadProgress[f.name] === 'pending' && uploading && <span style={{ color: '#888', marginLeft: 8 }}>Uploading...</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="submit" disabled={uploading}>
+        {uploading ? 'Uploading...' : 'Upload'}
       </button>
       {error && <div className="error">{error}</div>}
     </form>

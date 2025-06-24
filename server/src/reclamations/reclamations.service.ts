@@ -131,9 +131,13 @@ export class ReclamationsService {
 
   // Helper: Find least-loaded user in department for auto-assignment
   public async autoAssign(department?: string): Promise<string | undefined> {
-    // Find users in department with least assigned open reclamations
+    // Find eligible users in department (active, GESTIONNAIRE or CUSTOMER_SERVICE)
     const users = await this.prisma.user.findMany({
-      where: department ? { department } : {},
+      where: {
+        ...(department ? { department } : {}),
+        active: true,
+        role: { in: ['GESTIONNAIRE', 'CUSTOMER_SERVICE'] },
+      },
       select: { id: true },
     });
     if (!users.length) return undefined;
@@ -153,6 +157,21 @@ export class ReclamationsService {
     // Auto-assignment if not provided
     if (!assignedToId) {
       assignedToId = await this.autoAssign(dto.department);
+    }
+    // Defensive: ensure client exists if clientId provided
+    if (dto.clientId) {
+      const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
+      if (!client) throw new Error('Linked client does not exist.');
+    }
+    // Defensive: ensure contract exists if contractId provided
+    if (dto.contractId) {
+      const contract = await this.prisma.contract.findUnique({ where: { id: dto.contractId } });
+      if (!contract) throw new Error('Linked contract does not exist.');
+    }
+    // Defensive: ensure bordereau exists if bordereauId provided
+    if (dto.bordereauId) {
+      const bordereau = await this.prisma.bordereau.findUnique({ where: { id: dto.bordereauId } });
+      if (!bordereau) throw new Error('Linked bordereau does not exist.');
     }
     const data: any = {
       description: dto.description,

@@ -19,6 +19,16 @@ const BSListPage: React.FC = () => {
 
   const { data: slaAlerts } = useSlaAlerts();
   const { data: notifications } = useNotifications();
+  const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
+
+  React.useEffect(() => {
+    // Fetch managers (GESTIONNAIRE) from backend using LocalAPI
+    import('../../services/axios').then(({ LocalAPI }) => {
+      LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
+        .then(res => setManagers(res.data || []))
+        .catch(() => setManagers([]));
+    });
+  }, []);
 
   const slaCount = (slaAlerts?.overdue?.length || 0) + (slaAlerts?.approaching?.length || 0);
 

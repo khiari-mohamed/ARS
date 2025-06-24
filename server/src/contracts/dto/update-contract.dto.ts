@@ -1,11 +1,13 @@
-import { IsOptional, IsString, IsInt } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsDateString } from 'class-validator';
 
 export class UpdateContractDto {
   @IsOptional()
   @IsString()
   clientName?: string;
 
-  @IsOptional() signature?: string; // <-- NEW
+  @IsOptional()
+  @IsString()
+  signature?: string;
 
   @IsOptional()
   @IsInt()
@@ -26,4 +28,16 @@ export class UpdateContractDto {
   @IsOptional()
   @IsString()
   assignedManagerId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  signatureDate?: string;
 }
