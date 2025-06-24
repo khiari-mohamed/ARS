@@ -224,3 +224,4 @@ def predict_resources(data: Dict = Body(...)):
         return {'required_managers': None, 'error': 'Invalid historical rate'}
     required = int(np.ceil(volume / (historical_rate * sla_days)))
     return {'required_managers': required}
+    
