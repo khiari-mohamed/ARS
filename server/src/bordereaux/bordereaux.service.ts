@@ -984,6 +984,18 @@ async estimateStaffing(days: number = 7, avgPerStaffPerDay: number = 5): Promise
 
 // --- AI Integration (stubs) ---
 /**
+ * Predict required resources using AI microservice
+ */
+async getPredictResourcesAI(payload: any): Promise<any> {
+  try {
+    const { data } = await axios.post('http://localhost:8001/predict_resources', payload);
+    return data;
+  } catch (error) {
+    return { message: 'AI microservice unavailable', error: error.message };
+  }
+}
+
+/**
  * Analyze complaints using AI (stub)
  */
 async analyzeComplaintsAI(): Promise<{ message: string; analysis?: any }> {

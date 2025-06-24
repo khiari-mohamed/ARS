@@ -260,6 +260,12 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
     return this.bordereauxService.getTeamRecommendations();
   }
 
+  // --- AI Predict Resources ---
+  @Post('ai/predict-resources')
+  async getPredictResourcesAI(@Body() payload: any) {
+    return this.bordereauxService.getPredictResourcesAI(payload);
+  }
+
   // --- Full-Text Search ---
   @Get('search')
   searchBordereauxAndDocuments(@Query('query') query: string) {

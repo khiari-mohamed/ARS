@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Body
-from typing import List, Dict
-from collections import Counter
+from typing import List, Dict, Any
+from collections import Counter, defaultdict
 import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from datetime import datetime, timedelta
+import numpy as np
 
 app = FastAPI()
 nlp = spacy.load("fr_core_news_sm")
@@ -57,3 +59,168 @@ def recommendations(payload: Dict = Body(...)):
                 "recommendation": f"Workload is {count}. Staffing is sufficient."
             })
     return {"recommendations": recs}
+
+# 1. SLA Breach Prediction
+@app.post("/sla_prediction")
+def sla_prediction(items: List[Dict]):
+    # Each item: { 'id', 'start_date', 'deadline', 'current_progress', 'total_required', 'sla_days' }
+    results = []
+    for item in items:
+        try:
+            start = datetime.fromisoformat(item['start_date'])
+            deadline = datetime.fromisoformat(item['deadline'])
+            now = datetime.now()
+            days_total = (deadline - start).days
+            days_left = (deadline - now).days
+            progress = item.get('current_progress', 0)
+            total = item.get('total_required', 1)
+            if days_total <= 0:
+                risk = '🔴'
+                score = 1.0
+            else:
+                expected_rate = total / days_total
+                actual_rate = progress / max(1, (now - start).days)
+                if days_left < 0:
+                    risk = '🔴'
+                    score = 1.0
+                elif actual_rate >= expected_rate:
+                    risk = '🟢'
+                    score = 0.0
+                elif actual_rate >= 0.7 * expected_rate:
+                    risk = '🟠'
+                    score = 0.5
+                else:
+                    risk = '🔴'
+                    score = 1.0
+            results.append({
+                'id': item['id'],
+                'risk': risk,
+                'score': score,
+                'days_left': days_left
+            })
+        except Exception as e:
+            results.append({'id': item.get('id'), 'error': str(e)})
+    return {'sla_predictions': results}
+
+# 2. Prioritization (Daily Priority Suggestions)
+@app.post("/priorities")
+def priorities(bordereaux: List[Dict]):
+    # Each bordereau: { 'id', 'sla_urgency', 'volume', 'client_importance', 'deadline', ... }
+    scored = []
+    for b in bordereaux:
+        sla_urgency = b.get('sla_urgency', 0)
+        volume = b.get('volume', 1)
+        client_importance = b.get('client_importance', 1)
+        deadline = b.get('deadline')
+        days_left = 0
+        if deadline:
+            try:
+                days_left = (datetime.fromisoformat(deadline) - datetime.now()).days
+            except:
+                days_left = 0
+        # Lower days_left = higher urgency
+        priority_score = sla_urgency * 2 + volume + client_importance * 1.5 + max(0, 10 - days_left)
+        scored.append({
+            'id': b['id'],
+            'priority_score': priority_score
+        })
+    scored.sort(key=lambda x: -x['priority_score'])
+    return {'priorities': scored}
+
+# 3. Reassignment Recommendation
+@app.post("/reassignment")
+def reassignment(data: Dict = Body(...)):
+    # Input: { 'managers': [{id, avg_time, norm_time, workload}], 'threshold': float }
+    managers = data.get('managers', [])
+    threshold = data.get('threshold', 1.2)  # 20% slower than norm
+    recs = []
+    for m in managers:
+        avg = m.get('avg_time', 1)
+        norm = m.get('norm_time', 1)
+        if avg > norm * threshold:
+            recs.append({
+                'manager_id': m['id'],
+                'recommendation': 'Reassign workload, underperformance detected.'
+            })
+    return {'reassignment': recs}
+
+# 4. Performance Analysis
+@app.post("/performance")
+def performance(data: Dict = Body(...)):
+    # Input: { 'users': [{id, actual, expected}], 'period': str }
+    users = data.get('users', [])
+    results = []
+    for u in users:
+        actual = u.get('actual', 0)
+        expected = u.get('expected', 1)
+        delta = actual - expected
+        status = 'OK' if actual >= expected else 'UNDER'
+        results.append({
+            'user_id': u['id'],
+            'actual': actual,
+            'expected': expected,
+            'delta': delta,
+            'status': status
+        })
+    return {'performance': results}
+
+# 5. Correlation between complaints and processes
+@app.post("/correlation")
+def correlation(data: Dict = Body(...)):
+    # Input: { 'complaints': [{id, type, related_docs, process}], 'processes': [{id, name}] }
+    complaints = data.get('complaints', [])
+    process_map = defaultdict(list)
+    for c in complaints:
+        proc = c.get('process')
+        if proc:
+            process_map[proc].append(c['id'])
+    correlations = [{
+        'process': proc,
+        'complaint_ids': ids,
+        'count': len(ids)
+    } for proc, ids in process_map.items() if len(ids) > 1]
+    return {'correlations': correlations}
+
+# 6. Comparative Performance (Planned vs Actual)
+@app.post("/compare_performance")
+def compare_performance(data: Dict = Body(...)):
+    # Input: { 'planned': [{id, value}], 'actual': [{id, value}] }
+    planned = {x['id']: x['value'] for x in data.get('planned', [])}
+    actual = {x['id']: x['value'] for x in data.get('actual', [])}
+    results = []
+    for id_ in planned:
+        act = actual.get(id_, 0)
+        plan = planned[id_]
+        results.append({
+            'id': id_,
+            'planned': plan,
+            'actual': act,
+            'delta': act - plan
+        })
+    return {'comparison': results}
+
+# 7. Diagnostic Optimisation
+@app.post("/diagnostic_optimisation")
+def diagnostic_optimisation(data: Dict = Body(...)):
+    # Input: { 'metrics': [{name, value, threshold}] }
+    metrics = data.get('metrics', [])
+    recs = []
+    for m in metrics:
+        if m['value'] < m['threshold']:
+            recs.append({
+                'metric': m['name'],
+                'recommendation': 'Below threshold, optimize process.'
+            })
+    return {'diagnostic': recs}
+
+# 8. Predict Required Resources
+@app.post("/predict_resources")
+def predict_resources(data: Dict = Body(...)):
+    # Input: { 'sla_days': int, 'historical_rate': float, 'volume': int }
+    sla_days = data.get('sla_days', 1)
+    historical_rate = data.get('historical_rate', 1)
+    volume = data.get('volume', 1)
+    if historical_rate <= 0:
+        return {'required_managers': None, 'error': 'Invalid historical rate'}
+    required = int(np.ceil(volume / (historical_rate * sla_days)))
+    return {'required_managers': required}

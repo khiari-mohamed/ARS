@@ -1,6 +1,10 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException }
+from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertsQueryDto } from './dto/alerts-query.dto';
+import axios from 'axios';
+
+const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8001';
 
 @Injectable()
 export class AlertsService {
@@ -9,6 +13,20 @@ export class AlertsService {
   }
   constructor(private prisma: PrismaService) {}
 
+
+
+    /**
+   * AI-powered SLA prediction
+   */
+  async getSlaPredictionAI(items: any[]) {
+    // items: [{ id, start_date, deadline, current_progress, total_required, sla_days }]
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/sla_prediction`, items);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI SLA prediction failed: ' + error.message);
+    }
+  } 
   // Allow all authenticated users to access dashboard alerts
   private checkAlertsRole(user: any) {
     // Implement role-based access if needed

@@ -1,23 +1,29 @@
-import React from 'react';
-import { ComparativeAnalytics } from '../../types/alerts.d';
+import React, { useEffect, useState } from 'react';
+import { getComparePerformanceAI } from '../../services/analyticsService';
 import { Box, Typography, Tooltip } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
-interface Props {
-  analytics?: ComparativeAnalytics;
-}
+const AlertComparativeAnalytics: React.FC<{ payload: any }> = ({ payload }) => {
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-const AlertComparativeAnalytics: React.FC<Props> = ({ analytics }) => {
-  if (
-    !analytics ||
-    typeof analytics.planned !== 'number' ||
-    typeof analytics.actual !== 'number' ||
-    typeof analytics.gap !== 'number'
-  ) {
+  useEffect(() => {
+    if (!payload) return;
+    setLoading(true);
+    getComparePerformanceAI(payload)
+      .then(data => setAnalytics(data.comparison ? data.comparison[0] : null))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [payload]);
+
+  if (loading) return <Typography>Chargement comparatif IA...</Typography>;
+  if (error) return <Typography color="error">Erreur: {error}</Typography>;
+  if (!analytics || typeof analytics.planned !== 'number' || typeof analytics.actual !== 'number' || typeof analytics.delta !== 'number') {
     return null;
   }
 
-  const isGapNegative = analytics.gap < 0;
+  const isGapNegative = analytics.delta < 0;
 
   // For a simple bar chart, calculate relative widths
   const maxVal = Math.max(analytics.planned, analytics.actual, 1);
@@ -58,7 +64,7 @@ const AlertComparativeAnalytics: React.FC<Props> = ({ analytics }) => {
               justifyContent="center"
               gap={0.5}
             >
-              {analytics.gap}
+              {analytics.delta}
               {isGapNegative && (
                 <WarningAmberIcon fontSize="small" sx={{ ml: 0.5 }} />
               )}

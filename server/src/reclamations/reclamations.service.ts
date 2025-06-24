@@ -4,6 +4,9 @@ import { CreateReclamationDto } from './dto/create-reclamation.dto';
 import { UpdateReclamationDto } from './dto/update-reclamation.dto';
 import { SearchReclamationDto } from './dto/search-reclamation.dto';
 import { NotificationService } from './notification.service';
+import axios from 'axios';
+
+const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8001';
 
 @Injectable()
 export class ReclamationsService {
@@ -330,6 +333,16 @@ export class ReclamationsService {
       orderBy: { createdAt: 'asc' },
       include: { user: true },
     });
+  }
+
+  // AI-based correlation analysis
+  async getCorrelationAI(payload: any) {
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/correlation`, payload);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI correlation failed: ' + error.message);
+    }
   }
 
   // AI-based analysis: detect recurrent complaints, suggest root causes

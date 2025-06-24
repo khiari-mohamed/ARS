@@ -15,6 +15,7 @@ import { GecTemplates } from './GecTemplates';
 import { ExportButtons } from './ExportButtons';
 import { ReclamationAlerts } from './ReclamationAlerts';
 import { SkeletonTable } from './SkeletonTable';
+import { getCorrelationAI } from '../../services/reclamationsService';
 
 const PAGE_SIZE = 20;
 type Client = { id: string; name: string };
@@ -89,6 +90,25 @@ export const ReclamationsList: React.FC = () => {
     setPage(1); // Reset to first page on filter change
   };
 
+  // AI Correlation Example (button to fetch and display correlation)
+  const [correlation, setCorrelation] = useState<any>(null);
+  const [correlationLoading, setCorrelationLoading] = useState(false);
+  const [correlationError, setCorrelationError] = useState<string | null>(null);
+
+  const handleCorrelation = async () => {
+    setCorrelationLoading(true);
+    setCorrelationError(null);
+    try {
+      const payload = { complaints: data || [], processes: [] };
+      const result = await getCorrelationAI(payload);
+      setCorrelation(result);
+    } catch (e: any) {
+      setCorrelationError(e.message);
+    } finally {
+      setCorrelationLoading(false);
+    }
+  };
+
   return (
     <div className="reclamations-container max-w-full p-2 md:p-6">
       <h2 className="reclamations-title text-2xl font-bold mb-4">Réclamations</h2>
@@ -105,6 +125,26 @@ export const ReclamationsList: React.FC = () => {
       <div className="mb-6">
         <GecTemplates />
       </div>
+      <button className="mb-4 px-4 py-2 bg-blue-500 text-white rounded" onClick={handleCorrelation} disabled={correlationLoading}>
+        {correlationLoading ? 'Analyse IA...' : 'Corrélation IA réclamations ↔ processus'}
+      </button>
+      {correlationError && <div className="text-red-600">Erreur IA: {correlationError}</div>}
+      {correlation && (
+        <div className="mb-4">
+          <h4 className="font-bold">Corrélations détectées :</h4>
+          <ul>
+            {correlation.correlations && correlation.correlations.length > 0 ? (
+              correlation.correlations.map((c: any, idx: number) => (
+                <li key={idx}>
+                  Processus: <b>{c.process}</b> — Réclamations: {c.complaint_ids.join(', ')} (Total: {c.count})
+                </li>
+              ))
+            ) : (
+              <li>Aucune corrélation détectée.</li>
+            )}
+          </ul>
+        </div>
+      )}
       <FilterPanel
         filters={filters}
         onChange={handleFilterChange}

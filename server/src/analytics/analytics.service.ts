@@ -8,6 +8,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as fastcsv from 'fast-csv';
 import PDFDocument from 'pdfkit';
+import axios from 'axios';
+
+const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8001';
 
 
 @Injectable()
@@ -68,6 +71,61 @@ async getActualPerformance(filters: any, user: any) {
 }
 
   constructor(private prisma: PrismaService) {}
+
+  // --- AI Integration ---
+  async getPrioritiesAI(items: any[]) {
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/priorities`, items);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI priorities failed: ' + error.message);
+    }
+  }
+
+  async getReassignmentAI(payload: any) {
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/reassignment`, payload);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI reassignment failed: ' + error.message);
+    }
+  }
+
+  async getPerformanceAI(payload: any) {
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/performance`, payload);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI performance failed: ' + error.message);
+    }
+  }
+
+  async getComparePerformanceAI(payload: any) {
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/compare_performance`, payload);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI compare performance failed: ' + error.message);
+    }
+  }
+
+  async getDiagnosticOptimisationAI(payload: any) {
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/diagnostic_optimisation`, payload);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI diagnostic optimisation failed: ' + error.message);
+    }
+  }
+
+  async getPredictResourcesAI(payload: any) {
+    try {
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/predict_resources`, payload);
+      return response.data;
+    } catch (error) {
+      throw new Error('AI predict resources failed: ' + error.message);
+    }
+  }
 
   private checkAnalyticsRole(user: any) {
     if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'SCAN', 'BO', 'GESTIONNAIRE'].includes(user.role)) {

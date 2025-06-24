@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { PriorityBordereau } from '../../types/alerts.d';
 import {
   Table,
@@ -14,79 +14,47 @@ import {
 } from '@mui/material';
 import { alertLevelColor, alertLevelLabel } from '../../utils/alertUtils';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { getPrioritiesAI } from '../../services/analyticsService';
 
 interface Props {
-  priorityList?: PriorityBordereau[];
+  items?: any[]; // Array of bordereaux or relevant objects for AI
 }
 
-const PriorityList: React.FC<Props> = ({ priorityList }) => {
-  if (!priorityList || priorityList.length === 0) {
-    return <Typography>Aucun bordereau prioritaire.</Typography>;
-  }
+const PriorityList: React.FC<Props> = ({ items }) => {
+  const [priorities, setPriorities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!items || !items.length) return;
+    setLoading(true);
+    getPrioritiesAI(items)
+      .then(data => setPriorities(data.priorities || []))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [items]);
+
+  if (loading) return <Typography>Chargement des priorités IA...</Typography>;
+  if (error) return <Typography color="error">Erreur: {error}</Typography>;
+  if (!priorities.length) return <Typography>Aucun bordereau prioritaire.</Typography>;
 
   return (
     <>
       <Typography variant="h6" gutterBottom>
-        Bordereaux prioritaires
+        Bordereaux prioritaires (IA)
       </Typography>
       <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell>ID</TableCell>
-            <TableCell>Date réception</TableCell>
-            <TableCell>Statut</TableCell>
-            <TableCell>Equipe</TableCell>
-            <TableCell>Niveau</TableCell>
-            <TableCell>Raison</TableCell>
-            <TableCell>Action</TableCell>
+            <TableCell>Score de priorité</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {priorityList.map((b) => (
-            <TableRow key={b.bordereau.id}>
-              <TableCell>
-                <Link
-                  href={`/bordereaux/${b.bordereau.id}`}
-                  target="_blank"
-                  rel="noopener"
-                  underline="hover"
-                >
-                  {b.bordereau.id}
-                </Link>
-              </TableCell>
-              <TableCell>
-                {b.bordereau.dateReception
-                  ? new Date(b.bordereau.dateReception).toLocaleDateString()
-                  : '-'}
-              </TableCell>
-              <TableCell>{b.bordereau.statut}</TableCell>
-              <TableCell>
-                {/* If you have team name, display it, else fallback to teamId */}
-                {b.bordereau.teamName || b.bordereau.teamId || '-'}
-              </TableCell>
-              <TableCell>
-                <Chip
-                  label={alertLevelLabel(b.alertLevel)}
-                  sx={{
-                    backgroundColor: alertLevelColor(b.alertLevel),
-                    color: '#fff',
-                  }}
-                />
-              </TableCell>
-              <TableCell>{b.reason}</TableCell>
-              <TableCell>
-                <Tooltip title="Voir le bordereau">
-                  <IconButton
-                    component="a"
-                    href={`/bordereaux/${b.bordereau.id}`}
-                    target="_blank"
-                    rel="noopener"
-                    size="small"
-                  >
-                    <OpenInNewIcon fontSize="inherit" />
-                  </IconButton>
-                </Tooltip>
-              </TableCell>
+          {priorities.map((b) => (
+            <TableRow key={b.id}>
+              <TableCell>{b.id}</TableCell>
+              <TableCell>{b.priority_score}</TableCell>
             </TableRow>
           ))}
         </TableBody>

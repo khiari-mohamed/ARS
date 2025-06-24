@@ -83,4 +83,17 @@ export class AlertsController {
     const user = getUserFromRequest(req);
     return this.alertsService.resolveAlert(alertId, user);
   }
+
+  // AI-powered SLA prediction
+  @Get('sla-prediction')
+  async getSlaPredictionAI(@Query('items') items: string) {
+    // items should be a JSON stringified array
+    let parsedItems: any[] = [];
+    try {
+      parsedItems = JSON.parse(items);
+    } catch {
+      throw new Error('Invalid items format. Must be JSON array.');
+    }
+    return this.alertsService.getSlaPredictionAI(parsedItems);
+  }
 }

@@ -175,4 +175,47 @@ export class AnalyticsController {
     const user = getUserFromRequest(req);
     return this.analyticsService.getTraceability(bordereauId, user);
   }
+
+  // --- AI Endpoints ---
+  @Get('ai/priorities')
+  async getPrioritiesAI(@Query('items') items: string) {
+    let parsedItems: any[] = [];
+    try { parsedItems = JSON.parse(items); } catch { throw new Error('Invalid items format. Must be JSON array.'); }
+    return this.analyticsService.getPrioritiesAI(parsedItems);
+  }
+
+  @Get('ai/reassignment')
+  async getReassignmentAI(@Query('payload') payload: string) {
+    let parsed: any = {};
+    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
+    return this.analyticsService.getReassignmentAI(parsed);
+  }
+
+  @Get('ai/performance')
+  async getPerformanceAI(@Query('payload') payload: string) {
+    let parsed: any = {};
+    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
+    return this.analyticsService.getPerformanceAI(parsed);
+  }
+
+  @Get('ai/compare-performance')
+  async getComparePerformanceAI(@Query('payload') payload: string) {
+    let parsed: any = {};
+    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
+    return this.analyticsService.getComparePerformanceAI(parsed);
+  }
+
+  @Get('ai/diagnostic-optimisation')
+  async getDiagnosticOptimisationAI(@Query('payload') payload: string) {
+    let parsed: any = {};
+    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
+    return this.analyticsService.getDiagnosticOptimisationAI(parsed);
+  }
+
+  @Get('ai/predict-resources')
+  async getPredictResourcesAI(@Query('payload') payload: string) {
+    let parsed: any = {};
+    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
+    return this.analyticsService.getPredictResourcesAI(parsed);
+  }
 }

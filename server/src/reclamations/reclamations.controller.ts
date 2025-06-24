@@ -181,6 +181,12 @@ export class ReclamationsController {
     return this.reclamationsService.aiAnalysis(user);
   }
 
+  // AI-based correlation endpoint
+  @Post('ai/correlation')
+  async getCorrelationAI(@Body() payload: any) {
+    return this.reclamationsService.getCorrelationAI(payload);
+  }
+
   @Get('analytics/dashboard')
   async analytics(@Req() req: any) {
     const user = getUserFromRequest(req);

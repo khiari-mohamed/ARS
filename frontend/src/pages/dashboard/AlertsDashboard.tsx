@@ -117,7 +117,7 @@ const AlertsDashboard: React.FC = () => {
               Erreur lors du chargement des statistiques comparatives : {errorComparative.message}
             </MuiAlert>
           )}
-          <AlertComparativeAnalytics analytics={comparativeAnalytics} />
+          <AlertComparativeAnalytics payload={comparativeAnalytics} />
         </Grid>
       </Grid>
       <Divider sx={{ my: 2 }} />
@@ -148,7 +148,7 @@ const AlertsDashboard: React.FC = () => {
           Erreur lors du chargement des bordereaux prioritaires : {errorPriority.message}
         </MuiAlert>
       )}
-      <PriorityList priorityList={priorityList} />
+      <PriorityList items={priorityList} />
       <Divider sx={{ my: 2 }} />
       <AlertHistory />
     </Box>
