@@ -147,4 +147,29 @@ export class DashboardService {
       resourceEstimation,
     };
   }
+
+
+
+
+  //////////////////////
+
+
+   async getDepartments(user: any) {
+    // In the future, fetch from DB here.
+    // For now, return the static list:
+    return [
+      { id: 'bureau-ordre', name: "Bureau d’ordre", details: "Réception et enregistrement des dossiers" },
+      { id: 'scan', name: "Service SCAN / Équipe Scan", details: "Numérisation et indexation des documents" },
+      { id: 'sante', name: "Équipe Santé / Équipe Métier", details: "Traitement des bordereaux et bulletins de soins" },
+      { id: 'chef-equipe', name: "Chef d’Équipe", details: "Supervision et répartition des tâches aux gestionnaires" },
+      { id: 'gestionnaire', name: "Gestionnaire", details: "Traitement opérationnel des dossiers" },
+      { id: 'production', name: "Équipe Production", details: "Partie de l’équipe Santé" },
+       { id: 'tiers-payant', name: "Équipe Tiers Payant", details: "Traitement des dossiers spécifiques tiers payant" },
+      { id: 'finance', name: "Service Financier / Finance", details: "Suivi et exécution des virements" },
+      { id: 'client', name: "Service Client", details: "Gestion des réclamations et interaction client" },
+      { id: 'super-admin', name: "Super Admin", details: "Supervision globale et vue sur tous les tableaux de bord" },
+      { id: 'responsable', name: "Responsable de Département", details: "Responsable de son unité avec accès aux données de performance" },
+      { id: 'charge-compte', name: "Chargé de Compte", details: "Liaison avec les clients pour les délais et contrats" }
+    ];
+  }
 }

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { NotificationCenter } from '../components/BS/NotificationCenter';
 import { LocalAPI } from '../services/axios';
 import io from 'socket.io-client';
+import { getSocketUrl } from '../utils/getSocketUrl';
 
 const sidebarLinks = [
   { to: "/home/dashboard", label: "Dashboard", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE'] },
@@ -69,7 +70,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
   // Listen for SLA alerts via socket.io
   useEffect(() => {
-    const socket = io(process.env.REACT_APP_API_URL || 'http://localhost:8000');
+    const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
     socket.on('sla_alert', (data: any) => {
       setNotifications(prev => [
         { message: data.message, read: false, _type: 'sla' },

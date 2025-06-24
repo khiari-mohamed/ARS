@@ -176,44 +176,35 @@ export class AnalyticsController {
     return this.analyticsService.getTraceability(bordereauId, user);
   }
 
-  // --- AI Endpoints ---
-  @Get('ai/priorities')
-  async getPrioritiesAI(@Query('items') items: string) {
-    let parsedItems: any[] = [];
-    try { parsedItems = JSON.parse(items); } catch { throw new Error('Invalid items format. Must be JSON array.'); }
-    return this.analyticsService.getPrioritiesAI(parsedItems);
-  }
+  // --- AI Endpoints ---// --- AI Endpoints ---
+@Post('ai/priorities')
+async getPrioritiesAI(@Body() items: any) {
+  return this.analyticsService.getPrioritiesAI(items);
+}
 
-  @Get('ai/reassignment')
-  async getReassignmentAI(@Query('payload') payload: string) {
-    let parsed: any = {};
-    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
-    return this.analyticsService.getReassignmentAI(parsed);
-  }
+@Post('ai/reassignment')
+async getReassignmentAI(@Body() payload: any) {
+  return this.analyticsService.getReassignmentAI(payload);
+}
 
- @Post('ai/performance')
+@Post('ai/performance')
 async getPerformanceAI(@Body() payload: any) {
   return this.analyticsService.getPerformanceAI(payload);
 }
 
-  @Get('ai/compare-performance')
-  async getComparePerformanceAI(@Query('payload') payload: string) {
-    let parsed: any = {};
-    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
-    return this.analyticsService.getComparePerformanceAI(parsed);
-  }
+@Post('ai/compare-performance')
+async getComparePerformanceAI(@Body() payload: any) {
+  return this.analyticsService.getComparePerformanceAI(payload);
+}
 
-  @Get('ai/diagnostic-optimisation')
-  async getDiagnosticOptimisationAI(@Query('payload') payload: string) {
-    let parsed: any = {};
-    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
-    return this.analyticsService.getDiagnosticOptimisationAI(parsed);
-  }
+@Post('ai/diagnostic-optimisation')
+async getDiagnosticOptimisationAI(@Body() payload: any) {
+  return this.analyticsService.getDiagnosticOptimisationAI(payload);
+}
 
-  @Get('ai/predict-resources')
-  async getPredictResourcesAI(@Query('payload') payload: string) {
-    let parsed: any = {};
-    try { parsed = JSON.parse(payload); } catch { throw new Error('Invalid payload format.'); }
-    return this.analyticsService.getPredictResourcesAI(parsed);
-  }
+@Post('ai/predict-resources')
+async getPredictResourcesAI(@Body() payload: any) {
+  return this.analyticsService.getPredictResourcesAI(payload);
+}
+
 }

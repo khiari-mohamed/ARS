@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Snackbar, Alert } from '@mui/material';
 
+
 interface NotificationContextProps {
   notify: (message: string, severity?: 'success' | 'info' | 'warning' | 'error') => void;
 }

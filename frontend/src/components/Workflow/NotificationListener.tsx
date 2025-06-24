@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Snackbar, Alert } from '@mui/material';
 import io from 'socket.io-client';
+import { getSocketUrl } from '../../utils/getSocketUrl';
 
-const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
 
 const NotificationListener: React.FC = () => {
   const [notif, setNotif] = useState<{ open: boolean, message: string, severity: 'warning' | 'info' | 'success' | 'error' }>({ open: false, message: '', severity: 'warning' });
 
   useEffect(() => {
-    const socket = io(SOCKET_URL, { transports: ['websocket'] });
+    const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
 
     socket.on('sla_alert', (data: any) => {
       setNotif({ open: true, message: data.message, severity: 'warning' });
