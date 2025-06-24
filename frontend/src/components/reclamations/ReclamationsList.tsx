@@ -96,18 +96,25 @@ export const ReclamationsList: React.FC = () => {
   const [correlationError, setCorrelationError] = useState<string | null>(null);
 
   const handleCorrelation = async () => {
-    setCorrelationLoading(true);
-    setCorrelationError(null);
-    try {
-      const payload = { complaints: data || [], processes: [] };
-      const result = await getCorrelationAI(payload);
-      setCorrelation(result);
-    } catch (e: any) {
-      setCorrelationError(e.message);
-    } finally {
+  setCorrelationLoading(true);
+  setCorrelationError(null);
+  try {
+    // Only send if there are valid complaints (with at least an id)
+    const validComplaints = Array.isArray(data) ? data.filter(c => c && c.id) : [];
+    if (!validComplaints.length) {
+      setCorrelation({ correlations: [] });
       setCorrelationLoading(false);
+      return;
     }
-  };
+    const payload = { complaints: validComplaints, processes: [] };
+    const result = await getCorrelationAI(payload);
+    setCorrelation(result);
+  } catch (e: any) {
+    setCorrelationError(e.message);
+  } finally {
+    setCorrelationLoading(false);
+  }
+};
 
   return (
     <div className="reclamations-container max-w-full p-2 md:p-6">

@@ -21,14 +21,20 @@ const PerformanceDashboard: React.FC = () => {
     setFilters({ ...filters, [e.target.name]: e.target.value || undefined });
   };
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    getPerformanceAI({ users: [filters] })
-      .then(data => setAiData(data.performance || []))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [filters]);
+ useEffect(() => {
+  // Only send the request if at least one filter is set
+  const hasValidFilter = Object.values(filters).some(v => v !== undefined && v !== '');
+  if (!hasValidFilter) {
+    setAiData([]);
+    return;
+  }
+  setLoading(true);
+  setError(null);
+  getPerformanceAI({ users: [filters] })
+    .then(data => setAiData(data.performance || []))
+    .catch(e => setError(e.message))
+    .finally(() => setLoading(false));
+}, [filters]);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="text-red-600">Erreur chargement performance IA: {error}</div>;

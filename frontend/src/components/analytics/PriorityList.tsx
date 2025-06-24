@@ -26,13 +26,17 @@ const PriorityList: React.FC<Props> = ({ items }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!items || !items.length) return;
-    setLoading(true);
-    getPrioritiesAI(items)
-      .then(data => setPriorities(data.priorities || []))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [items]);
+  // Only call the API if items is a non-empty array and every item has an id
+  if (!items || !Array.isArray(items) || items.length === 0 || !items.every(i => i && i.id)) {
+    setPriorities([]);
+    return;
+  }
+  setLoading(true);
+  getPrioritiesAI(items)
+    .then(data => setPriorities(data.priorities || []))
+    .catch(e => setError(e.message))
+    .finally(() => setLoading(false));
+}, [items]);
 
   if (loading) return <Typography>Chargement des priorités IA...</Typography>;
   if (error) return <Typography color="error">Erreur: {error}</Typography>;
