@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsString, IsInt, IsOptional, IsDateString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateContractDto {
   @IsNotEmpty()
@@ -10,14 +11,17 @@ export class CreateContractDto {
   clientName: string;
 
   @IsNotEmpty()
+  @Type(() => Number)
   @IsInt()
   delaiReglement: number;
 
   @IsNotEmpty()
+  @Type(() => Number)
   @IsInt()
   delaiReclamation: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   escalationThreshold?: number;
 
