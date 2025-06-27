@@ -41,40 +41,53 @@ export class ContractsService {
   }
 
   async createContract(dto: CreateContractDto, file: Express.Multer.File, user: any) {
-    this.checkRole(user, 'create');
-    // Validate client linkage (defensive, should be checked in controller)
-    const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
-    if (!client) {
-      throw new NotFoundException('Linked client does not exist.');
-    }
-    // Optionally, check for unique contract per client+period (defensive)
-    const overlap = await this.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
-    if (overlap) {
-      throw new ConflictException('A contract for this client and period already exists.');
-    }
-    const {
-      startDate,
-      endDate,
-      signatureDate, // not used in model, but present in DTO
-      ...rest
-    } = dto;
-    const contract = await this.prisma.contract.create({
-      data: {
+    try {
+      this.checkRole(user, 'create');
+      // Validate client linkage (defensive, should be checked in controller)
+      const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
+      if (!client) {
+        console.error('Contract creation error: Linked client does not exist.', dto.clientId);
+        throw new NotFoundException('Linked client does not exist.');
+      }
+      // Optionally, check for unique contract per client+period (defensive)
+      const overlap = await this.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
+      if (overlap) {
+        console.error('Contract creation error: Overlapping contract exists.', dto.clientId, dto.startDate, dto.endDate);
+        throw new ConflictException('A contract for this client and period already exists.');
+      }
+      const {
+        startDate,
+        endDate,
+        signatureDate, // not used in model, but present in DTO
+        ...rest
+      } = dto;
+      console.log('Contract creation payload:', {
         ...rest,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate,
+        endDate,
         documentPath: file?.path || dto.documentPath || '',
-        // signature: signatureDate || null, // Uncomment if you want to store signatureDate
-      },
-    });
-    await this.prisma.contractHistory.create({
-      data: {
-        contractId: contract.id,
-        modifiedById: user.id,
-        changes: { created: contract },
-      },
-    });
-    return contract;
+      });
+      const contract = await this.prisma.contract.create({
+        data: {
+          ...rest,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          documentPath: file?.path || dto.documentPath || '',
+          // signature: signatureDate || null, // Uncomment if you want to store signatureDate
+        },
+      });
+      await this.prisma.contractHistory.create({
+        data: {
+          contractId: contract.id,
+          modifiedById: user.id,
+          changes: { created: contract },
+        },
+      });
+      return contract;
+    } catch (err) {
+      console.error('Contract creation error (catch):', err);
+      throw err;
+    }
   }
 
   async updateContract(id: string, dto: UpdateContractDto, user: any) {
