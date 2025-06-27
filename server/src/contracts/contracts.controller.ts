@@ -43,27 +43,33 @@ export class ContractsController {
     @Body() dto: CreateContractDto,
     @Req() req: any,
   ) {
-    const user = getUserFromRequest(req);
-    // Validate input
-    if (!dto.clientId || !dto.clientName || typeof dto.delaiReglement !== 'number' || typeof dto.delaiReclamation !== 'number' || !dto.assignedManagerId || !dto.startDate || !dto.endDate) {
-      throw new BadRequestException('All required fields must be provided.');
+    try {
+      console.log('Controller: createContract called', { dto, file });
+      const user = getUserFromRequest(req);
+      // Validate input
+      if (!dto.clientId || !dto.clientName || typeof dto.delaiReglement !== 'number' || typeof dto.delaiReclamation !== 'number' || !dto.assignedManagerId || !dto.startDate || !dto.endDate) {
+        throw new BadRequestException('All required fields must be provided.');
+      }
+      // Logical check: startDate must be before or equal to endDate
+      if (new Date(dto.startDate) > new Date(dto.endDate)) {
+        throw new BadRequestException('startDate must be before or equal to endDate');
+      }
+      // Validate client linkage
+      const clientLinked = await this.contractsService.isClientExists(dto.clientId);
+      if (!clientLinked) {
+        throw new NotFoundException('Linked client does not exist.');
+      }
+      // Optionally, check for unique contract per client+period
+      // (Business rule: only one active contract per client per period)
+      const overlap = await this.contractsService.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
+      if (overlap) {
+        throw new ConflictException('A contract for this client and period already exists.');
+      }
+      return await this.contractsService.createContract(dto, file, user);
+    } catch (err) {
+      console.error('Controller error:', err);
+      throw err;
     }
-    // Logical check: startDate must be before or equal to endDate
-    if (new Date(dto.startDate) > new Date(dto.endDate)) {
-      throw new BadRequestException('startDate must be before or equal to endDate');
-    }
-    // Validate client linkage
-    const clientLinked = await this.contractsService.isClientExists(dto.clientId);
-    if (!clientLinked) {
-      throw new NotFoundException('Linked client does not exist.');
-    }
-    // Optionally, check for unique contract per client+period
-    // (Business rule: only one active contract per client per period)
-    const overlap = await this.contractsService.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
-    if (overlap) {
-      throw new ConflictException('A contract for this client and period already exists.');
-    }
-    return this.contractsService.createContract(dto, file, user);
   }
 
   @Patch(':id')

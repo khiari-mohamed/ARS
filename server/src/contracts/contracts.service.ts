@@ -25,14 +25,16 @@ export class ContractsService {
   }
 
   async hasContractOverlap(clientId: string, startDate: string, endDate: string): Promise<boolean> {
-    // Check for overlapping contracts for the same client
+    // Convert to Date objects for Prisma
+    const start = new Date(startDate);
+    const end = new Date(endDate);
     const overlap = await this.prisma.contract.findFirst({
       where: {
         clientId,
         OR: [
           {
-            startDate: { lte: endDate },
-            endDate: { gte: startDate },
+            startDate: { lte: end },
+            endDate: { gte: start },
           },
         ],
       },
@@ -56,33 +58,32 @@ export class ContractsService {
         throw new ConflictException('A contract for this client and period already exists.');
       }
       const {
-        startDate,
-        endDate,
-        signatureDate, // not used in model, but present in DTO
-        ...rest
-      } = dto;
-      console.log('Contract creation payload:', {
-        ...rest,
-        startDate,
-        endDate,
-        documentPath: file?.path || dto.documentPath || '',
-      });
-      const contract = await this.prisma.contract.create({
-        data: {
-          ...rest,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-          documentPath: file?.path || dto.documentPath || '',
-          // signature: signatureDate || null, // Uncomment if you want to store signatureDate
-        },
-      });
-      await this.prisma.contractHistory.create({
-        data: {
-          contractId: contract.id,
-          modifiedById: user.id,
-          changes: { created: contract },
-        },
-      });
+  startDate,
+  endDate,
+  signatureDate, // not used in model, but present in DTO
+  ...rest
+} = dto;
+
+// Remove notes if present
+if ('notes' in rest) {
+  delete (rest as any).notes;
+}
+
+console.log('Contract creation payload:', {
+  ...rest,
+  startDate,
+  endDate,
+  documentPath: file?.path || dto.documentPath || '',
+});
+const contract = await this.prisma.contract.create({
+  data: {
+    ...rest,
+    startDate: new Date(startDate),
+    endDate: new Date(endDate),
+    documentPath: file?.path || dto.documentPath || '',
+    // signature: signatureDate || null, // Uncomment if you want to store signatureDate
+  },
+});
       return contract;
     } catch (err) {
       console.error('Contract creation error (catch):', err);
