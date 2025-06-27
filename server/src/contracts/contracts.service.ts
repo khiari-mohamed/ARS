@@ -52,10 +52,19 @@ export class ContractsService {
     if (overlap) {
       throw new ConflictException('A contract for this client and period already exists.');
     }
+    const {
+      startDate,
+      endDate,
+      signatureDate, // not used in model, but present in DTO
+      ...rest
+    } = dto;
     const contract = await this.prisma.contract.create({
       data: {
-        ...dto,
+        ...rest,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
         documentPath: file?.path || dto.documentPath || '',
+        // signature: signatureDate || null, // Uncomment if you want to store signatureDate
       },
     });
     await this.prisma.contractHistory.create({

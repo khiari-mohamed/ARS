@@ -303,9 +303,24 @@ export class ClientService {
   }
 
   async update(id: string, dto: UpdateClientDto) {
+    // Only pick allowed fields
+    const {
+      name,
+      reglementDelay,
+      reclamationDelay,
+      accountManagerId,
+      slaConfig
+    } = dto;
+
     return this.prisma.client.update({
       where: { id },
-      data: dto,
+      data: {
+        ...(name !== undefined && { name }),
+        ...(reglementDelay !== undefined && { reglementDelay }),
+        ...(reclamationDelay !== undefined && { reclamationDelay }),
+        ...(accountManagerId !== undefined && { accountManagerId }),
+        ...(slaConfig !== undefined && { slaConfig }),
+      },
     });
   }
 
