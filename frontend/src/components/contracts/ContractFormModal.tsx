@@ -35,8 +35,8 @@ const ContractFormModal: React.FC<Props> = ({ contract, onClose, onSaved }) => {
     LocalAPI.get('/clients').then(res => {
       setClients(res.data || []);
     });
-    // Fetch managers
-    LocalAPI.get('/users', { params: { role: 'manager' } }).then(res => {
+    // Fetch managers (GESTIONNAIRE role)
+    LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } }).then(res => {
       setManagers(res.data || []);
     });
   }, []);

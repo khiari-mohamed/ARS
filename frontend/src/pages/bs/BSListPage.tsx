@@ -61,7 +61,7 @@ const BSListPage: React.FC = () => {
           onChange={dates => setFilters(f => ({ ...f, dateRange: dates ? dates : [] }))}
         />
         <Button
-          onClick={() => window.open('http://197.14.56.112:8083/api/bulletin-soin/export/excel', '_blank')}
+          onClick={() => window.open('https://197.14.56.112:8083/api/bulletin-soin/export/excel', '_blank')}
         >
           Exporter Excel
         </Button>

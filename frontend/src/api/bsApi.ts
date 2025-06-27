@@ -6,7 +6,7 @@ import {
   ExpertiseInfo,
 } from '../types/bs';
 
-const API_BASE = 'http://197.14.56.112:8083/api/bulletin-soin';
+const API_BASE = 'https://197.14.56.112:8083/api/bulletin-soin';
 
 export const fetchBSList = async (params: any): Promise<BSListResponse> => {
   const { data } = await axios.get(API_BASE, { params });

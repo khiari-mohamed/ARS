@@ -90,6 +90,9 @@ export const getPriorityScoring = async (params: any) => {
 };
 
 export const getComparativeAnalysis = async (params: any) => {
+  if (!params?.period1?.fromDate || !params?.period1?.toDate || !params?.period2?.fromDate || !params?.period2?.toDate) {
+    return null;
+  }
   const { data } = await LocalAPI.get<any>('/analytics/comparative-analysis', { params });
   return data;
 };

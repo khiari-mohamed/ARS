@@ -84,7 +84,7 @@ export const BSDetailsPage: React.FC = () => {
               Traiter
             </Button>
             <Button onClick={() => setDocOpen(true)}>Voir document</Button>
-            <Button onClick={() => window.open('http://197.14.56.112:8083/api/bulletin-soin/export/excel', '_blank')}>
+            <Button onClick={() => window.open('https://197.14.56.112:8083/api/bulletin-soin/export/excel', '_blank')}>
               Exporter Excel
             </Button>
           </Space>

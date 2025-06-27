@@ -28,12 +28,12 @@ export const fetchContractById = async (id: string | number): Promise<Contract> 
 
 // External API endpoints
 export const fetchExternalContracts = async (): Promise<Contract[]> => {
-  const res = await LocalAPI.get('http://197.14.56.112:8083/api/prestations');
+  const res = await LocalAPI.get('https://197.14.56.112:8083/api/prestations');
   return res.data.content || res.data;
 };
 
 export const fetchExternalContractById = async (id: string | number): Promise<Contract> => {
-  const res = await LocalAPI.get(`http://197.14.56.112:8083/api/prestations/${id}`);
+  const res = await LocalAPI.get(`https://197.14.56.112:8083/api/prestations/${id}`);
   return res.data;
 };
 

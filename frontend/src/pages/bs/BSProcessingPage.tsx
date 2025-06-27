@@ -32,7 +32,7 @@ const getSlaColor = (dueDate: string) => {
 
 const useEscalationRisk = (bsId: number | string) =>
   useQuery(['escalation-risk', bsId], async () => {
-    const res = await fetch(`http://197.14.56.112:8083/api/bulletin-soin/ai/escalation-risk/${bsId}`);
+    const res = await fetch(`https://197.14.56.112:8083/api/bulletin-soin/ai/escalation-risk/${bsId}`);
     return res.json();
   });
 
@@ -99,7 +99,7 @@ export const BSProcessingPage: React.FC = () => {
         extra={
           <Space>
             <Button onClick={() => setDocOpen(true)}>Voir document</Button>
-            <Button onClick={() => window.open('http://197.14.56.112:8083/api/bulletin-soin/export/excel', '_blank')}>
+            <Button onClick={() => window.open('https://197.14.56.112:8083/api/bulletin-soin/export/excel', '_blank')}>
               Exporter Excel
             </Button>
           </Space>

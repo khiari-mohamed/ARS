@@ -20,6 +20,9 @@ export async function getPerformanceAI(payload: any) {
 
 // AI Compare Performance
 export async function getComparePerformanceAI(payload: any) {
+  if (!payload || typeof payload !== 'object' || Object.keys(payload).length === 0) {
+    return null;
+  }
   const { data } = await LocalAPI.post('/analytics/ai/compare-performance', payload);
   return data;
 }

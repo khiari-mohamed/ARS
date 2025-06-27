@@ -15,7 +15,7 @@ type Gestionnaire = { id: number; name: string };
 
 // Fetch gestionnaires from your backend
 const fetchGestionnaires = async (): Promise<Gestionnaire[]> => {
-  const res = await fetch('http://197.14.56.112:8083/api/users?role=Gestionnaire');
+  const res = await fetch('https://197.14.56.112:8083/api/users?role=Gestionnaire');
   const data = await res.json();
   // Adjust if your API returns a different structure
   return (data.content || []).map((u: any) => ({ id: u.id, name: u.username }));

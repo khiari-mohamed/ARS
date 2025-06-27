@@ -18,7 +18,7 @@ export const BSAssignModal: React.FC<{
     // Fetch gestionnaires from backend
     const fetchUsers = async () => {
       try {
-        const res = await fetch('http://197.14.56.112:8083/api/users?role=Gestionnaire');
+        const res = await fetch('https://197.14.56.112:8083/api/users?role=Gestionnaire');
         const data = await res.json();
         setUsers(data.content || []);
       } catch (err) {
