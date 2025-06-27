@@ -9,10 +9,13 @@ const AlertComparativeAnalytics: React.FC<{ payload: any }> = ({ payload }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!payload) return;
+    // Validate payload: must be an object with all required fields (example: period1, period2, etc.)
+    if (!payload || typeof payload !== 'object') return;
+    // Example required fields: period1, period2, metric (adjust as needed)
+    if (!payload.period1 || !payload.period2 || !payload.metric) return;
     setLoading(true);
     getComparePerformanceAI(payload)
-      .then(data => setAnalytics(data.comparison ? data.comparison[0] : null))
+      .then(data => setAnalytics(data && data.comparison ? data.comparison[0] : null))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [payload]);

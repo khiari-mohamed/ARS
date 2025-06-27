@@ -12,6 +12,7 @@ import {
   UseInterceptors,
  Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UsePipes } from '@nestjs/common';
 import { ContractsService } from './contracts.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
@@ -36,6 +37,7 @@ export class ContractsController {
 
   @Post()
   @UseInterceptors(FileInterceptor('file', { dest: './uploads/contracts' }))
+  @UsePipes(new (require('@nestjs/common').ValidationPipe)({ transform: true }))
   async createContract(
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: CreateContractDto,
