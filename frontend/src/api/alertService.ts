@@ -16,7 +16,15 @@ import {
  * @param params AlertsDashboardQuery
  */
 export const getAlertsDashboard = async (params: AlertsDashboardQuery): Promise<Alert[]> => {
-  const { data } = await LocalAPI.get('/alerts/dashboard', { params });
+  // Only send fromDate/toDate if valid
+  const filteredParams = { ...params };
+  if (filteredParams.fromDate && isNaN(Date.parse(filteredParams.fromDate))) {
+    delete filteredParams.fromDate;
+  }
+  if (filteredParams.toDate && isNaN(Date.parse(filteredParams.toDate))) {
+    delete filteredParams.toDate;
+  }
+  const { data } = await LocalAPI.get('/alerts/dashboard', { params: filteredParams });
   return data;
 };
 

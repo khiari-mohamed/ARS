@@ -59,13 +59,13 @@ export class ClientController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
     return this.clientService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMINISTRATEUR)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   remove(@Param('id') id: string) {
     return this.clientService.remove(id);
   }
@@ -82,7 +82,7 @@ export class ClientController {
 
   // Export clients to Excel
   @Post('export/excel')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   async exportExcel(@Body() query: SearchClientDto, @Res() res: Response) {
     const buffer = await this.clientService.exportToExcel(query);
     res.set({
@@ -94,7 +94,7 @@ export class ClientController {
 
   // Export clients to PDF
   @Post('export/pdf')
- @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
+ @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   async exportPDF(@Body() query: SearchClientDto, @Res() res: Response) {
     const buffer = await this.clientService.exportToPDF(query);
     res.set({
@@ -112,7 +112,7 @@ export class ClientController {
 
   // External API sync endpoint (stub)
   @Post(':id/sync-external')
-  @Roles(UserRole.ADMINISTRATEUR)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async syncExternal(@Param('id') id: string) {
     return this.clientService.syncWithExternal(id);
   }
@@ -137,7 +137,7 @@ export class ClientController {
   // --- GED: Upload contract document ---
   @Post(':id/upload-contract')
   @UseInterceptors(FileInterceptor('file'))
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   async uploadContract(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -154,7 +154,7 @@ export class ClientController {
 
   // --- SLA Config ---
   @Patch(':id/sla-config')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   updateSlaConfig(@Param('id') id: string, @Body() config: any) {
     return this.clientService.updateSlaConfig(id, config);
   }

@@ -15,7 +15,7 @@ const initialState = {
   clientName: '',
   startDate: '',
   endDate: '',
-  signature: '',
+  signatureDate: '',
   delaiReglement: 0,
   delaiReclamation: 0,
   escalationThreshold: undefined,
@@ -84,32 +84,41 @@ const ContractFormModal: React.FC<Props> = ({ contract, onClose, onSaved }) => {
         <div className="contract-modal-title">
           {contract ? 'Edit Contract' : 'Add Contract'}
         </div>
-        <label>Client:</label>
+        <label>Client :</label>
         <select name="clientId" value={form.clientId} onChange={handleClientChange} required>
-          <option value="">Select client</option>
+          <option value="">Sélectionner un client</option>
           {clients.map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-        <input name="clientName" value={form.clientName} readOnly placeholder="Client Name" required />
+        <label>Nom du client :</label>
+        <input name="clientName" value={form.clientName} readOnly placeholder="Nom du client" required />
+        <label>Date de début :</label>
         <input name="startDate" type="date" value={form.startDate} onChange={handleChange} required />
+        <label>Date de fin :</label>
         <input name="endDate" type="date" value={form.endDate} onChange={handleChange} required />
-        <input name="signature" type="text" value={form.signature} onChange={handleChange} placeholder="Signature (or date string)" />
+        <label>Date de signature :</label>
+        <input name="signatureDate" type="date" value={form.signatureDate} onChange={handleChange} placeholder="Date de signature" />
+        <label>Délai de règlement (jours) :</label>
         <input name="delaiReglement" type="number" value={form.delaiReglement} onChange={handleChange} required />
+        <label>Délai de réclamation (jours) :</label>
         <input name="delaiReclamation" type="number" value={form.delaiReclamation} onChange={handleChange} required />
+        <label>Seuil d'escalade (optionnel) :</label>
         <input name="escalationThreshold" type="number" value={form.escalationThreshold || ''} onChange={handleChange} />
-        <label>Account Manager:</label>
+        <label>Gestionnaire de compte :</label>
         <select name="assignedManagerId" value={form.assignedManagerId} onChange={handleManagerChange} required>
-          <option value="">Select manager</option>
+          <option value="">Sélectionner un gestionnaire</option>
           {managers.map(m => (
             <option key={m.id} value={m.id}>{m.fullName}</option>
           ))}
         </select>
+        <label>Notes :</label>
         <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Notes" />
+        <label>Fichier du contrat :</label>
         <ContractUploadInput onFileChange={setFile} />
         <div className="contract-modal-actions">
-          <button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save'}</button>
-          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="submit" disabled={loading}>{loading ? 'Enregistrement...' : 'Enregistrer'}</button>
+          <button type="button" onClick={onClose}>Annuler</button>
         </div>
       </form>
     </div>
