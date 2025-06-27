@@ -11,11 +11,19 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.MANAGER)
   @Get()
-  async getAllUsers() {
-    const users = await this.usersService.findAll();
-    return users.map(({ password, ...rest }) => rest);
+  async getAllUsers(@Request() req) {
+    // Support filtering by role via query param
+    const role = req.query?.role;
+    let users;
+    if (role) {
+      users = await this.usersService.findByRole(role);
+    } else {
+      users = await this.usersService.findAll();
+    }
+    // Only return id and fullName for dropdowns
+    return users.map(({ id, fullName }) => ({ id, fullName }));
   }
 
   @UseGuards(JwtAuthGuard)

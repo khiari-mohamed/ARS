@@ -101,11 +101,14 @@ async getActualPerformance(filters: any, user: any) {
   }
 
   async getComparePerformanceAI(payload: any) {
+    const { BadGatewayException } = await import('@nestjs/common');
     try {
       const response = await axios.post(`${AI_MICROSERVICE_URL}/compare_performance`, payload);
       return response.data;
     } catch (error) {
-      throw new Error('AI compare performance failed: ' + error.message);
+      // Log error details for debugging
+      console.error('AI compare performance error:', error?.response?.data || error?.message || error);
+      throw new BadGatewayException('AI compare performance failed: ' + (error?.response?.data?.error || error?.message || error));
     }
   }
 

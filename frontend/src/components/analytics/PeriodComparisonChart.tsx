@@ -5,10 +5,21 @@ const PeriodComparisonChart: React.FC = () => {
   const [period1, setPeriod1] = useState({ fromDate: '', toDate: '' });
   const [period2, setPeriod2] = useState({ fromDate: '', toDate: '' });
   const canQuery = !!(period1.fromDate && period1.toDate && period2.fromDate && period2.toDate);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const { data, isLoading, error } = useComparativeAnalysis(
     { period1, period2 },
     { enabled: canQuery }
   );
+
+  React.useEffect(() => {
+    if (error && (error as any).response && (error as any).response.data && (error as any).response.data.message) {
+      setBackendError((error as any).response.data.message);
+    } else if (error) {
+      setBackendError('Erreur inconnue du serveur');
+    } else {
+      setBackendError(null);
+    }
+  }, [error]);
   return (
     <div>
       <h3 className="text-lg font-bold mb-2">Comparaison de périodes</h3>
@@ -25,7 +36,7 @@ const PeriodComparisonChart: React.FC = () => {
         </div>
       </div>
       {isLoading && <div>Chargement...</div>}
-      {error && <div className="text-red-600">Erreur chargement comparaison</div>}
+      {backendError && <div className="text-red-600">{backendError}</div>}
       {data && (
         <table className="w-full border rounded mt-2">
           <thead>

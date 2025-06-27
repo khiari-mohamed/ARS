@@ -11,7 +11,27 @@ const ExportButton: React.FC = () => {
     try {
       const params: AnalyticsExportDto = { format };
       const { filePath } = await exportAnalytics(params);
-      window.open(filePath, '_blank');
+      // Download the file as blob using authenticated request
+      const axios = await import('axios');
+      const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+      const response = await axios.default.get(filePath, {
+        responseType: 'blob',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      // Try to extract filename from response headers or fallback
+      const disposition = response.headers['content-disposition'];
+      let filename = 'export.' + format;
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        filename = disposition.split('filename=')[1].replace(/"/g, '').trim();
+      }
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (e) {
       alert('Erreur export');
     }

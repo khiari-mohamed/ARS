@@ -23,9 +23,32 @@ const GECAnalytics: React.FC = () => {
 
   const handleExport = async (format: string) => {
     setExporting(true);
-    const res = await LocalAPI.get('/analytics/export', { params: { format } });
-    const url = res.data.filePath;
-    window.open(url, '_blank');
+    try {
+      const res = await LocalAPI.get('/analytics/export', { params: { format } });
+      const url = res.data.filePath;
+      // Secure download with token
+      const axios = await import('axios');
+      const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+      const response = await axios.default.get(url, {
+        responseType: 'blob',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const disposition = response.headers['content-disposition'];
+      let filename = 'export.' + format;
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        filename = disposition.split('filename=')[1].replace(/"/g, '').trim();
+      }
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      alert('Erreur export');
+    }
     setExporting(false);
   };
 

@@ -94,13 +94,19 @@ const MailTemplateEditor: React.FC = () => {
     <div className="gec-mail-template-editor">
       <h3>Letter Templates</h3>
       <ul style={{ display: 'flex', gap: '0.7em', flexWrap: 'wrap', marginBottom: '1em', paddingLeft: 0 }}>
-        {templates.map((tpl, idx) => (
-          <li key={tpl.id} style={{ listStyle: 'none', margin: 0 }}>
-            <button className="btn" type="button" onClick={() => handleSelect(idx)}>
-              {tpl.name}
-            </button>
+        {templates.length === 0 ? (
+          <li style={{ listStyle: 'none', margin: 0, color: '#b71c1c', fontWeight: 500 }}>
+            No templates available. Please create one below.
           </li>
-        ))}
+        ) : (
+          templates.map((tpl, idx) => (
+            <li key={tpl.id} style={{ listStyle: 'none', margin: 0 }}>
+              <button className="btn" type="button" onClick={() => handleSelect(idx)}>
+                {tpl.name}
+              </button>
+            </li>
+          ))
+        )}
       </ul>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7em' }}>
         <input

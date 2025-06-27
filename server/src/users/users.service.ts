@@ -30,6 +30,10 @@ export class UsersService {
     return this.prisma.user.findMany();
   }
 
+  async findByRole(role: string) {
+    return this.prisma.user.findMany({ where: { role } });
+  }
+
   async update(id: string, data: Partial<{ email: string; password: string; fullName: string; role: string }>) {
     const user = await this.prisma.user.update({
       where: { id },

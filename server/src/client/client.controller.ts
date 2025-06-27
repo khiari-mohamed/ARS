@@ -33,7 +33,7 @@ export class ClientController {
 
 
   @Post()
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   async create(@Body() dto: CreateClientDto) {
     // Validate input
     if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number' || !dto.accountManagerId) {

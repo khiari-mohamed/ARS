@@ -185,12 +185,19 @@ def correlation(data: Dict = Body(...)):
 @app.post("/compare_performance")
 def compare_performance(data: Dict = Body(...)):
     # Input: { 'planned': [{id, value}], 'actual': [{id, value}] }
-    planned = {x['id']: x['value'] for x in data.get('planned', [])}
-    actual = {x['id']: x['value'] for x in data.get('actual', [])}
+    planned = data.get('planned')
+    actual = data.get('actual')
+    if not isinstance(planned, list) or not isinstance(actual, list):
+        return {"error": "planned and actual must be lists"}, 400
+    try:
+        planned_dict = {x['id']: x['value'] for x in planned}
+        actual_dict = {x['id']: x['value'] for x in actual}
+    except Exception as e:
+        return {"error": f"Invalid input structure: {e}"}, 400
     results = []
-    for id_ in planned:
-        act = actual.get(id_, 0)
-        plan = planned[id_]
+    for id_ in planned_dict:
+        act = actual_dict.get(id_, 0)
+        plan = planned_dict[id_]
         results.append({
             'id': id_,
             'planned': plan,

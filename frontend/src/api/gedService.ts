@@ -3,7 +3,8 @@ import { Document, DocumentUploadPayload, DocumentSearchParams } from '../types/
 
 export async function uploadDocument(payload: DocumentUploadPayload, file: File): Promise<Document> {
   const formData = new FormData();
-  formData.append('file', file);
+  //formData.append('file', file);
+  formData.append('files', file);
   formData.append('name', payload.name);
   formData.append('type', payload.type);
   if (payload.bordereauId) formData.append('bordereauId', payload.bordereauId);

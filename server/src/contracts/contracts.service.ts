@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
@@ -45,12 +45,12 @@ export class ContractsService {
     // Validate client linkage (defensive, should be checked in controller)
     const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
     if (!client) {
-      throw new Error('Linked client does not exist.');
+      throw new NotFoundException('Linked client does not exist.');
     }
     // Optionally, check for unique contract per client+period (defensive)
     const overlap = await this.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
     if (overlap) {
-      throw new Error('A contract for this client and period already exists.');
+      throw new ConflictException('A contract for this client and period already exists.');
     }
     const contract = await this.prisma.contract.create({
       data: {

@@ -16,6 +16,7 @@ import { ContractsService } from './contracts.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { SearchContractDto } from './dto/search-contract.dto';
+import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {
@@ -43,18 +44,22 @@ export class ContractsController {
     const user = getUserFromRequest(req);
     // Validate input
     if (!dto.clientId || !dto.clientName || typeof dto.delaiReglement !== 'number' || typeof dto.delaiReclamation !== 'number' || !dto.assignedManagerId || !dto.startDate || !dto.endDate) {
-      throw new Error('All required fields must be provided.');
+      throw new BadRequestException('All required fields must be provided.');
+    }
+    // Logical check: startDate must be before or equal to endDate
+    if (new Date(dto.startDate) > new Date(dto.endDate)) {
+      throw new BadRequestException('startDate must be before or equal to endDate');
     }
     // Validate client linkage
     const clientLinked = await this.contractsService.isClientExists(dto.clientId);
     if (!clientLinked) {
-      throw new Error('Linked client does not exist.');
+      throw new NotFoundException('Linked client does not exist.');
     }
     // Optionally, check for unique contract per client+period
     // (Business rule: only one active contract per client per period)
     const overlap = await this.contractsService.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
     if (overlap) {
-      throw new Error('A contract for this client and period already exists.');
+      throw new ConflictException('A contract for this client and period already exists.');
     }
     return this.contractsService.createContract(dto, file, user);
   }

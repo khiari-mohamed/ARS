@@ -65,6 +65,19 @@ export class AnalyticsController {
   @Get('comparative-analysis')
   async getComparativeAnalysis(@Query() query: any, @Req() req: any) {
     const user = getUserFromRequest(req);
+    // Validate input: period1 and period2 must have fromDate and toDate, and all must be valid dates
+    const { period1, period2 } = query;
+    if (!period1 || !period2 || !period1.fromDate || !period1.toDate || !period2.fromDate || !period2.toDate) {
+      throw new (await import('@nestjs/common')).BadRequestException('All period date ranges must be provided');
+    }
+    if (
+      isNaN(Date.parse(period1.fromDate)) ||
+      isNaN(Date.parse(period1.toDate)) ||
+      isNaN(Date.parse(period2.fromDate)) ||
+      isNaN(Date.parse(period2.toDate))
+    ) {
+      throw new (await import('@nestjs/common')).BadRequestException('All period dates must be valid ISO date strings');
+    }
     return this.analyticsService.getComparativeAnalysis(user, query);
   }
 
@@ -194,7 +207,15 @@ async getPerformanceAI(@Body() payload: any) {
 
 @Post('ai/compare-performance')
 async getComparePerformanceAI(@Body() payload: any) {
-  return this.analyticsService.getComparePerformanceAI(payload);
+  const { BadRequestException, BadGatewayException } = await import('@nestjs/common');
+  if (!payload || !Array.isArray(payload.planned) || !Array.isArray(payload.actual) || payload.planned.length === 0 || payload.actual.length === 0) {
+    throw new BadRequestException('Payload must include non-empty planned and actual arrays');
+  }
+  try {
+    return await this.analyticsService.getComparePerformanceAI(payload);
+  } catch (e) {
+    throw new BadGatewayException('AI microservice error: ' + (e?.message || e));
+  }
 }
 
 @Post('ai/diagnostic-optimisation')
