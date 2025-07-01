@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsInt, IsObject } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsObject, IsArray } from 'class-validator';
 
 export class UpdateClientDto {
   @IsOptional()
@@ -14,8 +14,9 @@ export class UpdateClientDto {
   reclamationDelay?: number;
 
   @IsOptional()
-  @IsString()
-  accountManagerId?: string;
+  @IsArray()
+  @IsString({ each: true })
+  gestionnaireIds?: string[];
 
   @IsOptional()
   @IsObject()

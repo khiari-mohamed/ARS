@@ -36,10 +36,11 @@ const DocumentStatusModal: React.FC<Props> = ({ document, onClose, onStatus }) =
           <div>
             <label>Status</label>
             <select value={status} onChange={e => setStatus(e.target.value)} required>
-              <option value="uploaded">Uploaded</option>
-              <option value="scanned">Scanned</option>
-              <option value="processed">Processed</option>
-              <option value="archived">Archived</option>
+              <option value="UPLOADED">Uploaded</option>
+              <option value="EN_COURS">En cours</option>
+              <option value="TRAITE">Traité</option>
+              <option value="REJETE">Rejeté</option>
+              <option value="RETOUR_ADMIN">Retour corbeille Admin</option>
             </select>
           </div>
           <button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save'}</button>

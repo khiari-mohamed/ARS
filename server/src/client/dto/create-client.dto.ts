@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsInt, IsOptional, IsObject } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, IsOptional, IsObject, IsArray, ArrayNotEmpty } from 'class-validator';
 
 export class CreateClientDto {
   @IsNotEmpty()
@@ -13,9 +13,10 @@ export class CreateClientDto {
   @IsInt()
   reclamationDelay: number;
 
-  @IsNotEmpty()
-  @IsString()
-  accountManagerId: string;
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  gestionnaireIds: string[];
 
   @IsOptional()
   @IsObject()

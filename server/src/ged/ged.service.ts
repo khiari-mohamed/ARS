@@ -27,7 +27,7 @@ export class GedService {
   where: {
   uploadedAt: { lte: thresholdDate },
   OR: [
-  { status: { not: 'scanned' } },
+  { status: { not: 'EN_COURS' } },
   { status: null },
   ],
   },
@@ -52,7 +52,7 @@ export class GedService {
   return docs.map(doc => {
   const hours = (now.getTime() - doc.uploadedAt.getTime()) / (1000 * 60 * 60);
   let slaStatus = 'green'; // 🟢
-  if (doc.status !== 'scanned') {
+  if (doc.status !== 'EN_COURS') {
   if (hours >= breachHours) slaStatus = 'red'; // 🔴
   else if (hours >= warningHours) slaStatus = 'orange'; // 🟠
   }
@@ -94,7 +94,7 @@ export class GedService {
       // Assign to user with lowest open documents
       const workloads = await Promise.all(eligible.map(async user => {
         const count = await this.prisma.document.count({
-          where: { uploadedById: user.id, status: { not: 'scanned' } },
+          where: { uploadedById: user.id, status: { not: 'EN_COURS' } },
         });
         return { user, count };
       }));
@@ -154,7 +154,7 @@ export class GedService {
       // Real status update now that Prisma client is correct
       doc = await this.prisma.document.update({
         where: { id },
-        data: { status },
+        data: { status: status as any },
       });
     } catch (err) {
       // If status field does not exist, fallback to fetching the doc
@@ -179,14 +179,18 @@ export class GedService {
     return doc;
   }
 
-  async uploadDocument(
-    file: Express.Multer.File,
-    dto: CreateDocumentDto,
-    user: User,
-  ): Promise<Document> {
+ async uploadDocument(
+  file: Express.Multer.File,
+  dto: CreateDocumentDto,
+  user: User,
+): Promise<Document> {
+  try {
     // Access control: Only Scan Team, Chef d’équipe, Super Admin can upload
     if (!['SCAN_TEAM', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to upload documents');
+    }
+    if (!user || !user.id) {
+      throw new ForbiddenException('Authenticated user not found or missing user ID');
     }
     // Validate file type and size (example: max 10MB, allowed types: pdf, jpg, png)
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
@@ -208,7 +212,7 @@ export class GedService {
         path: file.path,
         uploadedById: user.id,
         bordereauId: dto.bordereauId,
-        status: 'uploaded',
+        status: 'UPLOADED',
       },
     });
     // Audit log
@@ -226,7 +230,11 @@ export class GedService {
     // Notification
     await this.notificationService.notify('document_uploaded', { document: doc, user });
     return doc;
+  } catch (err) {
+    console.error('Upload error:', err);
+    throw new Error('File upload failed: ' + (err?.message || err));
   }
+}
 
   async searchDocuments(query: SearchDocumentDto, user: User) {
     // Access control: Gestionnaires can only view linked docs, others can see all

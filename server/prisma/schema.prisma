@@ -2,6 +2,14 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum DocumentStatus {
+  UPLOADED
+  EN_COURS 
+  TRAITE
+  REJETE
+  RETOUR_ADMIN
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -14,12 +22,14 @@ model User {
   fullName                    String
   role                        String
   department                  String?              // <--- ADD THIS LINE
+
   active                      Boolean @default(true)
   createdAt                   DateTime             @default(now())
   bordereaux                  Bordereau[]          @relation("UserBordereaux")
   documents                   Document[]           @relation("UserDocuments")
   courriers                   Courrier[]           @relation("UserCourriers")
   virements                   Virement[]           @relation("UserVirements")
+  clientsManaged              Client[]             @relation("ClientGestionnaires") // new one 
   OCRLog                      OCRLog[]
   AlertLog                    AlertLog[]
   Contract                    Contract[]           @relation("ManagerContracts")
@@ -32,9 +42,6 @@ model User {
   bordereauxTeam              Bordereau[]          @relation("TeamBordereaux")
   assignedTraitementHistories TraitementHistory[]  @relation("AssignedTraitementHistories")
   clientReclamations          Reclamation[]        @relation("ClientReclamations")
-
-
-  Client Client[]
 
   ownerBulletinSoins BulletinSoin[] @relation("OwnerBulletinSoins")
   processedBulletinSoins BulletinSoin[] @relation("ProcessedByBulletinSoins")
@@ -223,17 +230,18 @@ model Client {
   name             String      @unique
   reglementDelay   Int         // délai contractuel de règlement (jours)
   reclamationDelay Int         // délai de réponse aux réclamations (jours)
-  accountManagerId String
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   slaConfig        Json? 
 
   // Relations
-  accountManager   User        @relation(fields: [accountManagerId], references: [id])
+  gestionnaires    User[]      @relation("ClientGestionnaires")
   contracts        Contract[]
   bordereaux       Bordereau[]
   reclamations     Reclamation[]
 }
+
+
 
 model Contract {
   id                  String   @id @default(uuid())
@@ -284,7 +292,7 @@ model Document {
   bordereauId  String?
   ocrResult    Json?
 
-  status      String?   // <-- Corrected field name
+  status      DocumentStatus?   // Explicit enum for status
   ocrText     String?   // <-- For OCR full-text search
 
   // Relations

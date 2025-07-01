@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Query, Param, Put, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, Put, Delete, UseInterceptors, UploadedFile 
+} from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { WorkflowKpiDto } from './dto/workflow-kpi.dto';
@@ -8,6 +9,14 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 @Controller('workflow')
 export class WorkflowController {
   constructor(private readonly workflowService: WorkflowService) {}
+
+
+  @Post('auto-assign')
+  @ApiOperation({ summary: 'Trigger AI-based auto-assignment of tasks (admin/team lead only)' })
+  async autoAssignTasks() {
+    await this.workflowService.autoAssignTasks();
+    return { success: true, message: 'AI-based assignment triggered.' };
+  }
 
   @Put('priority')
   @ApiOperation({ summary: 'Manually override the priority of a workflow task (admin only)' })

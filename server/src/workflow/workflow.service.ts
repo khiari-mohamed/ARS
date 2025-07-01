@@ -132,15 +132,34 @@ export class WorkflowService {
   async autoAssignTasks(): Promise<void> {
     const pendingTasks = await this.getPendingTasks();
     const availableUsers = await this.getAvailableUsers();
+    let aiAssignments: Record<string, string> = {};
+    try {
+      // Call AI microservice for assignment recommendations
+      const analyticsService = this.analyticsService as any;
+      const aiResponse = await analyticsService.getPrioritiesAI(pendingTasks);
+      if (aiResponse && Array.isArray(aiResponse.priorities)) {
+        // aiResponse.priorities: [{ id: taskId, assigneeId }]
+        aiAssignments = Object.fromEntries(
+          aiResponse.priorities.map((p: any) => [p.id, p.assigneeId])
+        );
+      }
+    } catch (err) {
+      this.logger.warn('AI assignment failed, falling back to local logic: ' + err.message);
+    }
     for (const task of pendingTasks) {
-      const assignee = this.findBestAssignee(task, availableUsers);
-      if (assignee) {
+      let assigneeId = aiAssignments[task.id];
+      if (!assigneeId) {
+        // Fallback to local logic if AI did not provide an assignee
+        const assignee = this.findBestAssignee(task, availableUsers);
+        assigneeId = assignee?.id;
+      }
+      if (assigneeId) {
         await this.assignTask({
           taskId: task.id,
           taskType: task.type,
-          assigneeId: assignee.id
+          assigneeId
         });
-        this.logger.log(`Assigned task ${task.id} to ${assignee.id}`);
+        this.logger.log(`Assigned task ${task.id} to ${assigneeId}`);
       }
     }
   }

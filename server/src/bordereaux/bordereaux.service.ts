@@ -89,25 +89,25 @@ export class BordereauxService {
     // 2. Create test clients
     let client1 = await this.prisma.client.findUnique({ where: { name: 'Test Client 1' } });
     if (!client1) {
-      client1 = await this.prisma.client.create({
-        data: {
-          name: 'Test Client 1',
-          reglementDelay: 30,
-          reclamationDelay: 15,
-          accountManager: { connect: { id: 'manager1' } }
-        }
-      });
+    client1 = await this.prisma.client.create({
+    data: {
+    name: 'Test Client 1',
+    reglementDelay: 30,
+    reclamationDelay: 15,
+    gestionnaires: { connect: [{ id: 'manager1' }] }
+    }
+    });
     }
     let client2 = await this.prisma.client.findUnique({ where: { name: 'Test Client 2' } });
     if (!client2) {
-      client2 = await this.prisma.client.create({
-        data: {
-          name: 'Test Client 2',
-          reglementDelay: 45,
-          reclamationDelay: 20,
-          accountManager: { connect: { id: 'manager2' } }
-        }
-      });
+    client2 = await this.prisma.client.create({
+    data: {
+    name: 'Test Client 2',
+    reglementDelay: 45,
+    reclamationDelay: 20,
+    gestionnaires: { connect: [{ id: 'manager2' }] }
+    }
+    });
     }
 
     // 2. Create test contracts

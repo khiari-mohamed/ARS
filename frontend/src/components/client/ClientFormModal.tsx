@@ -17,21 +17,21 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
     name: '',
     reglementDelay: 0,
     reclamationDelay: 0,
-    accountManagerId: '',
+    gestionnaireIds: [],
   });
   const [errors, setErrors] = useState<any>({});
   const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
 
   useEffect(() => {
-    // Fetch managers (CHEF_EQUIPE) from backend
-    LocalAPI.get('/users', { params: { role: 'CHEF_EQUIPE' } })
+    // Fetch managers (GESTIONNAIRE) from backend
+    LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
       .then(res => setManagers(res.data || []))
       .catch(() => setManagers([]));
   }, []);
 
   useEffect(() => {
-    if (client) setForm(client);
-    else setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, accountManagerId: '' });
+    if (client) setForm({ ...client, gestionnaireIds: client.gestionnaires?.map((g: any) => g.id) || [] });
+    else setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [] });
     setErrors({});
   }, [client]);
 
@@ -59,8 +59,8 @@ const validate = () => {
     newErrors.reclamationDelay = 'Must be a non-negative number';
   }
   
-  if (!form.accountManagerId || !form.accountManagerId.toString().trim()) {
-    newErrors.accountManagerId = 'Account Manager ID is required';
+  if (!form.gestionnaireIds || form.gestionnaireIds.length === 0) {
+    newErrors.gestionnaireIds = 'At least one gestionnaire is required';
   }
   
   setErrors(newErrors);
@@ -116,24 +116,25 @@ const validate = () => {
             />
           </Grid>
           <Grid>
-            <FormControl fullWidth required error={!!errors.accountManagerId}>
-              <InputLabel id="accountManagerId-label">Account Manager</InputLabel>
+            <FormControl fullWidth required error={!!errors.gestionnaireIds}>
+              <InputLabel id="gestionnaireIds-label">Gestionnaires</InputLabel>
               <Select
-                labelId="accountManagerId-label"
-                name="accountManagerId"
-                value={form.accountManagerId}
+                labelId="gestionnaireIds-label"
+                name="gestionnaireIds"
+                multiple
+                value={form.gestionnaireIds || []}
                 onChange={e => {
-                  setForm({ ...form, accountManagerId: e.target.value });
-                  setErrors((prev: any) => ({ ...prev, accountManagerId: undefined }));
+                  setForm({ ...form, gestionnaireIds: e.target.value as string[] });
+                  setErrors((prev: any) => ({ ...prev, gestionnaireIds: undefined }));
                 }}
-                label="Account Manager"
+                label="Gestionnaires"
+                renderValue={(selected) => (selected as string[]).map(id => managers.find(m => m.id === id)?.fullName).join(', ')}
               >
-                <MenuItem value=""><em>None</em></MenuItem>
                 {managers.map(m => (
                   <MenuItem key={m.id} value={m.id}>{m.fullName}</MenuItem>
                 ))}
               </Select>
-              {errors.accountManagerId && <FormHelperText>{errors.accountManagerId}</FormHelperText>}
+              {errors.gestionnaireIds && <FormHelperText>{errors.gestionnaireIds}</FormHelperText>}
             </FormControl>
           </Grid>
         </Grid>

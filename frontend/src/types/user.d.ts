@@ -3,7 +3,9 @@ export type UserRole =
   | 'CHEF_EQUIPE'
   | 'GESTIONNAIRE'
   | 'CLIENT_SERVICE'
-  | 'FINANCE';
+  | 'FINANCE'
+  | 'SCAN_TEAM'
+  | 'BO';
 
 export interface User {
   id: string;

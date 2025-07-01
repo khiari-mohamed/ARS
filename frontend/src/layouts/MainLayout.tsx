@@ -110,9 +110,9 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       </aside>
       <main className="main-content">
         {/* Global Notification Center */}
-        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 1000, width: 350 }}>
-          <NotificationCenter notifications={notifications} />
-        </div>
+<div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 1000, width: 350 }}>
+  <NotificationCenter notifications={notifications} />
+</div>
         <Outlet />
       </main>
     </div>

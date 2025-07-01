@@ -36,7 +36,7 @@ export class ClientController {
   @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   async create(@Body() dto: CreateClientDto) {
     // Validate input
-    if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number' || !dto.accountManagerId) {
+    if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number' ) {
       throw new Error('All fields (name, reglementDelay, reclamationDelay, accountManagerId) are required.');
     }
     // Check for unique client name

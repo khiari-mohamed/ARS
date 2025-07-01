@@ -7,7 +7,7 @@ import { OutlookService } from './outlook.service';
 @Module({
   imports: [ScheduleModule.forRoot()],
   providers: [TuniclaimService, PrismaService, OutlookService],
-  exports: [TuniclaimService],
+  exports: [TuniclaimService , OutlookService],
 })
 export class IntegrationModule {
   constructor(private tuniclaim: TuniclaimService) {

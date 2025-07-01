@@ -36,34 +36,27 @@ function getUserFromRequest(req: any) {
 export class GedController {
   constructor(private readonly gedService: GedService) {}
 
-  @Post('upload')
-  @UseInterceptors(
-    FileInterceptor('files', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          cb(null, uniqueSuffix + extname(file.originalname));
-        },
-      }),
+ @Post('upload')
+@UseInterceptors(
+  FileInterceptor('file', {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + extname(file.originalname));
+      },
     }),
-  )
-  async uploadDocument(
-    @UploadedFile() files: Express.Multer.File | Express.Multer.File[],
-    @Body() body: CreateDocumentDto,
-    @Req() req: any,
-  ) {
-    const user = getUserFromRequest(req);
-    // Support both single and multiple file upload
-    if (Array.isArray(files)) {
-      if (files.length === 0) throw new Error('No files uploaded.');
-      return Promise.all(files.map(file => this.gedService.uploadDocument(file, body, user)));
-    } else if (files) {
-      return this.gedService.uploadDocument(files, body, user);
-    } else {
-      throw new Error('No file(s) uploaded.');
-    }
-  }
+  }),
+)
+async uploadDocument(
+  @UploadedFile() file: Express.Multer.File,
+  @Body() body: CreateDocumentDto,
+  @Req() req: any,
+) {
+  const user = getUserFromRequest(req);
+  if (!file) throw new Error('No file(s) uploaded.');
+  return this.gedService.uploadDocument(file, body, user);
+}
 
   // TEMP: Seed demo user, client, contract, and bordereau for testing
   @Get('seed-demo')
@@ -90,7 +83,6 @@ export class GedController {
         name: 'Demo Client',
         reglementDelay: 30,
         reclamationDelay: 15,
-        accountManagerId: 'demo',
         createdAt: new Date(),
         updatedAt: new Date(),
       },

@@ -36,7 +36,22 @@ const DocumentTable: React.FC<Props> = ({ documents, onSelect, onStatusUpdate, s
             <th>Bordereau</th>
             <th>Uploader</th>
             <th>Uploaded At</th>
-            <th>Status</th>
+            <th>
+              Status
+              <span
+                style={{ marginLeft: 4, cursor: 'pointer' }}
+                title={
+                  'Status meanings:\n' +
+                  '• UPLOADED: File uploaded, waiting for scan.\n' +
+                  '• EN_COURS: Pending scan (in progress).\n' +
+                  '• TRAITE: Processed/validated.\n' +
+                  '• REJETE: Rejected.\n' +
+                  '• RETOUR_ADMIN: Returned to admin bin.'
+                }
+              >
+                ℹ️
+              </span>
+            </th>
             <th>SLA</th>
             <th>Action</th>
           </tr>
@@ -55,7 +70,24 @@ const DocumentTable: React.FC<Props> = ({ documents, onSelect, onStatusUpdate, s
                 <td>{doc.uploader?.fullName || '-'}</td>
                 <td>{new Date(doc.uploadedAt).toLocaleString()}</td>
                 <td>
-                  <span className={`status-badge status-${doc.status || 'unknown'}`}>{doc.status || '-'}</span>
+                  <span
+                    className={`status-badge status-${doc.status || 'unknown'}`}
+                    title={
+                      doc.status === 'UPLOADED'
+                        ? 'Uploaded: File uploaded, waiting for scan.'
+                        : doc.status === 'EN_COURS'
+                        ? 'En cours: Pending scan (in progress).' 
+                        : doc.status === 'TRAITE'
+                        ? 'Traité: Processed/validated.'
+                        : doc.status === 'REJETE'
+                        ? 'Rejeté: Rejected.'
+                        : doc.status === 'RETOUR_ADMIN'
+                        ? 'Retour corbeille Admin: Returned to admin bin.'
+                        : doc.status || '-'
+                    }
+                  >
+                    {doc.status || '-'}
+                  </span>
                   <button style={{ marginLeft: 8 }} onClick={() => setStatusDoc(doc)} title="Update Status">✏️</button>
                 </td>
                 <td style={{ fontSize: 20 }}>{slaIcon}</td>

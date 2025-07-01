@@ -84,15 +84,11 @@ export class ClientService {
   async findAll(query: SearchClientDto, user?: any) {
     let where: any = {
       name: query.name ? { contains: query.name, mode: 'insensitive' } : undefined,
-      accountManagerId: query.accountManagerId,
     };
-    if (user && user.role === 'manager') {
-      where.accountManagerId = user.id;
-    }
     return this.prisma.client.findMany({
       where,
       include: {
-        accountManager: true,
+        gestionnaires: true,
         contracts: true,
         bordereaux: true,
         reclamations: true,
@@ -140,8 +136,8 @@ export class ClientService {
   async autofillData(clientId: string) {
     // Return all fields needed for workflow autofill
     const client = await this.prisma.client.findUnique({
-      where: { id: clientId },
-      include: { accountManager: true, contracts: true },
+    where: { id: clientId },
+    include: { gestionnaires: true, contracts: true },
     });
     if (!client) throw new NotFoundException('Client not found');
     return client;
@@ -156,13 +152,13 @@ export class ClientService {
           where: { id: payload.clientId },
           update: { name: payload.name },
           create: {
-            id: payload.clientId,
-            name: payload.name,
-            reglementDelay: payload.reglementDelay ?? 0,
-            reclamationDelay: payload.reclamationDelay ?? 0,
-            accountManagerId: payload.accountManagerId ?? '',
+          id: payload.clientId,
+          name: payload.name,
+          reglementDelay: payload.reglementDelay ?? 0,
+          reclamationDelay: payload.reclamationDelay ?? 0,
+          // accountManagerId removed
           },
-        });
+          });
       }
     } catch (err) {
       throw new InternalServerErrorException('Failed to process ARS webhook payload');
@@ -175,13 +171,13 @@ export class ClientService {
       const { data } = await axios.get(externalUrl);
       if (!data) throw new NotFoundException('External client not found');
       const updated = await this.prisma.client.update({
-        where: { id },
-        data: {
-          name: data.name,
-          reglementDelay: data.reglementDelay ?? 5,
-          reclamationDelay: data.reclamationDelay ?? 5,
-          accountManagerId: data.accountManagerId || data.prefix || undefined,
-        },
+      where: { id },
+      data: {
+      name: data.name,
+      reglementDelay: data.reglementDelay ?? 5,
+      reclamationDelay: data.reclamationDelay ?? 5,
+      // accountManagerId removed
+      },
       });
       return updated;
     } catch (err) {
@@ -210,20 +206,20 @@ export class ClientService {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Clients');
     sheet.columns = [
-      { header: 'ID', key: 'id', width: 24 },
-      { header: 'Name', key: 'name', width: 32 },
-      { header: 'Reglement Delay', key: 'reglementDelay', width: 18 },
-      { header: 'Reclamation Delay', key: 'reclamationDelay', width: 18 },
-      { header: 'Account Manager', key: 'accountManager', width: 32 },
+    { header: 'ID', key: 'id', width: 24 },
+    { header: 'Name', key: 'name', width: 32 },
+    { header: 'Reglement Delay', key: 'reglementDelay', width: 18 },
+    { header: 'Reclamation Delay', key: 'reclamationDelay', width: 18 },
+    { header: 'Gestionnaires', key: 'gestionnaires', width: 32 },
     ];
     clients.forEach((client: any) => {
-      sheet.addRow({
-        id: client.id,
-        name: client.name,
-        reglementDelay: client.reglementDelay,
-        reclamationDelay: client.reclamationDelay,
-        accountManager: client.accountManager?.fullName || client.accountManagerId || '',
-      });
+    sheet.addRow({
+    id: client.id,
+    name: client.name,
+    reglementDelay: client.reglementDelay,
+    reclamationDelay: client.reclamationDelay,
+    gestionnaires: client.gestionnaires?.map((g: any) => g.fullName).join(', ') || '',
+    });
     });
     const arrayBuffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(arrayBuffer);
@@ -237,30 +233,30 @@ export class ClientService {
     doc.fontSize(18).text('Clients', { align: 'center' });
     doc.moveDown();
     doc.fontSize(12).text(
-      'ID', 30, doc.y, { continued: true }
+    'ID', 30, doc.y, { continued: true }
     ).text(
-      'Name', 120, doc.y, { continued: true }
+    'Name', 120, doc.y, { continued: true }
     ).text(
-      'Reglement Delay', 250, doc.y, { continued: true }
+    'Reglement Delay', 250, doc.y, { continued: true }
     ).text(
-      'Reclamation Delay', 370, doc.y, { continued: true }
+    'Reclamation Delay', 370, doc.y, { continued: true }
     ).text(
-      'Account Manager', 500, doc.y
+    'Gestionnaires', 500, doc.y
     );
     doc.moveDown(0.5);
     clients.forEach((client: any) => {
-      doc.text(
-        client.id, 30, doc.y, { continued: true }
-      ).text(
-        client.name, 120, doc.y, { continued: true }
-      ).text(
-        String(client.reglementDelay), 250, doc.y, { continued: true }
-      ).text(
-        String(client.reclamationDelay), 370, doc.y, { continued: true }
-      ).text(
-        client.accountManager?.fullName || client.accountManagerId || '', 500, doc.y
-      );
-      doc.moveDown(0.5);
+    doc.text(
+    client.id, 30, doc.y, { continued: true }
+    ).text(
+    client.name, 120, doc.y, { continued: true }
+    ).text(
+    String(client.reglementDelay), 250, doc.y, { continued: true }
+    ).text(
+    String(client.reclamationDelay), 370, doc.y, { continued: true }
+    ).text(
+    client.gestionnaires?.map((g: any) => g.fullName).join(', ') || '', 500, doc.y
+    );
+    doc.moveDown(0.5);
     });
     doc.end();
     const chunks: Buffer[] = [];
@@ -285,14 +281,23 @@ export class ClientService {
     if (!('slaConfig' in dto)) {
       (dto as any).slaConfig = { slaThreshold: dto.reglementDelay };
     }
-    return this.prisma.client.create({ data: dto });
+    const { gestionnaireIds, ...rest } = dto;
+    return this.prisma.client.create({
+      data: {
+        ...rest,
+        gestionnaires: {
+          connect: gestionnaireIds.map(id => ({ id })),
+        },
+      },
+      include: { gestionnaires: true },
+    });
   }
 
   async findOne(id: string) {
     const client = await this.prisma.client.findUnique({
       where: { id },
       include: {
-        accountManager: true,
+        gestionnaires: true,
         contracts: true,
         bordereaux: true,
         reclamations: true,
@@ -303,24 +308,28 @@ export class ClientService {
   }
 
   async update(id: string, dto: UpdateClientDto) {
-    // Only pick allowed fields
     const {
       name,
       reglementDelay,
       reclamationDelay,
-      accountManagerId,
+      gestionnaireIds,
       slaConfig
     } = dto;
-
+    const data: any = {
+      ...(name !== undefined && { name }),
+      ...(reglementDelay !== undefined && { reglementDelay }),
+      ...(reclamationDelay !== undefined && { reclamationDelay }),
+      ...(slaConfig !== undefined && { slaConfig }),
+    };
+    if (gestionnaireIds) {
+      data.gestionnaires = {
+        set: gestionnaireIds.map(id => ({ id })),
+      };
+    }
     return this.prisma.client.update({
       where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(reglementDelay !== undefined && { reglementDelay }),
-        ...(reclamationDelay !== undefined && { reclamationDelay }),
-        ...(accountManagerId !== undefined && { accountManagerId }),
-        ...(slaConfig !== undefined && { slaConfig }),
-      },
+      data,
+      include: { gestionnaires: true },
     });
   }
 

@@ -1,8 +1,8 @@
-
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { uploadDocument } from '../../api/gedService';
-import { Document, DocumentUploadPayload } from '../../types/document';
+import { DocumentUploadPayload } from '../../types/document';
 import { useAuth } from '../../hooks/useAuth';
+import { LocalAPI } from '../../services/axios';
 
 interface Props {
   onUploadSuccess?: () => void;
@@ -13,6 +13,7 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
   const [form, setForm] = useState<DocumentUploadPayload>({
     name: '',
     type: 'BS',
+    clientId: '',
     bordereauId: '',
   });
   const [files, setFiles] = useState<File[]>([]);
@@ -20,6 +21,23 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
   const [uploadProgress, setUploadProgress] = useState<{ [name: string]: 'pending' | 'success' | 'error' }>({});
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+
+  const [clients, setClients] = useState<any[]>([]);
+  const [bordereaux, setBordereaux] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch clients on mount
+    LocalAPI.get('/clients').then(res => setClients(res.data || []));
+  }, []);
+
+  useEffect(() => {
+    if (form.clientId) {
+      // Fetch bordereaux for selected client
+      LocalAPI.get(`/clients/${form.clientId}/bordereaux`).then(res => setBordereaux(res.data || []));
+    } else {
+      setBordereaux([]);
+    }
+  }, [form.clientId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -37,6 +55,10 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
     e.preventDefault();
     if (!files.length) {
       setError('Please select at least one file');
+      return;
+    }
+    if (!form.clientId || !form.bordereauId) {
+      setError('Please select a client and a bordereau');
       return;
     }
     setUploading(true);
@@ -59,7 +81,7 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
     }
     setUploading(false);
     if (!anyError) {
-      setForm({ name: '', type: 'BS', bordereauId: '' });
+      setForm({ name: '', type: 'BS', clientId: '', bordereauId: '' });
       setFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
       onUploadSuccess?.();
@@ -71,7 +93,6 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
   // Only allow upload for SCAN_TEAM, CHEF_EQUIPE, SUPER_ADMIN
   const allowedRoles = ['SCAN_TEAM', 'CHEF_EQUIPE', 'SUPER_ADMIN', 'ADMINISTRATEUR'];
   const userRole = user?.role?.toUpperCase?.() || '';
-  console.log('Current user role:', userRole);
   if (!user || !allowedRoles.includes(userRole)) {
     return <div style={{ color: '#888', marginBottom: 16 }}>You do not have permission to upload documents.</div>;
   }
@@ -99,13 +120,33 @@ const DocumentUpload: React.FC<Props> = ({ onUploadSuccess }) => {
         </select>
       </div>
       <div>
-        <label>Bordereau ID (optional)</label>
-        <input
-          type="text"
-          name="bordereauId"
-          value={form.bordereauId}
+        <label>Client</label>
+        <select
+          name="clientId"
+          value={form.clientId || ''}
           onChange={handleChange}
-        />
+          required
+        >
+          <option value="">Sélectionner un client</option>
+          {clients.map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label>Bordereau</label>
+        <select
+          name="bordereauId"
+          value={form.bordereauId || ''}
+          onChange={handleChange}
+          required
+          disabled={!form.clientId}
+        >
+          <option value="">Sélectionner un bordereau</option>
+          {bordereaux.map(b => (
+            <option key={b.id} value={b.id}>{b.reference}</option>
+          ))}
+        </select>
       </div>
       <div>
         <label>File(s)</label>

@@ -40,3 +40,9 @@ export const getWorkflowVisualization = async (taskId: string) => {
   const res = await LocalAPI.get(`${API_BASE}/visualize/${taskId}`);
   return res.data;
 };
+
+// Nouvelle API : Déclencher l'affectation intelligente IA
+export const triggerAIAssignment = async () => {
+  const res = await LocalAPI.post(`${API_BASE}/auto-assign`);
+  return res.data;
+};

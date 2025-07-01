@@ -8,6 +8,8 @@ const roleOptions: { value: UserRole; label: string }[] = [
   { value: 'GESTIONNAIRE', label: 'Gestionnaire' },
   { value: 'CLIENT_SERVICE', label: 'Service Client' },
   { value: 'FINANCE', label: 'Finance' },
+  { value: 'SCAN_TEAM', label: 'Équipe Scan' },
+  { value: 'BO', label: 'Bureau d’Ordre' },
 ];
 
 interface UserFormProps {

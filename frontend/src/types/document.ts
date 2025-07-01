@@ -19,6 +19,7 @@ export interface DocumentUploadPayload {
   name: string;
   type: string;
   bordereauId?: string;
+  clientId?: string;
 }
 
 export interface DocumentSearchParams {

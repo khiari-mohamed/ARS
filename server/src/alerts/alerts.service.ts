@@ -1,7 +1,7 @@
-import { Injectable, ForbiddenException }
-from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertsQueryDto } from './dto/alerts-query.dto';
+import { OutlookService } from '../integrations/outlook.service';
 import axios from 'axios';
 
 const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8001';
@@ -11,7 +11,7 @@ export class AlertsService {
   triggerAlert(arg0: { type: string; bsId: string; }) {
     throw new Error('Method not implemented.');
   }
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private readonly outlook: OutlookService) {}
 
 
 
@@ -196,26 +196,14 @@ export class AlertsService {
   async notify(role: string, message: string, alert: any = {}) {
     // Find users by role
     const users = await this.prisma.user.findMany({ where: { role } });
-    // Send email (Nodemailer)
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.example.com',
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER || 'user@example.com',
-        pass: process.env.SMTP_PASS || 'password',
-      },
-    });
     for (const user of users) {
       if (user.email) {
         try {
-          await transporter.sendMail({
-            from: process.env.SMTP_FROM || 'noreply@example.com',
-            to: user.email,
-            subject: '[ALERT] Notification',
-            text: message + '\n' + JSON.stringify(alert, null, 2),
-          });
+          await this.outlook.sendMail(
+            user.email,
+            '[ALERT] Notification',
+            message + '\n' + JSON.stringify(alert, null, 2)
+          );
         } catch (err) {
           console.error(`[ALERT][EMAIL] Failed to send to ${user.email}:`, err);
         }
