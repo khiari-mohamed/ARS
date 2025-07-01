@@ -13,12 +13,12 @@ interface Props {
 }
 
 const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) => {
-  const [form, setForm] = useState<Partial<Client>>({
-    name: '',
-    reglementDelay: 0,
-    reclamationDelay: 0,
-    gestionnaireIds: [],
-  });
+  const [form, setForm] = useState({
+  name: '',
+  reglementDelay: 0,
+  reclamationDelay: 0,
+  gestionnaireIds: [] as string[],
+});
   const [errors, setErrors] = useState<any>({});
   const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
 

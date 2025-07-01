@@ -1,6 +1,7 @@
 // src/types/client.d.ts
 
 export interface Client {
+  gestionnaires: any;
   id: string;
   name: string;
   reglementDelay: number;
