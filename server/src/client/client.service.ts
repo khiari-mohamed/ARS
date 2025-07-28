@@ -42,6 +42,22 @@ export class ClientService {
     return document;
   }
 
+  // --- GED Integration: Download Contract Document ---
+  async downloadContract(documentId: string, res: any) {
+    const document = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!document) throw new NotFoundException('Document not found');
+    const fs = require('fs');
+    if (!fs.existsSync(document.path)) {
+      throw new NotFoundException('File not found on server');
+    }
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${document.name}"`,
+    });
+    const stream = fs.createReadStream(document.path);
+    stream.pipe(res);
+  }
+
   // --- SLA Config ---
   async updateSlaConfig(clientId: string, config: any) {
     return this.prisma.client.update({

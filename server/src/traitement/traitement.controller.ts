@@ -7,6 +7,7 @@ import {
   Query,
   Req,
   Param,
+  Res,
 } from '@nestjs/common';
 import { TraitementService } from './traitement.service';
 import { AssignTraitementDto } from './dto/assign-traitement.dto';
@@ -74,5 +75,27 @@ export class TraitementController {
   async history(@Param('bordereauId') bordereauId: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.traitementService.history(bordereauId, user);
+  }
+
+  @Get(':bordereauId/history/export/excel')
+  async exportHistoryExcel(@Param('bordereauId') bordereauId: string, @Req() req: any, @Res() res) {
+    const user = getUserFromRequest(req);
+    const result = await this.traitementService.exportHistoryExcel(bordereauId, user);
+    if (result && result.filePath) {
+      res.download(result.filePath);
+    } else {
+      res.status(500).json({ error: 'Export failed' });
+    }
+  }
+
+  @Get(':bordereauId/history/export/pdf')
+  async exportHistoryPdf(@Param('bordereauId') bordereauId: string, @Req() req: any, @Res() res) {
+    const user = getUserFromRequest(req);
+    const result = await this.traitementService.exportHistoryPdf(bordereauId, user);
+    if (result && result.filePath) {
+      res.download(result.filePath);
+    } else {
+      res.status(500).json({ error: 'Export failed' });
+    }
   }
 }

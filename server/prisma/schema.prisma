@@ -291,6 +291,7 @@ model Document {
   uploadedById String
   bordereauId  String?
   ocrResult    Json?
+  hash         String?  @unique
 
   status      DocumentStatus?   // Explicit enum for status
   ocrText     String?   // <-- For OCR full-text search
@@ -502,6 +503,105 @@ enum CourrierStatus {
   RESPONDED
 }
 
+
+// --- Wire Transfer (Ordre de Virement) Module ---
+
+model Society {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
+  members   Member[]
+  donneurs  DonneurDOrdre[]
+  batches   WireTransferBatch[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Member {
+  id         String   @id @default(uuid())
+  societyId  String
+  name       String
+  rib        String
+  cin        String?
+  address    String?
+  wireTransfers WireTransfer[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  society    Society  @relation(fields: [societyId], references: [id])
+}
+
+model DonneurDOrdre {
+  id         String   @id @default(uuid())
+  societyId  String
+  name       String
+  rib        String
+  wireTransfers WireTransfer[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  society    Society  @relation(fields: [societyId], references: [id])
+
+  WireTransferBatch WireTransferBatch[]
+}
+
+enum WireTransferBatchStatus {
+  CREATED
+  VALIDATED
+  REJECTED
+  ARCHIVED
+  PROCESSED
+}
+
+model WireTransferBatch {
+  id         String   @id @default(uuid())
+  societyId  String
+  donneurId  String
+  status     WireTransferBatchStatus @default(CREATED)
+  fileName   String?
+  fileType   String?
+  archived   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  society    Society  @relation(fields: [societyId], references: [id])
+  donneur    DonneurDOrdre @relation(fields: [donneurId], references: [id])
+  transfers  WireTransfer[]
+  history    WireTransferBatchHistory[]
+}
+
+model WireTransfer {
+  id           String   @id @default(uuid())
+  batchId      String
+  memberId     String
+  donneurId    String
+  amount       Float
+  reference    String
+  status       String
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  batch        WireTransferBatch @relation(fields: [batchId], references: [id])
+  member       Member   @relation(fields: [memberId], references: [id])
+  donneur      DonneurDOrdre @relation(fields: [donneurId], references: [id])
+  history      WireTransferHistory[]
+}
+
+model WireTransferBatchHistory {
+  id         String   @id @default(uuid())
+  batchId    String
+  status     WireTransferBatchStatus
+  changedBy  String?
+  changedAt  DateTime @default(now())
+  batch      WireTransferBatch @relation(fields: [batchId], references: [id])
+}
+
+model WireTransferHistory {
+  id         String   @id @default(uuid())
+  transferId String
+  status     String
+  error      String?
+  changedBy  String?
+  changedAt  DateTime @default(now())
+  transfer   WireTransfer @relation(fields: [transferId], references: [id])
+}
 
 // --- Workflow Module ---
 model WorkflowAssignment {

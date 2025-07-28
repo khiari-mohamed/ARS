@@ -262,6 +262,12 @@ export class BordereauxService {
         contract: true,
       },
     });
+    // Notify SCAN team of new bordereau
+    await this.alertsService.triggerAlert({
+      type: 'NEW_BORDEREAU',
+      bsId: bordereau.id,
+      // Optionally add more details (client, contract, etc.)
+    });
     await this.autoAssignBordereau(bordereau.id);
     await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
     return BordereauResponseDto.fromEntity(bordereau);
@@ -321,6 +327,11 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       include: {
         client: true,
         contract: true,
+        virement: true,
+        documents: true,
+        team: true,
+        currentHandler: true,
+        traitementHistory: { include: { user: true, assignedTo: true } },
       },
     });
     
