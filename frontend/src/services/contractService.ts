@@ -1,6 +1,8 @@
 import { LocalAPI } from './axios';
 
 export interface Contract {
+  assignedManagerId: string;
+  delaiReglement: any;
   name: string;
   id: string | number;
   nom: string;

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { createBordereau } from "../services/bordereauxService";
-import { fetchClients, Societe } from "../services/clientService";
-import { fetchContracts, Contract } from "../services/contractService";
+import { fetchClients, fetchClientById } from "../services/clientService";
+import { fetchContractsByClient, fetchContractById, Contract } from "../services/contractService";
 import { Statut } from "../types/bordereaux";
+import { Client } from "../types/client.d";
 
 interface Props {
   onSuccess: () => void;
@@ -28,19 +29,62 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
   const [delaiReglement, setDelaiReglement] = useState("");
   const [nombreBS, setNombreBS] = useState("");
   const [statut, setStatut] = useState<Statut>("EN_ATTENTE");
-  const [clients, setClients] = useState<Societe[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [manager, setManager] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchClients().then(data => setClients(data as unknown as Societe[]));
-    fetchContracts().then(setContracts);
+    fetchClients().then(setClients);
   }, []);
+
+  useEffect(() => {
+    if (!clientId) {
+      setContracts([]);
+      setContractId("");
+      setDelaiReglement("");
+      setManager("");
+      return;
+    }
+    // Fetch contracts for selected client
+    fetchContractsByClient(clientId).then((data) => {
+      setContracts(data);
+      // If only one contract, auto-select it
+      if (data.length === 1) {
+        setContractId(data[0].id.toString());
+        setDelaiReglement(data[0].delaiReglement?.toString() || "");
+        setManager(data[0].assignedManagerId || "");
+      } else {
+        setContractId("");
+        setDelaiReglement("");
+        setManager("");
+      }
+    });
+    // Fetch client profile for fallback reglementDelay and manager
+    fetchClientById(clientId).then((client) => {
+      if (!contractId && client.reglementDelay) {
+        setDelaiReglement(client.reglementDelay.toString());
+      }
+      if (client.accountManager && client.accountManager.fullName) {
+        setManager(client.accountManager.fullName);
+      }
+    });
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!contractId) return;
+    fetchContractById(contractId).then((contract) => {
+      setDelaiReglement(contract.delaiReglement?.toString() || "");
+      setManager(contract.assignedManagerId || "");
+    });
+  }, [contractId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     if (!reference || !dateReception || !clientId || !delaiReglement || !nombreBS) {
       setError("Tous les champs obligatoires doivent être remplis.");
       return;
@@ -56,6 +100,15 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
         nombreBS: Number(nombreBS),
         statut,
       });
+      setSuccess("Bordereau créé et notification envoyée à l'équipe SCAN.");
+      setReference("");
+      setDateReception("");
+      setClientId("");
+      setContractId("");
+      setDelaiReglement("");
+      setNombreBS("");
+      setStatut("EN_ATTENTE");
+      setManager("");
       onSuccess();
     } catch (err: any) {
       setError(err?.response?.data?.message || "Erreur lors de la création du bordereau.");
@@ -147,7 +200,14 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
           ))}
         </select>
       </div>
+      {manager && (
+        <div>
+          <label className="block font-semibold">Gestionnaire assigné</label>
+          <input type="text" className="input" value={manager} disabled />
+        </div>
+      )}
       {error && <div className="text-red-600 text-sm">{error}</div>}
+      {success && <div className="text-green-600 text-sm">{success}</div>}
       <div className="flex justify-end gap-2">
         <button
           type="submit"

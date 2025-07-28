@@ -24,8 +24,31 @@ const BordereauDetailsPage = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div>
-            <div className="text-sm text-gray-600">Client: {bordereau.client?.username || bordereau.clientId}</div>
-            <div className="text-sm text-gray-600">Contrat: {bordereau.contract?.name || bordereau.contractId}</div>
+            <div className="text-sm text-gray-600">
+              Client: {bordereau.client ? (
+                <a href={`/clients/${bordereau.client.id}`} className="text-blue-600 underline">{bordereau.client.name}</a>
+              ) : bordereau.clientId}
+            </div>
+            <div className="text-sm text-gray-600">
+              Contrat: {bordereau.contract ? (
+                <a href={`/contracts/${bordereau.contract.id}`} className="text-blue-600 underline">{bordereau.contract.clientName}</a>
+              ) : bordereau.contractId}
+            </div>
+            <div className="text-sm text-gray-600">
+              Virement: {bordereau.virement ? (
+                <a href={`/virements/${bordereau.virement.id}`} className="text-blue-600 underline">Voir virement</a>
+              ) : 'Aucun'}
+            </div>
+            <div className="text-sm text-gray-600">
+              Équipe: {bordereau.team ? (
+                <a href={`/users/${bordereau.team.id}`} className="text-blue-600 underline">{bordereau.team.fullName || bordereau.team.id}</a>
+              ) : bordereau.teamId || '-'}
+            </div>
+            <div className="text-sm text-gray-600">
+              Gestionnaire: {bordereau.currentHandler ? (
+                <a href={`/users/${bordereau.currentHandler.id}`} className="text-blue-600 underline">{bordereau.currentHandler.fullName || bordereau.currentHandler.id}</a>
+              ) : bordereau.currentHandlerId || '-'}
+            </div>
             <div className="text-sm text-gray-600">Date réception: {new Date(bordereau.dateReception).toLocaleDateString()}</div>
             <div className="text-sm text-gray-600">Deadline: {bordereau.daysRemaining} jours restants</div>
             <div className="text-sm text-gray-600">Nombre de BS: {bordereau.nombreBS}</div>
@@ -44,10 +67,10 @@ const BordereauDetailsPage = () => {
         </div>
         <div className="mb-6">
           <h2 className="text-lg font-semibold mb-2">Documents</h2>
-          {documents && documents.length > 0 ? (
+          {bordereau.documents && bordereau.documents.length > 0 ? (
             <ul className="list-disc pl-5">
-              {documents.map((doc: any) => (
-                <li key={doc.id}><a href={doc.url} className="text-blue-600 underline" target="_blank" rel="noopener noreferrer">{doc.name || doc.id}</a></li>
+              {bordereau.documents.map((doc: any) => (
+                <li key={doc.id}><a href={`/ged/${doc.id}`} className="text-blue-600 underline">{doc.name || doc.id}</a></li>
               ))}
             </ul>
           ) : (
@@ -72,6 +95,23 @@ const BordereauDetailsPage = () => {
             </ul>
           ) : (
             <div className="text-gray-500">Aucune alerte</div>
+          )}
+        </div>
+      <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-2">Traitement History</h2>
+          {bordereau.traitementHistory && bordereau.traitementHistory.length > 0 ? (
+            <ul className="list-disc pl-5">
+              {bordereau.traitementHistory.map((h: any) => (
+                <li key={h.id}>
+                  {h.createdAt && <span>{new Date(h.createdAt).toLocaleString()} - </span>}
+                  {h.action} | Utilisateur: {h.user ? <a href={`/users/${h.user.id}`} className="text-blue-600 underline">{h.user.fullName || h.user.id}</a> : h.userId}
+                  {h.assignedTo && <> | Assigné à: <a href={`/users/${h.assignedTo.id}`} className="text-blue-600 underline">{h.assignedTo.fullName || h.assignedTo.id}</a></>}
+                  {h.toStatus && <> | Statut: {h.toStatus}</>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-gray-500">Aucun historique</div>
           )}
         </div>
       </div>

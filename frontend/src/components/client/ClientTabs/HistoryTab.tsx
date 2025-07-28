@@ -22,91 +22,46 @@ const HistoryTab: React.FC<Props> = ({ clientId }) => {
   }, [clientId]);
 
   // Export handlers
-  const handleExportExcel = () => {
-    if (!history) return;
-    // Each table as a separate sheet
-    const sheets = [
-      {
-        name: 'Contracts',
-        data: history.contracts.map((c: any) => ({
-          Name: c.clientName,
-          Start: c.startDate || '-',
-          End: c.endDate || '-',
-        })),
-      },
-      {
-        name: 'Bordereaux',
-        data: history.bordereaux.map((b: any) => ({
-          Reference: b.reference,
-          Status: b.statut,
-          Date: b.dateReception ? new Date(b.dateReception).toLocaleDateString() : '-',
-        })),
-      },
-      {
-        name: 'Complaints',
-        data: history.reclamations.map((r: any) => ({
-          Type: r.type,
-          Status: r.status,
-          Date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-',
-        })),
-      },
-    ];
-    // Custom export: one file, multiple sheets
-    // We'll use the first sheet as main, then append others
-    const XLSX = require('xlsx');
-    const wb = XLSX.utils.book_new();
-    sheets.forEach(sheet => {
-      const ws = XLSX.utils.json_to_sheet(sheet.data);
-      XLSX.utils.book_append_sheet(wb, ws, sheet.name);
-    });
-    XLSX.writeFile(wb, `client_history_${clientId}.xlsx`);
+  const handleExportExcel = async () => {
+    try {
+      const response = await fetch(`/traitement/${clientId}/history/export/excel`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `client_history_${clientId}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Export Excel failed.');
+    }
   };
 
-  const handleExportPDF = () => {
-    if (!history) return;
-    // Export each table as a separate section in the PDF
-    const doc = new (require('jspdf').default)();
-    require('jspdf-autotable');
-
-    // Contracts
-    doc.text('Contracts', 14, 16);
-    (doc as any).autoTable({
-      startY: 20,
-      head: [['Name', 'Start', 'End']],
-      body: history.contracts.map((c: any) => [
-        c.clientName,
-        c.startDate || '-',
-        c.endDate || '-',
-      ]),
-    });
-
-    // Bordereaux
-    let y = (doc as any).lastAutoTable.finalY + 10 || 40;
-    doc.text('Bordereaux', 14, y);
-    (doc as any).autoTable({
-      startY: y + 4,
-      head: [['Reference', 'Status', 'Date']],
-      body: history.bordereaux.map((b: any) => [
-        b.reference,
-        b.statut,
-        b.dateReception ? new Date(b.dateReception).toLocaleDateString() : '-',
-      ]),
-    });
-
-    // Complaints
-    y = (doc as any).lastAutoTable.finalY + 10 || y + 40;
-    doc.text('Complaints', 14, y);
-    (doc as any).autoTable({
-      startY: y + 4,
-      head: [['Type', 'Status', 'Date']],
-      body: history.reclamations.map((r: any) => [
-        r.type,
-        r.status,
-        r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-',
-      ]),
-    });
-
-    doc.save(`client_history_${clientId}.pdf`);
+  const handleExportPDF = async () => {
+    try {
+      const response = await fetch(`/traitement/${clientId}/history/export/pdf`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `client_history_${clientId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Export PDF failed.');
+    }
   };
 
   return (

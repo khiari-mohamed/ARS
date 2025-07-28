@@ -10,6 +10,7 @@ import { exportToExcel, exportToPDF } from '../../../utils/export';
 
 interface Props {
   clientId: string;
+  // onDataChanged?: () => void;
 }
 
 function getSLAStatus(delaiReglement?: number, avgSLA?: number) {
@@ -58,13 +59,25 @@ const ContractsTab: React.FC<Props> = ({ clientId }) => {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    // Client-side validation: only PDF, max 10MB
+    if (file.type !== 'application/pdf') {
+      setSnackbar({open: true, message: 'Only PDF files are allowed', severity: 'error'});
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setSnackbar({open: true, message: 'File size exceeds 10MB', severity: 'error'});
+      e.target.value = '';
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
-      const file = e.target.files[0];
       await uploadContractDocument(clientId, file);
       setSnackbar({open: true, message: 'Contract uploaded successfully', severity: 'success'});
       loadContracts();
+      // // // // Removed onDataChanged call (was undefined)
     } catch (err: any) {
       setSnackbar({open: true, message: err?.message || 'Upload failed', severity: 'error'});
     } finally {
@@ -104,6 +117,7 @@ const ContractsTab: React.FC<Props> = ({ clientId }) => {
       setEditId(null);
       setEditValues({});
       loadContracts();
+      // Removed onDataChanged call (was undefined)
     } catch (err: any) {
       setSnackbar({open: true, message: err?.message || 'Update failed', severity: 'error'});
     } finally {
@@ -245,7 +259,7 @@ const ContractsTab: React.FC<Props> = ({ clientId }) => {
                 )}
                 <TableCell>
                   {contract.documentPath ? (
-                    <Link href={contract.documentPath} target="_blank" rel="noopener">Download</Link>
+                    <Link href={`/api/clients/contract/${contract.documentPath}/download`} target="_blank" rel="noopener">Download</Link>
                   ) : '-'}
                 </TableCell>
                 <TableCell>
