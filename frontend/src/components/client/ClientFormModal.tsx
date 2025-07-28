@@ -67,15 +67,23 @@ const validate = () => {
   return Object.keys(newErrors).length === 0;
 };
 
-  const handleSubmit = () => {
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setFormError(null);
     if (!validate()) return;
-    onSubmit(form);
+    try {
+      await onSubmit(form);
+    } catch (err: any) {
+      setFormError(err?.response?.data?.message || err?.message || 'An error occurred');
+    }
   };
 
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogTitle>{client ? 'Edit Client' : 'Add Client'}</DialogTitle>
       <DialogContent>
+        {formError && <div style={{ color: 'red', marginBottom: 8 }}>{formError}</div>}
         <Grid container spacing={2}>
           <Grid>
             <TextField
