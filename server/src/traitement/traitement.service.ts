@@ -136,11 +136,32 @@ export class TraitementService {
     return { filePath };
   }
 
-  // Export PDF (stub)
+  // Export PDF (real)
   async exportStatsPdf(user: any) {
     this.checkRole(user, 'export');
+    const stats = await this.kpi(user);
+    const PDFDocument = require('pdfkit');
+    const fs = require('fs');
+    const path = require('path');
     const filePath = path.join('exports', `traitement_stats_${Date.now()}.pdf`);
-    fs.writeFileSync(filePath, 'PDF export not implemented.');
+    if (!fs.existsSync('exports')) {
+      fs.mkdirSync('exports', { recursive: true });
+    }
+    const doc = new PDFDocument({ margin: 30, size: 'A4' });
+    const ws = fs.createWriteStream(filePath);
+    doc.pipe(ws);
+    doc.fontSize(18).text('Traitement Stats', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12);
+    doc.text(`Total: ${stats.total}`);
+    doc.text(`Traités: ${stats.traite}`);
+    doc.text(`En Difficulté: ${stats.enDifficulte}`);
+    doc.text(`Délai Moyen: ${stats.avgDelay}`);
+    doc.end();
+    await new Promise((resolve, reject) => {
+      ws.on('finish', resolve);
+      ws.on('error', reject);
+    });
     return { filePath };
   }
 
@@ -152,5 +173,71 @@ export class TraitementService {
       orderBy: { createdAt: 'asc' },
       include: { user: true, assignedTo: true },
     });
+  }
+
+  // Export Historique Excel
+  async exportHistoryExcel(bordereauId: string, user: any) {
+    this.checkRole(user, 'export');
+    const history = await this.history(bordereauId, user);
+    const ExcelJS = require('exceljs');
+    const path = require('path');
+    const fs = require('fs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Historique');
+    sheet.columns = [
+      { header: 'Date', key: 'createdAt', width: 20 },
+      { header: 'Action', key: 'action', width: 20 },
+      { header: 'Utilisateur', key: 'user', width: 20 },
+      { header: 'Statut', key: 'toStatus', width: 20 },
+      { header: 'Assigné à', key: 'assignedTo', width: 20 },
+    ];
+    for (const h of history) {
+      sheet.addRow({
+        createdAt: h.createdAt ? new Date(h.createdAt).toLocaleString() : '',
+        action: h.action,
+        user: h.user ? h.user.fullName || h.user.id : '',
+        toStatus: h.toStatus,
+        assignedTo: h.assignedTo ? h.assignedTo.fullName || h.assignedTo.id : '',
+      });
+    }
+    if (!fs.existsSync('exports')) {
+      fs.mkdirSync('exports', { recursive: true });
+    }
+    const filePath = path.join('exports', `traitement_history_${bordereauId}_${Date.now()}.xlsx`);
+    await workbook.xlsx.writeFile(filePath);
+    return { filePath };
+  }
+
+  // Export Historique PDF
+  async exportHistoryPdf(bordereauId: string, user: any) {
+    this.checkRole(user, 'export');
+    const history = await this.history(bordereauId, user);
+    const PDFDocument = require('pdfkit');
+    const fs = require('fs');
+    const path = require('path');
+    if (!fs.existsSync('exports')) {
+      fs.mkdirSync('exports', { recursive: true });
+    }
+    const filePath = path.join('exports', `traitement_history_${bordereauId}_${Date.now()}.pdf`);
+    const doc = new PDFDocument({ margin: 30, size: 'A4' });
+    const ws = fs.createWriteStream(filePath);
+    doc.pipe(ws);
+    doc.fontSize(18).text('Historique de Traitement', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12);
+    for (const h of history) {
+      doc.text(`Date: ${h.createdAt ? new Date(h.createdAt).toLocaleString() : ''}`);
+      doc.text(`Action: ${h.action}`);
+      doc.text(`Utilisateur: ${h.user ? h.user.fullName || h.user.id : ''}`);
+      doc.text(`Statut: ${h.toStatus}`);
+      doc.text(`Assigné à: ${h.assignedTo ? h.assignedTo.fullName || h.assignedTo.id : ''}`);
+      doc.moveDown(0.5);
+    }
+    doc.end();
+    await new Promise((resolve, reject) => {
+      ws.on('finish', resolve);
+      ws.on('error', reject);
+    });
+    return { filePath };
   }
 }

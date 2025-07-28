@@ -143,13 +143,31 @@ export class ClientController {
     @UploadedFile() file: Express.Multer.File,
     @Req() req: Request
   ) {
-    // Support multiple possible user id fields for robustness
+    // File validation: only PDF, max 10MB
+    if (!file) throw new Error('No file uploaded');
+    const allowedTypes = ['application/pdf'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new Error('Only PDF files are allowed');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('File size exceeds 10MB');
+    }
     const user = req['user'] as any;
     const uploaderId = user?.id || user?.userId || user?.sub;
     if (!uploaderId) {
       throw new Error('Uploader user id not found in request');
     }
     return this.clientService.uploadContract(id, file, uploaderId);
+  }
+
+  // --- GED: Download contract document ---
+  @Get('contract/:documentId/download')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  async downloadContract(
+    @Param('documentId') documentId: string,
+    @Res() res: Response
+  ) {
+    return this.clientService.downloadContract(documentId, res);
   }
 
   // --- SLA Config ---
