@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Contract } from '../../types/ContractType';
+import { Contract } from '../../types/contract.d';
 import { ContractService } from '../../api/ContractService';
 import ContractTable from './ContractTable';
 import ContractFormModal from './ContractFormModal';
 import ContractCard from './ContractCard';
-import { useAuth } from '../../hooks/useAuth';
+import ContractDetail from './ContractDetail';
+import { useAuth } from '../../contexts/AuthContext';
+import { Paper, Typography, Button, Grid } from '@mui/material';
 import './contracts.css';
 
 const ContractListPage: React.FC = () => {
@@ -17,7 +19,8 @@ const ContractListPage: React.FC = () => {
   const [historyModal, setHistoryModal] = useState<{ open: boolean; contract: Contract | null; history: any[] }>({ open: false, contract: null, history: [] });
   const [adminResult, setAdminResult] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState<{ open: boolean; contract: Contract | null }>({ open: false, contract: null });
-  const [showExternal, setShowExternal] = useState(false); // NEW
+  const [showExternal, setShowExternal] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const { user } = useAuth();
   if (!user) return <div>Loading...</div>;
 
@@ -74,19 +77,46 @@ const ContractListPage: React.FC = () => {
   // Helper to get file extension
   const getFileExtension = (path: string) => path.split('.').pop()?.toLowerCase() || '';
 
-  return (
-    <div className="contracts-page">
-      <div className="contracts-header">
-        <span className="contracts-title">Contracts</span>
-        <button className="contracts-add-btn" onClick={() => { setEditContract(null); setShowModal(true); }}>
-          Add Contract
-        </button>
-        <button onClick={() => handleExport('excel')}>Export Excel</button>
-        <button onClick={() => handleExport('pdf')}>Export PDF</button>
-        <button onClick={() => setShowExternal(e => !e)} style={{ background: showExternal ? '#e3f2fd' : undefined }}>
-          {showExternal ? 'Show Internal Contracts' : 'Show External Contracts'}
-        </button>
+  const handleViewContract = (contract: Contract) => {
+    setSelectedContract(contract);
+  };
+
+  if (selectedContract) {
+    return (
+      <div style={{ padding: 16 }}>
+        <Button 
+          onClick={() => setSelectedContract(null)} 
+          sx={{ mb: 2 }}
+          variant="outlined"
+        >
+          ← Retour à la liste
+        </Button>
+        <ContractDetail contract={selectedContract} />
       </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 16, minHeight: '100vh', background: '#f7f9fb' }}>
+      <Paper sx={{ p: 2, mb: 3, boxShadow: 2 }}>
+        <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>Contrats</Typography>
+        <Button 
+          variant="contained" 
+          color="primary" 
+          onClick={() => { setEditContract(null); setShowModal(true); }}
+          sx={{ mb: 2, mr: 2 }}
+        >
+          Nouveau Contrat
+        </Button>
+        <Button onClick={() => handleExport('excel')} sx={{ mr: 1 }}>Export Excel</Button>
+        <Button onClick={() => handleExport('pdf')} sx={{ mr: 1 }}>Export PDF</Button>
+        <Button 
+          onClick={() => setShowExternal(e => !e)} 
+          variant={showExternal ? 'contained' : 'outlined'}
+          sx={{ mr: 1 }}
+        >
+          {showExternal ? 'Contrats Internes' : 'Contrats Externes'}
+        </Button>
       {dashboard && (
         <div className="dashboard-stats" style={{ display: 'flex', gap: 16, margin: '16px 0' }}>
           <div>Total: {dashboard.total}</div>
@@ -169,19 +199,21 @@ const ContractListPage: React.FC = () => {
           onChange={e => setFilters((f: any) => ({ ...f, assignedManagerId: e.target.value }))}
         />
       </div>
-      <ContractTable
-        contracts={contracts}
-        loading={loading}
-        onEdit={contract => { setEditContract(contract); setShowModal(true); }}
-        onDelete={async id => { await ContractService.delete(id); fetchContracts(); }}
-        onHistory={async contract => {
-          const history = await ContractService.getHistory(contract.id);
-          setHistoryModal({ open: true, contract, history });
-        }}
-        onPreview={contract => setPreviewModal({ open: true, contract })}
-        user={user}
-      />
-      <ContractCard contracts={contracts} />
+        <ContractTable
+          contracts={contracts}
+          loading={loading}
+          onEdit={contract => { setEditContract(contract); setShowModal(true); }}
+          onDelete={async id => { await ContractService.delete(id); fetchContracts(); }}
+          onHistory={async contract => {
+            const history = await ContractService.getHistory(contract.id);
+            setHistoryModal({ open: true, contract, history });
+          }}
+          onPreview={contract => setPreviewModal({ open: true, contract })}
+          onView={handleViewContract}
+          user={user}
+        />
+        <ContractCard contracts={contracts} />
+      </Paper>
       {showModal && (
         <ContractFormModal
           contract={editContract}

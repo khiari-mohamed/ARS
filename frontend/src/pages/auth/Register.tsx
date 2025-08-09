@@ -29,7 +29,7 @@ const Register = () => {
     setSuccess('');
     setLoading(true);
     try {
-      await registerService(email, password, fullName, role as UserRole);
+      await registerService({ email, password, fullName, role: role as UserRole });
       setSuccess('Registration successful! You can now log in.');
       setTimeout(() => navigate('/login'), 1500);
     } catch (err: any) {

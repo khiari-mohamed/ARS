@@ -1,15 +1,5 @@
-export type Statut =
-  | "EN_ATTENTE"
-  | "SCAN_EN_COURS"
-  | "SCAN_TERMINE"
-  | "ASSIGNE"
-  | "TRAITE"
-  | "CLOTURE"
-  | "EN_DIFFICULTE"
-  | "EN_COURS"
-  | "PARTIEL";
-
-export type StatusColor = "GREEN" | "ORANGE" | "RED";
+import { Statut, StatusColor } from "../utils/enums";
+export type { Statut };
 
 export interface Bordereau {
   id: string;
@@ -25,6 +15,8 @@ export interface Bordereau {
   dateExecutionVirement?: string | null;
   delaiReglement: number;
   statut: Statut;
+  currentHandler?: any;
+  currentHandlerId?: string;
   nombreBS: number;
   createdAt: string;
   updatedAt: string;

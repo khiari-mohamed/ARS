@@ -295,4 +295,161 @@ export class AlertsService {
       gap: planned - actual,
     };
   }
+
+  /**
+   * 8. KPI Dashboard Data
+   */
+  async getAlertsKPI(user: any) {
+    this.checkAlertsRole(user);
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    // Get total active alerts
+    const totalAlerts = await this.prisma.alertLog.count({
+      where: { resolved: false }
+    });
+    
+    // Get critical alerts
+    const criticalAlerts = await this.prisma.alertLog.count({
+      where: { resolved: false, alertLevel: 'red' }
+    });
+    
+    // Get resolved today
+    const resolvedToday = await this.prisma.alertLog.count({
+      where: {
+        resolved: true,
+        resolvedAt: { gte: today }
+      }
+    });
+    
+    // Calculate average resolution time
+    const resolvedAlerts = await this.prisma.alertLog.findMany({
+      where: {
+        resolved: true,
+        resolvedAt: { gte: last7Days }
+      },
+      select: { createdAt: true, resolvedAt: true }
+    });
+    
+    const avgResolutionTime = resolvedAlerts.length > 0 
+      ? resolvedAlerts.reduce((acc, alert) => {
+          const diff = new Date(alert.resolvedAt!).getTime() - new Date(alert.createdAt).getTime();
+          return acc + (diff / (1000 * 60 * 60)); // Convert to hours
+        }, 0) / resolvedAlerts.length
+      : 0;
+    
+    // Calculate SLA compliance
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: { createdAt: { gte: last7Days } },
+      include: { client: true, contract: true }
+    });
+    
+    let compliantCount = 0;
+    bordereaux.forEach(b => {
+      const daysSinceReception = b.dateReception 
+        ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) 
+        : 0;
+      let slaThreshold = 5;
+      if (b.contract?.delaiReglement) slaThreshold = b.contract.delaiReglement;
+      else if (b.client?.reglementDelay) slaThreshold = b.client.reglementDelay;
+      
+      if (b.statut === 'CLOTURE' || daysSinceReception <= slaThreshold) {
+        compliantCount++;
+      }
+    });
+    
+    const slaCompliance = bordereaux.length > 0 
+      ? Math.round((compliantCount / bordereaux.length) * 100)
+      : 100;
+    
+    // Get charts data
+    const chartsData = await this.getChartsData(user);
+    
+    return {
+      totalAlerts,
+      criticalAlerts,
+      resolvedToday,
+      avgResolutionTime: Math.round(avgResolutionTime * 10) / 10,
+      slaCompliance,
+      ...chartsData
+    };
+  }
+
+  /**
+   * 9. Real-time alerts (last 5 minutes)
+   */
+  async getRealTimeAlerts(user: any) {
+    this.checkAlertsRole(user);
+    
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    return this.prisma.alertLog.findMany({
+      where: {
+        createdAt: { gte: fiveMinutesAgo },
+        resolved: false
+      },
+      include: { bordereau: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+  }
+
+  /**
+   * 10. Charts data for analytics
+   */
+  async getChartsData(user: any) {
+    this.checkAlertsRole(user);
+    
+    const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    
+    // Alerts by day
+    const alertsByDay = await this.prisma.alertLog.groupBy({
+      by: ['createdAt', 'alertLevel'],
+      where: { createdAt: { gte: last7Days } },
+      _count: { id: true }
+    });
+    
+    // Process data for charts
+    const dayMap = new Map();
+    alertsByDay.forEach(item => {
+      const date = new Date(item.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+      if (!dayMap.has(date)) {
+        dayMap.set(date, { date, critical: 0, warning: 0, normal: 0 });
+      }
+      const dayData = dayMap.get(date);
+      if (item.alertLevel === 'red') dayData.critical += item._count.id;
+      else if (item.alertLevel === 'orange') dayData.warning += item._count.id;
+      else dayData.normal += item._count.id;
+    });
+    
+    // Alerts by type
+    const alertsByType = await this.prisma.alertLog.groupBy({
+      by: ['alertType'],
+      where: { createdAt: { gte: last7Days } },
+      _count: { id: true }
+    });
+    
+    const typeColors = {
+      'SLA_BREACH': '#ff4d4f',
+      'PERFORMANCE': '#faad14',
+      'WORKLOAD': '#722ed1',
+      'CLAIM': '#1890ff',
+      'SYSTEM': '#52c41a'
+    };
+    
+    return {
+      alertsByDay: Array.from(dayMap.values()),
+      alertsByType: alertsByType.map(item => ({
+        name: item.alertType.replace('_', ' '),
+        value: item._count.id,
+        color: typeColors[item.alertType] || '#d9d9d9'
+      })),
+      slaComplianceChart: Array.from(dayMap.values()).map(day => ({
+        date: day.date,
+        compliance: Math.max(0, 100 - (day.critical * 10 + day.warning * 5))
+      }))
+    };
+  }
 }

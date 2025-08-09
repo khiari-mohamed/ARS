@@ -2,13 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody, Chip, Skeleton, Alert, Grid } from '@mui/material';
 import { fetchClients, fetchClientAnalytics } from '../../services/clientService';
 import { useAuthContext } from '../../contexts/AuthContext';
-
-interface Client {
-  id: string;
-  name: string;
-  reglementDelay: number;
-  accountManagerId: string;
-}
+import { Client } from '../../types/client.d';
 
 interface ClientKPI {
   clientId: string;

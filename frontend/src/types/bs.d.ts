@@ -1,4 +1,4 @@
-export type BSStatus = 'IN_PROGRESS' | 'VALIDATED' | 'REJECTED' | 'EN_COURS' | 'CLOTURE' | 'DELETED';
+export type BSStatus = 'IN_PROGRESS' | 'VALIDATED' | 'REJECTED' | 'EN_COURS' | 'CLOTURE' | 'DELETED' | 'EN_DIFFICULTE';
 
 export interface BulletinSoinItem {
   id: number;

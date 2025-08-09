@@ -84,6 +84,18 @@ export class AlertsController {
     return this.alertsService.resolveAlert(alertId, user);
   }
 
+  @Get('kpi')
+  async getAlertsKPI(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.alertsService.getAlertsKPI(user);
+  }
+
+  @Get('realtime')
+  async getRealTimeAlerts(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.alertsService.getRealTimeAlerts(user);
+  }
+
   // AI-powered SLA prediction
   @Get('sla-prediction')
   async getSlaPredictionAI(@Query('items') items: string) {
@@ -95,5 +107,11 @@ export class AlertsController {
       throw new Error('Invalid items format. Must be JSON array.');
     }
     return this.alertsService.getSlaPredictionAI(parsedItems);
+  }
+
+  @Get('charts-data')
+  async getChartsData(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.alertsService.getChartsData(user);
   }
 }

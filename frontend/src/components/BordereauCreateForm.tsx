@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { createBordereau } from "../services/bordereauxService";
 import { fetchClients, fetchClientById } from "../services/clientService";
 import { fetchContractsByClient, fetchContractById, Contract } from "../services/contractService";
-import { Statut } from "../types/bordereaux";
+import { Statut } from "../utils/enums";
 import { Client } from "../types/client.d";
+import { useAuth } from '../hooks/useAuth';
 
 interface Props {
   onSuccess: () => void;
@@ -22,6 +23,7 @@ const statutOptions: { value: Statut; label: string }[] = [
 ];
 
 const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
+  const { user } = useAuth();
   const [reference, setReference] = useState("");
   const [dateReception, setDateReception] = useState("");
   const [clientId, setClientId] = useState("");
@@ -35,6 +37,12 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Only BO, Chef, Admin can create
+  const isBO = user?.role === 'CLIENT_SERVICE';
+  const isChef = user?.role === 'CHEF_EQUIPE';
+  const isAdmin = user?.role === 'ADMINISTRATEUR';
+  const canCreate = isBO || isChef || isAdmin;
 
   useEffect(() => {
     fetchClients().then(setClients);
@@ -85,13 +93,18 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    if (!canCreate) {
+      setError("Vous n'avez pas le droit de créer un bordereau.");
+      return;
+    }
     if (!reference || !dateReception || !clientId || !delaiReglement || !nombreBS) {
       setError("Tous les champs obligatoires doivent être remplis.");
       return;
     }
     setLoading(true);
     try {
-      await createBordereau({
+      // Prepare notification payload (backend will handle notification)
+      const payload = {
         reference,
         dateReception,
         clientId,
@@ -99,7 +112,10 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
         delaiReglement: Number(delaiReglement),
         nombreBS: Number(nombreBS),
         statut,
-      });
+        createdBy: user?.id,
+        // Optionally, add auto-assignment fields if needed
+      };
+      await createBordereau(payload);
       setSuccess("Bordereau créé et notification envoyée à l'équipe SCAN.");
       setReference("");
       setDateReception("");
@@ -117,10 +133,14 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
     }
   };
 
+  if (!canCreate) {
+    return <div className="text-red-600 text-sm">Vous n'avez pas le droit de créer un bordereau.</div>;
+  }
+
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div>
-        <label className="block font-semibold">Référence *</label>
+        <label className="block font-semibold">R��férence *</label>
         <input
           type="text"
           className="input"

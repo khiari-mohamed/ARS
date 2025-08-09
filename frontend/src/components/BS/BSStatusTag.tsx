@@ -7,6 +7,7 @@ const statusMap: Record<BSStatus, { color: string; label: string }> = {
   VALIDATED: { color: 'success', label: 'Validé' },
   REJECTED: { color: 'error', label: 'Rejeté' },
   EN_COURS: { color: 'processing', label: 'En cours' },
+  EN_DIFFICULTE: { color: 'warning', label: 'En difficulté' },
   CLOTURE: { color: 'default', label: 'Clôturé' },
   DELETED: { color: 'default', label: 'Supprimé' },
 };

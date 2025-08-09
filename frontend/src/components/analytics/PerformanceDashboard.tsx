@@ -40,56 +40,58 @@ const PerformanceDashboard: React.FC = () => {
   if (error) return <div className="text-red-600">Erreur chargement performance IA: {error}</div>;
 
   return (
-    <div>
-      <h2 className="text-xl font-bold mb-4 border-b pb-2">Performance par utilisateur (IA)</h2>
-      <div className="flex flex-wrap gap-4 mb-4">
-        <input name="fromDate" type="date" onChange={handleFilterChange} className="border p-1 rounded" />
-        <input name="toDate" type="date" onChange={handleFilterChange} className="border p-1 rounded" />
-        <input name="teamId" placeholder="Team ID" onChange={handleFilterChange} className="border p-1 rounded" />
-        <input name="userId" placeholder="User ID" onChange={handleFilterChange} className="border p-1 rounded" />
-        <select name="role" onChange={handleFilterChange} className="border p-1 rounded">
+    <div className="dashboard-sharp-panel">
+      <h3 className="dashboard-sharp-title">Performance par utilisateur (IA)</h3>
+      <div className="performance-filters-bar">
+        <input name="fromDate" type="date" onChange={handleFilterChange} className="performance-filter-input" />
+        <input name="toDate" type="date" onChange={handleFilterChange} className="performance-filter-input" />
+        <input name="teamId" placeholder="ID équipe" onChange={handleFilterChange} className="performance-filter-input" />
+        <input name="userId" placeholder="ID utilisateur" onChange={handleFilterChange} className="performance-filter-input" />
+        <select name="role" onChange={handleFilterChange} className="performance-filter-input performance-filter-select">
           <option value="">Tous rôles</option>
           <option value="GESTIONNAIRE">Gestionnaire</option>
           <option value="CHEF_EQUIPE">Chef d'équipe</option>
           <option value="SUPER_ADMIN">Super Admin</option>
         </select>
         <button
-          className="ml-2 px-4 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          className="performance-filter-reset"
           onClick={() => setFilters(defaultFilters)}
         >
-          Reset
+          Réinitialiser
         </button>
       </div>
-      <table className="w-full border rounded">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="p-2">Utilisateur</th>
-            <th className="p-2">Réel</th>
-            <th className="p-2">Attendu</th>
-            <th className="p-2">Delta</th>
-            <th className="p-2">Statut</th>
-          </tr>
-        </thead>
-        <tbody>
-          {aiData && aiData.length === 0 ? (
+      <div className="performance-table-wrapper">
+        <table className="performance-table">
+          <thead>
             <tr>
-              <td colSpan={5} className="text-center text-gray-500 py-4">
-                Aucun utilisateur trouvé pour les filtres sélectionnés.
-              </td>
+              <th className="performance-th">Utilisateur</th>
+              <th className="performance-th">Réel</th>
+              <th className="performance-th">Attendu</th>
+              <th className="performance-th">Delta</th>
+              <th className="performance-th">Statut</th>
             </tr>
-          ) : (
-            aiData && aiData.map((u: any) => (
-              <tr key={u.user_id}>
-                <td className="p-2">{u.user_id}</td>
-                <td className="p-2">{u.actual}</td>
-                <td className="p-2">{u.expected}</td>
-                <td className="p-2">{u.delta}</td>
-                <td className="p-2">{u.status}</td>
+          </thead>
+          <tbody>
+            {aiData && aiData.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center text-gray-500 py-4">
+                  Aucun utilisateur trouvé pour les filtres sélectionnés.
+                </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              aiData && aiData.map((u: any) => (
+                <tr key={u.user_id}>
+                  <td>{u.user_id}</td>
+                  <td>{u.actual}</td>
+                  <td>{u.expected}</td>
+                  <td>{u.delta}</td>
+                  <td>{u.status}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

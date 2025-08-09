@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateVirementDto } from './dto/create-virement.dto';
 import { ConfirmVirementDto } from './dto/confirm-virement.dto';
 import { SearchVirementDto } from './dto/search-virement.dto';
+import { CreateOVDto } from './dto/create-ov.dto';
+import { UpdateOVStatusDto } from './dto/update-ov-status.dto';
 import { Virement, User } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
@@ -210,5 +212,135 @@ export class FinanceService {
     }
     await this.logAuditAction('AUTO_CONFIRM_VIREMENTS_RUN', { count: virements.length });
     return { autoConfirmed: virements.length };
+  }
+
+  // OV Processing methods
+  async validateOVFile(file: Express.Multer.File, body: any, user: User) {
+    this.checkFinanceRole(user);
+    if (!file) throw new BadRequestException('No file uploaded');
+    
+    // Mock validation - replace with actual Excel parsing
+    const results = [
+      { matricule: '12345', name: 'John Doe', society: 'AON', rib: '12345678901234567890', amount: 150.50, status: 'ok', notes: '' },
+      { matricule: '67890', name: 'Jane Smith', society: 'AXA', rib: '', amount: 200.00, status: 'error', notes: 'RIB manquant' }
+    ];
+    
+    return { success: true, results };
+  }
+
+  async processOV(dto: CreateOVDto, user: User) {
+    this.checkFinanceRole(user);
+    // Mock OV processing
+    const ovRecord = {
+      id: Date.now().toString(),
+      reference: `OV/${new Date().getFullYear()}/${String(Date.now()).slice(-3)}`,
+      donneurOrdreId: dto.donneurOrdreId,
+      societyId: dto.societyId,
+      totalAmount: dto.totalAmount,
+      status: 'NON_EXECUTE',
+      createdAt: new Date(),
+      createdBy: user.id
+    };
+    
+    await this.logAuditAction('CREATE_OV', { userId: user.id, ovId: ovRecord.id });
+    return ovRecord;
+  }
+
+  async getOVTracking(query: any, user: User) {
+    this.checkFinanceRole(user);
+    // Mock tracking data
+    return [
+      {
+        id: '1',
+        reference: 'OV/2025/001',
+        society: 'AON',
+        dateInjected: '2025-01-15',
+        dateExecuted: '2025-01-16',
+        status: 'EXECUTE',
+        delay: 1,
+        observations: 'Traité normalement',
+        donneurOrdre: 'ARS Tunisie',
+        totalAmount: 1250.75
+      }
+    ];
+  }
+
+  async updateOVStatus(id: string, dto: UpdateOVStatusDto, user: User) {
+    this.checkFinanceRole(user);
+    // Mock status update
+    await this.logAuditAction('UPDATE_OV_STATUS', { userId: user.id, ovId: id, status: dto.status });
+    return { id, ...dto, updatedAt: new Date() };
+  }
+
+  async generateOVPDF(id: string, res: Response, user: User) {
+    this.checkFinanceRole(user);
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="OV_${id}.pdf"`);
+    doc.pipe(res);
+    doc.fontSize(16).text(`Ordre de Virement ${id}`, { align: 'center' });
+    doc.end();
+  }
+
+  async generateOVTXT(id: string, res: Response, user: User) {
+    this.checkFinanceRole(user);
+    const txtContent = `OV${id}${Date.now()}`;
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="OV_${id}.txt"`);
+    res.send(txtContent);
+  }
+
+  // Donneurs d'Ordre methods
+  async getDonneurs(user: User) {
+    this.checkFinanceRole(user);
+    return [
+      { id: '1', name: 'ARS Tunisie', bank: 'Banque Centrale', rib: '12345678901234567890', txtFormat: 'SWIFT', status: 'active' }
+    ];
+  }
+
+  async createDonneur(data: any, user: User) {
+    this.checkFinanceRole(user);
+    const donneur = { id: Date.now().toString(), ...data };
+    await this.logAuditAction('CREATE_DONNEUR', { userId: user.id, donneurId: donneur.id });
+    return donneur;
+  }
+
+  async updateDonneur(id: string, data: any, user: User) {
+    this.checkFinanceRole(user);
+    await this.logAuditAction('UPDATE_DONNEUR', { userId: user.id, donneurId: id });
+    return { id, ...data };
+  }
+
+  async deleteDonneur(id: string, user: User) {
+    this.checkFinanceRole(user);
+    await this.logAuditAction('DELETE_DONNEUR', { userId: user.id, donneurId: id });
+    return { deleted: true };
+  }
+
+  // Adherents methods
+  async getAdherents(query: any, user: User) {
+    this.checkFinanceRole(user);
+    return [
+      { id: '1', matricule: '12345', name: 'John', surname: 'Doe', society: 'AON', rib: '12345678901234567890', status: 'active' }
+    ];
+  }
+
+  async createAdherent(data: any, user: User) {
+    this.checkFinanceRole(user);
+    const adherent = { id: Date.now().toString(), ...data };
+    await this.logAuditAction('CREATE_ADHERENT', { userId: user.id, adherentId: adherent.id });
+    return adherent;
+  }
+
+  async updateAdherent(id: string, data: any, user: User) {
+    this.checkFinanceRole(user);
+    await this.logAuditAction('UPDATE_ADHERENT', { userId: user.id, adherentId: id });
+    return { id, ...data };
+  }
+
+  async deleteAdherent(id: string, user: User) {
+    this.checkFinanceRole(user);
+    await this.logAuditAction('DELETE_ADHERENT', { userId: user.id, adherentId: id });
+    return { deleted: true };
   }
 }

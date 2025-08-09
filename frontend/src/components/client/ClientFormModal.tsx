@@ -30,8 +30,16 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
   }, []);
 
   useEffect(() => {
-    if (client) setForm({ ...client, gestionnaireIds: client.gestionnaires?.map((g: any) => g.id) || [] });
-    else setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [] });
+    if (client) {
+      setForm({ 
+        name: client.name,
+        reglementDelay: client.reglementDelay || 0,
+        reclamationDelay: client.reclamationDelay || 0,
+        gestionnaireIds: client.gestionnaires?.map((g: any) => g.id) || [] 
+      });
+    } else {
+      setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [] });
+    }
     setErrors({});
   }, [client]);
 

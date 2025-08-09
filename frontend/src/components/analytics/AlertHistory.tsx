@@ -42,7 +42,7 @@ const AlertHistory: React.FC = () => {
   const handleExport = () => {
     if (history && history.length > 0) {
       // Convert AlertHistoryEntry[] to Alert[]-like for export utility, or write a custom export
-      const rows = history.map(h => ({
+      const rows = history.map((h: any) => ({
         id: h.id,
         bordereauId: h.bordereauId,
         user: h.user?.fullName || h.userId,
@@ -53,7 +53,7 @@ const AlertHistory: React.FC = () => {
       }));
       const headers = ['ID', 'Bordereau', 'Utilisateur', 'Niveau', 'Message', 'Date', 'Résolu'];
       const csvContent =
-        [headers, ...rows.map(row => [
+        [headers, ...rows.map((row: any) => [
           row.id,
           row.bordereauId,
           row.user,
@@ -62,7 +62,7 @@ const AlertHistory: React.FC = () => {
           new Date(row.createdAt).toLocaleString(),
           row.resolved,
         ])]
-          .map(row => row.map(String).map(s => `"${s.replace(/"/g, '""')}"`).join(','))
+          .map((row: any) => row.map(String).map((s: string) => `"${s.replace(/"/g, '""')}"`).join(','))
           .join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const link = document.createElement('a');
@@ -143,7 +143,7 @@ const AlertHistory: React.FC = () => {
       )}
       {error && (
         <MuiAlert severity="error" sx={{ my: 2 }}>
-          Erreur lors du chargement de l'historique : {error.message}
+          Erreur lors du chargement de l'historique : {(error as any)?.message || 'Erreur inconnue'}
         </MuiAlert>
       )}
       {!isLoading && !error && (!history || history.length === 0) && (

@@ -15,11 +15,11 @@ export default function DocumentViewer({ docs }: { docs: Document[] }) {
         const url = getDocumentUrl(doc.path);
         return (
           <div key={doc.id} className="border rounded p-2">
-            <div className="font-semibold">{doc.name}</div>
+            <div className="font-semibold"><span>{doc.name}</span></div>
             {doc.type === "pdf" ? (
               <iframe src={url} className="w-full h-48" />
             ) : (
-              <img src={url} alt={doc.name} className="max-h-48" />
+              <img src={url} alt="Document" className="max-h-48" />
             )}
             <a
               href={url}

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Box, Button, TextField, Typography, Paper } from '@mui/material';
 
 const FeedbackForm: React.FC<{ page: string }> = ({ page }) => {
   const [message, setMessage] = useState('');
@@ -14,34 +13,29 @@ const FeedbackForm: React.FC<{ page: string }> = ({ page }) => {
 
   if (submitted)
     return (
-      <Paper elevation={2} sx={{ p: 2, mt: 2, borderRadius: 3 }}>
-        <Typography variant="h6" color="success.main">
-          Thank you for your feedback!
-        </Typography>
-      </Paper>
+      <div className="dashboard-sharp-panel">
+        <div className="dashboard-sharp-title" style={{ color: '#388e3c' }}>
+          Merci pour votre retour !
+        </div>
+      </div>
     );
 
   return (
-    <Paper elevation={2} sx={{ p: 2, mt: 2, borderRadius: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Feedback
-      </Typography>
-      <Box component="form" onSubmit={handleSubmit}>
-        <TextField
-          label="Your feedback"
+    <div className="dashboard-sharp-panel">
+      <div className="dashboard-sharp-title">Donnez votre avis</div>
+      <form onSubmit={handleSubmit} className="feedback-form-fields">
+        <label htmlFor="feedback-message" className="feedback-label">Votre retour</label>
+        <textarea
+          id="feedback-message"
+          className="feedback-textarea"
           value={message}
           onChange={e => setMessage(e.target.value)}
           required
-          multiline
           rows={3}
-          fullWidth
-          sx={{ mb: 2 }}
         />
-        <Button type="submit" variant="contained" color="primary">
-          Submit
-        </Button>
-      </Box>
-    </Paper>
+        <button type="submit" className="feedback-submit-btn">Envoyer</button>
+      </form>
+    </div>
   );
 };
 

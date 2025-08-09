@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { useUsers } from '../../hooks/useUsers';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { UsersList } from '../../components/user/UsersList';
 import { UserForm } from '../../components/user/UserForm';
 import { UserDetail } from '../../components/user/UserDetail';
+import UserMobileView from '../../components/user/UserMobileView';
+import EnhancedUserForm from '../../components/user/EnhancedUserForm';
+import BulkUserActions from '../../components/user/BulkUserActions';
 import { canCreateUser, canViewUsers } from '../../utils/roleUtils';
 import { User, UserRole } from '../../types/user.d';
+import { Box, useTheme, useMediaQuery, Fab } from '@mui/material';
+import { Add } from '@mui/icons-material';
 
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
@@ -24,12 +29,17 @@ export default function UserManagement() {
   const [showDetail, setShowDetail] = useState<User | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
+  const [useEnhancedForm, setUseEnhancedForm] = useState(true);
+  
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // If not authenticated or role is not a valid UserRole, block access
   if (
     !currentUser ||
     !currentUser.role ||
-    !['ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE', 'FINANCE'].includes(currentUser.role)
+    !['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE', 'FINANCE'].includes(currentUser.role)
   ) {
     return <div style={{ color: 'red', margin: 32 }}>Accès refusé.</div>;
   }
@@ -40,6 +50,12 @@ export default function UserManagement() {
   const handleCreate = () => setShowForm({ mode: 'create' });
   const handleEdit = (user: User) => setShowForm({ mode: 'edit', user });
   const handleView = (user: User) => setShowDetail(user);
+  
+  const handleBulkAction = async (action: string, data?: any) => {
+    // Implement bulk actions
+    console.log('Bulk action:', action, 'Data:', data, 'Users:', selectedUsers);
+    // Add actual implementation here
+  };
 
   const handleFormSubmit = async (data: any) => {
     setIsSubmitting(true);
@@ -90,6 +106,43 @@ export default function UserManagement() {
     }
   };
 
+  // Mobile view
+  if (isMobile) {
+    return (
+      <Box>
+        <UserMobileView
+          users={users}
+          currentUserRole={currentUserRole}
+          onEdit={handleEdit}
+          onView={handleView}
+          onResetPassword={handleResetPassword}
+          onDisable={handleDisable}
+        />
+        {canCreateUser(currentUserRole) && (
+          <Fab
+            color="primary"
+            aria-label="add"
+            sx={{ position: 'fixed', bottom: 16, right: 16 }}
+            onClick={handleCreate}
+          >
+            <Add />
+          </Fab>
+        )}
+        {showForm && (
+          <EnhancedUserForm
+            mode={showForm.mode}
+            initial={showForm.user}
+            onSubmit={handleFormSubmit}
+            onCancel={() => setShowForm(null)}
+            currentUserRole={currentUserRole}
+            isSubmitting={isSubmitting}
+            error={formError}
+          />
+        )}
+      </Box>
+    );
+  }
+
   return (
     <div className="user-management-container">
       <h1 className="user-management-title">Gestion des utilisateurs</h1>
@@ -110,19 +163,38 @@ export default function UserManagement() {
         onResetPassword={handleResetPassword}
         onDisable={handleDisable}
       />
+      <BulkUserActions
+        selectedUsers={selectedUsers}
+        onBulkAction={handleBulkAction}
+        onClearSelection={() => setSelectedUsers([])}
+        currentUserRole={currentUserRole}
+      />
+      
       {showForm && (
         <div className="modal">
-          <div className="modal-content">
-            <UserForm
-              mode={showForm.mode}
-              initial={showForm.user}
-              onSubmit={handleFormSubmit}
-              onCancel={() => setShowForm(null)}
-              currentUserRole={currentUserRole}
-              isSubmitting={isSubmitting}
-              error={formError}
-              showPassword={showForm.mode === 'create'}
-            />
+          <div className="modal-content" style={{ maxWidth: useEnhancedForm ? '900px' : '500px' }}>
+            {useEnhancedForm ? (
+              <EnhancedUserForm
+                mode={showForm.mode}
+                initial={showForm.user}
+                onSubmit={handleFormSubmit}
+                onCancel={() => setShowForm(null)}
+                currentUserRole={currentUserRole}
+                isSubmitting={isSubmitting}
+                error={formError}
+              />
+            ) : (
+              <UserForm
+                mode={showForm.mode}
+                initial={showForm.user}
+                onSubmit={handleFormSubmit}
+                onCancel={() => setShowForm(null)}
+                currentUserRole={currentUserRole}
+                isSubmitting={isSubmitting}
+                error={formError}
+                showPassword={showForm.mode === 'create'}
+              />
+            )}
           </div>
         </div>
       )}

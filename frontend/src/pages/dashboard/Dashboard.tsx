@@ -4,6 +4,7 @@ import PerformanceChart from './PerformanceChart';
 import SLAStatusPanel from './SLAStatusPanel';
 import RoleSpecificPanel from './RoleSpecificPanel';
 import AlertsPanel from './AlertsPanel';
+import TeamPerformanceDashboard from '../../components/analytics/TeamPerformanceDashboard';
 import { getKPIs, getPerformance, getSLAStatus, getAlerts, getCharts, getDepartments } from '../../services/dashboardService';
 import { useAuthContext } from '../../contexts/AuthContext';
 import UserPerformance from '../../components/UserPerformance';
@@ -57,10 +58,10 @@ const Dashboard: React.FC = () => {
   }, [filters]);
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Dashboard</h2>
+    <div className="dashboard-root">
+      <h2 className="dashboard-title">Dashboard</h2>
       {/* Filter Controls */}
-      <div style={{ marginBottom: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div className="dashboard-filters card-panel">
         <label>
           Department:&nbsp;
           <select name="departmentId" onChange={handleFilterChange} value={filters.departmentId || ''}>
@@ -82,26 +83,34 @@ const Dashboard: React.FC = () => {
         </label>
         {/* Add more filters as needed */}
       </div>
-      <KPIWidgets kpis={kpis} />
-      <div style={{ display: 'flex', gap: 24, marginTop: 24, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 320 }}>
-          <SLAStatusPanel slaStatus={slaStatus} />
-          <PerformanceChart data={performance} />
-        </div>
-        <div style={{ flex: 1, minWidth: 320 }}>
+      <div className="dashboard-kpi-row">
+        <KPIWidgets kpis={kpis} />
+      </div>
+      <div className="dashboard-main-grid-2x2">
+        <SLAStatusPanel slaStatus={slaStatus} />
+        <div className="dashboard-sharp-panel">
+          <h3 className="dashboard-sharp-title">Aperçu des alertes</h3>
           <AlertsPanel alerts={alerts} />
+        </div>
+        <div className="dashboard-sharp-panel">
+          <h3 className="dashboard-sharp-title">Classement de l'équipe</h3>
           <UserPerformance data={performance} />
         </div>
+        <div className="dashboard-sharp-panel">
+          <h3 className="dashboard-sharp-title">Performance - BS traités</h3>
+          <LineChart data={charts.trend || []} dataKey="count" label="BS traités" />
+        </div>
       </div>
-      <div style={{ marginTop: 32 }}>
-        <LineChart data={charts.trend || []} dataKey="count" label="BS traités" />
+      {/* Team Breakdown */}
+      <div className="dashboard-sharp-panel mt-6">
+        <h3 className="dashboard-sharp-title">Répartition par équipe</h3>
+        <TeamPerformanceDashboard data={performance} />
       </div>
-      <div style={{ marginTop: 32 }}>
-        <RoleSpecificPanel role={user?.role ?? ''} data={{ kpis, performance, alerts }} />
-      </div>
-      <div style={{ marginTop: 32 }}>
-        <FeedbackForm page="dashboard" />
-      </div>
+      {/* Client Breakdown (if available) */}
+      {/* <ClientBreakdownDashboard data={clientPerformance} /> */}
+      <PerformanceChart data={performance} />
+      <RoleSpecificPanel role={user?.role ?? ''} data={{ kpis, performance, alerts }} />
+      <FeedbackForm page="dashboard" />
     </div>
   );
 };

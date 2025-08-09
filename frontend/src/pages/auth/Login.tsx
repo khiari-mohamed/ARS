@@ -18,7 +18,7 @@ const Login = () => {
     setLoading(true);
     try {
       const { access_token, user } = await loginService(email, password);
-      login(access_token);
+      login(access_token, user);
       navigate('/home/dashboard');
     } catch (err: any) {
       if (err.response?.data?.message?.includes('locked')) {

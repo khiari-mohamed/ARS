@@ -38,22 +38,31 @@ export class OutlookService {
 
   // Step 3: Use access token to send email
   async sendMail(to: string, subject: string, text: string) {
-    if (!this.accessToken) throw new UnauthorizedException('Outlook not connected');
-    const res = await axios.post(
-      `${MS_GRAPH_API}/me/sendMail`,
-      {
-        message: {
-          subject,
-          body: { contentType: 'Text', content: text },
-          toRecipients: [{ emailAddress: { address: to } }],
+    if (!this.accessToken) {
+      console.warn('Outlook not connected - email notification skipped');
+      return { status: 'skipped', reason: 'Outlook not connected' };
+    }
+    
+    try {
+      const res = await axios.post(
+        `${MS_GRAPH_API}/me/sendMail`,
+        {
+          message: {
+            subject,
+            body: { contentType: 'Text', content: text },
+            toRecipients: [{ emailAddress: { address: to } }],
+          },
+          saveToSentItems: 'true',
         },
-        saveToSentItems: 'true',
-      },
-      {
-        headers: { Authorization: `Bearer ${this.accessToken}` },
-      }
-    );
-    return res.data;
+        {
+          headers: { Authorization: `Bearer ${this.accessToken}` },
+        }
+      );
+      return res.data;
+    } catch (error) {
+      console.warn('Failed to send email via Outlook:', error.message);
+      return { status: 'failed', error: error.message };
+    }
   }
 
   // Step 4: Refresh token if needed (not shown: implement token expiry check)

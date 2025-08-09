@@ -5,22 +5,7 @@ import { NotificationCenter } from '../components/BS/NotificationCenter';
 import { LocalAPI } from '../services/axios';
 import io from 'socket.io-client';
 import { getSocketUrl } from '../utils/getSocketUrl';
-
-const sidebarLinks = [
-  { to: "/home/dashboard", label: "Dashboard", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE'] },
-  { to: "/home/bordereaux", label: "Bordereaux", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/bs", label: "Bulletins de Soin", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/clients", label: "Clients", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/contracts", label: "Contracts", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/analytics", label: "Analytics", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/finance", label: "Finance", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'FINANCE'] },
-  { to: "/home/ged", label: "GED", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
-  { to: "/home/gec", label: "GEC", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/reclamations", label: "Réclamations", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
-  { to: "/home/users", label: "Utilisateurs", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN'] },
-  { to: "/home/workflow", label: "Workflow", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/alerts", label: "Alertes", roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'FINANCE'] },
-];
+import { Sidebar } from '../components/Sidebar';
 
 const MainLayout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
@@ -84,39 +69,21 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className={`layout-root${sidebarOpen ? "" : " sidebar-collapsed"}`}>
-      <aside className={`sidebar${sidebarOpen ? "" : " sidebar-closed"}`}>
-        <button className="sidebar-toggle" onClick={handleToggleSidebar} aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}>
-          {sidebarOpen ? <span>&#10005;</span> : <span>&#9776;</span>}
-        </button>
-        <div className={`sidebar-title${sidebarOpen ? '' : ' sidebar-title-collapsed'}`}>ARS</div>
-        <nav className={`sidebar-nav${sidebarOpen ? '' : ' sidebar-nav-collapsed'}`}
-          style={{ pointerEvents: sidebarOpen ? 'auto' : 'none' }}>
-          {sidebarLinks
-            .filter(link => !userRole || link.roles?.includes(userRole))
-            .map(link => {
-              const isActive = location.pathname.startsWith(link.to);
-              return (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  className={`sidebar-link${isActive ? " sidebar-link-active" : ""}`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-        </nav>
-        <div className={`sidebar-footer${sidebarOpen ? '' : ' sidebar-footer-collapsed'}`}>© {new Date().getFullYear()} ARS</div>
-      </aside>
-      <main className="main-content">
+      {/* Sidebar Component */}
+      <Sidebar open={sidebarOpen} onToggle={handleToggleSidebar} userRole={userRole} />
+      <main className="main-content   style={{
+    marginLeft: sidebarOpen ? 250 : 0,
+    padding: '1rem',
+    transition: 'margin-left 0.3s ease',
+  }}">
         {/* Global Notification Center */}
-<div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 1000, width: 350 }}>
-  <NotificationCenter notifications={notifications} />
-</div>
+        <div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 1000, width: 350 }}>
+          <NotificationCenter notifications={notifications} />
+        </div>
         <Outlet />
       </main>
     </div>
   );
 };
 
-export default MainLayout;
+export default MainLayout

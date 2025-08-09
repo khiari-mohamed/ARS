@@ -18,7 +18,9 @@ interface UsersListProps {
 }
 
 const roleLabels: Record<UserRole, string> = {
+  SUPER_ADMIN: 'Super Admin',
   ADMINISTRATEUR: 'Administrateur',
+  RESPONSABLE_DEPARTEMENT: 'Responsable Département',
   CHEF_EQUIPE: "Chef d'Équipe",
   GESTIONNAIRE: 'Gestionnaire',
   CLIENT_SERVICE: 'Service Client',

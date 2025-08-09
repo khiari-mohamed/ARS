@@ -33,31 +33,36 @@ export const canEdit = (
    ========================= */
 
 export function canCreateUser(currentRole: UserRole): boolean {
-  return currentRole === 'ADMINISTRATEUR';
+  return ['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(currentRole);
 }
 
 export function canEditUser(currentRole: UserRole, targetUser: User): boolean {
-  // Only admin can edit any user, except their own role
-  if (currentRole === 'ADMINISTRATEUR') return true;
-  // Chef d'équipe can edit their own profile (except role/department)
-  if (currentRole === 'CHEF_EQUIPE' && targetUser.role === 'CHEF_EQUIPE') return true;
-  // Gestionnaire, Service Client, Finance: only their own profile (except role/department)
+  // Super admin can edit anyone
+  if (currentRole === 'SUPER_ADMIN') return true;
+  // Admin can edit anyone except super admin
+  if (currentRole === 'ADMINISTRATEUR' && targetUser.role !== 'SUPER_ADMIN') return true;
+  // Responsable département can edit users in their department
+  if (currentRole === 'RESPONSABLE_DEPARTEMENT' && 
+      !['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(targetUser.role)) return true;
+  // Chef d'équipe can edit their team members
+  if (currentRole === 'CHEF_EQUIPE' && 
+      ['GESTIONNAIRE', 'CHEF_EQUIPE'].includes(targetUser.role)) return true;
   return false;
 }
 
 export function canEditRole(currentRole: UserRole): boolean {
-  return currentRole === 'ADMINISTRATEUR';
+  return ['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(currentRole);
 }
 
 export function canResetPassword(currentRole: UserRole): boolean {
-  return currentRole === 'ADMINISTRATEUR';
+  return ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(currentRole);
 }
 
 export function canViewUsers(currentRole: UserRole): boolean {
-  // Gestionnaire cannot view users at all
-  return currentRole !== 'GESTIONNAIRE';
+  // All roles can view users, but with different scopes
+  return true;
 }
 
 export function canDisableUser(currentRole: UserRole): boolean {
-  return currentRole === 'ADMINISTRATEUR';
+  return ['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(currentRole);
 }

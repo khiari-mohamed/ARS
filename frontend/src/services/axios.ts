@@ -1,22 +1,32 @@
 import axios from 'axios';
-import type { AxiosInstance } from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
-export const api = axios.create({
-  baseURL: API_URL,
+export const LocalAPI = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  timeout: 10000,
 });
 
-const setAuthInterceptor = (instance: AxiosInstance) => {
-  instance.interceptors.request.use(config => {
-    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  });
-};
+export const ExternalAPI = axios.create({
+  baseURL: process.env.REACT_APP_EXTERNAL_API_URL || 'http://localhost:3002',
+  timeout: 10000,
+});
 
-setAuthInterceptor(api);
+// Add request interceptor for auth
+LocalAPI.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
-// For backward compatibility with existing imports
-export const LocalAPI = api;
-export const ExternalAPI = api;
+// Add response interceptor for error handling
+LocalAPI.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);

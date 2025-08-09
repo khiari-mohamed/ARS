@@ -1,7 +1,7 @@
-import { UseAuth } from "./useAuth";
+import { useAuth } from "./useAuth";
 
 export function useRole(role: string) {
   // Replace with real role logic
-  const { user } = UseAuth();
-  return user.role === role;
+  const { user } = useAuth();
+  return user?.role === role;
 }
