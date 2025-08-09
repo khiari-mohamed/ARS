@@ -342,4 +342,31 @@ const contract = await this.prisma.contract.create({
     }
     return { linked };
   }
+
+  // Get bordereaux by contract
+  async getBordereauxByContract(contractId: string, user: any) {
+    this.checkRole(user, 'view');
+    return this.prisma.bordereau.findMany({
+      where: { contractId },
+      include: { client: true }
+    });
+  }
+
+  // Get claims by contract
+  async getClaimsByContract(contractId: string, user: any) {
+    this.checkRole(user, 'view');
+    return this.prisma.reclamation.findMany({
+      where: { contractId },
+      include: { client: true, createdBy: true }
+    });
+  }
+
+  // Update contract thresholds
+  async updateContractThresholds(contractId: string, thresholds: any, user: any) {
+    this.checkRole(user, 'update');
+    return this.prisma.contract.update({
+      where: { id: contractId },
+      data: { thresholds }
+    });
+  }
 }

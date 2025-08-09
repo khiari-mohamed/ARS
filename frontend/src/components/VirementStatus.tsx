@@ -13,7 +13,7 @@ export default function VirementStatus({ virement }: { virement: Virement | null
         <b>Montant:</b> {virement.montant} DT
       </div>
       <div>
-        <b>Statut:</b> {getStatus(virement)}
+        <b>Statut:</b> <span>{getStatus(virement)}</span>
       </div>
       <div>
         <b>Date:</b> {new Date(virement.dateExecution).toLocaleDateString()}

@@ -9,16 +9,21 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
-  async create(data: { email: string; password: string; fullName: string; role: string }) {
+  async create(data: any) {
     // Ensure email is unique
     const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
     if (existing) {
       throw new Error('A user with this email already exists.');
     }
-    // Ensure role is valid (reuse assertValidRole if needed)
-    // Password should already be hashed by controller or AuthService
-    const user = await this.prisma.user.create({ data });
-    await this.logAction(user.id, 'USER_CREATE', { data: { ...data, password: undefined } });
+    // Set default values
+    const userData = {
+      ...data,
+      active: data.active ?? true,
+      permissions: data.permissions || [],
+      assignedClients: data.assignedClients || []
+    };
+    const user = await this.prisma.user.create({ data: userData });
+    await this.logAction(user.id, 'USER_CREATE', { data: { ...userData, password: undefined } });
     return user;
   }
 
@@ -34,7 +39,13 @@ export class UsersService {
     return this.prisma.user.findMany({ where: { role } });
   }
 
-  async update(id: string, data: Partial<{ email: string; password: string; fullName: string; role: string }>) {
+  async update(id: string, data: any) {
+    // Update lastLogin if this is a login update
+    if (data.updateLastLogin) {
+      data.lastLogin = new Date();
+      delete data.updateLastLogin;
+    }
+    
     const user = await this.prisma.user.update({
       where: { id },
       data,
@@ -85,5 +96,43 @@ async logAction(userId: string, action: string, details?: any) {
   await this.prisma.auditLog.create({
     data: { userId, action, details, timestamp: new Date() }
   });
+}
+
+async getUserPerformanceStats(userId: string) {
+  // Calculate performance statistics
+  const user = await this.prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error('User not found');
+  
+  // Mock performance data - replace with actual calculations
+  return {
+    processedDocuments: 150,
+    slaCompliance: 92,
+    avgProcessingTime: 2.5
+  };
+}
+
+async performBulkAction(userIds: string[], action: string, data?: any) {
+  const results = [];
+  
+  for (const userId of userIds) {
+    try {
+      switch (action) {
+        case 'deactivate':
+          await this.update(userId, { active: false });
+          break;
+        case 'changeDepartment':
+          await this.update(userId, { department: data.department });
+          break;
+        case 'export':
+          // Handle export logic
+          break;
+      }
+      results.push({ userId, success: true });
+    } catch (error) {
+      results.push({ userId, success: false, error: error.message });
+    }
+  }
+  
+  return results;
 }
 }

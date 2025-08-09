@@ -220,4 +220,29 @@ export class GecService {
       this.logger.log(`[NOTIFY] ${type}: ${message}`);
     }
   }
+
+  async respondToCourrier(id: string, response: string, user: any) {
+    const courrier = await this.prisma.courrier.findUnique({ where: { id } });
+    if (!courrier) throw new NotFoundException('Courrier not found');
+    
+    // Update status to responded
+    const updated = await this.prisma.courrier.update({
+      where: { id },
+      data: {
+        status: 'RESPONDED',
+        responseAt: new Date(),
+      },
+    });
+    
+    // Audit log
+    await this.prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: 'RESPOND_TO_COURRIER',
+        details: { courrierId: id, response },
+      },
+    });
+    
+    return updated;
+  }
 }

@@ -13,14 +13,28 @@ import ContractList from './pages/contracts/ContractList';
 import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
 import GedViewer from './pages/ged/GedViewer';
 import GecManager from './pages/gec/GecManager';
-import ReclamationsList from './pages/reclamations/ReclamationsList';
+import ReclamationsModule from './pages/reclamations/ReclamationsModule';
 import UserManagement from './pages/users/UserManagement';
 import WorkflowTimeline from './pages/workflow/WorkflowTimeline';
 import WorkflowPage from './pages/workflow/WorkflowPage'; // <-- add this import
-import AlertsDashboard from './pages/dashboard/AlertsDashboard';
+import AlertsModule from './pages/AlertsModule';
 
 const App: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        fontSize: '18px'
+      }}>
+        Chargement...
+      </div>
+    );
+  }
 
   return (
     <Routes>
@@ -37,10 +51,10 @@ const App: React.FC = () => {
           <Route path="/home/finance" element={<FinanceTracker />} />
           <Route path="/home/ged" element={<GedViewer />} />
           <Route path="/home/gec" element={<GecManager />} />
-          <Route path="/home/reclamations" element={<ReclamationsList />} />
+          <Route path="/home/reclamations" element={<ReclamationsModule />} />
           <Route path="/home/users" element={<UserManagement />} />
           <Route path="/home/workflow" element={<WorkflowPage />} />
-          <Route path="/home/alerts" element={<AlertsDashboard />} />
+          <Route path="/home/alerts" element={<AlertsModule />} />
           <Route path="*" element={<Navigate to="/home/dashboard" />} />
         </Route>
       ) : (

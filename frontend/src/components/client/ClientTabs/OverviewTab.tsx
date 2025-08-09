@@ -6,7 +6,7 @@ import { getSLAColor } from '../../../utils/slaColor';
 const OverviewTab: React.FC<{ client: Client }> = ({ client }) => {
   // Optionally show SLA health color (based on reglementDelay and averageSLA if available)
   // For demo, we use reglementDelay as both values (replace with real avgSLA if available)
-  const slaColor = getSLAColor(client.reglementDelay, client.reglementDelay);
+  const slaColor = getSLAColor(client.reglementDelay || 30, client.reglementDelay || 30);
 
   return (
     <div>

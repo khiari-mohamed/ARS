@@ -187,6 +187,13 @@ export class ClientController {
     return this.clientService.getComplaintsByClient(id);
   }
 
+  // --- Create complaint for client ---
+  @Post(':id/complaints')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  createComplaint(@Param('id') id: string, @Body() data: any) {
+    return this.clientService.createComplaintForClient(id, data);
+  }
+
   // --- Bordereaux by client ---
   @Get(':id/bordereaux')
   getBordereaux(@Param('id') id: string) {
@@ -215,5 +222,18 @@ export class ClientController {
   @Get(':id/autofill')
   autofill(@Param('id') id: string) {
     return this.clientService.autofillData(id);
+  }
+
+  // --- Client performance metrics ---
+  @Get(':id/performance')
+  getPerformanceMetrics(@Param('id') id: string) {
+    return this.clientService.getPerformanceMetrics(id);
+  }
+
+  // --- Update SLA alerts ---
+  @Post(':id/alerts')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  updateSLAAlerts(@Param('id') id: string, @Body() alertConfig: any) {
+    return this.clientService.updateSLAAlerts(id, alertConfig);
   }
 }

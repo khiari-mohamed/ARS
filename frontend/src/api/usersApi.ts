@@ -5,11 +5,18 @@ export interface User {
   id: string;
   fullName: string;
   role?: string;
+  teamId?: string;
 }
 
 // --- Existing fetchUsers function ---
 export const fetchUsers = async (): Promise<User[]> => {
   const { data } = await LocalAPI.get<User[]>('/users');
+  return data;
+};
+
+// --- Fetch Gestionnaires (users with role GESTIONNAIRE) ---
+export const fetchGestionnaires = async (): Promise<User[]> => {
+  const { data } = await LocalAPI.get<User[]>('/users', { params: { role: 'GESTIONNAIRE' } });
   return data;
 };
 

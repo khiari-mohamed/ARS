@@ -25,7 +25,7 @@ const ClientListPage: React.FC = () => {
       // If no client is selected, select the first one
       if (!selected && data.length > 0) setSelected(data[0]);
       // If selected client is deleted, select the first one
-      if (selected && !data.find(c => c.id === selected.id) && data.length > 0) setSelected(data[0]);
+      if (selected && !data.find((c: any) => c.id === selected.id) && data.length > 0) setSelected(data[0]);
       if (data.length === 0) setSelected(null);
     } finally {
       setLoading(false);

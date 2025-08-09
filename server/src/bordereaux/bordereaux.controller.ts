@@ -93,8 +93,8 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
   }
 
   @Get()
-  findAll(): Promise<BordereauResponseDto[]> {
-    return this.bordereauxService.findAll();
+  findAll(@Query() filters: any): Promise<BordereauResponseDto[]> {
+    return this.bordereauxService.findAll(filters);
   }
 
   @Get('approaching-deadlines')
@@ -128,6 +128,18 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
   @Delete(':id')
   remove(@Param('id') id: string): Promise<BordereauResponseDto> {
     return this.bordereauxService.remove(id);
+  }
+
+  // Archive (soft-delete) a bordereau
+  @Patch(':id/archive')
+  archiveBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+    return this.bordereauxService.archiveBordereau(id);
+  }
+
+  // Restore a bordereau from archive
+  @Patch(':id/restore')
+  restoreBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+    return this.bordereauxService.restoreBordereau(id);
   }
 
   @Post('assign')

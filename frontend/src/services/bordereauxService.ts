@@ -1,84 +1,163 @@
 import { LocalAPI } from './axios';
 
-// --- Original Exports (restore all previous functions) ---
-export async function fetchBordereaux(params?: any) {
-  const { data } = await LocalAPI.get('/bordereaux', { params });
-  return data;
-}
+export const fetchBordereaux = async (filters?: any, pagination?: any) => {
+  // Sanitize filters to prevent NoSQL injection
+  const sanitizedFilters = filters ? {
+    ...filters,
+    search: typeof filters.search === 'string' ? filters.search.replace(/[{}$]/g, '') : filters.search
+  } : {};
+  
+  const params = { ...sanitizedFilters, ...pagination };
+  const response = await LocalAPI.get('/bordereaux', { params });
+  return response.data;
+};
 
-export async function fetchBordereau(id: string) {
-  const { data } = await LocalAPI.get(`/bordereaux/${id}`);
-  return data;
-}
+export const fetchBordereau = async (id: string) => {
+  const response = await LocalAPI.get(`/bordereaux/${id}`);
+  return response.data;
+};
 
-export async function createBordereau(payload: any) {
-  const { data } = await LocalAPI.post('/bordereaux', payload);
-  return data;
-}
+export const fetchKPIs = async () => {
+  const response = await LocalAPI.get('/bordereaux/kpis');
+  return response.data;
+};
 
-export async function updateBordereau(id: string, payload: any) {
-  const { data } = await LocalAPI.patch(`/bordereaux/${id}`, payload);
-  return data;
-}
+export const fetchUnassignedBordereaux = async () => {
+  const response = await LocalAPI.get('/bordereaux/unassigned');
+  return response.data;
+};
 
-export async function fetchKPIs() {
-  const { data } = await LocalAPI.get('/bordereaux/kpis');
-  return data;
-}
+export const fetchTeamBordereaux = async (teamId: string) => {
+  const response = await LocalAPI.get(`/bordereaux/team/${teamId}`);
+  return response.data;
+};
 
-export async function fetchBSList(bordereauId: string) {
-  const { data } = await LocalAPI.get(`/bordereaux/${bordereauId}/bs`);
-  return data;
-}
+export const fetchUserBordereaux = async (userId: string) => {
+  const response = await LocalAPI.get(`/bordereaux/user/${userId}`);
+  return response.data;
+};
 
-export async function fetchDocuments(bordereauId: string) {
-  const { data } = await LocalAPI.get(`/bordereaux/${bordereauId}/documents`);
-  return data;
-}
+export const assignBordereau = async (bordereauId: string, userId?: string) => {
+  const response = await LocalAPI.post(`/bordereaux/${bordereauId}/assign`, { userId });
+  return response.data;
+};
 
-export async function fetchVirement(bordereauId: string) {
-  const { data } = await LocalAPI.get(`/bordereaux/${bordereauId}/virement`);
-  return data;
-}
+export const createBordereau = async (data: any) => {
+  const response = await LocalAPI.post('/bordereaux', data);
+  return response.data;
+};
 
-export async function fetchAlerts(bordereauId: string) {
-  const { data } = await LocalAPI.get(`/bordereaux/${bordereauId}/alerts`);
-  return data;
-}
+export const updateBordereau = async (id: string, data: any) => {
+  const response = await LocalAPI.put(`/bordereaux/${id}`, data);
+  return response.data;
+};
 
-export async function searchBordereauxAndDocuments(query: string) {
-  const { data } = await LocalAPI.get('/bordereaux/search', { params: { query } });
-  return data;
-}
+export const uploadDocument = async (bordereauId: string, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await LocalAPI.post(`/bordereaux/${bordereauId}/documents`, formData);
+  return response.data;
+};
 
-export async function analyzeComplaintsAI() {
-  const { data } = await LocalAPI.get('/bordereaux/ai/complaints');
-  return data;
-}
+export const archiveDocument = async (documentId: string) => {
+  const response = await LocalAPI.post(`/documents/${documentId}/archive`);
+  return response.data;
+};
 
-export async function getAIRecommendations() {
-  const { data } = await LocalAPI.get('/bordereaux/ai/recommendations');
-  return data;
-}
+export const deleteDocument = async (documentId: string) => {
+  const response = await LocalAPI.delete(`/documents/${documentId}`);
+  return response.data;
+};
 
-export async function fetchForecastBordereaux(days = 7) {
-  const { data } = await LocalAPI.get('/bordereaux/forecast/bordereaux', { params: { days } });
-  return data;
-}
+export const getReclamationSuggestions = async (complaintId: string) => {
+  const response = await LocalAPI.get(`/complaints/${complaintId}/suggestions`);
+  return response.data;
+};
 
-export async function fetchEstimateStaffing(days = 7, avgPerStaffPerDay = 5) {
-  const { data } = await LocalAPI.get('/bordereaux/forecast/staffing', { params: { days, avgPerStaffPerDay } });
-  return data;
-}
+export const markBordereauAsProcessed = async (bordereauId: string) => {
+  const response = await LocalAPI.post(`/bordereaux/${bordereauId}/process`);
+  return response.data;
+};
 
-// --- AI Predict Resources (Bordereaux context) ---
-export async function getPredictResourcesBordereauxAI(payload: any) {
-  const { data } = await LocalAPI.post('/bordereaux/ai/predict-resources', payload);
-  return data;
-}
+export const returnBordereau = async (bordereauId: string, reason: string) => {
+  const response = await LocalAPI.post(`/bordereaux/${bordereauId}/return`, { reason });
+  return response.data;
+};
 
-// --- Restore getReclamationSuggestions for ComplaintDetails.tsx ---
-export async function getReclamationSuggestions(id: string) {
-  const { data } = await LocalAPI.get(`/bordereaux/ai/reclamations/suggestions/${id}`);
-  return data.suggestion || data;
-}
+export const archiveBordereau = async (bordereauId: string) => {
+  const response = await LocalAPI.post(`/bordereaux/${bordereauId}/archive`);
+  return response.data;
+};
+
+export const restoreBordereau = async (bordereauId: string) => {
+  const response = await LocalAPI.post(`/bordereaux/${bordereauId}/restore`);
+  return response.data;
+};
+
+export const exportBordereauxCSV = async () => {
+  const response = await LocalAPI.get('/bordereaux/export/csv');
+  return response.data;
+};
+
+export const fetchUsers = async (filters?: any) => {
+  // Sanitize filters to prevent NoSQL injection
+  const sanitizedFilters = filters ? {
+    ...filters,
+    role: typeof filters.role === 'string' ? filters.role.replace(/[{}$]/g, '') : filters.role
+  } : {};
+  
+  const response = await LocalAPI.get('/users', { params: sanitizedFilters });
+  return response.data;
+};
+
+export const assignBordereau2 = async (bordereauId: string, userId: string) => {
+  const response = await LocalAPI.post(`/bordereaux/${bordereauId}/assign`, { userId });
+  return response.data;
+};
+
+export const fetchBSList = async (bordereauId: string) => {
+  const response = await LocalAPI.get(`/bordereaux/${bordereauId}/bs`);
+  return response.data;
+};
+
+export const fetchDocuments = async (bordereauId: string) => {
+  const response = await LocalAPI.get(`/bordereaux/${bordereauId}/documents`);
+  return response.data;
+};
+
+export const fetchVirement = async (bordereauId: string) => {
+  const response = await LocalAPI.get(`/bordereaux/${bordereauId}/virement`);
+  return response.data;
+};
+
+export const fetchAlerts = async (bordereauId: string) => {
+  const response = await LocalAPI.get(`/bordereaux/${bordereauId}/alerts`);
+  return response.data;
+};
+
+export const searchBordereauxAndDocuments = async (query: string) => {
+  // Sanitize query to prevent NoSQL injection
+  const sanitizedQuery = query.replace(/[{}$]/g, '');
+  const response = await LocalAPI.get('/bordereaux/search', { params: { q: sanitizedQuery } });
+  return response.data;
+};
+
+export const analyzeComplaintsAI = async () => {
+  const response = await LocalAPI.get('/bordereaux/ai/complaints');
+  return response.data;
+};
+
+export const getAIRecommendations = async () => {
+  const response = await LocalAPI.get('/bordereaux/ai/recommendations');
+  return response.data;
+};
+
+export const fetchForecastBordereaux = async () => {
+  const response = await LocalAPI.get('/bordereaux/forecast');
+  return response.data;
+};
+
+export const fetchEstimateStaffing = async () => {
+  const response = await LocalAPI.get('/bordereaux/staffing');
+  return response.data;
+};

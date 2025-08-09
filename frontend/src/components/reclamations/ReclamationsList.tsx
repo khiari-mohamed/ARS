@@ -16,6 +16,7 @@ import { ExportButtons } from './ExportButtons';
 import { ReclamationAlerts } from './ReclamationAlerts';
 import { SkeletonTable } from './SkeletonTable';
 import { getCorrelationAI } from '../../services/reclamationsService';
+import SlaCountdown from './SlaCountdown';
 
 const PAGE_SIZE = 20;
 type Client = { id: string; name: string };
@@ -187,6 +188,7 @@ export const ReclamationsList: React.FC = () => {
                   <th>Type</th>
                   <th>Gravité</th>
                   <th>Date</th>
+                  <th>SLA</th>
                   <th>Statut</th>
                   <th>Actions</th>
                 </tr>
@@ -204,25 +206,53 @@ export const ReclamationsList: React.FC = () => {
                       </td>
                       <td>{new Date(rec.createdAt).toLocaleString()}</td>
                       <td>
+                        <SlaCountdown 
+                          createdAt={rec.createdAt} 
+                          slaDays={7}
+                          status={rec.status}
+                        />
+                      </td>
+                      <td>
                         <StatusBadge status={rec.status} />
                       </td>
-                      <td className="reclamations-actions">
-                        <button>Voir</button>
+                      <td className="reclamations-actions space-x-2">
+                        <button 
+                          className="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600"
+                          onClick={() => window.open(`/reclamations/${rec.id}`, '_blank')}
+                        >
+                          Voir
+                        </button>
                         {user &&
                           (user.role === 'CHEF_EQUIPE' ||
                             user.role === 'SUPER_ADMIN' ||
                             (user.role === 'GESTIONNAIRE' && rec.createdById === user.id)) && (
-                            <button>Editer</button>
+                            <button 
+                              className="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600"
+                              onClick={() => console.log('Edit', rec.id)}
+                            >
+                              Editer
+                            </button>
                           )}
                         {canAssign && (
-                          <button>Assigner</button>
+                          <button 
+                            className="bg-purple-500 text-white px-2 py-1 rounded text-xs hover:bg-purple-600"
+                            onClick={() => console.log('Assign', rec.id)}
+                          >
+                            Assigner
+                          </button>
                         )}
+                        <button 
+                          className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
+                          onClick={() => window.open(`/reclamations/${rec.id}/gec`, '_blank')}
+                        >
+                          GEC
+                        </button>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <div className="reclamations-empty-state">
                         Aucune réclamation trouvée.
                       </div>

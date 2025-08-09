@@ -1,5 +1,9 @@
 export type AlertLevel = 'green' | 'orange' | 'red';
 
+export type AlertType = 'SLA_BREACH' | 'PERFORMANCE' | 'WORKLOAD' | 'CLAIM' | 'SYSTEM';
+
+export type AlertStatus = 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED';
+
 export interface AlertBordereau {
   id: string;
   statut: string;
@@ -14,9 +18,32 @@ export interface AlertBordereau {
 }
 
 export interface Alert {
+  id?: string;
   bordereau: AlertBordereau;
   alertLevel: AlertLevel;
+  alertType?: AlertType;
+  status?: AlertStatus;
   reason: string;
+  assignedToId?: string;
+  assignedTo?: {
+    id: string;
+    fullName: string;
+  };
+  acknowledgedAt?: string;
+  resolvedAt?: string;
+  comments?: AlertComment[];
+}
+
+export interface AlertComment {
+  id: string;
+  alertId: string;
+  userId: string;
+  user?: {
+    id: string;
+    fullName: string;
+  };
+  comment: string;
+  createdAt: string;
 }
 
 export interface TeamOverloadAlert {
@@ -67,15 +94,19 @@ export interface AlertHistoryEntry {
   createdAt: string;
   resolved?: boolean;
   resolvedAt?: string;
+  acknowledgedAt?: string;
   bordereau?: AlertBordereau;
   document?: any;
   user?: any;
+  comments?: AlertComment[];
 }
 
 export interface AlertsDashboardQuery {
   teamId?: string;
   userId?: string;
   clientId?: string;
+  alertType?: AlertType;
+  status?: AlertStatus;
   fromDate?: string;
   toDate?: string;
 }
@@ -84,6 +115,24 @@ export interface AlertHistoryQuery {
   bordereauId?: string;
   userId?: string;
   alertLevel?: AlertLevel;
+  alertType?: AlertType;
+  resolved?: boolean;
   fromDate?: string;
   toDate?: string;
+}
+
+export interface CreateAlertDTO {
+  bordereauId?: string;
+  documentId?: string;
+  alertType: AlertType;
+  alertLevel: AlertLevel;
+  message: string;
+  assignedToId?: string;
+}
+
+export interface UpdateAlertDTO {
+  status?: AlertStatus;
+  assignedToId?: string;
+  acknowledgedAt?: string;
+  resolvedAt?: string;
 }

@@ -1,13 +1,8 @@
 import React from 'react';
-import RoleSpecificPanel from '../../components/analytics/RoleSpecificPanel';
+import AnalyticsDashboard from '../../components/analytics/AnalyticsDashboard';
 
-const AnalyticsDashboard: React.FC = () => {
-  return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Analytics & KPIs</h1>
-      <RoleSpecificPanel />
-    </div>
-  );
+const AnalyticsDashboardPage: React.FC = () => {
+  return <AnalyticsDashboard />;
 };
 
-export default AnalyticsDashboard;
+export default AnalyticsDashboardPage;

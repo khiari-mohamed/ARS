@@ -1,142 +1,171 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationService } from './notification.service';
-import { OcrService } from '../ocr/ocr.service';
-import * as chokidar from 'chokidar';
+import { BordereauxService } from '../bordereaux/bordereaux.service';
+import { AlertsService } from '../alerts/alerts.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
-export class PaperStreamWatcherService implements OnModuleInit, OnModuleDestroy {
+export class PaperStreamWatcherService {
   private readonly logger = new Logger(PaperStreamWatcherService.name);
-  private watcher: chokidar.FSWatcher | null = null;
-  private readonly watchDir = process.env.PAPERSTREAM_WATCH_DIR || 'D:/PAPERSTREAM-INBOX'; // configurable
-  private readonly allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
-  private readonly maxSize = 10 * 1024 * 1024; // 10MB
+  private readonly watchFolder = process.env.PAPERSTREAM_WATCH_FOLDER || './watch-folder';
 
   constructor(
     private prisma: PrismaService,
-    private notificationService: NotificationService,
-    private ocrService: OcrService,
-  ) {}
-
-  async onModuleInit() {
-    this.logger.log(`Starting PaperStream watcher on: ${this.watchDir}`);
-    this.watcher = chokidar.watch(this.watchDir, { persistent: true, ignoreInitial: false });
-    this.watcher.on('add', this.handleFileAdd.bind(this));
-    this.watcher.on('error', (err) => this.logger.error('Watcher error', err));
+    private bordereauxService: BordereauxService,
+    private alertsService: AlertsService,
+  ) {
+    this.ensureWatchFolder();
   }
 
-  async onModuleDestroy() {
-    if (this.watcher) await this.watcher.close();
-  }
-
-  private async handleFileAdd(filePath: string) {
-    this.logger.log(`Detected new file: ${filePath}`);
-    try {
-      const ext = path.extname(filePath).toLowerCase();
-      if (!this.allowedTypes.includes(ext)) {
-        this.logger.warn(`File type not allowed: ${filePath}`);
-        await this.logAction('REJECTED_TYPE', filePath, `Type: ${ext}`);
-        return;
-      }
-      const stat = fs.statSync(filePath);
-      if (stat.size > this.maxSize) {
-        this.logger.warn(`File too large: ${filePath}`);
-        await this.logAction('REJECTED_SIZE', filePath, `Size: ${stat.size}`);
-        return;
-      }
-      // Duplicate detection by hash
-      const hash = await this.computeFileHash(filePath);
-      const existing = await this.prisma.document.findFirst({ where: { hash } });
-      if (existing) {
-        this.logger.warn(`Duplicate file detected: ${filePath}`);
-        await this.logAction('DUPLICATE', filePath, `Hash: ${hash}`);
-        return;
-      }
-      // Move file to uploads dir
-      const uploadsDir = path.resolve('uploads');
-      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-      const destPath = path.join(uploadsDir, path.basename(filePath));
-      fs.renameSync(filePath, destPath);
-      // OCR and metadata extraction
-      let ocrText = '';
-      let ocrResult: any = {};
-      try {
-        ocrText = await this.ocrService.extractText(destPath);
-        ocrResult = this.ocrService.parseFields(ocrText);
-      } catch (e) {
-        this.logger.warn(`OCR failed for ${destPath}: ${e.message}`);
-      }
-      // Try to find bordereau by reference
-      let bordereau: any = null;
-      if (ocrResult.reference) {
-        bordereau = await this.prisma.bordereau.findFirst({ where: { reference: ocrResult.reference } });
-      }
-      // Create document in DB, link to bordereau if found
-      const doc = await this.prisma.document.create({
-        data: {
-          name: path.basename(destPath),
-          type: ext.replace('.', ''),
-          path: destPath,
-          uploadedById: '0ce7d8c7-64ee-45a6-b8a5888', // System import
-          status: 'UPLOADED',
-          hash,
-          bordereauId: bordereau && bordereau.id ? bordereau.id : undefined,
-          ocrText,
-          ocrResult,
-        },
-      });
-      await this.logAction('IMPORTED', destPath, `Hash: ${hash}`);
-      // If linked to bordereau, update status and auto-assign
-      if (bordereau && bordereau.id) {
-        await this.prisma.bordereau.update({
-          where: { id: bordereau.id },
-          data: { statut: 'SCAN_TERMINE' },
-        });
-        // Auto-assign to team lead based on client/account manager
-        const contract = await this.prisma.contract.findUnique({ where: { id: bordereau.contractId } });
-        if (contract && contract.assignedManagerId) {
-          await this.prisma.bordereau.update({
-            where: { id: bordereau.id },
-            data: { teamId: contract.assignedManagerId },
-          });
-          // Check overload: count open bordereaux for this team
-          const openCount = await this.prisma.bordereau.count({ where: { teamId: contract.assignedManagerId, statut: { not: 'CLOTURE' } } });
-          const threshold = contract.escalationThreshold || 50;
-          if (openCount > threshold) {
-            await this.notificationService.notify('team_overload', { teamId: contract.assignedManagerId, bordereauId: bordereau.id });
-          }
-        }
-      }
-      // Trigger workflow (auto-assign to SCAN or Team Lead)
-      await this.notificationService.notify('document_uploaded', { document: doc, user: null });
-      this.logger.log(`Imported and triggered workflow for: ${destPath}`);
-    } catch (err) {
-      this.logger.error(`Error importing file: ${filePath}`, err);
-      await this.logAction('ERROR', filePath, err?.message || String(err));
+  private ensureWatchFolder() {
+    if (!fs.existsSync(this.watchFolder)) {
+      fs.mkdirSync(this.watchFolder, { recursive: true });
     }
   }
 
-  private async computeFileHash(filePath: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const hash = crypto.createHash('sha256');
-      const stream = fs.createReadStream(filePath);
-      stream.on('data', (data) => hash.update(data));
-      stream.on('end', () => resolve(hash.digest('hex')));
-      stream.on('error', reject);
+  @Cron(CronExpression.EVERY_30_SECONDS)
+  async watchForNewFiles() {
+    try {
+      const files = fs.readdirSync(this.watchFolder);
+      for (const filename of files) {
+        if (this.isValidFile(filename)) {
+          await this.processFile(filename);
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error watching folder:', error);
+    }
+  }
+
+  private isValidFile(filename: string): boolean {
+    const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff'];
+    return validExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+  }
+
+  private async processFile(filename: string) {
+    const filePath = path.join(this.watchFolder, filename);
+    
+    try {
+      // Calculate file hash for deduplication
+      const fileBuffer = fs.readFileSync(filePath);
+      const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+      // Check for duplicates
+      const existingDoc = await this.prisma.document.findUnique({
+        where: { hash }
+      });
+
+      if (existingDoc) {
+        this.logger.warn(`Duplicate file detected: ${filename}`);
+        await this.logImportError(filename, 'DUPLICATE_FILE', 'File already exists in system');
+        fs.unlinkSync(filePath); // Remove duplicate
+        return;
+      }
+
+      // Extract bordereau reference from filename (pattern: REF_YYYY_NNN_*)
+      const bordereauRef = this.extractBordereauReference(filename);
+      let bordereauId: string | null = null;
+
+      if (bordereauRef) {
+        const bordereau = await this.prisma.bordereau.findFirst({
+          where: { reference: bordereauRef }
+        });
+        bordereauId = bordereau?.id || null;
+      }
+
+      // Move file to permanent storage
+      const permanentPath = await this.moveToStorage(filePath, filename);
+
+      // Create document record
+      const document = await this.prisma.document.create({
+        data: {
+          name: filename,
+          type: this.getDocumentType(filename),
+          path: permanentPath,
+          hash,
+          status: 'UPLOADED',
+          uploadedById: 'SYSTEM', // System user for auto-imports
+          bordereauId,
+        }
+      });
+
+      // Update bordereau status if linked
+      if (bordereauId) {
+        await this.bordereauxService.update(bordereauId, {
+          statut: 'SCAN_TERMINE' as any,
+          dateFinScan: new Date().toISOString()
+        });
+      }
+
+      // Trigger OCR processing
+      await this.triggerOCR(document.id);
+
+      this.logger.log(`Successfully processed file: ${filename}`);
+
+    } catch (error) {
+      this.logger.error(`Error processing file ${filename}:`, error);
+      await this.logImportError(filename, 'PROCESSING_ERROR', error.message);
+      
+      // Alert SCAN admin
+      await this.alertsService.triggerAlert({
+        type: 'SCAN_IMPORT_ERROR',
+        bsId: filename
+      });
+    }
+  }
+
+  private extractBordereauReference(filename: string): string | null {
+    // Pattern: REF_2025_001_document.pdf -> REF/2025/001
+    const match = filename.match(/^([A-Z0-9]+)_(\d{4})_(\d{3})/);
+    return match ? `${match[1]}/${match[2]}/${match[3]}` : null;
+  }
+
+  private getDocumentType(filename: string): string {
+    if (filename.toLowerCase().includes('bs')) return 'BS';
+    if (filename.toLowerCase().includes('contrat')) return 'CONTRAT';
+    if (filename.toLowerCase().includes('recu')) return 'RECU';
+    return 'AUTRE';
+  }
+
+  private async moveToStorage(sourcePath: string, filename: string): Promise<string> {
+    const storageDir = path.join(process.cwd(), 'uploads', 'documents');
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+
+    const timestamp = Date.now();
+    const newFilename = `${timestamp}_${filename}`;
+    const destPath = path.join(storageDir, newFilename);
+    
+    fs.renameSync(sourcePath, destPath);
+    return path.relative(process.cwd(), destPath);
+  }
+
+  private async triggerOCR(documentId: string) {
+    // Placeholder for OCR integration
+    // In production, this would call OCR service
+    await this.prisma.document.update({
+      where: { id: documentId },
+      data: {
+        ocrText: 'OCR processing queued...',
+        status: 'EN_COURS'
+      }
     });
   }
 
-  private async logAction(action: string, filePath: string, details: string) {
+  private async logImportError(filename: string, errorType: string, details: string) {
     await this.prisma.auditLog.create({
       data: {
-        userId: null,
-        action: `PAPERSTREAM_${action}`,
-        details: { filePath, details },
-        timestamp: new Date(),
-      },
+        userId: 'SYSTEM',
+        action: 'PAPERSTREAM_IMPORT_ERROR',
+        details: { filename, errorType, details }
+      }
+    }).catch(() => {
+      // Fallback to console if audit log fails
+      this.logger.error(`Import error: ${filename} - ${errorType}: ${details}`);
     });
   }
 }

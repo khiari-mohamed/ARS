@@ -18,31 +18,33 @@ const getSlaSummary = (slaStatus: any[]) => {
 const SLAStatusPanel: React.FC<SLAStatusPanelProps> = ({ slaStatus }) => {
   const summary = getSlaSummary(slaStatus);
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="font-bold mb-2">SLA Compliance</h3>
-      <div className="flex flex-col gap-2 mb-4">
-        <div>🟢 Within deadline: {summary.withinDeadline}</div>
-        <div>🟠 At risk: {summary.atRisk}</div>
-        <div>🔴 Breached: {summary.breached}</div>
+    <div className="sla-panel-container">
+      <h3 className="sla-panel-title">Conformité SLA</h3>
+      <div className="sla-panel-summary">
+        <div>🟢 Dans le délai : {summary.withinDeadline}</div>
+        <div>🟠 À risque : {summary.atRisk}</div>
+        <div>🔴 Non conforme : {summary.breached}</div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {slaStatus.map((sla, idx) => (
-            <tr key={idx}>
-              <td>{sla.type}</td>
-              <td><StatusBadge status={sla.status} /></td>
-              <td>{sla.value}</td>
+      <div className="sla-panel-table-wrapper">
+        <table className="sla-panel-table">
+          <thead>
+            <tr>
+              <th className="sla-panel-th">Type</th>
+              <th className="sla-panel-th">Statut</th>
+              <th className="sla-panel-th">Valeur</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {slaStatus.map((sla, idx) => (
+              <tr key={idx}>
+                <td>{sla.type}</td>
+                <td><StatusBadge status={sla.status} /></td>
+                <td>{sla.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

@@ -159,6 +159,61 @@ export class ClientService {
     return client;
   }
 
+  // --- Create complaint for client ---
+  async createComplaintForClient(clientId: string, data: any) {
+    return this.prisma.reclamation.create({
+      data: {
+        clientId,
+        type: data.type,
+        severity: data.severity,
+        status: data.status || 'open',
+        description: data.description,
+        createdById: 'SYSTEM', // Should be actual user ID
+      }
+    });
+  }
+
+  // --- Performance metrics ---
+  async getPerformanceMetrics(clientId: string) {
+    const [bordereauxStats, reclamationStats, slaStats] = await Promise.all([
+      this.prisma.bordereau.groupBy({
+        by: ['statut'],
+        where: { clientId },
+        _count: true
+      }),
+      this.prisma.reclamation.groupBy({
+        by: ['status'],
+        where: { clientId },
+        _count: true
+      }),
+      this.prisma.bordereau.aggregate({
+        where: { clientId },
+        _avg: { delaiReglement: true },
+        _min: { delaiReglement: true },
+        _max: { delaiReglement: true }
+      })
+    ]);
+
+    return {
+      bordereauxByStatus: bordereauxStats,
+      reclamationsByStatus: reclamationStats,
+      slaMetrics: slaStats
+    };
+  }
+
+  // --- Update SLA alerts ---
+  async updateSLAAlerts(clientId: string, alertConfig: any) {
+    return this.prisma.client.update({
+      where: { id: clientId },
+      data: {
+        slaConfig: {
+          ...alertConfig,
+          updatedAt: new Date().toISOString()
+        }
+      }
+    });
+  }
+
   // --- Existing methods (untouched) ---
   async handleArsWebhook(payload: any): Promise<void> {
     try {

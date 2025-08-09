@@ -175,4 +175,25 @@ export class ContractsController {
   async linkContractsToComplaints() {
     return this.contractsService.linkContractsToComplaints();
   }
+
+  // Get bordereaux by contract
+  @Get(':id/bordereaux')
+  async getBordereauxByContract(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.contractsService.getBordereauxByContract(id, user);
+  }
+
+  // Get claims by contract
+  @Get(':id/claims')
+  async getClaimsByContract(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.contractsService.getClaimsByContract(id, user);
+  }
+
+  // Update contract thresholds
+  @Patch(':id/thresholds')
+  async updateContractThresholds(@Param('id') id: string, @Body() thresholds: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.contractsService.updateContractThresholds(id, thresholds, user);
+  }
 }

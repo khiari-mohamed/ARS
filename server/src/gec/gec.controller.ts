@@ -110,4 +110,14 @@ export class GecController {
     const user = getUserFromRequest(req);
     return this.gecService.deleteCourrier(id, user);
   }
+
+  @Post(':id/respond')
+  async respondToCourrier(
+    @Param('id') id: string,
+    @Body() body: { response: string },
+    @Req() req: any,
+  ) {
+    const user = getUserFromRequest(req);
+    return this.gecService.respondToCourrier(id, body.response, user);
+  }
 }

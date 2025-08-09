@@ -1,13 +1,32 @@
-import { useContext } from 'react';
-import { useAuthContext } from '../contexts/AuthContext';
+import { useState, useEffect, createContext, useContext } from 'react';
+
+interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  teamId?: string;
+  username?: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  loading: boolean;
+  isAuthenticated: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-  const ctx = useAuthContext();
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
 
-export function UseAuth() {
-  // Replace with real auth logic
-  return { user: { id: 'demo', role: 'SUPER_ADMIN', fullName: 'Demo User' } };
-}
+// Legacy export for compatibility
+export const UseAuth = useAuth;
+export const useAuthContext = useAuth;

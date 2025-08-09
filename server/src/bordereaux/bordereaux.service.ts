@@ -273,15 +273,55 @@ export class BordereauxService {
     return BordereauResponseDto.fromEntity(bordereau);
   }
   
-  async findAll(): Promise<BordereauResponseDto[]> {
+  async findAll(filters: any = {}): Promise<BordereauResponseDto[]> {
+    // Build Prisma where clause based on filters
+    const where: any = {};
+    if (filters.teamId) where.teamId = filters.teamId;
+    if (filters.type) where.type = filters.type;
+    if (filters.performance) where.performance = filters.performance;
+    if (filters.clientId) where.clientId = filters.clientId;
+    if (filters.contractId) where.contractId = filters.contractId;
+    if (filters.statut) where.statut = filters.statut;
+    if (filters.sla) where.statusColor = filters.sla;
+    if (filters.reference) where.reference = { contains: filters.reference, mode: 'insensitive' };
+    if (filters.search) where.reference = { contains: filters.search, mode: 'insensitive' };
+    if (filters.dateStart || filters.dateEnd) {
+      where.dateReception = {};
+      if (filters.dateStart) where.dateReception.gte = new Date(filters.dateStart);
+      if (filters.dateEnd) where.dateReception.lte = new Date(filters.dateEnd);
+    }
+    if (typeof filters.archived === 'boolean') where.archived = filters.archived;
+    // Add more filters as needed
     const bordereaux = await this.prisma.bordereau.findMany({
+      where,
       include: {
         client: true,
         contract: true,
       },
     });
-    
     return bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
+  }
+
+  // Archive (soft-delete) a bordereau
+  async archiveBordereau(id: string): Promise<BordereauResponseDto> {
+    const bordereau = await this.prisma.bordereau.update({
+      where: { id },
+      data: { archived: true },
+      include: { client: true, contract: true },
+    });
+    await this.logAction(id, 'ARCHIVE_BORDEREAU');
+    return BordereauResponseDto.fromEntity(bordereau);
+  }
+
+  // Restore a bordereau from archive
+  async restoreBordereau(id: string): Promise<BordereauResponseDto> {
+    const bordereau = await this.prisma.bordereau.update({
+      where: { id },
+      data: { archived: false },
+      include: { client: true, contract: true },
+    });
+    await this.logAction(id, 'RESTORE_BORDEREAU');
+    return BordereauResponseDto.fromEntity(bordereau);
   }
 
  // Ensure alerts are triggered in the updateBordereauStatus method
@@ -413,15 +453,15 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     }
     
     // Update the bordereau status to ASSIGNE
+    const updateData: any = {
+      statut: { set: Statut.ASSIGNE },
+    };
+    if (assignedToUserId) updateData.assignedToUserId = assignedToUserId;
+    if (teamId) updateData.teamId = teamId;
+
     const updatedBordereau = await this.prisma.bordereau.update({
       where: { id: bordereauId },
-      data: {
-        statut: { set: Statut.ASSIGNE },
-
-        
-        // In a real implementation, you would store the assignedToUserId
-        // and teamId in the bordereau or in a separate assignments table
-      },
+      data: updateData,
       include: {
         client: true,
         contract: true,

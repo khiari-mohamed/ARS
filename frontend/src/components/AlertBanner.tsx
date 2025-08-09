@@ -9,7 +9,7 @@ export default function AlertBanner({ alerts }: { alerts: Alert[] }) {
           key={alert.id}
           className="bg-red-100 border-l-4 border-red-500 text-red-700 p-2 mb-2 rounded"
         >
-          <strong>⚠️ {alert.type}:</strong> {alert.message}
+          <strong>⚠️ {alert.type}:</strong> <span>{alert.message}</span>
         </div>
       ))}
     </div>

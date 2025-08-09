@@ -138,6 +138,7 @@ model Bordereau {
   teamId                String?
   assignedToUserId      String?
   prestataireId         String? 
+  archived              Boolean   @default(false) 
 
   // Relations
   prestataire   Prestataire? @relation("BordereauPrestataire", fields: [prestataireId], references: [id])
@@ -480,12 +481,20 @@ model BSLog {
 
 enum Statut {
   EN_ATTENTE
+  A_SCANNER
   SCAN_EN_COURS
-  SCAN_TERMINE
+  SCANNE
+  A_AFFECTER
   ASSIGNE
+  EN_COURS
   TRAITE
+  PRET_VIREMENT
+  VIREMENT_EN_COURS
+  VIREMENT_EXECUTE
+  VIREMENT_REJETE
   CLOTURE
   EN_DIFFICULTE
+  PARTIEL
 }
 
 enum CourrierType {

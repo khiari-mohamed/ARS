@@ -39,7 +39,19 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
   @Post()
-  async createUser(@Body() body: { email: string; password: string; fullName: string; role: string }) {
+  async createUser(@Body() body: { 
+    email: string; 
+    password: string; 
+    fullName: string; 
+    role: string;
+    department?: string;
+    team?: string;
+    phone?: string;
+    position?: string;
+    photo?: string;
+    permissions?: string[];
+    assignedClients?: string[];
+  }) {
     // Validate input
     if (!body.email || !body.password || !body.fullName || !body.role) {
       throw new Error('All fields (email, password, fullName, role) are required.');
@@ -61,7 +73,20 @@ export class UsersController {
   @Put(':id')
   async updateUser(
     @Param('id') id: string,
-    @Body() body: Partial<{ email: string; password: string; fullName: string; role: string }>
+    @Body() body: Partial<{ 
+      email: string; 
+      password: string; 
+      fullName: string; 
+      role: string;
+      department?: string;
+      team?: string;
+      phone?: string;
+      position?: string;
+      photo?: string;
+      permissions?: string[];
+      assignedClients?: string[];
+      active?: boolean;
+    }>
   ) {
     return this.usersService.update(id, body).then(({ password, ...rest }) => rest);
   }
@@ -78,6 +103,17 @@ export class UsersController {
   @Get(':id/audit-logs')
   async getUserAuditLogs(@Param('id') id: string) {
     return this.usersService.getAuditLogsForUser(id);
+  }
+
+  @Get(':id/performance')
+  async getUserPerformance(@Param('id') id: string) {
+    return this.usersService.getUserPerformanceStats(id);
+  }
+
+  @Post('bulk-action')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.MANAGER)
+  async bulkUserAction(@Body() body: { userIds: string[]; action: string; data?: any }) {
+    return this.usersService.performBulkAction(body.userIds, body.action, body.data);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

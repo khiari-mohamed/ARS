@@ -23,10 +23,11 @@ export class TuniclaimService {
   // Fetch BS list from external API
   async fetchBsList(): Promise<any[]> {
     try {
-      const res = await axios.get(`${this.baseUrl}/bs`);
+      const res = await axios.get(`${this.baseUrl}/bs`, { timeout: 10000 });
       return res.data;
     } catch (e) {
-      this.logger.error('Failed to fetch BS list', e);
+      this.logger.error('Tuniclaim fetch failed');
+      this.logger.error(e.code === 'ECONNREFUSED' ? 'External API unavailable' : e.message);
       throw e;
     }
   }
@@ -59,11 +60,15 @@ export class TuniclaimService {
           details: 'External API unavailable: ' + (e.message || e.toString()),
         },
       });
-      await this.outlook.sendMail(
-        'admin@example.com',
-        'Tuniclaim Sync Errors',
-        `Tuniclaim API unavailable: ${e.message}`
-      );
+      try {
+        await this.outlook.sendMail(
+          'admin@example.com',
+          'Tuniclaim Sync Errors',
+          `Tuniclaim API unavailable: ${e.message}`
+        );
+      } catch (emailError) {
+        this.logger.warn('Failed to send error notification email', emailError.message);
+      }
       return { imported: 0, errors: 1, error: e.message };
     }
     for (const extBs of bsList) {
@@ -103,11 +108,15 @@ export class TuniclaimService {
 
     // Email notification if errors
     if (errors > 0) {
-      await this.outlook.sendMail(
-        'admin@example.com',
-        'Tuniclaim Sync Errors',
-        `There were ${errors} errors during the last sync.`
-      );
+      try {
+        await this.outlook.sendMail(
+          'admin@example.com',
+          'Tuniclaim Sync Errors',
+          `There were ${errors} errors during the last sync.`
+        );
+      } catch (emailError) {
+        this.logger.warn('Failed to send sync error notification', emailError.message);
+      }
     }
 
     return { imported, errors };

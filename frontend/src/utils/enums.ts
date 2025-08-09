@@ -5,6 +5,7 @@ export type Statut =
   | "ASSIGNE"
   | "TRAITE"
   | "CLOTURE"
+  | "EN_DIFFICULTE"
   | "EN_COURS"
   | "PARTIEL";
 

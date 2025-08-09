@@ -1,12 +1,8 @@
 import React from 'react';
-import GECPanel from '../../components/GEC/GECPanel';
+import GECModule from '../../components/GEC/GECModule';
 
 const GecManager: React.FC = () => {
-  return (
-    <div>
-      <GECPanel />
-    </div>
-  );
+  return <GECModule />;
 };
 
 export default GecManager;

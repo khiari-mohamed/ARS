@@ -11,12 +11,12 @@ function getSLAStatus(avgSLA: number, reglementDelay: number) {
 
 interface Props {
   client: Client;
-  avgSLA?: number; // Optionally pass from KPI tab
+  avgSLA?: number | null; // Optionally pass from KPI tab
 }
 
 const SLATab: React.FC<Props> = ({ client, avgSLA }) => {
-  const slaStatus = avgSLA !== undefined
-    ? getSLAStatus(avgSLA, client.reglementDelay)
+  const slaStatus = avgSLA !== undefined && avgSLA !== null
+    ? getSLAStatus(avgSLA, client.reglementDelay || 30)
     : null;
 
   return (
