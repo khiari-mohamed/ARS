@@ -697,7 +697,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: {
-        statut: { set: Statut.SCAN_TERMINE },
+        statut: { set: Statut.SCANNE },
         dateFinScan: new Date(),
       },
       include: {

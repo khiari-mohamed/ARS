@@ -10,6 +10,9 @@ import ClaimsTab from './ClaimsTab';
 import SLARiskTab from './SLARiskTab';
 import ForecastingTab from './ForecastingTab';
 import ReportsTab from './ReportsTab';
+import AdvancedFilteringDashboard from './AdvancedFilteringDashboard';
+import ScheduledReportsManager from './ScheduledReportsManager';
+import PredictiveAnalyticsDashboard from './PredictiveAnalyticsDashboard';
 import AnalyticsMobileView from './AnalyticsMobileView';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -81,6 +84,9 @@ const AnalyticsDashboard: React.FC = () => {
     'Réclamations',
     'Risques SLA',
     'Prévisions',
+    'Filtrage Avancé',
+    'Rapports Programmés',
+    'Analyses Prédictives',
     'Rapports'
   ];
 
@@ -183,7 +189,10 @@ const AnalyticsDashboard: React.FC = () => {
               {tab === 2 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
               {tab === 3 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
               {tab === 4 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 5 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 5 && <AdvancedFilteringDashboard />}
+              {tab === 6 && <ScheduledReportsManager />}
+              {tab === 7 && <PredictiveAnalyticsDashboard />}
+              {tab === 8 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
             </Box>
           </Paper>
         </>

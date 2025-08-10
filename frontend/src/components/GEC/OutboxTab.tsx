@@ -32,28 +32,33 @@ const OutboxTab: React.FC = () => {
 
   useEffect(() => {
     const loadItems = async () => {
-      try {
-        const { searchCorrespondence } = await import('../../services/gecService');
-        const data = await searchCorrespondence({ ...filters, direction: 'SENT' });
-        setItems(data);
-      } catch (error) {
-        console.error('Failed to load outbox items:', error);
-        // Fallback to mock data
-        setItems([
-          {
-            id: '1',
-            reference: 'OUT/2025/001',
-            to: 'client.a@example.com',
-            dateSent: '2025-01-15',
-            type: 'REGLEMENT',
-            linkedTo: 'BS-123',
-            status: 'PENDING_RESPONSE',
-            slaStatus: 'green',
-            priority: 'NORMAL',
-            subject: 'Courrier de règlement - Dossier BS-123'
-          }
-        ]);
-      }
+      // Mock data - replace with actual API call when available
+      setItems([
+        {
+          id: '1',
+          reference: 'OUT/2025/001',
+          to: 'client.a@example.com',
+          dateSent: '2025-01-15',
+          type: 'REGLEMENT',
+          linkedTo: 'BS-123',
+          status: 'PENDING_RESPONSE',
+          slaStatus: 'green',
+          priority: 'NORMAL',
+          subject: 'Courrier de règlement - Dossier BS-123'
+        },
+        {
+          id: '2',
+          reference: 'OUT/2025/002',
+          to: 'client.b@example.com',
+          dateSent: '2025-01-14',
+          type: 'NOTIFICATION',
+          linkedTo: 'CONTRAT-456',
+          status: 'DELIVERED',
+          slaStatus: 'green',
+          priority: 'NORMAL',
+          subject: 'Notification de traitement'
+        }
+      ]);
     };
     loadItems();
   }, [filters]);

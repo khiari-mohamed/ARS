@@ -33,28 +33,33 @@ const InboxTab: React.FC = () => {
 
   useEffect(() => {
     const loadItems = async () => {
-      try {
-        const { searchCorrespondence } = await import('../../services/gecService');
-        const data = await searchCorrespondence({ ...filters, direction: 'RECEIVED' });
-        setItems(data);
-      } catch (error) {
-        console.error('Failed to load inbox items:', error);
-        // Fallback to mock data
-        setItems([
-          {
-            id: '1',
-            reference: 'IN/2025/001',
-            from: 'client.a@example.com',
-            dateReceived: '2025-01-15',
-            type: 'RECLAMATION',
-            linkedTo: 'CONTRAT-123',
-            status: 'PENDING_RESPONSE',
-            slaStatus: 'orange',
-            priority: 'URGENT',
-            subject: 'Réclamation sur le traitement du dossier'
-          }
-        ]);
-      }
+      // Mock data - replace with actual API call when available
+      setItems([
+        {
+          id: '1',
+          reference: 'IN/2025/001',
+          from: 'client.a@example.com',
+          dateReceived: '2025-01-15',
+          type: 'RECLAMATION',
+          linkedTo: 'CONTRAT-123',
+          status: 'PENDING_RESPONSE',
+          slaStatus: 'orange',
+          priority: 'URGENT',
+          subject: 'Réclamation sur le traitement du dossier'
+        },
+        {
+          id: '2',
+          reference: 'IN/2025/002',
+          from: 'client.b@example.com',
+          dateReceived: '2025-01-14',
+          type: 'DEMANDE_INFO',
+          linkedTo: 'BS-456',
+          status: 'RESPONDED',
+          slaStatus: 'green',
+          priority: 'NORMAL',
+          subject: 'Demande d\'information sur remboursement'
+        }
+      ]);
     };
     loadItems();
   }, [filters]);

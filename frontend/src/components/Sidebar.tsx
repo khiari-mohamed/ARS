@@ -13,9 +13,13 @@ import ReportIcon from '@mui/icons-material/Report';
 import GroupIcon from '@mui/icons-material/Group';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import InputIcon from '@mui/icons-material/Input';
+import ScannerIcon from '@mui/icons-material/Scanner';
 
 const sidebarLinks = [
   { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE'] },
+  { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'BO', 'CUSTOMER_SERVICE'] },
+  { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'SCAN_TEAM'] },
   { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
   { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
   { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },

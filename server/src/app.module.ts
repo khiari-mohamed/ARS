@@ -18,6 +18,10 @@ import { ConfigModule } from './config/config.module';
 import { ClientModule } from './client/client.module';
 // Import WorkflowModule
 import { WorkflowModule } from './workflow/workflow.module';
+// Import BO Module
+import { BOModule } from './bo/bo.module';
+// Import SCAN Module
+import { ScanModule } from './scan/scan.module';
 //new modules dahsboard w tun service ta3 l kpis 
 
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -29,7 +33,9 @@ import { SeedController } from './seed.controller';
         DashboardModule,
     IntegrationModule,
     ClientModule,
-    WorkflowModule
+    WorkflowModule,
+    BOModule,
+    ScanModule
   ],
   controllers: [AppController , SeedController],
   providers: [AppService],
