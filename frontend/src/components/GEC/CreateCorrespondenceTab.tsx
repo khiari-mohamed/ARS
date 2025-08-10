@@ -29,8 +29,8 @@ const CreateCorrespondenceTab: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const { getTemplates } = await import('../../services/gecService');
-        const templatesData = await getTemplates();
+        const { getEmailTemplates } = await import('../../services/gecService');
+        const templatesData = await getEmailTemplates();
         setTemplates(templatesData);
       } catch (error) {
         console.error('Failed to load templates:', error);
@@ -56,8 +56,8 @@ const CreateCorrespondenceTab: React.FC = () => {
     
     if (templateId) {
       try {
-        const { getTemplate } = await import('../../services/gecService');
-        const template = await getTemplate(templateId);
+        const { renderTemplate } = await import('../../services/gecService');
+        const template = await renderTemplate(templateId, {});
         
         setFormData(prev => ({
           ...prev,
@@ -93,20 +93,14 @@ const CreateCorrespondenceTab: React.FC = () => {
   const handleSave = async (action: 'draft' | 'send' | 'schedule') => {
     setSaving(true);
     try {
-      const { createCorrespondence, sendCorrespondence } = await import('../../services/gecService');
+      const { sendOutlookEmail } = await import('../../services/gecService');
       
-      // Create correspondence
-      const correspondence = await createCorrespondence({
-        subject: formData.subject,
-        body: formData.body,
-        type: templates.find(t => t.id === formData.templateId)?.type || 'AUTRE',
-        templateUsed: formData.templateId,
-        bordereauId: formData.linkedTo
-      });
-      
+      // Create and send correspondence
       if (action === 'send') {
-        await sendCorrespondence(correspondence.id, {
-          recipientEmail: formData.recipientEmail
+        await sendOutlookEmail('current-user', {
+          subject: formData.subject,
+          body: formData.body,
+          to: [formData.recipientEmail]
         });
       }
       

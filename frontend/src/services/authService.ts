@@ -9,7 +9,8 @@ export enum UserRole {
   CHEF_EQUIPE = 'CHEF_EQUIPE',
   GESTIONNAIRE = 'GESTIONNAIRE',
   CUSTOMER_SERVICE = 'CUSTOMER_SERVICE',
-  FINANCE = 'FINANCE'
+  FINANCE = 'FINANCE',
+  BO = 'BO'
 }
 
 export const login = async (email: string, password: string) => {

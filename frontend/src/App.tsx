@@ -18,6 +18,9 @@ import UserManagement from './pages/users/UserManagement';
 import WorkflowTimeline from './pages/workflow/WorkflowTimeline';
 import WorkflowPage from './pages/workflow/WorkflowPage'; // <-- add this import
 import AlertsModule from './pages/AlertsModule';
+import BODashboard from './pages/BODashboard';
+import ScanDashboard from './pages/ScanDashboard';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
@@ -55,6 +58,9 @@ const App: React.FC = () => {
           <Route path="/home/users" element={<UserManagement />} />
           <Route path="/home/workflow" element={<WorkflowPage />} />
           <Route path="/home/alerts" element={<AlertsModule />} />
+          <Route path="/home/bo" element={<BODashboard />} />
+          <Route path="/home/scan" element={<ScanDashboard />} />
+          <Route path="/home/super-admin" element={<SuperAdminDashboard />} />
           <Route path="*" element={<Navigate to="/home/dashboard" />} />
         </Route>
       ) : (

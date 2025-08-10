@@ -18,6 +18,7 @@ import { ClientService } from './client.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { SearchClientDto } from './dto/search-client.dto';
+import { ClientAnalyticsDto, CommunicationLogDto, RiskThresholdsDto } from './dto/client-analytics.dto';
 import { Response, Request } from 'express';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -235,5 +236,96 @@ export class ClientController {
   @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   updateSLAAlerts(@Param('id') id: string, @Body() alertConfig: any) {
     return this.clientService.updateSLAAlerts(id, alertConfig);
+  }
+
+  // === NEW ENDPOINTS FOR 100% COMPLETION ===
+
+  // --- Performance Analytics Dashboard ---
+  @Get(':id/performance-analytics')
+  getPerformanceAnalytics(
+    @Param('id') id: string,
+    @Query() query: ClientAnalyticsDto
+  ) {
+    return this.clientService.getPerformanceAnalytics(id, query.period);
+  }
+
+  // --- Bulk Import/Export ---
+  @Post('bulk-import')
+  @UseInterceptors(FileInterceptor('file'))
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async bulkImport(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('validateOnly') validateOnly?: string
+  ) {
+    if (!file) throw new Error('No file uploaded');
+    const csvContent = file.buffer.toString('utf-8');
+    return this.clientService.bulkImportClients(csvContent, validateOnly === 'true');
+  }
+
+  @Get('export/advanced')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  async exportAdvanced(
+    @Query('format') format: 'csv' | 'excel' | 'pdf' = 'csv',
+    @Query() filters: any,
+    @Res() res: Response
+  ) {
+    const data = await this.clientService.exportClientsAdvanced(format, filters);
+    
+    if (format === 'csv') {
+      res.set({
+        'Content-Type': 'text/csv',
+        'Content-Disposition': 'attachment; filename="clients-advanced.csv"'
+      });
+      res.send(data);
+    } else {
+      const contentType = format === 'excel' 
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'application/pdf';
+      const filename = `clients-advanced.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+      
+      res.set({
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${filename}"`
+      });
+      res.send(data);
+    }
+  }
+
+  // --- Communication History ---
+  @Post(':id/communication')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  addCommunicationLog(
+    @Param('id') id: string,
+    @Body() logData: CommunicationLogDto,
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.clientService.addCommunicationLog(id, logData, userId);
+  }
+
+  @Get(':id/communication-history')
+  getCommunicationHistory(@Param('id') id: string) {
+    return this.clientService.getCommunicationHistory(id);
+  }
+
+  @Get(':id/communication-templates')
+  getCommunicationTemplates(@Param('id') id: string) {
+    return this.clientService.getCommunicationTemplates(id);
+  }
+
+  // --- Risk Assessment ---
+  @Get(':id/risk-assessment')
+  getRiskAssessment(@Param('id') id: string) {
+    return this.clientService.getRiskAssessment(id);
+  }
+
+  @Post(':id/risk-thresholds')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  updateRiskThresholds(
+    @Param('id') id: string,
+    @Body() thresholds: RiskThresholdsDto
+  ) {
+    return this.clientService.updateRiskThresholds(id, thresholds);
   }
 }

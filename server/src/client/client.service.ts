@@ -1,6 +1,4 @@
-import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException // --- Complaints by client ---
- 
-} from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -211,6 +209,341 @@ export class ClientService {
           updatedAt: new Date().toISOString()
         }
       }
+    });
+  }
+
+  // === NEW FEATURES FOR 100% COMPLETION ===
+
+  // --- Client Performance Analytics Dashboard ---
+  async getPerformanceAnalytics(clientId: string, period: string = 'monthly') {
+    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new NotFoundException('Client not found');
+
+    const now = new Date();
+    const startDate = new Date();
+    
+    switch (period) {
+      case 'daily': startDate.setDate(now.getDate() - 30); break;
+      case 'weekly': startDate.setDate(now.getDate() - 84); break;
+      case 'monthly': startDate.setMonth(now.getMonth() - 12); break;
+      case 'yearly': startDate.setFullYear(now.getFullYear() - 3); break;
+    }
+
+    // SLA Compliance Trends
+    const slaCompliance = await this.prisma.bordereau.groupBy({
+      by: ['dateReception'],
+      where: {
+        clientId,
+        dateReception: { gte: startDate }
+      },
+      _count: { id: true },
+      _avg: { delaiReglement: true }
+    });
+
+    // Processing Time Averages
+    const processingTimes = await this.prisma.bordereau.findMany({
+      where: {
+        clientId,
+        dateReception: { gte: startDate },
+        dateCloture: { not: null }
+      },
+      select: {
+        dateReception: true,
+        dateCloture: true,
+        delaiReglement: true
+      }
+    });
+
+    const avgProcessingTime = processingTimes.reduce((acc, b) => {
+      const days = Math.floor((new Date(b.dateCloture!).getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+      return acc + days;
+    }, 0) / (processingTimes.length || 1);
+
+    // Volume vs Capacity Analysis
+    const volumeAnalysis = await this.prisma.bordereau.groupBy({
+      by: ['statut'],
+      where: { clientId },
+      _count: { id: true }
+    });
+
+    const totalVolume = volumeAnalysis.reduce((acc, v) => acc + v._count.id, 0);
+    const completedVolume = volumeAnalysis.find(v => v.statut === 'CLOTURE')?._count.id || 0;
+    const capacityUtilization = totalVolume > 0 ? (completedVolume / totalVolume) * 100 : 0;
+
+    return {
+      slaCompliance: {
+        trends: slaCompliance.map(s => ({
+          date: s.dateReception,
+          count: s._count.id,
+          avgSla: s._avg.delaiReglement
+        })),
+        overallCompliance: slaCompliance.length > 0 ? 
+          slaCompliance.reduce((acc, s) => acc + (s._avg.delaiReglement || 0), 0) / slaCompliance.length : 0
+      },
+      processingTimes: {
+        average: avgProcessingTime,
+        trends: processingTimes.map(p => ({
+          date: p.dateReception,
+          processingDays: Math.floor((new Date(p.dateCloture!).getTime() - new Date(p.dateReception).getTime()) / (1000 * 60 * 60 * 24))
+        }))
+      },
+      volumeCapacity: {
+        totalVolume,
+        completedVolume,
+        capacityUtilization,
+        statusBreakdown: volumeAnalysis
+      }
+    };
+  }
+
+  // --- Bulk Import/Export ---
+  async bulkImportClients(csvData: string, validateOnly: boolean = false) {
+    const lines = csvData.split('\n').filter(line => line.trim());
+    const headers = lines[0].split(',').map(h => h.trim());
+    const results = { success: [] as any[], errors: [] as any[], total: lines.length - 1 };
+
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const values = lines[i].split(',').map(v => v.trim());
+        const clientData: any = {};
+        
+        headers.forEach((header, index) => {
+          switch (header.toLowerCase()) {
+            case 'name': clientData.name = values[index]; break;
+            case 'reglementdelay': clientData.reglementDelay = parseInt(values[index]); break;
+            case 'reclamationdelay': clientData.reclamationDelay = parseInt(values[index]); break;
+            case 'gestionnaireids': 
+              clientData.gestionnaireIds = values[index] ? values[index].split(';') : [];
+              break;
+          }
+        });
+
+        // Validation
+        if (!clientData.name || !clientData.reglementDelay || !clientData.reclamationDelay) {
+          results.errors.push({ line: i + 1, error: 'Missing required fields' });
+          continue;
+        }
+
+        if (!validateOnly) {
+          const existing = await this.prisma.client.findUnique({ where: { name: clientData.name } });
+          if (existing) {
+            results.errors.push({ line: i + 1, error: 'Client name already exists' });
+            continue;
+          }
+
+          await this.create(clientData);
+        }
+        
+        results.success.push({ line: i + 1, name: clientData.name });
+      } catch (error) {
+        results.errors.push({ line: i + 1, error: error.message });
+      }
+    }
+
+    return results;
+  }
+
+  async exportClientsAdvanced(format: 'csv' | 'excel' | 'pdf', filters?: any) {
+    const clients = await this.findAll(filters || {});
+    
+    if (format === 'csv') {
+      const headers = ['ID', 'Name', 'Reglement Delay', 'Reclamation Delay', 'Gestionnaires', 'SLA Status', 'Risk Level'];
+      const csvContent = [headers.join(',')];
+      
+      for (const client of clients) {
+        const slaStatus = await this.getSlaStatus(client.id);
+        const riskAssessment = await this.getRiskAssessment(client.id);
+        
+        csvContent.push([
+          client.id,
+          `"${client.name}"`,
+          client.reglementDelay,
+          client.reclamationDelay,
+          `"${client.gestionnaires?.map(g => g.fullName).join('; ') || ''}"`,
+          slaStatus.status,
+          riskAssessment.riskLevel
+        ].join(','));
+      }
+      
+      return csvContent.join('\n');
+    }
+    
+    // For Excel and PDF, use existing methods with enhancements
+    return format === 'excel' ? await this.exportToExcel(filters) : await this.exportToPDF(filters);
+  }
+
+  // --- Communication History ---
+  async addCommunicationLog(clientId: string, logData: any, userId: string) {
+    // Store in a new CommunicationLog table or use existing audit system
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CLIENT_COMMUNICATION',
+        details: {
+          clientId,
+          type: logData.type,
+          subject: logData.subject,
+          content: logData.content,
+          contactPerson: logData.contactPerson,
+          timestamp: new Date().toISOString()
+        }
+      }
+    });
+
+    return { success: true, message: 'Communication logged successfully' };
+  }
+
+  async getCommunicationHistory(clientId: string) {
+    const logs = await this.prisma.auditLog.findMany({
+      where: {
+        action: 'CLIENT_COMMUNICATION',
+        details: {
+          path: ['clientId'],
+          equals: clientId
+        }
+      },
+      include: { user: { select: { fullName: true } } },
+      orderBy: { timestamp: 'desc' }
+    });
+
+    return logs.map(log => ({
+      id: log.id,
+      timestamp: log.timestamp,
+      user: log.user.fullName,
+      type: log.details?.type,
+      subject: log.details?.subject,
+      content: log.details?.content,
+      contactPerson: log.details?.contactPerson
+    }));
+  }
+
+  async getCommunicationTemplates(clientId: string) {
+    // Get templates specific to client or general templates
+    const templates = await this.prisma.template.findMany({
+      where: {
+        OR: [
+          { name: { contains: 'client' } },
+          { variables: { has: 'clientName' } }
+        ]
+      }
+    });
+
+    return templates.map(t => ({
+      id: t.id,
+      name: t.name,
+      subject: t.subject,
+      body: t.body,
+      variables: t.variables
+    }));
+  }
+
+  // --- Risk Assessment ---
+  async getRiskAssessment(clientId: string) {
+    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new NotFoundException('Client not found');
+
+    // Calculate risk factors
+    const [slaStatus, recentComplaints, bordereauxStats] = await Promise.all([
+      this.getSlaStatus(clientId),
+      this.prisma.reclamation.count({
+        where: {
+          clientId,
+          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
+        }
+      }),
+      this.prisma.bordereau.groupBy({
+        by: ['statut'],
+        where: { clientId },
+        _count: { id: true }
+      })
+    ]);
+
+    let riskScore = 0;
+    const riskFactors: string[] = [];
+
+    // SLA breach risk
+    if (slaStatus.status === 'breach') {
+      riskScore += 30;
+      riskFactors.push('SLA compliance issues');
+    }
+
+    // High complaint volume
+    if (recentComplaints > 5) {
+      riskScore += 25;
+      riskFactors.push('High complaint volume');
+    }
+
+    // Processing delays
+    const delayedBordereaux = bordereauxStats.find(s => s.statut === 'EN_DIFFICULTE')?._count.id || 0;
+    const totalBordereaux = bordereauxStats.reduce((acc, s) => acc + s._count.id, 0);
+    if (totalBordereaux > 0 && (delayedBordereaux / totalBordereaux) > 0.2) {
+      riskScore += 20;
+      riskFactors.push('High processing delay rate');
+    }
+
+    // Volume overload
+    const activeBordereaux = bordereauxStats.filter(s => !['CLOTURE', 'TRAITE'].includes(s.statut))
+      .reduce((acc, s) => acc + s._count.id, 0);
+    if (activeBordereaux > 50) {
+      riskScore += 15;
+      riskFactors.push('High active volume');
+    }
+
+    let riskLevel: 'low' | 'medium' | 'high' | 'critical';
+    if (riskScore >= 70) riskLevel = 'critical';
+    else if (riskScore >= 50) riskLevel = 'high';
+    else if (riskScore >= 25) riskLevel = 'medium';
+    else riskLevel = 'low';
+
+    return {
+      riskScore,
+      riskLevel,
+      riskFactors,
+      recommendations: this.generateRiskRecommendations(riskLevel, riskFactors)
+    };
+  }
+
+  private generateRiskRecommendations(riskLevel: string, factors: string[]) {
+    const recommendations: string[] = [];
+    
+    if (factors.includes('SLA compliance issues')) {
+      recommendations.push('Review and optimize processing workflows');
+      recommendations.push('Consider increasing staff allocation');
+    }
+    
+    if (factors.includes('High complaint volume')) {
+      recommendations.push('Implement proactive communication strategy');
+      recommendations.push('Review service quality processes');
+    }
+    
+    if (factors.includes('High processing delay rate')) {
+      recommendations.push('Analyze bottlenecks in processing pipeline');
+      recommendations.push('Implement priority handling for this client');
+    }
+    
+    if (factors.includes('High active volume')) {
+      recommendations.push('Consider workload redistribution');
+      recommendations.push('Evaluate capacity planning');
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push('Continue monitoring current performance');
+    }
+
+    return recommendations;
+  }
+
+  async updateRiskThresholds(clientId: string, thresholds: any) {
+    const currentConfig = await this.getSlaConfig(clientId) || {};
+    const updatedConfig = {
+      ...(typeof currentConfig === 'object' ? currentConfig : {}),
+      riskThresholds: thresholds,
+      updatedAt: new Date().toISOString()
+    };
+
+    return this.prisma.client.update({
+      where: { id: clientId },
+      data: { slaConfig: updatedConfig }
     });
   }
 

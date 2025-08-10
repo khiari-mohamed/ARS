@@ -112,7 +112,7 @@ async getUserPerformanceStats(userId: string) {
 }
 
 async performBulkAction(userIds: string[], action: string, data?: any) {
-  const results = [];
+  const results: any[] = [];
   
   for (const userId of userIds) {
     try {

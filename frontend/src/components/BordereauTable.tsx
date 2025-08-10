@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { fetchBordereaux, assignBordereau2 as assignBordereau, markBordereauAsProcessed, exportBordereauxCSV } from '../services/bordereauxService';
+import { fetchBordereaux, assignBordereau2 as assignBordereau, markBordereauAsProcessed, exportBordereauxCSV, bulkUpdateBordereaux, bulkAssignBordereaux } from '../services/bordereauxService';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import BordereauAssignModal from './BordereauAssignModal';
+import BordereauBatchOperations from './BordereauBatchOperations';
+import AdvancedBordereauFilters from './AdvancedBordereauFilters';
 
 interface TableColumn {
   key: string;
@@ -35,7 +37,11 @@ const BordereauTable: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<any>({});
+  const [users, setUsers] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
 
   // Role-based permissions
   const canAssign = ['CHEF_EQUIPE', 'ADMINISTRATEUR'].includes(user?.role || '');
@@ -279,9 +285,9 @@ const BordereauTable: React.FC = () => {
               {canAssign && (
                 <button
                   className="btn btn-primary btn-sm"
-                  onClick={handleBulkAssign}
+                  onClick={() => setBatchModalOpen(true)}
                 >
-                  Affecter
+                  Opérations en lot
                 </button>
               )}
               {canProcess && (
@@ -312,6 +318,12 @@ const BordereauTable: React.FC = () => {
           </button>
           <button className="btn btn-warning" onClick={() => {}}>
             Générer OV
+          </button>
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setAdvancedFiltersOpen(!advancedFiltersOpen)}
+          >
+            Filtres avancés
           </button>
         </div>
       </div>
@@ -469,6 +481,15 @@ const BordereauTable: React.FC = () => {
         </div>
       </div>
 
+      {/* Advanced Filters */}
+      {advancedFiltersOpen && (
+        <AdvancedBordereauFilters
+          onFiltersChange={setFilters}
+          clients={clients}
+          users={users}
+        />
+      )}
+
       {/* Assignment Modal */}
       {assignModalOpen && (
         <BordereauAssignModal
@@ -476,6 +497,20 @@ const BordereauTable: React.FC = () => {
           onClose={() => setAssignModalOpen(false)}
           onSuccess={() => {
             setAssignModalOpen(false);
+            setSelectedRows(new Set());
+            loadData();
+          }}
+        />
+      )}
+
+      {/* Batch Operations Modal */}
+      {batchModalOpen && (
+        <BordereauBatchOperations
+          open={batchModalOpen}
+          onClose={() => setBatchModalOpen(false)}
+          selectedBordereaux={Array.from(selectedRows)}
+          onSuccess={() => {
+            setBatchModalOpen(false);
             setSelectedRows(new Set());
             loadData();
           }}

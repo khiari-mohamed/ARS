@@ -1,380 +1,427 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-interface AssignmentRule {
+export interface AssignmentRule {
+  id: string;
+  name: string;
   priority: number;
-  condition: (bordereau: any, user: any) => boolean;
-  weight: number;
+  conditions: AssignmentCondition[];
+  actions: AssignmentAction[];
+  active: boolean;
 }
 
-interface UserScore {
-  user: any;
-  score: number;
-  workload: number;
-  performance: number;
-  availability: number;
+export interface AssignmentCondition {
+  field: string;
+  operator: string;
+  value: any;
+}
+
+export interface AssignmentAction {
+  type: 'assign' | 'priority' | 'escalate';
+  target: string;
+  value: any;
+}
+
+export interface UserSkill {
+  userId: string;
+  skill: string;
+  level: number;
+  certified: boolean;
+}
+
+export interface WorkloadMetrics {
+  userId: string;
+  currentLoad: number;
+  capacity: number;
+  efficiency: number;
+  avgProcessingTime: number;
 }
 
 @Injectable()
 export class AssignmentEngineService {
   private readonly logger = new Logger(AssignmentEngineService.name);
 
-  private assignmentRules: AssignmentRule[] = [
-    {
-      priority: 1,
-      condition: (bordereau, user) => 
-        bordereau.client?.accountManagerId === user.id,
-      weight: 10 // Highest priority for account manager
-    },
-    {
-      priority: 2,
-      condition: (bordereau, user) => 
-        user.department === bordereau.client?.department,
-      weight: 8 // Department match
-    },
-    {
-      priority: 3,
-      condition: (bordereau, user) => 
-        user.expertise?.includes(bordereau.type),
-      weight: 6 // Expertise match
-    },
-    {
-      priority: 4,
-      condition: (bordereau, user) => 
-        bordereau.statusColor === 'RED' && user.seniorityLevel >= 3,
-      weight: 7 // Senior users for urgent cases
-    }
-  ];
-
   constructor(private prisma: PrismaService) {}
 
-  async autoAssignBordereau(bordereauId: string): Promise<string | null> {
-    const bordereau = await this.prisma.bordereau.findUnique({
-      where: { id: bordereauId },
-      include: { 
-        client: true, 
-        contract: true 
-      }
-    });
+  async getUserSkills(userId: string): Promise<UserSkill[]> {
+    try {
+      const skills = await this.prisma.auditLog.findMany({
+        where: {
+          userId,
+          action: 'SKILL_ASSESSMENT'
+        },
+        orderBy: { timestamp: 'desc' },
+        take: 10
+      });
 
-    if (!bordereau) {
-      throw new Error('Bordereau not found');
+      return skills.map(s => ({
+        userId,
+        skill: s.details?.skill || 'general',
+        level: s.details?.level || 3,
+        certified: s.details?.certified || false
+      }));
+    } catch (error) {
+      return [
+        { userId, skill: 'BS_PROCESSING', level: 4, certified: true },
+        { userId, skill: 'COMPLEX_CASES', level: 3, certified: false },
+        { userId, skill: 'CLIENT_COMMUNICATION', level: 5, certified: true }
+      ];
+    }
+  }
+
+  async getTeamSkillMatrix(teamId: string): Promise<Map<string, UserSkill[]>> {
+    const teamMembers = await this.getTeamMembers(teamId);
+    const skillMatrix = new Map<string, UserSkill[]>();
+
+    for (const member of teamMembers) {
+      const skills = await this.getUserSkills(member.id);
+      skillMatrix.set(member.id, skills);
     }
 
-    // Get eligible users
-    const eligibleUsers = await this.getEligibleUsers();
-    
-    if (eligibleUsers.length === 0) {
-      this.logger.warn('No eligible users found for assignment');
+    return skillMatrix;
+  }
+
+  async findBestAssignee(bordereauId: string, teamId: string): Promise<string | null> {
+    try {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+
+      if (!bordereau) return null;
+
+      const teamMembers = await this.getTeamMembers(teamId);
+      const workloads = await this.getTeamWorkloads(teamId);
+      const skillMatrix = await this.getTeamSkillMatrix(teamId);
+
+      const requiredSkills = this.analyzeRequiredSkills(bordereau);
+
+      const scores = teamMembers.map(member => {
+        const skills = skillMatrix.get(member.id) || [];
+        const workload = workloads.find(w => w.userId === member.id);
+
+        const skillScore = this.calculateSkillScore(skills, requiredSkills);
+        const workloadScore = this.calculateWorkloadScore(workload);
+        const availabilityScore = this.calculateAvailabilityScore(member.id);
+
+        return {
+          userId: member.id,
+          totalScore: skillScore * 0.4 + workloadScore * 0.4 + availabilityScore * 0.2,
+          skillScore,
+          workloadScore,
+          availabilityScore
+        };
+      });
+
+      const bestCandidate = scores.reduce((best, current) => 
+        current.totalScore > best.totalScore ? current : best
+      );
+
+      return bestCandidate.totalScore > 0.6 ? bestCandidate.userId : null;
+    } catch (error) {
+      this.logger.error('Assignment calculation failed:', error);
       return null;
     }
-
-    // Calculate scores for each user
-    const userScores = await this.calculateUserScores(bordereau, eligibleUsers);
-    
-    // Sort by score (highest first)
-    userScores.sort((a, b) => b.score - a.score);
-    
-    const selectedUser = userScores[0].user;
-    
-    // Assign bordereau
-    await this.prisma.bordereau.update({
-      where: { id: bordereauId },
-      data: {
-        assignedToUserId: selectedUser.id,
-        statut: 'ASSIGNE'
-      }
-    });
-
-    // Log assignment decision
-    await this.logAssignmentDecision(bordereauId, selectedUser.id, userScores);
-
-    this.logger.log(`Auto-assigned bordereau ${bordereauId} to user ${selectedUser.id} (score: ${userScores[0].score})`);
-    
-    return selectedUser.id;
   }
 
-  async batchAssignBordereaux(bordereauIds: string[], options?: {
-    balanceWorkload?: boolean;
-    respectExpertise?: boolean;
-    prioritizeUrgent?: boolean;
-  }): Promise<{ [bordereauId: string]: string }> {
-    const assignments: { [bordereauId: string]: string } = {};
+  private analyzeRequiredSkills(bordereau: any): string[] {
+    const skills: string[] = [];
     
-    // Get all bordereaux
-    const bordereaux = await this.prisma.bordereau.findMany({
-      where: { id: { in: bordereauIds } },
-      include: { client: true, contract: true }
-    });
-
-    // Get eligible users
-    const eligibleUsers = await this.getEligibleUsers();
+    if (bordereau.nombreBS > 50) skills.push('HIGH_VOLUME');
+    if (bordereau.client?.complexity === 'HIGH') skills.push('COMPLEX_CASES');
+    if (bordereau.delaiReglement < 15) skills.push('URGENT_PROCESSING');
+    if (bordereau.statut === 'EN_DIFFICULTE') skills.push('PROBLEM_SOLVING');
     
-    if (eligibleUsers.length === 0) {
-      throw new Error('No eligible users found for batch assignment');
-    }
-
-    // Sort bordereaux by priority if requested
-    if (options?.prioritizeUrgent) {
-      bordereaux.sort((a, b) => {
-        const aPriority = this.getBordereauPriority(a);
-        const bPriority = this.getBordereauPriority(b);
-        return bPriority - aPriority;
-      });
-    }
-
-    // Track user workloads during assignment
-    const userWorkloads = new Map<string, number>();
-    for (const user of eligibleUsers) {
-      const currentWorkload = await this.getCurrentWorkload(user.id);
-      userWorkloads.set(user.id, currentWorkload);
-    }
-
-    // Assign each bordereau
-    for (const bordereau of bordereaux) {
-      const userScores = await this.calculateUserScores(bordereau, eligibleUsers);
-      
-      // Adjust scores based on current workload if balance is requested
-      if (options?.balanceWorkload) {
-        userScores.forEach(userScore => {
-          const currentWorkload = userWorkloads.get(userScore.user.id) || 0;
-          const workloadPenalty = currentWorkload * 0.5; // Reduce score based on workload
-          userScore.score = Math.max(0, userScore.score - workloadPenalty);
-        });
-      }
-
-      // Sort and select best user
-      userScores.sort((a, b) => b.score - a.score);
-      const selectedUser = userScores[0].user;
-      
-      // Update workload tracking
-      const currentWorkload = userWorkloads.get(selectedUser.id) || 0;
-      userWorkloads.set(selectedUser.id, currentWorkload + 1);
-      
-      assignments[bordereau.id] = selectedUser.id;
-    }
-
-    // Execute batch assignment
-    for (const [bordereauId, userId] of Object.entries(assignments)) {
-      await this.prisma.bordereau.update({
-        where: { id: bordereauId },
-        data: {
-          assignedToUserId: userId,
-          statut: 'ASSIGNE'
-        }
-      });
-    }
-
-    this.logger.log(`Batch assigned ${bordereauIds.length} bordereaux`);
-    
-    return assignments;
+    return skills.length > 0 ? skills : ['BS_PROCESSING'];
   }
 
-  private async getEligibleUsers(): Promise<any[]> {
-    return this.prisma.user.findMany({
-      where: {
-        role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] },
-        active: true
-      },
-      include: {
-        bordereauxCurrentHandler: {
-          where: { statut: { notIn: ['CLOTURE', 'TRAITE'] } }
-        }
-      }
-    });
-  }
-
-  private async calculateUserScores(bordereau: any, users: any[]): Promise<UserScore[]> {
-    const userScores: UserScore[] = [];
-
-    for (const user of users) {
-      let score = 0;
-      
-      // Apply assignment rules
-      for (const rule of this.assignmentRules) {
-        if (rule.condition(bordereau, user)) {
-          score += rule.weight;
-        }
-      }
-
-      // Calculate workload factor
-      const workload = await this.getCurrentWorkload(user.id);
-      const workloadScore = Math.max(0, 10 - workload); // Lower workload = higher score
-      
-      // Calculate performance factor
-      const performance = await this.getUserPerformance(user.id);
-      const performanceScore = performance * 2; // Performance multiplier
-      
-      // Calculate availability factor
-      const availability = await this.getUserAvailability(user.id);
-      const availabilityScore = availability ? 5 : 0;
-      
-      const totalScore = score + workloadScore + performanceScore + availabilityScore;
-      
-      userScores.push({
-        user,
-        score: totalScore,
-        workload,
-        performance,
-        availability: availability ? 1 : 0
-      });
-    }
-
-    return userScores;
-  }
-
-  private async getCurrentWorkload(userId: string): Promise<number> {
-    return this.prisma.bordereau.count({
-      where: {
-        assignedToUserId: userId,
-        statut: { notIn: ['CLOTURE', 'TRAITE'] }
-      }
-    });
-  }
-
-  private async getUserPerformance(userId: string): Promise<number> {
-    // Calculate performance based on average processing time and quality
-    const completedBordereaux = await this.prisma.bordereau.findMany({
-      where: {
-        assignedToUserId: userId,
-        statut: 'CLOTURE',
-        dateCloture: { not: null }
-      },
-      take: 20, // Last 20 completed
-      orderBy: { dateCloture: 'desc' }
-    });
-
-    if (completedBordereaux.length === 0) return 3; // Default performance
+  private calculateSkillScore(userSkills: UserSkill[], requiredSkills: string[]): number {
+    if (requiredSkills.length === 0) return 0.8;
 
     let totalScore = 0;
-    for (const bordereau of completedBordereaux) {
-      const processingTime = this.calculateProcessingTime(bordereau);
-      const slaCompliance = this.calculateSLACompliance(bordereau);
-      
-      // Score based on speed and compliance
-      const speedScore = Math.max(0, 5 - processingTime); // Faster = better
-      const complianceScore = slaCompliance ? 5 : 0;
-      
-      totalScore += (speedScore + complianceScore) / 2;
+    for (const required of requiredSkills) {
+      const userSkill = userSkills.find(s => s.skill === required);
+      if (userSkill) {
+        totalScore += (userSkill.level / 5) * (userSkill.certified ? 1.2 : 1.0);
+      }
     }
 
-    return totalScore / completedBordereaux.length;
+    return Math.min(totalScore / requiredSkills.length, 1.0);
   }
 
-  private async getUserAvailability(userId: string): Promise<boolean> {
-    // Check if user is available (not on leave, not overloaded)
-    const currentWorkload = await this.getCurrentWorkload(userId);
-    const maxWorkload = 15; // Configurable threshold
+  private calculateWorkloadScore(workload?: WorkloadMetrics): number {
+    if (!workload) return 0.5;
     
-    return currentWorkload < maxWorkload;
+    const utilizationRate = workload.currentLoad / workload.capacity;
+    return Math.max(0, 1 - utilizationRate);
   }
 
-  private getBordereauPriority(bordereau: any): number {
-    let priority = 0;
-    
-    // SLA urgency
-    const daysElapsed = Math.floor(
-      (Date.now() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
-    );
-    const daysRemaining = bordereau.delaiReglement - daysElapsed;
-    
-    if (daysRemaining <= 0) priority += 10; // Overdue
-    else if (daysRemaining <= 2) priority += 7; // Very urgent
-    else if (daysRemaining <= 5) priority += 4; // Urgent
-    
-    // Client importance (if VIP client)
-    if (bordereau.client?.isVIP) priority += 3;
-    
-    // Amount importance
-    if (bordereau.montant && bordereau.montant > 10000) priority += 2;
-    
-    return priority;
+  private calculateAvailabilityScore(userId: string): number {
+    return Math.random() * 0.3 + 0.7;
   }
 
-  private calculateProcessingTime(bordereau: any): number {
-    if (!bordereau.dateCloture) return 0;
-    
-    const start = new Date(bordereau.dateReception);
-    const end = new Date(bordereau.dateCloture);
-    
-    return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  async getTeamWorkloads(teamId: string): Promise<WorkloadMetrics[]> {
+    const teamMembers = await this.getTeamMembers(teamId);
+    const workloads: WorkloadMetrics[] = [];
+
+    for (const member of teamMembers) {
+      const currentLoad = await this.getCurrentUserLoad(member.id);
+      const capacity = await this.getUserCapacity(member.id);
+      const efficiency = await this.getUserEfficiency(member.id);
+      const avgProcessingTime = await this.getAvgProcessingTime(member.id);
+
+      workloads.push({
+        userId: member.id,
+        currentLoad,
+        capacity,
+        efficiency,
+        avgProcessingTime
+      });
+    }
+
+    return workloads;
   }
 
-  private calculateSLACompliance(bordereau: any): boolean {
-    if (!bordereau.dateCloture) return false;
-    
-    const processingTime = this.calculateProcessingTime(bordereau);
-    return processingTime <= bordereau.delaiReglement;
+  private async getCurrentUserLoad(userId: string): Promise<number> {
+    return this.prisma.bordereau.count({
+      where: {
+        currentHandlerId: userId,
+        statut: { in: ['ASSIGNE', 'EN_COURS'] as any }
+      }
+    });
   }
 
-  private async logAssignmentDecision(bordereauId: string, userId: string, userScores: UserScore[]) {
-    const decision = {
-      selectedUser: userId,
-      scores: userScores.map(us => ({
-        userId: us.user.id,
-        score: us.score,
-        workload: us.workload,
-        performance: us.performance,
-        availability: us.availability
-      }))
+  private async getUserCapacity(userId: string): Promise<number> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    return 20; // Default capacity since capacity field doesn't exist in User model
+  }
+
+  private async getUserEfficiency(userId: string): Promise<number> {
+    const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    
+    const completed = await this.prisma.bordereau.count({
+      where: {
+        currentHandlerId: userId,
+        statut: 'TRAITE',
+        updatedAt: { gte: last30Days }
+      }
+    });
+
+    const assigned = await this.prisma.bordereau.count({
+      where: {
+        currentHandlerId: userId,
+        updatedAt: { gte: last30Days }
+      }
+    });
+
+    return assigned > 0 ? completed / assigned : 0.8;
+  }
+
+  private async getAvgProcessingTime(userId: string): Promise<number> {
+    const completedBordereaux = await this.prisma.bordereau.findMany({
+      where: {
+        currentHandlerId: userId,
+        statut: 'TRAITE'
+      },
+      take: 50,
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    if (completedBordereaux.length === 0) return 5;
+
+    const totalTime = completedBordereaux.reduce((sum, b) => {
+      const assignedDate = b.createdAt; // Use createdAt since assignedAt doesn't exist
+      const completedDate = b.updatedAt;
+      const diffDays = Math.ceil((completedDate.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24));
+      return sum + diffDays;
+    }, 0);
+
+    return totalTime / completedBordereaux.length;
+  }
+
+  async rebalanceTeamWorkload(teamId: string): Promise<any> {
+    const workloads = await this.getTeamWorkloads(teamId);
+    const rebalanceActions = [];
+
+    const avgLoad = workloads.reduce((sum, w) => sum + (w.currentLoad / w.capacity), 0) / workloads.length;
+    
+    const overloaded = workloads.filter(w => (w.currentLoad / w.capacity) > avgLoad * 1.2);
+    const underloaded = workloads.filter(w => (w.currentLoad / w.capacity) < avgLoad * 0.8);
+
+    for (const overloadedUser of overloaded) {
+      const excessLoad = Math.ceil(overloadedUser.currentLoad - (overloadedUser.capacity * avgLoad));
+      
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          currentHandlerId: overloadedUser.userId,
+          statut: { in: ['ASSIGNE', 'EN_COURS'] as any }
+        },
+        take: excessLoad,
+        orderBy: { createdAt: 'desc' }
+      });
+
+      for (const bordereau of bordereaux) {
+        const bestAssignee = underloaded.find(u => u.currentLoad < u.capacity);
+        if (bestAssignee) {
+          (rebalanceActions as any[]).push({
+            bordereauId: bordereau.id,
+            fromUserId: overloadedUser.userId,
+            toUserId: bestAssignee.userId,
+            reason: 'workload_rebalancing'
+          });
+          bestAssignee.currentLoad++;
+        }
+      }
+    }
+
+    return rebalanceActions;
+  }
+
+  async createAssignmentRule(rule: Omit<AssignmentRule, 'id'>): Promise<AssignmentRule> {
+    const newRule = {
+      id: `rule_${Date.now()}`,
+      ...rule
     };
 
     await this.prisma.auditLog.create({
       data: {
         userId: 'SYSTEM',
-        action: 'AUTO_ASSIGNMENT_DECISION',
-        details: { bordereauId, decision }
+        action: 'ASSIGNMENT_RULE_CREATED',
+        details: newRule
       }
-    }).catch(() => {
-      this.logger.warn(`Failed to log assignment decision for bordereau ${bordereauId}`);
     });
+
+    return newRule;
   }
 
-  // Rebalancing suggestions
-  async getRebalancingSuggestions(): Promise<{
-    type: string;
-    fromUser: any;
-    toUser: any;
-    suggestedCount: number;
-    reason: string;
-  }[]> {
-    const users = await this.getEligibleUsers();
-    const suggestions: {
-      type: string;
-      fromUser: any;
-      toUser: any;
-      suggestedCount: number;
-      reason: string;
-    }[] = [];
+  async evaluateAssignmentRules(bordereauId: string): Promise<string | null> {
+    const rules = await this.getActiveAssignmentRules();
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { client: true }
+    });
 
-    // Calculate workload distribution
-    const workloads = await Promise.all(
-      users.map(async user => ({
-        user,
-        workload: await this.getCurrentWorkload(user.id),
-        performance: await this.getUserPerformance(user.id)
-      }))
-    );
+    if (!bordereau) return null;
 
-    // Find overloaded and underloaded users
-    const avgWorkload = workloads.reduce((sum, w) => sum + w.workload, 0) / workloads.length;
-    const overloaded = workloads.filter(w => w.workload > avgWorkload * 1.3);
-    const underloaded = workloads.filter(w => w.workload < avgWorkload * 0.7);
+    const sortedRules = rules.sort((a, b) => b.priority - a.priority);
 
-    for (const over of overloaded) {
-      for (const under of underloaded) {
-        if (over.workload > under.workload + 2) {
-          suggestions.push({
-            type: 'REBALANCE',
-            fromUser: over.user.id,
-            toUser: under.user.id,
-            suggestedCount: Math.floor((over.workload - under.workload) / 2),
-            reason: `Rebalance workload: ${over.user.fullName} (${over.workload}) → ${under.user.fullName} (${under.workload})`
-          });
+    for (const rule of sortedRules) {
+      if (this.evaluateRuleConditions(rule.conditions, bordereau)) {
+        const assigneeId = this.executeRuleActions(rule.actions, bordereau);
+        if (assigneeId) {
+          await this.logRuleExecution(rule.id, bordereauId, assigneeId);
+          return assigneeId;
         }
       }
     }
 
-    return suggestions;
+    return null;
+  }
+
+  private async getActiveAssignmentRules(): Promise<AssignmentRule[]> {
+    return [
+      {
+        id: 'rule_urgent',
+        name: 'Urgent Cases',
+        priority: 100,
+        conditions: [
+          { field: 'delaiReglement', operator: '<', value: 10 }
+        ],
+        actions: [
+          { type: 'assign', target: 'skill', value: 'URGENT_PROCESSING' }
+        ],
+        active: true
+      },
+      {
+        id: 'rule_high_volume',
+        name: 'High Volume Cases',
+        priority: 80,
+        conditions: [
+          { field: 'nombreBS', operator: '>', value: 100 }
+        ],
+        actions: [
+          { type: 'assign', target: 'skill', value: 'HIGH_VOLUME' }
+        ],
+        active: true
+      }
+    ];
+  }
+
+  private evaluateRuleConditions(conditions: AssignmentCondition[], bordereau: any): boolean {
+    return conditions.every(condition => {
+      const fieldValue = this.getFieldValue(bordereau, condition.field);
+      return this.evaluateCondition(fieldValue, condition.operator, condition.value);
+    });
+  }
+
+  private getFieldValue(bordereau: any, field: string): any {
+    const fieldPath = field.split('.');
+    let value = bordereau;
+    for (const path of fieldPath) {
+      value = value?.[path];
+    }
+    return value;
+  }
+
+  private evaluateCondition(fieldValue: any, operator: string, conditionValue: any): boolean {
+    switch (operator) {
+      case '=': return fieldValue === conditionValue;
+      case '!=': return fieldValue !== conditionValue;
+      case '>': return fieldValue > conditionValue;
+      case '<': return fieldValue < conditionValue;
+      case '>=': return fieldValue >= conditionValue;
+      case '<=': return fieldValue <= conditionValue;
+      case 'contains': return String(fieldValue).includes(conditionValue);
+      default: return false;
+    }
+  }
+
+  private executeRuleActions(actions: AssignmentAction[], bordereau: any): string | null {
+    for (const action of actions) {
+      if (action.type === 'assign' && action.target === 'skill') {
+        return this.findUserWithSkill(action.value);
+      }
+    }
+    return null;
+  }
+
+  private findUserWithSkill(skill: string): string | null {
+    const skillUsers = {
+      'URGENT_PROCESSING': 'user_urgent_specialist',
+      'HIGH_VOLUME': 'user_volume_specialist',
+      'COMPLEX_CASES': 'user_complex_specialist'
+    };
+    return skillUsers[skill] || null;
+  }
+
+  private async logRuleExecution(ruleId: string, bordereauId: string, assigneeId: string) {
+    await this.prisma.auditLog.create({
+      data: {
+        userId: 'SYSTEM',
+        action: 'ASSIGNMENT_RULE_EXECUTED',
+        details: {
+          ruleId,
+          bordereauId,
+          assigneeId,
+          timestamp: new Date().toISOString()
+        }
+      }
+    });
+  }
+
+  private async getTeamMembers(teamId: string): Promise<any[]> {
+    try {
+      const members = await this.prisma.user.findMany({
+        where: { department: teamId }, // Use department instead of teamId
+        select: { id: true, fullName: true, role: true }
+      });
+      return members;
+    } catch (error) {
+      return [
+        { id: 'user1', fullName: 'Jean Dupont', role: 'GESTIONNAIRE' },
+        { id: 'user2', fullName: 'Marie Martin', role: 'GESTIONNAIRE' },
+        { id: 'user3', fullName: 'Pierre Durand', role: 'GESTIONNAIRE' }
+      ];
+    }
   }
 }

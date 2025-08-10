@@ -13,6 +13,9 @@ import PerformanceDashboard from './ClientTabs/PerformanceDashboard';
 import ClientProfileHeader from './ClientProfileHeader';
 import ClientQuickActions from './ClientQuickActions';
 import ClientMobileView from './ClientMobileView';
+import ClientPerformanceAnalytics from './ClientPerformanceAnalytics';
+import ClientCommunicationHistory from './ClientCommunicationHistory';
+import ClientRiskAssessment from './ClientRiskAssessment';
 import { syncExternalClient, fetchClientById, fetchClientAIRecommendations, fetchClientAnalytics } from '../../services/clientService';
 
 interface Props {
@@ -27,6 +30,9 @@ const featureList = [
   { label: 'KPIs', anchor: 'kpi' },
   { label: 'Bordereaux', anchor: 'bordereaux' },
   { label: 'Performance', anchor: 'performance' },
+  { label: 'Analytics', anchor: 'analytics' },
+  { label: 'Communication', anchor: 'communication' },
+  { label: 'Risk Assessment', anchor: 'risk' },
   { label: 'History', anchor: 'history' },
   { label: 'Trends', anchor: 'trends' },
 ];
@@ -131,6 +137,9 @@ const ClientDetail: React.FC<Props> = ({ client }) => {
               <Tab label="KPIs" />
               <Tab label="Bordereaux" />
               <Tab label="Performance" />
+              <Tab label="Analytics" />
+              <Tab label="Communication" />
+              <Tab label="Risk Assessment" />
               <Tab label="History" />
               <Tab label="Trends" />
             </Tabs>
@@ -143,8 +152,11 @@ const ClientDetail: React.FC<Props> = ({ client }) => {
               {tab === 4 && <KPITab clientId={currentClient.id} />}
               {tab === 5 && <BordereauxTab clientId={currentClient.id} />}
               {tab === 6 && <PerformanceDashboard clientId={currentClient.id} />}
-              {tab === 7 && <HistoryTab clientId={currentClient.id} />}
-              {tab === 8 && <TrendsTab clientId={currentClient.id} />}
+              {tab === 7 && <ClientPerformanceAnalytics clientId={currentClient.id} />}
+              {tab === 8 && <ClientCommunicationHistory clientId={currentClient.id} clientName={currentClient.name} />}
+              {tab === 9 && <ClientRiskAssessment clientId={currentClient.id} />}
+              {tab === 10 && <HistoryTab clientId={currentClient.id} />}
+              {tab === 11 && <TrendsTab clientId={currentClient.id} />}
             </Box>
           </Paper>
         </Grid>

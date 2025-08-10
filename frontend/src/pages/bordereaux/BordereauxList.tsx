@@ -29,6 +29,8 @@ import OcrPanel from "../../components/OcrPanel";
 import CourrierPanel from "../../components/CourrierPanel";
 import ContractThresholdPanel from "../../components/ContractThresholdPanel";
 import { useAuth } from '../../contexts/AuthContext';
+import MobileBSProcessor from '../../components/MobileBSProcessor';
+import TeamLeaderDashboard from '../../components/TeamLeaderDashboard';
 
 export default function BordereauxListPage() {
   const { user, isAuthenticated } = useAuth();
@@ -146,79 +148,8 @@ export default function BordereauxListPage() {
   }
 
   if (userRole === 'CHEF_EQUIPE') {
-    // Chef dashboard: Kanban view as specified
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Global Frame - Top Bar */}
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-6 py-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <h1 className="text-2xl font-bold text-gray-900">Corbeille Chef d'Équipe</h1>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span className="bg-gray-100 px-2 py-1 rounded">Total: {unassigned.length + teamBordereaux.length}</span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button 
-                  className="btn-primary"
-                  onClick={() => setShowCreateModal(true)}
-                >
-                  + Ajouter Bordereau
-                </button>
-                <div className="border-l border-gray-200 mx-2"></div>
-                <button className="btn-secondary" onClick={handleExportCSV} disabled={exporting}>
-                  {exporting ? "Export..." : "Importer Excel"}
-                </button>
-                <button className="btn-warning">Générer OV</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Content Container */}
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <BordereauKanban />
-        </div>
-
-        {/* Team Performance KPIs */}
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-bold mb-4">Performance de l'équipe</h2>
-            {summary && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{summary.daysElapsed}</div>
-                  <div className="text-sm text-green-700">Total bordereaux</div>
-                </div>
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-red-600">{summary.daysRemaining}</div>
-                  <div className="text-sm text-red-700">En retard</div>
-                </div>
-                <div className="bg-yellow-50 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600">{summary.scanDuration ?? "-"}</div>
-                  <div className="text-sm text-yellow-700">Durée scan moy. (j)</div>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{summary.totalDuration ?? "-"}</div>
-                  <div className="text-sm text-blue-700">Durée traitement moy. (j)</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Modal for Bordereau creation */}
-        {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded shadow-lg p-6 w-full max-w-lg relative">
-              <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-800" onClick={() => setShowCreateModal(false)} aria-label="Fermer">✕</button>
-              <BordereauCreateForm onSuccess={() => { setShowCreateModal(false); window.location.reload(); }} />
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    // Enhanced Team Leader Dashboard with advanced features
+    return <TeamLeaderDashboard />;
   }
 
   if (userRole === 'GESTIONNAIRE') {

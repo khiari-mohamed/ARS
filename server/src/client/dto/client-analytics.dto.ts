@@ -1,11 +1,51 @@
-// D:\ARS\server\src\client\dto\client-analytics.dto.ts
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import { IsOptional, IsString, IsIn } from 'class-validator';
 
 export class ClientAnalyticsDto {
+  @IsOptional()
   @IsString()
-  clientId: string;
+  @IsIn(['daily', 'weekly', 'monthly', 'yearly'])
+  period?: string = 'monthly';
 
   @IsOptional()
-  @IsObject()
-  slaConfig?: any; // For analytics on SLA config if needed
+  @IsString()
+  fromDate?: string;
+
+  @IsOptional()
+  @IsString()
+  toDate?: string;
+}
+
+export class BulkImportResultDto {
+  success: Array<{ line: number; name: string }>;
+  errors: Array<{ line: number; error: string }>;
+  total: number;
+}
+
+export class CommunicationLogDto {
+  @IsString()
+  type: string;
+
+  @IsString()
+  subject: string;
+
+  @IsString()
+  content: string;
+
+  @IsOptional()
+  @IsString()
+  contactPerson?: string;
+}
+
+export class RiskThresholdsDto {
+  @IsOptional()
+  slaBreachThreshold?: number;
+
+  @IsOptional()
+  complaintVolumeThreshold?: number;
+
+  @IsOptional()
+  delayRateThreshold?: number;
+
+  @IsOptional()
+  volumeOverloadThreshold?: number;
 }
