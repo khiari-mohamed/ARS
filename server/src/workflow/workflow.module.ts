@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
 import { WorkflowController } from './workflow.controller';
+import { CorbeilleService } from './corbeille.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BordereauxModule } from '../bordereaux/bordereaux.module';
 import { AlertsModule } from '../alerts/alerts.module';
@@ -16,7 +17,7 @@ import { GedModule } from '../ged/ged.module';
     GedModule
   ],
   controllers: [WorkflowController],
-  providers: [WorkflowService, PrismaService],
-  exports: [WorkflowService]
+  providers: [WorkflowService, CorbeilleService, PrismaService],
+  exports: [WorkflowService, CorbeilleService]
 })
 export class WorkflowModule {}

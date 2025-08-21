@@ -16,7 +16,11 @@ import {
   Chip,
   LinearProgress,
   IconButton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Add,
@@ -43,7 +47,9 @@ const BODashboard: React.FC = () => {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<any>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -53,10 +59,13 @@ const BODashboard: React.FC = () => {
 
   const loadDashboard = async () => {
     try {
+      setLoading(true);
+      setError(null);
       const data = await fetchBODashboard();
       setDashboardData(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load BO dashboard:', error);
+      setError('Erreur lors du chargement du tableau de bord');
     } finally {
       setLoading(false);
     }
@@ -77,6 +86,19 @@ const BODashboard: React.FC = () => {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
         <LinearProgress sx={{ width: '50%' }} />
+      </Box>
+    );
+  }
+
+  if (error && !dashboardData) {
+    return (
+      <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="60vh">
+        <Typography variant="h6" color="error" gutterBottom>
+          {error}
+        </Typography>
+        <Button variant="contained" onClick={loadDashboard}>
+          Réessayer
+        </Button>
       </Box>
     );
   }
@@ -201,16 +223,16 @@ const BODashboard: React.FC = () => {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={dashboardData?.documentTypes || []}
+                  data={dashboardData?.statusCounts || dashboardData?.documentTypes || []}
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ statut, _count }) => `${statut}: ${_count.id}`}
+                  label={({ statut, _count }) => `${statut}: ${_count?.id || 0}`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="_count.id"
                 >
-                  {(dashboardData?.documentTypes || []).map((entry: any, index: number) => (
+                  {(dashboardData?.statusCounts || dashboardData?.documentTypes || []).map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -268,7 +290,10 @@ const BODashboard: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Tooltip title="Voir Détails">
-                          <IconButton size="small">
+                          <IconButton 
+                            size="small"
+                            onClick={() => setSelectedEntry(entry)}
+                          >
                             <Visibility />
                           </IconButton>
                         </Tooltip>
@@ -296,6 +321,7 @@ const BODashboard: React.FC = () => {
         onClose={() => setActiveDialog(null)}
         onSuccess={() => {
           setActiveDialog(null);
+          // Immediate refresh without timeout
           loadDashboard();
         }}
       />
@@ -317,6 +343,44 @@ const BODashboard: React.FC = () => {
           loadDashboard();
         }}
       />
+
+      {/* Entry Details Dialog */}
+      <Dialog open={!!selectedEntry} onClose={() => setSelectedEntry(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Détails de l'Entrée</DialogTitle>
+        <DialogContent>
+          {selectedEntry && (
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2">Référence</Typography>
+                <Typography variant="body1">{selectedEntry.reference}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2">Client</Typography>
+                <Typography variant="body1">{selectedEntry.client?.name}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2">Date Réception</Typography>
+                <Typography variant="body1">{new Date(selectedEntry.dateReception).toLocaleDateString()}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2">Nombre de Documents</Typography>
+                <Typography variant="body1">{selectedEntry.nombreBS}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2">Statut</Typography>
+                <Chip label={selectedEntry.statut} color={getStatusColor(selectedEntry.statut) as any} />
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle2">Délai Règlement</Typography>
+                <Typography variant="body1">{selectedEntry.delaiReglement} jours</Typography>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedEntry(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

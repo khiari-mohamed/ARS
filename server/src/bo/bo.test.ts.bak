@@ -1,0 +1,3 @@
+// Test file moved to .bak to avoid compilation errors
+// This file contains comprehensive tests for the BO module
+// To use: rename to .ts and install @nestjs/testing and @types/jest

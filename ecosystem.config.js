@@ -9,8 +9,9 @@ module.exports = {
     env: {
       NODE_ENV: 'production',
       PORT: 8000,
-      DATABASE_URL: 'postgresql://postgres:23044943@localhost:5432/arsdb',
-      JWT_SECRET: 'verySecretKey'
+      DATABASE_URL: "postgresql://postgres:23044943@localhost:5432/arsdb",
+      JWT_SECRET: "verySecretKey",
+      DB_TYPE: "postgresql"
     }
   }]
 };

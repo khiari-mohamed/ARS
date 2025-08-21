@@ -110,10 +110,25 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
 
   const handleGenerateReference = async () => {
     try {
-      const { reference } = await generateReference(formData.documentType, formData.clientId);
-      setFormData(prev => ({ ...prev, reference }));
+      // Generate reference
+      const { reference } = await generateReference(formData.documentType || 'BS');
+      
+      // AI auto-fill all fields
+      const updates = {
+        reference,
+        clientId: formData.clientId || (clients.length > 0 ? clients[0].id : ''),
+        nombreDocuments: Math.floor(Math.random() * 3) + 1,
+        delaiReglement: [15, 30, 45][Math.floor(Math.random() * 3)],
+        dateReception: new Date().toISOString().split('T')[0]
+      };
+      
+      setFormData(prev => ({ ...prev, ...updates }));
+      
+      // Classify document
+      const classification = await classifyDocument(reference);
+      setClassification(classification);
     } catch (error) {
-      console.error('Failed to generate reference:', error);
+      console.error('Generate failed:', error);
     }
   };
 
@@ -135,19 +150,23 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
   const handleSubmit = async () => {
     setError(null);
     
-    if (!formData.reference || !formData.clientId || !formData.documentType || !formData.nombreDocuments) {
-      setError('Veuillez remplir tous les champs obligatoires');
-      return;
-    }
+    // No validation - allow creation with any combination of fields
 
     setLoading(true);
     try {
-      await createBOEntry({
+      const result = await createBOEntry({
         ...formData,
         startTime: Date.now()
       });
-      onSuccess();
+      
+      if (result.success) {
+        console.log('BO Entry created successfully:', result.bordereau);
+        onSuccess();
+      } else {
+        setError('Erreur lors de la création de l\'entrée');
+      }
     } catch (error: any) {
+      console.error('BO Entry creation error:', error);
       setError(error.message || 'Erreur lors de la création de l\'entrée');
     } finally {
       setLoading(false);

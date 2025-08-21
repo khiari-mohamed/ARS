@@ -29,6 +29,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
 import { UseGuards } from '@nestjs/common';
+import { Express } from 'express';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('contracts')

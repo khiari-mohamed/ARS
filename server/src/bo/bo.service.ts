@@ -1,12 +1,13 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Express } from 'express';
 
 export interface CreateBOEntryDto {
   reference?: string;
-  clientId: string;
+  clientId?: string;
   contractId?: string;
-  documentType: string;
-  nombreDocuments: number;
+  documentType?: string;
+  nombreDocuments?: number;
   delaiReglement?: number;
   dateReception?: string;
   startTime?: number;
@@ -43,51 +44,62 @@ export class BOService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    const count = await this.prisma.bordereau.count({
-      where: {
-        createdAt: {
-          gte: today,
-          lt: tomorrow
+    // Use transaction to prevent race conditions in reference generation
+    const result = await this.prisma.$transaction(async (tx) => {
+      const count = await tx.bordereau.count({
+        where: {
+          createdAt: {
+            gte: today,
+            lt: tomorrow
+          }
         }
+      });
+      
+      const sequence = String(count + 1).padStart(4, '0');
+      
+      switch (type) {
+        case 'BS':
+          return `BS-${year}${month}${day}-${sequence}`;
+        case 'RECLAMATION':
+          return `REC-${year}${month}${day}-${sequence}`;
+        case 'CONTRAT':
+          return `CTR-${year}${month}${day}-${sequence}`;
+        default:
+          return `DOC-${year}${month}${day}-${sequence}`;
       }
     });
     
-    const sequence = String(count + 1).padStart(4, '0');
-    
-    switch (type) {
-      case 'BS':
-        return `BS-${year}${month}${day}-${sequence}`;
-      case 'RECLAMATION':
-        return `REC-${year}${month}${day}-${sequence}`;
-      case 'CONTRAT':
-        return `CTR-${year}${month}${day}-${sequence}`;
-      default:
-        return `DOC-${year}${month}${day}-${sequence}`;
-    }
+    return result;
   }
 
   async classifyDocument(fileName: string, content?: string): Promise<DocumentTypeDto> {
     const extension = fileName.split('.').pop()?.toLowerCase();
+    const lowerFileName = fileName.toLowerCase();
     let type = 'AUTRE';
     let category = 'GENERAL';
     let priority = 'NORMAL';
+    let confidence = 0.6; // Base confidence
     
-    if (fileName.toLowerCase().includes('bs') || fileName.toLowerCase().includes('bulletin')) {
+    if (lowerFileName.includes('bs') || lowerFileName.includes('bulletin')) {
       type = 'BS';
       category = 'MEDICAL';
       priority = 'HIGH';
-    } else if (fileName.toLowerCase().includes('contrat') || fileName.toLowerCase().includes('contract')) {
+      confidence = 0.9;
+    } else if (lowerFileName.includes('contrat') || lowerFileName.includes('contract')) {
       type = 'CONTRAT';
       category = 'LEGAL';
       priority = 'HIGH';
-    } else if (fileName.toLowerCase().includes('reclamation') || fileName.toLowerCase().includes('complaint')) {
+      confidence = 0.85;
+    } else if (lowerFileName.includes('reclamation') || lowerFileName.includes('complaint')) {
       type = 'RECLAMATION';
       category = 'CUSTOMER_SERVICE';
       priority = 'URGENT';
-    } else if (fileName.toLowerCase().includes('facture') || fileName.toLowerCase().includes('invoice')) {
+      confidence = 0.88;
+    } else if (lowerFileName.includes('facture') || lowerFileName.includes('invoice')) {
       type = 'FACTURE';
       category = 'FINANCE';
       priority = 'HIGH';
+      confidence = 0.82;
     }
     
     return {
@@ -95,70 +107,133 @@ export class BOService {
       category,
       priority,
       extension: extension || 'unknown',
-      confidence: 0.85
+      confidence
     };
   }
 
   async createBatchEntry(entries: CreateBOEntryDto[], userId: string) {
-    const results = [];
-    const errors = [];
-    
-    for (let i = 0; i < entries.length; i++) {
-      try {
-        const entry = entries[i];
-        
-        if (!entry.reference) {
-          entry.reference = await this.generateReference(entry.documentType, entry.clientId);
-        }
-        
-        if (!entry.clientId || !entry.documentType || !entry.nombreDocuments) {
-          throw new Error('Missing required fields');
-        }
-        
-        const bordereau = await this.prisma.bordereau.create({
-          data: {
-            reference: entry.reference,
-            clientId: entry.clientId,
-            contractId: entry.contractId || '',
-            dateReception: entry.dateReception ? new Date(entry.dateReception) : new Date(),
-            delaiReglement: entry.delaiReglement || 30,
-            nombreBS: entry.nombreDocuments,
-            statut: 'EN_ATTENTE',
-          },
-          include: {
-            client: true,
-            contract: true
+    // Process entries in parallel for better performance
+    const results = await Promise.allSettled(
+      entries.map(async (entry, index) => {
+        try {
+          if (!entry.reference) {
+            entry.reference = await this.generateReference(entry.documentType || 'DOC', entry.clientId);
           }
-        });
-        
-        await this.logBOActivity(userId, 'CREATE_ENTRY', {
-          bordereauId: bordereau.id,
-          documentType: entry.documentType,
-          processingTime: Date.now() - (entry.startTime || Date.now())
-        });
-        
-        (results as any[]).push({
-          index: i,
-          success: true,
-          bordereau,
-          reference: bordereau.reference
-        });
-        
-      } catch (error) {
-        (errors as any[]).push({
-          index: i,
-          error: error.message,
-          entry: entries[i]
-        });
-      }
-    }
+          
+          // Set defaults for missing fields
+          if (!entry.clientId) {
+            // Create or find a default client
+            const defaultClient = await this.prisma.client.findFirst() || 
+              await this.prisma.client.create({
+                data: {
+                  name: 'Client par défaut',
+                  reglementDelay: 30,
+                  reclamationDelay: 7
+                }
+              });
+            entry.clientId = defaultClient.id;
+          }
+          
+          if (!entry.documentType) {
+            entry.documentType = 'AUTRE';
+          }
+          
+          if (!entry.nombreDocuments) {
+            entry.nombreDocuments = 1;
+          }
+          
+          // First, get or create a default contract if none provided
+          let contractId = entry.contractId;
+          if (!contractId) {
+            // Find the first contract for this client or create a default one
+            const existingContract = await this.prisma.contract.findFirst({
+              where: { clientId: entry.clientId }
+            });
+            
+            if (existingContract) {
+              contractId = existingContract.id;
+            } else {
+              // Create a default contract
+              const defaultContract = await this.prisma.contract.create({
+                data: {
+                  clientId: entry.clientId,
+                  clientName: 'Default Contract',
+                  delaiReglement: entry.delaiReglement || 30,
+                  delaiReclamation: 7,
+                  documentPath: '',
+                  assignedManagerId: userId,
+                  startDate: new Date(),
+                  endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
+                }
+              });
+              contractId = defaultContract.id;
+            }
+          }
+          
+          const bordereau = await this.prisma.bordereau.create({
+            data: {
+              reference: entry.reference,
+              clientId: entry.clientId,
+              contractId: contractId,
+              dateReception: entry.dateReception ? new Date(entry.dateReception) : new Date(),
+              delaiReglement: entry.delaiReglement || 30,
+              nombreBS: entry.nombreDocuments,
+              statut: 'EN_ATTENTE',
+            },
+            include: {
+              client: true,
+              contract: true
+            }
+          });
+          
+          await this.logBOActivity(userId, 'CREATE_ENTRY', {
+            bordereauId: bordereau.id,
+            documentType: entry.documentType,
+            processingTime: Date.now() - (entry.startTime || Date.now())
+          });
+          
+          return {
+            index,
+            success: true,
+            bordereau,
+            reference: bordereau.reference
+          };
+          
+        } catch (error) {
+          return {
+            index,
+            success: false,
+            error: error.message,
+            entry
+          };
+        }
+      })
+    );
+    
+    const successResults = results
+      .filter(result => result.status === 'fulfilled' && result.value.success)
+      .map(result => (result as PromiseFulfilledResult<any>).value);
+    
+    const errorResults = results
+      .filter(result => result.status === 'fulfilled' && !result.value.success)
+      .map(result => (result as PromiseFulfilledResult<any>).value);
+    
+    const rejectedResults = results
+      .filter(result => result.status === 'rejected')
+      .map((result, index) => ({
+        index,
+        error: (result as PromiseRejectedResult).reason?.message || 'Unknown error',
+        entry: entries[index]
+      }));
+    
+    const allErrors = [...errorResults, ...rejectedResults];
     
     return {
-      success: results,
-      errors,
+      success: successResults,
+      errors: allErrors,
       total: entries.length,
-      successCount: results.length,
-      errorCount: errors.length
+      successCount: successResults.length,
+      errorCount: allErrors.length
     };
   }
 
@@ -248,7 +323,7 @@ export class BOService {
       processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length : 0;
     
     const errors = activities.filter(a => a.action === 'BO_ERROR').length;
-    const errorRate = totalEntries > 0 ? (errors / totalEntries) * 100 : 0;
+    const errorRate = totalEntries > 0 ? (errors / totalEntries) : 0;
     
     const hoursInPeriod = (now.getTime() - startDate.getTime()) / (1000 * 60 * 60);
     const entrySpeed = hoursInPeriod > 0 ? totalEntries / hoursInPeriod : 0;
@@ -257,7 +332,7 @@ export class BOService {
       period,
       totalEntries,
       avgProcessingTime: Math.round(avgProcessingTime),
-      errorRate: Math.round(errorRate * 100) / 100,
+      errorRate: Math.round(errorRate * 10000) / 100,
       entrySpeed: Math.round(entrySpeed * 100) / 100,
       activities: activities.slice(0, 50)
     };
@@ -267,40 +342,99 @@ export class BOService {
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     
-    const todayEntries = await this.prisma.bordereau.count({
-      where: {
-        createdAt: { gte: startOfDay }
-      }
-    });
+    const [todayEntries, pendingEntries, recentEntries, documentTypes] = await Promise.all([
+      this.prisma.bordereau.count({
+        where: {
+          createdAt: { gte: startOfDay }
+        }
+      }),
+      
+      this.prisma.bordereau.count({
+        where: { statut: 'EN_ATTENTE' }
+      }),
+      
+      this.prisma.bordereau.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          client: { select: { name: true } },
+          contract: { select: { clientName: true } }
+        }
+      }),
+      
+      this.prisma.bordereau.groupBy({
+        by: ['statut'],
+        _count: { id: true },
+        where: {
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        }
+      })
+    ]);
     
-    const pendingEntries = await this.prisma.bordereau.count({
-      where: { statut: 'EN_ATTENTE' }
-    });
-    
-    const recentEntries = await this.prisma.bordereau.findMany({
-      take: 10,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        client: { select: { name: true } },
-        contract: { select: { clientName: true } }
-      }
-    });
-    
-    const documentTypes = await this.prisma.bordereau.groupBy({
-      by: ['statut'],
-      _count: { id: true },
-      where: {
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-      }
-    });
+    const performance = await this.getBOPerformance(userId, 'daily');
     
     return {
       todayEntries,
       pendingEntries,
       recentEntries,
-      documentTypes,
-      performance: await this.getBOPerformance(userId, 'daily')
+      statusCounts: documentTypes,
+      performance,
+      lastUpdated: new Date().toISOString()
     };
+  }
+
+  async getClientInfoForBO(clientId: string) {
+    try {
+      const client = await this.prisma.client.findUnique({
+        where: { id: clientId },
+        include: {
+          contracts: {
+            where: {
+              startDate: { lte: new Date() },
+              endDate: { gte: new Date() }
+            },
+            orderBy: { startDate: 'desc' },
+            take: 1
+          },
+          gestionnaires: { select: { id: true, fullName: true, role: true } }
+        }
+      });
+      
+      if (!client) return { error: 'Client not found' };
+      
+      return {
+        client: {
+          id: client.id,
+          name: client.name,
+          reglementDelay: client.reglementDelay,
+          reclamationDelay: client.reclamationDelay
+        },
+        activeContract: client.contracts[0] || null,
+        gestionnaires: client.gestionnaires
+      };
+    } catch (error) {
+      return { error: 'Failed to retrieve client info' };
+    }
+  }
+
+  async searchClientsForBO(query: string) {
+    try {
+      const clients = await this.prisma.client.findMany({
+        where: {
+          name: { contains: query, mode: 'insensitive' }
+        },
+        select: {
+          id: true,
+          name: true,
+          reglementDelay: true,
+          reclamationDelay: true
+        },
+        take: 10
+      });
+      return { clients };
+    } catch (error) {
+      return { clients: [] };
+    }
   }
 
   async trackPhysicalDocument(trackingData: {
@@ -308,7 +442,7 @@ export class BOService {
     location: string;
     status: string;
     notes?: string;
-  }) {
+  }, userId: string = 'SYSTEM') {
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { reference: trackingData.reference }
     });
@@ -317,21 +451,56 @@ export class BOService {
       throw new BadRequestException('Bordereau not found');
     }
     
-    await this.prisma.auditLog.create({
-      data: {
-        userId: 'SYSTEM',
-        action: 'PHYSICAL_DOCUMENT_TRACKING',
-        details: {
-          bordereauId: bordereau.id,
-          reference: trackingData.reference,
-          location: trackingData.location,
-          status: trackingData.status,
-          notes: trackingData.notes,
-          timestamp: new Date().toISOString()
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'PHYSICAL_DOCUMENT_TRACKING',
+          details: {
+            bordereauId: bordereau.id,
+            reference: trackingData.reference,
+            location: trackingData.location,
+            status: trackingData.status,
+            notes: trackingData.notes,
+            timestamp: new Date().toISOString()
+          }
         }
-      }
-    });
+      });
+    } catch (error) {
+      console.error('Failed to create audit log:', error);
+      throw new BadRequestException('Failed to update document tracking');
+    }
     
     return { success: true, message: 'Document tracking updated' };
+  }
+
+  async enhancedCreateEntry(entry: CreateBOEntryDto & { autoRetrieveClient?: boolean }, userId: string) {
+    // Enhanced entry creation with auto client retrieval
+    if (entry.autoRetrieveClient && entry.clientId) {
+      const clientInfo = await this.getClientInfoForBO(entry.clientId);
+      if (clientInfo.client) {
+        entry.delaiReglement = entry.delaiReglement || clientInfo.client.reglementDelay;
+        entry.contractId = entry.contractId || clientInfo.activeContract?.id;
+      }
+    }
+    
+    return this.createBatchEntry([entry], userId);
+  }
+
+  async getBOWorkflowStatus() {
+    const statuses = await this.prisma.bordereau.groupBy({
+      by: ['statut'],
+      _count: { id: true }
+    });
+    
+    return {
+      workflow: statuses.map(s => ({
+        status: s.statut,
+        count: s._count.id
+      })),
+      totalActive: statuses.reduce((sum, s) => 
+        s.statut !== 'CLOTURE' ? sum + s._count.id : sum, 0
+      )
+    };
   }
 }

@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -28,9 +31,9 @@ async function bootstrap() {
     });
   });
 
-  const port = process.env.PORT ?? 8000;
+  const port = parseInt(process.env.PORT ?? '8000', 10);
   await app.init(); // <-- This is important!
-  httpServer.listen(port, () => {
+  httpServer.listen(port, '0.0.0.0', () => {
     console.log(`Server (with socket.io) running on port ${port}`);
   });
 }

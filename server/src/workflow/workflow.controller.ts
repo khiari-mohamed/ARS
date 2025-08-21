@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Body, Query, Param, Put, Delete, UseInterceptors, UploadedFile 
+import { Controller, Get, Post, Body, Query, Param, Put, Delete, UseInterceptors, UploadedFile, Req 
 } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
+import { CorbeilleService } from './corbeille.service';
+import { Request } from 'express';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { WorkflowKpiDto } from './dto/workflow-kpi.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -8,7 +10,10 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 @ApiTags('Workflow')
 @Controller('workflow')
 export class WorkflowController {
-  constructor(private readonly workflowService: WorkflowService) {}
+  constructor(
+    private readonly workflowService: WorkflowService,
+    private readonly corbeilleService: CorbeilleService
+  ) {}
 
 
   @Post('auto-assign')
@@ -78,6 +83,24 @@ export class WorkflowController {
   @ApiOperation({ summary: 'Update a workflow assignment (status, notes, etc.)' })
   async updateAssignment(@Param('id') id: string, @Body() data: any, @Query('updatedByUserId') updatedByUserId?: string) {
     return this.workflowService.updateAssignment(id, data, updatedByUserId);
+  }
+
+  // --- CORBEILLE ENDPOINTS ---
+
+  @Get('corbeille')
+  @ApiOperation({ summary: 'Get user-specific corbeille (inbox)' })
+  async getCorbeille(@Req() req: Request) {
+    const userId = req?.['user']?.id || req?.['user']?.sub;
+    if (!userId) return { items: [], count: 0, type: 'UNAUTHORIZED' };
+    return this.corbeilleService.getUserCorbeille(userId);
+  }
+
+  @Get('corbeille/stats')
+  @ApiOperation({ summary: 'Get corbeille statistics' })
+  async getCorbeilleStats(@Req() req: Request) {
+    const userId = req?.['user']?.id || req?.['user']?.sub;
+    if (!userId) return { totalItems: 0, urgentItems: 0, role: 'UNKNOWN' };
+    return this.corbeilleService.getCorbeilleStats(userId);
   }
 }
 

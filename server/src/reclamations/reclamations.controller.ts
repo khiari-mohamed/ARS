@@ -20,6 +20,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
 import { UseGuards } from '@nestjs/common';
+import { Express } from 'express';
 
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {

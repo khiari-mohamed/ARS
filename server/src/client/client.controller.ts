@@ -25,6 +25,7 @@ import { Roles } from '../auth/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '../auth/user-role.enum';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Express } from 'express';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('clients')

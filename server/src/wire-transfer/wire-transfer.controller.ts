@@ -3,6 +3,7 @@ import { WireTransferService } from './wire-transfer.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as multer from 'multer';
+import { Express } from 'express';
 
 @Controller('wire-transfer')
 export class WireTransferController {

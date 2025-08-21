@@ -13,6 +13,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OcrService } from './ocr.service';
 import { OcrRequestDto } from './dto/ocr-request.dto';
+import { Express } from 'express';
 
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {

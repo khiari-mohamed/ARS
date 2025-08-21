@@ -21,6 +21,7 @@ import AlertsModule from './pages/AlertsModule';
 import BODashboard from './pages/BODashboard';
 import ScanDashboard from './pages/ScanDashboard';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import GuideFlowPage from './components/guide/GuideFlowPage';
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
@@ -61,6 +62,7 @@ const App: React.FC = () => {
           <Route path="/home/bo" element={<BODashboard />} />
           <Route path="/home/scan" element={<ScanDashboard />} />
           <Route path="/home/super-admin" element={<SuperAdminDashboard />} />
+          <Route path="/home/guide" element={<GuideFlowPage />} />
           <Route path="*" element={<Navigate to="/home/dashboard" />} />
         </Route>
       ) : (
