@@ -15,6 +15,7 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import InputIcon from '@mui/icons-material/Input';
 import ScannerIcon from '@mui/icons-material/Scanner';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
 
 const sidebarLinks = [
   { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE'] },
@@ -32,6 +33,7 @@ const sidebarLinks = [
   { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN'] },
   { to: "/home/workflow", label: "Workflow", icon: <TimelineIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
   { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'FINANCE'] },
+  { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'SCAN_TEAM'] },
 ];
 
 interface SidebarProps {

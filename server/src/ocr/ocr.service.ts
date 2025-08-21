@@ -5,6 +5,7 @@ import { OcrResponseDto } from './dto/ocr-response.dto';
 import * as Tesseract from 'tesseract.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Express } from 'express';
 
 @Injectable()
 export class OcrService {

@@ -7,6 +7,7 @@ import { Document, User } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { NotificationService } from './notification.service';
+import { Express } from 'express';
 
 @Injectable()
 export class GedService {

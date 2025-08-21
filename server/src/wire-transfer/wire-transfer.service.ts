@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Society, Member, DonneurDOrdre, WireTransferBatch, WireTransfer, WireTransferBatchStatus, WireTransferBatchHistory, WireTransferHistory } from '@prisma/client';
+import { Express } from 'express';
 
 @Injectable()
 export class WireTransferService {

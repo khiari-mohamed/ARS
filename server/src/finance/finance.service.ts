@@ -9,6 +9,7 @@ import { Virement, User } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { Response } from 'express';
+import { Express } from 'express';
 
 @Injectable()
 export class FinanceService {

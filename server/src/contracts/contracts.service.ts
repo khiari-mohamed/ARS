@@ -6,6 +6,7 @@ import { SearchContractDto } from './dto/search-contract.dto';
 import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { PassThrough } from 'stream';
+import { Express } from 'express';
 
 @Injectable()
 export class ContractsService {
