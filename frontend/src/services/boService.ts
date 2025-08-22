@@ -62,3 +62,13 @@ export const validateDocuments = async (files: File[]) => {
   });
   return response.data;
 };
+
+export const simulateWorkflow = async () => {
+  const response = await LocalAPI.post('/bo/simulate-workflow');
+  return response.data;
+};
+
+export const progressBordereauStatus = async (bordereauId: string, status: string) => {
+  const response = await LocalAPI.post(`/bo/progress-status/${bordereauId}`, { status });
+  return response.data;
+};

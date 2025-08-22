@@ -294,4 +294,50 @@ export class BOController {
       }
     };
   }
+
+  // Upload documents and create bordereaux
+  @Post('upload-documents')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('files', 20))
+  async uploadDocuments(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() data: { entries: CreateBOEntryDto[] },
+    @Req() req: Request
+  ) {
+    const user = req?.['user'] as any;
+    const userId = this.extractUserId(user) || 'system-user';
+    
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded');
+    }
+
+    try {
+      // Create bordereau entries for uploaded files
+      const results = await this.boService.createBatchEntryWithFiles(data.entries, files, userId);
+      return results;
+    } catch (error) {
+      throw new BadRequestException('Failed to process uploaded documents');
+    }
+  }
+
+  // Simulate workflow progression for demo
+  @Post('simulate-workflow')
+  @UseGuards(JwtAuthGuard)
+  async simulateWorkflow() {
+    return await this.boService.simulateWorkflowProgression();
+  }
+
+  // Progress specific bordereau status
+  @Post('progress-status/:id')
+  @UseGuards(JwtAuthGuard)
+  async progressBordereauStatus(
+    @Param('id') bordereauId: string,
+    @Body() data: { status: string },
+    @Req() req: Request
+  ) {
+    const user = req?.['user'] as any;
+    const userId = this.extractUserId(user) || 'system-user';
+    
+    return await this.boService.progressBordereauWorkflow(bordereauId, data.status, userId);
+  }
 }

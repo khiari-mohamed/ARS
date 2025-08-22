@@ -39,7 +39,7 @@ import BOEntryForm from '../components/BOEntryForm';
 import BOBatchForm from '../components/BOBatchForm';
 import BOPerformanceMetrics from '../components/BOPerformanceMetrics';
 import DocumentUploadPortal from '../components/DocumentUploadPortal';
-import { fetchBODashboard } from '../services/boService';
+import { fetchBODashboard, simulateWorkflow } from '../services/boService';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -66,6 +66,21 @@ const BODashboard: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to load BO dashboard:', error);
       setError('Erreur lors du chargement du tableau de bord');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSimulateWorkflow = async () => {
+    try {
+      setLoading(true);
+      const result = await simulateWorkflow();
+      console.log('Workflow simulation result:', result);
+      // Refresh dashboard after simulation
+      setTimeout(loadDashboard, 1000);
+    } catch (error: any) {
+      console.error('Workflow simulation failed:', error);
+      setError('Erreur lors de la simulation du workflow');
     } finally {
       setLoading(false);
     }
@@ -133,6 +148,14 @@ const BODashboard: React.FC = () => {
             sx={{ minWidth: 140 }}
           >
             Upload Documents
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Assessment />}
+            onClick={handleSimulateWorkflow}
+            sx={{ minWidth: 140 }}
+          >
+            Simuler Workflow
           </Button>
         </Box>
       </Box>

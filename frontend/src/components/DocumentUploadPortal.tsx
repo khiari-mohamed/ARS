@@ -56,10 +56,38 @@ const DocumentUploadPortal: React.FC<Props> = ({ open, onClose, onSuccess }) => 
     }
   };
 
-  const handleSubmit = () => {
-    // Simulate successful upload
-    onSuccess();
-    onClose();
+  const handleSubmit = async () => {
+    if (!results || !results.results) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Create bordereau entries for valid documents
+      const validDocuments = results.results.filter((r: any) => r.validation?.isValid);
+      
+      const entries = validDocuments.map((doc: any) => ({
+        documentType: doc.classification?.type || 'AUTRE',
+        nombreDocuments: 1,
+        delaiReglement: 30,
+        dateReception: new Date().toISOString().split('T')[0],
+        fileName: doc.fileName,
+        fileSize: files.find(f => f.name === doc.fileName)?.size || 0
+      }));
+
+      if (entries.length > 0) {
+        const { createBOBatch } = await import('../services/boService');
+        await createBOBatch(entries);
+      }
+
+      onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      setError(error.response?.data?.message || error.message || 'Erreur lors de l\'upload');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
