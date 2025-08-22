@@ -16,13 +16,17 @@ const UserPerformance: React.FC<UserPerformanceProps> = ({ data }) => (
         </tr>
       </thead>
       <tbody>
-        {data.map((user, idx) => (
+        {Array.isArray(data) ? data.map((user, idx) => (
           <tr key={idx} style={{ background: idx === 0 ? '#e3f2fd' : undefined }}>
             <td>{user.user}</td>
             <td>{user.bsProcessed}</td>
             <td>{user.avgTime}</td>
           </tr>
-        ))}
+        )) : (
+          <tr>
+            <td colSpan={3}>No data available</td>
+          </tr>
+        )}
       </tbody>
     </table>
   </div>

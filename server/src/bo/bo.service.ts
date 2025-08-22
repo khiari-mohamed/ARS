@@ -40,36 +40,43 @@ export class BOService {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     
-    const today = new Date(year, now.getMonth(), now.getDate());
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    // Use transaction to prevent race conditions in reference generation
-    const result = await this.prisma.$transaction(async (tx) => {
-      const count = await tx.bordereau.count({
-        where: {
-          createdAt: {
-            gte: today,
-            lt: tomorrow
+    try {
+      const today = new Date(year, now.getMonth(), now.getDate());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      // Use transaction to prevent race conditions in reference generation
+      const result = await this.prisma.$transaction(async (tx) => {
+        const count = await tx.bordereau.count({
+          where: {
+            createdAt: {
+              gte: today,
+              lt: tomorrow
+            }
           }
+        });
+        
+        const sequence = String(count + 1).padStart(4, '0');
+        
+        switch (type) {
+          case 'BS':
+            return `BS-${year}${month}${day}-${sequence}`;
+          case 'RECLAMATION':
+            return `REC-${year}${month}${day}-${sequence}`;
+          case 'CONTRAT':
+            return `CTR-${year}${month}${day}-${sequence}`;
+          default:
+            return `DOC-${year}${month}${day}-${sequence}`;
         }
       });
       
-      const sequence = String(count + 1).padStart(4, '0');
-      
-      switch (type) {
-        case 'BS':
-          return `BS-${year}${month}${day}-${sequence}`;
-        case 'RECLAMATION':
-          return `REC-${year}${month}${day}-${sequence}`;
-        case 'CONTRAT':
-          return `CTR-${year}${month}${day}-${sequence}`;
-        default:
-          return `DOC-${year}${month}${day}-${sequence}`;
-      }
-    });
-    
-    return result;
+      return result;
+    } catch (error) {
+      // Fallback to timestamp-based reference if database fails
+      const timestamp = Date.now().toString().slice(-6);
+      const prefix = type === 'BS' ? 'BS' : type === 'RECLAMATION' ? 'REC' : type === 'CONTRAT' ? 'CTR' : 'DOC';
+      return `${prefix}-${year}${month}${day}-${timestamp}`;
+    }
   }
 
   async classifyDocument(fileName: string, content?: string): Promise<DocumentTypeDto> {
@@ -153,36 +160,29 @@ export class BOService {
             if (existingContract) {
               contractId = existingContract.id;
             } else {
-              // Create a default contract
-              const defaultContract = await this.prisma.contract.create({
-                data: {
-                  clientId: entry.clientId,
-                  clientName: 'Default Contract',
-                  delaiReglement: entry.delaiReglement || 30,
-                  delaiReclamation: 7,
-                  documentPath: '',
-                  assignedManagerId: userId,
-                  startDate: new Date(),
-                  endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
-                }
-              });
-              contractId = defaultContract.id;
+              // Skip contract creation if no existing contract - just use undefined
+              contractId = undefined;
             }
           }
           
+          const bordereauData: any = {
+            reference: entry.reference,
+            clientId: entry.clientId,
+            dateReception: entry.dateReception ? new Date(entry.dateReception) : new Date(),
+            delaiReglement: entry.delaiReglement || 30,
+            nombreBS: entry.nombreDocuments,
+            statut: 'EN_ATTENTE',
+          };
+          
+          if (contractId) {
+            bordereauData.contractId = contractId;
+          }
+          
           const bordereau = await this.prisma.bordereau.create({
-            data: {
-              reference: entry.reference,
-              clientId: entry.clientId,
-              contractId: contractId,
-              dateReception: entry.dateReception ? new Date(entry.dateReception) : new Date(),
-              delaiReglement: entry.delaiReglement || 30,
-              nombreBS: entry.nombreDocuments,
-              statut: 'EN_ATTENTE',
-            },
+            data: bordereauData,
             include: {
               client: true,
-              contract: true
+              contract: contractId ? true : false
             }
           });
           
@@ -227,6 +227,15 @@ export class BOService {
       }));
     
     const allErrors = [...errorResults, ...rejectedResults];
+    
+    // For single entry, return the result directly
+    if (entries.length === 1) {
+      if (successResults.length > 0) {
+        return successResults[0];
+      } else if (allErrors.length > 0) {
+        return allErrors[0];
+      }
+    }
     
     return {
       success: successResults,

@@ -11,7 +11,7 @@ import { IntegrationModule } from '../integrations/integration.module'; // <-- I
 import { NotificationService } from '../reclamations/notification.service'; // adjust path as needed
 import { ReclamationsModule } from '../reclamations/reclamations.module';
 @Module({
-  imports: [IntegrationModule , ReclamationsModule], 
+  imports: [IntegrationModule, ReclamationsModule], 
   controllers: [DashboardController],
   providers: [
     DashboardService,

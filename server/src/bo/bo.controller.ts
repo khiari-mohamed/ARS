@@ -9,32 +9,58 @@ import {
   UseInterceptors,
   UploadedFile,
   UploadedFiles,
-  BadRequestException
+  BadRequestException,
+  UseGuards
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { BOService, CreateBOEntryDto } from './bo.service';
 import { Request } from 'express';
 import { Express } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { UserRole } from '../auth/user-role.enum';
+
 
 @Controller('bo')
 export class BOController {
   constructor(
     private readonly boService: BOService,
     private readonly prisma: PrismaService
-  ) {}
+  ) {
+    console.log('🔥 BO CONTROLLER INITIALIZED!');
+  }
   
   private extractUserId(user: any): string | null {
     return user?.id || user?.userId || user?.sub || null;
   }
 
-  // Test endpoint
+  // Test endpoint - NO AUTH for debugging
   @Get('test')
   async test() {
+    console.log('🔥 BO TEST ENDPOINT HIT!');
     return { message: 'BO module is working', timestamp: new Date().toISOString() };
   }
 
-  // Generate reference number
+  // Test endpoint with auth info
+  @Get('test-auth')
+  @UseGuards(JwtAuthGuard)
+  async testAuth(@Req() req: Request) {
+    const user = req?.['user'] as any;
+    return { 
+      message: 'Auth test', 
+      user: {
+        id: user?.id,
+        role: user?.role,
+        email: user?.email,
+        fullName: user?.fullName
+      },
+      timestamp: new Date().toISOString() 
+    };
+  }
+
+  // Generate reference number - NO AUTH for debugging
   @Post('generate-reference')
   async generateReference(
     @Body() data: { type: string; clientId?: string }
@@ -43,20 +69,42 @@ export class BOController {
     return { reference };
   }
 
+  // Generate reference with auth
+  @Post('generate-reference-auth')
+  @UseGuards(JwtAuthGuard)
+  async generateReferenceAuth(
+    @Body() data: { type: string; clientId?: string },
+    @Req() req: Request
+  ) {
+    const user = req?.['user'] as any;
+    const reference = await this.boService.generateReference(data.type, data.clientId);
+    return { 
+      reference, 
+      user: {
+        id: user?.id,
+        role: user?.role,
+        email: user?.email
+      }
+    };
+  }
+
   // Auto-retrieve client info for BO entry
   @Get('client-info/:clientId')
+  @UseGuards(JwtAuthGuard)
   async getClientInfo(@Param('clientId') clientId: string) {
     return await this.boService.getClientInfoForBO(clientId);
   }
 
   // Search clients for BO entry
   @Get('search-clients')
+  @UseGuards(JwtAuthGuard)
   async searchClients(@Query('query') query: string) {
     return await this.boService.searchClientsForBO(query);
   }
 
   // Document classification
   @Post('classify-document')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   async classifyDocument(
     @UploadedFile() file: Express.Multer.File,
@@ -73,6 +121,7 @@ export class BOController {
 
   // Document quality validation
   @Post('validate-document')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   @UseInterceptors(FileInterceptor('file'))
   async validateDocument(
     @UploadedFile() file: Express.Multer.File
@@ -85,6 +134,7 @@ export class BOController {
 
   // Batch document validation
   @Post('validate-documents')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   @UseInterceptors(FilesInterceptor('files', 20))
   async validateDocuments(
     @UploadedFiles() files: Express.Multer.File[]
@@ -111,9 +161,19 @@ export class BOController {
     return { results, summary };
   }
 
-  // Single entry creation
+  // Single entry creation - NO AUTH for debugging
   @Post('create-entry')
   async createEntry(
+    @Body() entry: CreateBOEntryDto
+  ) {
+    const result = await this.boService.createBatchEntry([entry], 'test-user');
+    return result;
+  }
+
+  // Single entry creation with auth
+  @Post('create-entry-auth')
+  @UseGuards(JwtAuthGuard)
+  async createEntryAuth(
     @Body() entry: CreateBOEntryDto,
     @Req() req: Request
   ) {
@@ -121,11 +181,19 @@ export class BOController {
     const userId = this.extractUserId(user) || 'system-user';
     
     const result = await this.boService.createBatchEntry([entry], userId);
-    return result.success[0] || result.errors[0];
+    return {
+      result,
+      user: {
+        id: user?.id,
+        role: user?.role,
+        email: user?.email
+      }
+    };
   }
 
   // Batch entry creation
   @Post('create-batch')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async createBatch(
     @Body() data: { entries: CreateBOEntryDto[] },
     @Req() req: Request
@@ -138,6 +206,7 @@ export class BOController {
 
   // BO Dashboard
   @Get('dashboard')
+  @UseGuards(JwtAuthGuard)
   async getDashboard(@Req() req: Request) {
     const user = req?.['user'] as any;
     const userId = this.extractUserId(user) || 'system-user';
@@ -147,6 +216,7 @@ export class BOController {
 
   // BO Performance metrics
   @Get('performance')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async getPerformance(
     @Req() req: Request,
     @Query('period') period: string = 'daily',
@@ -164,6 +234,7 @@ export class BOController {
 
   // Physical document tracking
   @Post('track-document')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async trackDocument(
     @Body() trackingData: {
       reference: string;
@@ -177,6 +248,7 @@ export class BOController {
 
   // Get document tracking history
   @Get('tracking/:reference')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async getTrackingHistory(@Param('reference') reference: string) {
     try {
       // Fetch actual tracking history from audit logs
@@ -200,6 +272,7 @@ export class BOController {
 
   // BO Statistics for reporting
   @Get('statistics')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async getStatistics(
     @Query('from') fromDate?: string,
     @Query('to') toDate?: string,

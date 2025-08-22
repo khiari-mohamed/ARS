@@ -4,16 +4,16 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
   TextField,
+  Button,
+  Grid,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Grid,
-  Typography,
   Alert,
   Box,
+  Typography,
   Chip,
   IconButton
 } from '@mui/material';
@@ -110,8 +110,16 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
 
   const handleGenerateReference = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       // Generate reference
-      const { reference } = await generateReference(formData.documentType || 'BS');
+      const response = await generateReference(formData.documentType || 'BS');
+      const reference = response.reference;
+      
+      if (!reference) {
+        throw new Error('No reference generated');
+      }
       
       // AI auto-fill all fields
       const updates = {
@@ -125,10 +133,17 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       setFormData(prev => ({ ...prev, ...updates }));
       
       // Classify document
-      const classification = await classifyDocument(reference);
-      setClassification(classification);
-    } catch (error) {
+      try {
+        const classification = await classifyDocument(reference);
+        setClassification(classification);
+      } catch (classifyError) {
+        console.warn('Classification failed:', classifyError);
+      }
+    } catch (error: any) {
       console.error('Generate failed:', error);
+      setError(error.response?.data?.message || error.message || 'Erreur lors de la génération de la référence');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -139,7 +154,7 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       const result = await classifyDocument(formData.reference);
       setClassification(result);
       
-      if (result.confidence > 0.8) {
+      if (result && result.confidence > 0.8) {
         setFormData(prev => ({ ...prev, documentType: result.type }));
       }
     } catch (error) {
@@ -149,25 +164,26 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
 
   const handleSubmit = async () => {
     setError(null);
-    
-    // No validation - allow creation with any combination of fields
-
     setLoading(true);
+    
     try {
       const result = await createBOEntry({
         ...formData,
         startTime: Date.now()
       });
       
-      if (result.success) {
-        console.log('BO Entry created successfully:', result.bordereau);
+      if (result && (result.success || result.bordereau)) {
+        console.log('BO Entry created successfully:', result);
         onSuccess();
+        onClose();
+      } else if (result.error) {
+        setError(result.error);
       } else {
         setError('Erreur lors de la création de l\'entrée');
       }
     } catch (error: any) {
       console.error('BO Entry creation error:', error);
-      setError(error.message || 'Erreur lors de la création de l\'entrée');
+      setError(error.response?.data?.message || error.message || 'Erreur lors de la création de l\'entrée');
     } finally {
       setLoading(false);
     }
@@ -211,6 +227,7 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
                 variant="outlined"
                 onClick={handleGenerateReference}
                 startIcon={<AutoAwesome />}
+                disabled={loading}
                 sx={{ minWidth: 120 }}
               >
                 Générer
@@ -311,34 +328,45 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
         {classification && (
           <Box mt={2} p={2} bgcolor="grey.50" borderRadius={1}>
             <Typography variant="subtitle2" gutterBottom>
-              Classification Automatique
+              Classification AI
             </Typography>
             <Grid container spacing={1}>
-              <Grid item>
-                <Chip label={`Type: ${classification.type}`} size="small" />
+              <Grid item xs={6}>
+                <Typography variant="body2">
+                  Type: <strong>{classification.type}</strong>
+                </Typography>
               </Grid>
-              <Grid item>
-                <Chip label={`Catégorie: ${classification.category}`} size="small" />
+              <Grid item xs={6}>
+                <Typography variant="body2">
+                  Catégorie: <strong>{classification.category}</strong>
+                </Typography>
               </Grid>
-              <Grid item>
-                <Chip label={`Priorité: ${classification.priority}`} size="small" />
+              <Grid item xs={6}>
+                <Typography variant="body2">
+                  Priorité: <strong>{classification.priority}</strong>
+                </Typography>
               </Grid>
-              <Grid item>
-                <Chip label={`Confiance: ${Math.round(classification.confidence * 100)}%`} size="small" />
+              <Grid item xs={6}>
+                <Typography variant="body2">
+                  Confiance: <strong>{Math.round(classification.confidence * 100)}%</strong>
+                </Typography>
               </Grid>
             </Grid>
           </Box>
         )}
       </DialogContent>
-
+      
       <DialogActions>
-        <Button onClick={onClose}>Annuler</Button>
+        <Button onClick={onClose} disabled={loading}>
+          Annuler
+        </Button>
         <Button
-          variant="contained"
           onClick={handleSubmit}
-          disabled={loading}
+          variant="contained"
+          disabled={loading || !formData.reference}
+          sx={{ minWidth: 120 }}
         >
-          {loading ? 'Création...' : 'Créer Entrée'}
+          {loading ? 'Création...' : 'Créer'}
         </Button>
       </DialogActions>
     </Dialog>

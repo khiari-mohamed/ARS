@@ -18,12 +18,26 @@ const Dashboard: React.FC = () => {
   const [slaStatus, setSlaStatus] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [charts, setCharts] = useState<any>({});
-  const [filters, setFilters] = useState<any>({});
+  const [filters, setFilters] = useState<any>({
+    departmentId: '',
+    fromDate: '',
+    toDate: ''
+  });
   const [departments, setDepartments] = useState<any[]>([]);
 
   // Handle filter changes
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFilters({ ...filters, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFilters((prev: any) => ({ ...prev, [name]: value }));
+  };
+
+  // Clear filters
+  const clearFilters = () => {
+    setFilters({
+      departmentId: '',
+      fromDate: '',
+      toDate: ''
+    });
   };
 
   // Fetch departments for the filter dropdown
@@ -61,10 +75,24 @@ const Dashboard: React.FC = () => {
     <div className="dashboard-root">
       <h2 className="dashboard-title">Dashboard</h2>
       {/* Filter Controls */}
-      <div className="dashboard-filters card-panel">
-        <label>
-          Department:&nbsp;
-          <select name="departmentId" onChange={handleFilterChange} value={filters.departmentId || ''}>
+      <div className="dashboard-filters card-panel" style={{ 
+        display: 'flex', 
+        gap: '1rem', 
+        alignItems: 'center', 
+        padding: '1rem', 
+        backgroundColor: '#f5f5f5', 
+        borderRadius: '8px', 
+        marginBottom: '1rem',
+        flexWrap: 'wrap'
+      }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <strong>Department:</strong>
+          <select 
+            name="departmentId" 
+            onChange={handleFilterChange} 
+            value={filters.departmentId}
+            style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+          >
             <option value="">All</option>
             {departments.map((department: any) => (
               <option key={department.id} value={department.id}>
@@ -73,15 +101,39 @@ const Dashboard: React.FC = () => {
             ))}
           </select>
         </label>
-        <label>
-          From:&nbsp;
-          <input type="date" name="fromDate" onChange={handleFilterChange} value={filters.fromDate || ''} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <strong>From:</strong>
+          <input 
+            type="date" 
+            name="fromDate" 
+            onChange={handleFilterChange} 
+            value={filters.fromDate}
+            style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+          />
         </label>
-        <label>
-          To:&nbsp;
-          <input type="date" name="toDate" onChange={handleFilterChange} value={filters.toDate || ''} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <strong>To:</strong>
+          <input 
+            type="date" 
+            name="toDate" 
+            onChange={handleFilterChange} 
+            value={filters.toDate}
+            style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+          />
         </label>
-        {/* Add more filters as needed */}
+        <button 
+          onClick={clearFilters}
+          style={{ 
+            padding: '0.5rem 1rem', 
+            backgroundColor: '#1976d2', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '4px', 
+            cursor: 'pointer'
+          }}
+        >
+          Clear Filters
+        </button>
       </div>
       <div className="dashboard-kpi-row">
         <KPIWidgets kpis={kpis} />

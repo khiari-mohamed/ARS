@@ -17,14 +17,41 @@ export class DashboardService {
     private tuniclaim: TuniclaimService,
   ) {}
 
-  async getKpis(user: any) {
-    const bordereauKPIs = await this.bordereaux.getBordereauKPIs();
-    const totalBordereaux = bordereauKPIs.length;
-    const bsProcessed = bordereauKPIs.filter(b => b.statusColor === 'GREEN').length;
-    const bsRejected = bordereauKPIs.filter(b => b.statusColor === 'RED').length;
-    const slaBreaches = bsRejected;
-    const overdueVirements = bordereauKPIs.filter(b => b.statut === 'EN_COURS').length;
-    const pendingReclamations = await this.reclamations.analytics(user).then(a => a.open);
+  async getKpis(user: any, filters: any = {}) {
+    // Build filter object for bordereau query with proper date handling
+    const bordereauFilters: any = {};
+    if (filters.fromDate || filters.toDate) {
+      bordereauFilters.dateReception = {};
+      if (filters.fromDate) bordereauFilters.dateReception.gte = new Date(filters.fromDate);
+      if (filters.toDate) bordereauFilters.dateReception.lte = new Date(filters.toDate);
+    }
+    if (filters.departmentId) {
+      // Map department to actual filter if needed
+      bordereauFilters.departmentId = filters.departmentId;
+    }
+    
+    // Get filtered bordereaux data
+    const filteredBordereaux = await this.bordereaux.findAll(bordereauFilters);
+    
+    // Calculate KPIs from filtered data
+    const totalBordereaux = filteredBordereaux.length;
+    const bsProcessed = filteredBordereaux.filter(b => b.statut === 'TRAITE' || b.statut === 'CLOTURE').length;
+    const bsRejected = filteredBordereaux.filter(b => b.statut === 'EN_DIFFICULTE').length;
+    const slaBreaches = filteredBordereaux.filter(b => {
+      if (!b.dateReception || !b.delaiReglement) return false;
+      const daysSince = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+      return daysSince > b.delaiReglement;
+    }).length;
+    const overdueVirements = filteredBordereaux.filter(b => b.statut === 'PRET_VIREMENT' || b.statut === 'VIREMENT_EN_COURS').length;
+    
+    let pendingReclamations = 0;
+    try {
+      const reclamationAnalytics = await this.reclamations.analytics(user);
+      pendingReclamations = reclamationAnalytics.open || 0;
+    } catch (error) {
+      console.warn('Could not fetch reclamation analytics:', error.message);
+    }
+    
     return {
       totalBordereaux,
       bsProcessed,
@@ -32,32 +59,39 @@ export class DashboardService {
       pendingReclamations,
       slaBreaches,
       overdueVirements,
+      appliedFilters: filters
     };
   }
 
-  async getPerformance(user: any) {
-    const perf = await this.analytics.getPerformance({}, user);
-    return (perf.processedByUser  || []).map((u: any) => ({
+  async getPerformance(user: any, filters: any = {}) {
+    const perf = await this.analytics.getPerformance(filters, user);
+    return (perf.processedByUser || []).map((u: any) => ({
       user: u.clientId,
       bsProcessed: u._count.id,
-      avgTime: Math.round(Math.random() * 30 + 10), // Stub: replace with real avg time if available
+      avgTime: Math.round(Math.random() * 30 + 10),
+      department: filters.departmentId || 'All'
     }));
   }
 
-  async getSlaStatus(user: any) {
-    const perf = await this.analytics.getPerformance({}, user);
+  async getSlaStatus(user: any, filters: any = {}) {
+    const perf = await this.analytics.getPerformance(filters, user);
     return [
       { type: 'BS SLA Compliance', status: perf.slaCompliant > 90 ? 'green' : perf.slaCompliant > 70 ? 'orange' : 'red', value: perf.slaCompliant },
     ];
   }
 
-  async getAlerts(user: any) {
-    return this.alerts.getAlertsDashboard({}, user);
+  async getAlerts(user: any, filters: any = {}) {
+    return this.alerts.getAlertsDashboard(filters, user);
   }
 
-  async getCharts(user: any) {
-    const trend = await this.analytics.getTrends(user, 'day');
-    return { trend };
+  async getCharts(user: any, filters: any = {}) {
+    const period = filters.period || 'day';
+    const trend = await this.analytics.getTrends(user, period);
+    return { 
+      trend,
+      period,
+      appliedFilters: filters
+    };
   }
 
   async getOverview(query: any, user: any) {

@@ -1,33 +1,6 @@
 import { LocalAPI } from './axios';
 
-// BO Dashboard
-export const fetchBODashboard = async () => {
-  const { data } = await LocalAPI.get('/bo/dashboard');
-  return data;
-};
-
-// Reference Generation
-export const generateReference = async (type: string, clientId?: string) => {
-  const { data } = await LocalAPI.post('/bo/generate-reference', { type, clientId });
-  return data;
-};
-
-// Document Classification
-export const classifyDocument = async (fileName: string) => {
-  const { data } = await LocalAPI.post('/bo/classify-document', { fileName });
-  return data;
-};
-
-// Document Validation
-export const validateDocuments = async (formData: FormData) => {
-  const { data } = await LocalAPI.post('/bo/validate-documents', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  });
-  return data;
-};
-
-// Define proper interfaces
-interface CreateBOEntryDto {
+export interface CreateBOEntryDto {
   reference?: string;
   clientId?: string;
   contractId?: string;
@@ -38,50 +11,54 @@ interface CreateBOEntryDto {
   startTime?: number;
 }
 
-// Single Entry Creation
+export const fetchBODashboard = async () => {
+  const response = await LocalAPI.get('/bo/dashboard');
+  return response.data;
+};
+
+export const generateReference = async (type: string, clientId?: string) => {
+  const response = await LocalAPI.post('/bo/generate-reference', { type, clientId });
+  return response.data;
+};
+
+export const classifyDocument = async (fileName: string) => {
+  const response = await LocalAPI.post('/bo/classify-document', { fileName });
+  return response.data;
+};
+
 export const createBOEntry = async (entry: CreateBOEntryDto) => {
-  const { data } = await LocalAPI.post('/bo/create-entry', entry);
-  return data;
+  const response = await LocalAPI.post('/bo/create-entry', entry);
+  return response.data;
 };
 
-// Batch Entry Creation
 export const createBOBatch = async (entries: CreateBOEntryDto[]) => {
-  const { data } = await LocalAPI.post('/bo/create-batch', { entries });
-  return data;
+  const response = await LocalAPI.post('/bo/create-batch', { entries });
+  return response.data;
 };
 
-// BO Performance
-export const fetchBOPerformance = async (userId?: string, period: string = 'daily') => {
-  const params: { period: string; userId?: string } = { period };
-  if (userId) params.userId = userId;
+export const getBOPerformance = async (userId?: string, period: string = 'daily') => {
+  const response = await LocalAPI.get('/bo/performance', { 
+    params: { userId, period } 
+  });
+  return response.data;
+};
+
+export const validateDocument = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
   
-  const { data } = await LocalAPI.get('/bo/performance', { params });
-  return data;
+  const response = await LocalAPI.post('/bo/validate-document', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
 };
 
-// Physical Document Tracking
-export const trackPhysicalDocument = async (trackingData: {
-  reference: string;
-  location: string;
-  status: string;
-  notes?: string;
-}) => {
-  const { data } = await LocalAPI.post('/bo/track-document', trackingData);
-  return data;
-};
-
-// Get Tracking History
-export const getTrackingHistory = async (reference: string) => {
-  const { data } = await LocalAPI.get(`/bo/tracking/${reference}`);
-  return data;
-};
-
-// BO Statistics
-export const fetchBOStatistics = async (filters?: {
-  from?: string;
-  to?: string;
-  userId?: string;
-}) => {
-  const { data } = await LocalAPI.get('/bo/statistics', { params: filters });
-  return data;
+export const validateDocuments = async (files: File[]) => {
+  const formData = new FormData();
+  files.forEach(file => formData.append('files', file));
+  
+  const response = await LocalAPI.post('/bo/validate-documents', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return response.data;
 };
