@@ -121,7 +121,7 @@ model Bordereau {
   id                    String    @id @default(uuid())
   reference             String    @unique
   clientId              String
-  contractId            String
+  contractId            String?
   dateReception         DateTime
   dateDebutScan         DateTime?
   dateFinScan           DateTime?
@@ -142,7 +142,7 @@ model Bordereau {
 
   // Relations
   prestataire   Prestataire? @relation("BordereauPrestataire", fields: [prestataireId], references: [id])
-  contract          Contract            @relation("ContractBordereaux", fields: [contractId], references: [id])
+  contract          Contract?           @relation("ContractBordereaux", fields: [contractId], references: [id])
   client            Client              @relation(fields: [clientId], references: [id])
   documents         Document[]          @relation("BordereauDocuments")
   courriers         Courrier[]          @relation("BordereauCourriers")
