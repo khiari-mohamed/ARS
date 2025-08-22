@@ -9,9 +9,11 @@ const TeamPerformanceDashboard: React.FC<TeamPerformanceDashboardProps> = ({ dat
     <div>
       <h3>Team Performance</h3>
       {/* Render team performance data here */}
-      {data.map((item, index) => (
+      {Array.isArray(data) ? data.map((item, index) => (
         <div key={index}>{item.name}: {item.performance}</div>
-      ))}
+      )) : (
+        <div>No team performance data available</div>
+      )}
     </div>
   );
 };

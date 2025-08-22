@@ -26,18 +26,22 @@ import { ScanModule } from './scan/scan.module';
 
 import { DashboardModule } from './dashboard/dashboard.module';
 import { IntegrationModule } from './integrations/integration.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { PrismaService } from './prisma/prisma.service';
 import { SeedController } from './seed.controller';
+
 
 @Module({
   imports: [AuthModule, UsersModule, ContractsModule, BordereauxModule, TraitementModule, ReclamationsModule, GedModule, GecModule, FinanceModule, OcrModule, AnalyticsModule, AlertsModule, SharedModule, ConfigModule,
         DashboardModule,
     IntegrationModule,
+    FeedbackModule,
     ClientModule,
     WorkflowModule,
     BOModule,
     ScanModule
   ],
-  controllers: [AppController , SeedController],
-  providers: [AppService],
+  controllers: [AppController,SeedController],
+  providers: [AppService, PrismaService],
 })
 export class AppModule {}

@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:5000';
 
 // Test configuration
 const testConfig = {

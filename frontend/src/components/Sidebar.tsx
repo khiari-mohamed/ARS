@@ -19,7 +19,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 
 const sidebarLinks = [
   { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE'] },
-  { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'BO', 'CUSTOMER_SERVICE'] },
+  { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'BO', 'CUSTOMER_SERVICE', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
   { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'SCAN_TEAM'] },
   { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
   { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },

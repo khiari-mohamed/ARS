@@ -15,12 +15,14 @@ export class UsersService {
     if (existing) {
       throw new Error('A user with this email already exists.');
     }
-    // Set default values
+    // Only use fields that exist in the Prisma schema
     const userData = {
-      ...data,
-      active: data.active ?? true,
-      permissions: data.permissions || [],
-      assignedClients: data.assignedClients || []
+      email: data.email,
+      password: data.password,
+      fullName: data.fullName,
+      role: data.role,
+      department: data.department || null,
+      active: data.active ?? true
     };
     const user = await this.prisma.user.create({ data: userData });
     await this.logAction(user.id, 'USER_CREATE', { data: { ...userData, password: undefined } });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { LocalAPI } from '../services/axios';
 
 const FeedbackForm: React.FC<{ page: string }> = ({ page }) => {
   const [message, setMessage] = useState('');
@@ -7,8 +7,20 @@ const FeedbackForm: React.FC<{ page: string }> = ({ page }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await axios.post('/api/feedback', { message, page });
-    setSubmitted(true);
+    
+    if (!message.trim()) {
+      alert('Veuillez saisir votre message avant d\'envoyer.');
+      return;
+    }
+    
+    try {
+      await LocalAPI.post('/simple-feedback', { message: message.trim(), page });
+      setSubmitted(true);
+      setMessage('');
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert('Erreur lors de l\'envoi du feedback. Veuillez réessayer.');
+    }
   };
 
   if (submitted)

@@ -10,6 +10,9 @@ import { Server } from 'socket.io';
 
 async function bootstrap() {
   const expressApp = express();
+  
+
+
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
   app.enableCors();
   app.setGlobalPrefix('api');
@@ -30,11 +33,16 @@ async function bootstrap() {
       console.log('Socket.io client disconnected:', socket.id);
     });
   });
-
-  const port = parseInt(process.env.PORT ?? '8000', 10);
-  await app.init(); // <-- This is important!
+  
+  const port = parseInt(process.env.PORT ?? '5000', 10);
+  await app.init();
+  
   httpServer.listen(port, '0.0.0.0', () => {
-    console.log(`Server (with socket.io) running on port ${port}`);
+    console.log(`🚀 Server (with socket.io) running on port ${port}`);
+    console.log(`🔗 Test endpoints:`);
+    console.log(`   GET  http://localhost:${port}/api/`);
+    console.log(`   POST http://localhost:${port}/api/dashboard`);
+    console.log(`   POST http://localhost:${port}/api/feedback`);
   });
 }
 bootstrap();

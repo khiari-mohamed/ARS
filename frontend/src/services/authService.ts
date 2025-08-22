@@ -22,19 +22,8 @@ export const login = async (email: string, password: string) => {
 };
 
 export const register = async (userData: any) => {
-  try {
-    const { data } = await LocalAPI.post('/auth/register', userData);
-    return data;
-  } catch (error) {
-    return {
-      user: {
-        id: Date.now().toString(),
-        ...userData,
-        createdAt: new Date().toISOString()
-      },
-      access_token: 'mock-token'
-    };
-  }
+  const { data } = await LocalAPI.post('/auth/register', userData);
+  return data;
 };
 
 export const requestPasswordReset = async (email: string) => {

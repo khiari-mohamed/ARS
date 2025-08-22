@@ -1,36 +1,41 @@
-import { Controller, Get, Post, Query, Req, UseGuards, Res } from '@nestjs/common';
+import { Controller, Get, Post, Query, Req, UseGuards, Res, Body } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Public } from '../auth/public.decorator';
 import { Response } from 'express';
 
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard)
 export class DashboardController {
   constructor(private dashboardService: DashboardService) {}
 
   @Get('kpis')
-  async getKpis(@Req() req) {
-    return this.dashboardService.getKpis(req.user);
+  @UseGuards(JwtAuthGuard)
+  async getKpis(@Query() query: any, @Req() req) {
+    return this.dashboardService.getKpis(req.user, query);
   }
 
   @Get('performance')
-  async getPerformance(@Req() req) {
-    return this.dashboardService.getPerformance(req.user);
+  @UseGuards(JwtAuthGuard)
+  async getPerformance(@Query() query: any, @Req() req) {
+    return this.dashboardService.getPerformance(req.user, query);
   }
 
   @Get('sla-status')
-  async getSlaStatus(@Req() req) {
-    return this.dashboardService.getSlaStatus(req.user);
+  @UseGuards(JwtAuthGuard)
+  async getSlaStatus(@Query() query: any, @Req() req) {
+    return this.dashboardService.getSlaStatus(req.user, query);
   }
 
   @Get('alerts')
-  async getAlerts(@Req() req) {
-    return this.dashboardService.getAlerts(req.user);
+  @UseGuards(JwtAuthGuard)
+  async getAlerts(@Query() query: any, @Req() req) {
+    return this.dashboardService.getAlerts(req.user, query);
   }
 
   @Get('charts')
-  async getCharts(@Req() req) {
-    return this.dashboardService.getCharts(req.user);
+  @UseGuards(JwtAuthGuard)
+  async getCharts(@Query() query: any, @Req() req) {
+    return this.dashboardService.getCharts(req.user, query);
   }
 
   @Get('overview')
@@ -67,6 +72,7 @@ export class DashboardController {
   }
 
   @Post('sync')
+  @UseGuards(JwtAuthGuard)
   async syncBs() {
     return this.dashboardService.syncAndSaveStatus();
   }
@@ -104,5 +110,16 @@ export class DashboardController {
       { id: 'responsable', name: "Responsable de Département", details: "Responsable de son unité avec accès aux données de performance" },
       { id: 'charge-compte', name: "Chargé de Compte", details: "Liaison avec les clients pour les délais et contrats" }
     ];
+  }
+
+  @Post('feedback')
+  async submitFeedback(@Body() body: { message: string; page: string }) {
+    console.log('🔥 FEEDBACK ENDPOINT HIT IN DASHBOARD!', body);
+    return { success: true, message: 'Feedback received', data: body, timestamp: new Date().toISOString() };
+  }
+
+  @Get('test')
+  async test() {
+    return { success: true, message: 'Dashboard test endpoint working' };
   }
 }

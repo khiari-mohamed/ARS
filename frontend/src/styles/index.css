@@ -1,3 +1,128 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dashboard Styles */
+.dashboard-root {
+  padding: 1rem;
+  max-width: 100%;
+}
+
+.dashboard-title {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #1976d2;
+}
+
+.dashboard-filters {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-kpi-row {
+  margin-bottom: 2rem;
+}
+
+.dashboard-main-grid-2x2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.dashboard-sharp-panel {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dashboard-sharp-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #495057;
+}
+
+.card-panel {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.mt-6 {
+  margin-top: 2rem;
+}
+
+/* Feedback Form Styles */
+.feedback-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.feedback-label {
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 0.5rem;
+}
+
+.feedback-textarea {
+  padding: 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.feedback-textarea:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.feedback-submit-btn {
+  padding: 0.75rem 1.5rem;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  align-self: flex-start;
+}
+
+.feedback-submit-btn:hover {
+  background-color: #1565c0;
+}
+
+.feedback-submit-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dashboard-main-grid-2x2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .dashboard-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .dashboard-filters label {
+    margin-bottom: 0.5rem;
+  }
+}

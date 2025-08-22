@@ -322,7 +322,7 @@ const BODashboard: React.FC = () => {
         onSuccess={() => {
           setActiveDialog(null);
           // Immediate refresh without timeout
-          loadDashboard();
+          setTimeout(loadDashboard, 500);
         }}
       />
 
@@ -331,7 +331,7 @@ const BODashboard: React.FC = () => {
         onClose={() => setActiveDialog(null)}
         onSuccess={() => {
           setActiveDialog(null);
-          loadDashboard();
+          setTimeout(loadDashboard, 500);
         }}
       />
 
@@ -340,7 +340,7 @@ const BODashboard: React.FC = () => {
         onClose={() => setActiveDialog(null)}
         onSuccess={() => {
           setActiveDialog(null);
-          loadDashboard();
+          setTimeout(loadDashboard, 500);
         }}
       />
 
