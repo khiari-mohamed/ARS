@@ -41,7 +41,7 @@ import ScannerControl from '../components/ScannerControl';
 import QualityValidator from '../components/QualityValidator';
 import OCRCorrectionInterface from '../components/OCRCorrectionInterface';
 import FolderMonitor from '../components/FolderMonitor';
-import { fetchScanStatus, fetchScanActivity, initializeScanners } from '../services/scanService';
+import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, simulatePaperStreamImport, getDashboardStats } from '../services/scanService';
 
 const ScanDashboard: React.FC = () => {
   const [scanStatus, setScanStatus] = useState<any>(null);
@@ -80,6 +80,34 @@ const ScanDashboard: React.FC = () => {
       console.error('Scanner initialization failed:', error);
     } finally {
       setInitializingScanner(false);
+    }
+  };
+
+  const handleProcessQueue = async () => {
+    setLoading(true);
+    try {
+      const result = await processScanQueue();
+      console.log('Queue processing result:', result);
+      // Refresh dashboard after processing
+      setTimeout(loadDashboard, 2000);
+    } catch (error) {
+      console.error('Queue processing failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePaperStreamImport = async () => {
+    setLoading(true);
+    try {
+      const result = await simulatePaperStreamImport();
+      console.log('PaperStream import result:', result);
+      // Refresh dashboard after import
+      setTimeout(loadDashboard, 1000);
+    } catch (error) {
+      console.error('PaperStream import failed:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -150,6 +178,22 @@ const ScanDashboard: React.FC = () => {
             sx={{ minWidth: 140 }}
           >
             Correction OCR
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PlayArrow />}
+            onClick={handleProcessQueue}
+            sx={{ minWidth: 140 }}
+          >
+            Traiter File
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Scanner />}
+            onClick={handlePaperStreamImport}
+            sx={{ minWidth: 140 }}
+          >
+            Import PaperStream
           </Button>
         </Box>
       </Box>

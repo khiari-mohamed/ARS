@@ -18,7 +18,7 @@ import {
   Chip
 } from '@mui/material';
 import { PlayArrow, Stop, Settings, Scanner } from '@mui/icons-material';
-import { fetchScanners, startScanJob } from '../services/scanService';
+import { fetchScanners, startScanJob, getScanJobStatus } from '../services/scanService';
 
 interface Props {
   onScanComplete: () => void;
@@ -65,14 +65,32 @@ const ScannerControl: React.FC<Props> = ({ onScanComplete }) => {
       const job = await startScanJob(selectedScanner, scanSettings);
       setScanJob(job);
       
-      setTimeout(() => {
-        setScanning(false);
-        setScanJob(null);
-        onScanComplete();
-      }, 5000);
-    } catch (error) {
+      // Poll for job status updates
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await getScanJobStatus(job.id);
+          setScanJob((prev: any) => ({ ...prev, ...status }));
+          
+          if (status.status === 'completed' || status.status === 'completed_assigned' || status.status === 'error') {
+            clearInterval(pollInterval);
+            setScanning(false);
+            
+            setTimeout(() => {
+              setScanJob(null);
+              onScanComplete();
+            }, 2000); // Show completion for 2 seconds
+          }
+        } catch (error) {
+          console.error('Failed to get job status:', error);
+          clearInterval(pollInterval);
+          setScanning(false);
+        }
+      }, 1000); // Poll every second
+      
+    } catch (error: any) {
       console.error('Scan job failed:', error);
       setScanning(false);
+      alert(error.response?.data?.message || error.message || 'Scan failed');
     }
   };
 
@@ -212,11 +230,47 @@ const ScannerControl: React.FC<Props> = ({ onScanComplete }) => {
       </Box>
 
       {scanning && scanJob && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <Typography variant="subtitle2">
-            Scan en cours - Job ID: {scanJob.id}
+        <Alert 
+          severity={scanJob.status === 'error' ? 'error' : scanJob.status === 'completed' || scanJob.status === 'completed_assigned' ? 'success' : 'info'} 
+          sx={{ mb: 2 }}
+        >
+          <Typography variant="subtitle2" gutterBottom>
+            {scanJob.status === 'completed' || scanJob.status === 'completed_assigned' ? 
+              'Scan terminé avec succès' : 
+              scanJob.status === 'error' ? 
+                'Erreur de scan' : 
+                'Scan en cours'
+            }
           </Typography>
-          <LinearProgress sx={{ mt: 1 }} />
+          
+          {scanJob.reference && (
+            <Typography variant="body2" gutterBottom>
+              Bordereau: {scanJob.reference} - Client: {scanJob.clientName}
+            </Typography>
+          )}
+          
+          {scanJob.documentCount && (
+            <Typography variant="body2" gutterBottom>
+              Documents: {scanJob.documentCount} - Statut: {scanJob.currentStatus}
+            </Typography>
+          )}
+          
+          <Box display="flex" alignItems="center" gap={1} mt={1}>
+            <LinearProgress 
+              variant="determinate" 
+              value={scanJob.progress || 0} 
+              sx={{ flexGrow: 1 }} 
+            />
+            <Typography variant="caption">
+              {scanJob.progress || 0}%
+            </Typography>
+          </Box>
+          
+          {scanJob.status === 'completed_assigned' && (
+            <Typography variant="caption" color="success.main" sx={{ mt: 1, display: 'block' }}>
+              ✓ Assigné automatiquement au Chef d'Équipe
+            </Typography>
+          )}
         </Alert>
       )}
 
@@ -226,7 +280,7 @@ const ScannerControl: React.FC<Props> = ({ onScanComplete }) => {
           size="large"
           startIcon={<PlayArrow />}
           onClick={handleStartScan}
-          disabled={!selectedScanner || scanning || scanners.find(s => s.id === selectedScanner)?.status !== 'ready'}
+          disabled={!selectedScanner || scanning || scanners.find((s: any) => s.id === selectedScanner)?.status !== 'ready'}
         >
           Démarrer Scan
         </Button>

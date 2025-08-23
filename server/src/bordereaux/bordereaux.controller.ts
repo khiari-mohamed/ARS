@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   Query,
@@ -27,6 +28,7 @@ import { UserRole } from '../auth/user-role.enum';
 import { UseGuards } from '@nestjs/common';
 import { UpdateBulletinSoinDto } from '../bulletin-soin/dto/update-bulletin-soin.dto';
 import { Express } from 'express';
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('bordereaux')
 export class BordereauxController {
@@ -52,11 +54,10 @@ export class BordereauxController {
     return this.auditLogService.getBordereauHistory(id);
   }
 
-
   @Patch(':id/thresholds')
-updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
-  return this.contractsService.updateThresholds(id, thresholds);
-}
+  updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
+    return this.contractsService.updateThresholds(id, thresholds);
+  }
 
   @Get('export/csv')
   exportCSV() {
@@ -94,7 +95,7 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
   }
 
   @Get()
-  findAll(@Query() filters: any): Promise<BordereauResponseDto[]> {
+  findAll(@Query() filters: any) {
     return this.bordereauxService.findAll(filters);
   }
 
@@ -111,6 +112,34 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
   @Get('kpis')
   getBordereauKPIs(): Promise<BordereauKPI[]> {
     return this.bordereauxService.getBordereauKPIs();
+  }
+
+  @Get('forecast/bordereaux')
+  forecastBordereaux(@Query('days') days?: string) {
+    return this.bordereauxService.forecastBordereaux(days ? Number(days) : 7);
+  }
+
+  @Get('forecast/staffing')
+  estimateStaffing(@Query('days') days?: string, @Query('avgPerStaffPerDay') avg?: string) {
+    return this.bordereauxService.estimateStaffing(
+      days ? Number(days) : 7,
+      avg ? Number(avg) : 5
+    );
+  }
+
+  @Get('ai/complaints')
+  analyzeComplaintsAI() {
+    return this.bordereauxService.analyzeComplaintsAI();
+  }
+
+  @Get('ai/recommendations')
+  getAIRecommendations() {
+    return this.bordereauxService.getAIRecommendations();
+  }
+
+  @Get('search')
+  searchBordereauxAndDocuments(@Query('q') query: string) {
+    return this.bordereauxService.searchBordereauxAndDocuments(query);
   }
 
   @Get(':id')
@@ -131,13 +160,11 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
     return this.bordereauxService.remove(id);
   }
 
-  // Archive (soft-delete) a bordereau
   @Patch(':id/archive')
   archiveBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
     return this.bordereauxService.archiveBordereau(id);
   }
 
-  // Restore a bordereau from archive
   @Patch(':id/restore')
   restoreBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
     return this.bordereauxService.restoreBordereau(id);
@@ -146,6 +173,16 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
   @Post('assign')
   assignBordereau(@Body() assignDto: AssignBordereauDto): Promise<BordereauResponseDto> {
     return this.bordereauxService.assignBordereau(assignDto);
+  }
+
+  @Post(':id/assign')
+  assignBordereauById(@Param('id') id: string, @Body() assignDto: { userId: string }): Promise<BordereauResponseDto> {
+    return this.bordereauxService.assignBordereau({ bordereauId: id, assignedToUserId: assignDto.userId });
+  }
+
+  @Post(':id/process')
+  processBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+    return this.bordereauxService.markAsProcessed(id);
   }
 
   @Post(':id/start-scan')
@@ -168,7 +205,6 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
     return this.bordereauxService.closeBordereau(id);
   }
 
-  // --- BS (BulletinSoin) Management ---
   @Get(':id/bs')
   getBSList(@Param('id') id: string) {
     return this.bordereauxService.getBSList(id);
@@ -181,16 +217,14 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
 
   @Patch('bs/:bsId')
   async updateBS(@Param('bsId') bsId: string, @Body() updateBSDto: UpdateBulletinSoinDto) {
-  return this.bordereauxService.updateBS(bsId, updateBSDto);
-}
+    return this.bordereauxService.updateBS(bsId, updateBSDto);
+  }
 
-  // --- Documents, Virement, Alerts ---
   @Get(':id/documents')
   getDocuments(@Param('id') id: string) {
     return this.bordereauxService.getDocuments(id);
   }
 
-  // Document upload (file upload + metadata)
   @Post(':id/documents')
   @UseInterceptors(FileInterceptor('file'))
   uploadDocument(
@@ -198,12 +232,10 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
     @UploadedFile() file: Express.Multer.File,
     @Body() documentData: any
   ) {
-    // Merge file info into documentData if needed
     const data = { ...documentData, file };
     return this.bordereauxService.uploadDocument(id, data);
   }
 
-  // Update bordereau status manually
   @Patch(':id/update-status')
   updateBordereauStatus(@Param('id') id: string) {
     return this.bordereauxService.updateBordereauStatus(id);
@@ -219,43 +251,14 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
     return this.bordereauxService.getAlerts(id);
   }
 
-  // --- Advanced Forecasting ---
-  // --- Advanced Forecasting ---
-  // Move these above the :id route to avoid conflicts
-  @Get('forecast/bordereaux')
-  forecastBordereaux(@Query('days') days?: string) {
-    return this.bordereauxService.forecastBordereaux(days ? Number(days) : 7);
-  }
-
-  @Get('forecast/staffing')
-  estimateStaffing(@Query('days') days?: string, @Query('avgPerStaffPerDay') avg?: string) {
-    return this.bordereauxService.estimateStaffing(
-      days ? Number(days) : 7,
-      avg ? Number(avg) : 5
-    );
-  }
-
-  // --- Temporary: Seed test data endpoint ---
   @Post('seed-test-data')
   async seedTestData() {
     return this.bordereauxService.seedTestData();
   }
 
-  // --- Temporary: Seed complaints endpoint ---
   @Post('seed-complaints')
   async seedComplaints() {
     return this.bordereauxService.seedComplaints();
-  }
-
-  // --- AI Integration ---
-  @Get('ai/complaints')
-  analyzeComplaintsAI() {
-    return this.bordereauxService.analyzeComplaintsAI();
-  }
-
-  @Get('ai/recommendations')
-  getAIRecommendations() {
-    return this.bordereauxService.getAIRecommendations();
   }
 
   @Get('ai/reclamations/analyze')
@@ -273,15 +276,72 @@ updateThresholds(@Param('id') id: string, @Body() thresholds: any) {
     return this.bordereauxService.getTeamRecommendations();
   }
 
-  // --- AI Predict Resources ---
   @Post('ai/predict-resources')
   async getPredictResourcesAI(@Body() payload: any) {
     return this.bordereauxService.getPredictResourcesAI(payload);
   }
 
-  // --- Full-Text Search ---
-  @Get('search')
-  searchBordereauxAndDocuments(@Query('query') query: string) {
-    return this.bordereauxService.searchBordereauxAndDocuments(query);
+  @Post('bulk-update')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async bulkUpdateBordereaux(@Body() data: { bordereauIds: string[]; updates: any }) {
+    const results: Array<{
+      bordereauId: string;
+      success: boolean;
+      result?: BordereauResponseDto;
+      error?: string;
+    }> = [];
+    
+    for (const id of data.bordereauIds) {
+      try {
+        const result = await this.bordereauxService.update(id, data.updates);
+        results.push({ bordereauId: id, success: true, result });
+      } catch (error: any) {
+        results.push({ bordereauId: id, success: false, error: error.message });
+      }
+    }
+    
+    return {
+      successCount: results.filter(r => r.success).length,
+      errorCount: results.filter(r => !r.success).length,
+      results
+    };
+  }
+
+  @Post('bulk-assign')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async bulkAssignBordereaux(@Body() data: { bordereauIds: string[]; userId: string }) {
+    const results: Array<{
+      bordereauId: string;
+      success: boolean;
+      result?: BordereauResponseDto;
+      error?: string;
+    }> = [];
+    
+    for (const bordereauId of data.bordereauIds) {
+      try {
+        const result = await this.bordereauxService.assignBordereau({ bordereauId, assignedToUserId: data.userId });
+        results.push({ bordereauId, success: true, result });
+      } catch (error: any) {
+        results.push({ bordereauId, success: false, error: error.message });
+      }
+    }
+    
+    return {
+      successCount: results.filter(r => r.success).length,
+      errorCount: results.filter(r => !r.success).length,
+      results
+    };
+  }
+
+  @Put('bs/:bsId')
+  @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async updateBSStatus(@Param('bsId') bsId: string, @Body() updates: any) {
+    return this.bordereauxService.updateBS(bsId, updates);
+  }
+
+  @Post('bs/:bsId/process')
+  @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async markBSAsProcessed(@Param('bsId') bsId: string, @Body() data: { status: string }) {
+    return this.bordereauxService.updateBS(bsId, { etat: data.status });
   }
 }
