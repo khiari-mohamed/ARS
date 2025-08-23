@@ -111,4 +111,28 @@ export class ScanController {
   async retryFailedScan(@Param('fileName') fileName: string) {
     return this.scanService.retryFailedScan(fileName);
   }
+
+  @Post('process-queue')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async processScanQueue() {
+    return this.scanService.processPendingScanQueue();
+  }
+
+  @Post('paperstream-import')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async simulatePaperStreamImport() {
+    return this.scanService.simulatePaperStreamImport();
+  }
+
+  @Get('dashboard-stats')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getDashboardStats() {
+    return this.scanService.getScanDashboardStats();
+  }
+
+  @Get('job-status/:jobId')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getScanJobStatus(@Param('jobId') jobId: string) {
+    return this.scanService.getScanJobStatus(jobId);
+  }
 }

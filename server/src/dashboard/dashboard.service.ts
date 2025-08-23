@@ -31,7 +31,8 @@ export class DashboardService {
     }
     
     // Get filtered bordereaux data
-    const filteredBordereaux = await this.bordereaux.findAll(bordereauFilters);
+    const result = await this.bordereaux.findAll(bordereauFilters);
+    const filteredBordereaux = Array.isArray(result) ? result : result.items;
     
     // Calculate KPIs from filtered data
     const totalBordereaux = filteredBordereaux.length;

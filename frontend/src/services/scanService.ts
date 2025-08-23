@@ -237,3 +237,45 @@ export const getScanStatistics = async (period = 'daily') => {
     };
   }
 };
+
+// Workflow integration
+export const processScanQueue = async () => {
+  try {
+    const { data } = await LocalAPI.post('/scan/process-queue');
+    return data;
+  } catch (error) {
+    return { processedCount: 0, results: [] };
+  }
+};
+
+export const simulatePaperStreamImport = async () => {
+  try {
+    const { data } = await LocalAPI.post('/scan/paperstream-import');
+    return data;
+  } catch (error) {
+    return { importedCount: 0, files: [] };
+  }
+};
+
+export const getDashboardStats = async () => {
+  try {
+    const { data } = await LocalAPI.get('/scan/dashboard-stats');
+    return data;
+  } catch (error) {
+    return {
+      daily: [],
+      weekly: [],
+      quality: [],
+      avgProcessingTime: 180
+    };
+  }
+};
+
+export const getScanJobStatus = async (jobId: string) => {
+  try {
+    const { data } = await LocalAPI.get(`/scan/job-status/${jobId}`);
+    return data;
+  } catch (error) {
+    return { status: 'error', progress: 0, error: 'Failed to get job status' };
+  }
+};

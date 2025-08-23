@@ -273,7 +273,7 @@ export class BordereauxService {
     return BordereauResponseDto.fromEntity(bordereau);
   }
   
-  async findAll(filters: any = {}): Promise<BordereauResponseDto[]> {
+  async findAll(filters: any = {}): Promise<BordereauResponseDto[] | { items: BordereauResponseDto[]; total: number }> {
     // Build Prisma where clause based on filters
     const where: any = {};
     if (filters.teamId) where.teamId = filters.teamId;
@@ -281,23 +281,81 @@ export class BordereauxService {
     if (filters.performance) where.performance = filters.performance;
     if (filters.clientId) where.clientId = filters.clientId;
     if (filters.contractId) where.contractId = filters.contractId;
-    if (filters.statut) where.statut = filters.statut;
+    if (filters.statut) {
+      if (Array.isArray(filters.statut)) {
+        where.statut = { in: filters.statut };
+      } else {
+        where.statut = filters.statut;
+      }
+    }
     if (filters.sla) where.statusColor = filters.sla;
     if (filters.reference) where.reference = { contains: filters.reference, mode: 'insensitive' };
-    if (filters.search) where.reference = { contains: filters.search, mode: 'insensitive' };
+    if (filters.search) {
+      where.OR = [
+        { reference: { contains: filters.search, mode: 'insensitive' } },
+        { client: { name: { contains: filters.search, mode: 'insensitive' } } }
+      ];
+    }
     if (filters.dateStart || filters.dateEnd) {
       where.dateReception = {};
       if (filters.dateStart) where.dateReception.gte = new Date(filters.dateStart);
       if (filters.dateEnd) where.dateReception.lte = new Date(filters.dateEnd);
     }
     if (typeof filters.archived === 'boolean') where.archived = filters.archived;
-    // Add more filters as needed
+    if (filters.assigned === false) where.assignedToUserId = null;
+    if (filters.overdue === true) {
+      // Calculate overdue bordereaux
+      const today = new Date();
+      // This is a simplified approach - in production you might want to use raw SQL
+      where.dateReception = {
+        ...where.dateReception,
+        lt: new Date(today.getTime() - (filters.delaiReglement || 30) * 24 * 60 * 60 * 1000)
+      };
+    }
+    
+    // Handle pagination
+    const page = filters.page ? parseInt(filters.page) : 1;
+    const pageSize = filters.pageSize ? parseInt(filters.pageSize) : 25;
+    const skip = (page - 1) * pageSize;
+    
+    // Handle sorting
+    const orderBy: any = {};
+    if (filters.sortBy) {
+      orderBy[filters.sortBy] = filters.sortOrder || 'asc';
+    } else {
+      orderBy.dateReception = 'desc'; // Default sort
+    }
+    
+    // If pagination is requested, return paginated results
+    if (filters.page || filters.pageSize) {
+      const [bordereaux, total] = await Promise.all([
+        this.prisma.bordereau.findMany({
+          where,
+          include: {
+            client: true,
+            contract: true,
+          },
+          orderBy,
+          skip,
+          take: pageSize,
+        }),
+        this.prisma.bordereau.count({ where })
+      ]);
+      
+      return {
+        items: bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau)),
+        total
+      };
+    }
+    
+    // Otherwise return all results
     const bordereaux = await this.prisma.bordereau.findMany({
       where,
       include: {
         client: true,
         contract: true,
       },
+      orderBy,
     });
     return bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
   }
@@ -639,7 +697,8 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
 
   // --- Export Functionality ---
   async exportCSV() {
-    const bordereaux = await this.findAll();
+    const result = await this.findAll();
+    const bordereaux = Array.isArray(result) ? result : result.items;
     const fields = ['id', 'reference', 'statut', 'dateReception', 'dateCloture', 'delaiReglement', 'nombreBS'];
     const csvRows = [fields.join(',')];
     for (const b of bordereaux) {
@@ -649,26 +708,24 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
   }
 
   async exportExcel() {
-    // Minimal implementation, returns a Buffer
-    const bordereaux = await this.findAll();
+    const result = await this.findAll();
+    const bordereaux = Array.isArray(result) ? result : result.items;
     const fields = ['id', 'reference', 'statut', 'dateReception', 'dateCloture', 'delaiReglement', 'nombreBS'];
     const rows = [fields];
     for (const b of bordereaux) {
       rows.push(fields.map(f => b[f] !== undefined ? b[f] : ''));
     }
-    // Simple buffer output (CSV as Excel)
     const content = rows.map(r => r.join('\t')).join('\n');
     return Buffer.from(content, 'utf-8');
   }
 
   async exportPDF() {
-    // Minimal implementation, returns a Buffer (plain text PDF)
-    const bordereaux = await this.findAll();
+    const result = await this.findAll();
+    const bordereaux = Array.isArray(result) ? result : result.items;
     let content = 'Bordereaux List\n\n';
     for (const b of bordereaux) {
       content += `ID: ${b.id} | Ref: ${b.reference} | Statut: ${b.statut} | Date Reception: ${b.dateReception}\n`;
     }
-    // Return as a Buffer (simulate PDF)
     return Buffer.from(content, 'utf-8');
   }
   /**

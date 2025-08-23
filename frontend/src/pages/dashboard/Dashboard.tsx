@@ -5,6 +5,7 @@ import SLAStatusPanel from './SLAStatusPanel';
 import RoleSpecificPanel from './RoleSpecificPanel';
 import AlertsPanel from './AlertsPanel';
 import TeamPerformanceDashboard from '../../components/analytics/TeamPerformanceDashboard';
+import RecentEntriesTable from '../../components/RecentEntriesTable';
 import { getKPIs, getPerformance, getSLAStatus, getAlerts, getCharts, getDepartments } from '../../services/dashboardService';
 import { useAuthContext } from '../../contexts/AuthContext';
 import UserPerformance from '../../components/UserPerformance';
@@ -153,6 +154,11 @@ const Dashboard: React.FC = () => {
           <LineChart data={charts.trend || []} dataKey="count" label="BS traités" />
         </div>
       </div>
+      {/* Recent Entries */}
+      <div className="dashboard-sharp-panel mt-6">
+        <RecentEntriesTable />
+      </div>
+      
       {/* Team Breakdown */}
       <div className="dashboard-sharp-panel mt-6">
         <h3 className="dashboard-sharp-title">Répartition par équipe</h3>
