@@ -35,7 +35,7 @@ function getUserFromRequest(req: any) {
 
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('virements')
+@Controller('finance')
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 
@@ -170,5 +170,24 @@ export class FinanceController {
   async deleteAdherent(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.financeService.deleteAdherent(id, user);
+  }
+
+  @Post('generate-ov')
+  async generateOV(@Body() generateOVDto: {
+    bordereauIds: string[];
+    donneurOrdre?: string;
+    format: 'PDF' | 'TXT' | 'BOTH';
+    includeDetails: boolean;
+  }, @Req() req: any) {
+    console.log('📡 Finance Controller: Received OV generation request');
+    console.log('📡 Request body:', JSON.stringify(generateOVDto, null, 2));
+    try {
+      const result = await this.financeService.generateOV(generateOVDto);
+      console.log('✅ Finance Controller: OV generated successfully');
+      return result;
+    } catch (error) {
+      console.error('❌ Finance Controller: Error generating OV:', error);
+      throw error;
+    }
   }
 }

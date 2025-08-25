@@ -1760,4 +1760,280 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
   });
   return bordereaux;
 }
+
+  // AI Analysis Methods
+  async getAISLAAnalysis(): Promise<any> {
+    try {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: { statut: { not: 'CLOTURE' } },
+        include: { client: true, contract: true }
+      });
+
+      const risks = bordereaux.map(b => {
+        const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+        const daysLeft = b.delaiReglement - daysSinceReception;
+        const score = daysLeft <= 0 ? 1.0 : daysLeft <= 3 ? 0.8 : daysLeft <= 7 ? 0.5 : 0.2;
+        
+        return {
+          id: b.id,
+          reference: b.reference,
+          days_left: daysLeft,
+          score,
+          client: b.client?.name
+        };
+      }).filter(r => r.score > 0.5);
+
+      return { risks, total_analyzed: bordereaux.length };
+    } catch (error) {
+      return { risks: [], error: error.message };
+    }
+  }
+
+  async getAIResourceAnalysis(): Promise<any> {
+    try {
+      const activeBordereaux = await this.prisma.bordereau.count({
+        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
+      });
+      
+      const availableManagers = await this.prisma.user.count({
+        where: { role: 'GESTIONNAIRE', active: true }
+      });
+
+      const avgProcessingRate = 5; // BS per day per manager
+      const requiredManagers = Math.ceil(activeBordereaux / avgProcessingRate);
+      const additionalNeeded = Math.max(0, requiredManagers - availableManagers);
+
+      return {
+        current_workload: activeBordereaux,
+        available_managers: availableManagers,
+        required_managers: requiredManagers,
+        additional_managers_needed: additionalNeeded,
+        utilization_rate: availableManagers > 0 ? (activeBordereaux / (availableManagers * avgProcessingRate)) * 100 : 0
+      };
+    } catch (error) {
+      return { additional_managers_needed: 0, error: error.message };
+    }
+  }
+
+  async getAIReassignmentAnalysis(): Promise<any> {
+    try {
+      const managers = await this.prisma.user.findMany({
+        where: { role: 'GESTIONNAIRE', active: true },
+        include: {
+          bordereaux: {
+            where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
+          }
+        }
+      });
+
+      const suggestions = managers
+        .filter(m => m.bordereaux.length > 10) // Overloaded threshold
+        .map(m => ({
+          manager_id: m.id,
+          manager_name: m.fullName,
+          current_workload: m.bordereaux.length,
+          reason: `Surcharge détectée: ${m.bordereaux.length} dossiers actifs`,
+          recommended_action: 'Réaffecter une partie des dossiers'
+        }));
+
+      return { suggestions, analyzed_managers: managers.length };
+    } catch (error) {
+      return { suggestions: [], error: error.message };
+    }
+  }
+
+  async getAIAnomalyDetection(): Promise<any> {
+    try {
+      const recentBordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          dateReception: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+          }
+        },
+        include: { client: true }
+      });
+
+      const anomalies: any[] = [];
+      
+      // Detect unusual processing times
+      const avgProcessingTime = 5; // days
+      recentBordereaux.forEach(b => {
+        const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSinceReception > avgProcessingTime * 2 && b.statut !== 'CLOTURE') {
+          anomalies.push({
+            type: 'processing_delay',
+            severity: 'high',
+            description: `Délai de traitement anormalement long: ${daysSinceReception} jours`,
+            bordereau_id: b.id,
+            reference: b.reference
+          });
+        }
+      });
+
+      // Detect unusual client patterns
+      const clientCounts = recentBordereaux.reduce((acc, b) => {
+        acc[b.clientId] = (acc[b.clientId] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      Object.entries(clientCounts).forEach(([clientId, count]) => {
+        if (count > 20) { // Unusual volume threshold
+          const client = recentBordereaux.find(b => b.clientId === clientId)?.client;
+          anomalies.push({
+            type: 'volume_spike',
+            severity: 'medium',
+            description: `Volume inhabituel pour ${client?.name}: ${count} bordereaux ce mois`,
+            client_id: clientId
+          });
+        }
+      });
+
+      return { anomalies, analyzed_period: '30 days', total_bordereaux: recentBordereaux.length };
+    } catch (error) {
+      return { anomalies: [], error: error.message };
+    }
+  }
+
+  // AI Action Methods
+  async aiAutoAssign(bordereauId: string): Promise<any> {
+    try {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+
+      if (!bordereau) {
+        throw new Error('Bordereau not found');
+      }
+
+      // AI Logic: Find optimal gestionnaire based on workload
+      const gestionnaires = await this.prisma.user.findMany({
+        where: { role: 'GESTIONNAIRE', active: true },
+        include: {
+          bordereaux: {
+            where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
+          }
+        }
+      });
+
+      // Find gestionnaire with lowest workload
+      const optimalGestionnaire = gestionnaires.reduce((best, current) => 
+        current.bordereaux.length < best.bordereaux.length ? current : best
+      );
+
+      // Assign bordereau
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: {
+          assignedToUserId: optimalGestionnaire.id,
+          statut: 'ASSIGNE'
+        }
+      });
+
+      return {
+        success: true,
+        assignedTo: optimalGestionnaire.fullName,
+        reason: `Charge de travail optimale: ${optimalGestionnaire.bordereaux.length} dossiers actifs`
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async aiPrioritize(bordereauId: string): Promise<any> {
+    try {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId }
+      });
+
+      if (!bordereau) {
+        throw new Error('Bordereau not found');
+      }
+
+      // AI Logic: Calculate priority based on SLA risk
+      const daysSinceReception = Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+      const daysLeft = bordereau.delaiReglement - daysSinceReception;
+      
+      let priority = 1;
+      let reason = 'Priorité normale';
+      
+      if (daysLeft <= 0) {
+        priority = 5; // Critical
+        reason = 'SLA dépassé - CRITIQUE';
+      } else if (daysLeft <= 3) {
+        priority = 4; // High
+        reason = 'Risque SLA élevé - 3 jours restants';
+      } else if (daysLeft <= 7) {
+        priority = 3; // Medium
+        reason = 'Attention SLA - 7 jours restants';
+      }
+
+      // Update bordereau priority
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { priority }
+      });
+
+      return {
+        success: true,
+        priority,
+        reason,
+        daysLeft
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async aiResourceAlert(): Promise<any> {
+    try {
+      const activeBordereaux = await this.prisma.bordereau.count({
+        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
+      });
+      
+      const availableGestionnaires = await this.prisma.user.count({
+        where: { role: 'GESTIONNAIRE', active: true }
+      });
+
+      const avgProcessingRate = 5; // BS per day per gestionnaire
+      const requiredGestionnaires = Math.ceil(activeBordereaux / avgProcessingRate);
+      const shortage = Math.max(0, requiredGestionnaires - availableGestionnaires);
+
+      // Send alert to admins if shortage detected
+      if (shortage > 0) {
+        // Create notification for admins
+        const admins = await this.prisma.user.findMany({
+          where: { role: { in: ['SUPER_ADMIN', 'CHEF_EQUIPE'] } }
+        });
+
+        for (const admin of admins) {
+          await this.prisma.notification.create({
+            data: {
+              userId: admin.id,
+              type: 'RESOURCE_ALERT',
+              title: 'Alerte IA: Ressources insuffisantes',
+              message: `${shortage} gestionnaire(s) supplémentaire(s) nécessaire(s) pour respecter les SLA`,
+              data: {
+                current: availableGestionnaires,
+                needed: requiredGestionnaires,
+                shortage,
+                workload: activeBordereaux
+              },
+              read: false
+            }
+          }).catch(() => console.log('Failed to create notification'));
+        }
+      }
+
+      return {
+        success: true,
+        current: availableGestionnaires,
+        needed: requiredGestionnaires,
+        shortage,
+        alert_sent: shortage > 0
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
 }

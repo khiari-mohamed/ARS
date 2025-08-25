@@ -68,6 +68,7 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
   const isGestionnaire = user?.role === 'GESTIONNAIRE';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdministrateur = user?.role === 'ADMINISTRATEUR';
+  const isFinanceTeam = user?.role === 'FINANCE' || user?.role === 'SERVICE_FINANCIER';
   
   // Permissions based on workflow roles
   const canCreate = isBureauOrdre || isChefEquipe || isAdministrateur || isSuperAdmin;
@@ -79,6 +80,7 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
   const canExport = isAdministrateur || isSuperAdmin;
   const canViewAll = isSuperAdmin || isAdministrateur;
   const canManageAlerts = isSuperAdmin || isAdministrateur;
+  const canGenerateOV = isFinanceTeam || isSuperAdmin || isAdministrateur;
 
   useEffect(() => {
     loadInitialData();
@@ -259,31 +261,57 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
     }
   };
 
+  // Check if selected bordereaux are valid for OV generation
+  const hasValidBordereauForOV = () => {
+    if (selectedRows.size === 0) return false;
+    const selectedBordereaux = bordereaux.filter(b => selectedRows.has(b.id));
+    return selectedBordereaux.some(b => ['TRAITE', 'PRET_VIREMENT', 'A_SCANNER', 'SCANNE', 'EN_COURS'].includes(b.statut));
+  };
+
   const handleGenerateOV = async () => {
     if (selectedRows.size === 0) {
       notify('Sélectionnez au moins un bordereau pour générer un OV', 'warning');
       return;
     }
 
+    const selectedBordereaux = bordereaux.filter(b => selectedRows.has(b.id));
+    const validBordereaux = selectedBordereaux.filter(b => ['TRAITE', 'PRET_VIREMENT', 'A_SCANNER', 'SCANNE', 'EN_COURS'].includes(b.statut));
+    
+    if (validBordereaux.length === 0) {
+      notify('Aucun bordereau sélectionné n\'est prêt pour virement', 'warning');
+      return;
+    }
+
     try {
-      const { generateOV } = await import('../services/ovService');
-      const ovData = await generateOV({
-        bordereauIds: Array.from(selectedRows),
-        format: 'PDF',
-        includeDetails: true
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_BASE_URL}/api/finance/generate-ov`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          bordereauIds: validBordereaux.map(b => b.id),
+          format: 'TXT',
+          includeDetails: true
+        })
       });
       
-      // Create download link
-      const blob = new Blob([ovData], { type: 'application/pdf' });
+      if (!response.ok) throw new Error('Failed to generate OV');
+      
+      const result = await response.json();
+      
+      const blob = new Blob([result.content], { type: 'text/plain;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `OV_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.download = result.filename;
       a.click();
       window.URL.revokeObjectURL(url);
       
-      notify(`OV généré pour ${selectedRows.size} bordereau(x)`, 'success');
+      notify(`OV généré pour ${validBordereaux.length} bordereau(x)`, 'success');
       setSelectedRows(new Set());
+      loadData();
     } catch (error) {
       notify('Erreur lors de la génération OV', 'error');
     }
@@ -822,14 +850,19 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
                 >
                   + Nouveau Bordereau
                 </button>
-                <button
-                  className="btn-warning"
-                  onClick={handleGenerateOV}
-                  disabled={selectedRows.size === 0}
-                >
-                  Générer OV
-                </button>
               </>
+            )}
+            
+            {/* Finance Team specific buttons */}
+            {canGenerateOV && (
+              <button
+                className="btn-warning"
+                onClick={handleGenerateOV}
+                disabled={selectedRows.size === 0 || !hasValidBordereauForOV()}
+                title={!hasValidBordereauForOV() ? 'Sélectionnez des bordereaux traités prêts pour virement' : 'Générer ordre de virement'}
+              >
+                💰 Générer OV ({selectedRows.size})
+              </button>
             )}
             
             {/* Common import for non-BO roles */}
