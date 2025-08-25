@@ -1,70 +1,55 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as ExcelJS from 'exceljs';
-import { CreateBordereauDto } from './dto/create-bordereau.dto';
-import { BordereauxService } from './bordereaux.service';
-
-export interface ImportResult {
-  success: boolean;
-  imported: number;
-  errors: string[];
-  skipped: number;
-}
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class ExcelImportService {
-  private readonly logger = new Logger(ExcelImportService.name);
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly bordereauxService: BordereauxService
-  ) {}
-
-  async importFromExcel(fileBuffer: Buffer): Promise<ImportResult> {
-    const result: ImportResult = {
-      success: true,
-      imported: 0,
-      errors: [],
-      skipped: 0
-    };
+  async importFromExcel(buffer: Buffer, filename: string) {
+    console.log('📡 Excel Import: Starting real Excel processing');
+    console.log('📡 File:', filename, 'Size:', buffer.length, 'bytes');
 
     try {
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(fileBuffer);
-      
-      const worksheet = workbook.getWorksheet(1);
-      if (!worksheet) {
-        throw new Error('No worksheet found');
-      }
+      // Parse Excel file
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      // Expected columns: Reference, Client, Date Reception, Delai Reglement, Nombre BS
-      const expectedHeaders = ['reference', 'client', 'dateReception', 'delaiReglement', 'nombreBS'];
-      
-      worksheet.eachRow({ includeEmpty: false }, async (row, rowNumber) => {
-        if (rowNumber === 1) return; // Skip header row
+      console.log('📡 Parsed Excel data:', jsonData.length, 'rows');
+      console.log('📡 Sample row:', jsonData[0]);
 
+      let imported = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < jsonData.length; i++) {
+        const row: any = jsonData[i];
+        
         try {
-          const reference = row.getCell(1).value?.toString();
-          const clientName = row.getCell(2).value?.toString();
-          const dateReception = row.getCell(3).value;
-          const delaiReglement = Number(row.getCell(4).value);
-          const nombreBS = Number(row.getCell(5).value);
+          // Extract data from Excel columns
+          const reference = row['Reference'] || row['Référence'] || `EXCEL-${Date.now()}-${i}`;
+          const clientName = row['Client'] || row['Nom Client'] || 'Client Importé';
+          const nombreBS = parseInt(row['Nombre BS'] || row['NombreBS'] || '1');
+          const dateReception = row['Date Reception'] || row['Date Réception'] || new Date().toISOString().split('T')[0];
+          const delaiReglement = parseInt(row['Délai Règlement'] || row['Delai'] || '30');
 
-          if (!reference || !clientName || !dateReception) {
-            result.errors.push(`Row ${rowNumber}: Missing required fields`);
-            result.skipped++;
-            return;
-          }
+          console.log(`📡 Processing row ${i + 1}:`, { reference, clientName, nombreBS });
 
-          // Find client by name
-          const client = await this.prisma.client.findFirst({
+          // Find or create client
+          let client = await this.prisma.client.findFirst({
             where: { name: { contains: clientName, mode: 'insensitive' } }
           });
 
           if (!client) {
-            result.errors.push(`Row ${rowNumber}: Client '${clientName}' not found`);
-            result.skipped++;
-            return;
+            console.log('🆕 Creating new client:', clientName);
+            client = await this.prisma.client.create({
+              data: {
+                name: clientName,
+                reglementDelay: 30,
+                reclamationDelay: 15
+              }
+            });
           }
 
           // Check if bordereau already exists
@@ -73,39 +58,56 @@ export class ExcelImportService {
           });
 
           if (existing) {
-            result.errors.push(`Row ${rowNumber}: Bordereau '${reference}' already exists`);
-            result.skipped++;
-            return;
+            console.log('⚠️ Bordereau already exists:', reference);
+            continue;
           }
 
           // Create bordereau
-          const bordereauData: CreateBordereauDto = {
-            reference,
-            clientId: client.id,
-            dateReception: new Date(dateReception as Date).toISOString(),
-            delaiReglement: delaiReglement || client.reglementDelay || 30,
-            nombreBS: nombreBS || 0
-          };
+          const bordereau = await this.prisma.bordereau.create({
+            data: {
+              reference,
+              dateReception: new Date(dateReception),
+              clientId: client.id,
+              nombreBS: isNaN(nombreBS) ? 1 : nombreBS,
+              delaiReglement: isNaN(delaiReglement) ? 30 : delaiReglement,
+              statut: 'A_SCANNER'
+            }
+          });
 
-          await this.bordereauxService.create(bordereauData);
-          result.imported++;
+          // Store Excel file as document
+          const firstUser = await this.prisma.user.findFirst();
+          if (firstUser) {
+            await this.prisma.document.create({
+              data: {
+                name: filename,
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                path: `excel-imports/${filename}`,
+                bordereauId: bordereau.id,
+                uploadedById: firstUser.id
+              }
+            });
+          }
 
-        } catch (error) {
-          result.errors.push(`Row ${rowNumber}: ${error.message}`);
-          result.skipped++;
+          imported++;
+          console.log('✅ Imported bordereau:', reference);
+
+        } catch (error: any) {
+          console.error('❌ Error importing row:', error.message);
+          errors.push(`Row ${i + 1}: ${error.message}`);
         }
-      });
-
-      if (result.errors.length > 0) {
-        result.success = false;
       }
 
-    } catch (error) {
-      this.logger.error('Excel import error:', error);
-      result.success = false;
-      result.errors.push(`Import failed: ${error.message}`);
-    }
+      console.log('✅ Excel import completed:', { imported, errors: errors.length });
+      return {
+        success: true,
+        imported,
+        errors,
+        skipped: jsonData.length - imported - errors.length
+      };
 
-    return result;
+    } catch (error: any) {
+      console.error('❌ Excel import failed:', error);
+      throw new Error(`Excel import failed: ${error.message}`);
+    }
   }
 }

@@ -284,6 +284,41 @@ export class BordereauxController {
     return this.bordereauxService.getTeamRecommendations();
   }
 
+  @Get('ai/sla-analysis')
+  async getSLAAnalysis() {
+    return this.bordereauxService.getAISLAAnalysis();
+  }
+
+  @Get('ai/resource-analysis')
+  async getResourceAnalysis() {
+    return this.bordereauxService.getAIResourceAnalysis();
+  }
+
+  @Get('ai/reassignment-analysis')
+  async getReassignmentAnalysis() {
+    return this.bordereauxService.getAIReassignmentAnalysis();
+  }
+
+  @Get('ai/anomaly-detection')
+  async getAnomalyDetection() {
+    return this.bordereauxService.getAIAnomalyDetection();
+  }
+
+  @Post(':id/ai-assign')
+  async aiAutoAssign(@Param('id') id: string) {
+    return this.bordereauxService.aiAutoAssign(id);
+  }
+
+  @Post(':id/ai-prioritize')
+  async aiPrioritize(@Param('id') id: string) {
+    return this.bordereauxService.aiPrioritize(id);
+  }
+
+  @Post('ai/resource-alert')
+  async aiResourceAlert() {
+    return this.bordereauxService.aiResourceAlert();
+  }
+
   @Post('ai/predict-resources')
   async getPredictResourcesAI(@Body() payload: any) {
     return this.bordereauxService.getPredictResourcesAI(payload);
@@ -292,13 +327,29 @@ export class BordereauxController {
   @Post('import/excel')
   @UseInterceptors(FileInterceptor('file'))
   async importFromExcel(@UploadedFile() file: Express.Multer.File) {
+    console.log('📡 Excel Import: Received file upload request');
+    console.log('📡 File info:', {
+      originalname: file?.originalname,
+      mimetype: file?.mimetype,
+      size: file?.size
+    });
+    
     if (!file) {
+      console.error('❌ Excel Import: No file uploaded');
       throw new Error('No file uploaded');
     }
     
-    const { ExcelImportService } = await import('./excel-import.service');
-    const importService = new ExcelImportService(this.prisma, this.bordereauxService);
-    return await importService.importFromExcel(file.buffer);
+    try {
+      console.log('📡 Excel Import: Processing file...');
+      const { ExcelImportService } = await import('./excel-import.service');
+      const importService = new ExcelImportService(this.prisma);
+      const result = await importService.importFromExcel(file.buffer, file.originalname);
+      console.log('✅ Excel Import: Success -', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Excel Import: Error -', error);
+      throw error;
+    }
   }
 
   @Post('generate-ov')
