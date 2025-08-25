@@ -21,6 +21,207 @@ type BordereauWithMontant = { montant?: number } & any;
 
 @Injectable()
 export class BordereauxService {
+  // --- Missing Features Implementation ---
+  
+  // Workflow progression with notifications
+  async progressToNextStage(bordereauId: string): Promise<BordereauResponseDto> {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { client: true, contract: true }
+    });
+    
+    if (!bordereau) throw new NotFoundException('Bordereau not found');
+    
+    let nextStatus: Statut;
+    const updateData: any = {};
+    
+    switch (bordereau.statut) {
+      case 'A_SCANNER':
+        nextStatus = Statut.SCAN_EN_COURS;
+        updateData.dateDebutScan = new Date();
+        break;
+      case 'SCAN_EN_COURS':
+        nextStatus = Statut.SCANNE;
+        updateData.dateFinScan = new Date();
+        break;
+      case 'SCANNE':
+        nextStatus = Statut.A_AFFECTER;
+        break;
+      case 'A_AFFECTER':
+        nextStatus = Statut.ASSIGNE;
+        updateData.dateReceptionSante = new Date();
+        break;
+      case 'ASSIGNE':
+        nextStatus = Statut.EN_COURS;
+        break;
+      case 'EN_COURS':
+        nextStatus = Statut.TRAITE;
+        break;
+      case 'TRAITE':
+        nextStatus = Statut.PRET_VIREMENT;
+        break;
+      case 'PRET_VIREMENT':
+        nextStatus = Statut.VIREMENT_EN_COURS;
+        updateData.dateDepotVirement = new Date();
+        break;
+      case 'VIREMENT_EN_COURS':
+        nextStatus = Statut.VIREMENT_EXECUTE;
+        updateData.dateExecutionVirement = new Date();
+        break;
+      case 'VIREMENT_EXECUTE':
+        nextStatus = Statut.CLOTURE;
+        updateData.dateCloture = new Date();
+        break;
+      default:
+        throw new BadRequestException('Cannot progress from current status');
+    }
+    
+    const updated = await this.prisma.bordereau.update({
+      where: { id: bordereauId },
+      data: { statut: nextStatus, ...updateData },
+      include: { client: true, contract: true }
+    });
+    
+    await this.progressWorkflow(bordereauId, 'STATUS_CHANGED');
+    await this.logAction(bordereauId, `PROGRESS_TO_${nextStatus}`);
+    
+    return BordereauResponseDto.fromEntity(updated);
+  }
+  
+  // Enhanced document management
+  async linkDocumentToBordereau(bordereauId: string, documentId: string): Promise<void> {
+    await this.prisma.document.update({
+      where: { id: documentId },
+      data: { bordereauId }
+    });
+    await this.logAction(bordereauId, 'LINK_DOCUMENT');
+  }
+  
+  // Performance analytics
+  async getPerformanceAnalytics(filters: any = {}): Promise<any> {
+    const whereClause: any = {};
+    if (filters.dateStart) whereClause.dateReception = { gte: new Date(filters.dateStart) };
+    if (filters.dateEnd) whereClause.dateReception = { ...whereClause.dateReception, lte: new Date(filters.dateEnd) };
+    if (filters.clientId) whereClause.clientId = filters.clientId;
+    
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: whereClause,
+      include: { client: true, contract: true }
+    });
+    
+    const analytics = {
+      totalProcessed: bordereaux.length,
+      averageProcessingTime: 0,
+      slaCompliance: 0,
+      statusDistribution: {},
+      clientPerformance: {},
+      monthlyTrends: []
+    };
+    
+    // Calculate metrics
+    let totalDays = 0;
+    let slaCompliant = 0;
+    
+    bordereaux.forEach(b => {
+      // Status distribution
+      analytics.statusDistribution[b.statut] = (analytics.statusDistribution[b.statut] || 0) + 1;
+      
+      // Processing time
+      if (b.dateCloture) {
+        const days = Math.floor((new Date(b.dateCloture).getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+        totalDays += days;
+        
+        // SLA compliance
+        if (days <= b.delaiReglement) slaCompliant++;
+      }
+      
+      // Client performance
+      const clientName = b.client?.name || 'Unknown';
+      if (!analytics.clientPerformance[clientName]) {
+        analytics.clientPerformance[clientName] = { total: 0, completed: 0, avgDays: 0 };
+      }
+      analytics.clientPerformance[clientName].total++;
+      if (b.statut === 'CLOTURE') analytics.clientPerformance[clientName].completed++;
+    });
+    
+    analytics.averageProcessingTime = bordereaux.length > 0 ? Math.round(totalDays / bordereaux.length) : 0;
+    analytics.slaCompliance = bordereaux.length > 0 ? Math.round((slaCompliant / bordereaux.length) * 100) : 0;
+    
+    return analytics;
+  }
+  
+  // Advanced search with OCR content
+  async advancedSearch(query: string, filters: any = {}): Promise<any[]> {
+    const searchTerms = query.toLowerCase().split(' ');
+    
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: {
+        OR: [
+          { reference: { contains: query, mode: 'insensitive' } },
+          { client: { name: { contains: query, mode: 'insensitive' } } },
+          { documents: { some: {
+            OR: [
+              { name: { contains: query, mode: 'insensitive' } },
+              { ocrText: { contains: query, mode: 'insensitive' } }
+            ]
+          } } }
+        ],
+        ...filters
+      },
+      include: {
+        client: true,
+        contract: true,
+        documents: true,
+        BulletinSoin: true
+      }
+    });
+    
+    return bordereaux.map(b => ({
+      ...BordereauResponseDto.fromEntity(b),
+      relevanceScore: this.calculateRelevanceScore(b, searchTerms)
+    })).sort((a, b) => b.relevanceScore - a.relevanceScore);
+  }
+  
+  private calculateRelevanceScore(bordereau: any, searchTerms: string[]): number {
+    let score = 0;
+    const text = `${bordereau.reference} ${bordereau.client?.name || ''} ${bordereau.documents?.map(d => d.name).join(' ') || ''}`;
+    
+    searchTerms.forEach(term => {
+      if (text.toLowerCase().includes(term)) score += 1;
+    });
+    
+    return score;
+  }
+  
+  // Batch operations
+  async batchUpdateStatus(bordereauIds: string[], newStatus: Statut): Promise<any> {
+    type BatchUpdateResult = { id: string; success: boolean; result?: BordereauResponseDto; error?: string };
+    const results: BatchUpdateResult[] = [];
+    for (const id of bordereauIds) {
+      try {
+        const updated = await this.update(id, { statut: newStatus as any });
+        results.push({ id, success: true, result: updated });
+      } catch (error: any) {
+        results.push({ id, success: false, error: error.message });
+      }
+    }
+    return {
+      successCount: results.filter(r => r.success).length,
+      errorCount: results.filter(r => !r.success).length,
+      results
+    };
+  }
+  
+  // Enhanced notifications
+  async sendCustomNotification(bordereauId: string, message: string, recipients: string[]): Promise<void> {
+    await this.alertsService.triggerAlert({
+      type: 'CUSTOM_NOTIFICATION',
+      bsId: bordereauId
+      // recipients // <-- Removed, not in type definition
+    });
+    await this.logAction(bordereauId, 'SEND_NOTIFICATION');
+  }
+  
   // --- Seed complaints for AI demo ---
   async seedComplaints(): Promise<any> {
     // Fetch a valid client and user for foreign keys
@@ -199,6 +400,7 @@ export class BordereauxService {
       delaiReglement,
       statut,
       nombreBS,
+      createdBy,
     } = createBordereauDto;
 
     // Validate clientId
@@ -239,21 +441,35 @@ export class BordereauxService {
       throw new BadRequestException('A bordereau with this reference already exists for this client.');
     }
 
+    // DYNAMIC STATUS: Start with A_SCANNER (ready for scan) instead of EN_ATTENTE
+    const initialStatus = statut || Statut.A_SCANNER;
+
+    // Helper function to safely convert date strings to Date objects
+    const parseDate = (dateStr: string): Date => {
+      if (!dateStr) throw new BadRequestException('Date is required');
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        throw new BadRequestException(`Invalid date format: ${dateStr}`);
+      }
+      return date;
+    };
+
     const data: any = {
       reference,
-      dateReception,
+      dateReception: parseDate(dateReception),
       clientId,
       contractId,
       delaiReglement,
       nombreBS,
+      statut: initialStatus,
     };
-    if (statut !== undefined) data.statut = statut;
-    if (dateDebutScan) data.dateDebutScan = dateDebutScan;
-    if (dateFinScan) data.dateFinScan = dateFinScan;
-    if (dateReceptionSante) data.dateReceptionSante = dateReceptionSante;
-    if (dateCloture) data.dateCloture = dateCloture;
-    if (dateDepotVirement) data.dateDepotVirement = dateDepotVirement;
-    if (dateExecutionVirement) data.dateExecutionVirement = dateExecutionVirement;
+    if (createdBy) data.createdBy = createdBy;
+    if (dateDebutScan) data.dateDebutScan = parseDate(dateDebutScan);
+    if (dateFinScan) data.dateFinScan = parseDate(dateFinScan);
+    if (dateReceptionSante) data.dateReceptionSante = parseDate(dateReceptionSante);
+    if (dateCloture) data.dateCloture = parseDate(dateCloture);
+    if (dateDepotVirement) data.dateDepotVirement = parseDate(dateDepotVirement);
+    if (dateExecutionVirement) data.dateExecutionVirement = parseDate(dateExecutionVirement);
 
     const bordereau = await this.prisma.bordereau.create({
       data,
@@ -262,13 +478,16 @@ export class BordereauxService {
         contract: true,
       },
     });
+    
+    // Trigger workflow progression
+    await this.progressWorkflow(bordereau.id, 'CREATED');
+    
     // Notify SCAN team of new bordereau
     await this.alertsService.triggerAlert({
       type: 'NEW_BORDEREAU',
       bsId: bordereau.id,
-      // Optionally add more details (client, contract, etc.)
     });
-    await this.autoAssignBordereau(bordereau.id);
+    
     await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
     return BordereauResponseDto.fromEntity(bordereau);
   }
@@ -454,19 +673,29 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       statut,
       nombreBS,
     } = updateBordereauDto;
+    // Helper function to safely convert date strings to Date objects
+    const parseDate = (dateStr: string): Date => {
+      if (!dateStr) throw new BadRequestException('Date is required');
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        throw new BadRequestException(`Invalid date format: ${dateStr}`);
+      }
+      return date;
+    };
+
     const data: any = {};
     if (reference !== undefined) data.reference = reference;
-    if (dateReception !== undefined) data.dateReception = dateReception;
+    if (dateReception !== undefined) data.dateReception = parseDate(dateReception);
     if (clientId !== undefined) data.clientId = clientId;
     if (contractId !== undefined) data.contractId = contractId;
-    if (dateDebutScan !== undefined) data.dateDebutScan = dateDebutScan;
-    if (dateFinScan !== undefined) data.dateFinScan = dateFinScan;
-    if (dateReceptionSante !== undefined) data.dateReceptionSante = dateReceptionSante;
-    if (dateCloture !== undefined) data.dateCloture = dateCloture;
-    if (dateDepotVirement !== undefined) data.dateDepotVirement = dateDepotVirement;
-    if (dateExecutionVirement !== undefined) data.dateExecutionVirement = dateExecutionVirement;
+    if (dateDebutScan !== undefined) data.dateDebutScan = parseDate(dateDebutScan);
+    if (dateFinScan !== undefined) data.dateFinScan = parseDate(dateFinScan);
+    if (dateReceptionSante !== undefined) data.dateReceptionSante = parseDate(dateReceptionSante);
+    if (dateCloture !== undefined) data.dateCloture = parseDate(dateCloture);
+    if (dateDepotVirement !== undefined) data.dateDepotVirement = parseDate(dateDepotVirement);
+    if (dateExecutionVirement !== undefined) data.dateExecutionVirement = parseDate(dateExecutionVirement);
     if (delaiReglement !== undefined) data.delaiReglement = delaiReglement;
-    if (statut !== undefined) data.statut = { set: statut };
+    if (statut !== undefined) data.statut = statut;
     if (nombreBS !== undefined) data.nombreBS = nombreBS;
     
     const bordereau = await this.prisma.bordereau.update({
@@ -512,7 +741,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     
     // Update the bordereau status to ASSIGNE
     const updateData: any = {
-      statut: { set: Statut.ASSIGNE },
+      statut: Statut.ASSIGNE,
     };
     if (assignedToUserId) updateData.assignedToUserId = assignedToUserId;
     if (teamId) updateData.teamId = teamId;
@@ -526,6 +755,8 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       },
     });
     
+    await this.progressWorkflow(bordereauId, 'ASSIGNED');
+    await this.logAction(bordereauId, 'ASSIGN_BORDEREAU');
     return BordereauResponseDto.fromEntity(updatedBordereau);
   }
   
@@ -534,35 +765,10 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
    */
   private async autoAssignBordereau(bordereauId: string): Promise<void> {
     try {
-      // 1. Get all available users with role 'GESTIONNAIRE'
-      const availableUsers = await this.prisma.user.findMany({
-        where: {
-          role: 'GESTIONNAIRE',
-          active: true,
-        },
-      });
-      if (availableUsers.length === 0) {
-        this.logger.warn('No available users found for auto-assignment');
-        return;
-      }
-      // 2. Find the user with the lowest current workload (open bordereaux assigned)
-      const workloads = await Promise.all(availableUsers.map(async user => {
-        const count = await this.prisma.bordereau.count({
-          where: { assignedToUserId: user.id, statut: { not: 'CLOTURE' } },
-        });
-        return { user, count };
-      }));
-      workloads.sort((a, b) => a.count - b.count);
-      const selectedUser = workloads[0].user;
-      // 3. Assign the bordereau to the selected user
-      await this.assignBordereau({
-        bordereauId,
-        assignedToUserId: selectedUser.id,
-        notes: 'Auto-assigned based on lowest workload',
-      });
-      this.logger.log(`Auto-assigned bordereau ${bordereauId} to user ${selectedUser.id}`);
+      // Don't auto-assign immediately - let it go through scan first
+      this.logger.log(`Bordereau ${bordereauId} created, will be assigned after scan`);
     } catch (error) {
-      this.logger.error(`Error auto-assigning bordereau ${bordereauId}: ${error.message}`);
+      this.logger.error(`Error in auto-assignment logic for bordereau ${bordereauId}: ${error.message}`);
     }
   }
   
@@ -735,7 +941,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: {
-        statut: { set: Statut.SCAN_EN_COURS },
+        statut: Statut.SCAN_EN_COURS,
         dateDebutScan: new Date(),
       },
       include: {
@@ -744,6 +950,8 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       },
     });
     
+    await this.progressWorkflow(id, 'SCAN_STARTED');
+    await this.logAction(id, 'START_SCAN');
     return BordereauResponseDto.fromEntity(bordereau);
   }
   
@@ -754,7 +962,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: {
-        statut: { set: Statut.SCANNE },
+        statut: Statut.SCANNE,
         dateFinScan: new Date(),
       },
       include: {
@@ -763,6 +971,9 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       },
     });
     
+    // Auto-progress to next stage
+    await this.progressWorkflow(id, 'SCAN_COMPLETED');
+    await this.logAction(id, 'COMPLETE_SCAN');
     return BordereauResponseDto.fromEntity(bordereau);
   }
   
@@ -773,7 +984,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: {
-        statut: { set: Statut.TRAITE },
+        statut: Statut.TRAITE,
       },
       include: {
         client: true,
@@ -781,6 +992,8 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       },
     });
     
+    await this.progressWorkflow(id, 'PROCESSING_COMPLETED');
+    await this.logAction(id, 'MARK_PROCESSED');
     return BordereauResponseDto.fromEntity(bordereau);
   }
   
@@ -791,7 +1004,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: {
-        statut: { set: Statut.CLOTURE },
+        statut: Statut.CLOTURE,
         dateCloture: new Date(),
       },
       include: {
@@ -884,19 +1097,21 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     const total = bsList.length;
     const validated = bsList.filter(bs => bs.etat === BSStatus.VALIDATED).length;
 
-    let newStatus: Statut = Statut.EN_ATTENTE;
+    // Fix for Statut assignment (error 2322) in updateBordereauStatusFromBS:
+    let newStatus: Statut | undefined = undefined;
     if (validated === 0 && total > 0) {
-      newStatus = Statut.EN_ATTENTE as Statut; // Use an existing status, or replace with the appropriate one
+      newStatus = Statut.EN_ATTENTE;
     } else if (validated < total) {
-      newStatus = Statut.EN_DIFFICULTE as Statut; // Use an existing status, e.g., EN_DIFFICULTE
+      newStatus = Statut.EN_DIFFICULTE;
     } else if (validated === total && total > 0) {
-      newStatus = Statut.CLOTURE as Statut;
+      newStatus = Statut.CLOTURE;
     }
-    
-    await this.prisma.bordereau.update({
-      where: { id: bordereauId },
-      data: { statut: { set: newStatus } },
-    });
+    if (newStatus !== undefined) {
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { statut: newStatus },
+      });
+    }
     return { total, validated, progress: total ? validated / total : 0 };
   }
 
@@ -980,7 +1195,7 @@ async getTeamRecommendations(): Promise<any> {
 try {
 const teams: any[] = []; // No Team model, so empty array
 const workload = await this.prisma.bordereau.groupBy({ by: ['teamId'], _count: { id: true } });
-const { data } = await axios.post('http://localhost:8001/recommendations', { teams, workload });
+const { data } = await axios.post('http://localhost:5000/recommendations', { teams, workload });
 return data;
 } catch (error) {
 this.logger.error('AI microservice error (getTeamRecommendations):', error.message);
@@ -997,6 +1212,132 @@ private async logAction(bordereauId: string, action: string): Promise<void> {
       timestamp: new Date(),
     },
   });
+}
+
+/**
+ * Dynamic workflow progression according to cahier de charge
+ */
+private async progressWorkflow(bordereauId: string, trigger: string): Promise<void> {
+  try {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { client: true, contract: true }
+    });
+    
+    if (!bordereau) return;
+    
+    let newStatus: Statut | null = null;
+    let updateData: any = {};
+    
+    switch (trigger) {
+      case 'CREATED':
+        // Bureau d'Ordre creates -> ready for scan
+        newStatus = Statut.A_SCANNER;
+        break;
+        
+      case 'SCAN_STARTED':
+        // Scan service starts processing
+        newStatus = Statut.SCAN_EN_COURS;
+        updateData.dateDebutScan = new Date();
+        break;
+        
+      case 'SCAN_COMPLETED':
+        // Scan completed -> ready for assignment to health team
+        newStatus = Statut.A_AFFECTER;
+        updateData.dateFinScan = new Date();
+        // Auto-assign to available gestionnaire
+        setTimeout(() => this.autoAssignToGestionnaire(bordereauId), 1000);
+        break;
+        
+      case 'ASSIGNED':
+        // Assigned to gestionnaire -> in progress
+        newStatus = Statut.EN_COURS;
+        updateData.dateReceptionSante = new Date();
+        break;
+        
+      case 'PROCESSING_STARTED':
+        newStatus = Statut.EN_COURS;
+        break;
+        
+      case 'PROCESSING_COMPLETED':
+        // Gestionnaire completed -> ready for payment
+        newStatus = Statut.PRET_VIREMENT;
+        break;
+        
+      case 'PAYMENT_INITIATED':
+        newStatus = Statut.VIREMENT_EN_COURS;
+        updateData.dateDepotVirement = new Date();
+        break;
+        
+      case 'PAYMENT_EXECUTED':
+        newStatus = Statut.VIREMENT_EXECUTE;
+        updateData.dateExecutionVirement = new Date();
+        break;
+        
+      case 'CLOSED':
+        newStatus = Statut.CLOTURE;
+        updateData.dateCloture = new Date();
+        break;
+        
+      case 'DIFFICULTY':
+        newStatus = Statut.EN_DIFFICULTE;
+        break;
+    }
+    
+    if (newStatus && newStatus !== bordereau.statut) {
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: {
+          statut: newStatus,
+          ...updateData
+        }
+      });
+      
+      this.logger.log(`Workflow progression: ${bordereau.statut} -> ${newStatus} for bordereau ${bordereauId}`);
+    }
+  } catch (error) {
+    this.logger.error(`Error in workflow progression for ${bordereauId}: ${error.message}`);
+  }
+}
+
+/**
+ * Auto-assign to available gestionnaire after scan
+ */
+private async autoAssignToGestionnaire(bordereauId: string): Promise<void> {
+  try {
+    const availableUsers = await this.prisma.user.findMany({
+      where: {
+        role: 'GESTIONNAIRE',
+        active: true,
+      },
+    });
+    
+    if (availableUsers.length === 0) {
+      this.logger.warn('No available gestionnaires for auto-assignment');
+      return;
+    }
+    
+    // Find user with lowest workload
+    const workloads = await Promise.all(availableUsers.map(async user => {
+      const count = await this.prisma.bordereau.count({
+        where: { assignedToUserId: user.id, statut: { not: 'CLOTURE' } },
+      });
+      return { user, count };
+    }));
+    
+    workloads.sort((a, b) => a.count - b.count);
+    const selectedUser = workloads[0].user;
+    
+    await this.assignBordereau({
+      bordereauId,
+      assignedToUserId: selectedUser.id,
+      notes: 'Auto-assigned after scan completion',
+    });
+    
+    this.logger.log(`Auto-assigned bordereau ${bordereauId} to gestionnaire ${selectedUser.id}`);
+  } catch (error) {
+    this.logger.error(`Error auto-assigning to gestionnaire: ${error.message}`);
+  }
 }
 
 async findUnassigned(): Promise<BordereauResponseDto[]> {
@@ -1037,7 +1378,7 @@ async returnBordereau(id: string, reason: string) {
   const bordereau = await this.prisma.bordereau.update({
     where: { id },
     data: {
-      statut: { set: Statut.EN_DIFFICULTE },
+      statut: Statut.EN_DIFFICULTE,
       // Optionally, clear assignedToUserId to return to team leader
       assignedToUserId: null,
     },

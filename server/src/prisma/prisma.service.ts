@@ -5,7 +5,6 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit {
   private _syncLog: any;
   private _auditLog: any;
-  actionLog: any;
   public get auditLog(): any {
     return this._auditLog;
   }

@@ -9,13 +9,19 @@ interface WorkflowNodeProps {
 
 const statutMap: Record<Statut, { color: string; label: string }> = {
   EN_ATTENTE: { color: 'border-gray-400', label: 'En attente' },
+  A_SCANNER: { color: 'border-orange-400', label: 'À scanner' },
   SCAN_EN_COURS: { color: 'border-yellow-500', label: 'Scan en cours' },
-  SCAN_TERMINE: { color: 'border-blue-500', label: 'Scan terminé' },
+  SCANNE: { color: 'border-blue-500', label: 'Scanné' },
+  A_AFFECTER: { color: 'border-purple-400', label: 'À affecter' },
   ASSIGNE: { color: 'border-indigo-500', label: 'Assigné' },
+  EN_COURS: { color: 'border-yellow-400', label: 'En cours' },
   TRAITE: { color: 'border-green-500', label: 'Traité' },
+  PRET_VIREMENT: { color: 'border-teal-500', label: 'Prêt virement' },
+  VIREMENT_EN_COURS: { color: 'border-cyan-500', label: 'Virement en cours' },
+  VIREMENT_EXECUTE: { color: 'border-emerald-500', label: 'Virement exécuté' },
+  VIREMENT_REJETE: { color: 'border-red-600', label: 'Virement rejeté' },
   CLOTURE: { color: 'border-green-700', label: 'Clôturé' },
   EN_DIFFICULTE: { color: 'border-red-500', label: 'En difficulté' },
-  EN_COURS: { color: 'border-yellow-400', label: 'En cours' },
   PARTIEL: { color: 'border-orange-500', label: 'Partiel' },
 };
 

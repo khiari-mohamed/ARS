@@ -1,0 +1,489 @@
+/* Bordereau Module Specific Styles - Override Global CSS */
+
+/* Dashboard Container */
+.bordereau-dashboard {
+  min-height: 100vh !important;
+  background: #f8fafc !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* Header Section */
+.bordereau-header {
+  background: white !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  padding: 24px 0 !important;
+}
+
+.bordereau-header-content {
+  max-width: 1280px !important;
+  margin: 0 auto !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+.bordereau-title {
+  font-size: 2rem !important;
+  font-weight: 700 !important;
+  color: #111827 !important;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.bordereau-subtitle {
+  color: #6b7280 !important;
+  margin-top: 4px !important;
+  font-size: 0.875rem !important;
+}
+
+.bordereau-user-info {
+  font-size: 0.875rem !important;
+  color: #6b7280 !important;
+}
+
+/* Main Content Container */
+.bordereau-main {
+  max-width: 1280px !important;
+  margin: 0 auto !important;
+  padding: 32px 24px !important;
+}
+
+/* KPI Cards Container */
+.bordereau-kpi-container {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 24px !important;
+  margin-bottom: 32px !important;
+}
+
+/* Individual KPI Card */
+.bordereau-kpi-card {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid #e5e7eb !important;
+  padding: 24px !important;
+  flex: 1 !important;
+  min-width: 280px !important;
+  transition: all 0.2s ease !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.bordereau-kpi-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.bordereau-kpi-card::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 4px !important;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8) !important;
+}
+
+.bordereau-kpi-card.kpi-success::before {
+  background: linear-gradient(90deg, #10b981, #059669) !important;
+}
+
+.bordereau-kpi-card.kpi-danger::before {
+  background: linear-gradient(90deg, #ef4444, #dc2626) !important;
+}
+
+.bordereau-kpi-card.kpi-warning::before {
+  background: linear-gradient(90deg, #f59e0b, #d97706) !important;
+}
+
+.bordereau-kpi-content {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.bordereau-kpi-info {
+  flex: 1 !important;
+}
+
+.bordereau-kpi-icon {
+  width: 64px !important;
+  height: 64px !important;
+  border-radius: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 2rem !important;
+  margin-bottom: 16px !important;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+  box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.39) !important;
+}
+
+.bordereau-kpi-icon.icon-success {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.39) !important;
+}
+
+.bordereau-kpi-icon.icon-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.39) !important;
+}
+
+.bordereau-kpi-icon.icon-warning {
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  box-shadow: 0 4px 14px 0 rgba(245, 158, 11, 0.39) !important;
+}
+
+.bordereau-kpi-label {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: #6b7280 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  margin-bottom: 8px !important;
+}
+
+.bordereau-kpi-value {
+  font-size: 3rem !important;
+  font-weight: 800 !important;
+  color: #111827 !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+}
+
+.bordereau-kpi-value.value-success {
+  color: #059669 !important;
+}
+
+.bordereau-kpi-value.value-danger {
+  color: #dc2626 !important;
+}
+
+.bordereau-kpi-value.value-warning {
+  color: #d97706 !important;
+}
+
+/* Actions Bar */
+.bordereau-actions-bar {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #e5e7eb !important;
+  padding: 24px !important;
+  margin-bottom: 32px !important;
+}
+
+.bordereau-actions-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+@media (min-width: 1024px) {
+  .bordereau-actions-content {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.bordereau-actions-left {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.bordereau-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 12px 20px !important;
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s ease !important;
+  border: none !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+}
+
+.bordereau-btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+  color: white !important;
+  box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.39) !important;
+}
+
+.bordereau-btn-primary:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px 0 rgba(59, 130, 246, 0.5) !important;
+}
+
+.bordereau-btn-success {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: white !important;
+  box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.39) !important;
+}
+
+.bordereau-btn-success:hover {
+  background: linear-gradient(135deg, #059669, #047857) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px 0 rgba(16, 185, 129, 0.5) !important;
+}
+
+.bordereau-btn-secondary {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+  border: 1px solid #d1d5db !important;
+}
+
+.bordereau-btn-secondary:hover {
+  background: #e5e7eb !important;
+  border-color: #9ca3af !important;
+}
+
+/* Table Styles */
+.bordereau-table-container {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #e5e7eb !important;
+  overflow: hidden !important;
+}
+
+.bordereau-table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.bordereau-table th {
+  background: #f9fafb !important;
+  padding: 16px 24px !important;
+  text-align: left !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  color: #6b7280 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.bordereau-table td {
+  padding: 16px 24px !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+  vertical-align: middle !important;
+}
+
+.bordereau-table tr:hover {
+  background: #f9fafb !important;
+}
+
+/* Status Badges */
+.bordereau-status-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 6px 12px !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* Kanban Styles */
+.bordereau-kanban-container {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)) !important;
+  gap: 24px !important;
+  margin-top: 24px !important;
+}
+
+.bordereau-kanban-column {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #e5e7eb !important;
+  overflow: hidden !important;
+  min-height: 600px !important;
+}
+
+.bordereau-kanban-header {
+  padding: 16px 20px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+}
+
+.bordereau-kanban-cards {
+  padding: 16px !important;
+  max-height: 70vh !important;
+  overflow-y: auto !important;
+  background: #f8fafc !important;
+}
+
+.bordereau-kanban-card {
+  background: white !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  margin-bottom: 12px !important;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #e5e7eb !important;
+  cursor: grab !important;
+  transition: all 0.2s ease !important;
+  user-select: none !important;
+}
+
+.bordereau-kanban-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px -3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.bordereau-kanban-card:active {
+  cursor: grabbing !important;
+}
+
+.bordereau-kanban-card.selected {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Responsive Kanban */
+@media (max-width: 768px) {
+  .bordereau-kanban-container {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  
+  .bordereau-kanban-column {
+    min-height: 400px !important;
+  }
+  
+  .bordereau-kanban-cards {
+    max-height: 50vh !important;
+  }
+}
+
+/* Modal Styles */
+.bordereau-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 50 !important;
+  overflow-y: auto !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.bordereau-modal-container {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh !important;
+  padding: 16px !important;
+}
+
+.bordereau-modal-content {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  max-width: 1024px !important;
+  width: 100% !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}
+
+.bordereau-modal-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 24px !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.bordereau-modal-title {
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  color: #111827 !important;
+}
+
+.bordereau-modal-close {
+  color: #6b7280 !important;
+  cursor: pointer !important;
+  transition: color 0.2s ease !important;
+}
+
+.bordereau-modal-close:hover {
+  color: #374151 !important;
+}
+
+.bordereau-modal-body {
+  padding: 24px !important;
+}
+
+/* Loading States */
+.bordereau-loading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 100vh !important;
+  background: #f8fafc !important;
+}
+
+.bordereau-spinner {
+  width: 48px !important;
+  height: 48px !important;
+  border: 3px solid #e5e7eb !important;
+  border-top: 3px solid #3b82f6 !important;
+  border-radius: 50% !important;
+  animation: bordereau-spin 1s linear infinite !important;
+}
+
+@keyframes bordereau-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .bordereau-kpi-container {
+    flex-direction: column !important;
+  }
+  
+  .bordereau-kpi-card {
+    min-width: 100% !important;
+  }
+  
+  .bordereau-main {
+    padding: 16px !important;
+  }
+  
+  .bordereau-header-content {
+    padding: 0 16px !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    text-align: center !important;
+  }
+}
+
+/* Override any conflicting global styles */
+.bordereau-dashboard * {
+  box-sizing: border-box !important;
+}
+
+.bordereau-dashboard button {
+  font-family: inherit !important;
+}
+
+.bordereau-dashboard input,
+.bordereau-dashboard select,
+.bordereau-dashboard textarea {
+  font-family: inherit !important;
+}

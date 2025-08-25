@@ -94,13 +94,20 @@ const RecentEntriesTable: React.FC = () => {
   const getActualStatus = (statut: string) => {
     const statusMap: Record<string, { text: string; color: string; bg: string }> = {
       'EN_ATTENTE': { text: 'En attente', color: 'text-gray-600', bg: 'bg-gray-50' },
+      'A_SCANNER': { text: 'À scanner', color: 'text-orange-600', bg: 'bg-orange-50' },
       'SCAN_EN_COURS': { text: 'Scan en cours', color: 'text-blue-600', bg: 'bg-blue-50' },
-      'SCAN_TERMINE': { text: 'Scanné', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+      'SCANNE': { text: 'Scanné', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+      'A_AFFECTER': { text: 'À affecter', color: 'text-purple-600', bg: 'bg-purple-50' },
       'ASSIGNE': { text: 'Assigné', color: 'text-purple-600', bg: 'bg-purple-50' },
       'EN_COURS': { text: 'En cours', color: 'text-yellow-600', bg: 'bg-yellow-50' },
       'TRAITE': { text: 'Traité', color: 'text-green-600', bg: 'bg-green-50' },
+      'PRET_VIREMENT': { text: 'Prêt virement', color: 'text-teal-600', bg: 'bg-teal-50' },
+      'VIREMENT_EN_COURS': { text: 'Virement en cours', color: 'text-cyan-600', bg: 'bg-cyan-50' },
+      'VIREMENT_EXECUTE': { text: 'Virement exécuté', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+      'VIREMENT_REJETE': { text: 'Virement rejeté', color: 'text-red-600', bg: 'bg-red-50' },
       'CLOTURE': { text: 'Clôturé', color: 'text-gray-600', bg: 'bg-gray-50' },
-      'EN_DIFFICULTE': { text: 'En difficulté', color: 'text-red-600', bg: 'bg-red-50' }
+      'EN_DIFFICULTE': { text: 'En difficulté', color: 'text-red-600', bg: 'bg-red-50' },
+      'PARTIEL': { text: 'Partiel', color: 'text-amber-600', bg: 'bg-amber-50' }
     };
 
     return statusMap[statut] || null;

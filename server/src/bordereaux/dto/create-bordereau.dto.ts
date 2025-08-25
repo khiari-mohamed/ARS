@@ -11,8 +11,9 @@ export class CreateBordereauDto {
   @IsUUID()
   clientId: string;
 
+  @IsOptional()
   @IsUUID()
-  contractId: string;
+  contractId?: string;
 
   @IsOptional()
   @IsDateString()
@@ -47,4 +48,8 @@ export class CreateBordereauDto {
 
   @IsInt()
   nombreBS: number;
+
+  @IsOptional()
+  @IsUUID()
+  createdBy?: string;
 }

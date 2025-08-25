@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
+import { Statut } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BordereauxService } from './bordereaux.service';
 import { CreateBordereauDto } from './dto/create-bordereau.dto';
@@ -205,6 +206,18 @@ export class BordereauxController {
     return this.bordereauxService.closeBordereau(id);
   }
 
+  @Post(':id/initiate-payment')
+  async initiatePayment(@Param('id') id: string) {
+    const bordereau = await this.bordereauxService.update(id, { statut: 'VIREMENT_EN_COURS' as any });
+    return { message: 'Payment initiated', bordereau };
+  }
+
+  @Post(':id/execute-payment')
+  async executePayment(@Param('id') id: string) {
+    const bordereau = await this.bordereauxService.update(id, { statut: 'VIREMENT_EXECUTE' as any });
+    return { message: 'Payment executed', bordereau };
+  }
+
   @Get(':id/bs')
   getBSList(@Param('id') id: string) {
     return this.bordereauxService.getBSList(id);
@@ -331,6 +344,43 @@ export class BordereauxController {
       errorCount: results.filter(r => !r.success).length,
       results
     };
+  }
+  
+  @Post(':id/progress')
+  @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async progressToNextStage(@Param('id') id: string) {
+    return this.bordereauxService.progressToNextStage(id);
+  }
+  
+  @Get('analytics/performance')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getPerformanceAnalytics(@Query() filters: any) {
+    return this.bordereauxService.getPerformanceAnalytics(filters);
+  }
+  
+  @Get('search/advanced')
+  async advancedSearch(@Query('q') query: string, @Query() filters: any) {
+    return this.bordereauxService.advancedSearch(query, filters);
+  }
+  
+  @Post('batch/update-status')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async batchUpdateStatus(@Body() data: { bordereauIds: string[]; status: string }) {
+    return this.bordereauxService.batchUpdateStatus(data.bordereauIds, data.status as any);
+  }
+  
+  @Post(':id/notify')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async sendCustomNotification(@Param('id') id: string, @Body() data: { message: string; recipients: string[] }) {
+    await this.bordereauxService.sendCustomNotification(id, data.message, data.recipients);
+    return { success: true };
+  }
+  
+  @Post(':id/documents/:documentId/link')
+  @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async linkDocument(@Param('id') bordereauId: string, @Param('documentId') documentId: string) {
+    await this.bordereauxService.linkDocumentToBordereau(bordereauId, documentId);
+    return { success: true };
   }
 
   @Put('bs/:bsId')

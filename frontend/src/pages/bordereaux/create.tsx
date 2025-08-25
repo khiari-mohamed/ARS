@@ -8,13 +8,19 @@ import { Client } from "../../types/client.d";
 
 const statutOptions: { value: Statut; label: string }[] = [
   { value: "EN_ATTENTE", label: "En attente" },
+  { value: "A_SCANNER", label: "À scanner" },
   { value: "SCAN_EN_COURS", label: "Scan en cours" },
-  { value: "SCAN_TERMINE", label: "Scan terminé" },
+  { value: "SCANNE", label: "Scanné" },
+  { value: "A_AFFECTER", label: "À affecter" },
   { value: "ASSIGNE", label: "Assigné" },
+  { value: "EN_COURS", label: "En cours" },
   { value: "TRAITE", label: "Traité" },
+  { value: "PRET_VIREMENT", label: "Prêt virement" },
+  { value: "VIREMENT_EN_COURS", label: "Virement en cours" },
+  { value: "VIREMENT_EXECUTE", label: "Virement exécuté" },
+  { value: "VIREMENT_REJETE", label: "Virement rejeté" },
   { value: "CLOTURE", label: "Clôturé" },
   { value: "EN_DIFFICULTE", label: "En difficulté" },
-  { value: "EN_COURS", label: "En cours" },
   { value: "PARTIEL", label: "Partiel" },
 ];
 

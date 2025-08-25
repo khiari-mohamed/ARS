@@ -19,11 +19,13 @@ import BordereauTable from "../../components/BordereauTable";
 import BordereauFilters from "../../components/BordereauFilters";
 import { KPI, SearchResult, AIComplaintAnalysis, AIRecommendations, ForecastResult, StaffingEstimation } from "../../types/bordereaux";
 import BordereauCreateForm from "../../components/BordereauCreateForm";
+import EnhancedBordereauCreateForm from "../../components/EnhancedBordereauCreateForm";
 import SearchResultsPanel from "../../components/SearchResultsPanel";
 import { useAuth } from '../../contexts/AuthContext';
 import TeamLeaderDashboard from '../../components/TeamLeaderDashboard';
+import BordereauxDashboard from './BordereauxDashboard';
 
-export default function BordereauxListPage() {
+function BordereauxListPage() {
   const { user, isAuthenticated } = useAuth();
   const [bordereaux, setBordereaux] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -201,7 +203,34 @@ export default function BordereauxListPage() {
     );
   }
 
-  // ADMINISTRATEUR view - Clean BO-style design with ALL features preserved
+  // ADMINISTRATEUR view - Use new dashboard
+  return <BordereauxDashboard />;
+};
+
+export default BordereauxListPage;
+
+const OldBordereauxView = () => {
+  const { user } = useAuth();
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<any>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [filters, setFilters] = useState<any>({});
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [activeTab, setActiveTab] = useState('tous');
+  const [showFilters, setShowFilters] = useState(false);
+  const [clients, setClients] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [bordereaux, setBordereaux] = useState<any[]>([]);
+  const [forecast, setForecast] = useState<any>(null);
+  const [staffing, setStaffing] = useState<any>(null);
+  const [aiAnalysis, setAIAnalysis] = useState<any>(null);
+  const [aiRecommendations, setAIRecommendations] = useState<any>(null);
+  
+  const loadData = () => {};
+  
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -579,7 +608,7 @@ export default function BordereauxListPage() {
                     </svg>
                   </button>
                 </div>
-                <BordereauCreateForm 
+                <EnhancedBordereauCreateForm 
                   onSuccess={() => {
                     setShowCreateModal(false);
                     loadData();
