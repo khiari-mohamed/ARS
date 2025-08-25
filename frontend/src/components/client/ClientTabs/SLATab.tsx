@@ -30,7 +30,7 @@ const SLATab: React.FC<Props> = ({ client, avgSLA }) => {
           <Typography><strong>Reclamation Delay:</strong> {client.reclamationDelay} days</Typography>
         </Grid>
         <Grid item>
-          <Typography><strong>Account Manager:</strong> {client.accountManager?.fullName || '-'}</Typography>
+          <Typography><strong>Gestionnaires:</strong> {client.gestionnaires?.map(g => g.fullName).join(', ') || '-'}</Typography>
         </Grid>
         {slaStatus && (
           <Grid item>

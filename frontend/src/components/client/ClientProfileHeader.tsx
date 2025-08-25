@@ -52,7 +52,7 @@ const ClientProfileHeader: React.FC<Props> = ({ client, avgSLA }) => {
               <Box display="flex" alignItems="center" gap={1}>
                 <PersonIcon fontSize="small" />
                 <Typography variant="body2">
-                  Chargé de Compte: {client.gestionnaires?.[0]?.fullName || client.accountManager?.fullName || 'Non assigné'}
+                  Chargé de Compte: {client.gestionnaires?.[0]?.fullName || 'Non assigné'}
                 </Typography>
               </Box>
             </Grid>

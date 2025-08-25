@@ -27,18 +27,48 @@ export class ClientService {
   // --- GED Integration: Upload Contract Document ---
   async uploadContract(clientId: string, file: Express.Multer.File, uploadedById: string) {
     if (!file) throw new BadRequestException('No file uploaded');
+    
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'contracts');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomNum = Math.floor(Math.random() * 1000000000);
+    const fileExtension = path.extname(file.originalname);
+    const fileName = `${timestamp}-${randomNum}${fileExtension}`;
+    const filePath = path.join(uploadsDir, fileName);
+    
+    // Write file to disk
+    fs.writeFileSync(filePath, file.buffer);
+    
     // Save document metadata
     const document = await this.prisma.document.create({
       data: {
         name: file.originalname,
         type: 'contrat',
-        path: file.path, // or file.location if using S3
+        path: filePath,
         uploadedById,
       },
     });
-    // Optionally, link to Contract if needed
-    // await this.prisma.contract.updateMany({ where: { clientId }, data: { documentPath: file.path } });
+    
     return document;
+  }
+
+  // --- Get client documents ---
+  async getClientDocuments(clientId: string) {
+    return this.prisma.document.findMany({
+      where: {
+        type: 'contrat',
+        uploadedById: { not: undefined }
+      },
+      orderBy: { uploadedAt: 'desc' }
+    });
   }
 
   // --- GED Integration: Download Contract Document ---
@@ -99,7 +129,15 @@ export class ClientService {
   async findAll(query: SearchClientDto, user?: any) {
     let where: any = {
       name: query.name ? { contains: query.name, mode: 'insensitive' } : undefined,
+      status: query.status && query.status !== 'all' ? query.status : undefined,
     };
+    
+    if (query.gestionnaireId) {
+      where.gestionnaires = {
+        some: { id: query.gestionnaireId }
+      };
+    }
+    
     return this.prisma.client.findMany({
       where,
       include: {
@@ -159,7 +197,7 @@ export class ClientService {
   }
 
   // --- Create complaint for client ---
-  async createComplaintForClient(clientId: string, data: any) {
+  async createComplaintForClient(clientId: string, data: any, userId: string) {
     return this.prisma.reclamation.create({
       data: {
         clientId,
@@ -167,7 +205,8 @@ export class ClientService {
         severity: data.severity,
         status: data.status || 'open',
         description: data.description,
-        createdById: 'SYSTEM', // Should be actual user ID
+        department: data.department,
+        createdById: userId,
       }
     });
   }
@@ -690,11 +729,12 @@ export class ClientService {
     return this.prisma.client.create({
       data: {
         ...rest,
-        gestionnaires: {
+        status: dto.status || 'active',
+        gestionnaires: gestionnaireIds ? {
           connect: gestionnaireIds.map(id => ({ id })),
-        },
+        } : undefined,
       },
-      include: { gestionnaires: true },
+      include: { gestionnaires: true, contracts: true, bordereaux: true, reclamations: true },
     });
   }
 
@@ -715,6 +755,10 @@ export class ClientService {
   async update(id: string, dto: UpdateClientDto) {
     const {
       name,
+      email,
+      phone,
+      address,
+      status,
       reglementDelay,
       reclamationDelay,
       gestionnaireIds,
@@ -722,6 +766,10 @@ export class ClientService {
     } = dto;
     const data: any = {
       ...(name !== undefined && { name }),
+      ...(email !== undefined && { email }),
+      ...(phone !== undefined && { phone }),
+      ...(address !== undefined && { address }),
+      ...(status !== undefined && { status }),
       ...(reglementDelay !== undefined && { reglementDelay }),
       ...(reclamationDelay !== undefined && { reclamationDelay }),
       ...(slaConfig !== undefined && { slaConfig }),
@@ -734,7 +782,7 @@ export class ClientService {
     return this.prisma.client.update({
       where: { id },
       data,
-      include: { gestionnaires: true },
+      include: { gestionnaires: true, contracts: true, bordereaux: true, reclamations: true },
     });
   }
 

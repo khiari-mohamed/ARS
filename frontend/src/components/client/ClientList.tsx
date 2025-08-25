@@ -40,7 +40,7 @@ const ClientList: React.FC<Props> = ({ clients, loading, onEdit, onDelete, onVie
               >
                 {client.name}
               </TableCell>
-              <TableCell>{client.accountManager?.fullName || '-'}</TableCell>
+              <TableCell>{client.gestionnaires?.[0]?.fullName || '-'}</TableCell>
               <TableCell>{client.reglementDelay} days</TableCell>
               <TableCell>{client.reclamationDelay} days</TableCell>
               <TableCell>

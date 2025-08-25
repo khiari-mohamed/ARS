@@ -37,8 +37,7 @@ const ClientQuickActions: React.FC<Props> = ({ clientId, clientName, onComplaint
 
   const handleCreateClaim = async () => {
     try {
-      await createComplaint({
-        clientId,
+      await createComplaint(clientId, {
         ...claimForm,
         status: 'open'
       });

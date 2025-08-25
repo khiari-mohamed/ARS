@@ -89,7 +89,7 @@ const ComplaintsTab: React.FC<Props> = ({ clientId, onComplaintCreated }) => {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      await createComplaint({ clientId, ...form });
+      await createComplaint(clientId, form);
       setSnackbar({ open: true, message: 'Complaint created successfully', severity: 'success' });
       setOpen(false);
       loadComplaints();

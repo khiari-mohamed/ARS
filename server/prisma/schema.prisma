@@ -202,6 +202,10 @@ model ReclamationHistory {
 model Client {
   id               String        @id @default(uuid())
   name             String        @unique
+  email            String?
+  phone            String?
+  address          String?
+  status           String        @default("active")
   reglementDelay   Int
   reclamationDelay Int
   createdAt        DateTime      @default(now())
