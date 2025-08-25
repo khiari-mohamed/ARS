@@ -9,5 +9,6 @@ import { IntegrationModule } from '../integrations/integration.module';
    imports: [IntegrationModule],
   controllers: [ReclamationsController],
   providers: [ReclamationsService, PrismaService , NotificationService],
+  exports: [ReclamationsService]
 })
 export class ReclamationsModule {}

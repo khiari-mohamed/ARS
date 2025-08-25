@@ -214,12 +214,66 @@ export class BordereauxService {
   
   // Enhanced notifications
   async sendCustomNotification(bordereauId: string, message: string, recipients: string[]): Promise<void> {
-    await this.alertsService.triggerAlert({
-      type: 'CUSTOM_NOTIFICATION',
-      bsId: bordereauId
-      // recipients // <-- Removed, not in type definition
-    });
-    await this.logAction(bordereauId, 'SEND_NOTIFICATION');
+    console.log('📧 Sending custom notification');
+    console.log('Bordereau ID:', bordereauId);
+    console.log('Message:', message);
+    console.log('Recipients:', recipients);
+    
+    try {
+      // Get bordereau details
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+      
+      if (!bordereau) {
+        throw new Error('Bordereau not found');
+      }
+      
+      // Send notification to each recipient
+      for (const recipientId of recipients) {
+        if (recipientId) {
+          const user = await this.prisma.user.findUnique({ where: { id: recipientId } });
+          if (user) {
+            // Create in-app notification
+            await this.prisma.notification.create({
+              data: {
+                userId: recipientId,
+                type: 'CUSTOM_NOTIFICATION',
+                title: 'Notification personnalisée',
+                message: message,
+                data: {
+                  bordereauId,
+                  reference: bordereau.reference,
+                  clientName: bordereau.client?.name
+                },
+                read: false
+              }
+            }).catch(() => console.log('Failed to create notification record'));
+            
+            console.log(`✅ Notification sent to user ${user.fullName}`);
+          }
+        }
+      }
+      
+      // Trigger alert for system tracking
+      try {
+        await this.alertsService.triggerAlert({
+          type: 'CUSTOM_NOTIFICATION',
+          bsId: bordereauId
+        });
+      } catch (err) {
+        console.log('Alert service not available');
+      }
+      
+      // Log the action
+      await this.logAction(bordereauId, 'SEND_NOTIFICATION');
+      
+      console.log('✅ Custom notification sent successfully');
+    } catch (error) {
+      console.error('❌ Error sending custom notification:', error);
+      throw error;
+    }
   }
   
   // --- Seed complaints for AI demo ---
@@ -381,10 +435,15 @@ export class BordereauxService {
   }
   private readonly logger = new Logger(BordereauxService.name);
   auditLogService: any;
-  constructor(private readonly prisma: PrismaService, private readonly alertsService: AlertsService) {}
+  constructor(
+    private readonly prisma: PrismaService, 
+    private readonly alertsService: AlertsService
+  ) {}
 
 
   async create(createBordereauDto: CreateBordereauDto): Promise<BordereauResponseDto> {
+    console.log('📝 CREATE BORDEREAU - Received payload:', JSON.stringify(createBordereauDto, null, 2));
+    
     // Build data object, only include fields if defined
     let {
       reference,
@@ -400,17 +459,27 @@ export class BordereauxService {
       delaiReglement,
       statut,
       nombreBS,
-      createdBy,
+      createdBy, // This field doesn't exist in schema, will be ignored
     } = createBordereauDto;
 
     // Validate clientId
+    console.log('🔍 Validating client:', clientId);
     const client = await this.prisma.client.findUnique({ where: { id: clientId } });
-    if (!client) throw new BadRequestException('Invalid clientId');
+    if (!client) {
+      console.error('❌ Client not found:', clientId);
+      throw new BadRequestException('Invalid clientId');
+    }
+    console.log('✅ Client found:', client.name);
 
     // Validate contractId if provided
     if (contractId) {
+      console.log('🔍 Validating contract:', contractId);
       const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
-      if (!contract) throw new BadRequestException('Invalid contractId');
+      if (!contract) {
+        console.error('❌ Contract not found:', contractId);
+        throw new BadRequestException('Invalid contractId');
+      }
+      console.log('✅ Contract found:', contract.clientName);
     }
 
     // --- AUTO-LINK TO ACTIVE CONTRACT IF contractId NOT PROVIDED ---
@@ -436,10 +505,13 @@ export class BordereauxService {
     // -------------------------------------------------------------
 
     // Business rule: unique reference per client
+    console.log('🔍 Checking for existing bordereau with reference:', reference, 'for client:', clientId);
     const existing = await this.prisma.bordereau.findFirst({ where: { reference, clientId } });
     if (existing) {
+      console.error('❌ Duplicate reference found:', reference);
       throw new BadRequestException('A bordereau with this reference already exists for this client.');
     }
+    console.log('✅ Reference is unique');
 
     // DYNAMIC STATUS: Start with A_SCANNER (ready for scan) instead of EN_ATTENTE
     const initialStatus = statut || Statut.A_SCANNER;
@@ -463,36 +535,53 @@ export class BordereauxService {
       nombreBS,
       statut: initialStatus,
     };
-    if (createdBy) data.createdBy = createdBy;
+    // Note: createdBy is not a field in the schema, skip it
     if (dateDebutScan) data.dateDebutScan = parseDate(dateDebutScan);
     if (dateFinScan) data.dateFinScan = parseDate(dateFinScan);
     if (dateReceptionSante) data.dateReceptionSante = parseDate(dateReceptionSante);
     if (dateCloture) data.dateCloture = parseDate(dateCloture);
     if (dateDepotVirement) data.dateDepotVirement = parseDate(dateDepotVirement);
     if (dateExecutionVirement) data.dateExecutionVirement = parseDate(dateExecutionVirement);
+    
+    console.log('💾 Creating bordereau with data:', JSON.stringify(data, null, 2));
 
-    const bordereau = await this.prisma.bordereau.create({
-      data,
-      include: {
-        client: true,
-        contract: true,
-      },
-    });
+    try {
+      const bordereau = await this.prisma.bordereau.create({
+        data,
+        include: {
+          client: true,
+          contract: true,
+        },
+      });
+      console.log('✅ Bordereau created successfully:', bordereau.reference);
     
-    // Trigger workflow progression
-    await this.progressWorkflow(bordereau.id, 'CREATED');
-    
-    // Notify SCAN team of new bordereau
-    await this.alertsService.triggerAlert({
-      type: 'NEW_BORDEREAU',
-      bsId: bordereau.id,
-    });
-    
-    await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
-    return BordereauResponseDto.fromEntity(bordereau);
+      // Trigger workflow progression
+      await this.progressWorkflow(bordereau.id, 'CREATED');
+      
+      // Notify SCAN team of new bordereau (optional)
+      try {
+        await this.alertsService.triggerAlert({
+          type: 'NEW_BORDEREAU',
+          bsId: bordereau.id,
+        });
+        console.log('✅ Alert triggered successfully');
+      } catch (alertError) {
+        console.log('⚠️ Alert service not available, continuing without alert');
+      }
+      
+      await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
+      console.log('🎉 Bordereau creation completed successfully');
+      return BordereauResponseDto.fromEntity(bordereau);
+    } catch (error) {
+      console.error('❌ Error creating bordereau:', error);
+      console.error('Error details:', error.message);
+      console.error('Stack trace:', error.stack);
+      throw error;
+    }
   }
   
   async findAll(filters: any = {}): Promise<BordereauResponseDto[] | { items: BordereauResponseDto[]; total: number }> {
+    console.log('📡 Backend: Received filters:', JSON.stringify(filters, null, 2));
     // Build Prisma where clause based on filters
     const where: any = {};
     if (filters.teamId) where.teamId = filters.teamId;
@@ -500,11 +589,16 @@ export class BordereauxService {
     if (filters.performance) where.performance = filters.performance;
     if (filters.clientId) where.clientId = filters.clientId;
     if (filters.contractId) where.contractId = filters.contractId;
-    if (filters.statut) {
-      if (Array.isArray(filters.statut)) {
-        where.statut = { in: filters.statut };
+    // Handle statut filter (can be statut or statut[])
+    const statutFilter = filters.statut || filters['statut[]'];
+    if (statutFilter) {
+      console.log('🔍 Backend: Filtering by statut:', statutFilter);
+      if (Array.isArray(statutFilter)) {
+        where.statut = { in: statutFilter };
+        console.log('🔍 Backend: Applied statut IN filter:', statutFilter);
       } else {
-        where.statut = filters.statut;
+        where.statut = statutFilter;
+        console.log('🔍 Backend: Applied statut equals filter:', statutFilter);
       }
     }
     if (filters.sla) where.statusColor = filters.sla;
@@ -520,7 +614,16 @@ export class BordereauxService {
       if (filters.dateStart) where.dateReception.gte = new Date(filters.dateStart);
       if (filters.dateEnd) where.dateReception.lte = new Date(filters.dateEnd);
     }
-    if (typeof filters.archived === 'boolean') where.archived = filters.archived;
+    if (typeof filters.archived === 'boolean') {
+      where.archived = filters.archived;
+      console.log('🗄️ Backend: Filtering by archived:', filters.archived);
+    } else if (filters.archived === 'false') {
+      where.archived = false;
+      console.log('🗄️ Backend: Filtering by archived (string):', false);
+    } else if (filters.archived === 'true') {
+      where.archived = true;
+      console.log('🗄️ Backend: Filtering by archived (string):', true);
+    }
     if (filters.assigned === false) where.assignedToUserId = null;
     if (filters.overdue === true) {
       // Calculate overdue bordereaux
@@ -568,6 +671,7 @@ export class BordereauxService {
     }
     
     // Otherwise return all results
+    console.log('📡 Backend: Final where clause:', JSON.stringify(where, null, 2));
     const bordereaux = await this.prisma.bordereau.findMany({
       where,
       include: {
@@ -576,16 +680,24 @@ export class BordereauxService {
       },
       orderBy,
     });
+    console.log('📊 Backend: Found', bordereaux.length, 'bordereaux');
+    console.log('📊 Backend: Sample results:', bordereaux.slice(0, 2).map(b => `${b.reference}: ${b.statut} (archived: ${b.archived})`));
     return bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
   }
 
   // Archive (soft-delete) a bordereau
   async archiveBordereau(id: string): Promise<BordereauResponseDto> {
+    console.log('🗄️ ARCHIVING BORDEREAU:', id);
+    
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: { archived: true },
       include: { client: true, contract: true },
     });
+    
+    console.log('✅ BORDEREAU ARCHIVED SUCCESSFULLY:', bordereau.reference);
+    console.log('Archived status:', bordereau.archived);
+    
     await this.logAction(id, 'ARCHIVE_BORDEREAU');
     return BordereauResponseDto.fromEntity(bordereau);
   }
@@ -933,6 +1045,55 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       content += `ID: ${b.id} | Ref: ${b.reference} | Statut: ${b.statut} | Date Reception: ${b.dateReception}\n`;
     }
     return Buffer.from(content, 'utf-8');
+  }
+
+  async exportBordereauPDF(bordereauId: string): Promise<Buffer> {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: {
+        client: true,
+        contract: true,
+        documents: true,
+        BulletinSoin: true
+      }
+    });
+
+    if (!bordereau) {
+      throw new NotFoundException('Bordereau not found');
+    }
+
+    // Generate PDF content
+    const pdfContent = `
+BORDEREAU DETAILS
+=================
+
+Référence: ${bordereau.reference}
+Client: ${bordereau.client?.name || 'N/A'}
+Statut: ${bordereau.statut}
+Date de réception: ${new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}
+Délai de règlement: ${bordereau.delaiReglement} jours
+Nombre de BS: ${bordereau.nombreBS}
+
+CONTRAT
+-------
+Client: ${bordereau.contract?.clientName || 'N/A'}
+Délai règlement: ${bordereau.contract?.delaiReglement || 'N/A'} jours
+Délai réclamation: ${bordereau.contract?.delaiReclamation || 'N/A'} jours
+
+DOCUMENTS
+---------
+${bordereau.documents?.map(doc => `- ${doc.name} (${doc.type})`).join('\n') || 'Aucun document'}
+
+BULLETINS DE SOIN
+-----------------
+Nombre total: ${bordereau.BulletinSoin?.length || 0}
+${bordereau.BulletinSoin?.slice(0, 5).map(bs => `- BS ${bs.numBs}: ${bs.etat} - ${bs.nomAssure}`).join('\n') || 'Aucun bulletin'}
+${bordereau.BulletinSoin?.length > 5 ? `\n... et ${bordereau.BulletinSoin.length - 5} autres` : ''}
+
+Généré le: ${new Date().toLocaleString('fr-FR')}
+    `;
+
+    return Buffer.from(pdfContent, 'utf-8');
   }
   /**
    * Update bordereau status when scan starts
@@ -1396,6 +1557,96 @@ async returnBordereau(id: string, reason: string) {
   });
 
   return BordereauResponseDto.fromEntity(bordereau);
+}
+
+/**
+ * Reassign a bordereau to a new user with comment logging
+ */
+async reassignBordereau(bordereauId: string, newUserId: string, comment?: string): Promise<BordereauResponseDto> {
+  console.log('🔄 SERVICE: reassignBordereau called');
+  console.log('Bordereau ID:', bordereauId);
+  console.log('New User ID:', newUserId);
+  console.log('Comment:', comment);
+  
+  // Validate bordereau exists
+  const bordereau = await this.prisma.bordereau.findUnique({
+    where: { id: bordereauId },
+    include: { client: true, contract: true }
+  });
+  
+  console.log('Found bordereau:', bordereau ? 'YES' : 'NO');
+  if (bordereau) {
+    console.log('Current assignment:', bordereau.assignedToUserId);
+    console.log('Current status:', bordereau.statut);
+  }
+  
+  if (!bordereau) {
+    throw new NotFoundException(`Bordereau with ID ${bordereauId} not found`);
+  }
+  
+  // Validate new user exists and has GESTIONNAIRE role
+  const newUser = await this.prisma.user.findUnique({
+    where: { id: newUserId }
+  });
+  
+  console.log('Found new user:', newUser ? 'YES' : 'NO');
+  if (newUser) {
+    console.log('New user role:', newUser.role);
+    console.log('New user name:', newUser.fullName);
+  }
+  
+  if (!newUser) {
+    throw new NotFoundException(`User with ID ${newUserId} not found`);
+  }
+  
+  if (newUser.role !== 'GESTIONNAIRE') {
+    throw new BadRequestException('User must have GESTIONNAIRE role');
+  }
+  
+  // Store old assignment for logging
+  const oldUserId = bordereau.assignedToUserId;
+  
+  console.log('🔄 Updating bordereau assignment...');
+  console.log('From:', oldUserId);
+  console.log('To:', newUserId);
+  
+  // Update the bordereau assignment
+  const updatedBordereau = await this.prisma.bordereau.update({
+    where: { id: bordereauId },
+    data: {
+      assignedToUserId: newUserId,
+      statut: Statut.ASSIGNE // Ensure proper status
+    },
+    include: { client: true, contract: true }
+  });
+  
+  console.log('✅ Database updated successfully');
+  console.log('New assignment:', updatedBordereau.assignedToUserId);
+  console.log('New status:', updatedBordereau.statut);
+  
+  // Log the reassignment action with comment
+  await this.prisma.actionLog.create({
+    data: {
+      bordereauId,
+      action: 'REASSIGN_BORDEREAU',
+      timestamp: new Date(),
+      details: {
+        fromUserId: oldUserId,
+        toUserId: newUserId,
+        comment: comment || 'No comment provided',
+        timestamp: new Date().toISOString()
+      }
+    }
+  });
+  
+  console.log('📝 Action logged successfully');
+  
+  this.logger.log(`Reassigned bordereau ${bordereauId} from ${oldUserId} to ${newUserId}`);
+  
+  const result = BordereauResponseDto.fromEntity(updatedBordereau);
+  console.log('🎉 SERVICE: reassignBordereau completed successfully');
+  
+  return result;
 }
 
 // --- Advanced Forecasting ---

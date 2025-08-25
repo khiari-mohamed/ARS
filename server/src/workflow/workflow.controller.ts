@@ -90,7 +90,7 @@ export class WorkflowController {
   @Get('corbeille')
   @ApiOperation({ summary: 'Get user-specific corbeille (inbox)' })
   async getCorbeille(@Req() req: Request) {
-    const userId = req?.['user']?.id || req?.['user']?.sub;
+    const userId = (req as any)?.user?.id || (req as any)?.user?.sub;
     if (!userId) return { items: [], count: 0, type: 'UNAUTHORIZED' };
     return this.corbeilleService.getUserCorbeille(userId);
   }
@@ -98,7 +98,7 @@ export class WorkflowController {
   @Get('corbeille/stats')
   @ApiOperation({ summary: 'Get corbeille statistics' })
   async getCorbeilleStats(@Req() req: Request) {
-    const userId = req?.['user']?.id || req?.['user']?.sub;
+    const userId = (req as any)?.user?.id || (req as any)?.user?.sub;
     if (!userId) return { totalItems: 0, urgentItems: 0, role: 'UNKNOWN' };
     return this.corbeilleService.getCorbeilleStats(userId);
   }

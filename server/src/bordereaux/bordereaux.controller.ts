@@ -10,7 +10,9 @@ import {
   Query,
   UseInterceptors,
   UploadedFile,
+  Res,
 } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { Statut } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BordereauxService } from './bordereaux.service';
@@ -37,6 +39,7 @@ export class BordereauxController {
   constructor(
     private readonly bordereauxService: BordereauxService,
     private readonly auditLogService: AuditLogService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post()
@@ -161,15 +164,7 @@ export class BordereauxController {
     return this.bordereauxService.remove(id);
   }
 
-  @Patch(':id/archive')
-  archiveBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
-    return this.bordereauxService.archiveBordereau(id);
-  }
 
-  @Patch(':id/restore')
-  restoreBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
-    return this.bordereauxService.restoreBordereau(id);
-  }
 
   @Post('assign')
   assignBordereau(@Body() assignDto: AssignBordereauDto): Promise<BordereauResponseDto> {
@@ -294,6 +289,26 @@ export class BordereauxController {
     return this.bordereauxService.getPredictResourcesAI(payload);
   }
 
+  @Post('import/excel')
+  @UseInterceptors(FileInterceptor('file'))
+  async importFromExcel(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    
+    const { ExcelImportService } = await import('./excel-import.service');
+    const importService = new ExcelImportService(this.prisma, this.bordereauxService);
+    return await importService.importFromExcel(file.buffer);
+  }
+
+  @Post('generate-ov')
+  @Roles(UserRole.FINANCE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async generateOV(@Body() request: any) {
+    const { OVGeneratorService } = await import('../finance/ov-generator.service');
+    const ovService = new OVGeneratorService(this.prisma);
+    return await ovService.generateOV(request);
+  }
+
   @Post('bulk-update')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async bulkUpdateBordereaux(@Body() data: { bordereauIds: string[]; updates: any }) {
@@ -345,6 +360,26 @@ export class BordereauxController {
       results
     };
   }
+
+  @Post(':id/reassign')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async reassignBordereau(
+    @Param('id') bordereauId: string,
+    @Body() data: { newUserId: string; comment?: string; timestamp?: string }
+  ) {
+    console.log('🔄 REASSIGN ENDPOINT HIT');
+    console.log('Bordereau ID:', bordereauId);
+    console.log('New User ID:', data.newUserId);
+    console.log('Comment:', data.comment);
+    console.log('Request Body:', JSON.stringify(data, null, 2));
+    
+    const result = await this.bordereauxService.reassignBordereau(bordereauId, data.newUserId, data.comment);
+    
+    console.log('✅ REASSIGN SUCCESS');
+    console.log('Result:', JSON.stringify(result, null, 2));
+    
+    return result;
+  }
   
   @Post(':id/progress')
   @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
@@ -375,12 +410,35 @@ export class BordereauxController {
     await this.bordereauxService.sendCustomNotification(id, data.message, data.recipients);
     return { success: true };
   }
+
+  @Get(':id/export-pdf')
+  async exportBordereauPDF(@Param('id') id: string, @Res() res: any) {
+    const pdfBuffer = await this.bordereauxService.exportBordereauPDF(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="bordereau_${id}.pdf"`,
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  }
   
   @Post(':id/documents/:documentId/link')
   @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async linkDocument(@Param('id') bordereauId: string, @Param('documentId') documentId: string) {
     await this.bordereauxService.linkDocumentToBordereau(bordereauId, documentId);
     return { success: true };
+  }
+
+  @Patch(':id/archive')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async archiveBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+    return this.bordereauxService.archiveBordereau(id);
+  }
+
+  @Patch(':id/restore')
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async restoreBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+    return this.bordereauxService.restoreBordereau(id);
   }
 
   @Put('bs/:bsId')
@@ -393,5 +451,40 @@ export class BordereauxController {
   @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async markBSAsProcessed(@Param('bsId') bsId: string, @Body() data: { status: string }) {
     return this.bordereauxService.updateBS(bsId, { etat: data.status });
+  }
+
+  @Get('inbox/corbeille/:role')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getCorbeilleByRole(@Param('role') role: string) {
+    // Return role-specific corbeille data
+    const filters: any = {};
+    
+    switch (role) {
+      case 'CHEF_EQUIPE':
+        filters.statut = ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'];
+        break;
+      case 'GESTIONNAIRE':
+        // Will be filtered by assignedToUserId in the service
+        break;
+      case 'SCAN_TEAM':
+        filters.statut = ['A_SCANNER', 'SCAN_EN_COURS'];
+        break;
+      case 'BO':
+        filters.statut = ['EN_ATTENTE', 'A_SCANNER'];
+        break;
+    }
+    
+    return this.bordereauxService.findAll(filters);
+  }
+
+  @Get('workflow/notifications')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getWorkflowNotifications() {
+    // Return workflow-based notifications
+    return {
+      newBordereaux: await this.bordereauxService.findAll({ statut: 'A_SCANNER' }),
+      overdueItems: await this.bordereauxService.getOverdueBordereaux(),
+      approachingDeadlines: await this.bordereauxService.getApproachingDeadlines()
+    };
   }
 }

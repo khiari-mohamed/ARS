@@ -13,7 +13,9 @@ export type Statut =
   | "VIREMENT_REJETE"
   | "CLOTURE"
   | "EN_DIFFICULTE"
-  | "PARTIEL";
+  | "PARTIEL"
+  | "MIS_EN_INSTANCE"
+  | "REJETE";
 
 export enum StatusColor {
   GREEN = "GREEN",
