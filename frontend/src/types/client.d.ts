@@ -1,26 +1,43 @@
 export interface Client {
   id: string;
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   address?: string;
   status: 'active' | 'inactive' | 'suspended';
   createdAt: string;
   updatedAt: string;
-  contractCount?: number;
-  totalValue?: number;
   reglementDelay: number;
   reclamationDelay: number;
-  accountManager?: {
-    fullName: string;
-  };
+  slaConfig?: any;
   gestionnaires?: Array<{
     id: string;
     fullName: string;
+    email?: string;
+    role?: string;
   }>;
-  contracts?: any[];
-  bordereaux?: any[];
-  reclamations?: any[];
+  contracts?: Array<{
+    id: string;
+    delaiReglement: number;
+    delaiReclamation: number;
+    startDate: string;
+    endDate: string;
+    documentPath?: string;
+  }>;
+  bordereaux?: Array<{
+    id: string;
+    reference: string;
+    statut: string;
+    dateReception: string;
+    dateCloture?: string;
+  }>;
+  reclamations?: Array<{
+    id: string;
+    type: string;
+    status: string;
+    createdAt: string;
+    severity: string;
+  }>;
 }
 
 export interface ClientKPI {

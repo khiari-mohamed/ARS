@@ -1,9 +1,26 @@
-import { IsOptional, IsString, IsInt, IsObject, IsArray } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsObject, IsArray, IsEmail, IsIn } from 'class-validator';
 
 export class UpdateClientDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['active', 'inactive', 'suspended'])
+  status?: 'active' | 'inactive' | 'suspended';
 
   @IsOptional()
   @IsInt()
@@ -20,26 +37,5 @@ export class UpdateClientDto {
 
   @IsOptional()
   @IsObject()
-  slaConfig?: any; // For alert threshold/SLA config
-
-  @IsOptional()
-  accountManager?: any;
-
-  @IsOptional()
-  contracts?: any;
-
-  @IsOptional()
-  bordereaux?: any;
-
-  @IsOptional()
-  reclamations?: any;
-
-  @IsOptional()
-  createdAt?: any;
-
-  @IsOptional()
-  updatedAt?: any;
-
-  @IsOptional()
-  id?: any;
+  slaConfig?: any;
 }

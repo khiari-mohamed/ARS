@@ -12,7 +12,7 @@ const OverviewTab: React.FC<{ client: Client }> = ({ client }) => {
     <div>
       <h3>Client Overview</h3>
       <p><strong>Name:</strong> {client.name}</p>
-      <p><strong>Account Manager:</strong> {client.accountManager?.fullName || '-'}</p>
+      <p><strong>Gestionnaires:</strong> {client.gestionnaires?.map(g => g.fullName).join(', ') || '-'}</p>
       <p><strong>Reglement Delay:</strong> {client.reglementDelay} days</p>
       <p><strong>Reclamation Delay:</strong> {client.reclamationDelay} days</p>
       <p><strong>Client ID:</strong> {client.id}</p>

@@ -38,8 +38,8 @@ export class ClientController {
   @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
   async create(@Body() dto: CreateClientDto) {
     // Validate input
-    if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number' ) {
-      throw new Error('All fields (name, reglementDelay, reclamationDelay, accountManagerId) are required.');
+    if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number') {
+      throw new Error('Name, reglementDelay, and reclamationDelay are required.');
     }
     // Check for unique client name
     const existing = await this.clientService.findByName(dto.name);
@@ -192,8 +192,10 @@ export class ClientController {
   // --- Create complaint for client ---
   @Post(':id/complaints')
   @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
-  createComplaint(@Param('id') id: string, @Body() data: any) {
-    return this.clientService.createComplaintForClient(id, data);
+  createComplaint(@Param('id') id: string, @Body() data: any, @Req() req: Request) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.clientService.createComplaintForClient(id, data, userId);
   }
 
   // --- Bordereaux by client ---
@@ -328,5 +330,10 @@ export class ClientController {
     @Body() thresholds: RiskThresholdsDto
   ) {
     return this.clientService.updateRiskThresholds(id, thresholds);
+  }
+
+  @Get(':id/documents')
+  getClientDocuments(@Param('id') id: string) {
+    return this.clientService.getClientDocuments(id);
   }
 }

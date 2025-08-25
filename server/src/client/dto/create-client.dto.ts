@@ -1,9 +1,26 @@
-import { IsNotEmpty, IsString, IsInt, IsOptional, IsObject, IsArray, ArrayNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, IsOptional, IsObject, IsArray, IsEmail, IsIn } from 'class-validator';
 
 export class CreateClientDto {
   @IsNotEmpty()
   @IsString()
   name: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['active', 'inactive', 'suspended'])
+  status?: 'active' | 'inactive' | 'suspended';
 
   @IsNotEmpty()
   @IsInt()
@@ -13,12 +30,12 @@ export class CreateClientDto {
   @IsInt()
   reclamationDelay: number;
 
+  @IsOptional()
   @IsArray()
-  @ArrayNotEmpty()
   @IsString({ each: true })
-  gestionnaireIds: string[];
+  gestionnaireIds?: string[];
 
   @IsOptional()
   @IsObject()
-  slaConfig?: any; // For alert threshold/SLA config
+  slaConfig?: any;
 }
