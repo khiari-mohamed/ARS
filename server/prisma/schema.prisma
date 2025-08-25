@@ -2,14 +2,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum DocumentStatus {
-  UPLOADED
-  EN_COURS 
-  TRAITE
-  REJETE
-  RETOUR_ADMIN
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -21,48 +13,40 @@ model User {
   password                    String
   fullName                    String
   role                        String
-  department                  String?              // <--- ADD THIS LINE
-
-  active                      Boolean @default(true)
   createdAt                   DateTime             @default(now())
-  bordereaux                  Bordereau[]          @relation("UserBordereaux")
-  documents                   Document[]           @relation("UserDocuments")
-  courriers                   Courrier[]           @relation("UserCourriers")
-  virements                   Virement[]           @relation("UserVirements")
-  clientsManaged              Client[]             @relation("ClientGestionnaires") // new one 
-  OCRLog                      OCRLog[]
+  department                  String?
+  active                      Boolean              @default(true)
   AlertLog                    AlertLog[]
+  AuditLog                    AuditLog[]
+  bsLogs                      BSLog[]
+  bordereauxCurrentHandler    Bordereau[]          @relation("CurrentHandlerBordereaux")
+  bordereauxTeam              Bordereau[]          @relation("TeamBordereaux")
+  ownerBulletinSoins          BulletinSoin[]       @relation("OwnerBulletinSoins")
+  processedBulletinSoins      BulletinSoin[]       @relation("ProcessedByBulletinSoins")
   Contract                    Contract[]           @relation("ManagerContracts")
   ContractHistory             ContractHistory[]
+  courriers                   Courrier[]           @relation("UserCourriers")
+  documents                   Document[]           @relation("UserDocuments")
+  Feedback                    Feedback[]
+  OCRLog                      OCRLog[]
+  PasswordResetToken          PasswordResetToken[]
   reclamations                Reclamation[]        @relation("HandlerReclamations")
   reclamationsCreated         Reclamation[]        @relation("CreatorReclamations")
   reclamationHistories        ReclamationHistory[] @relation("UserReclamationHistories")
-  traitementHistory           TraitementHistory[]  @relation("UserTraitementHistory")
-  bordereauxCurrentHandler    Bordereau[]          @relation("CurrentHandlerBordereaux")
-  bordereauxTeam              Bordereau[]          @relation("TeamBordereaux")
   assignedTraitementHistories TraitementHistory[]  @relation("AssignedTraitementHistories")
+  traitementHistory           TraitementHistory[]  @relation("UserTraitementHistory")
+  virements                   Virement[]           @relation("UserVirements")
+  WorkflowAssignment          WorkflowAssignment[]
+  clientsManaged              Client[]             @relation("ClientGestionnaires")
   clientReclamations          Reclamation[]        @relation("ClientReclamations")
-
-  ownerBulletinSoins BulletinSoin[] @relation("OwnerBulletinSoins")
-  processedBulletinSoins BulletinSoin[] @relation("ProcessedByBulletinSoins")
-  bsLogs      BSLog[]
-
-  WorkflowAssignment WorkflowAssignment[]
-
-  AuditLog AuditLog[]
-
-  PasswordResetToken PasswordResetToken[]
-
-  Feedback Feedback[]
+  bordereaux                  Bordereau[]          @relation("UserBordereaux")
 }
 
-
-
 model Process {
-  id           String         @id @default(uuid())
+  id           String        @id @default(uuid())
   name         String
   description  String?
-  reclamations Reclamation[]  @relation("ProcessReclamations")
+  reclamations Reclamation[] @relation("ProcessReclamations")
 }
 
 model AuditLog {
@@ -73,7 +57,6 @@ model AuditLog {
   timestamp DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
 }
-
 
 model Feedback {
   id        String   @id @default(uuid())
@@ -94,32 +77,30 @@ model PasswordResetToken {
 }
 
 model UserLockout {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  attempts   Int      @default(0)
+  id          String    @id @default(uuid())
+  email       String    @unique
+  attempts    Int       @default(0)
   lockedUntil DateTime?
-  updatedAt  DateTime @updatedAt
+  updatedAt   DateTime  @updatedAt
 }
+
 model TraitementHistory {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   bordereauId  String
   userId       String
   action       String
   fromStatus   String?
   toStatus     String?
   assignedToId String?
-  createdAt    DateTime @default(now())
-
-  bordereau  Bordereau @relation(fields: [bordereauId], references: [id])
-  user       User      @relation("UserTraitementHistory", fields: [userId], references: [id])
-  assignedTo User?     @relation("AssignedTraitementHistories", fields: [assignedToId], references: [id])
+  createdAt    DateTime  @default(now())
+  assignedTo   User?     @relation("AssignedTraitementHistories", fields: [assignedToId], references: [id])
+  bordereau    Bordereau @relation(fields: [bordereauId], references: [id])
+  user         User      @relation("UserTraitementHistory", fields: [userId], references: [id])
 }
 
-
-
 model Bordereau {
-  id                    String    @id @default(uuid())
-  reference             String    @unique
+  id                    String              @id @default(uuid())
+  reference             String              @unique
   clientId              String
   contractId            String?
   dateReception         DateTime
@@ -129,34 +110,32 @@ model Bordereau {
   dateCloture           DateTime?
   dateDepotVirement     DateTime?
   dateExecutionVirement DateTime?
-  delaiReglement        Int // in days
-  statut                Statut    @default(EN_ATTENTE)
+  delaiReglement        Int
+  statut                Statut              @default(EN_ATTENTE)
   nombreBS              Int
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
   currentHandlerId      String?
   teamId                String?
   assignedToUserId      String?
-  prestataireId         String? 
-  archived              Boolean   @default(false) 
-
-  // Relations
-  prestataire   Prestataire? @relation("BordereauPrestataire", fields: [prestataireId], references: [id])
-  contract          Contract?           @relation("ContractBordereaux", fields: [contractId], references: [id])
-  client            Client              @relation(fields: [clientId], references: [id])
-  documents         Document[]          @relation("BordereauDocuments")
-  courriers         Courrier[]          @relation("BordereauCourriers")
-  virement          Virement?           @relation("BordereauVirement")
-  AlertLog          AlertLog[]
-  reclamations      Reclamation[]
-  currentHandler    User?               @relation("CurrentHandlerBordereaux", fields: [currentHandlerId], references: [id])
-  team              User?               @relation("TeamBordereaux", fields: [teamId], references: [id])
-  traitementHistory TraitementHistory[]
-  User              User[]              @relation("UserBordereaux")
-  BulletinSoin      BulletinSoin[]
-  BordereauAuditLog BordereauAuditLog[]
-
-  priority Int @default(1)
+  prestataireId         String?
+  priority              Int                 @default(1)
+  archived              Boolean             @default(false)
+  ActionLog             ActionLog[]
+  AlertLog              AlertLog[]
+  client                Client              @relation(fields: [clientId], references: [id])
+  contract              Contract?           @relation("ContractBordereaux", fields: [contractId], references: [id])
+  currentHandler        User?               @relation("CurrentHandlerBordereaux", fields: [currentHandlerId], references: [id])
+  prestataire           Prestataire?        @relation("BordereauPrestataire", fields: [prestataireId], references: [id])
+  team                  User?               @relation("TeamBordereaux", fields: [teamId], references: [id])
+  BordereauAuditLog     BordereauAuditLog[]
+  BulletinSoin          BulletinSoin[]
+  courriers             Courrier[]          @relation("BordereauCourriers")
+  documents             Document[]          @relation("BordereauDocuments")
+  reclamations          Reclamation[]
+  traitementHistory     TraitementHistory[]
+  virement              Virement?           @relation("BordereauVirement")
+  User                  User[]              @relation("UserBordereaux")
 }
 
 model Prestataire {
@@ -165,19 +144,18 @@ model Prestataire {
   bordereaux Bordereau[] @relation("BordereauPrestataire")
 }
 
-
 model BordereauAuditLog {
-  id           String   @id @default(uuid())
-  bordereauId  String
-  action       String
-  userId       String?
-  details      String?
-  createdAt    DateTime @default(now())
-
-  bordereau    Bordereau @relation(fields: [bordereauId], references: [id])
+  id          String    @id @default(uuid())
+  bordereauId String
+  action      String
+  userId      String?
+  details     String?
+  createdAt   DateTime  @default(now())
+  bordereau   Bordereau @relation(fields: [bordereauId], references: [id])
 }
+
 model Reclamation {
-  id           String   @id @default(uuid())
+  id           String               @id @default(uuid())
   clientId     String
   documentId   String?
   bordereauId  String?
@@ -187,88 +165,74 @@ model Reclamation {
   description  String
   assignedToId String?
   createdById  String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
   evidencePath String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  contractId   String?
   department   String?
   processId    String?
-
-  contractId   String?
-  contract     Contract?  @relation(fields: [contractId], references: [id])
-
-  // Relations
-  client     Client                @relation(fields: [clientId], references: [id])
-  document   Document?             @relation(fields: [documentId], references: [id])
-  bordereau  Bordereau?            @relation(fields: [bordereauId], references: [id])
-  assignedTo User?                 @relation("HandlerReclamations", fields: [assignedToId], references: [id])
-  createdBy  User                  @relation("CreatorReclamations", fields: [createdById], references: [id])
-  history    ReclamationHistory[]
-  process    Process?              @relation("ProcessReclamations", fields: [processId], references: [id]) // <--- THIS IS CORRECT
-
-  User User[] @relation("ClientReclamations")
-
-  priority Int @default(1)
+  priority     Int                  @default(1)
+  assignedTo   User?                @relation("HandlerReclamations", fields: [assignedToId], references: [id])
+  bordereau    Bordereau?           @relation(fields: [bordereauId], references: [id])
+  client       Client               @relation(fields: [clientId], references: [id])
+  contract     Contract?            @relation(fields: [contractId], references: [id])
+  createdBy    User                 @relation("CreatorReclamations", fields: [createdById], references: [id])
+  document     Document?            @relation(fields: [documentId], references: [id])
+  process      Process?             @relation("ProcessReclamations", fields: [processId], references: [id])
+  history      ReclamationHistory[]
+  User         User[]               @relation("ClientReclamations")
 }
+
 model ReclamationHistory {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   reclamationId String
   userId        String
   action        String
   fromStatus    String?
   toStatus      String?
   description   String?
-  createdAt     DateTime @default(now())
-  isRecurrent Boolean? @default(false)
+  createdAt     DateTime    @default(now())
   aiSuggestions Json?
-
-  // Relations
-  reclamation Reclamation @relation(fields: [reclamationId], references: [id])
-  user        User        @relation("UserReclamationHistories", fields: [userId], references: [id])
+  isRecurrent   Boolean?    @default(false)
+  reclamation   Reclamation @relation(fields: [reclamationId], references: [id])
+  user          User        @relation("UserReclamationHistories", fields: [userId], references: [id])
 }
 
 model Client {
-  id               String      @id @default(uuid())
-  name             String      @unique
-  reglementDelay   Int         // délai contractuel de règlement (jours)
-  reclamationDelay Int         // délai de réponse aux réclamations (jours)
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  slaConfig        Json? 
-
-  // Relations
-  gestionnaires    User[]      @relation("ClientGestionnaires")
-  contracts        Contract[]
+  id               String        @id @default(uuid())
+  name             String        @unique
+  reglementDelay   Int
+  reclamationDelay Int
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  slaConfig        Json?
   bordereaux       Bordereau[]
+  contracts        Contract[]
   reclamations     Reclamation[]
+  gestionnaires    User[]        @relation("ClientGestionnaires")
 }
 
-
-
 model Contract {
-  id                  String   @id @default(uuid())
+  id                  String            @id @default(uuid())
+  assignedManagerId   String
   clientId            String
   clientName          String
-  delaiReglement      Int
+  createdAt           DateTime          @default(now())
   delaiReclamation    Int
-  escalationThreshold Int?
+  delaiReglement      Int
   documentPath        String
-  assignedManagerId   String
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  startDate           DateTime
+  escalationThreshold Int?
+  updatedAt           DateTime          @updatedAt
   endDate             DateTime
-  
-  signature         String?      // For digital signature (see below)
-  version           Int      @default(1) // <-- NEW
-  thresholds Json?
-
- // Relations
-  client              Client   @relation(fields: [clientId], references: [id])
+  startDate           DateTime
+  signature           String?
+  version             Int               @default(1)
+  thresholds          Json?
   bordereaux          Bordereau[]       @relation("ContractBordereaux")
   assignedManager     User              @relation("ManagerContracts", fields: [assignedManagerId], references: [id])
+  client              Client            @relation(fields: [clientId], references: [id])
   history             ContractHistory[]
-
-  Reclamation Reclamation[]
+  Reclamation         Reclamation[]
 }
 
 model ContractHistory {
@@ -277,31 +241,26 @@ model ContractHistory {
   modifiedById String
   modifiedAt   DateTime @default(now())
   changes      Json
-
-  // Relations
-  contract   Contract @relation(fields: [contractId], references: [id])
-  modifiedBy User     @relation(fields: [modifiedById], references: [id])
+  contract     Contract @relation(fields: [contractId], references: [id])
+  modifiedBy   User     @relation(fields: [modifiedById], references: [id])
 }
 
 model Document {
-  id           String   @id @default(uuid())
+  id           String          @id @default(uuid())
   name         String
-  type         String // e.g. BS, reçu, contrat
-  path         String // local path or S3 link
-  uploadedAt   DateTime @default(now())
+  type         String
+  path         String
+  uploadedAt   DateTime        @default(now())
   uploadedById String
   bordereauId  String?
   ocrResult    Json?
-  hash         String?  @unique
-
-  status      DocumentStatus?   // Explicit enum for status
-  ocrText     String?   // <-- For OCR full-text search
-
-  // Relations
-  uploader     User          @relation("UserDocuments", fields: [uploadedById], references: [id])
-  bordereau    Bordereau?    @relation("BordereauDocuments", fields: [bordereauId], references: [id])
-  OCRLog       OCRLog[]
+  ocrText      String?
+  status       DocumentStatus?
+  hash         String?         @unique
   AlertLog     AlertLog[]
+  bordereau    Bordereau?      @relation("BordereauDocuments", fields: [bordereauId], references: [id])
+  uploader     User            @relation("UserDocuments", fields: [uploadedById], references: [id])
+  OCRLog       OCRLog[]
   reclamations Reclamation[]
 }
 
@@ -318,30 +277,25 @@ model Courrier {
   updatedAt    DateTime       @updatedAt
   bordereauId  String?
   uploadedById String
-
-  // Relations
-  bordereau Bordereau? @relation("BordereauCourriers", fields: [bordereauId], references: [id])
-  uploader  User       @relation("UserCourriers", fields: [uploadedById], references: [id])
+  bordereau    Bordereau?     @relation("BordereauCourriers", fields: [bordereauId], references: [id])
+  uploader     User           @relation("UserCourriers", fields: [uploadedById], references: [id])
 }
 
 model Virement {
-  id                String    @id @default(uuid())
-  bordereauId       String    @unique
+  id                String         @id @default(uuid())
+  bordereauId       String         @unique
   montant           Float
   referenceBancaire String
   dateDepot         DateTime
   dateExecution     DateTime
-  confirmed         Boolean   @default(false)
+  confirmed         Boolean        @default(false)
   confirmedById     String?
   confirmedAt       DateTime?
-  createdAt         DateTime  @default(now())
-
-  // Relations
-  bordereau   Bordereau @relation("BordereauVirement", fields: [bordereauId], references: [id])
-  confirmedBy User?     @relation("UserVirements", fields: [confirmedById], references: [id])
-  bulletinSoins BulletinSoin[] @relation("VirementBulletinSoins")
-
-  priority Int @default(1)
+  createdAt         DateTime       @default(now())
+  priority          Int            @default(1)
+  bulletinSoins     BulletinSoin[] @relation("VirementBulletinSoins")
+  bordereau         Bordereau      @relation("BordereauVirement", fields: [bordereauId], references: [id])
+  confirmedBy       User?          @relation("UserVirements", fields: [confirmedById], references: [id])
 }
 
 model OCRLog {
@@ -352,14 +306,12 @@ model OCRLog {
   status        String
   error         String?
   ocrAt         DateTime
-
-  // Relations
-  document    Document? @relation(fields: [documentId], references: [id])
-  processedBy User      @relation(fields: [processedById], references: [id])
+  document      Document @relation(fields: [documentId], references: [id])
+  processedBy   User     @relation(fields: [processedById], references: [id])
 }
 
 model AlertLog {
-  id            String    @id @default(uuid())
+  id            String     @id @default(uuid())
   bordereauId   String?
   documentId    String?
   userId        String?
@@ -367,67 +319,63 @@ model AlertLog {
   alertLevel    String
   message       String
   notifiedRoles String[]
-  createdAt     DateTime  @default(now())
-  resolved      Boolean   @default(false)
+  createdAt     DateTime   @default(now())
+  resolved      Boolean    @default(false)
   resolvedAt    DateTime?
-
-  // Relations
-  bordereau Bordereau? @relation(fields: [bordereauId], references: [id])
-  document  Document?  @relation(fields: [documentId], references: [id])
-  user      User?      @relation(fields: [userId], references: [id])
+  bordereau     Bordereau? @relation(fields: [bordereauId], references: [id])
+  document      Document?  @relation(fields: [documentId], references: [id])
+  user          User?      @relation(fields: [userId], references: [id])
 }
 
 model SyncLog {
-  id        String   @id @default(uuid())
-  date      DateTime @default(now())
-  imported  Int
-  errors    Int
-  details   String?
+  id       String   @id @default(uuid())
+  date     DateTime @default(now())
+  imported Int
+  errors   Int
+  details  String?
 }
 
 model BulletinSoin {
-  id                  String           @id @default(uuid())
-  bordereauId         String
-  numBs               String
-  codeAssure          String
-  nomAssure           String
-  nomBeneficiaire     String
-  nomSociete          String
-  matricule           String?          // Add this line
-  dateSoin            DateTime?        // Add this line
-  montant             Float?           // Add this line
-  acte                String?  
-  nomPrestation       String
-  nomBordereau        String
-  lien                String
-  dateCreation        DateTime
-  dateMaladie         DateTime
-  totalPec            Float
-  observationGlobal   String
-  etat                String
-  ownerId             String?
-  ocrText             String?
-  processedAt         DateTime?
-  processedById       String?          // NEW: for performance metrics
-  dueDate             DateTime?        // NEW: for SLA tracking
-  virementId          String?          // NEW: for financial link
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  deletedAt           DateTime?
-
-  bordereau           Bordereau        @relation(fields: [bordereauId], references: [id])
-  owner               User?            @relation("OwnerBulletinSoins", fields: [ownerId], references: [id])
-  processedBy         User?            @relation("ProcessedByBulletinSoins", fields: [processedById], references: [id])
-  virement            Virement?        @relation("VirementBulletinSoins", fields: [virementId], references: [id])
-  items               BulletinSoinItem[]
-  expertises          ExpertiseInfo[]
-  logs                BSLog[]
-
-  priority Int @default(1)
+  id                String             @id @default(uuid())
+  bordereauId       String
+  numBs             String
+  etat              String
+  ownerId           String?
+  processedAt       DateTime?
+  codeAssure        String
+  createdAt         DateTime           @default(now())
+  dateCreation      DateTime
+  dateMaladie       DateTime
+  lien              String
+  nomAssure         String
+  nomBeneficiaire   String
+  nomBordereau      String
+  nomPrestation     String
+  nomSociete        String
+  observationGlobal String
+  ocrText           String?
+  totalPec          Float
+  updatedAt         DateTime           @updatedAt
+  acte              String?
+  dateSoin          DateTime?
+  deletedAt         DateTime?
+  matricule         String?
+  montant           Float?
+  dueDate           DateTime?
+  processedById     String?
+  virementId        String?
+  priority          Int                @default(1)
+  logs              BSLog[]
+  bordereau         Bordereau          @relation(fields: [bordereauId], references: [id])
+  owner             User?              @relation("OwnerBulletinSoins", fields: [ownerId], references: [id])
+  processedBy       User?              @relation("ProcessedByBulletinSoins", fields: [processedById], references: [id])
+  virement          Virement?          @relation("VirementBulletinSoins", fields: [virementId], references: [id])
+  items             BulletinSoinItem[]
+  expertises        ExpertiseInfo[]
 }
 
 model BulletinSoinItem {
-  id                    String   @id @default(uuid())
+  id                    String       @id @default(uuid())
   bulletinSoinId        String
   nomProduit            String
   quantite              Int
@@ -445,14 +393,13 @@ model BulletinSoinItem {
   acuiteGauche          Float
   nombreCle             String
   nbJourDepassement     Int
-
   bulletinSoin          BulletinSoin @relation(fields: [bulletinSoinId], references: [id])
 }
 
 model ExpertiseInfo {
-  id                String   @id @default(uuid())
+  id                String       @id @default(uuid())
   bulletinSoinId    String
-  isFavorable       String   // EN_COURS | FAVORABLE | DEFAVORABLE
+  isFavorable       String
   matriculeAdherent String
   numBS             String
   contrat           String
@@ -463,20 +410,162 @@ model ExpertiseInfo {
   codification      String?
   natureActe        String?
   societe           String?
-  dents             String?  // store as JSON string or comma-separated
-
+  dents             String?
   bulletinSoin      BulletinSoin @relation(fields: [bulletinSoinId], references: [id])
 }
 
 model BSLog {
-  id        String   @id @default(uuid())
-  userId    String
-  bsId      String
-  action    String
-  timestamp DateTime @default(now())
-
-  user         User         @relation(fields: [userId], references: [id])
+  id           String       @id @default(uuid())
+  userId       String
+  bsId         String
+  action       String
+  timestamp    DateTime     @default(now())
   bulletinSoin BulletinSoin @relation(fields: [bsId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+}
+
+model Society {
+  id        String              @id @default(uuid())
+  name      String              @unique
+  code      String              @unique
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  donneurs  DonneurDOrdre[]
+  members   Member[]
+  batches   WireTransferBatch[]
+}
+
+model Member {
+  id            String         @id @default(uuid())
+  societyId     String
+  name          String
+  rib           String
+  cin           String?
+  address       String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  society       Society        @relation(fields: [societyId], references: [id])
+  wireTransfers WireTransfer[]
+}
+
+model DonneurDOrdre {
+  id                String              @id @default(uuid())
+  societyId         String
+  name              String
+  rib               String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  society           Society             @relation(fields: [societyId], references: [id])
+  wireTransfers     WireTransfer[]
+  WireTransferBatch WireTransferBatch[]
+}
+
+model WireTransferBatch {
+  id        String                     @id @default(uuid())
+  societyId String
+  donneurId String
+  status    WireTransferBatchStatus    @default(CREATED)
+  fileName  String?
+  fileType  String?
+  archived  Boolean                    @default(false)
+  createdAt DateTime                   @default(now())
+  updatedAt DateTime                   @updatedAt
+  transfers WireTransfer[]
+  donneur   DonneurDOrdre              @relation(fields: [donneurId], references: [id])
+  society   Society                    @relation(fields: [societyId], references: [id])
+  history   WireTransferBatchHistory[]
+}
+
+model WireTransfer {
+  id        String                @id @default(uuid())
+  batchId   String
+  memberId  String
+  donneurId String
+  amount    Float
+  reference String
+  status    String
+  error     String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  batch     WireTransferBatch     @relation(fields: [batchId], references: [id])
+  donneur   DonneurDOrdre         @relation(fields: [donneurId], references: [id])
+  member    Member                @relation(fields: [memberId], references: [id])
+  history   WireTransferHistory[]
+}
+
+model WireTransferBatchHistory {
+  id        String                  @id @default(uuid())
+  batchId   String
+  status    WireTransferBatchStatus
+  changedBy String?
+  changedAt DateTime                @default(now())
+  batch     WireTransferBatch       @relation(fields: [batchId], references: [id])
+}
+
+model WireTransferHistory {
+  id         String       @id @default(uuid())
+  transferId String
+  status     String
+  error      String?
+  changedBy  String?
+  changedAt  DateTime     @default(now())
+  transfer   WireTransfer @relation(fields: [transferId], references: [id])
+}
+
+model WorkflowAssignment {
+  id                        String                      @id @default(uuid())
+  taskId                    String
+  taskType                  String
+  assigneeId                String
+  assignedAt                DateTime                    @default(now())
+  completedAt               DateTime?
+  status                    String                      @default("PENDING")
+  notes                     String?
+  user                      User                        @relation(fields: [assigneeId], references: [id])
+  WorkflowAssignmentHistory WorkflowAssignmentHistory[]
+}
+
+model Template {
+  id        String   @id @default(uuid())
+  name      String
+  subject   String
+  body      String
+  variables String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WorkflowAssignmentHistory {
+  id              String             @id @default(uuid())
+  assignmentId    String
+  updatedByUserId String?
+  updatedAt       DateTime           @default(now())
+  prevStatus      String?
+  newStatus       String?
+  prevNotes       String?
+  newNotes        String?
+  slaMet          Boolean?
+  assignment      WorkflowAssignment @relation(fields: [assignmentId], references: [id])
+}
+
+model ActionLog {
+  id          String    @id @default(uuid())
+  bordereauId String
+  action      String
+  timestamp   DateTime  @default(now())
+  details     Json?
+  Bordereau   Bordereau @relation(fields: [bordereauId], references: [id])
+
+  @@index([bordereauId])
+  @@index([timestamp])
+}
+
+enum DocumentStatus {
+  UPLOADED
+  EN_COURS
+  TRAITE
+  REJETE
+  RETOUR_ADMIN
 }
 
 enum Statut {
@@ -512,144 +601,10 @@ enum CourrierStatus {
   RESPONDED
 }
 
-
-// --- Wire Transfer (Ordre de Virement) Module ---
-
-model Society {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  code      String   @unique
-  members   Member[]
-  donneurs  DonneurDOrdre[]
-  batches   WireTransferBatch[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Member {
-  id         String   @id @default(uuid())
-  societyId  String
-  name       String
-  rib        String
-  cin        String?
-  address    String?
-  wireTransfers WireTransfer[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  society    Society  @relation(fields: [societyId], references: [id])
-}
-
-model DonneurDOrdre {
-  id         String   @id @default(uuid())
-  societyId  String
-  name       String
-  rib        String
-  wireTransfers WireTransfer[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  society    Society  @relation(fields: [societyId], references: [id])
-
-  WireTransferBatch WireTransferBatch[]
-}
-
 enum WireTransferBatchStatus {
   CREATED
   VALIDATED
   REJECTED
   ARCHIVED
   PROCESSED
-}
-
-model WireTransferBatch {
-  id         String   @id @default(uuid())
-  societyId  String
-  donneurId  String
-  status     WireTransferBatchStatus @default(CREATED)
-  fileName   String?
-  fileType   String?
-  archived   Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  society    Society  @relation(fields: [societyId], references: [id])
-  donneur    DonneurDOrdre @relation(fields: [donneurId], references: [id])
-  transfers  WireTransfer[]
-  history    WireTransferBatchHistory[]
-}
-
-model WireTransfer {
-  id           String   @id @default(uuid())
-  batchId      String
-  memberId     String
-  donneurId    String
-  amount       Float
-  reference    String
-  status       String
-  error        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  batch        WireTransferBatch @relation(fields: [batchId], references: [id])
-  member       Member   @relation(fields: [memberId], references: [id])
-  donneur      DonneurDOrdre @relation(fields: [donneurId], references: [id])
-  history      WireTransferHistory[]
-}
-
-model WireTransferBatchHistory {
-  id         String   @id @default(uuid())
-  batchId    String
-  status     WireTransferBatchStatus
-  changedBy  String?
-  changedAt  DateTime @default(now())
-  batch      WireTransferBatch @relation(fields: [batchId], references: [id])
-}
-
-model WireTransferHistory {
-  id         String   @id @default(uuid())
-  transferId String
-  status     String
-  error      String?
-  changedBy  String?
-  changedAt  DateTime @default(now())
-  transfer   WireTransfer @relation(fields: [transferId], references: [id])
-}
-
-// --- Workflow Module ---
-model WorkflowAssignment {
-  id          String   @id @default(uuid())
-  taskId      String
-  taskType    String
-  assigneeId  String
-  assignedAt  DateTime @default(now())
-  completedAt DateTime?
-  status      String   @default("PENDING")
-  notes       String?
-
-  user        User     @relation(fields: [assigneeId], references: [id])
-
-  WorkflowAssignmentHistory WorkflowAssignmentHistory[]
-}
-
-
-model Template {
-  id        String   @id @default(uuid())
-  name      String
-  subject   String
-  body      String
-  variables String[] // store as string array, or use JSON if needed
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-
-model WorkflowAssignmentHistory {
-  id               String   @id @default(uuid())
-  assignmentId     String
-  updatedByUserId  String?  // User who made the change (nullable for system actions)
-  updatedAt        DateTime @default(now())
-  prevStatus       String?
-  newStatus        String?
-  prevNotes        String?
-  newNotes         String?
-  slaMet           Boolean? // Whether SLA was met on completion (optional)
-
-  assignment       WorkflowAssignment @relation(fields: [assignmentId], references: [id])
 }

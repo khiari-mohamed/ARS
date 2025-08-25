@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchBordereaux, assignBordereau2 as assignBordereau, markBordereauAsProcessed, exportBordereauxCSV, bulkUpdateBordereaux, bulkAssignBordereaux, fetchUsers } from '../services/bordereauxService';
+import { fetchBordereaux, assignBordereau2 as assignBordereau, markBordereauAsProcessed, exportBordereauxCSV, bulkUpdateBordereaux, bulkAssignBordereaux, fetchUsers, progressToNextStage, getPerformanceAnalytics, advancedSearchBordereaux, batchUpdateStatus, sendCustomNotification } from '../services/bordereauxService';
 import { fetchClients } from '../services/clientService';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -48,6 +48,11 @@ const BordereauTable: React.FC = () => {
   const [selectedBordereauId, setSelectedBordereauId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [importingExcel, setImportingExcel] = useState(false);
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [performanceData, setPerformanceData] = useState<any>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [selectedBordereauForNotification, setSelectedBordereauForNotification] = useState<string | null>(null);
 
   // Role-based permissions
   const canAssign = ['CHEF_EQUIPE', 'ADMINISTRATEUR', 'SUPER_ADMIN'].includes(user?.role || '');
@@ -219,6 +224,66 @@ const BordereauTable: React.FC = () => {
     }
   };
 
+  const handleProgressBordereau = async (bordereauId: string) => {
+    try {
+      await progressToNextStage(bordereauId);
+      notify('Bordereau progressé vers l\'étape suivante', 'success');
+      loadData();
+    } catch (error) {
+      notify('Erreur lors de la progression', 'error');
+    }
+  };
+
+  const handleAdvancedSearch = async () => {
+    if (!searchQuery.trim()) {
+      notify('Veuillez saisir un terme de recherche', 'warning');
+      return;
+    }
+
+    try {
+      const results = await advancedSearchBordereaux(searchQuery, filters);
+      setBordereaux(results);
+      setTotal(results.length);
+      notify(`${results.length} résultat(s) trouvé(s)`, 'success');
+    } catch (error) {
+      notify('Erreur lors de la recherche avancée', 'error');
+    }
+  };
+
+  const handleBatchStatusUpdate = async (newStatus: string) => {
+    if (selectedRows.size === 0) {
+      notify('Sélectionnez au moins un bordereau', 'warning');
+      return;
+    }
+
+    try {
+      const result = await batchUpdateStatus(Array.from(selectedRows), newStatus);
+      notify(`${result.successCount} bordereau(x) mis à jour`, 'success');
+      setSelectedRows(new Set());
+      loadData();
+    } catch (error) {
+      notify('Erreur lors de la mise à jour en lot', 'error');
+    }
+  };
+
+  const handleSendNotification = async (bordereauId: string) => {
+    setSelectedBordereauForNotification(bordereauId);
+    setShowNotificationModal(true);
+  };
+
+  const loadPerformanceData = async () => {
+    try {
+      const data = await getPerformanceAnalytics(filters);
+      setPerformanceData(data);
+    } catch (error) {
+      console.error('Error loading performance data:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadPerformanceData();
+  }, [filters]);
+
   const handleAssignSingle = (bordereauId: string) => {
     setSelectedBordereauId(bordereauId);
     setAssignModalOpen(true);
@@ -274,31 +339,48 @@ const BordereauTable: React.FC = () => {
   };
 
   const getStatusBadge = (bordereau: any) => {
-    const statusColors: Record<string, string> = {
-      'EN_ATTENTE': 'bg-gray-100 text-gray-800',
-      'SCAN_EN_COURS': 'bg-blue-100 text-blue-800',
-      'SCAN_TERMINE': 'bg-indigo-100 text-indigo-800',
-      'ASSIGNE': 'bg-purple-100 text-purple-800',
-      'EN_COURS': 'bg-yellow-100 text-yellow-800',
-      'TRAITE': 'bg-green-100 text-green-800',
-      'CLOTURE': 'bg-gray-100 text-gray-800',
-      'EN_DIFFICULTE': 'bg-red-100 text-red-800'
+    const statusConfig: Record<string, { color: string; label: string; icon: string }> = {
+      'EN_ATTENTE': { color: 'bg-gray-100 text-gray-800', label: 'En attente', icon: '⏳' },
+      'A_SCANNER': { color: 'bg-orange-100 text-orange-800', label: 'À scanner', icon: '📄' },
+      'SCAN_EN_COURS': { color: 'bg-blue-100 text-blue-800', label: 'Scan en cours', icon: '🔄' },
+      'SCANNE': { color: 'bg-indigo-100 text-indigo-800', label: 'Scanné', icon: '✅' },
+      'A_AFFECTER': { color: 'bg-purple-100 text-purple-800', label: 'À affecter', icon: '👥' },
+      'ASSIGNE': { color: 'bg-purple-100 text-purple-800', label: 'Assigné', icon: '👤' },
+      'EN_COURS': { color: 'bg-yellow-100 text-yellow-800', label: 'En cours', icon: '⚡' },
+      'TRAITE': { color: 'bg-green-100 text-green-800', label: 'Traité', icon: '✅' },
+      'PRET_VIREMENT': { color: 'bg-teal-100 text-teal-800', label: 'Prêt virement', icon: '💰' },
+      'VIREMENT_EN_COURS': { color: 'bg-cyan-100 text-cyan-800', label: 'Virement en cours', icon: '🏦' },
+      'VIREMENT_EXECUTE': { color: 'bg-emerald-100 text-emerald-800', label: 'Virement exécuté', icon: '✅' },
+      'VIREMENT_REJETE': { color: 'bg-red-100 text-red-800', label: 'Virement rejeté', icon: '❌' },
+      'CLOTURE': { color: 'bg-gray-100 text-gray-800', label: 'Clôturé', icon: '🔒' },
+      'EN_DIFFICULTE': { color: 'bg-red-100 text-red-800', label: 'En difficulté', icon: '⚠️' },
+      'PARTIEL': { color: 'bg-amber-100 text-amber-800', label: 'Partiel', icon: '📊' }
     };
 
-    const colorClass = statusColors[bordereau.statut as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+    const config = statusConfig[bordereau.statut as keyof typeof statusConfig] || 
+                  { color: 'bg-gray-100 text-gray-800', label: bordereau.statut, icon: '❓' };
+    
     const daysRemaining = calculateDaysRemaining(bordereau);
     
-    // Dynamic status color based on SLA
-    let statusIcon = '🟢'; // Green by default
-    if (daysRemaining < 0) statusIcon = '🔴'; // Red for overdue
-    else if (daysRemaining <= 3) statusIcon = '🟡'; // Yellow for at risk
+    // SLA indicator overlay
+    let slaIcon = '';
+    if (daysRemaining < 0) slaIcon = '🔴'; // Red for overdue
+    else if (daysRemaining <= 3) slaIcon = '🟡'; // Yellow for at risk
+    else if (daysRemaining <= 7) slaIcon = '🟢'; // Green for safe
 
     return (
       <div className="flex items-center gap-1">
-        <span>{statusIcon}</span>
-        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
-          {bordereau.statut.replace('_', ' ')}
-        </span>
+        <div className="relative">
+          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
+            <span className="mr-1">{config.icon}</span>
+            {config.label}
+          </span>
+          {slaIcon && (
+            <span className="absolute -top-1 -right-1 text-xs" title={`SLA: ${daysRemaining < 0 ? 'En retard' : `${daysRemaining} jours restants`}`}>
+              {slaIcon}
+            </span>
+          )}
+        </div>
       </div>
     );
   };
@@ -344,6 +426,20 @@ const BordereauTable: React.FC = () => {
             ✅
           </button>
         )}
+        <button
+          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          onClick={() => handleProgressBordereau(bordereau.id)}
+          title="Progresser vers l'étape suivante"
+        >
+          ➡️
+        </button>
+        <button
+          className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+          onClick={() => handleSendNotification(bordereau.id)}
+          title="Envoyer notification"
+        >
+          🔔
+        </button>
         <button
           className="p-1 text-gray-600 hover:bg-gray-50 rounded transition-colors"
           onClick={() => window.open(`/bordereaux/${bordereau.id}/history`, '_blank')}
@@ -444,9 +540,66 @@ const BordereauTable: React.FC = () => {
           </div>
         </div>
         
+        {/* Advanced Search */}
+        {showAdvancedSearch && (
+          <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Recherche avancée (référence, client, contenu OCR...)"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAdvancedSearch()}
+              />
+              <button
+                className="btn-sm btn-primary"
+                onClick={handleAdvancedSearch}
+              >
+                🔍 Rechercher
+              </button>
+              <button
+                className="btn-sm btn-secondary"
+                onClick={() => {
+                  setSearchQuery('');
+                  setShowAdvancedSearch(false);
+                  loadData();
+                }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Performance Analytics */}
+        {performanceData && (
+          <div className="mb-4 p-4 bg-green-50 rounded-lg">
+            <h3 className="text-sm font-semibold text-green-800 mb-2">📈 Analytics de Performance</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="text-center">
+                <div className="font-bold text-green-600">{performanceData.totalProcessed}</div>
+                <div className="text-gray-600">Total traités</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-blue-600">{performanceData.averageProcessingTime}j</div>
+                <div className="text-gray-600">Durée moyenne</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-purple-600">{performanceData.slaCompliance}%</div>
+                <div className="text-gray-600">Conformité SLA</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-orange-600">{Object.keys(performanceData.statusDistribution).length}</div>
+                <div className="text-gray-600">Statuts actifs</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Bulk actions */}
         {selectedRows.size > 0 && (
-          <div className="flex gap-2 mb-4 p-3 bg-blue-50 rounded-lg">
+          <div className="flex gap-2 mb-4 p-3 bg-blue-50 rounded-lg flex-wrap">
             {canAssign && (
               <button
                 className="btn-sm btn-primary"
@@ -463,6 +616,31 @@ const BordereauTable: React.FC = () => {
                 Marquer traités ({selectedRows.size})
               </button>
             )}
+            <div className="relative group">
+              <button className="btn-sm btn-warning">
+                Changer statut ▼
+              </button>
+              <div className="absolute top-8 left-0 bg-white shadow-lg rounded-md py-1 z-10 hidden group-hover:block min-w-40">
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('EN_COURS')}
+                >
+                  En cours
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('TRAITE')}
+                >
+                  Traité
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('EN_DIFFICULTE')}
+                >
+                  En difficulté
+                </button>
+              </div>
+            </div>
             <button
               className="btn-sm btn-secondary"
               onClick={() => setBatchModalOpen(true)}
@@ -620,6 +798,67 @@ const BordereauTable: React.FC = () => {
         </div>
       )}
 
+      {/* Notification Modal */}
+      {showNotificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Envoyer une notification</h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              const message = formData.get('message') as string;
+              const recipients = (formData.get('recipients') as string).split(',').map(r => r.trim());
+              
+              if (selectedBordereauForNotification) {
+                sendCustomNotification(selectedBordereauForNotification, message, recipients)
+                  .then(() => {
+                    notify('Notification envoyée', 'success');
+                    setShowNotificationModal(false);
+                    setSelectedBordereauForNotification(null);
+                  })
+                  .catch(() => notify('Erreur lors de l\'envoi', 'error'));
+              }
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Message</label>
+                <textarea
+                  name="message"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  rows={3}
+                  required
+                  placeholder="Votre message..."
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Destinataires (emails séparés par des virgules)</label>
+                <input
+                  name="recipients"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  required
+                  placeholder="email1@example.com, email2@example.com"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  className="btn-sm btn-secondary"
+                  onClick={() => {
+                    setShowNotificationModal(false);
+                    setSelectedBordereauForNotification(null);
+                  }}
+                >
+                  Annuler
+                </button>
+                <button type="submit" className="btn-sm btn-primary">
+                  Envoyer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       {assignModalOpen && (
         <BordereauAssignModal
@@ -751,6 +990,27 @@ const BordereauTable: React.FC = () => {
         .btn-secondary:disabled,
         .btn-warning:disabled,
         .btn-success:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        .btn-info {
+          background-color: #0dcaf0;
+          color: white;
+          padding: 0.375rem 0.75rem;
+          border-radius: 0.375rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .btn-info:hover:not(:disabled) {
+          background-color: #0bb5d6;
+        }
+        
+        .btn-info:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
