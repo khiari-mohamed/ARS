@@ -12,6 +12,7 @@ export enum UserRole {
   BO = 'BO',
   MANAGER = 'MANAGER',
   ADMINISTRATEUR = 'ADMINISTRATEUR',
+  CLIENT_SERVICE = 'CLIENT_SERVICE',
 }
 
 /**

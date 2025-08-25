@@ -23,6 +23,8 @@ const statutMap: Record<Statut, { color: string; label: string }> = {
   CLOTURE: { color: 'border-green-700', label: 'Clôturé' },
   EN_DIFFICULTE: { color: 'border-red-500', label: 'En difficulté' },
   PARTIEL: { color: 'border-orange-500', label: 'Partiel' },
+  MIS_EN_INSTANCE: { color: 'border-yellow-600', label: 'Mis en instance' },
+  REJETE: { color: 'border-red-700', label: 'Rejeté' }
 };
 
 const WorkflowNode: React.FC<WorkflowNodeProps> = ({ label, statut, onClick }) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchBordereaux, assignBordereau2 as assignBordereau, markBordereauAsProcessed, exportBordereauxCSV, bulkUpdateBordereaux, bulkAssignBordereaux, fetchUsers, progressToNextStage, getPerformanceAnalytics, advancedSearchBordereaux, batchUpdateStatus, sendCustomNotification } from '../services/bordereauxService';
+import { fetchBordereaux, assignBordereau2 as assignBordereau, markBordereauAsProcessed, exportBordereauxCSV, bulkUpdateBordereaux, bulkAssignBordereaux, fetchUsers, progressToNextStage, getPerformanceAnalytics, advancedSearchBordereaux, batchUpdateStatus, sendCustomNotification, startScan, completeScan, returnBordereau, archiveBordereau } from '../services/bordereauxService';
 import { fetchClients } from '../services/clientService';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -7,6 +7,7 @@ import BordereauAssignModal from './BordereauAssignModal';
 import BordereauBatchOperations from './BordereauBatchOperations';
 import AdvancedBordereauFilters from './AdvancedBordereauFilters';
 import BordereauCreateForm from './BordereauCreateForm';
+import BordereauDetailsModal from './BordereauDetailsModal';
 
 interface TableColumn {
   key: string;
@@ -25,10 +26,14 @@ const columns: TableColumn[] = [
   { key: 'dateLimite', label: 'Date limite', sortable: true, width: '120px' },
   { key: 'statut', label: 'Status', sortable: true, width: '120px' },
   { key: 'assigned', label: 'Assigned', sortable: true, width: '150px' },
-  { key: 'actions', label: 'Actions', sortable: false, width: '200px' }
+  { key: 'actions', label: 'Actions', sortable: false, width: '300px' }
 ];
 
-const BordereauTable: React.FC = () => {
+interface BordereauTableProps {
+  filters?: any;
+}
+
+const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilters = {} }) => {
   const { user } = useAuth();
   const { notify } = useNotification();
   const [bordereaux, setBordereaux] = useState<any[]>([]);
@@ -42,7 +47,7 @@ const BordereauTable: React.FC = () => {
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [filters, setFilters] = useState<any>({});
+  const [filters, setFilters] = useState<any>(externalFilters);
   const [users, setUsers] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [selectedBordereauId, setSelectedBordereauId] = useState<string | null>(null);
@@ -53,17 +58,36 @@ const BordereauTable: React.FC = () => {
   const [performanceData, setPerformanceData] = useState<any>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [selectedBordereauForNotification, setSelectedBordereauForNotification] = useState<string | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedBordereauForDetails, setSelectedBordereauForDetails] = useState<string | null>(null);
 
-  // Role-based permissions
-  const canAssign = ['CHEF_EQUIPE', 'ADMINISTRATEUR', 'SUPER_ADMIN'].includes(user?.role || '');
-  const canProcess = ['GESTIONNAIRE', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'SUPER_ADMIN'].includes(user?.role || '');
-  const canExport = ['ADMINISTRATEUR', 'SUPER_ADMIN'].includes(user?.role || '');
-  const canCreate = ['CLIENT_SERVICE', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'SUPER_ADMIN'].includes(user?.role || '');
+  // Role-based permissions according to workflow specification
+  const isBureauOrdre = user?.role === 'BO';
+  const isScanTeam = user?.role === 'SCAN_TEAM';
+  const isChefEquipe = user?.role === 'CHEF_EQUIPE';
+  const isGestionnaire = user?.role === 'GESTIONNAIRE';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdministrateur = user?.role === 'ADMINISTRATEUR';
+  
+  // Permissions based on workflow roles
+  const canCreate = isBureauOrdre || isChefEquipe || isAdministrateur || isSuperAdmin;
+  const canScan = isScanTeam || isAdministrateur || isSuperAdmin;
+  const canAssign = isChefEquipe || isAdministrateur || isSuperAdmin;
+  const canProcess = isGestionnaire || isChefEquipe || isAdministrateur || isSuperAdmin;
+  const canReturn = isGestionnaire || isChefEquipe || isAdministrateur || isSuperAdmin;
+  const canReassign = isSuperAdmin || isAdministrateur;
+  const canExport = isAdministrateur || isSuperAdmin;
+  const canViewAll = isSuperAdmin || isAdministrateur;
+  const canManageAlerts = isSuperAdmin || isAdministrateur;
 
   useEffect(() => {
     loadInitialData();
   }, []);
 
+  useEffect(() => {
+    setFilters(externalFilters);
+  }, [externalFilters]);
+  
   useEffect(() => {
     loadData();
   }, [currentPage, pageSize, sortConfig, filters]);
@@ -84,7 +108,7 @@ const BordereauTable: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const params = {
+      let params = {
         ...filters,
         page: currentPage,
         pageSize,
@@ -93,6 +117,22 @@ const BordereauTable: React.FC = () => {
           sortOrder: sortConfig.direction
         })
       };
+
+      // Role-based filtering according to workflow specification
+      if (isBureauOrdre) {
+        // BO sees all bordereaux they created or need to process
+        params = { ...params, createdBy: user?.id };
+      } else if (isScanTeam) {
+        // SCAN team sees bordereaux ready for scan or being scanned
+        params = { ...params, statut: ['A_SCANNER', 'SCAN_EN_COURS'] };
+      } else if (isChefEquipe) {
+        // Chef sees bordereaux in their team's workflow
+        params = { ...params, statut: ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] };
+      } else if (isGestionnaire) {
+        // Gestionnaire sees only bordereaux assigned to them
+        params = { ...params, assignedToUserId: user?.id };
+      }
+      // Super Admin and Administrateur see all bordereaux (no additional filters)
 
       const response = await fetchBordereaux(params);
       
@@ -199,14 +239,23 @@ const BordereauTable: React.FC = () => {
 
     setImportingExcel(true);
     try {
-      // Here you would implement the Excel import logic
-      // For now, we'll just show a success message
-      notify('Import Excel en cours de développement', 'info');
+      const { importBordereauxFromExcel } = await import('../services/ovService');
+      const result = await importBordereauxFromExcel(file);
+      
+      if (result.success) {
+        notify(`${result.imported} bordereau(x) importé(s) avec succès`, 'success');
+        if (result.errors?.length > 0) {
+          notify(`${result.errors.length} erreur(s) détectée(s)`, 'warning');
+        }
+        loadData();
+      } else {
+        notify('Erreur lors de l\'import Excel', 'error');
+      }
     } catch (error) {
       notify('Erreur lors de l\'import Excel', 'error');
     } finally {
       setImportingExcel(false);
-      event.target.value = ''; // Reset file input
+      event.target.value = '';
     }
   };
 
@@ -217,8 +266,24 @@ const BordereauTable: React.FC = () => {
     }
 
     try {
-      // Here you would implement the OV generation logic
-      notify('Génération OV en cours de développement', 'info');
+      const { generateOV } = await import('../services/ovService');
+      const ovData = await generateOV({
+        bordereauIds: Array.from(selectedRows),
+        format: 'PDF',
+        includeDetails: true
+      });
+      
+      // Create download link
+      const blob = new Blob([ovData], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `OV_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      notify(`OV généré pour ${selectedRows.size} bordereau(x)`, 'success');
+      setSelectedRows(new Set());
     } catch (error) {
       notify('Erreur lors de la génération OV', 'error');
     }
@@ -231,6 +296,82 @@ const BordereauTable: React.FC = () => {
       loadData();
     } catch (error) {
       notify('Erreur lors de la progression', 'error');
+    }
+  };
+
+  const handleStartScan = async (bordereauId: string) => {
+    if (!canScan) {
+      notify('Vous n\'avez pas les droits pour démarrer un scan', 'warning');
+      return;
+    }
+    try {
+      await startScan(bordereauId);
+      notify('Scan démarré', 'success');
+      loadData();
+    } catch (error) {
+      notify('Erreur lors du démarrage du scan', 'error');
+    }
+  };
+
+  const handleCompleteScan = async (bordereauId: string) => {
+    if (!canScan) {
+      notify('Vous n\'avez pas les droits pour terminer un scan', 'warning');
+      return;
+    }
+    try {
+      await completeScan(bordereauId);
+      notify('Scan terminé', 'success');
+      loadData();
+    } catch (error) {
+      notify('Erreur lors de la finalisation du scan', 'error');
+    }
+  };
+
+  const handleReturnBordereau = async (bordereauId: string, reason: string) => {
+    if (!canReturn) {
+      notify('Vous n\'avez pas les droits pour retourner un bordereau', 'warning');
+      return;
+    }
+    try {
+      await returnBordereau(bordereauId, reason);
+      notify('Bordereau retourné au chef d\'équipe', 'success');
+      loadData();
+    } catch (error) {
+      notify('Erreur lors du retour', 'error');
+    }
+  };
+
+  const handleArchiveBordereau = async (bordereauId: string) => {
+    if (!canReassign) {
+      notify('Vous n\'avez pas les droits pour archiver', 'warning');
+      return;
+    }
+    try {
+      await archiveBordereau(bordereauId);
+      notify('Bordereau archivé', 'success');
+      loadData();
+    } catch (error) {
+      notify('Erreur lors de l\'archivage', 'error');
+    }
+  };
+
+  const handleMarkAsInstance = async (bordereauId: string) => {
+    try {
+      await batchUpdateStatus([bordereauId], 'EN_DIFFICULTE');
+      notify('Bordereau mis en instance', 'success');
+      loadData();
+    } catch (error) {
+      notify('Erreur lors de la mise en instance', 'error');
+    }
+  };
+
+  const handleRejectBordereau = async (bordereauId: string) => {
+    try {
+      await batchUpdateStatus([bordereauId], 'VIREMENT_REJETE');
+      notify('Bordereau rejeté', 'success');
+      loadData();
+    } catch (error) {
+      notify('Erreur lors du rejet', 'error');
     }
   };
 
@@ -354,7 +495,9 @@ const BordereauTable: React.FC = () => {
       'VIREMENT_REJETE': { color: 'bg-red-100 text-red-800', label: 'Virement rejeté', icon: '❌' },
       'CLOTURE': { color: 'bg-gray-100 text-gray-800', label: 'Clôturé', icon: '🔒' },
       'EN_DIFFICULTE': { color: 'bg-red-100 text-red-800', label: 'En difficulté', icon: '⚠️' },
-      'PARTIEL': { color: 'bg-amber-100 text-amber-800', label: 'Partiel', icon: '📊' }
+      'PARTIEL': { color: 'bg-amber-100 text-amber-800', label: 'Partiel', icon: '📊' },
+      'MIS_EN_INSTANCE': { color: 'bg-yellow-100 text-yellow-800', label: 'Mis en instance', icon: '⏸️' },
+      'REJETE': { color: 'bg-red-100 text-red-800', label: 'Rejeté', icon: '❌' }
     };
 
     const config = statusConfig[bordereau.statut as keyof typeof statusConfig] || 
@@ -399,85 +542,180 @@ const BordereauTable: React.FC = () => {
   };
 
   const renderActionButtons = (bordereau: any) => {
+    const status = bordereau.statut;
+    console.log('Rendering buttons for role:', user?.role, 'status:', status, 'bordereau:', bordereau.id);
+    
     return (
-      <div className="flex items-center gap-1">
-        {canAssign && (
-          <button
-            className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-            onClick={() => handleAssignSingle(bordereau.id)}
-            title="Assigner"
-          >
-            👤
-          </button>
-        )}
+      <div className="flex items-center gap-1 min-w-[200px]">
+        {/* Always show Voir button */}
         <button
-          className="p-1 text-gray-600 hover:bg-gray-50 rounded transition-colors"
-          onClick={() => window.open(`/bordereaux/${bordereau.id}`, '_blank')}
+          className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedBordereauForDetails(bordereau.id);
+            setShowDetailsModal(true);
+          }}
           title="Voir détails"
         >
-          👁️
+          👁️ Voir
         </button>
-        {canProcess && bordereau.statut !== 'TRAITE' && bordereau.statut !== 'CLOTURE' && (
-          <button
-            className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
-            onClick={() => handleProcessSingle(bordereau.id)}
-            title="Marquer comme traité"
-          >
-            ✅
-          </button>
-        )}
+
+        {/* Always show Progresser button */}
         <button
-          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-          onClick={() => handleProgressBordereau(bordereau.id)}
+          className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleProgressBordereau(bordereau.id);
+          }}
           title="Progresser vers l'étape suivante"
         >
-          ➡️
+          ➡️ Progresser
         </button>
-        <button
-          className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
-          onClick={() => handleSendNotification(bordereau.id)}
-          title="Envoyer notification"
-        >
-          🔔
-        </button>
-        <button
-          className="p-1 text-gray-600 hover:bg-gray-50 rounded transition-colors"
-          onClick={() => window.open(`/bordereaux/${bordereau.id}/history`, '_blank')}
-          title="Historique"
-        >
-          📜
-        </button>
-        <div className="relative group">
-          <button className="p-1 text-gray-600 hover:bg-gray-50 rounded transition-colors">
-            ⋯
+
+        {/* Bureau d'Ordre specific */}
+        {isBureauOrdre && status === 'EN_ATTENTE' && (
+          <button
+            className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded transition-colors"
+            onClick={() => batchUpdateStatus([bordereau.id], 'A_SCANNER')}
+            title="Envoyer au scan"
+          >
+            📤 Scan
           </button>
-          <div className="absolute right-0 top-8 bg-white shadow-lg rounded-md py-1 z-10 hidden group-hover:block min-w-32">
-            <button 
-              className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
-              onClick={() => window.open(`/bordereaux/${bordereau.id}/pdf`, '_blank')}
-            >
-              Export PDF
-            </button>
-            {canAssign && (
-              <button 
-                className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
-                onClick={() => {
-                  // Handle return to team leader
-                  notify('Fonctionnalité en cours de développement', 'info');
-                }}
+        )}
+
+        {/* SCAN Team specific */}
+        {isScanTeam && (
+          <>
+            {status === 'A_SCANNER' && (
+              <button
+                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
+                onClick={() => handleStartScan(bordereau.id)}
+                title="Démarrer scan"
               >
-                Retourner au chef
+                🖨️ Start
               </button>
             )}
-            <button 
-              className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50 text-red-600"
-              onClick={() => {
-                // Handle archive
-                notify('Fonctionnalité d\'archivage en cours de développement', 'info');
-              }}
+            {status === 'SCAN_EN_COURS' && (
+              <button
+                className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 rounded transition-colors"
+                onClick={() => handleCompleteScan(bordereau.id)}
+                title="Terminer scan"
+              >
+                ✅ Done
+              </button>
+            )}
+          </>
+        )}
+
+        {/* Chef d'Équipe specific */}
+        {isChefEquipe && (
+          <>
+            {(status === 'SCANNE' || status === 'A_AFFECTER') && (
+              <button
+                className="px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 rounded transition-colors"
+                onClick={() => handleAssignSingle(bordereau.id)}
+                title="Assigner à un gestionnaire"
+              >
+                👥 Assigner
+              </button>
+            )}
+            {bordereau.assignedToUserId && (
+              <button
+                className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded transition-colors"
+                onClick={() => batchUpdateStatus([bordereau.id], 'A_AFFECTER')}
+                title="Récupérer le dossier"
+              >
+                ↩️ Récupérer
+              </button>
+            )}
+          </>
+        )}
+
+        {/* Gestionnaire specific */}
+        {isGestionnaire && status === 'EN_COURS' && (
+          <>
+            <button
+              className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 rounded transition-colors"
+              onClick={() => handleProcessSingle(bordereau.id)}
+              title="Marquer comme traité"
             >
-              Archiver
+              ✅ Traiter
             </button>
+            <button
+              className="px-2 py-1 text-xs bg-yellow-100 hover:bg-yellow-200 rounded transition-colors"
+              onClick={() => handleMarkAsInstance(bordereau.id)}
+              title="Mettre en instance"
+            >
+              ⏸️ Instance
+            </button>
+            <button
+              className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 rounded transition-colors"
+              onClick={() => handleRejectBordereau(bordereau.id)}
+              title="Rejeter le dossier"
+            >
+              ❌ Rejeter
+            </button>
+            <button
+              className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
+              onClick={() => {
+                const reason = prompt('Motif du retour:');
+                if (reason) handleReturnBordereau(bordereau.id, reason);
+              }}
+              title="Renvoyer au chef"
+            >
+              🔄 Renvoyer
+            </button>
+          </>
+        )}
+
+        {/* Super Admin specific */}
+        {isSuperAdmin && (
+          <>
+            <button
+              className="px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 rounded transition-colors"
+              onClick={() => handleAssignSingle(bordereau.id)}
+              title="Réaffecter"
+            >
+              ↔️ Réaffecter
+            </button>
+            <button
+              className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded transition-colors"
+              onClick={() => notify('Gestion des alertes', 'info')}
+              title="Gérer alertes"
+            >
+              ⚠️ Alertes
+            </button>
+          </>
+        )}
+
+        {/* More actions dropdown */}
+        <div className="relative group">
+          <button className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors">
+            ⋯
+          </button>
+          <div className="absolute right-0 top-8 bg-white shadow-lg rounded-md py-1 z-50 hidden group-hover:block min-w-32">
+            <button 
+              className="block w-full text-left px-3 py-1 text-xs hover:bg-gray-50"
+              onClick={() => handleSendNotification(bordereau.id)}
+            >
+              🔔 Notification
+            </button>
+            <button 
+              className="block w-full text-left px-3 py-1 text-xs hover:bg-gray-50"
+              onClick={() => notify(`Export PDF du bordereau ${bordereau.reference}`, 'info')}
+            >
+              📄 Export PDF
+            </button>
+            {canReassign && (
+              <button 
+                className="block w-full text-left px-3 py-1 text-xs hover:bg-gray-50 text-red-600"
+                onClick={() => handleArchiveBordereau(bordereau.id)}
+              >
+                🗄️ Archiver
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -495,11 +733,28 @@ const BordereauTable: React.FC = () => {
 
   return (
     <div className="bg-white rounded-lg shadow-sm">
+      {/* Debug info */}
+      <div className="p-2 bg-yellow-50 border-b text-xs">
+        <strong>Debug:</strong> User Role = {user?.role} | 
+        BO={isBureauOrdre.toString()} | 
+        SCAN={isScanTeam.toString()} | 
+        CHEF={isChefEquipe.toString()} | 
+        GEST={isGestionnaire.toString()} | 
+        ADMIN={isSuperAdmin.toString()}
+      </div>
+      
       {/* Header with actions */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">Bordereaux ({total})</h2>
+            <h2 className="text-lg font-semibold">
+              {isBureauOrdre && '📅 Bureau d\'Ordre - '}
+              {isScanTeam && '🖨️ Service SCAN - '}
+              {isChefEquipe && '👨‍💼 Chef d\'Equipe - '}
+              {isGestionnaire && '👩‍💻 Gestionnaire - '}
+              {isSuperAdmin && '🔑 Super Admin - '}
+              Bordereaux ({total})
+            </h2>
             {selectedRows.size > 0 && (
               <span className="text-sm text-blue-600">
                 {selectedRows.size} sélectionné(s)
@@ -507,36 +762,94 @@ const BordereauTable: React.FC = () => {
             )}
           </div>
           <div className="flex gap-2">
-            {canCreate && (
-              <button
-                className="btn-primary"
-                onClick={() => setCreateModalOpen(true)}
-              >
-                + Ajouter Bordereau
-              </button>
+            {/* Bureau d'Ordre specific buttons */}
+            {isBureauOrdre && (
+              <>
+                <button
+                  className="btn-primary"
+                  onClick={() => setCreateModalOpen(true)}
+                >
+                  ➕ Enregistrer Bordereau
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => notify('Modification disponible via détails', 'info')}
+                >
+                  ✏️ Modifier
+                </button>
+              </>
             )}
-            <div className="relative">
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleImportExcel}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                disabled={importingExcel}
-              />
-              <button
-                className="btn-secondary flex items-center gap-2"
-                disabled={importingExcel}
-              >
-                📁 {importingExcel ? 'Import...' : 'Importer Excel'}
-              </button>
-            </div>
-            <button
-              className="btn-warning"
-              onClick={handleGenerateOV}
-              disabled={selectedRows.size === 0}
-            >
-              Générer OV
-            </button>
+            
+            {/* Scan Team specific buttons */}
+            {isScanTeam && (
+              <>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.png"
+                    onChange={handleImportExcel}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={importingExcel}
+                  />
+                  <button
+                    className="btn-secondary flex items-center gap-2"
+                    disabled={importingExcel}
+                  >
+                    📂 {importingExcel ? 'Import...' : 'Importer Scan'}
+                  </button>
+                </div>
+              </>
+            )}
+            
+            {/* Chef d'Equipe specific buttons */}
+            {isChefEquipe && (
+              <>
+                <button
+                  className="btn-primary"
+                  onClick={() => setAdvancedFiltersOpen(true)}
+                >
+                  📊 Tableau de Bord
+                </button>
+              </>
+            )}
+            
+            {/* Super Admin specific buttons */}
+            {isSuperAdmin && (
+              <>
+                <button
+                  className="btn-primary"
+                  onClick={() => setCreateModalOpen(true)}
+                >
+                  + Nouveau Bordereau
+                </button>
+                <button
+                  className="btn-warning"
+                  onClick={handleGenerateOV}
+                  disabled={selectedRows.size === 0}
+                >
+                  Générer OV
+                </button>
+              </>
+            )}
+            
+            {/* Common import for non-BO roles */}
+            {!isBureauOrdre && !isScanTeam && (
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImportExcel}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={importingExcel}
+                />
+                <button
+                  className="btn-secondary flex items-center gap-2"
+                  disabled={importingExcel}
+                >
+                  📁 {importingExcel ? 'Import...' : 'Importer Excel'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
         
@@ -572,8 +885,54 @@ const BordereauTable: React.FC = () => {
           </div>
         )}
 
+        {/* Chef d'Equipe Corbeille View */}
+        {isChefEquipe && (
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+            <h3 className="text-sm font-semibold text-blue-800 mb-2">📋 Corbeille Chef d'Équipe</h3>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="text-center p-3 bg-white rounded border">
+                <div className="font-bold text-green-600">{bordereaux.filter(b => b.statut === 'TRAITE' || b.statut === 'CLOTURE').length}</div>
+                <div className="text-gray-600">Dossiers traités</div>
+              </div>
+              <div className="text-center p-3 bg-white rounded border">
+                <div className="font-bold text-yellow-600">{bordereaux.filter(b => ['ASSIGNE', 'EN_COURS'].includes(b.statut)).length}</div>
+                <div className="text-gray-600">Dossiers en cours</div>
+              </div>
+              <div className="text-center p-3 bg-white rounded border">
+                <div className="font-bold text-orange-600">{bordereaux.filter(b => ['SCANNE', 'A_AFFECTER'].includes(b.statut)).length}</div>
+                <div className="text-gray-600">Dossiers non affectés</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Gestionnaire Personal Corbeille */}
+        {isGestionnaire && (
+          <div className="mb-4 p-4 bg-green-50 rounded-lg">
+            <h3 className="text-sm font-semibold text-green-800 mb-2">📋 Ma Corbeille Personnelle</h3>
+            <div className="grid grid-cols-4 gap-4 text-sm">
+              <div className="text-center p-3 bg-white rounded border">
+                <div className="font-bold text-blue-600">{bordereaux.filter(b => b.statut === 'EN_COURS').length}</div>
+                <div className="text-gray-600">En cours</div>
+              </div>
+              <div className="text-center p-3 bg-white rounded border">
+                <div className="font-bold text-green-600">{bordereaux.filter(b => b.statut === 'TRAITE').length}</div>
+                <div className="text-gray-600">Traités</div>
+              </div>
+              <div className="text-center p-3 bg-white rounded border">
+                <div className="font-bold text-red-600">{bordereaux.filter(b => b.statut === 'EN_DIFFICULTE').length}</div>
+                <div className="text-gray-600">Retournés</div>
+              </div>
+              <div className="text-center p-3 bg-white rounded border">
+                <div className="font-bold text-orange-600">{bordereaux.filter(b => calculateDaysRemaining(b) <= 3).length}</div>
+                <div className="text-gray-600">Urgences</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Performance Analytics */}
-        {performanceData && (
+        {performanceData && (isSuperAdmin || isAdministrateur) && (
           <div className="mb-4 p-4 bg-green-50 rounded-lg">
             <h3 className="text-sm font-semibold text-green-800 mb-2">📈 Analytics de Performance</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -623,6 +982,36 @@ const BordereauTable: React.FC = () => {
               <div className="absolute top-8 left-0 bg-white shadow-lg rounded-md py-1 z-10 hidden group-hover:block min-w-40">
                 <button 
                   className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('A_SCANNER')}
+                >
+                  À scanner
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('SCAN_EN_COURS')}
+                >
+                  Scan en cours
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('SCANNE')}
+                >
+                  Scanné
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('A_AFFECTER')}
+                >
+                  À affecter
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('ASSIGNE')}
+                >
+                  Assigné
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
                   onClick={() => handleBatchStatusUpdate('EN_COURS')}
                 >
                   En cours
@@ -639,6 +1028,24 @@ const BordereauTable: React.FC = () => {
                 >
                   En difficulté
                 </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('MIS_EN_INSTANCE')}
+                >
+                  Mis en instance
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('REJETE')}
+                >
+                  Rejeté
+                </button>
+                <button 
+                  className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
+                  onClick={() => handleBatchStatusUpdate('CLOTURE')}
+                >
+                  Clôturé
+                </button>
               </div>
             </div>
             <button
@@ -652,21 +1059,41 @@ const BordereauTable: React.FC = () => {
         
         {/* Filters toggle */}
         <div className="flex justify-between items-center">
-          <button
-            className="btn-sm btn-secondary"
-            onClick={() => setAdvancedFiltersOpen(!advancedFiltersOpen)}
-          >
-            🔍 Filtres avancés
-          </button>
-          {canExport && (
+          <div className="flex gap-2">
             <button
               className="btn-sm btn-secondary"
-              onClick={handleExport}
-              disabled={exporting}
+              onClick={() => setAdvancedFiltersOpen(!advancedFiltersOpen)}
             >
-              {exporting ? 'Export...' : '📊 Exporter CSV'}
+              🔍 Filtres avancés
             </button>
-          )}
+            <button
+              className="btn-sm btn-info"
+              onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+            >
+              🔎 Recherche avancée
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {canExport && (
+              <>
+                <button
+                  className="btn-sm btn-secondary"
+                  onClick={handleExport}
+                  disabled={exporting}
+                >
+                  {exporting ? 'Export...' : '📊 Exporter CSV'}
+                </button>
+                {isSuperAdmin && (
+                  <button
+                    className="btn-sm btn-secondary"
+                    onClick={() => notify('Export Excel/PDF disponible', 'info')}
+                  >
+                    📅 Exporter Excel/PDF
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -761,6 +1188,7 @@ const BordereauTable: React.FC = () => {
                     {getAssignedUser(bordereau)}
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap">
+                    <div className="text-xs text-gray-500 mb-1">Status: {bordereau.statut}</div>
                     {renderActionButtons(bordereau)}
                   </td>
                 </tr>
@@ -909,6 +1337,17 @@ const BordereauTable: React.FC = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* Details Modal */}
+      {showDetailsModal && selectedBordereauForDetails && (
+        <BordereauDetailsModal
+          bordereauId={selectedBordereauForDetails}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedBordereauForDetails(null);
+          }}
+        />
       )}
 
       <style>{`

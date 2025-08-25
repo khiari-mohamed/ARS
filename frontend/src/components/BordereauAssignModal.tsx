@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { fetchUsers, bulkAssignBordereaux } from '../services/bordereauxService';
 import { useNotification } from '../contexts/NotificationContext';
-import { assignBordereau2 as assignBordereau, fetchUsers } from '../services/bordereauxService';
 
-interface Props {
+interface BordereauAssignModalProps {
   bordereauId?: string;
   selectedBordereaux?: string[];
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const BordereauAssignModal: React.FC<Props> = ({ bordereauId, selectedBordereaux, onClose, onSuccess }) => {
-  const { user } = useAuth();
+const BordereauAssignModal: React.FC<BordereauAssignModalProps> = ({ 
+  bordereauId, 
+  selectedBordereaux, 
+  onClose, 
+  onSuccess 
+}) => {
   const { notify } = useNotification();
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -19,22 +22,22 @@ const BordereauAssignModal: React.FC<Props> = ({ bordereauId, selectedBordereaux
   const [loadingUsers, setLoadingUsers] = useState(true);
 
   useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const usersData = await fetchUsers({ role: 'GESTIONNAIRE' });
+        setUsers(usersData || []);
+      } catch (error) {
+        console.error('Error loading users:', error);
+        notify('Erreur lors du chargement des utilisateurs', 'error');
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
     loadUsers();
   }, []);
 
-  const loadUsers = async () => {
-    try {
-      const response = await fetchUsers({ role: 'GESTIONNAIRE' });
-      setUsers(response || []);
-    } catch (error) {
-      notify('Erreur lors du chargement des utilisateurs', 'error');
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAssign = async () => {
     if (!selectedUserId) {
       notify('Veuillez sélectionner un utilisateur', 'warning');
       return;
@@ -42,16 +45,13 @@ const BordereauAssignModal: React.FC<Props> = ({ bordereauId, selectedBordereaux
 
     setLoading(true);
     try {
-      if (bordereauId) {
-        await assignBordereau(bordereauId, selectedUserId);
-        notify('Bordereau assigné avec succès', 'success');
-      } else if (selectedBordereaux && selectedBordereaux.length > 0) {
-        for (const id of selectedBordereaux) {
-          await assignBordereau(id, selectedUserId);
-        }
-        notify(`${selectedBordereaux.length} bordereau(x) assigné(s) avec succès`, 'success');
-      }
+      const ids = bordereauId ? [bordereauId] : selectedBordereaux || [];
+      await bulkAssignBordereaux(ids, selectedUserId);
+      
+      const count = ids.length;
+      notify(`${count} bordereau(x) assigné(s) avec succès`, 'success');
       onSuccess();
+      onClose();
     } catch (error) {
       notify('Erreur lors de l\'assignation', 'error');
     } finally {
@@ -59,65 +59,77 @@ const BordereauAssignModal: React.FC<Props> = ({ bordereauId, selectedBordereaux
     }
   };
 
-  const bordereauCount = bordereauId ? 1 : (selectedBordereaux?.length || 0);
+  const borderCount = bordereauId ? 1 : (selectedBordereaux?.length || 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-      <div className="bg-white rounded shadow-lg p-6 w-full max-w-md relative">
-        <button 
-          className="absolute top-2 right-2 text-gray-500 hover:text-gray-800" 
-          onClick={onClose} 
-          aria-label="Fermer"
-        >
-          ✕
-        </button>
-        
-        <h2 className="text-xl font-bold mb-4">
-          Assigner {bordereauCount} bordereau{bordereauCount > 1 ? 'x' : ''}
-        </h2>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Gestionnaire
-            </label>
+    <div className="bordereau-progress-modal">
+      <div className="bordereau-progress-content">
+        <div className="bordereau-details-header">
+          <h2 className="bordereau-details-title">👥 Assigner Bordereau(x)</h2>
+          <button
+            onClick={onClose}
+            className="bordereau-details-close"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="bordereau-details-body">
+          <div className="bordereau-details-section">
+            <div className="bordereau-details-field">
+              <label className="bordereau-details-label">Nombre de bordereaux</label>
+              <p className="bordereau-details-value">{borderCount} bordereau(x) sélectionné(s)</p>
+            </div>
+
             {loadingUsers ? (
-              <div className="text-sm text-gray-500">Chargement...</div>
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-sm text-gray-600">Chargement des utilisateurs...</p>
+              </div>
             ) : (
-              <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                required
-              >
-                <option value="">Sélectionner un gestionnaire</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.fullName} ({u.email})
-                  </option>
-                ))}
-              </select>
+              <div className="bordereau-details-field">
+                <label className="bordereau-details-label">Assigner à</label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Sélectionner un gestionnaire...</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.fullName} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {users.length === 0 && !loadingUsers && (
+              <div className="text-center py-4">
+                <p className="text-gray-500">Aucun gestionnaire disponible</p>
+              </div>
             )}
           </div>
-          
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              disabled={loading || loadingUsers}
-            >
-              {loading ? 'Assignation...' : 'Assigner'}
-            </button>
-          </div>
-        </form>
+        </div>
+
+        <div className="bordereau-details-footer">
+          <button
+            onClick={onClose}
+            className="bordereau-btn-close"
+            disabled={loading}
+          >
+            ✖ Annuler
+          </button>
+          <button
+            onClick={handleAssign}
+            disabled={loading || !selectedUserId || loadingUsers}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {loading ? '⏳ Assignation...' : '✅ Assigner'}
+          </button>
+        </div>
       </div>
     </div>
   );

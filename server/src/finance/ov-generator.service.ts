@@ -1,307 +1,131 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AlertsService } from '../alerts/alerts.service';
 import * as PDFDocument from 'pdfkit';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as ExcelJS from 'exceljs';
 
-interface OVGenerationRequest {
+export interface OVGenerationRequest {
   bordereauIds: string[];
-  donneurOrdreId: string;
-  bankCode: string;
-}
-
-interface BankFormat {
-  txtTemplate: (data: any) => string;
-  pdfTemplate: (doc: any, data: any) => void;
+  format: 'PDF' | 'EXCEL';
+  includeDetails: boolean;
 }
 
 @Injectable()
 export class OVGeneratorService {
   private readonly logger = new Logger(OVGeneratorService.name);
-  private readonly outputDir = path.join(process.cwd(), 'generated', 'virements');
 
-  constructor(
-    private prisma: PrismaService,
-    private alertsService: AlertsService,
-  ) {
-    this.ensureOutputDir();
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
-  private ensureOutputDir() {
-    if (!fs.existsSync(this.outputDir)) {
-      fs.mkdirSync(this.outputDir, { recursive: true });
-    }
-  }
-
-  async generateOV(request: OVGenerationRequest) {
-    const { bordereauIds, donneurOrdreId, bankCode } = request;
-
-    // Fetch bordereau data with BS details
+  async generateOV(request: OVGenerationRequest): Promise<Buffer> {
     const bordereaux = await this.prisma.bordereau.findMany({
-      where: { 
-        id: { in: bordereauIds },
-        statut: 'TRAITE'
-      },
+      where: { id: { in: request.bordereauIds } },
       include: {
         client: true,
-        BulletinSoin: {
-          where: { etat: 'VALIDATED' },
-          include: { owner: true }
-        }
+        contract: true,
+        BulletinSoin: true,
+        virement: true
       }
     });
 
-    if (bordereaux.length === 0) {
-      throw new Error('No valid bordereaux found for OV generation');
+    if (request.format === 'PDF') {
+      return this.generatePDFOV(bordereaux, request.includeDetails);
+    } else {
+      return this.generateExcelOV(bordereaux, request.includeDetails);
     }
-
-    // Get donneur d'ordre details
-    const donneurOrdre = await this.prisma.donneurDOrdre.findUnique({
-      where: { id: donneurOrdreId },
-      include: { society: true }
-    });
-
-    if (!donneurOrdre) {
-      throw new Error('Donneur d\'ordre not found');
-    }
-
-    // Aggregate payments by matricule (deduplicate)
-    const payments = this.aggregatePayments(bordereaux);
-    
-    // Generate files
-    const ovRef = this.generateOVReference();
-    const txtPath = await this.generateTXTFile(payments, donneurOrdre, bankCode, ovRef);
-    const pdfPath = await this.generatePDFFile(payments, donneurOrdre, ovRef);
-
-    // Create virement batch record
-    const virementBatch = await this.prisma.wireTransferBatch.create({
-      data: {
-        societyId: donneurOrdre.societyId,
-        donneurId: donneurOrdreId,
-        fileName: `OV_${ovRef}`,
-        fileType: 'BANK_TRANSFER',
-        status: 'CREATED'
-      }
-    });
-
-    // Create individual virement records
-    for (const payment of payments) {
-      await this.prisma.wireTransfer.create({
-        data: {
-          batchId: virementBatch.id,
-          memberId: payment.memberId,
-          donneurId: donneurOrdreId,
-          amount: payment.amount,
-          reference: payment.reference,
-          status: 'PENDING'
-        }
-      });
-    }
-
-    // Update bordereaux status
-    await this.prisma.bordereau.updateMany({
-      where: { id: { in: bordereauIds } },
-      data: { 
-        statut: 'TRAITE',
-        dateDepotVirement: new Date()
-      }
-    });
-
-    // Schedule 24h alert if not processed
-    await this.scheduleOVAlert(virementBatch.id);
-
-    return {
-      batchId: virementBatch.id,
-      ovReference: ovRef,
-      txtPath,
-      pdfPath,
-      totalAmount: payments.reduce((sum, p) => sum + p.amount, 0),
-      paymentCount: payments.length
-    };
   }
 
-  private aggregatePayments(bordereaux: any[]): any[] {
-    const paymentMap = new Map();
+  private async generatePDFOV(bordereaux: any[], includeDetails: boolean): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument();
+      const chunks: Buffer[] = [];
 
-    for (const bordereau of bordereaux) {
-      for (const bs of bordereau.BulletinSoin) {
-        const key = bs.matricule || bs.nomAssure;
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Header
+      doc.fontSize(20).text('Ordre de Virement (OV)', 50, 50);
+      doc.fontSize(12).text(`Généré le: ${new Date().toLocaleDateString('fr-FR')}`, 50, 80);
+      doc.text(`Nombre de bordereaux: ${bordereaux.length}`, 50, 100);
+
+      let yPosition = 140;
+
+      bordereaux.forEach((bordereau, index) => {
+        if (yPosition > 700) {
+          doc.addPage();
+          yPosition = 50;
+        }
+
+        doc.fontSize(14).text(`${index + 1}. Bordereau ${bordereau.reference}`, 50, yPosition);
+        yPosition += 20;
         
-        if (paymentMap.has(key)) {
-          paymentMap.get(key).amount += bs.montant || 0;
-          paymentMap.get(key).references.push(bs.numBs);
-        } else {
-          paymentMap.set(key, {
-            memberId: bs.ownerId,
-            matricule: bs.matricule,
-            nomAssure: bs.nomAssure,
-            nomBeneficiaire: bs.nomBeneficiaire,
-            amount: bs.montant || 0,
-            references: [bs.numBs],
-            rib: bs.owner?.rib || 'RIB_MISSING'
-          });
+        doc.fontSize(10)
+          .text(`Client: ${bordereau.client?.name || 'N/A'}`, 70, yPosition)
+          .text(`Statut: ${bordereau.statut}`, 300, yPosition);
+        yPosition += 15;
+        
+        doc.text(`Date réception: ${new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}`, 70, yPosition)
+          .text(`Nombre BS: ${bordereau.nombreBS}`, 300, yPosition);
+        yPosition += 15;
+
+        if (includeDetails && bordereau.BulletinSoin?.length > 0) {
+          const totalMontant = bordereau.BulletinSoin.reduce((sum: number, bs: any) => sum + (bs.montant || 0), 0);
+          doc.text(`Montant total: ${totalMontant.toFixed(2)} €`, 70, yPosition);
+          yPosition += 15;
         }
-      }
-    }
 
-    return Array.from(paymentMap.values()).map((payment, index) => ({
-      ...payment,
-      reference: `PAY_${String(index + 1).padStart(6, '0')}`
-    }));
-  }
-
-  private generateOVReference(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const time = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-    return `OV${year}${month}${day}${time}`;
-  }
-
-  private async generateTXTFile(payments: any[], donneurOrdre: any, bankCode: string, ovRef: string): Promise<string> {
-    const bankFormat = this.getBankFormat(bankCode);
-    const txtContent = bankFormat.txtTemplate({
-      payments,
-      donneurOrdre,
-      ovRef,
-      totalAmount: payments.reduce((sum, p) => sum + p.amount, 0),
-      date: new Date().toISOString().split('T')[0].replace(/-/g, '')
-    });
-
-    const txtPath = path.join(this.outputDir, `${ovRef}.txt`);
-    fs.writeFileSync(txtPath, txtContent, 'utf8');
-    
-    return txtPath;
-  }
-
-  private async generatePDFFile(payments: any[], donneurOrdre: any, ovRef: string): Promise<string> {
-    const pdfPath = path.join(this.outputDir, `${ovRef}.pdf`);
-    const doc = new PDFDocument();
-    const stream = fs.createWriteStream(pdfPath);
-    doc.pipe(stream);
-
-    // PDF Header
-    doc.fontSize(16).text('ORDRE DE VIREMENT', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(12).text(`Référence: ${ovRef}`);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`);
-    doc.text(`Donneur d'ordre: ${donneurOrdre.name}`);
-    doc.moveDown();
-
-    // Payments table
-    doc.text('DÉTAIL DES VIREMENTS:', { underline: true });
-    doc.moveDown();
-
-    let yPosition = doc.y;
-    payments.forEach((payment, index) => {
-      if (yPosition > 700) {
-        doc.addPage();
-        yPosition = 50;
-      }
-
-      doc.text(`${index + 1}. ${payment.nomAssure}`, 50, yPosition);
-      doc.text(`Matricule: ${payment.matricule}`, 70, yPosition + 15);
-      doc.text(`Montant: ${payment.amount.toFixed(2)} €`, 70, yPosition + 30);
-      doc.text(`RIB: ${payment.rib}`, 70, yPosition + 45);
-      
-      if (payment.rib === 'RIB_MISSING') {
-        doc.fillColor('red').text('⚠ RIB MANQUANT', 300, yPosition + 45).fillColor('black');
-      }
-
-      yPosition += 70;
-    });
-
-    // Summary
-    doc.moveDown();
-    doc.fontSize(14).text(`TOTAL: ${payments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)} €`, { align: 'right' });
-    doc.text(`Nombre de virements: ${payments.length}`, { align: 'right' });
-
-    doc.end();
-    
-    return new Promise((resolve) => {
-      stream.on('finish', () => resolve(pdfPath));
-    });
-  }
-
-  private getBankFormat(bankCode: string): BankFormat {
-    const formats: Record<string, BankFormat> = {
-      'BNP': {
-        txtTemplate: (data) => this.generateBNPFormat(data),
-        pdfTemplate: (doc, data) => this.generateBNPPDF(doc, data)
-      },
-      'SG': {
-        txtTemplate: (data) => this.generateSGFormat(data),
-        pdfTemplate: (doc, data) => this.generateSGPDF(doc, data)
-      },
-      'DEFAULT': {
-        txtTemplate: (data) => this.generateDefaultFormat(data),
-        pdfTemplate: (doc, data) => this.generateDefaultPDF(doc, data)
-      }
-    };
-
-    return formats[bankCode] || formats['DEFAULT'];
-  }
-
-  private generateBNPFormat(data: any): string {
-    let content = `HDR${data.ovRef}${data.date}${String(data.payments.length).padStart(6, '0')}${String(Math.round(data.totalAmount * 100)).padStart(12, '0')}\n`;
-    
-    data.payments.forEach((payment: any) => {
-      content += `DTL${payment.reference}${payment.rib.replace(/\s/g, '')}${String(Math.round(payment.amount * 100)).padStart(12, '0')}${payment.nomAssure.padEnd(35, ' ')}\n`;
-    });
-    
-    content += `TRL${String(data.payments.length).padStart(6, '0')}${String(Math.round(data.totalAmount * 100)).padStart(12, '0')}\n`;
-    
-    return content;
-  }
-
-  private generateSGFormat(data: any): string {
-    // Société Générale format
-    let content = `01${data.donneurOrdre.rib}${data.date}${data.ovRef}\n`;
-    
-    data.payments.forEach((payment: any) => {
-      content += `02${payment.rib}${String(Math.round(payment.amount * 100)).padStart(10, '0')}${payment.nomAssure}\n`;
-    });
-    
-    return content;
-  }
-
-  private generateDefaultFormat(data: any): string {
-    let content = `HEADER|${data.ovRef}|${data.date}|${data.totalAmount}|${data.payments.length}\n`;
-    
-    data.payments.forEach((payment: any) => {
-      content += `PAYMENT|${payment.reference}|${payment.rib}|${payment.amount}|${payment.nomAssure}\n`;
-    });
-    
-    return content;
-  }
-
-  private generateBNPPDF(doc: any, data: any) {
-    // BNP-specific PDF formatting
-  }
-
-  private generateSGPDF(doc: any, data: any) {
-    // SG-specific PDF formatting
-  }
-
-  private generateDefaultPDF(doc: any, data: any) {
-    // Default PDF formatting
-  }
-
-  private async scheduleOVAlert(batchId: string) {
-    // Schedule alert for 24h later if OV not processed
-    setTimeout(async () => {
-      const batch = await this.prisma.wireTransferBatch.findUnique({
-        where: { id: batchId }
+        yPosition += 10;
       });
 
-      if (batch && batch.status === 'CREATED') {
-        await this.alertsService.triggerAlert({
-          type: 'OV_NOT_PROCESSED_24H',
-          bsId: batchId
-        });
-      }
-    }, 24 * 60 * 60 * 1000); // 24 hours
+      // Footer
+      const totalMontant = bordereaux.reduce((sum, b) => {
+        return sum + (b.BulletinSoin?.reduce((bsSum: number, bs: any) => bsSum + (bs.montant || 0), 0) || 0);
+      }, 0);
+
+      doc.fontSize(14).text(`Montant total OV: ${totalMontant.toFixed(2)} €`, 50, yPosition + 20);
+
+      doc.end();
+    });
+  }
+
+  private async generateExcelOV(bordereaux: any[], includeDetails: boolean): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Ordre de Virement');
+
+    // Headers
+    worksheet.columns = [
+      { header: 'Référence', key: 'reference', width: 15 },
+      { header: 'Client', key: 'client', width: 25 },
+      { header: 'Statut', key: 'statut', width: 15 },
+      { header: 'Date Réception', key: 'dateReception', width: 15 },
+      { header: 'Nombre BS', key: 'nombreBS', width: 10 },
+      { header: 'Montant', key: 'montant', width: 12 }
+    ];
+
+    // Data
+    bordereaux.forEach(bordereau => {
+      const totalMontant = bordereau.BulletinSoin?.reduce((sum: number, bs: any) => sum + (bs.montant || 0), 0) || 0;
+      
+      worksheet.addRow({
+        reference: bordereau.reference,
+        client: bordereau.client?.name || 'N/A',
+        statut: bordereau.statut,
+        dateReception: new Date(bordereau.dateReception).toLocaleDateString('fr-FR'),
+        nombreBS: bordereau.nombreBS,
+        montant: totalMontant.toFixed(2)
+      });
+    });
+
+    // Total row
+    const totalMontant = bordereaux.reduce((sum, b) => {
+      return sum + (b.BulletinSoin?.reduce((bsSum: number, bs: any) => bsSum + (bs.montant || 0), 0) || 0);
+    }, 0);
+
+    worksheet.addRow({});
+    worksheet.addRow({
+      reference: 'TOTAL',
+      montant: totalMontant.toFixed(2)
+    });
+
+    return await workbook.xlsx.writeBuffer() as Buffer;
   }
 }

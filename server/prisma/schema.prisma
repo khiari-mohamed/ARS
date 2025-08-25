@@ -40,6 +40,7 @@ model User {
   clientsManaged              Client[]             @relation("ClientGestionnaires")
   clientReclamations          Reclamation[]        @relation("ClientReclamations")
   bordereaux                  Bordereau[]          @relation("UserBordereaux")
+  notifications               Notification[]
 }
 
 model Process {
@@ -560,6 +561,23 @@ model ActionLog {
   @@index([timestamp])
 }
 
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
 enum DocumentStatus {
   UPLOADED
   EN_COURS
@@ -584,6 +602,8 @@ enum Statut {
   CLOTURE
   EN_DIFFICULTE
   PARTIEL
+  MIS_EN_INSTANCE
+  REJETE
 }
 
 enum CourrierType {
