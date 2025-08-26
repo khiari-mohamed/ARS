@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsInt, IsOptional, IsDateString } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, IsOptional, IsDateString, IsArray, IsObject, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateContractDto {
@@ -8,40 +8,58 @@ export class CreateContractDto {
 
   @IsNotEmpty()
   @IsString()
-  clientName: string;
+  contractNumber: string;
 
   @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
-  delaiReglement: number;
+  treatmentDelay: number; // SLA Treatment delay
 
   @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
-  delaiReclamation: number;
+  claimsReplyDelay: number; // SLA Claims reply delay
+
+  @IsNotEmpty()
+  @Type(() => Number)
+  @IsInt()
+  paymentDelay: number; // SLA Payment delay
 
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  escalationThreshold?: number;
+  @IsNumber()
+  warningThreshold?: number; // Alert warning threshold
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  criticalThreshold?: number; // Alert critical threshold
+
+  @IsOptional()
+  @IsArray()
+  escalationChain?: string[]; // Array of user IDs for escalation
+
+  @IsNotEmpty()
+  @IsString()
+  accountOwnerId: string; // Chargé de compte
+
+  @IsNotEmpty()
+  @IsDateString()
+  startDate: string;
+
+  @IsNotEmpty()
+  @IsDateString()
+  endDate: string;
+
+  @IsOptional()
+  @IsObject()
+  alertSettings?: {
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    escalationEnabled: boolean;
+  };
 
   @IsOptional()
   @IsString()
-  documentPath?: string;
-
-  @IsNotEmpty()
-  @IsString()
-  assignedManagerId: string;
-
-  @IsNotEmpty()
-  @IsDateString()
-  startDate: string; // ISO string
-
-  @IsNotEmpty()
-  @IsDateString()
-  endDate: string; // ISO string
-
-  @IsOptional()
-  @IsDateString()
-  signatureDate?: string; // ISO string
+  notes?: string;
 }

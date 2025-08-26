@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
@@ -11,363 +11,464 @@ import { Express } from 'express';
 @Injectable()
 export class ContractsService {
   private readonly logger = new Logger(ContractsService.name);
+  
   constructor(private prisma: PrismaService) {}
 
-  private checkRole(user: any, action: 'view'|'create'|'update'|'delete' = 'view') {
-    if (user.role === 'SUPER_ADMIN') return;
-    if (user.role === 'ADMIN' && action !== 'delete') return;
-    if (user.role === 'CHEF_EQUIPE' && action === 'view') return;
-    throw new ForbiddenException('Access denied');
-  }
-
-  async isClientExists(clientId: string): Promise<boolean> {
-    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
-    return !!client;
-  }
-
-  async hasContractOverlap(clientId: string, startDate: string, endDate: string): Promise<boolean> {
-    // Convert to Date objects for Prisma
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const overlap = await this.prisma.contract.findFirst({
-      where: {
-        clientId,
-        OR: [
-          {
-            startDate: { lte: end },
-            endDate: { gte: start },
-          },
-        ],
-      },
-    });
-    return !!overlap;
-  }
-
-  async createContract(dto: CreateContractDto, file: Express.Multer.File, user: any) {
+  // Create contract with PDF upload
+  async create(dto: CreateContractDto, file: Express.Multer.File, userId: string) {
     try {
-      this.checkRole(user, 'create');
-      // Validate client linkage (defensive, should be checked in controller)
+      console.log('=== SERVICE CREATE DEBUG ===');
+      console.log('DTO in service:', dto);
+      console.log('File in service:', file ? 'File present' : 'No file');
+      console.log('User ID in service:', userId);
+      
+      // Validate client exists
+      console.log('Checking client exists:', dto.clientId);
       const client = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
       if (!client) {
-        console.error('Contract creation error: Linked client does not exist.', dto.clientId);
-        throw new NotFoundException('Linked client does not exist.');
+        console.error('Client not found:', dto.clientId);
+        throw new NotFoundException('Client not found');
       }
-      // Optionally, check for unique contract per client+period (defensive)
-      const overlap = await this.hasContractOverlap(dto.clientId, dto.startDate, dto.endDate);
-      if (overlap) {
-        console.error('Contract creation error: Overlapping contract exists.', dto.clientId, dto.startDate, dto.endDate);
-        throw new ConflictException('A contract for this client and period already exists.');
+      console.log('Client found:', client.name);
+
+    // Check for overlapping contracts
+    const overlap = await this.prisma.contract.findFirst({
+      where: {
+        clientId: dto.clientId,
+        OR: [
+          {
+            startDate: { lte: new Date(dto.endDate) },
+            endDate: { gte: new Date(dto.startDate) }
+          }
+        ]
       }
-      const {
-  startDate,
-  endDate,
-  signatureDate, // not used in model, but present in DTO
-  ...rest
-} = dto;
+    });
 
-// Remove notes if present
-if ('notes' in rest) {
-  delete (rest as any).notes;
-}
+    if (overlap) {
+      throw new ConflictException('Overlapping contract exists for this period');
+    }
 
-console.log('Contract creation payload:', {
-  ...rest,
-  startDate,
-  endDate,
-  documentPath: file?.path || dto.documentPath || '',
-});
-const contract = await this.prisma.contract.create({
-  data: {
-    ...rest,
-    startDate: new Date(startDate),
-    endDate: new Date(endDate),
-    documentPath: file?.path || dto.documentPath || '',
-    // signature: signatureDate || null, // Uncomment if you want to store signatureDate
-  },
-});
+    // Handle file upload
+    let documentPath = '';
+    if (file) {
+      const fs = require('fs');
+      const path = require('path');
+      
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'contracts');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.pdf`;
+      documentPath = path.join(uploadsDir, fileName);
+      fs.writeFileSync(documentPath, file.buffer);
+    }
+
+      console.log('Creating contract with data:', {
+        clientId: dto.clientId,
+        clientName: client.name,
+        delaiReglement: dto.treatmentDelay,
+        delaiReclamation: dto.claimsReplyDelay,
+        escalationThreshold: dto.warningThreshold,
+        assignedManagerId: dto.accountOwnerId,
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
+        documentPath,
+        signature: dto.notes
+      });
+      
+      const contract = await this.prisma.contract.create({
+        data: {
+          clientId: dto.clientId,
+          clientName: client.name,
+          delaiReglement: parseInt(dto.treatmentDelay.toString()),
+          delaiReclamation: parseInt(dto.claimsReplyDelay.toString()),
+          escalationThreshold: dto.warningThreshold ? parseInt(dto.warningThreshold.toString()) : null,
+          assignedManagerId: dto.accountOwnerId,
+          startDate: new Date(dto.startDate),
+          endDate: new Date(dto.endDate),
+          documentPath,
+          signature: dto.notes
+        },
+        include: {
+          client: true,
+          assignedManager: true
+        }
+      });
+      
+      console.log('Contract created successfully:', contract.id);
+
+      // Auto-associate with existing bordereaux
+      await this.associateBordereaux(contract.id);
+
       return contract;
-    } catch (err) {
-      console.error('Contract creation error (catch):', err);
-      throw err;
+    } catch (error) {
+      console.error('=== SERVICE CREATE ERROR ===');
+      console.error('Error in service create:', error);
+      console.error('Stack trace:', error.stack);
+      throw error;
     }
   }
 
-  async updateContract(id: string, dto: UpdateContractDto, user: any) {
-    this.checkRole(user, 'update');
-    const old = await this.prisma.contract.findUnique({ where: { id } });
-    if (!old) throw new NotFoundException('Contract not found');
-    const contract = await this.prisma.contract.update({
-      where: { id },
-      data: { ...dto },
-    });
-    await this.prisma.contractHistory.create({
-      data: {
-        contractId: contract.id,
-        modifiedById: user.id,
-        changes: { before: old, after: contract },
+  // Get all contracts with filters
+  async findAll(query: SearchContractDto) {
+    const where: any = {};
+    
+    if (query.clientId) where.clientId = query.clientId;
+    if (query.contractNumber) where.clientName = { contains: query.contractNumber, mode: 'insensitive' };
+    if (query.accountOwnerId) where.assignedManagerId = query.accountOwnerId;
+    
+    if (query.status) {
+      const now = new Date();
+      const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      
+      switch (query.status) {
+        case 'active':
+          where.endDate = { gte: now };
+          break;
+        case 'expired':
+          where.endDate = { lt: now };
+          break;
+        case 'expiring_soon':
+          where.endDate = { gte: now, lte: soon };
+          break;
+      }
+    }
+
+    if (query.hasDocument !== undefined) {
+      where.documentPath = query.hasDocument ? { not: '' } : '';
+    }
+
+    return this.prisma.contract.findMany({
+      where,
+      include: {
+        client: true,
+        assignedManager: true
       },
+      orderBy: { createdAt: 'desc' }
     });
+  }
+
+  // Get single contract
+  async findOne(id: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        assignedManager: true
+      }
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
     return contract;
   }
 
-  async deleteContract(id: string, user: any) {
-    this.checkRole(user, 'delete');
-    return this.prisma.contract.delete({ where: { id } });
-  }
-
-  async getContract(id: string, user: any) {
-    this.checkRole(user, 'view');
-    return this.prisma.contract.findUnique({ where: { id }, include: { assignedManager: true, history: true } });
-  }
-
-  async searchContracts(query: SearchContractDto, user: any) {
-    this.checkRole(user, 'view');
-    const where: any = {};
-    if (query.clientId) where.clientId = query.clientId;
-    if (query.clientName) where.clientName = query.clientName;
-    if (query.assignedManagerId) where.assignedManagerId = query.assignedManagerId;
-    return this.prisma.contract.findMany({ where, include: { assignedManager: true } });
-  }
-
-  async getContractHistory(id: string, user: any) {
-    this.checkRole(user, 'view');
-    return this.prisma.contractHistory.findMany({
-      where: { contractId: id },
-      orderBy: { modifiedAt: 'desc' },
-      include: { modifiedBy: true },
-    });
-  }
-
-  // 1. Export Contracts (Excel, PDF)
-  async exportContractsExcel(query: SearchContractDto, user: any) {
-    this.checkRole(user, 'view');
-    const contracts = await this.searchContracts(query, user);
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Contracts');
-    sheet.columns = [
-      { header: 'ID', key: 'id', width: 20 },
-      { header: 'Client ID', key: 'clientId', width: 20 },
-      { header: 'Client Name', key: 'clientName', width: 30 },
-      { header: 'Assigned Manager', key: 'assignedManagerId', width: 20 },
-      { header: 'Start Date', key: 'startDate', width: 20 },
-      { header: 'End Date', key: 'endDate', width: 20 },
-      { header: 'Delai Reglement', key: 'delaiReglement', width: 20 },
-      { header: 'Delai Reclamation', key: 'delaiReclamation', width: 20 },
-      { header: 'Escalation Threshold', key: 'escalationThreshold', width: 20 },
-      { header: 'Document Path', key: 'documentPath', width: 40 },
-      { header: 'Signature', key: 'signature', width: 20 },
-    ];
-    contracts.forEach(contract => {
-      sheet.addRow(contract);
-    });
-    const buffer = await workbook.xlsx.writeBuffer();
-    return {
-      file: buffer,
-      filename: 'contracts.xlsx',
-      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    };
-  }
-
-  async exportContractsPdf(query: SearchContractDto, user: any) {
-    this.checkRole(user, 'view');
-    const contracts = await this.searchContracts(query, user);
-    const doc = new PDFDocument();
-    const stream = new PassThrough();
-    doc.pipe(stream);
-    doc.fontSize(18).text('Contracts List', { align: 'center' });
-    doc.moveDown();
-    contracts.forEach(contract => {
-      doc.fontSize(12).text(`ID: ${contract.id}`);
-      doc.text(`Client: ${contract.clientName} (${contract.clientId})`);
-      doc.text(`Manager: ${contract.assignedManagerId}`);
-      doc.text(`Start: ${contract.startDate}  End: ${contract.endDate}`);
-      doc.text(`Delai Reglement: ${contract.delaiReglement}`);
-      doc.text(`Delai Reclamation: ${contract.delaiReclamation}`);
-      doc.text(`Escalation Threshold: ${contract.escalationThreshold}`);
-      doc.text(`Document Path: ${contract.documentPath}`);
-      doc.text(`Signature: ${contract.signature}`);
-      doc.moveDown();
-    });
-    doc.end();
-    const chunks: Buffer[] = [];
-    return new Promise((resolve, reject) => {
-      stream.on('data', chunk => chunks.push(chunk));
-      stream.on('end', () => {
-        resolve({
-          file: Buffer.concat(chunks),
-          filename: 'contracts.pdf',
-          contentType: 'application/pdf',
-        });
-      });
-      stream.on('error', reject);
-    });
-  }
-
-  // 2. SLA Breach Detection & Alerting
-  async checkSlaBreaches() {
-    const now = new Date();
-    const contracts = await this.prisma.contract.findMany({});
-    const breached: any[] = [];
-    for (const contract of contracts) {
-      // Example: check if endDate is past and not signed
-      if (contract.endDate && new Date(contract.endDate) < now && !contract.signature) {
-        breached.push({
-          id: contract.id,
-          reason: 'Contract expired without signature',
-        });
-        this.logger.warn(`SLA Breach: Contract ${contract.id} expired without signature.`);
-      }
-      // Example: check escalation threshold
-      if (contract.escalationThreshold && contract.delaiReglement > contract.escalationThreshold) {
-        breached.push({
-          id: contract.id,
-          reason: 'Delai Reglement exceeds escalation threshold',
-        });
-        this.logger.warn(`SLA Breach: Contract ${contract.id} delaiReglement exceeds threshold.`);
-      }
-      // Add more SLA checks as needed
+  // Update contract
+  async update(id: string, dto: UpdateContractDto, userId: string) {
+    const contract = await this.prisma.contract.findUnique({ where: { id } });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
     }
-    return { breached };
+
+    const updated = await this.prisma.contract.update({
+      where: { id },
+      data: {
+        ...dto,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        updatedAt: new Date()
+      },
+      include: {
+        client: true,
+        assignedManager: true
+      }
+    });
+
+    // Log the change
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CONTRACT_UPDATE',
+        details: {
+          contractId: id,
+          changes: dto
+        }
+      }
+    });
+
+    return updated;
   }
 
-  // 3. Dashboard/Statistics Endpoints
-  async getContractStatistics(user: any) {
-    this.checkRole(user, 'view');
+  // Delete contract
+  async remove(id: string, userId: string) {
+    const contract = await this.prisma.contract.findUnique({ where: { id } });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    // Remove file if exists
+    if (contract.documentPath) {
+      const fs = require('fs');
+      if (fs.existsSync(contract.documentPath)) {
+        fs.unlinkSync(contract.documentPath);
+      }
+    }
+
+    await this.prisma.contract.delete({ where: { id } });
+
+    // Log the deletion
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CONTRACT_DELETE',
+        details: { contractId: id }
+      }
+    });
+
+    return { message: 'Contract deleted successfully' };
+  }
+
+  // Upload contract document
+  async uploadDocument(contractId: string, file: Express.Multer.File) {
+    const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'contracts');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.pdf`;
+    const documentPath = path.join(uploadsDir, fileName);
+    fs.writeFileSync(documentPath, file.buffer);
+
+    // Remove old file if exists
+    if (contract.documentPath && fs.existsSync(contract.documentPath)) {
+      fs.unlinkSync(contract.documentPath);
+    }
+
+    return this.prisma.contract.update({
+      where: { id: contractId },
+      data: { documentPath }
+    });
+  }
+
+  // Download contract document
+  async downloadDocument(contractId: string, res: any) {
+    const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
+    if (!contract || !contract.documentPath) {
+      throw new NotFoundException('Contract document not found');
+    }
+
+    const fs = require('fs');
+    if (!fs.existsSync(contract.documentPath)) {
+      throw new NotFoundException('File not found on server');
+    }
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="contract-${contract.id}.pdf"`
+    });
+
+    const stream = fs.createReadStream(contract.documentPath);
+    stream.pipe(res);
+  }
+
+  // Get contract statistics
+  async getStatistics() {
     const now = new Date();
-    const [total, active, expired, expiringSoon, contractsWithThreshold] = await Promise.all([
+    const soon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const [total, active, expired, expiringSoon, withDocuments] = await Promise.all([
       this.prisma.contract.count(),
       this.prisma.contract.count({ where: { endDate: { gte: now } } }),
       this.prisma.contract.count({ where: { endDate: { lt: now } } }),
-      this.prisma.contract.count({
-        where: {
-          endDate: {
-            gte: now,
-            lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
-      this.prisma.contract.findMany({ where: { escalationThreshold: { not: null } } })
+      this.prisma.contract.count({ where: { endDate: { gte: now, lte: soon } } }),
+      this.prisma.contract.count({ where: { documentPath: { not: '' } } })
     ]);
-    // JS-based SLA compliance: delaiReglement <= escalationThreshold
-    let slaCompliant = 0;
-    for (const contract of contractsWithThreshold as any[]) {
-      if (typeof contract.escalationThreshold === 'number' && contract.delaiReglement <= contract.escalationThreshold) {
-        slaCompliant++;
-      }
-    }
+
     return {
       total,
       active,
       expired,
       expiringSoon,
-      slaCompliant,
+      withDocuments,
+      documentCoverage: total > 0 ? (withDocuments / total) * 100 : 0
     };
   }
 
-  // 4. Automatic Contract-Bordereau Association
-  async associateContractsToBordereaux() {
-    const contracts = await this.prisma.contract.findMany();
-    let count = 0;
-    for (const contract of contracts) {
-      const bordereaux = await this.prisma.bordereau.findMany({
-        where: {
-          clientId: contract.clientId,
-          dateReception: {
-            gte: contract.startDate,
-            lte: contract.endDate,
-          },
+  // Get SLA compliance for contract
+  async getSLACompliance(contractId: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { bordereaux: true }
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    const bordereaux = contract.bordereaux;
+    let compliant = 0;
+    let atRisk = 0;
+    let breach = 0;
+
+    bordereaux.forEach(bordereau => {
+      const processingDays = bordereau.dateCloture 
+        ? Math.floor((bordereau.dateCloture.getTime() - bordereau.dateReception.getTime()) / (1000 * 60 * 60 * 24))
+        : Math.floor((new Date().getTime() - bordereau.dateReception.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (processingDays <= contract.delaiReglement) {
+        compliant++;
+      } else if (processingDays <= (contract.escalationThreshold || contract.delaiReglement + 2)) {
+        atRisk++;
+      } else {
+        breach++;
+      }
+    });
+
+    const total = bordereaux.length;
+    return {
+      total,
+      compliant,
+      atRisk,
+      breach,
+      complianceRate: total > 0 ? (compliant / total) * 100 : 100
+    };
+  }
+
+  // Auto-associate bordereaux with contract
+  private async associateBordereaux(contractId: string) {
+    const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
+    if (!contract) return;
+
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: {
+        clientId: contract.clientId,
+        dateReception: {
+          gte: contract.startDate,
+          lte: contract.endDate
         },
+        contractId: null
+      }
+    });
+
+    if (bordereaux.length > 0) {
+      await this.prisma.bordereau.updateMany({
+        where: {
+          id: { in: bordereaux.map(b => b.id) }
+        },
+        data: { contractId }
       });
-      for (const bordereau of bordereaux) {
-        if (bordereau.contractId !== contract.id) {
-          await this.prisma.bordereau.update({
-            where: { id: bordereau.id },
-            data: { contractId: contract.id },
+    }
+
+    return bordereaux.length;
+  }
+
+  // Export contracts to Excel
+  async exportToExcel(query: SearchContractDto) {
+    const contracts = await this.findAll(query);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Contracts');
+
+    sheet.columns = [
+      { header: 'Contract Number', key: 'contractNumber', width: 20 },
+      { header: 'Client', key: 'clientName', width: 30 },
+      { header: 'Account Owner', key: 'accountOwner', width: 25 },
+      { header: 'Start Date', key: 'startDate', width: 15 },
+      { header: 'End Date', key: 'endDate', width: 15 },
+      { header: 'Treatment SLA', key: 'treatmentDelay', width: 15 },
+      { header: 'Claims SLA', key: 'claimsReplyDelay', width: 15 },
+      { header: 'Payment SLA', key: 'paymentDelay', width: 15 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Bordereaux Count', key: 'bordereauxCount', width: 18 }
+    ];
+
+    contracts.forEach(contract => {
+      const now = new Date();
+      let status = 'Active';
+      if (contract.endDate < now) status = 'Expired';
+      else if (contract.endDate <= new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)) status = 'Expiring Soon';
+
+      sheet.addRow({
+        contractNumber: contract.id,
+        clientName: contract.clientName,
+        accountOwner: contract.assignedManager?.fullName || 'N/A',
+        startDate: contract.startDate.toLocaleDateString(),
+        endDate: contract.endDate.toLocaleDateString(),
+        treatmentDelay: `${contract.delaiReglement} days`,
+        claimsReplyDelay: `${contract.delaiReclamation} days`,
+        paymentDelay: `${contract.delaiReglement} days`,
+        status,
+        bordereauxCount: 0
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  // Check for SLA breaches and send alerts
+  async checkSLABreaches() {
+    const contracts = await this.prisma.contract.findMany({
+      where: {
+        endDate: { gte: new Date() } // Only active contracts
+      },
+      include: {
+        client: true,
+        assignedManager: true
+      }
+    });
+    
+    // Get bordereaux for each contract
+    const contractsWithBordereaux = await Promise.all(
+      contracts.map(async (contract) => {
+        const bordereaux = await this.prisma.bordereau.findMany({
+          where: {
+            clientId: contract.clientId,
+            statut: { notIn: ['CLOTURE', 'TRAITE'] }
+          }
+        });
+        return { ...contract, bordereaux };
+      })
+    );
+
+    const alerts: any[] = [];
+
+    for (const contract of contractsWithBordereaux) {
+      for (const bordereau of contract.bordereaux) {
+        const processingDays = Math.floor(
+          (new Date().getTime() - bordereau.dateReception.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        let alertLevel: string | null = null;
+        if (processingDays > (contract.escalationThreshold || contract.delaiReglement + 5)) {
+          alertLevel = 'critical';
+        } else if (processingDays > contract.delaiReglement + 2) {
+          alertLevel = 'warning';
+        }
+
+        if (alertLevel) {
+          alerts.push({
+            contractId: contract.id,
+            bordereauxId: bordereau.id,
+            clientName: contract.clientName,
+            processingDays,
+            alertLevel,
+            threshold: contract.escalationThreshold || contract.delaiReglement
           });
-          count++;
         }
       }
     }
-    return { associated: count };
-  }
 
-  // 5. GEC Integration (Automated Letters/Reminders)
-  async triggerContractReminders() {
-    const now = new Date();
-    const soon = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const contracts = await this.prisma.contract.findMany({
-      where: {
-        OR: [
-          { endDate: { gte: now, lte: soon } },
-          { signature: null },
-        ],
-      },
-    });
-    for (const contract of contracts) {
-      this.logger.log(`[REMINDER] Contract ${contract.id} is expiring soon or missing signature.`);
-    }
-    return { remindersSent: contracts.length };
-  }
-
-  // 6. GED Integration: Indexing & Search
-  async indexContractsForGed() {
-    const contracts = await this.prisma.contract.findMany();
-    let indexed = 0;
-    for (const contract of contracts) {
-      this.logger.log(`[GED] Indexed contract ${contract.id} for search.`);
-      indexed++;
-    }
-    return { indexed };
-  }
-
-  // 7. Link Contracts to Complaints (Reclamation)
-  async linkContractsToComplaints() {
-    // Only works if you have a contractId field in Reclamation
-    const complaints = await this.prisma.reclamation.findMany();
-    let linked = 0;
-    for (const complaint of complaints) {
-      const contract = await this.prisma.contract.findFirst({
-        where: {
-          clientId: complaint.clientId,
-          startDate: { lte: complaint.createdAt },
-          endDate: { gte: complaint.createdAt },
-        },
-      });
-      if (contract && (complaint as any).contractId !== contract.id) {
-        await this.prisma.reclamation.update({
-          where: { id: complaint.id },
-          data: { contractId: contract.id },
-        });
-        linked++;
-      }
-    }
-    return { linked };
-  }
-
-  // Get bordereaux by contract
-  async getBordereauxByContract(contractId: string, user: any) {
-    this.checkRole(user, 'view');
-    return this.prisma.bordereau.findMany({
-      where: { contractId },
-      include: { client: true }
-    });
-  }
-
-  // Get claims by contract
-  async getClaimsByContract(contractId: string, user: any) {
-    this.checkRole(user, 'view');
-    return this.prisma.reclamation.findMany({
-      where: { contractId },
-      include: { client: true, createdBy: true }
-    });
-  }
-
-  // Update contract thresholds
-  async updateContractThresholds(contractId: string, thresholds: any, user: any) {
-    this.checkRole(user, 'update');
-    return this.prisma.contract.update({
-      where: { id: contractId },
-      data: { thresholds }
-    });
+    return { alerts, count: alerts.length };
   }
 }

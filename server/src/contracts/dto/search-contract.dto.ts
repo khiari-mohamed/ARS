@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsDateString } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsBoolean } from 'class-validator';
 
 export class SearchContractDto {
   @IsOptional()
@@ -7,25 +7,29 @@ export class SearchContractDto {
 
   @IsOptional()
   @IsString()
-  clientName?: string;
+  contractNumber?: string;
 
   @IsOptional()
   @IsString()
-  assignedManagerId?: string;
+  accountOwnerId?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: 'active' | 'expired' | 'expiring_soon' | 'all';
 
   @IsOptional()
   @IsDateString()
-  startDateFrom?: string;
+  startDate?: string;
 
   @IsOptional()
   @IsDateString()
-  startDateTo?: string;
+  endDate?: string;
 
   @IsOptional()
-  @IsDateString()
-  endDateFrom?: string;
+  @IsBoolean()
+  hasDocument?: boolean;
 
   @IsOptional()
-  @IsDateString()
-  endDateTo?: string;
+  @IsString()
+  slaStatus?: 'compliant' | 'at_risk' | 'breach';
 }

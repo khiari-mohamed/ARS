@@ -163,7 +163,7 @@ const BordereauCreatePage: React.FC = () => {
             <select className="input w-full" value={contractId} onChange={e => setContractId(e.target.value)}>
               <option value="">Sélectionner...</option>
               {contracts.map(c => (
-                <option key={c.id} value={c.id}>{c.name || c.nom}</option>
+                <option key={c.id} value={c.id}>{c.name || c.nom || c.clientName}</option>
               ))}
             </select>
           </div>

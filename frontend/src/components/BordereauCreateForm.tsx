@@ -289,7 +289,7 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
               >
                 <option value="">Sélectionner un contrat...</option>
                 {contracts.map(c => (
-                  <option key={c.id} value={c.id}>{c.name || c.nom}</option>
+                  <option key={c.id} value={c.id}>{c.name || c.nom || c.clientName}</option>
                 ))}
               </select>
             </div>
