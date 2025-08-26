@@ -1,0 +1,217 @@
+2025-08-26 07:25:47,390 - fastapi - ERROR - Form data requires "python-multipart" to be installed. 
+You can install "python-multipart" with: 
+
+pip install python-multipart
+
+2025-08-26 07:26:12,883 - fastapi - ERROR - Form data requires "python-multipart" to be installed. 
+You can install "python-multipart" with: 
+
+pip install python-multipart
+
+2025-08-26 08:57:01,017 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-26 08:57:05,060 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 08:57:05,061 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 08:57:05,067 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 08:57:05,320 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 08:57:05,408 - cmdstanpy - DEBUG - Adding TBB (C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\prophet\stan_model\cmdstan-2.33.1\stan\lib\stan_math\lib\tbb) to PATH
+2025-08-26 08:57:05,504 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 08:57:05,513 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\0cwf9u4x.json
+2025-08-26 08:57:05,521 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\lpnjhb0c.json
+2025-08-26 08:57:05,537 - cmdstanpy - DEBUG - idx 0
+2025-08-26 08:57:05,538 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 08:57:05,538 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=47841', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\0cwf9u4x.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\lpnjhb0c.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_model8o9hvqta\\prophet_model-20250826085705.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 08:57:05,539 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 08:57:05,883 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 08:57:06,052 - monitoring - INFO - Completed trend_forecast in 0.98s
+2025-08-26 08:57:06,060 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 08:57:06,061 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 08:57:06,064 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 08:57:06,065 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 08:57:06,073 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 08:57:06,082 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 08:57:06,120 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 08:57:06,159 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 08:57:06,164 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\ey4zv6u4.json
+2025-08-26 08:57:06,185 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\v123kfg2.json
+2025-08-26 08:57:06,190 - cmdstanpy - DEBUG - idx 0
+2025-08-26 08:57:06,190 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 08:57:06,191 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=36507', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\ey4zv6u4.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\v123kfg2.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_model4eqch4xk\\prophet_model-20250826085706.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 08:57:06,193 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 08:57:06,457 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 08:57:06,579 - monitoring - INFO - Completed trend_forecast in 0.51s
+2025-08-26 08:57:06,581 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 08:57:06,582 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 08:57:06,656 - monitoring - INFO - Starting predict_resources endpoint call
+2025-08-26 08:57:06,657 - monitoring - INFO - Completed predict_resources in 0.00s
+2025-08-26 08:57:47,147 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 08:57:47,148 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 08:57:47,148 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 08:57:47,149 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 08:57:47,149 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 08:57:47,154 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 08:57:47,181 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 08:57:47,191 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 08:57:47,194 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\35iefq2y.json
+2025-08-26 08:57:47,199 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\uvotnh76.json
+2025-08-26 08:57:47,200 - cmdstanpy - DEBUG - idx 0
+2025-08-26 08:57:47,201 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 08:57:47,201 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=31592', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\35iefq2y.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\uvotnh76.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_modelszx2hz6v\\prophet_model-20250826085747.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 08:57:47,201 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 08:57:47,296 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 08:57:47,345 - monitoring - INFO - Completed trend_forecast in 0.20s
+2025-08-26 08:57:47,353 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 08:57:47,353 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 08:57:47,354 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 08:57:47,354 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 08:57:47,355 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 08:57:47,359 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 08:57:47,384 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 08:57:47,398 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 08:57:47,401 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\bzid4qye.json
+2025-08-26 08:57:47,405 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\85hbruwn.json
+2025-08-26 08:57:47,406 - cmdstanpy - DEBUG - idx 0
+2025-08-26 08:57:47,408 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 08:57:47,408 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=67518', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\bzid4qye.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\85hbruwn.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_modelg8sdvdh3\\prophet_model-20250826085747.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 08:57:47,409 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 08:57:47,497 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 08:57:47,542 - monitoring - INFO - Completed trend_forecast in 0.19s
+2025-08-26 08:57:47,548 - monitoring - INFO - Starting predict_resources endpoint call
+2025-08-26 08:57:47,549 - monitoring - INFO - Completed predict_resources in 0.00s
+2025-08-26 08:57:47,553 - monitoring - INFO - Starting predict_resources endpoint call
+2025-08-26 08:57:47,553 - monitoring - INFO - Completed predict_resources in 0.00s
+2025-08-26 09:14:40,138 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 09:14:40,145 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-08-26 09:14:40,154 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 09:14:40,170 - monitoring - INFO - Completed anomaly_detection in 0.02s
+2025-08-26 09:14:40,183 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 09:14:40,468 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 09:14:40,541 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 09:14:40,767 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 09:14:40,796 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\y_kc_jyc.json
+2025-08-26 09:14:40,815 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\9nz3be1e.json
+2025-08-26 09:14:40,845 - cmdstanpy - DEBUG - idx 0
+2025-08-26 09:14:40,846 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 09:14:40,847 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=5684', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\y_kc_jyc.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\9nz3be1e.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_modelzfwdo26w\\prophet_model-20250826091440.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 09:14:40,849 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 09:14:41,182 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 09:14:41,420 - monitoring - INFO - Completed trend_forecast in 1.24s
+2025-08-26 09:14:41,436 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 09:14:41,437 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 09:14:41,439 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 09:14:41,440 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 09:14:41,442 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 09:14:41,453 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 09:14:41,493 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 09:14:41,522 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 09:14:41,527 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\4h2lqmg2.json
+2025-08-26 09:14:41,537 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\k6kr58lv.json
+2025-08-26 09:14:41,540 - cmdstanpy - DEBUG - idx 0
+2025-08-26 09:14:41,541 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 09:14:41,542 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=68607', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\4h2lqmg2.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\k6kr58lv.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_modelu9o3h42q\\prophet_model-20250826091441.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 09:14:41,542 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 09:14:41,702 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 09:14:41,837 - monitoring - INFO - Completed trend_forecast in 0.39s
+2025-08-26 09:14:41,855 - monitoring - INFO - Starting predict_resources endpoint call
+2025-08-26 09:14:41,857 - monitoring - INFO - Completed predict_resources in 0.00s
+2025-08-26 09:14:54,218 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 09:14:54,219 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 09:14:54,220 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 09:14:54,220 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 09:14:54,221 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 09:14:54,227 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 09:14:54,252 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 09:14:54,273 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 09:14:54,278 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\ju0tz_a7.json
+2025-08-26 09:14:54,283 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\o1ojq2zg.json
+2025-08-26 09:14:54,285 - cmdstanpy - DEBUG - idx 0
+2025-08-26 09:14:54,285 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 09:14:54,286 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=62484', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\ju0tz_a7.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\o1ojq2zg.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_modelnet1j1rr\\prophet_model-20250826091454.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 09:14:54,286 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 09:14:54,404 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 09:14:54,480 - monitoring - INFO - Completed trend_forecast in 0.26s
+2025-08-26 09:14:54,490 - monitoring - INFO - Starting predict_resources endpoint call
+2025-08-26 09:14:54,492 - monitoring - INFO - Completed predict_resources in 0.00s
+2025-08-26 09:15:00,250 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 09:15:00,251 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 09:15:00,255 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 09:15:00,255 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 09:15:00,259 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 09:15:00,268 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 09:15:00,297 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 09:15:00,318 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 09:15:00,323 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\oo3swefq.json
+2025-08-26 09:15:00,330 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\zj4argys.json
+2025-08-26 09:15:00,332 - cmdstanpy - DEBUG - idx 0
+2025-08-26 09:15:00,333 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 09:15:00,333 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=72016', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\oo3swefq.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\zj4argys.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_modelv71sm2bq\\prophet_model-20250826091500.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 09:15:00,333 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 09:15:00,478 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 09:15:00,584 - monitoring - INFO - Completed trend_forecast in 0.32s
+2025-08-26 09:15:04,671 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 09:15:04,672 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 09:15:04,674 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 09:15:04,675 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 09:15:04,676 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 09:15:04,682 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 09:15:04,706 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 09:15:04,723 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 09:15:04,727 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\th8moqbt.json
+2025-08-26 09:15:04,730 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\gg4fihk_.json
+2025-08-26 09:15:04,732 - cmdstanpy - DEBUG - idx 0
+2025-08-26 09:15:04,733 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 09:15:04,733 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=10148', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\th8moqbt.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\gg4fihk_.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_model_2p1fe7i\\prophet_model-20250826091504.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 09:15:04,733 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 09:15:04,848 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 09:15:04,929 - monitoring - INFO - Completed trend_forecast in 0.25s
+2025-08-26 09:15:04,937 - monitoring - INFO - Starting predict_resources endpoint call
+2025-08-26 09:15:04,938 - monitoring - INFO - Completed predict_resources in 0.00s
+2025-08-26 09:15:35,889 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 09:15:35,890 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 09:15:35,894 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 09:15:35,894 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 09:15:35,896 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 09:15:35,903 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 09:15:35,947 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 09:15:35,979 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 09:15:35,983 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\4_wso16f.json
+2025-08-26 09:15:36,060 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\11h1huv4.json
+2025-08-26 09:15:36,108 - cmdstanpy - DEBUG - idx 0
+2025-08-26 09:15:36,109 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 09:15:36,110 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=44806', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\4_wso16f.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\11h1huv4.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_model7je4fke_\\prophet_model-20250826091536.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 09:15:36,111 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 09:15:36,646 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 09:15:37,008 - monitoring - INFO - Completed trend_forecast in 1.11s
+2025-08-26 09:15:37,039 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-26 09:15:37,039 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-26 09:15:37,041 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-26 09:15:37,042 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-26 09:15:37,045 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-26 09:15:37,053 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-26 09:15:37,099 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-26 09:15:37,138 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-26 09:15:37,145 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\afyrgp6q.json
+2025-08-26 09:15:37,159 - cmdstanpy - DEBUG - input tempfile: C:\Users\LENOVO\AppData\Local\Temp\tmp3bhy0cjb\wn8rbqjq.json
+2025-08-26 09:15:37,162 - cmdstanpy - DEBUG - idx 0
+2025-08-26 09:15:37,163 - cmdstanpy - DEBUG - running CmdStan, num_threads: None
+2025-08-26 09:15:37,164 - cmdstanpy - DEBUG - CmdStan args: ['C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\prophet\\stan_model\\prophet_model.bin', 'random', 'seed=3079', 'data', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\afyrgp6q.json', 'init=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\wn8rbqjq.json', 'output', 'file=C:\\Users\\LENOVO\\AppData\\Local\\Temp\\tmp3bhy0cjb\\prophet_modelctx2aqsw\\prophet_model-20250826091537.csv', 'method=optimize', 'algorithm=newton', 'iter=10000']
+2025-08-26 09:15:37,166 - cmdstanpy - INFO - Chain [1] start processing
+2025-08-26 09:15:37,341 - cmdstanpy - INFO - Chain [1] done processing
+2025-08-26 09:15:37,480 - monitoring - INFO - Completed trend_forecast in 0.43s
+2025-08-26 09:15:37,498 - monitoring - INFO - Starting predict_resources endpoint call
+2025-08-26 09:15:37,499 - monitoring - INFO - Completed predict_resources in 0.00s

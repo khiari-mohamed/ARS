@@ -82,12 +82,20 @@ const AdvancedFilteringDashboard: React.FC = () => {
         fromDate: dateRange.start.toISOString().split('T')[0],
         toDate: dateRange.end.toISOString().split('T')[0],
         filters: JSON.stringify(filters),
-        chartType: chartConfig.chartType
+        chartType: chartConfig.chartType,
+        drillDown: drillDownPath.length > 0 ? JSON.stringify(drillDownPath) : undefined
       };
 
-      // Try to load real data from multiple endpoints
-      const [trendsResponse, kpiResponse, alertsResponse] = await Promise.all([
-        LocalAPI.get('/analytics/trends', { params: { period: 'day', ...params } }).catch(() => null),
+      // Dynamic endpoint selection based on data source
+      const endpoints = {
+        bordereaux: '/analytics/bordereaux/filtered',
+        reclamations: '/analytics/reclamations/filtered', 
+        virements: '/analytics/virements/filtered'
+      };
+
+      // Load data from backend with filters
+      const [dataResponse, kpiResponse, alertsResponse] = await Promise.all([
+        LocalAPI.get(endpoints[dataSource as keyof typeof endpoints] || endpoints.bordereaux, { params }).catch(() => null),
         LocalAPI.get('/analytics/kpis/daily', { params }).catch(() => null),
         LocalAPI.get('/analytics/alerts').catch(() => null)
       ]);
@@ -97,12 +105,36 @@ const AdvancedFilteringDashboard: React.FC = () => {
       let statsData: any = null;
 
       // Process real data if available
-      if (trendsResponse?.data) {
-        realData = trendsResponse.data.map((item: any, index: number) => ({
-          date: new Date(item.date || Date.now() - (30 - index) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          count: item.count || Math.floor(Math.random() * 100) + 50,
-          value: item.value || Math.floor(Math.random() * 1000) + 500,
-          success_rate: item.success_rate || Math.random() * 20 + 80
+      if (dataResponse?.data) {
+        const responseData = Array.isArray(dataResponse.data) ? dataResponse.data : dataResponse.data.items || [];
+        
+        realData = responseData.map((item: any, index: number) => ({
+          date: item.dateCreation ? new Date(item.dateCreation).toISOString().split('T')[0] : 
+                new Date(Date.now() - (30 - index) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          count: item.count || 1,
+          value: item.montant || item.value || Math.floor(Math.random() * 1000) + 500,
+          success_rate: item.statut === 'TRAITE' ? 100 : item.statut === 'EN_COURS' ? 50 : 0,
+          statut: item.statut,
+          priorite: item.priorite,
+          clientId: item.clientId,
+          assignedTo: item.assignedTo
+        }));
+        
+        // Group by date for chart display
+        const groupedData = realData.reduce((acc: any, item: any) => {
+          const date = item.date;
+          if (!acc[date]) {
+            acc[date] = { date, count: 0, value: 0, success_rate: 0, items: [] };
+          }
+          acc[date].count += 1;
+          acc[date].value += item.value;
+          acc[date].items.push(item);
+          return acc;
+        }, {});
+        
+        realData = Object.values(groupedData).map((group: any) => ({
+          ...group,
+          success_rate: group.items.filter((i: any) => i.statut === 'TRAITE').length / group.items.length * 100
         }));
       }
 
@@ -205,17 +237,25 @@ const AdvancedFilteringDashboard: React.FC = () => {
 
   const handleAddFilter = () => {
     if (newFilter.field && newFilter.value) {
-      setFilters([...filters, { ...newFilter, id: Date.now() }]);
+      const filter = { ...newFilter, id: Date.now() };
+      setFilters([...filters, filter]);
       setNewFilter({ field: '', operator: 'equals', value: '', dataType: 'string' });
       setFilterDialog(false);
+      
+      // Reload data with new filter
+      setTimeout(() => loadChartData(), 100);
     }
   };
 
   const handleRemoveFilter = (filterId: number) => {
-    setFilters(filters.filter(f => f.id !== filterId));
+    const newFilters = filters.filter(f => f.id !== filterId);
+    setFilters(newFilters);
+    
+    // Reload data with updated filters
+    setTimeout(() => loadChartData(), 100);
   };
 
-  const handleDrillDown = (option: any) => {
+  const handleDrillDown = async (option: any) => {
     const newPath = [...drillDownPath, option];
     setDrillDownPath(newPath);
     
@@ -227,22 +267,51 @@ const AdvancedFilteringDashboard: React.FC = () => {
       value: option.value,
       dataType: 'string'
     };
-    setFilters([...filters, drillDownFilter]);
+    const newFilters = [...filters, drillDownFilter];
+    setFilters(newFilters);
     
-    // Mock next level drill-down options
-    if (newPath.length === 1) {
+    // Load next level drill-down options from backend
+    try {
+      const params = {
+        dataSource,
+        fromDate: dateRange.start.toISOString().split('T')[0],
+        toDate: dateRange.end.toISOString().split('T')[0],
+        filters: JSON.stringify(newFilters),
+        drillDownLevel: newPath.length,
+        parentDimension: option.dimension,
+        parentValue: option.value
+      };
+      
+      const drillDownResponse = await LocalAPI.get('/analytics/drill-down', { params });
+      
+      if (drillDownResponse.data && drillDownResponse.data.length > 0) {
+        setDrillDownOptions(drillDownResponse.data);
+      } else {
+        // Fallback to mock data if no backend response
+        generateNextLevelOptions(newPath.length);
+      }
+    } catch (error) {
+      console.error('Failed to load drill-down options:', error);
+      generateNextLevelOptions(newPath.length);
+    }
+  };
+  
+  const generateNextLevelOptions = (level: number) => {
+    if (level === 1) {
       setDrillDownOptions([
         { level: 2, dimension: 'priorite', value: 'HIGH', label: 'Haute', count: 89, percentage: 36.3 },
         { level: 2, dimension: 'priorite', value: 'MEDIUM', label: 'Moyenne', count: 98, percentage: 40.0 },
         { level: 2, dimension: 'priorite', value: 'LOW', label: 'Basse', count: 58, percentage: 23.7 }
       ]);
-    } else if (newPath.length === 2) {
+    } else if (level === 2) {
       setDrillDownOptions([
         { level: 3, dimension: 'clientId', value: 'client_1', label: 'Client A', count: 25, percentage: 28.1 },
         { level: 3, dimension: 'clientId', value: 'client_2', label: 'Client B', count: 22, percentage: 24.7 },
         { level: 3, dimension: 'clientId', value: 'client_3', label: 'Client C', count: 19, percentage: 21.3 },
         { level: 3, dimension: 'clientId', value: 'client_4', label: 'Client D', count: 23, percentage: 25.9 }
       ]);
+    } else {
+      setDrillDownOptions([]);
     }
   };
 
@@ -579,11 +648,27 @@ const AdvancedFilteringDashboard: React.FC = () => {
                   label="Champ"
                   onChange={(e) => setNewFilter(prev => ({ ...prev, field: e.target.value }))}
                 >
-                  <MenuItem value="statut">Statut</MenuItem>
-                  <MenuItem value="priorite">Priorité</MenuItem>
-                  <MenuItem value="clientId">Client</MenuItem>
-                  <MenuItem value="dateCreation">Date de Création</MenuItem>
-                  <MenuItem value="assignedTo">Assigné à</MenuItem>
+                  {dataSource === 'bordereaux' && [
+                    <MenuItem key="statut" value="statut">Statut</MenuItem>,
+                    <MenuItem key="priorite" value="priorite">Priorité</MenuItem>,
+                    <MenuItem key="clientId" value="clientId">Client</MenuItem>,
+                    <MenuItem key="dateCreation" value="dateCreation">Date de Création</MenuItem>,
+                    <MenuItem key="assignedTo" value="assignedTo">Assigné à</MenuItem>,
+                    <MenuItem key="reference" value="reference">Référence</MenuItem>
+                  ]}
+                  {dataSource === 'reclamations' && [
+                    <MenuItem key="type" value="type">Type</MenuItem>,
+                    <MenuItem key="severite" value="severite">Sévérité</MenuItem>,
+                    <MenuItem key="statut" value="statut">Statut</MenuItem>,
+                    <MenuItem key="clientId" value="clientId">Client</MenuItem>,
+                    <MenuItem key="dateCreation" value="dateCreation">Date de Création</MenuItem>
+                  ]}
+                  {dataSource === 'virements' && [
+                    <MenuItem key="statut" value="statut">Statut</MenuItem>,
+                    <MenuItem key="montant" value="montant">Montant</MenuItem>,
+                    <MenuItem key="dateExecution" value="dateExecution">Date d'Exécution</MenuItem>,
+                    <MenuItem key="beneficiaire" value="beneficiaire">Bénéficiaire</MenuItem>
+                  ]}
                 </Select>
               </FormControl>
             </Grid>

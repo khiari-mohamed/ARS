@@ -13,7 +13,7 @@ import * as fastcsv from 'fast-csv';
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
 
-const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:5000';
+const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
 
 @Injectable()
 export class AnalyticsService {

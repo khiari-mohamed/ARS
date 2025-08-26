@@ -270,7 +270,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
             </TableHead>
             <TableBody>
               {data.atRiskBordereaux.map((item: any, index: number) => (
-                <TableRow key={index} sx={{ bgcolor: item.status === 'critical' ? 'error.light' : item.status === 'warning' ? 'warning.light' : 'inherit', opacity: 0.1 }}>
+                <TableRow key={index} sx={{ bgcolor: item.status === 'critical' ? 'error.light' : item.status === 'warning' ? 'warning.light' : 'inherit' }}>
                   <TableCell>
                     <Typography variant="subtitle2">{item.reference || item.id}</Typography>
                   </TableCell>

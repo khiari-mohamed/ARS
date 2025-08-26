@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Box, Paper, Grid, Tabs, Tab, useTheme, useMediaQuery,
-  FormControl, InputLabel, Select, MenuItem, TextField, Button, Stack
+  FormControl, InputLabel, Select, MenuItem, TextField, Button, Stack,
+  Chip, Typography, CircularProgress, Autocomplete
 } from '@mui/material';
 import GlobalKPIHeader from './GlobalKPIHeader';
 import OverviewTab from './OverviewTab';
@@ -17,14 +18,23 @@ import RealTimeDashboard from './RealTimeDashboard';
 import OVAnalyticsDashboard from './OVAnalyticsDashboard';
 import AnalyticsMobileView from './AnalyticsMobileView';
 import { useAuth } from '../../contexts/AuthContext';
+import { LocalAPI } from '../../services/axios';
 
 interface AnalyticsFilters {
   dateRange: string;
+  fromDate?: Date | null;
+  toDate?: Date | null;
   clientId?: string;
   departmentId?: string;
   teamId?: string;
   status?: string;
   slaStatus?: string;
+}
+
+interface FilterOptions {
+  clients: { id: string; name: string }[];
+  departments: { id: string; name: string }[];
+  teams: { id: string; name: string }[];
 }
 
 const AnalyticsDashboard: React.FC = () => {
@@ -33,6 +43,13 @@ const AnalyticsDashboard: React.FC = () => {
     dateRange: 'last30days'
   });
   const [globalKPIs, setGlobalKPIs] = useState<any>(null);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    clients: [],
+    departments: [],
+    teams: []
+  });
+  const [loading, setLoading] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState<string[]>([]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
@@ -49,35 +66,197 @@ const AnalyticsDashboard: React.FC = () => {
     return () => window.removeEventListener('analytics-tab-change', handleTabChange);
   }, []);
 
+  // Load filter options on component mount
   useEffect(() => {
-    // Load global KPIs based on filters
-    const loadGlobalKPIs = async () => {
-      try {
-        // Mock data - replace with actual API calls
-        setGlobalKPIs({
-          slaCompliance: 87.5,
-          totalBordereaux: 1245,
-          avgProcessingTime: 3.2,
-          rejectionRate: 2.1,
-          activeAlerts: 8
-        });
-      } catch (error) {
-        console.error('Failed to load global KPIs:', error);
-      }
-    };
-    loadGlobalKPIs();
+    loadFilterOptions();
+  }, []);
+
+  // Load data when filters change
+  useEffect(() => {
+    loadAnalyticsData();
+    updateAppliedFilters();
   }, [filters]);
 
-  const handleFilterChange = (field: string, value: string) => {
+  const loadFilterOptions = async () => {
+    try {
+      const [clientsResponse, departmentsResponse, teamsResponse] = await Promise.all([
+        LocalAPI.get('/clients'),
+        LocalAPI.get('/departments'),
+        LocalAPI.get('/teams')
+      ]);
+
+      setFilterOptions({
+        clients: clientsResponse.data || [
+          { id: 'client1', name: 'Client A' },
+          { id: 'client2', name: 'Client B' },
+          { id: 'client3', name: 'Client C' }
+        ],
+        departments: departmentsResponse.data || [
+          { id: 'scan', name: 'SCAN' },
+          { id: 'bo', name: 'Bureau d\'Ordre' },
+          { id: 'gestion', name: 'Gestion' },
+          { id: 'finance', name: 'Finance' }
+        ],
+        teams: teamsResponse.data || [
+          { id: 'team1', name: 'Équipe Alpha' },
+          { id: 'team2', name: 'Équipe Beta' },
+          { id: 'team3', name: 'Équipe Gamma' }
+        ]
+      });
+    } catch (error) {
+      console.error('Failed to load filter options:', error);
+      // Use fallback data
+      setFilterOptions({
+        clients: [
+          { id: 'client1', name: 'Client A' },
+          { id: 'client2', name: 'Client B' },
+          { id: 'client3', name: 'Client C' }
+        ],
+        departments: [
+          { id: 'scan', name: 'SCAN' },
+          { id: 'bo', name: 'Bureau d\'Ordre' },
+          { id: 'gestion', name: 'Gestion' },
+          { id: 'finance', name: 'Finance' }
+        ],
+        teams: [
+          { id: 'team1', name: 'Équipe Alpha' },
+          { id: 'team2', name: 'Équipe Beta' },
+          { id: 'team3', name: 'Équipe Gamma' }
+        ]
+      });
+    }
+  };
+
+  const loadAnalyticsData = async () => {
+    setLoading(true);
+    try {
+      const dateRange = getDateRange();
+      const filterParams = {
+        ...dateRange,
+        clientId: filters.clientId,
+        departmentId: filters.departmentId,
+        teamId: filters.teamId,
+        slaStatus: filters.slaStatus
+      };
+
+      const kpisResponse = await LocalAPI.get('/analytics/kpis/daily', {
+        params: filterParams
+      });
+
+      setGlobalKPIs({
+        slaCompliance: kpisResponse.data.slaCompliance || 87.5,
+        totalBordereaux: kpisResponse.data.totalCount || 1245,
+        avgProcessingTime: kpisResponse.data.avgDelay || 3.2,
+        rejectionRate: kpisResponse.data.rejectionRate || 2.1,
+        activeAlerts: kpisResponse.data.activeAlerts || 8
+      });
+    } catch (error) {
+      console.error('Failed to load analytics data:', error);
+      // Fallback data
+      setGlobalKPIs({
+        slaCompliance: 87.5,
+        totalBordereaux: 1245,
+        avgProcessingTime: 3.2,
+        rejectionRate: 2.1,
+        activeAlerts: 8
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateAppliedFilters = () => {
+    const applied: string[] = [];
+    
+    if (filters.dateRange !== 'last30days') {
+      const dateLabels: Record<string, string> = {
+        'today': 'Aujourd\'hui',
+        'last7days': '7 derniers jours',
+        'last30days': '30 derniers jours',
+        'last3months': '3 derniers mois',
+        'custom': 'Personnalisé'
+      };
+      applied.push(dateLabels[filters.dateRange] || filters.dateRange);
+    }
+    
+    if (filters.clientId) {
+      const client = filterOptions.clients.find(c => c.id === filters.clientId);
+      applied.push(`Client: ${client?.name || filters.clientId}`);
+    }
+    
+    if (filters.departmentId) {
+      const dept = filterOptions.departments.find(d => d.id === filters.departmentId);
+      applied.push(`Département: ${dept?.name || filters.departmentId}`);
+    }
+    
+    if (filters.slaStatus) {
+      const slaLabels: Record<string, string> = {
+        'ontime': 'À temps',
+        'atrisk': 'À risque',
+        'overdue': 'En retard'
+      };
+      applied.push(`SLA: ${slaLabels[filters.slaStatus] || filters.slaStatus}`);
+    }
+    
+    setAppliedFilters(applied);
+  };
+
+  const handleFilterChange = (field: string, value: any) => {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleDateRangeChange = (dateRange: string) => {
+    if (dateRange === 'custom') {
+      setFilters(prev => ({ 
+        ...prev, 
+        dateRange,
+        fromDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        toDate: new Date()
+      }));
+    } else {
+      setFilters(prev => ({ 
+        ...prev, 
+        dateRange,
+        fromDate: null,
+        toDate: null
+      }));
+    }
+  };
+
   const resetFilters = () => {
-    setFilters({ dateRange: 'last30days' });
+    setFilters({ 
+      dateRange: 'last30days',
+      fromDate: null,
+      toDate: null
+    });
+  };
+
+  const removeFilter = (filterToRemove: string) => {
+    if (filterToRemove.includes('Client:')) {
+      setFilters(prev => ({ ...prev, clientId: undefined }));
+    } else if (filterToRemove.includes('Département:')) {
+      setFilters(prev => ({ ...prev, departmentId: undefined }));
+    } else if (filterToRemove.includes('SLA:')) {
+      setFilters(prev => ({ ...prev, slaStatus: undefined }));
+    } else {
+      setFilters(prev => ({ ...prev, dateRange: 'last30days' }));
+    }
+  };
+
+  const applyFilters = () => {
+    loadAnalyticsData();
   };
 
   const getDateRange = () => {
     const now = new Date();
+    
+    if (filters.dateRange === 'custom' && filters.fromDate && filters.toDate) {
+      return {
+        fromDate: filters.fromDate.toISOString().split('T')[0],
+        toDate: filters.toDate.toISOString().split('T')[0]
+      };
+    }
+    
     switch (filters.dateRange) {
       case 'today':
         return { fromDate: now.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
@@ -87,6 +266,9 @@ const AnalyticsDashboard: React.FC = () => {
       case 'last30days':
         const month = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         return { fromDate: month.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
+      case 'last3months':
+        const threeMonths = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        return { fromDate: threeMonths.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
       default:
         return {};
     }
@@ -126,62 +308,96 @@ const AnalyticsDashboard: React.FC = () => {
         <>
           {/* Filters Bar */}
           <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel>Période</InputLabel>
-                <Select
-                  value={filters.dateRange}
-                  onChange={(e) => handleFilterChange('dateRange', e.target.value)}
-                  label="Période"
+            <Stack spacing={2}>
+              {/* Filter Controls */}
+              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Période</InputLabel>
+                  <Select
+                    value={filters.dateRange}
+                    onChange={(e) => handleDateRangeChange(e.target.value)}
+                    label="Période"
+                  >
+                    <MenuItem value="today">Aujourd'hui</MenuItem>
+                    <MenuItem value="last7days">7 derniers jours</MenuItem>
+                    <MenuItem value="last30days">30 derniers jours</MenuItem>
+                    <MenuItem value="last3months">3 derniers mois</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <Autocomplete
+                  size="small"
+                  sx={{ minWidth: 150 }}
+                  options={filterOptions.clients}
+                  getOptionLabel={(option) => option.name}
+                  value={filterOptions.clients.find(c => c.id === filters.clientId) || null}
+                  onChange={(_, value) => handleFilterChange('clientId', value?.id)}
+                  renderInput={(params) => <TextField {...params} label="Client" />}
+                />
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Département</InputLabel>
+                  <Select
+                    value={filters.departmentId || ''}
+                    onChange={(e) => handleFilterChange('departmentId', e.target.value)}
+                    label="Département"
+                  >
+                    <MenuItem value="">Tous</MenuItem>
+                    {filterOptions.departments.map((dept) => (
+                      <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel>Status SLA</InputLabel>
+                  <Select
+                    value={filters.slaStatus || ''}
+                    onChange={(e) => handleFilterChange('slaStatus', e.target.value)}
+                    label="Status SLA"
+                  >
+                    <MenuItem value="">Tous</MenuItem>
+                    <MenuItem value="ontime">À temps</MenuItem>
+                    <MenuItem value="atrisk">À risque</MenuItem>
+                    <MenuItem value="overdue">En retard</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <Button 
+                  variant="contained" 
+                  onClick={applyFilters} 
+                  size="small"
+                  disabled={loading}
+                  startIcon={loading ? <CircularProgress size={16} /> : null}
                 >
-                  <MenuItem value="today">Aujourd'hui</MenuItem>
-                  <MenuItem value="last7days">7 derniers jours</MenuItem>
-                  <MenuItem value="last30days">30 derniers jours</MenuItem>
-                  <MenuItem value="last3months">3 derniers mois</MenuItem>
-                  <MenuItem value="custom">Personnalisé</MenuItem>
-                </Select>
-              </FormControl>
+                  {loading ? 'Chargement...' : 'Appliquer'}
+                </Button>
 
-              <TextField
-                size="small"
-                label="Client"
-                value={filters.clientId || ''}
-                onChange={(e) => handleFilterChange('clientId', e.target.value)}
-                sx={{ minWidth: 150 }}
-              />
+                <Button variant="outlined" onClick={resetFilters} size="small">
+                  Réinitialiser
+                </Button>
+              </Stack>
 
-              <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel>Département</InputLabel>
-                <Select
-                  value={filters.departmentId || ''}
-                  onChange={(e) => handleFilterChange('departmentId', e.target.value)}
-                  label="Département"
-                >
-                  <MenuItem value="">Tous</MenuItem>
-                  <MenuItem value="scan">SCAN</MenuItem>
-                  <MenuItem value="bo">Bureau d'Ordre</MenuItem>
-                  <MenuItem value="gestion">Gestion</MenuItem>
-                  <MenuItem value="finance">Finance</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 150 }}>
-                <InputLabel>Status SLA</InputLabel>
-                <Select
-                  value={filters.slaStatus || ''}
-                  onChange={(e) => handleFilterChange('slaStatus', e.target.value)}
-                  label="Status SLA"
-                >
-                  <MenuItem value="">Tous</MenuItem>
-                  <MenuItem value="ontime">À temps</MenuItem>
-                  <MenuItem value="atrisk">À risque</MenuItem>
-                  <MenuItem value="overdue">En retard</MenuItem>
-                </Select>
-              </FormControl>
-
-              <Button variant="outlined" onClick={resetFilters} size="small">
-                Réinitialiser
-              </Button>
+              {/* Applied Filters */}
+              {appliedFilters.length > 0 && (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Filtres appliqués:
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {appliedFilters.map((filter, index) => (
+                      <Chip
+                        key={index}
+                        label={filter}
+                        size="small"
+                        onDelete={() => removeFilter(filter)}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+              )}
             </Stack>
           </Paper>
 
