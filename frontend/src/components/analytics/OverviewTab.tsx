@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Grid, Paper, Typography } from '@mui/material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Grid, Paper, Typography, Box, Card, CardContent, CircularProgress, Chip } from '@mui/material';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts';
+import { LocalAPI } from '../../services/axios';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import WarningIcon from '@mui/icons-material/Warning';
 
 interface Props {
   filters: any;
@@ -9,26 +14,167 @@ interface Props {
 
 const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
   const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState<any>(null);
 
-  useEffect(() => {
-    setData({
-      volumeTrend: [
+  const loadOverviewData = async () => {
+    try {
+      setLoading(true);
+      
+      const [kpiResponse, alertsResponse] = await Promise.all([
+        LocalAPI.get('/analytics/kpis/daily', { params: dateRange }),
+        LocalAPI.get('/analytics/alerts')
+      ]);
+
+      const kpiData = kpiResponse.data;
+      const alertData = alertsResponse.data;
+
+      // Calculate KPIs
+      const totalBordereaux = kpiData.totalCount || 0;
+      const processedCount = kpiData.processedCount || 0;
+      const avgProcessingTime = kpiData.avgDelay || 0;
+      const slaCompliant = alertData.ok?.length || 0;
+      const slaAtRisk = alertData.warning?.length || 0;
+      const slaOverdue = alertData.critical?.length || 0;
+
+      setKpis({
+        totalBordereaux,
+        processedCount,
+        avgProcessingTime,
+        processingRate: totalBordereaux > 0 ? Math.round((processedCount / totalBordereaux) * 100) : 0
+      });
+
+      // Process volume trend data
+      const volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
+        date: new Date(day.createdAt).toLocaleDateString('fr-FR'),
+        volume: day._count?.id || 0
+      })) || [
         { date: '2025-01-01', volume: 45 },
         { date: '2025-01-02', volume: 52 },
         { date: '2025-01-03', volume: 38 }
-      ],
-      slaDistribution: [
+      ];
+
+      // Calculate SLA distribution
+      const totalSLA = slaCompliant + slaAtRisk + slaOverdue;
+      const slaDistribution = totalSLA > 0 ? [
+        { name: 'À temps', value: slaCompliant, color: '#4caf50' },
+        { name: 'À risque', value: slaAtRisk, color: '#ff9800' },
+        { name: 'En retard', value: slaOverdue, color: '#f44336' }
+      ] : [
         { name: 'À temps', value: 75, color: '#4caf50' },
         { name: 'À risque', value: 15, color: '#ff9800' },
         { name: 'En retard', value: 10, color: '#f44336' }
-      ]
-    });
+      ];
+
+      setData({
+        volumeTrend,
+        slaDistribution
+      });
+    } catch (error) {
+      console.error('Failed to load overview data:', error);
+      // Set fallback data
+      setData({
+        volumeTrend: [
+          { date: '2025-01-01', volume: 45 },
+          { date: '2025-01-02', volume: 52 },
+          { date: '2025-01-03', volume: 38 }
+        ],
+        slaDistribution: [
+          { name: 'À temps', value: 75, color: '#4caf50' },
+          { name: 'À risque', value: 15, color: '#ff9800' },
+          { name: 'En retard', value: 10, color: '#f44336' }
+        ]
+      });
+      setKpis({
+        totalBordereaux: 0,
+        processedCount: 0,
+        avgProcessingTime: 0,
+        processingRate: 0
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOverviewData();
   }, [filters, dateRange]);
 
-  if (!data) return <Typography>Chargement...</Typography>;
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Chargement des données...</Typography>
+      </Box>
+    );
+  }
+
+  if (!data) return <Typography>Aucune donnée disponible</Typography>;
 
   return (
     <Grid container spacing={3}>
+      {/* KPI Cards */}
+      {kpis && (
+        <Grid item xs={12}>
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <AssignmentIcon color="primary" />
+                    <Box>
+                      <Typography variant="h4">{kpis.totalBordereaux}</Typography>
+                      <Typography color="textSecondary">Total Bordereaux</Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <TrendingUpIcon color="success" />
+                    <Box>
+                      <Typography variant="h4">{kpis.processedCount}</Typography>
+                      <Typography color="textSecondary">Traités</Typography>
+                      <Chip size="small" label={`${kpis.processingRate}%`} color="success" />
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <AccessTimeIcon color="info" />
+                    <Box>
+                      <Typography variant="h4">{kpis.avgProcessingTime.toFixed(1)}j</Typography>
+                      <Typography color="textSecondary">Temps Moyen</Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <WarningIcon color="warning" />
+                    <Box>
+                      <Typography variant="h4">{kpis.totalBordereaux - kpis.processedCount}</Typography>
+                      <Typography color="textSecondary">En Attente</Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Grid>
+      )}
+
+      {/* Volume Trend Chart */}
       <Grid item xs={12} md={8}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Volume de Traitement</Typography>
@@ -43,6 +189,8 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
           </ResponsiveContainer>
         </Paper>
       </Grid>
+
+      {/* SLA Distribution Chart */}
       <Grid item xs={12} md={4}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Répartition SLA</Typography>
@@ -54,6 +202,7 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
                 ))}
               </Pie>
               <Tooltip />
+              <Legend />
             </PieChart>
           </ResponsiveContainer>
         </Paper>

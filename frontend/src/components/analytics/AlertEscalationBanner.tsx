@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAlertEscalationFlag } from '../../hooks/useAnalytics';
+import { Box, Typography, Alert } from '@mui/material';
 
 const AlertEscalationBanner: React.FC = () => {
   const { data, isLoading, error } = useAlertEscalationFlag();

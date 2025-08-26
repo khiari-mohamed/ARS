@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTrends } from '../../hooks/useAnalytics';
+import { TrendItem } from '../../types/analytics-extended';
 import LineChart from '../LineChart';
 import LoadingSpinner from '../LoadingSpinner';
 
@@ -10,7 +11,7 @@ const TrendsChart: React.FC = () => {
   if (isLoading) return <LoadingSpinner />;
   if (error) return <div className="text-red-600">Erreur chargement tendances</div>;
 
-  const chartData = data?.map(d => ({
+  const chartData = data?.map((d: TrendItem) => ({
     x: d.date,
     y: d.count,
   })) ?? [];

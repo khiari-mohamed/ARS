@@ -1,26 +1,82 @@
-import React from 'react';
-import { Paper, Grid, Card, CardContent, Typography, LinearProgress, Chip, Box } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Paper, Grid, Card, CardContent, Typography, LinearProgress, Chip, Box, CircularProgress } from '@mui/material';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ErrorIcon from '@mui/icons-material/Error';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import { LocalAPI } from '../../services/axios';
 
-interface Props {
-  kpis: {
-    slaCompliance: number;
-    totalBordereaux: number;
-    avgProcessingTime: number;
-    rejectionRate: number;
-    activeAlerts: number;
-  } | null;
+interface KPIData {
+  slaCompliance: number;
+  totalBordereaux: number;
+  avgProcessingTime: number;
+  rejectionRate: number;
+  activeAlerts: number;
 }
 
-const GlobalKPIHeader: React.FC<Props> = ({ kpis }) => {
-  if (!kpis) {
+const GlobalKPIHeader: React.FC = () => {
+  const [kpis, setKpis] = useState<KPIData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+
+  const loadKPIData = async () => {
+    try {
+      const [kpiResponse, alertsResponse] = await Promise.all([
+        LocalAPI.get('/analytics/kpis/daily'),
+        LocalAPI.get('/analytics/alerts')
+      ]);
+
+      const kpiData = kpiResponse.data;
+      const alertData = alertsResponse.data;
+
+      // Calculate real KPIs from backend data
+      const totalBordereaux = kpiData.totalCount || 0;
+      const processedCount = kpiData.processedCount || 0;
+      const slaCompliant = alertData.ok?.length || 0;
+      const avgProcessingTime = kpiData.avgDelay || 0;
+      const activeAlerts = (alertData.critical?.length || 0) + (alertData.warning?.length || 0);
+      const rejectionRate = totalBordereaux > 0 ? Math.round(((totalBordereaux - processedCount) / totalBordereaux) * 100) : 0;
+      const slaCompliance = totalBordereaux > 0 ? Math.round((slaCompliant / totalBordereaux) * 100) : 0;
+
+      setKpis({
+        slaCompliance,
+        totalBordereaux,
+        avgProcessingTime,
+        rejectionRate,
+        activeAlerts
+      });
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error('Failed to load KPI data:', error);
+      // Set fallback data
+      setKpis({
+        slaCompliance: 0,
+        totalBordereaux: 0,
+        avgProcessingTime: 0,
+        rejectionRate: 0,
+        activeAlerts: 0
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadKPIData();
+    
+    // Auto-refresh every 60 seconds
+    const interval = setInterval(loadKPIData, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  if (loading || !kpis) {
     return (
       <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Typography>Chargement des KPIs...</Typography>
+        <Box display="flex" alignItems="center" gap={2}>
+          <CircularProgress size={24} />
+          <Typography>Chargement des KPIs en temps réel...</Typography>
+        </Box>
       </Paper>
     );
   }
@@ -137,7 +193,7 @@ const GlobalKPIHeader: React.FC<Props> = ({ kpis }) => {
           </Grid>
           <Grid item xs={12} md={4}>
             <Typography variant="body2" sx={{ opacity: 0.9, textAlign: { xs: 'left', md: 'right' } }}>
-              Dernière mise à jour: {new Date().toLocaleTimeString()}
+              Dernière mise à jour: {lastUpdate.toLocaleTimeString()}
             </Typography>
           </Grid>
         </Grid>
