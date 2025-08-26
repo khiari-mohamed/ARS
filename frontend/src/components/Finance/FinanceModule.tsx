@@ -12,6 +12,7 @@ import AutomatedReconciliation from './AutomatedReconciliation';
 import FinancialReportingDashboard from './FinancialReportingDashboard';
 import FinanceMobileView from './FinanceMobileView';
 import FinanceTestPanel from './FinanceTestPanel';
+import FinanceAlertsTab from './FinanceAlertsTab';
 import { useAuth } from '../../contexts/AuthContext';
 
 const FinanceModule: React.FC = () => {
@@ -25,6 +26,7 @@ const FinanceModule: React.FC = () => {
     'Suivi & Statut',
     'Donneurs d\'Ordre',
     'Adhérents',
+    'Alertes & Retards',
     'Formats Bancaires',
     'Rapprochement Auto',
     'Rapports Financiers',
@@ -67,14 +69,15 @@ const FinanceModule: React.FC = () => {
           </Tabs>
 
           <Box>
-            {tab === 0 && <OVProcessingTab />}
+            {tab === 0 && <OVProcessingTab onSwitchToTab={setTab} />}
             {tab === 1 && <TrackingTab />}
             {tab === 2 && <DonneursTab />}
             {tab === 3 && <AdherentsTab />}
-            {tab === 4 && <MultiBankFormatManager />}
-            {tab === 5 && <AutomatedReconciliation />}
-            {tab === 6 && <FinancialReportingDashboard />}
-            {tab === 7 && <ReportsTab />}
+            {tab === 4 && <FinanceAlertsTab />}
+            {tab === 5 && <MultiBankFormatManager />}
+            {tab === 6 && <AutomatedReconciliation />}
+            {tab === 7 && <FinancialReportingDashboard />}
+            {tab === 8 && <ReportsTab />}
           </Box>
         </Paper>
       )}

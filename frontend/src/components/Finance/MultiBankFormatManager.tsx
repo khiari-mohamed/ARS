@@ -55,14 +55,30 @@ const MultiBankFormatManager: React.FC = () => {
   const [testData, setTestData] = useState<any>({});
   const [validationResult, setValidationResult] = useState<any>(null);
   const [statistics, setStatistics] = useState<any>(null);
+  const [newFormat, setNewFormat] = useState<any>({
+    name: '',
+    bankCode: '',
+    country: '',
+    formatType: 'SEPA',
+    active: true,
+    fields: [],
+    validation: {
+      ibanValidation: true,
+      bicValidation: false,
+      amountValidation: true,
+      dateValidation: true
+    }
+  });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      // Mock data
+      // Mock data - in production this would call an API
       setFormats([
         {
           id: 'sepa_credit_transfer',
@@ -143,6 +159,93 @@ const MultiBankFormatManager: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to load bank formats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateFormat = async () => {
+    try {
+      // Validate required fields
+      if (!newFormat.name || !newFormat.bankCode || !newFormat.country) {
+        alert('Veuillez remplir tous les champs requis');
+        return;
+      }
+
+      // Add new format to list
+      const format = {
+        ...newFormat,
+        id: `custom_${Date.now()}`,
+        fields: [
+          { name: 'reference', type: 'string', required: true, maxLength: 35, description: 'Référence' },
+          { name: 'amount', type: 'amount', required: true, description: 'Montant' },
+          { name: 'currency', type: 'string', required: true, maxLength: 3, description: 'Devise' },
+          { name: 'debtorName', type: 'string', required: true, maxLength: 70, description: 'Nom débiteur' },
+          { name: 'creditorName', type: 'string', required: true, maxLength: 70, description: 'Nom créditeur' }
+        ]
+      };
+
+      setFormats(prev => [...prev, format]);
+      setFormatDialog(false);
+      
+      // Reset form
+      setNewFormat({
+        name: '',
+        bankCode: '',
+        country: '',
+        formatType: 'SEPA',
+        active: true,
+        fields: [],
+        validation: {
+          ibanValidation: true,
+          bicValidation: false,
+          amountValidation: true,
+          dateValidation: true
+        }
+      });
+      
+      // Update statistics
+      setStatistics((prev: any) => ({
+        ...prev,
+        totalFormats: prev.totalFormats + 1,
+        activeFormats: format.active ? prev.activeFormats + 1 : prev.activeFormats
+      }));
+      
+      alert('Format créé avec succès!');
+    } catch (error) {
+      console.error('Failed to create format:', error);
+      alert('Erreur lors de la création du format');
+    }
+  };
+
+  const handleDeleteFormat = async (formatId: string) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce format ?')) {
+      return;
+    }
+
+    try {
+      setFormats(prev => prev.filter(f => f.id !== formatId));
+      setStatistics((prev: any) => ({
+        ...prev,
+        totalFormats: prev.totalFormats - 1,
+        activeFormats: prev.activeFormats - 1
+      }));
+      alert('Format supprimé avec succès!');
+    } catch (error) {
+      console.error('Failed to delete format:', error);
+      alert('Erreur lors de la suppression du format');
+    }
+  };
+
+  const handleToggleFormat = async (formatId: string) => {
+    try {
+      setFormats(prev => prev.map(f => 
+        f.id === formatId ? { ...f, active: !f.active } : f
+      ));
+      alert('Statut du format mis à jour!');
+    } catch (error) {
+      console.error('Failed to toggle format:', error);
+      alert('Erreur lors de la mise à jour du statut');
     }
   };
 
@@ -362,10 +465,19 @@ const MultiBankFormatManager: React.FC = () => {
                         >
                           <Science />
                         </IconButton>
-                        <IconButton size="small">
+                        <IconButton 
+                          size="small"
+                          onClick={() => handleToggleFormat(format.id)}
+                          title={format.active ? 'Désactiver' : 'Activer'}
+                        >
                           <Edit />
                         </IconButton>
-                        <IconButton size="small" color="error">
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteFormat(format.id)}
+                          title="Supprimer"
+                        >
                           <Delete />
                         </IconButton>
                       </Box>
@@ -544,6 +656,127 @@ const MultiBankFormatManager: React.FC = () => {
             disabled={!selectedFormat}
           >
             Valider
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* New Format Dialog */}
+      <Dialog open={formatDialog} onClose={() => setFormatDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Nouveau Format Bancaire
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Nom du Format"
+                  value={newFormat.name}
+                  onChange={(e) => setNewFormat((prev: any) => ({ ...prev, name: e.target.value }))}
+                  required
+                  placeholder="ex: SEPA Credit Transfer"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Code Banque"
+                  value={newFormat.bankCode}
+                  onChange={(e) => setNewFormat((prev: any) => ({ ...prev, bankCode: e.target.value }))}
+                  required
+                  placeholder="ex: SEPA, SWIFT"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Pays"
+                  value={newFormat.country}
+                  onChange={(e) => setNewFormat((prev: any) => ({ ...prev, country: e.target.value }))}
+                  required
+                  placeholder="ex: FR, EU, US"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Type de Format</InputLabel>
+                  <Select
+                    value={newFormat.formatType}
+                    onChange={(e) => setNewFormat((prev: any) => ({ ...prev, formatType: e.target.value }))}
+                    label="Type de Format"
+                  >
+                    <MenuItem value="SEPA">SEPA</MenuItem>
+                    <MenuItem value="SWIFT">SWIFT</MenuItem>
+                    <MenuItem value="DOMESTIC">DOMESTIC</MenuItem>
+                    <MenuItem value="ACH">ACH</MenuItem>
+                    <MenuItem value="WIRE">WIRE</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Options de Validation
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={newFormat.validation.ibanValidation}
+                      onChange={(e) => setNewFormat((prev: any) => ({
+                        ...prev,
+                        validation: { ...prev.validation, ibanValidation: e.target.checked }
+                      }))}
+                    />
+                  }
+                  label="Validation IBAN"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={newFormat.validation.bicValidation}
+                      onChange={(e) => setNewFormat((prev: any) => ({
+                        ...prev,
+                        validation: { ...prev.validation, bicValidation: e.target.checked }
+                      }))}
+                    />
+                  }
+                  label="Validation BIC"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={newFormat.validation.amountValidation}
+                      onChange={(e) => setNewFormat((prev: any) => ({
+                        ...prev,
+                        validation: { ...prev.validation, amountValidation: e.target.checked }
+                      }))}
+                    />
+                  }
+                  label="Validation Montant"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={newFormat.active}
+                      onChange={(e) => setNewFormat((prev: any) => ({ ...prev, active: e.target.checked }))}
+                    />
+                  }
+                  label="Format Actif"
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFormatDialog(false)}>Annuler</Button>
+          <Button
+            onClick={handleCreateFormat}
+            variant="contained"
+            disabled={!newFormat.name || !newFormat.bankCode || !newFormat.country}
+          >
+            Créer Format
           </Button>
         </DialogActions>
       </Dialog>

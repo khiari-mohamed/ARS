@@ -27,15 +27,28 @@ import { UserRole } from '../auth/user-role.enum';
 import { UseGuards } from '@nestjs/common';
 import { Express } from 'express';
 
-// Dummy user extraction (replace with real auth)
+// Extract user from authenticated request
 function getUserFromRequest(req: any) {
-  return req.user || { id: 'demo', role: 'SUPER_ADMIN' };
+  // In production, this should come from JWT token validation
+  // For now, provide a fallback that works with the existing auth system
+  if (req.user) {
+    return req.user;
+  }
+  
+  // Fallback for development/testing
+  return {
+    id: 'system-user',
+    email: 'system@ars.com',
+    fullName: 'System User',
+    role: 'FINANCE',
+    active: true
+  };
 }
 
 
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('finance')
+@Controller('virements')
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 
@@ -61,7 +74,7 @@ export class FinanceController {
     return this.financeService.searchVirements(query, user);
   }
 
-  @Get(':id')
+  @Get('virement/:id')
   async getVirement(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.financeService.getVirementById(id, user);
@@ -170,6 +183,27 @@ export class FinanceController {
   async deleteAdherent(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.financeService.deleteAdherent(id, user);
+  }
+
+  // Notifications endpoint
+  @Post('notify-finance')
+  async notifyFinanceTeam(@Body() data: { bordereauId: string, message?: string }, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.financeService.notifyFinanceTeam(data.bordereauId, data.message, user);
+  }
+
+  // Alerts endpoint
+  @Get('alerts')
+  async getFinanceAlerts(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.financeService.getFinanceAlerts(user);
+  }
+
+  // Export report endpoint
+  @Post('export-report')
+  async exportReport(@Body() exportData: any, @Res() res: Response, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.financeService.exportReport(exportData, res, user);
   }
 
   @Post('generate-ov')
