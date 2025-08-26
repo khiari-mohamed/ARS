@@ -189,43 +189,88 @@ export class AnalyticsController {
     return this.analyticsService.getTraceability(bordereauId, user);
   }
 
-  // --- AI Endpoints ---// --- AI Endpoints ---
-@Post('ai/priorities')
-async getPrioritiesAI(@Body() items: any) {
-  return this.analyticsService.getPrioritiesAI(items);
-}
-
-@Post('ai/reassignment')
-async getReassignmentAI(@Body() payload: any) {
-  return this.analyticsService.getReassignmentAI(payload);
-}
-
-@Post('ai/performance')
-async getPerformanceAI(@Body() payload: any) {
-  return this.analyticsService.getPerformanceAI(payload);
-}
-
-@Post('ai/compare-performance')
-async getComparePerformanceAI(@Body() payload: any) {
-  const { BadRequestException, BadGatewayException } = await import('@nestjs/common');
-  if (!payload || !Array.isArray(payload.planned) || !Array.isArray(payload.actual) || payload.planned.length === 0 || payload.actual.length === 0) {
-    throw new BadRequestException('Payload must include non-empty planned and actual arrays');
+  // --- SLA Analytics Endpoints ---
+  @Get('sla/dashboard')
+  async getSLADashboard(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getSLADashboard(user, query);
   }
-  try {
-    return await this.analyticsService.getComparePerformanceAI(payload);
-  } catch (e) {
-    throw new BadGatewayException('AI microservice error: ' + (e?.message || e));
+
+  @Get('sla/predictions')
+  async getSLAPredictions(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.predictSLABreaches(user);
   }
-}
 
-@Post('ai/diagnostic-optimisation')
-async getDiagnosticOptimisationAI(@Body() payload: any) {
-  return this.analyticsService.getDiagnosticOptimisationAI(payload);
-}
+  @Get('sla/capacity')
+  async getCapacityAnalysis(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getCapacityAnalysis(user);
+  }
 
-@Post('ai/predict-resources')
-async getPredictResourcesAI(@Body() payload: any) {
-  return this.analyticsService.getPredictResourcesAI(payload);
-}
+  // --- OV Analytics Endpoints ---
+  @Get('ov/dashboard')
+  async getOVDashboard(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getOVDashboard(user, query);
+  }
+
+  @Get('ov/export')
+  async exportOV(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.exportOVToExcel(query, user);
+  }
+
+  @Get('ov/statistics')
+  async getOVStatistics(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getOVStatistics(query);
+  }
+
+  // --- Real-time Analytics ---
+  @Post('events/process')
+  async processRealTimeEvent(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.processRealTimeEvent(payload.eventType, payload.data);
+  }
+
+  // --- AI Endpoints ---
+  @Post('ai/priorities')
+  async getPrioritiesAI(@Body() items: any) {
+    return this.analyticsService.getPrioritiesAI(items);
+  }
+
+  @Post('ai/reassignment')
+  async getReassignmentAI(@Body() payload: any) {
+    return this.analyticsService.getReassignmentAI(payload);
+  }
+
+  @Post('ai/performance')
+  async getPerformanceAI(@Body() payload: any) {
+    return this.analyticsService.getPerformanceAI(payload);
+  }
+
+  @Post('ai/compare-performance')
+  async getComparePerformanceAI(@Body() payload: any) {
+    const { BadRequestException, BadGatewayException } = await import('@nestjs/common');
+    if (!payload || !Array.isArray(payload.planned) || !Array.isArray(payload.actual) || payload.planned.length === 0 || payload.actual.length === 0) {
+      throw new BadRequestException('Payload must include non-empty planned and actual arrays');
+    }
+    try {
+      return await this.analyticsService.getComparePerformanceAI(payload);
+    } catch (e) {
+      throw new BadGatewayException('AI microservice error: ' + (e?.message || e));
+    }
+  }
+
+  @Post('ai/diagnostic-optimisation')
+  async getDiagnosticOptimisationAI(@Body() payload: any) {
+    return this.analyticsService.getDiagnosticOptimisationAI(payload);
+  }
+
+  @Post('ai/predict-resources')
+  async getPredictResourcesAI(@Body() payload: any) {
+    return this.analyticsService.getPredictResourcesAI(payload);
+  }
 
 }

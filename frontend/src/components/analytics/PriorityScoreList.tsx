@@ -3,7 +3,7 @@ import { usePriorityScoring } from '../../hooks/useAnalytics';
 
 const PriorityScoreList: React.FC = () => {
   const [type, setType] = useState('');
-  const { data = [], isLoading, error } = usePriorityScoring(type ? { type } : {});
+  const { data = [], isLoading, error } = usePriorityScoring({ type });
   return (
     <div>
       <h3 className="text-lg font-bold mb-2">Classement de priorité (IA)</h3>

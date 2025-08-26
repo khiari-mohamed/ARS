@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAlerts } from '../../hooks/useAnalytics';
+import { BordereauItem } from '../../types/analytics-extended';
 import LoadingSpinner from '../LoadingSpinner';
 
 const AlertsPanel: React.FC = () => {
@@ -15,7 +16,7 @@ const AlertsPanel: React.FC = () => {
         <span className="inline-block w-3 h-3 bg-red-600 rounded-full mr-2"></span>
         <span className="font-semibold">Critique (délai &gt; 5j):</span>
         <ul className="list-disc ml-6">
-          {data?.critical.map((b, i) => (
+          {data?.critical.map((b: BordereauItem, i: number) => (
             <li key={i}>
               Bordereau #{b.id} - {b.nomSociete} - Délai: {b.delaiReglement}j
             </li>
@@ -26,7 +27,7 @@ const AlertsPanel: React.FC = () => {
         <span className="inline-block w-3 h-3 bg-orange-400 rounded-full mr-2"></span>
         <span className="font-semibold">Alerte (délai 3-5j):</span>
         <ul className="list-disc ml-6">
-          {data?.warning.map((b, i) => (
+          {data?.warning.map((b: BordereauItem, i: number) => (
             <li key={i}>
               Bordereau #{b.id} - {b.nomSociete} - Délai: {b.delaiReglement}j
             </li>

@@ -1,658 +1,487 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  Grid,
-  Card,
-  CardContent,
-  Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Button,
-  Chip,
-  Alert,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Paper,
-  LinearProgress,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails
+  Box, Paper, Grid, Typography, Card, CardContent,
+  Button, Alert, Chip, LinearProgress, Tabs, Tab,
+  Table, TableHead, TableRow, TableCell, TableBody,
+  FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import {
-  TrendingUp,
-  TrendingDown,
-  Timeline,
-  Psychology,
-  Speed,
-  ExpandMore,
-  Warning,
-  CheckCircle,
-  Lightbulb,
-  Assessment
+  Psychology, TrendingUp, Warning, Assignment,
+  Speed, Timeline, AutoAwesome
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { LocalAPI } from '../../services/axios';
+import { useAuth } from '../../contexts/AuthContext';
+
+interface PredictiveData {
+  slaPredictions: SLAPrediction[];
+  capacityAnalysis: CapacityAnalysis[];
+  recommendations: AIRecommendation[];
+  forecast: ForecastData;
+}
+
+interface SLAPrediction {
+  id: string;
+  risk: string;
+  score: number;
+  days_left: number;
+  bordereau?: {
+    reference: string;
+    clientName: string;
+    assignedTo: string;
+  };
+}
+
+interface CapacityAnalysis {
+  userId: string;
+  userName: string;
+  activeBordereaux: number;
+  avgProcessingTime: number;
+  dailyCapacity: number;
+  daysToComplete: number;
+  capacityStatus: 'available' | 'at_capacity' | 'overloaded';
+  recommendation: string;
+}
+
+interface AIRecommendation {
+  type: 'reassignment' | 'staffing' | 'process';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  impact: string;
+  actionRequired: boolean;
+}
+
+interface ForecastData {
+  nextWeekForecast: number;
+  slope: number;
+  history: { day: number; count: number }[];
+}
 
 const PredictiveAnalyticsDashboard: React.FC = () => {
-  const [selectedMetric, setSelectedMetric] = useState('bordereaux_count');
-  const [forecastPeriod, setForecastPeriod] = useState('30');
-  const [trendForecast, setTrendForecast] = useState<any>(null);
-  const [capacityPlan, setCapacityPlan] = useState<any>(null);
-  const [predictiveModels, setPredictiveModels] = useState<any[]>([]);
-  const [selectedResource, setSelectedResource] = useState('staff');
+  const [data, setData] = useState<PredictiveData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
+  const [timeHorizon, setTimeHorizon] = useState('week');
+  const { user } = useAuth();
 
   useEffect(() => {
     loadPredictiveData();
-  }, [selectedMetric, forecastPeriod, selectedResource]);
+  }, [timeHorizon]);
 
   const loadPredictiveData = async () => {
+    setLoading(true);
     try {
-      // Mock trend forecast
-      setTrendForecast({
-        metric: selectedMetric,
-        period: 'daily',
-        historicalData: generateHistoricalData(),
-        forecast: generateForecastData(),
-        confidence: 0.87,
-        trend: 'increasing',
-        seasonality: {
-          type: 'weekly',
-          strength: 0.15,
-          peaks: [1, 2, 3], // Monday, Tuesday, Wednesday
-          valleys: [5, 6] // Friday, Saturday
-        },
-        accuracy: {
-          mape: 8.5,
-          rmse: 12.3,
-          mae: 9.1,
-          r2: 0.87
-        }
-      });
-
-      // Mock capacity plan
-      setCapacityPlan({
-        resource: selectedResource,
-        currentCapacity: 25,
-        projectedDemand: generateCapacityProjections(),
-        recommendations: [
-          {
-            type: 'increase_capacity',
-            priority: 'high',
-            description: `Augmenter la capacité ${selectedResource} de 3 unités pour répondre à la demande projetée`,
-            expectedImpact: 'Éliminer les goulots d\'étranglement et maintenir les niveaux de service',
-            timeframe: '2-4 semaines',
-            cost: 15000,
-            roi: 180
-          },
-          {
-            type: 'optimize_process',
-            priority: 'medium',
-            description: `Optimiser les processus ${selectedResource} pour améliorer l'efficacité`,
-            expectedImpact: 'Réduire l\'utilisation moyenne de 10-15%',
-            timeframe: '1-2 mois',
-            cost: 8000,
-            roi: 220
-          }
-        ],
-        riskFactors: [
-          {
-            factor: 'Forte Utilisation des Capacités',
-            probability: 0.7,
-            impact: 0.8,
-            description: `Utilisation moyenne de ${selectedResource} de 85% augmente le risque de dégradation du service`,
-            mitigation: 'Augmenter la capacité ou optimiser les processus'
-          },
-          {
-            factor: 'Volatilité de la Demande',
-            probability: 0.5,
-            impact: 0.6,
-            description: 'Forte volatilité de la demande rend la planification difficile',
-            mitigation: 'Implémenter une mise à l\'échelle flexible et des stratégies de lissage'
-          }
-        ],
-        optimizationOpportunities: [
-          {
-            area: 'Automatisation des Processus',
-            currentEfficiency: 75,
-            potentialEfficiency: 90,
-            description: `Automatiser les tâches routines ${selectedResource} pour améliorer l'efficacité`,
-            implementation: 'Déployer des outils d\'automatisation et des workflows',
-            expectedSavings: 22500
-          },
-          {
-            area: 'Mutualisation des Ressources',
-            currentEfficiency: 70,
-            potentialEfficiency: 85,
-            description: `Mutualiser ${selectedResource} entre les équipes pour améliorer l'utilisation`,
-            implementation: 'Implémenter un système de gestion partagée des ressources',
-            expectedSavings: 18000
-          }
-        ]
-      });
-
-      // Mock predictive models
-      setPredictiveModels([
-        {
-          id: 'model_demand_forecast',
-          name: 'Modèle de Prévision de Demande',
-          type: 'arima',
-          target: 'volume_quotidien',
-          accuracy: { mape: 8.5, r2: 0.87 },
-          lastTrained: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          status: 'active'
-        },
-        {
-          id: 'model_processing_time',
-          name: 'Prédiction Temps de Traitement',
-          type: 'neural_network',
-          target: 'duree_traitement',
-          accuracy: { mape: 12.1, r2: 0.82 },
-          lastTrained: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-          status: 'active'
-        },
-        {
-          id: 'model_capacity_planning',
-          name: 'Modèle de Planification Capacité',
-          type: 'linear_regression',
-          target: 'utilisation_ressources',
-          accuracy: { mape: 15.3, r2: 0.75 },
-          lastTrained: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-          status: 'training'
-        }
+      const [slaResponse, capacityResponse, recommendationsResponse, forecastResponse] = await Promise.all([
+        LocalAPI.get('/analytics/sla/predictions'),
+        LocalAPI.get('/analytics/sla/capacity'),
+        LocalAPI.get('/analytics/recommendations/enhanced'),
+        LocalAPI.get('/analytics/forecast')
       ]);
+
+      setData({
+        slaPredictions: slaResponse.data,
+        capacityAnalysis: capacityResponse.data,
+        recommendations: generateAIRecommendations(slaResponse.data, capacityResponse.data),
+        forecast: forecastResponse.data
+      });
     } catch (error) {
-      console.error('Failed to load predictive analytics data:', error);
+      console.error('Failed to load predictive data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const generateHistoricalData = () => {
-    const data = [];
-    const baseValue = getBaseValue(selectedMetric);
-    
-    for (let i = 30; i >= 0; i--) {
-      const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-      const trend = 0.01 * (30 - i); // Slight upward trend
-      const seasonal = Math.sin((date.getDay() / 7) * 2 * Math.PI) * baseValue * 0.1;
-      const noise = (Math.random() - 0.5) * baseValue * 0.1;
-      
-      let value = baseValue * (1 + trend) + seasonal + noise;
-      value = Math.max(value, baseValue * 0.5);
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        value: Math.round(value * 100) / 100,
-        actual: true
+  const generateAIRecommendations = (sla: SLAPrediction[], capacity: CapacityAnalysis[]): AIRecommendation[] => {
+    const recommendations: AIRecommendation[] = [];
+
+    // SLA-based recommendations
+    const highRiskCount = sla.filter(s => s.risk === '🔴').length;
+    if (highRiskCount > 0) {
+      recommendations.push({
+        type: 'process',
+        priority: 'high',
+        title: 'Risque SLA Critique Détecté',
+        description: `${highRiskCount} bordereaux à risque critique de dépassement SLA`,
+        impact: 'Risque de non-conformité contractuelle',
+        actionRequired: true
       });
     }
-    
-    return data;
-  };
 
-  const generateForecastData = () => {
-    const data = [];
-    const baseValue = getBaseValue(selectedMetric);
-    const days = parseInt(forecastPeriod);
-    
-    for (let i = 1; i <= days; i++) {
-      const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
-      const trend = 0.01 * i;
-      const seasonal = Math.sin((date.getDay() / 7) * 2 * Math.PI) * baseValue * 0.1;
-      
-      let predicted = baseValue * (1 + trend) + seasonal;
-      const confidence = Math.max(0.5, 0.95 - (i / days) * 0.4);
-      const errorMargin = predicted * (1 - confidence);
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        predicted: Math.round(predicted * 100) / 100,
-        lowerBound: Math.round((predicted - errorMargin) * 100) / 100,
-        upperBound: Math.round((predicted + errorMargin) * 100) / 100,
-        confidence
+    // Capacity-based recommendations
+    const overloadedUsers = capacity.filter(c => c.capacityStatus === 'overloaded');
+    if (overloadedUsers.length > 0) {
+      recommendations.push({
+        type: 'reassignment',
+        priority: 'high',
+        title: 'Surcharge Détectée',
+        description: `${overloadedUsers.length} gestionnaires en surcharge`,
+        impact: 'Réassignation recommandée pour optimiser la charge',
+        actionRequired: true
       });
     }
-    
-    return data;
-  };
 
-  const generateCapacityProjections = () => {
-    const data = [];
-    const currentCapacity = 25;
+    // Staffing recommendations
+    const totalWorkload = capacity.reduce((sum, c) => sum + c.activeBordereaux, 0);
+    const totalCapacity = capacity.reduce((sum, c) => sum + c.dailyCapacity * 7, 0);
     
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
-      const demand = 15 + Math.sin((i / 7) * 2 * Math.PI) * 5 + Math.random() * 3;
-      const utilization = (demand / currentCapacity) * 100;
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        demandForecast: Math.round(demand * 100) / 100,
-        capacityUtilization: Math.round(utilization * 100) / 100,
-        shortfall: demand > currentCapacity ? demand - currentCapacity : undefined,
-        surplus: demand < currentCapacity ? currentCapacity - demand : undefined,
-        confidence: 0.85 - (Math.random() * 0.2)
+    if (totalWorkload > totalCapacity * 1.2) {
+      recommendations.push({
+        type: 'staffing',
+        priority: 'medium',
+        title: 'Renforcement d\'Équipe Recommandé',
+        description: 'La charge de travail dépasse la capacité actuelle de 20%',
+        impact: 'Embauche de personnel supplémentaire suggérée',
+        actionRequired: false
       });
     }
-    
-    return data;
+
+    return recommendations;
   };
 
-  const getBaseValue = (metric: string) => {
-    const baseValues: Record<string, number> = {
-      'bordereaux_count': 150,
-      'processing_time': 2.5,
-      'success_rate': 95,
-      'workload': 80,
-      'staff_utilization': 75
-    };
-    return baseValues[metric] || 100;
-  };
-
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'increasing': return <TrendingUp color="success" />;
-      case 'decreasing': return <TrendingDown color="error" />;
-      default: return <Timeline color="action" />;
+  const getRiskColor = (risk: string) => {
+    switch (risk) {
+      case '🔴': return 'error';
+      case '🟠': return 'warning';
+      case '🟢': return 'success';
+      default: return 'default';
     }
   };
 
-  const getModelStatusColor = (status: string) => {
+  const getCapacityColor = (status: string) => {
     switch (status) {
-      case 'active': return 'success';
-      case 'training': return 'info';
-      case 'deprecated': return 'warning';
+      case 'overloaded': return 'error';
+      case 'at_capacity': return 'warning';
+      case 'available': return 'success';
       default: return 'default';
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return 'error';
-      case 'high': return 'warning';
-      case 'medium': return 'info';
-      case 'low': return 'success';
+      case 'high': return 'error';
+      case 'medium': return 'warning';
+      case 'low': return 'info';
       default: return 'default';
     }
   };
 
+  if (loading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <LinearProgress />
+        <Typography sx={{ mt: 2 }}>Chargement des analyses prédictives...</Typography>
+      </Box>
+    );
+  }
+
   return (
-    <Box>
-      <Typography variant="h6" gutterBottom>
-        Analyses Prédictives et Planification
-      </Typography>
-
-      {/* Controls */}
-      <Grid container spacing={2} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth>
-            <InputLabel>Métrique à Prévoir</InputLabel>
-            <Select
-              value={selectedMetric}
-              label="Métrique à Prévoir"
-              onChange={(e) => setSelectedMetric(e.target.value)}
-            >
-              <MenuItem value="bordereaux_count">Nombre de Bordereaux</MenuItem>
-              <MenuItem value="processing_time">Temps de Traitement</MenuItem>
-              <MenuItem value="success_rate">Taux de Succès</MenuItem>
-              <MenuItem value="workload">Charge de Travail</MenuItem>
-              <MenuItem value="staff_utilization">Utilisation Personnel</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth>
-            <InputLabel>Période de Prévision</InputLabel>
-            <Select
-              value={forecastPeriod}
-              label="Période de Prévision"
-              onChange={(e) => setForecastPeriod(e.target.value)}
-            >
-              <MenuItem value="7">7 jours</MenuItem>
-              <MenuItem value="14">14 jours</MenuItem>
-              <MenuItem value="30">30 jours</MenuItem>
-              <MenuItem value="90">90 jours</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <FormControl fullWidth>
-            <InputLabel>Ressource (Capacité)</InputLabel>
-            <Select
-              value={selectedResource}
-              label="Ressource (Capacité)"
-              onChange={(e) => setSelectedResource(e.target.value)}
-            >
-              <MenuItem value="staff">Personnel</MenuItem>
-              <MenuItem value="processing_power">Puissance de Traitement</MenuItem>
-              <MenuItem value="storage">Stockage</MenuItem>
-              <MenuItem value="bandwidth">Bande Passante</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Button
-            variant="contained"
-            startIcon={<Psychology />}
-            onClick={loadPredictiveData}
-            fullWidth
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4" component="h1">
+          🔮 Analyses Prédictives IA
+        </Typography>
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <InputLabel>Horizon</InputLabel>
+          <Select
+            value={timeHorizon}
+            onChange={(e) => setTimeHorizon(e.target.value)}
+            label="Horizon"
           >
-            Actualiser Prévisions
-          </Button>
-        </Grid>
-      </Grid>
+            <MenuItem value="week">1 Semaine</MenuItem>
+            <MenuItem value="month">1 Mois</MenuItem>
+            <MenuItem value="quarter">3 Mois</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
 
-      {/* Main Content */}
-      <Grid container spacing={3}>
-        {/* Trend Forecast */}
-        {trendForecast && (
-          <Grid item xs={12} md={8}>
-            <Card>
-              <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Typography variant="h6">
-                    Prévision de Tendance - {selectedMetric}
-                  </Typography>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    {getTrendIcon(trendForecast.trend)}
-                    <Chip
-                      label={`Confiance: ${(trendForecast.confidence * 100).toFixed(0)}%`}
-                      color={trendForecast.confidence > 0.8 ? 'success' : 'warning'}
-                      size="small"
-                    />
-                  </Box>
-                </Box>
-
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line
-                      data={trendForecast.historicalData}
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#8884d8"
-                      strokeWidth={2}
-                      name="Historique"
-                    />
-                    <Line
-                      data={trendForecast.forecast}
-                      type="monotone"
-                      dataKey="predicted"
-                      stroke="#ff7300"
-                      strokeWidth={2}
-                      strokeDasharray="5 5"
-                      name="Prévision"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  Tendance {trendForecast.trend === 'increasing' ? 'croissante' : 
-                           trendForecast.trend === 'decreasing' ? 'décroissante' : 'stable'} 
-                  détectée avec une précision de {trendForecast.accuracy.mape.toFixed(1)}% MAPE.
-                  {trendForecast.seasonality && (
-                    ` Saisonnalité ${trendForecast.seasonality.type} identifiée.`
-                  )}
-                </Alert>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Model Performance */}
-        <Grid item xs={12} md={4}>
+      {/* AI Recommendations Summary */}
+      <Grid container spacing={3} mb={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Modèles Prédictifs
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Psychology color="primary" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h4">
+                {data?.recommendations.length || 0}
               </Typography>
-              
-              <List>
-                {predictiveModels.map((model) => (
-                  <ListItem key={model.id}>
-                    <ListItemIcon>
-                      <Psychology color={model.status === 'active' ? 'success' : 'action'} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Typography variant="subtitle2">
-                            {model.name}
-                          </Typography>
-                          <Chip
-                            label={model.status}
-                            color={getModelStatusColor(model.status) as any}
-                            size="small"
-                          />
-                        </Box>
-                      }
-                      secondary={
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Type: {model.type} | R²: {model.accuracy.r2.toFixed(2)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            MAPE: {model.accuracy.mape.toFixed(1)}% | 
-                            Entraîné: {new Date(model.lastTrained).toLocaleDateString()}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              <Typography variant="body2" color="text.secondary">
+                Recommandations IA
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Capacity Planning */}
-        {capacityPlan && (
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Planification de Capacité - {selectedResource}
-                </Typography>
-                
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={8}>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <AreaChart data={capacityPlan.projectedDemand}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
-                        <YAxis />
-                        <Tooltip />
-                        <Area
-                          type="monotone"
-                          dataKey="demandForecast"
-                          stackId="1"
-                          stroke="#8884d8"
-                          fill="#8884d8"
-                          name="Demande Prévue"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="capacityUtilization"
-                          stackId="2"
-                          stroke="#82ca9d"
-                          fill="#82ca9d"
-                          name="Utilisation %"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </Grid>
-                  
-                  <Grid item xs={12} md={4}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Métriques Clés
-                    </Typography>
-                    <Paper sx={{ p: 2, mb: 2 }}>
-                      <Typography variant="h4" color="primary" textAlign="center">
-                        {capacityPlan.currentCapacity}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" textAlign="center">
-                        Capacité Actuelle
-                      </Typography>
-                    </Paper>
-                    <Paper sx={{ p: 2, mb: 2 }}>
-                      <Typography variant="h4" color="warning.main" textAlign="center">
-                        {capacityPlan.projectedDemand.reduce((sum: number, p: any) => sum + p.demandForecast, 0) / capacityPlan.projectedDemand.length}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" textAlign="center">
-                        Demande Moyenne Prévue
-                      </Typography>
-                    </Paper>
-                    <Paper sx={{ p: 2 }}>
-                      <Typography variant="h4" color="info.main" textAlign="center">
-                        {(capacityPlan.projectedDemand.reduce((sum: number, p: any) => sum + p.capacityUtilization, 0) / capacityPlan.projectedDemand.length).toFixed(1)}%
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" textAlign="center">
-                        Utilisation Moyenne
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Warning color="error" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h4">
+                {data?.slaPredictions.filter(s => s.risk === '🔴').length || 0}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Risques SLA Critiques
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Assignment color="warning" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h4">
+                {data?.capacityAnalysis.filter(c => c.capacityStatus === 'overloaded').length || 0}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Gestionnaires Surchargés
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <TrendingUp color="info" sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h4">
+                {data?.forecast.nextWeekForecast || 0}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Prévision Semaine
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Tabs */}
+      <Paper sx={{ p: 3 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }}>
+          <Tab label="Prédictions SLA" icon={<Warning />} />
+          <Tab label="Analyse Capacité" icon={<Speed />} />
+          <Tab label="Recommandations IA" icon={<Psychology />} />
+          <Tab label="Prévisions" icon={<Timeline />} />
+        </Tabs>
+
+        {/* SLA Predictions Tab */}
+        {activeTab === 0 && (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Prédictions de Dépassement SLA
+            </Typography>
+            
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Bordereau</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Assigné à</TableCell>
+                  <TableCell>Risque</TableCell>
+                  <TableCell>Score</TableCell>
+                  <TableCell>Jours Restants</TableCell>
+                  <TableCell>Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data?.slaPredictions.slice(0, 10).map((pred) => (
+                  <TableRow key={pred.id}>
+                    <TableCell>{pred.bordereau?.reference || pred.id.slice(-8)}</TableCell>
+                    <TableCell>{pred.bordereau?.clientName || 'N/A'}</TableCell>
+                    <TableCell>{pred.bordereau?.assignedTo || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={pred.risk}
+                        color={getRiskColor(pred.risk)}
+                      />
+                    </TableCell>
+                    <TableCell>{(pred.score * 100).toFixed(0)}%</TableCell>
+                    <TableCell>{pred.days_left}</TableCell>
+                    <TableCell>
+                      {pred.risk === '🔴' && (
+                        <Button size="small" color="error" variant="outlined">
+                          Réassigner
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         )}
 
-        {/* Recommendations */}
-        {capacityPlan && (
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  <Lightbulb sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Recommandations
-                </Typography>
-                
-                {capacityPlan.recommendations.map((rec: any, index: number) => (
-                  <Accordion key={index}>
-                    <AccordionSummary expandIcon={<ExpandMore />}>
-                      <Box display="flex" alignItems="center" gap={2} width="100%">
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {rec.type === 'increase_capacity' ? 'Augmenter Capacité' :
-                           rec.type === 'optimize_process' ? 'Optimiser Processus' :
-                           rec.type === 'redistribute_workload' ? 'Redistribuer Charge' : rec.type}
-                        </Typography>
-                        <Box sx={{ flexGrow: 1 }} />
-                        <Chip
-                          label={rec.priority}
-                          color={getPriorityColor(rec.priority) as any}
-                          size="small"
-                        />
-                      </Box>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Typography variant="body2" paragraph>
+        {/* Capacity Analysis Tab */}
+        {activeTab === 1 && (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Analyse de Capacité par Gestionnaire
+            </Typography>
+            
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Gestionnaire</TableCell>
+                  <TableCell>Bordereaux Actifs</TableCell>
+                  <TableCell>Temps Moyen</TableCell>
+                  <TableCell>Capacité Quotidienne</TableCell>
+                  <TableCell>Jours pour Terminer</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell>Recommandation</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data?.capacityAnalysis.map((analysis) => (
+                  <TableRow key={analysis.userId}>
+                    <TableCell>{analysis.userName}</TableCell>
+                    <TableCell>{analysis.activeBordereaux}</TableCell>
+                    <TableCell>{analysis.avgProcessingTime.toFixed(1)} j</TableCell>
+                    <TableCell>{analysis.dailyCapacity.toFixed(1)}</TableCell>
+                    <TableCell>{analysis.daysToComplete.toFixed(1)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={analysis.capacityStatus}
+                        color={getCapacityColor(analysis.capacityStatus)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ maxWidth: 200 }}>
+                        {analysis.recommendation}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
+
+        {/* AI Recommendations Tab */}
+        {activeTab === 2 && (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Recommandations Intelligentes
+            </Typography>
+            
+            <Grid container spacing={2}>
+              {data?.recommendations.map((rec, index) => (
+                <Grid item xs={12} key={index}>
+                  <Alert 
+                    severity={rec.priority === 'high' ? 'error' : rec.priority === 'medium' ? 'warning' : 'info'}
+                    action={
+                      rec.actionRequired && (
+                        <Button color="inherit" size="small">
+                          Appliquer
+                        </Button>
+                      )
+                    }
+                  >
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                        {rec.title}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
                         {rec.description}
                       </Typography>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">
-                            Impact Attendu:
-                          </Typography>
-                          <Typography variant="body2">
-                            {rec.expectedImpact}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">
-                            Délai:
-                          </Typography>
-                          <Typography variant="body2">
-                            {rec.timeframe}
-                          </Typography>
-                        </Grid>
-                        {rec.cost && (
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="caption" color="text.secondary">
-                              Coût Estimé:
-                            </Typography>
-                            <Typography variant="body2">
-                              €{rec.cost.toLocaleString()}
-                            </Typography>
-                          </Grid>
-                        )}
-                        {rec.roi && (
-                          <Grid item xs={12} sm={6}>
-                            <Typography variant="caption" color="text.secondary">
-                              ROI:
-                            </Typography>
-                            <Typography variant="body2" color="success.main">
-                              {rec.roi}%
-                            </Typography>
-                          </Grid>
-                        )}
-                      </Grid>
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
-              </CardContent>
-            </Card>
-          </Grid>
+                      <Typography variant="caption" color="text.secondary">
+                        Impact: {rec.impact}
+                      </Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <Chip
+                          size="small"
+                          label={rec.type}
+                          color="primary"
+                          sx={{ mr: 1 }}
+                        />
+                        <Chip
+                          size="small"
+                          label={rec.priority}
+                          color={getPriorityColor(rec.priority)}
+                        />
+                      </Box>
+                    </Box>
+                  </Alert>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
         )}
 
-        {/* Risk Factors */}
-        {capacityPlan && (
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  <Warning sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Facteurs de Risque
-                </Typography>
-                
-                <List>
-                  {capacityPlan.riskFactors.map((risk: any, index: number) => (
-                    <ListItem key={index}>
-                      <ListItemIcon>
-                        <Warning color="warning" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="subtitle2">
-                              {risk.factor}
-                            </Typography>
-                            <Chip
-                              label={`${(risk.probability * 100).toFixed(0)}% prob.`}
-                              size="small"
-                              color="warning"
-                            />
-                          </Box>
-                        }
-                        secondary={
-                          <Box>
-                            <Typography variant="body2" color="text.secondary">
-                              {risk.description}
-                            </Typography>
-                            <Typography variant="caption" color="success.main">
-                              Mitigation: {risk.mitigation}
-                            </Typography>
-                            <LinearProgress
-                              variant="determinate"
-                              value={risk.probability * risk.impact * 100}
-                              sx={{ mt: 1, height: 4 }}
-                              color="warning"
-                            />
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </CardContent>
-            </Card>
-          </Grid>
+        {/* Forecast Tab */}
+        {activeTab === 3 && (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Prévisions de Charge de Travail
+            </Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={8}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={data?.forecast.history}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="count" 
+                      stroke="#8884d8" 
+                      strokeWidth={2}
+                      name="Bordereaux par jour"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Grid>
+              
+              <Grid item xs={12} md={4}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Métriques de Prévision
+                    </Typography>
+                    
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Prévision Semaine Prochaine
+                      </Typography>
+                      <Typography variant="h4" color="primary">
+                        {data?.forecast.nextWeekForecast}
+                      </Typography>
+                    </Box>
+                    
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Tendance
+                      </Typography>
+                      <Box display="flex" alignItems="center">
+                        <TrendingUp 
+                          color={data?.forecast?.slope && data.forecast.slope > 0 ? 'success' : 'error'} 
+                          sx={{ mr: 1 }}
+                        />
+                        <Typography variant="h6">
+                          {data?.forecast?.slope && data.forecast.slope > 0 ? 'Croissante' : 'Décroissante'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Coefficient de Tendance
+                      </Typography>
+                      <Typography variant="h6">
+                        {data?.forecast.slope.toFixed(2)}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          </Box>
         )}
-      </Grid>
+      </Paper>
     </Box>
   );
 };

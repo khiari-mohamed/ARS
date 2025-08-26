@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useDailyKpis } from '../../hooks/useAnalytics';
 import { AnalyticsKpiDto } from '../../types/analytics';
+import { DailyKpiItem } from '../../types/analytics-extended';
 import LineChart from '../LineChart';
 import KPIBox from '../KPIBox';
 import LoadingSpinner from '../LoadingSpinner';
@@ -42,7 +43,7 @@ const KpiDashboard: React.FC = () => {
     );
   }
 
-  const chartData = data?.bsPerDay.map(d => ({
+  const chartData = data?.bsPerDay.map((d: DailyKpiItem) => ({
     x: formatDate(d.createdAt),
     y: d._count.id,
   })) || [];
@@ -62,8 +63,8 @@ const KpiDashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <KPIBox label="Moyenne Délai (jours)" value={data?.avgDelay?.toFixed(2) ?? '-'} />
-        <KPIBox label="Total BS" value={data?.bsPerDay.reduce((a, b) => a + b._count.id, 0) ?? '-'} />
-        <KPIBox label="BS / Jour (max)" value={Math.max(...(data?.bsPerDay.map(d => d._count.id) ?? [0]))} />
+        <KPIBox label="Total BS" value={data?.bsPerDay.reduce((a: number, b: DailyKpiItem) => a + b._count.id, 0) ?? '-'} />
+        <KPIBox label="BS / Jour (max)" value={Math.max(...(data?.bsPerDay.map((d: DailyKpiItem) => d._count.id) ?? [0]))} />
       </div>
       <div className="bg-white rounded shadow p-4">
         <LineChart

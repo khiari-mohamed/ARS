@@ -3,7 +3,7 @@ import { useClientDashboard } from '../../hooks/useAnalytics';
 
 const ClientSlaVolumeDashboard: React.FC = () => {
   const [clientId, setClientId] = useState('');
-  const { data, isLoading, error } = useClientDashboard(clientId ? { clientId } : {});
+  const { data, isLoading, error } = useClientDashboard({ clientId });
   return (
     <div className="mb-4">
       <h3 className="text-lg font-bold mb-2">KPI Client</h3>

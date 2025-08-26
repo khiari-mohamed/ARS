@@ -13,6 +13,8 @@ import ReportsTab from './ReportsTab';
 import AdvancedFilteringDashboard from './AdvancedFilteringDashboard';
 import ScheduledReportsManager from './ScheduledReportsManager';
 import PredictiveAnalyticsDashboard from './PredictiveAnalyticsDashboard';
+import RealTimeDashboard from './RealTimeDashboard';
+import OVAnalyticsDashboard from './OVAnalyticsDashboard';
 import AnalyticsMobileView from './AnalyticsMobileView';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -34,6 +36,18 @@ const AnalyticsDashboard: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
+
+  // Listen for tab change events from child components
+  useEffect(() => {
+    const handleTabChange = (event: any) => {
+      if (event.detail && typeof event.detail.tab === 'number') {
+        setTab(event.detail.tab);
+      }
+    };
+
+    window.addEventListener('analytics-tab-change', handleTabChange);
+    return () => window.removeEventListener('analytics-tab-change', handleTabChange);
+  }, []);
 
   useEffect(() => {
     // Load global KPIs based on filters
@@ -79,21 +93,23 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const tabLabels = [
-    'Vue d\'ensemble',
+    'Temps Réel',
+    'Vue d\'ensemble', 
     'Performance',
     'Réclamations',
     'Risques SLA',
+    'OV Analytics',
     'Prévisions',
+    'Analyses Prédictives',
     'Filtrage Avancé',
     'Rapports Programmés',
-    'Analyses Prédictives',
     'Rapports'
   ];
 
   return (
     <Box sx={{ p: 2 }}>
       {/* Global KPI Header */}
-      <GlobalKPIHeader kpis={globalKPIs} />
+      <GlobalKPIHeader />
 
       {/* Mobile View */}
       {isMobile && (
@@ -170,7 +186,7 @@ const AnalyticsDashboard: React.FC = () => {
           </Paper>
 
           {/* Main Content */}
-          <Paper elevation={2} sx={{ p: 3 }}>
+          <Paper elevation={2} sx={{ p: 3 }} data-analytics-tabs>
             <Tabs
               value={tab}
               onChange={(_, v) => setTab(v)}
@@ -184,15 +200,17 @@ const AnalyticsDashboard: React.FC = () => {
             </Tabs>
 
             <Box>
-              {tab === 0 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 1 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 2 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 3 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 4 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 5 && <AdvancedFilteringDashboard />}
-              {tab === 6 && <ScheduledReportsManager />}
+              {tab === 0 && <RealTimeDashboard />}
+              {tab === 1 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 2 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 3 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 4 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 5 && <OVAnalyticsDashboard />}
+              {tab === 6 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
               {tab === 7 && <PredictiveAnalyticsDashboard />}
-              {tab === 8 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 8 && <AdvancedFilteringDashboard />}
+              {tab === 9 && <ScheduledReportsManager />}
+              {tab === 10 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
             </Box>
           </Paper>
         </>
