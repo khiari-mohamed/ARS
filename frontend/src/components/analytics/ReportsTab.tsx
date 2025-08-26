@@ -112,7 +112,6 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
   const handleGenerateReport = async () => {
     setGenerating(true);
     try {
-      // Build report parameters
       const reportParams = {
         type: reportConfig.type,
         format: reportConfig.format,
@@ -123,35 +122,47 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
         dateRange: dateRange
       };
 
-      // Try to generate report via API
-      const response = await LocalAPI.post('/analytics/reports/generate', reportParams, {
-        responseType: 'blob'
-      }).catch(async () => {
-        // Fallback: simulate report generation
-        console.log('API not available, simulating report generation');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return null;
-      });
-
-      if (response) {
-        // Real API response - download the file
-        const filename = `analytics_report_${Date.now()}.${reportConfig.format}`;
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } else {
-        // Fallback notification
-        const filename = `analytics_report_${Date.now()}.${reportConfig.format}`;
-        alert(`Rapport généré: ${filename}`);
+      const response = await LocalAPI.post('/analytics/reports/generate', reportParams);
+      
+      if (response.data) {
+        // Show success message
+        alert(`Rapport "${response.data.filename}" généré avec succès! Il sera disponible dans quelques instants.`);
+        
+        // Add new report to local state
+        const newReport = {
+          id: response.data.id,
+          name: response.data.filename,
+          date: new Date().toLocaleDateString('fr-FR'),
+          size: 'Génération...',
+          type: response.data.type,
+          format: response.data.format,
+          status: 'generating'
+        };
+        
+        setRecentReports(prev => [newReport, ...prev]);
+        
+        // Poll for completion
+        const pollInterval = setInterval(async () => {
+          try {
+            const updatedReports = await LocalAPI.get('/analytics/reports/recent');
+            const completedReport = updatedReports.data.find((r: any) => r.id === response.data.id);
+            
+            if (completedReport && completedReport.status === 'completed') {
+              clearInterval(pollInterval);
+              setRecentReports(prev => prev.map(r => 
+                r.id === response.data.id 
+                  ? { ...r, status: 'completed', size: formatFileSize(completedReport.fileSize) }
+                  : r
+              ));
+            }
+          } catch (error) {
+            clearInterval(pollInterval);
+          }
+        }, 2000);
+        
+        // Clear polling after 30 seconds
+        setTimeout(() => clearInterval(pollInterval), 30000);
       }
-
-      // Refresh reports list
-      await loadReportsData();
     } catch (error) {
       console.error('Failed to generate report:', error);
       alert('Erreur lors de la génération du rapport');
@@ -164,22 +175,16 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
     try {
       const response = await LocalAPI.get(`/analytics/reports/${reportId}/download`, {
         responseType: 'blob'
-      }).catch(() => {
-        // Fallback: show download message
-        alert(`Téléchargement de ${filename}`);
-        return null;
       });
 
-      if (response) {
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download report:', error);
       alert('Erreur lors du téléchargement');

@@ -610,6 +610,19 @@ model ReportExecution {
   report      ScheduledReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }
 
+model ReportGeneration {
+  id          String    @id @default(uuid())
+  type        String
+  format      String
+  period      String
+  parameters  String
+  status      String    @default("generating")
+  filename    String
+  fileSize    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+}
+
 enum DocumentStatus {
   UPLOADED
   EN_COURS

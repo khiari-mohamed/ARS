@@ -14,8 +14,12 @@ export class CreateOVDto {
   adherents: {
     matricule: string;
     name: string;
+    society: string;
     rib: string;
     amount: number;
+    status: string;
+    notes: string;
+    memberId?: string;
   }[];
 
   @IsNotEmpty()

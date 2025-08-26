@@ -10,6 +10,7 @@ import { ReclamationsModule } from './reclamations/reclamations.module';
 import { GedModule } from './ged/ged.module';
 import { GecModule } from './gec/gec.module';
 import { FinanceModule } from './finance/finance.module';
+import { WireTransferModule } from './wire-transfer/wire-transfer.module';
 import { OcrModule } from './ocr/ocr.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AlertsModule } from './alerts/alerts.module';
@@ -32,7 +33,7 @@ import { SeedController } from './seed.controller';
 
 
 @Module({
-  imports: [AuthModule, UsersModule, ContractsModule, BordereauxModule, TraitementModule, ReclamationsModule, GedModule, GecModule, FinanceModule, OcrModule, AnalyticsModule, AlertsModule, SharedModule, ConfigModule,
+  imports: [AuthModule, UsersModule, ContractsModule, BordereauxModule, TraitementModule, ReclamationsModule, GedModule, GecModule, FinanceModule, WireTransferModule, OcrModule, AnalyticsModule, AlertsModule, SharedModule, ConfigModule,
         DashboardModule,
     IntegrationModule,
     FeedbackModule,

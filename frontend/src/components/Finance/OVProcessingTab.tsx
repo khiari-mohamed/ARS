@@ -26,7 +26,11 @@ interface ValidationResult {
   notes: string;
 }
 
-const OVProcessingTab: React.FC = () => {
+interface OVProcessingTabProps {
+  onSwitchToTab?: (tabIndex: number) => void;
+}
+
+const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedDonneur, setSelectedDonneur] = useState<DonneurOrdre | null>(null);
   const [donneurs, setDonneurs] = useState<DonneurOrdre[]>([]);
@@ -81,15 +85,28 @@ const OVProcessingTab: React.FC = () => {
       const { validateOVFile } = await import('../../services/financeService');
       const result = await validateOVFile(file, selectedDonneur?.id || '');
       
-      if (result.success) {
+      if (result.results && result.results.length > 0) {
         setValidationResults(result.results);
         setActiveStep(2);
+        
+        // Show validation summary
+        if (result.summary) {
+          console.log('Validation Summary:', result.summary);
+        }
+        
+        // Show errors if any
+        if (result.errors && result.errors.length > 0) {
+          console.warn('Validation Errors:', result.errors);
+        }
       } else {
-        console.error('Validation failed:', result.errors);
+        console.error('No results from validation');
+        // Show error to user
+        alert('Aucune donnée valide trouvée dans le fichier Excel');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('File processing failed:', error);
-      // Fallback to mock data
+      alert('Erreur lors du traitement du fichier: ' + (error?.message || 'Erreur inconnue'));
+      // Fallback to mock data for demo
       const mockResults: ValidationResult[] = [
         { matricule: '12345', name: 'John Doe', society: 'AON', rib: '12345678901234567890', amount: 150.50, status: 'ok', notes: '' },
         { matricule: '67890', name: 'Jane Smith', society: 'AXA', rib: '', amount: 200.00, status: 'error', notes: 'RIB manquant' }
@@ -107,11 +124,12 @@ const OVProcessingTab: React.FC = () => {
       const { processOV, generateOVPDF, generateOVTXT } = await import('../../services/financeService');
       
       // First process the OV
+      const validAdherents = validationResults.filter(r => r.status === 'ok');
       const ovData = {
         donneurOrdreId: selectedDonneur?.id,
         societyId: 'default',
-        adherents: validationResults.filter(r => r.status === 'ok'),
-        totalAmount: validationResults.reduce((sum, r) => sum + r.amount, 0)
+        adherents: validAdherents,
+        totalAmount: validAdherents.reduce((sum, r) => sum + r.amount, 0)
       };
       
       const ovRecord = await processOV(ovData);
@@ -341,7 +359,10 @@ const OVProcessingTab: React.FC = () => {
                 <Button variant="outlined" onClick={() => setActiveStep(0)}>
                   Nouveau Traitement
                 </Button>
-                <Button variant="contained" href="/finance/tracking">
+                <Button 
+                  variant="contained" 
+                  onClick={() => onSwitchToTab?.(1)}
+                >
                   Voir le Suivi
                 </Button>
               </Box>

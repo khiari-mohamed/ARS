@@ -8,12 +8,14 @@ import { AdvancedFilteringService } from './advanced-filtering.service';
 import { AdvancedFilteringController } from './advanced-filtering.controller';
 import { ScheduledReportsService } from './scheduled-reports.service';
 import { ScheduledReportsController } from './scheduled-reports.controller';
+import { ReportsService } from './reports.service';
+import { ReportsController } from './reports.controller';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
   imports: [EventEmitterModule.forRoot()],
-  controllers: [AnalyticsController, AdvancedFilteringController, ScheduledReportsController],
+  controllers: [AnalyticsController, AdvancedFilteringController, ScheduledReportsController, ReportsController],
   providers: [
     AnalyticsService, 
     RealTimeAnalyticsService,
@@ -21,6 +23,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     OVAnalyticsService,
     AdvancedFilteringService,
     ScheduledReportsService,
+    ReportsService,
     PrismaService
   ],
   exports: [AnalyticsService],

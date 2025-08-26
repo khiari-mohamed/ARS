@@ -3,10 +3,10 @@ import {
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Chip, Button, Dialog, DialogTitle, DialogContent, 
   DialogActions, TextField, FormControl, InputLabel, Select, MenuItem,
-  Stack, Box
+  Stack, Box, CircularProgress
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
-import CommentIcon from '@mui/icons-material/Comment';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 interface OVRecord {
   id: string;
@@ -23,6 +23,8 @@ interface OVRecord {
 
 const TrackingTab: React.FC = () => {
   const [records, setRecords] = useState<OVRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<OVRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     society: '',
     status: '',
@@ -39,33 +41,59 @@ const TrackingTab: React.FC = () => {
     observations: ''
   });
 
+  const loadRecords = async () => {
+    setLoading(true);
+    try {
+      const { getOVTracking } = await import('../../services/financeService');
+      const data = await getOVTracking({});
+      setRecords(data);
+    } catch (error) {
+      console.error('Failed to load OV tracking:', error);
+      // Fallback to mock data
+      setRecords([
+        {
+          id: '1',
+          reference: 'OV/2025/001',
+          society: 'AON',
+          dateInjected: '2025-01-15',
+          dateExecuted: '2025-01-16',
+          status: 'EXECUTE',
+          delay: 1,
+          observations: 'Traité normalement',
+          donneurOrdre: 'ARS Tunisie',
+          totalAmount: 1250.75
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadRecords = async () => {
-      try {
-        const { getOVTracking } = await import('../../services/financeService');
-        const data = await getOVTracking(filters);
-        setRecords(data);
-      } catch (error) {
-        console.error('Failed to load OV tracking:', error);
-        // Fallback to mock data
-        setRecords([
-          {
-            id: '1',
-            reference: 'OV/2025/001',
-            society: 'AON',
-            dateInjected: '2025-01-15',
-            dateExecuted: '2025-01-16',
-            status: 'EXECUTE',
-            delay: 1,
-            observations: 'Traité normalement',
-            donneurOrdre: 'ARS Tunisie',
-            totalAmount: 1250.75
-          }
-        ]);
-      }
-    };
     loadRecords();
-  }, [filters]);
+  }, []);
+
+  useEffect(() => {
+    let filtered = records;
+    
+    if (filters.society) {
+      filtered = filtered.filter(r => r.society.toLowerCase().includes(filters.society.toLowerCase()));
+    }
+    if (filters.status) {
+      filtered = filtered.filter(r => r.status === filters.status);
+    }
+    if (filters.donneurOrdre) {
+      filtered = filtered.filter(r => r.donneurOrdre.toLowerCase().includes(filters.donneurOrdre.toLowerCase()));
+    }
+    if (filters.dateFrom) {
+      filtered = filtered.filter(r => r.dateInjected >= filters.dateFrom);
+    }
+    if (filters.dateTo) {
+      filtered = filtered.filter(r => r.dateInjected <= filters.dateTo);
+    }
+    
+    setFilteredRecords(filtered);
+  }, [records, filters]);
 
   const getStatusChip = (status: string, delay: number) => {
     const getSLAColor = () => {
@@ -124,20 +152,17 @@ const TrackingTab: React.FC = () => {
     try {
       const { updateOVStatus } = await import('../../services/financeService');
       await updateOVStatus(editDialog.record.id, {
-        ...editForm,
-        updatedBy: 'current-user' // Replace with actual user ID
+        status: editForm.status,
+        dateExecuted: editForm.dateExecuted,
+        observations: editForm.observations
       });
       
-      // Update local state
-      setRecords(prev => prev.map(r => 
-        r.id === editDialog.record?.id 
-          ? {...r, status: editForm.status as any, dateExecuted: editForm.dateExecuted, observations: editForm.observations, delay: calculateDelay(r.dateInjected, editForm.dateExecuted)}
-          : r
-      ));
-      
+      // Reload data to get updated records
+      await loadRecords();
       setEditDialog({open: false, record: null});
     } catch (error) {
       console.error('Failed to update record:', error);
+      alert('Erreur lors de la mise à jour du statut');
     }
   };
 
@@ -151,7 +176,17 @@ const TrackingTab: React.FC = () => {
     <Box>
       {/* Filters */}
       <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Filtres</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Filtres</Typography>
+          <Button
+            startIcon={<RefreshIcon />}
+            onClick={loadRecords}
+            disabled={loading}
+            size="small"
+          >
+            Actualiser
+          </Button>
+        </Box>
         <Stack direction="row" spacing={2} flexWrap="wrap">
           <TextField
             label="Société"
@@ -202,59 +237,73 @@ const TrackingTab: React.FC = () => {
             size="small"
             InputLabelProps={{ shrink: true }}
           />
+          
+          <Button 
+            variant="outlined" 
+            onClick={() => setFilters({society: '', status: '', donneurOrdre: '', dateFrom: '', dateTo: ''})}
+            size="small"
+          >
+            Réinitialiser
+          </Button>
         </Stack>
       </Paper>
 
       {/* Records Table */}
       <Paper elevation={2} sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          Suivi des Ordres de Virement ({records.length})
+          Suivi des Ordres de Virement ({filteredRecords.length})
         </Typography>
         
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Référence OV</TableCell>
-              <TableCell>Société</TableCell>
-              <TableCell>Date Injection</TableCell>
-              <TableCell>Date Exécution</TableCell>
-              <TableCell>Statut & SLA</TableCell>
-              <TableCell>Délai (jours)</TableCell>
-              <TableCell>Montant Total</TableCell>
-              <TableCell>Observations</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {records.map((record) => (
-              <TableRow key={record.id}>
-                <TableCell>{record.reference}</TableCell>
-                <TableCell>{record.society}</TableCell>
-                <TableCell>{new Date(record.dateInjected).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  {record.dateExecuted ? new Date(record.dateExecuted).toLocaleDateString() : '-'}
-                </TableCell>
-                <TableCell>{getStatusChip(record.status, record.delay)}</TableCell>
-                <TableCell>{record.delay}</TableCell>
-                <TableCell>{record.totalAmount.toFixed(2)} €</TableCell>
-                <TableCell>
-                  <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                    {record.observations || '-'}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Button
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={() => handleEditClick(record)}
-                  >
-                    Modifier
-                  </Button>
-                </TableCell>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Référence OV</TableCell>
+                <TableCell>Société</TableCell>
+                <TableCell>Date Injection</TableCell>
+                <TableCell>Date Exécution</TableCell>
+                <TableCell>Statut & SLA</TableCell>
+                <TableCell>Délai (jours)</TableCell>
+                <TableCell>Montant Total</TableCell>
+                <TableCell>Observations</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {filteredRecords.map((record) => (
+                <TableRow key={record.id}>
+                  <TableCell>{record.reference}</TableCell>
+                  <TableCell>{record.society}</TableCell>
+                  <TableCell>{new Date(record.dateInjected).toLocaleDateString('fr-FR')}</TableCell>
+                  <TableCell>
+                    {record.dateExecuted ? new Date(record.dateExecuted).toLocaleDateString('fr-FR') : '-'}
+                  </TableCell>
+                  <TableCell>{getStatusChip(record.status, record.delay)}</TableCell>
+                  <TableCell>{record.delay}</TableCell>
+                  <TableCell>{record.totalAmount.toFixed(2)} DT</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                      {record.observations || '-'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="small"
+                      startIcon={<EditIcon />}
+                      onClick={() => handleEditClick(record)}
+                    >
+                      Modifier
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Paper>
 
       {/* Edit Dialog */}

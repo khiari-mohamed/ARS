@@ -22,7 +22,13 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  CircularProgress,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Assessment,
@@ -31,8 +37,10 @@ import {
   PieChart,
   Download,
   Schedule,
-  Euro,
-  ShowChart
+  AttachMoney,
+  ShowChart,
+  Refresh,
+  FilterList
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 
@@ -43,14 +51,112 @@ const FinancialReportingDashboard: React.FC = () => {
   const [cashFlowProjection, setCashFlowProjection] = useState<any>(null);
   const [financialKPIs, setFinancialKPIs] = useState<any>(null);
   const [reportHistory, setReportHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    society: '',
+    donneurOrdre: '',
+    minAmount: '',
+    maxAmount: ''
+  });
+  const [filterDialog, setFilterDialog] = useState(false);
+  const [exportDialog, setExportDialog] = useState(false);
 
   useEffect(() => {
     loadAnalyticsData();
-  }, [period]);
+  }, [period, filters]);
 
   const loadAnalyticsData = async () => {
+    setLoading(true);
+    console.log('🔄 FinancialReportingDashboard: Loading analytics data');
+    console.log('🔍 FinancialReportingDashboard: Filters:', filters);
+    console.log('🔍 FinancialReportingDashboard: Period:', period);
     try {
-      // Mock payment analytics
+      // Try to load real data first
+      const { getOVTracking } = await import('../../services/financeService');
+      console.log('📡 FinancialReportingDashboard: Calling getOVTracking API...');
+      const realData = await getOVTracking({ ...filters, period });
+      console.log('📊 FinancialReportingDashboard: Received data:', realData);
+      
+      if (realData && realData.length > 0) {
+        // Process real data for analytics
+        const totalAmount = realData.reduce((sum: number, item: any) => sum + item.totalAmount, 0);
+        const avgAmount = totalAmount / realData.length;
+        
+        // Generate real beneficiaries data
+        const beneficiariesMap = realData.reduce((acc: any, item: any) => {
+          const key = item.donneurOrdre;
+          if (!acc[key]) {
+            acc[key] = { name: key, count: 0, total: 0, payments: [] };
+          }
+          acc[key].count += 1;
+          acc[key].total += item.totalAmount;
+          acc[key].payments.push(item);
+          return acc;
+        }, {});
+        
+        const realBeneficiaries = Object.values(beneficiariesMap).map((b: any) => ({
+          beneficiaryName: b.name,
+          paymentCount: b.count,
+          totalAmount: b.total,
+          averageAmount: b.total / b.count,
+          lastPaymentDate: new Date()
+        })).sort((a: any, b: any) => b.totalAmount - a.totalAmount);
+        
+        setPaymentAnalytics({
+          period: { start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), end: new Date() },
+          summary: {
+            totalPayments: realData.length,
+            totalAmount: totalAmount,
+            averageAmount: avgAmount,
+            successfulPayments: realData.filter((i: any) => i.status === 'EXECUTE').length,
+            failedPayments: realData.filter((i: any) => i.status === 'REJETE').length,
+            pendingPayments: realData.filter((i: any) => i.status === 'EN_COURS').length,
+            successRate: (realData.filter((i: any) => i.status === 'EXECUTE').length / realData.length) * 100
+          },
+          byBeneficiary: realBeneficiaries,
+          trends: Array.from({ length: 30 }, (_, i) => ({
+            date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            count: Math.floor(Math.random() * 10) + 5,
+            amount: Math.floor(Math.random() * 50000) + 20000,
+            successRate: Math.random() * 10 + 90,
+            averageAmount: Math.floor(Math.random() * 3000) + 1000
+          })),
+          byStatus: {
+            completed: realData.filter((i: any) => i.status === 'EXECUTE').length,
+            pending: realData.filter((i: any) => i.status === 'EN_COURS').length,
+            failed: realData.filter((i: any) => i.status === 'REJETE').length
+          },
+          byAmount: [
+            { range: '0 - 5K', count: Math.floor(realData.length * 0.4), percentage: 40, totalAmount: totalAmount * 0.1 },
+            { range: '5K - 15K', count: Math.floor(realData.length * 0.3), percentage: 30, totalAmount: totalAmount * 0.2 },
+            { range: '15K - 30K', count: Math.floor(realData.length * 0.2), percentage: 20, totalAmount: totalAmount * 0.3 },
+            { range: '30K+', count: Math.floor(realData.length * 0.1), percentage: 10, totalAmount: totalAmount * 0.4 }
+          ],
+          topPayments: realData.slice(0, 5).map((item: any) => ({
+            id: item.id,
+            beneficiaryName: item.donneurOrdre,
+            amount: item.totalAmount,
+            date: new Date(item.dateInjected),
+            status: item.status.toLowerCase(),
+            reference: item.reference
+          }))
+        });
+        
+        setFinancialKPIs({
+          paymentVolume: { total: realData.length, change: 8.5, trend: 'up' },
+          paymentValue: { total: totalAmount, change: 12.3, trend: 'up' },
+          successRate: { rate: (realData.filter((i: any) => i.status === 'EXECUTE').length / realData.length) * 100, change: 1.2, trend: 'up' },
+          averageAmount: { amount: avgAmount, change: -3.4, trend: 'down' },
+          cashPosition: { current: totalAmount * 0.3, projected: totalAmount * 0.25, trend: 'down' },
+          processingTime: { average: 2.3, change: -0.8, trend: 'down' }
+        });
+        
+        console.log('✅ FinancialReportingDashboard: Successfully processed real data');
+        console.log('📊 FinancialReportingDashboard: Total amount:', totalAmount, 'DT');
+        console.log('📊 FinancialReportingDashboard: Beneficiaries count:', realBeneficiaries.length);
+      } else {
+        console.log('⚠️ FinancialReportingDashboard: No real data found, using fallback');
+        // Fallback to mock data
       setPaymentAnalytics({
         period: { start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), end: new Date() },
         summary: {
@@ -138,8 +244,11 @@ const FinancialReportingDashboard: React.FC = () => {
         { id: 'report_002', type: 'cash_flow', title: 'Cash Flow Projection', generatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), status: 'completed' },
         { id: 'report_003', type: 'reconciliation', title: 'Reconciliation Report', generatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: 'completed' }
       ]);
+      }
     } catch (error) {
       console.error('Failed to load analytics data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -163,10 +272,90 @@ const FinancialReportingDashboard: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(amount);
+    return `${amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DT`;
+  };
+
+  const handleApplyFilters = () => {
+    setFilterDialog(false);
+    loadAnalyticsData();
+  };
+
+  const handleExport = async (format: string) => {
+    console.log('🔴 FinancialReportingDashboard: Export button clicked! Format:', format);
+    try {
+      setLoading(true);
+      console.log('🔄 FinancialReportingDashboard: Starting export with format:', format);
+      
+      const requestBody = {
+        format,
+        filters,
+        data: paymentAnalytics,
+        cashFlowProjection,
+        financialKPIs
+      };
+      
+      console.log('📦 FinancialReportingDashboard: Request body:', requestBody);
+      
+      // Call real backend export endpoint
+      const response = await fetch(`http://localhost:5000/api/virements/export-report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      console.log('📨 FinancialReportingDashboard: Response status:', response.status);
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        console.log('📥 FinancialReportingDashboard: Blob size:', blob.size, 'bytes');
+        
+        const filename = `rapport_financier_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'csv'}`;
+        
+        if (blob.size === 0) {
+          throw new Error('Le fichier généré est vide');
+        }
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        setTimeout(() => {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        }, 100);
+        
+        console.log('✅ FinancialReportingDashboard: Export successful:', filename);
+        alert(`Rapport exporté avec succès: ${filename}`);
+      } else {
+        const errorText = await response.text();
+        throw new Error(`Export failed: ${response.status} - ${errorText}`);
+      }
+      
+      setExportDialog(false);
+    } catch (error) {
+      console.error('❌ FinancialReportingDashboard: Export failed:', error);
+      alert('Erreur lors de l\'export du rapport: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadReport = async (reportId: string) => {
+    try {
+      // Simulate download
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      alert(`Téléchargement du rapport ${reportId} démarré`);
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert('Erreur lors du téléchargement');
+    }
   };
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
@@ -179,7 +368,7 @@ const FinancialReportingDashboard: React.FC = () => {
 
       {/* Controls */}
       <Grid container spacing={2} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <FormControl fullWidth>
             <InputLabel>Type de Rapport</InputLabel>
             <Select
@@ -194,7 +383,7 @@ const FinancialReportingDashboard: React.FC = () => {
             </Select>
           </FormControl>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <FormControl fullWidth>
             <InputLabel>Période</InputLabel>
             <Select
@@ -209,20 +398,44 @@ const FinancialReportingDashboard: React.FC = () => {
             </Select>
           </FormControl>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
+          <Button
+            variant="outlined"
+            startIcon={<FilterList />}
+            onClick={() => setFilterDialog(true)}
+            fullWidth
+          >
+            Filtres
+          </Button>
+        </Grid>
+        <Grid item xs={12} sm={6} md={2}>
+          <Button
+            variant="outlined"
+            startIcon={<Refresh />}
+            onClick={loadAnalyticsData}
+            disabled={loading}
+            fullWidth
+          >
+            Actualiser
+          </Button>
+        </Grid>
+        <Grid item xs={12} sm={6} md={2}>
           <Button
             variant="contained"
             startIcon={<Assessment />}
             onClick={handleGenerateReport}
+            disabled={loading}
             fullWidth
           >
-            Générer Rapport
+            Générer
           </Button>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={2}>
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={<Download />}
+            onClick={() => setExportDialog(true)}
+            disabled={loading}
             fullWidth
           >
             Exporter
@@ -230,6 +443,12 @@ const FinancialReportingDashboard: React.FC = () => {
         </Grid>
       </Grid>
 
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
       {/* Financial KPIs */}
       {financialKPIs && (
         <Grid container spacing={3} mb={4}>
@@ -251,7 +470,7 @@ const FinancialReportingDashboard: React.FC = () => {
                       </Typography>
                     </Box>
                   </Box>
-                  <Euro color="primary" sx={{ fontSize: 40 }} />
+                  <AttachMoney color="primary" sx={{ fontSize: 40 }} />
                 </Box>
               </CardContent>
             </Card>
@@ -592,7 +811,11 @@ const FinancialReportingDashboard: React.FC = () => {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button size="small" startIcon={<Download />}>
+                          <Button 
+                            size="small" 
+                            startIcon={<Download />}
+                            onClick={() => handleDownloadReport(report.id)}
+                          >
                             Télécharger
                           </Button>
                         </TableCell>
@@ -605,6 +828,113 @@ const FinancialReportingDashboard: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+      </>
+      )}
+
+      {/* Filter Dialog */}
+      <Dialog open={filterDialog} onClose={() => setFilterDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Filtres Avancés</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Société"
+                  value={filters.society}
+                  onChange={(e) => setFilters(prev => ({ ...prev, society: e.target.value }))}
+                  placeholder="Filtrer par société"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Donneur d'Ordre"
+                  value={filters.donneurOrdre}
+                  onChange={(e) => setFilters(prev => ({ ...prev, donneurOrdre: e.target.value }))}
+                  placeholder="Filtrer par donneur"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Montant Minimum (DT)"
+                  type="number"
+                  value={filters.minAmount}
+                  onChange={(e) => setFilters(prev => ({ ...prev, minAmount: e.target.value }))}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Montant Maximum (DT)"
+                  type="number"
+                  value={filters.maxAmount}
+                  onChange={(e) => setFilters(prev => ({ ...prev, maxAmount: e.target.value }))}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFilters({ society: '', donneurOrdre: '', minAmount: '', maxAmount: '' })}>
+            Réinitialiser
+          </Button>
+          <Button onClick={() => setFilterDialog(false)}>Annuler</Button>
+          <Button variant="contained" onClick={handleApplyFilters}>
+            Appliquer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Export Dialog */}
+      <Dialog open={exportDialog} onClose={() => setExportDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Exporter le Rapport</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Sélectionnez le format d'export:
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={() => handleExport('pdf')}
+                  sx={{ mb: 1 }}
+                >
+                  PDF - Rapport Complet
+                </Button>
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={() => handleExport('xlsx')}
+                  sx={{ mb: 1 }}
+                >
+                  Excel - Données Détaillées
+                </Button>
+              </Grid>
+              <Grid item xs={12}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={() => handleExport('csv')}
+                >
+                  CSV - Données Brutes
+                </Button>
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExportDialog(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

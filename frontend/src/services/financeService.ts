@@ -5,7 +5,20 @@ export const validateOVFile = async (file: File, donneurOrdreId: string) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('donneurOrdreId', donneurOrdreId);
-  const { data } = await LocalAPI.post('/virements/ov/validate-file', formData);
+  const { data } = await LocalAPI.post('/virements/ov/validate-file', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return data;
+};
+
+// Notifications
+export const notifyFinanceTeam = async (bordereauId: string, message?: string) => {
+  const { data } = await LocalAPI.post('/virements/notify-finance', { bordereauId, message });
+  return data;
+};
+
+export const getFinanceAlerts = async () => {
+  const { data } = await LocalAPI.get('/virements/alerts');
   return data;
 };
 
