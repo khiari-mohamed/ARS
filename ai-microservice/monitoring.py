@@ -4,21 +4,17 @@ from functools import wraps
 from typing import Callable
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlAlchemyIntegration
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi import Request, Response
 from fastapi.responses import PlainTextResponse
 
-# Initialize Sentry
-sentry_sdk.init(
-    dsn="your-sentry-dsn-here",  # Replace with actual Sentry DSN
-    integrations=[
-        FastApiIntegration(auto_enabling_integrations=False),
-        SqlAlchemyIntegration(),
-    ],
-    traces_sample_rate=0.1,
-    environment="production"
-)
+# Initialize Sentry - disabled for now
+# sentry_sdk.init(
+#     dsn="your-sentry-dsn-here",
+#     integrations=[FastApiIntegration()],
+#     traces_sample_rate=0.1,
+#     environment="production"
+# )
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
@@ -74,7 +70,7 @@ def log_endpoint_call(endpoint_name: str):
                 duration = time.time() - start_time
                 logger.error(f"Error in {endpoint_name} after {duration:.2f}s: {str(e)}")
                 ML_ERRORS.labels(endpoint=endpoint_name, error_type=type(e).__name__).inc()
-                sentry_sdk.capture_exception(e)
+                # sentry_sdk.capture_exception(e)  # Disabled for now
                 raise
         return wrapper
     return decorator

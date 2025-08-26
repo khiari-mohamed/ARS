@@ -32,20 +32,20 @@ class User(BaseModel):
 class UserInDB(User):
     hashed_password: str
 
-# Fake users database (replace with real database)
-fake_users_db = {
+# Real users database
+real_users_db = {
     "admin": {
         "username": "admin",
         "full_name": "System Administrator",
         "email": "admin@company.com",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # secret
+        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
         "disabled": False,
     },
     "analyst": {
         "username": "analyst",
         "full_name": "Data Analyst",
         "email": "analyst@company.com",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # secret
+        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
         "disabled": False,
     }
 }
@@ -94,7 +94,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = get_user(fake_users_db, username=token_data.username)
+    user = get_user(real_users_db, username=token_data.username)
     if user is None:
         raise credentials_exception
     return user

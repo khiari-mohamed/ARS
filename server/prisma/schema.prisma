@@ -582,6 +582,34 @@ model Notification {
   @@index([createdAt])
 }
 
+model ScheduledReport {
+  id            String            @id @default(uuid())
+  name          String
+  description   String?
+  type          String            @default("dashboard")
+  dataSource    String            @default("bordereaux")
+  frequency     String            @default("daily")
+  executionTime String            @default("08:00")
+  timezone      String            @default("Europe/Paris")
+  format        String            @default("pdf")
+  active        Boolean           @default(true)
+  recipients    String            @default("[]")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  executions    ReportExecution[]
+}
+
+model ReportExecution {
+  id          String          @id @default(uuid())
+  reportId    String
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+  status      String          @default("running")
+  fileSize    Int?
+  error       String?
+  report      ScheduledReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
 enum DocumentStatus {
   UPLOADED
   EN_COURS

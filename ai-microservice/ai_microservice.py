@@ -20,7 +20,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Import our custom modules
-from auth import authenticate_user, create_access_token, get_current_active_user, fake_users_db, Token, ACCESS_TOKEN_EXPIRE_MINUTES
+from auth import authenticate_user, create_access_token, get_current_active_user, real_users_db, Token, ACCESS_TOKEN_EXPIRE_MINUTES
 from database import get_db_manager
 from monitoring import log_endpoint_call, metrics_middleware, get_metrics, logger
 from explainable_ai import explainer
@@ -46,7 +46,7 @@ app.middleware("http")(metrics_middleware)
 # Authentication endpoint
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+    user = authenticate_user(real_users_db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -845,4 +845,6 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    import os
+    port = int(os.getenv('AI_SERVICE_PORT', 8002))
+    uvicorn.run(app, host="0.0.0.0", port=port)

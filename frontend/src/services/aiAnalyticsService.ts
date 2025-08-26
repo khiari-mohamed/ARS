@@ -1,12 +1,44 @@
-import { LocalAPI } from './axios';
+import { LocalAPI, AIAPI } from './axios';
 
 // AI Analytics Service for enhanced predictions and recommendations
 export class AIAnalyticsService {
   
+  // Get AI service token
+  static async getAIToken() {
+    try {
+      const formData = new URLSearchParams();
+      formData.append('username', 'admin');
+      formData.append('password', 'secret');
+      
+      const response = await AIAPI.post('/token', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      
+      if (response.data.access_token) {
+        localStorage.setItem('ai_token', response.data.access_token);
+        return response.data.access_token;
+      }
+    } catch (error) {
+      console.error('Failed to get AI token:', error);
+    }
+    return null;
+  }
+  
+  // Ensure AI authentication
+  static async ensureAIAuth() {
+    let token = localStorage.getItem('ai_token');
+    if (!token) {
+      token = await this.getAIToken();
+    }
+    return token;
+  }
+  
   // SLA Breach Prediction with AI
   static async predictSLABreaches(items: any[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/sla-prediction', items);
+      const response = await AIAPI.post('/sla_prediction', items);
       return response.data;
     } catch (error) {
       console.error('SLA prediction failed:', error);
@@ -17,7 +49,7 @@ export class AIAnalyticsService {
   // Priority Scoring with AI
   static async getPriorities(bordereaux: any[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/priorities', bordereaux);
+      const response = await AIAPI.post('/priorities', bordereaux);
       return response.data;
     } catch (error) {
       console.error('Priority scoring failed:', error);
@@ -28,7 +60,7 @@ export class AIAnalyticsService {
   // Reassignment Recommendations
   static async getReassignmentRecommendations(payload: any) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/reassignment', payload);
+      const response = await AIAPI.post('/reassignment', payload);
       return response.data;
     } catch (error) {
       console.error('Reassignment recommendations failed:', error);
@@ -39,7 +71,7 @@ export class AIAnalyticsService {
   // Performance Analysis with AI
   static async analyzePerformance(payload: any) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/performance', payload);
+      const response = await AIAPI.post('/performance', payload);
       return response.data;
     } catch (error) {
       console.error('Performance analysis failed:', error);
@@ -50,7 +82,7 @@ export class AIAnalyticsService {
   // Compare Performance (Planned vs Actual)
   static async comparePerformance(planned: any[], actual: any[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/compare-performance', {
+      const response = await AIAPI.post('/compare_performance', {
         planned,
         actual
       });
@@ -64,7 +96,7 @@ export class AIAnalyticsService {
   // Diagnostic and Optimization
   static async getDiagnosticOptimization(metrics: any[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/diagnostic-optimisation', {
+      const response = await AIAPI.post('/diagnostic_optimisation', {
         metrics
       });
       return response.data;
@@ -77,7 +109,7 @@ export class AIAnalyticsService {
   // Predict Required Resources
   static async predictRequiredResources(slaData: any) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/predict-resources', slaData);
+      const response = await AIAPI.post('/predict_resources', slaData);
       return response.data;
     } catch (error) {
       console.error('Resource prediction failed:', error);
@@ -88,7 +120,7 @@ export class AIAnalyticsService {
   // Advanced Analytics - Anomaly Detection
   static async detectAnomalies(data: any[], method: 'isolation_forest' | 'lof' = 'isolation_forest') {
     try {
-      const response = await LocalAPI.post('/analytics/ai/anomaly-detection', {
+      const response = await AIAPI.post('/anomaly_detection', {
         data,
         method,
         contamination: 0.1
@@ -103,7 +135,7 @@ export class AIAnalyticsService {
   // Trend Forecasting
   static async forecastTrends(historicalData: any[], forecastDays: number = 30) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/trend-forecast', {
+      const response = await AIAPI.post('/trend_forecast', {
         historical_data: historicalData,
         forecast_days: forecastDays
       });
@@ -117,7 +149,7 @@ export class AIAnalyticsService {
   // Confidence Scoring
   static async getConfidenceScores(trainingData: any[], predictionData: any[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/confidence-scoring', {
+      const response = await AIAPI.post('/confidence_scoring', {
         training_data: trainingData,
         prediction_data: predictionData
       });
@@ -131,7 +163,7 @@ export class AIAnalyticsService {
   // Document Classification
   static async classifyDocuments(documents: string[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/document-classification/classify', {
+      const response = await AIAPI.post('/document_classification/classify', {
         documents,
         batch_mode: true
       });
@@ -145,7 +177,7 @@ export class AIAnalyticsService {
   // Pattern Recognition - Recurring Issues
   static async detectRecurringIssues(complaints: any[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/pattern-recognition/recurring-issues', {
+      const response = await AIAPI.post('/pattern_recognition/recurring_issues', {
         complaints
       });
       return response.data;
@@ -158,7 +190,7 @@ export class AIAnalyticsService {
   // Smart Routing Suggestions
   static async getSuggestedAssignment(task: any, availableTeams?: any[]) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/smart-routing/suggest-assignment', {
+      const response = await AIAPI.post('/smart_routing/suggest_assignment', {
         task,
         available_teams: availableTeams
       });
@@ -172,7 +204,7 @@ export class AIAnalyticsService {
   // Automated Decision Making
   static async makeAutomatedDecision(context: any, decisionType: string) {
     try {
-      const response = await LocalAPI.post('/analytics/ai/automated-decisions', {
+      const response = await AIAPI.post('/automated_decisions', {
         context,
         decision_type: decisionType
       });

@@ -57,6 +57,7 @@ const ScheduledReportsManager: React.FC = () => {
   const [reportDialog, setReportDialog] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [newReport, setNewReport] = useState({
     name: '',
     description: '',
@@ -324,13 +325,46 @@ const ScheduledReportsManager: React.FC = () => {
 
   const handleCreateReport = async () => {
     try {
-      // Try to create report via API
-      await LocalAPI.post('/analytics/reports/scheduled', newReport).catch(() => {
-        console.log('API not available, simulating report creation');
-      });
+      const reportData = {
+        name: newReport.name,
+        description: newReport.description,
+        type: newReport.reportType,
+        dataSource: newReport.dataSource,
+        frequency: newReport.schedule.frequency,
+        executionTime: newReport.schedule.time,
+        timezone: newReport.schedule.timezone,
+        format: newReport.format,
+        active: newReport.active,
+        recipients: newReport.recipients
+      };
       
-      await loadData();
+      if (editingReportId) {
+        // Update existing report
+        const response = await LocalAPI.patch(`/analytics/reports/scheduled/${editingReportId}`, reportData);
+        if (response.data) {
+          setReports(prev => prev.map(r => r.id === editingReportId ? {
+            ...r,
+            ...newReport,
+            status: newReport.active ? 'active' : 'paused'
+          } : r));
+        }
+      } else {
+        // Create new report
+        const response = await LocalAPI.post('/analytics/reports/scheduled', reportData);
+        if (response.data) {
+          const newReportWithId = {
+            id: response.data.id || `report_${Date.now()}`,
+            ...newReport,
+            lastRun: null,
+            nextRun: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            status: newReport.active ? 'active' : 'paused'
+          };
+          setReports(prev => [...prev, newReportWithId]);
+        }
+      }
+      
       setReportDialog(false);
+      setEditingReportId(null);
       setNewReport({
         name: '',
         description: '',
@@ -347,18 +381,14 @@ const ScheduledReportsManager: React.FC = () => {
       });
       setActiveStep(0);
     } catch (error) {
-      console.error('Failed to create scheduled report:', error);
+      console.error('Failed to save scheduled report:', error);
     }
   };
 
   const handleToggleReport = async (reportId: string, active: boolean) => {
     try {
-      // Try to toggle report via API
-      await LocalAPI.patch(`/analytics/reports/scheduled/${reportId}`, { active }).catch(() => {
-        console.log('API not available, simulating report toggle');
-      });
-      
-      await loadData();
+      await LocalAPI.patch(`/analytics/reports/scheduled/${reportId}`, { active });
+      setReports(prev => prev.map(r => r.id === reportId ? { ...r, active, status: active ? 'active' : 'paused' } : r));
     } catch (error) {
       console.error('Failed to toggle report:', error);
     }
@@ -366,14 +396,39 @@ const ScheduledReportsManager: React.FC = () => {
 
   const handleRunReport = async (reportId: string) => {
     try {
-      // Try to run report via API
-      await LocalAPI.post(`/analytics/reports/scheduled/${reportId}/execute`).catch(() => {
-        console.log('API not available, simulating report execution');
-      });
-      
+      await LocalAPI.post(`/analytics/reports/scheduled/${reportId}/execute`);
       await loadData();
     } catch (error) {
       console.error('Failed to run report:', error);
+    }
+  };
+
+  const handleEditReport = (reportId: string) => {
+    const report = reports.find(r => r.id === reportId);
+    if (report) {
+      setNewReport({
+        name: report.name,
+        description: report.description,
+        reportType: report.reportType,
+        dataSource: report.dataSource,
+        schedule: report.schedule,
+        recipients: report.recipients,
+        format: report.format,
+        active: report.active
+      });
+      setEditingReportId(reportId);
+      setReportDialog(true);
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce rapport ?')) {
+      try {
+        await LocalAPI.delete(`/analytics/reports/scheduled/${reportId}`);
+        setReports(prev => prev.filter(r => r.id !== reportId));
+      } catch (error) {
+        console.error('Failed to delete report:', error);
+      }
     }
   };
 
@@ -579,10 +634,19 @@ const ScheduledReportsManager: React.FC = () => {
                             >
                               {report.active ? <Pause /> : <PlayArrow />}
                             </IconButton>
-                            <IconButton size="small" title="Modifier">
+                            <IconButton 
+                              size="small" 
+                              title="Modifier"
+                              onClick={() => handleEditReport(report.id)}
+                            >
                               <Edit />
                             </IconButton>
-                            <IconButton size="small" color="error" title="Supprimer">
+                            <IconButton 
+                              size="small" 
+                              color="error" 
+                              title="Supprimer"
+                              onClick={() => handleDeleteReport(report.id)}
+                            >
                               <Delete />
                             </IconButton>
                           </Box>
@@ -707,8 +771,8 @@ const ScheduledReportsManager: React.FC = () => {
       </Grid>
 
       {/* Create Report Dialog */}
-      <Dialog open={reportDialog} onClose={() => setReportDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Nouveau Rapport Programmé</DialogTitle>
+      <Dialog open={reportDialog} onClose={() => { setReportDialog(false); setEditingReportId(null); }} maxWidth="md" fullWidth>
+        <DialogTitle>{editingReportId ? 'Modifier le Rapport' : 'Nouveau Rapport Programmé'}</DialogTitle>
         <DialogContent>
           <Stepper activeStep={activeStep} orientation="vertical">
             <Step>
@@ -934,7 +998,7 @@ const ScheduledReportsManager: React.FC = () => {
                     disabled={newReport.recipients.length === 0}
                     sx={{ mr: 1 }}
                   >
-                    Créer le Rapport
+                    {editingReportId ? 'Modifier le Rapport' : 'Créer le Rapport'}
                   </Button>
                   <Button onClick={() => setActiveStep(1)}>
                     Retour
@@ -945,7 +1009,7 @@ const ScheduledReportsManager: React.FC = () => {
           </Stepper>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReportDialog(false)}>Annuler</Button>
+          <Button onClick={() => { setReportDialog(false); setEditingReportId(null); }}>Annuler</Button>
         </DialogActions>
       </Dialog>
     </Box>
