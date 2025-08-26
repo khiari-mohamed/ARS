@@ -2,18 +2,31 @@ export interface Contract {
   id: string;
   clientId: string;
   clientName: string;
+  name?: string; // For backward compatibility
+  nom?: string; // For backward compatibility
+  delaiReglement: number; // SLA Treatment delay in days
+  delaiReclamation: number; // SLA Claims reply delay in days  
+  escalationThreshold?: number; // Alert threshold
+  assignedManagerId: string; // Chargé de compte
   startDate: string;
   endDate: string;
-  signature?: string; // unified with backend
-  delaiReglement: number;
-  delaiReclamation: number;
-  escalationThreshold?: number;
-  assignedManagerId: string;
-  documentPath: string;
-  notes?: string;
+  documentPath?: string;
+  signature?: string; // Notes
   createdAt: string;
   updatedAt: string;
-  assignedManager?: { id: string; fullName: string; email: string };
+  version?: number; // For backward compatibility
+  thresholds?: any; // For backward compatibility
+  notes?: string;
+  
+  // Relations
+  client?: {
+    id: string;
+    name: string;
+  };
+  assignedManager?: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
   history?: any[];
-  version?: number;
 }

@@ -81,20 +81,7 @@ const ContractListPage: React.FC = () => {
     setSelectedContract(contract);
   };
 
-  if (selectedContract) {
-    return (
-      <div style={{ padding: 16 }}>
-        <Button 
-          onClick={() => setSelectedContract(null)} 
-          sx={{ mb: 2 }}
-          variant="outlined"
-        >
-          ← Retour à la liste
-        </Button>
-        <ContractDetail contract={selectedContract} />
-      </div>
-    );
-  }
+
 
   return (
     <div style={{ padding: 16, minHeight: '100vh', background: '#f7f9fb' }}>
@@ -231,9 +218,9 @@ const ContractListPage: React.FC = () => {
       {previewModal.open && previewModal.contract && (
         <div className="modal">
           <button onClick={() => setPreviewModal({ open: false, contract: null })}>Close</button>
-          <h3>Preview Document: {previewModal.contract.documentPath.split('/').pop()}</h3>
+          <h3>Preview Document: {previewModal.contract.documentPath?.split('/').pop()}</h3>
           {(() => {
-            const ext = getFileExtension(previewModal.contract!.documentPath);
+            const ext = getFileExtension(previewModal.contract!.documentPath || '');
             if (ext === 'pdf') {
               return (
                 <iframe

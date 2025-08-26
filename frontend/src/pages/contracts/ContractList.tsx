@@ -1,6 +1,6 @@
 import React from 'react';
-import ContractListPage from '../../components/contracts/ContractListPage';
+import ContractsPage from './index';
 
 export default function ContractList() {
-  return <ContractListPage />;
+  return <ContractsPage />;
 }
