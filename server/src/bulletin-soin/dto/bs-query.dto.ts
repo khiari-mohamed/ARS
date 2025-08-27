@@ -5,4 +5,7 @@ export class BsQueryDto {
   ownerId?: number;
   bordereauId?: number;
   search?: string;
+  prestataire?: string;
+  dateStart?: string;
+  dateEnd?: string;
 }
