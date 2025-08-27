@@ -7,7 +7,7 @@ import Register from './pages/auth/Register'; // <-- Import Register
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/dashboard/Dashboard';
 import BordereauxListPage from './pages/bordereaux/BordereauxList';
-import BSListPage from './pages/bs/BSListPage';
+import BSModule from './pages/bs/BSModule';
 import ClientListPage from './pages/clients/index';
 import ContractList from './pages/contracts/ContractList';
 import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
@@ -48,7 +48,7 @@ const App: React.FC = () => {
         <Route element={<MainLayout children={undefined} />}>
           <Route path="/home/dashboard" element={<Dashboard />} />
           <Route path="/home/bordereaux" element={<BordereauxListPage />} />
-          <Route path="/home/bs" element={<BSListPage />} />
+          <Route path="/home/bs/*" element={<BSModule />} />
           <Route path="/home/clients" element={<ClientListPage />} />
           <Route path="/home/contracts" element={<ContractList />} />
           <Route path="/home/analytics" element={<AnalyticsDashboard />} />

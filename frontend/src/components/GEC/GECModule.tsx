@@ -12,6 +12,8 @@ import OutlookIntegration from './OutlookIntegration';
 import MailTrackingDashboard from './MailTrackingDashboard';
 import EnhancedTemplateManager from './EnhancedTemplateManager';
 import GECMobileView from './GECMobileView';
+import GECAIInsights from './GECAIInsights';
+import RelanceManager from './RelanceManager';
 import { useAuth } from '../../contexts/AuthContext';
 
 const GECModule: React.FC = () => {
@@ -25,9 +27,11 @@ const GECModule: React.FC = () => {
     'Créer Courrier',
     'Boîte de Réception',
     'Boîte d\'Envoi',
+    'Relances',
     'Outlook/365',
     'Suivi Emails',
     'Modèles Avancés',
+    'Insights IA',
     'Recherche & Archive',
     'Rapports'
   ];
@@ -69,11 +73,13 @@ const GECModule: React.FC = () => {
             {tab === 1 && <CreateCorrespondenceTab />}
             {tab === 2 && <InboxTab />}
             {tab === 3 && <OutboxTab />}
-            {tab === 4 && <OutlookIntegration />}
-            {tab === 5 && <MailTrackingDashboard />}
-            {tab === 6 && <EnhancedTemplateManager />}
-            {tab === 7 && <SearchArchiveTab />}
-            {tab === 8 && <ReportsTab />}
+            {tab === 4 && <RelanceManager />}
+            {tab === 5 && <OutlookIntegration />}
+            {tab === 6 && <MailTrackingDashboard />}
+            {tab === 7 && <EnhancedTemplateManager />}
+            {tab === 8 && <GECAIInsights />}
+            {tab === 9 && <SearchArchiveTab />}
+            {tab === 10 && <ReportsTab />}
           </Box>
         </Paper>
       )}

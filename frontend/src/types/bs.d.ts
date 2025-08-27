@@ -21,6 +21,7 @@ export interface BulletinSoinItem {
 }
 
 export interface ExpertiseInfo {
+  id?: string;
   isFavorable: 'EN_COURS' | 'FAVORABLE' | 'DEFAVORABLE';
   matriculeAdherent: string;
   numBS: string;

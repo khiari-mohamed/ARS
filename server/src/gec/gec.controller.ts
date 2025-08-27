@@ -8,6 +8,7 @@ import {
   Body,
   Query,
   Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { GecService } from './gec.service';
 import { CreateCourrierDto } from './dto/create-courrier.dto';
@@ -119,5 +120,47 @@ export class GecController {
   ) {
     const user = getUserFromRequest(req);
     return this.gecService.respondToCourrier(id, body.response, user);
+  }
+
+  // Analytics endpoints
+  @Get('analytics')
+  async getAnalytics(@Query('period') period: string = '30d') {
+    return this.gecService.getGECAnalytics(period);
+  }
+
+  @Get('sla-breaches')
+  async getSLABreaches() {
+    return this.gecService.getSLABreaches();
+  }
+
+  @Get('volume-stats')
+  async getVolumeStats(@Query('period') period: string = '7d') {
+    return this.gecService.getVolumeStats(period);
+  }
+
+  // Relance endpoints
+  @Post('trigger-relances')
+  async triggerRelances(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    if (!['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only admins can trigger relances');
+    }
+    return this.gecService.triggerRelances();
+  }
+
+  @Post('bordereau/:bordereauId/relance')
+  async createRelance(
+    @Param('bordereauId') bordereauId: string,
+    @Body() body: { type: 'CLIENT' | 'PRESTATAIRE' },
+    @Req() req: any,
+  ) {
+    const user = getUserFromRequest(req);
+    return this.gecService.createAutomaticRelance(bordereauId, body.type, user);
+  }
+
+  // AI insights endpoint
+  @Get('ai-insights')
+  async getAIInsights() {
+    return this.gecService.getAIInsights();
   }
 }

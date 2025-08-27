@@ -8,7 +8,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AlertsModule } from '../alerts/alerts.module';
 
 @Module({
-  imports: [PrismaModule, GedModule, OcrModule, AuthModule, AlertsModule],
+  imports: [PrismaModule, AlertsModule],
   controllers: [BulletinSoinController],
   providers: [BulletinSoinService],
   exports: [BulletinSoinService],

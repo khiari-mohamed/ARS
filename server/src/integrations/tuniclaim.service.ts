@@ -43,7 +43,7 @@ export class TuniclaimService {
     }
   }
 
-  // Map and upsert BS into local DB
+  // Map and upsert BS into local DB with individual BS creation
   async syncBs(): Promise<{ imported: number; errors: number; error?: string }> {
     let bsList: any[] = [];
     let imported = 0, errors = 0;
@@ -73,8 +73,8 @@ export class TuniclaimService {
     }
     for (const extBs of bsList) {
       try {
-        // Map external fields to your Bordereau model, with robust fallbacks
-        const mapped = {
+        // Create/update bordereau
+        const bordereauMapped = {
           reference: extBs.reference || 'EXT_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
           clientId: await this.resolveClientId(extBs.client || {}),
           contractId: await this.resolveContractId(extBs.contract || {}),
@@ -83,11 +83,18 @@ export class TuniclaimService {
           statut: Statut.EN_ATTENTE,
           nombreBS: extBs.nombreBS || 1,
         };
-        await this.prisma.bordereau.upsert({
-          where: { reference: mapped.reference },
-          update: mapped,
-          create: mapped,
+        const bordereau = await this.prisma.bordereau.upsert({
+          where: { reference: bordereauMapped.reference },
+          update: bordereauMapped,
+          create: bordereauMapped,
         });
+
+        // Create individual BS records if they exist in external data
+        if (extBs.bulletinsSoins && Array.isArray(extBs.bulletinsSoins)) {
+          for (const extBsItem of extBs.bulletinsSoins) {
+            await this.createBulletinSoin(extBsItem, bordereau.id);
+          }
+        }
         imported++;
       } catch (e) {
         this.logger.error(`Failed to import BS ${extBs.reference}: ${e.message}`);
@@ -188,4 +195,66 @@ export class TuniclaimService {
   });
   return created.id;
 }
+
+  // Create individual BulletinSoin from MY TUNICLAIM data
+  private async createBulletinSoin(extBsItem: any, bordereauId: string): Promise<void> {
+    try {
+      const bsData = {
+        bordereauId,
+        numBs: extBsItem.numBs || 'EXT_' + Date.now(),
+        etat: 'IN_PROGRESS',
+        codeAssure: extBsItem.codeAssure || '',
+        dateCreation: extBsItem.dateCreation ? new Date(extBsItem.dateCreation) : new Date(),
+        dateMaladie: extBsItem.dateMaladie ? new Date(extBsItem.dateMaladie) : new Date(),
+        lien: extBsItem.lien || '',
+        nomAssure: extBsItem.nomAssure || '',
+        nomBeneficiaire: extBsItem.nomBeneficiaire || '',
+        nomBordereau: extBsItem.nomBordereau || '',
+        nomPrestation: extBsItem.nomPrestation || '',
+        nomSociete: extBsItem.nomSociete || '',
+        observationGlobal: extBsItem.observationGlobal || '',
+        totalPec: extBsItem.totalPec || 0,
+        dueDate: this.calculateDueDate(extBsItem.dateCreation, extBsItem.delaiReglement || 5),
+      };
+
+      const bulletinSoin = await this.prisma.bulletinSoin.create({ data: bsData });
+
+      // Create BS items if they exist
+      if (extBsItem.items && Array.isArray(extBsItem.items)) {
+        for (const item of extBsItem.items) {
+          await this.prisma.bulletinSoinItem.create({
+            data: {
+              bulletinSoinId: bulletinSoin.id,
+              nomProduit: item.nomProduit || '',
+              quantite: item.quantite || 1,
+              commentaire: item.commentaire || '',
+              nomChapitre: item.nomChapitre || '',
+              nomPrestataire: item.nomPrestataire || '',
+              datePrestation: item.datePrestation ? new Date(item.datePrestation) : new Date(),
+              typeHonoraire: item.typeHonoraire || 'FIXE',
+              depense: item.depense || 0,
+              pec: item.pec || 0,
+              participationAdherent: item.participationAdherent || 0,
+              message: item.message || '',
+              codeMessage: item.codeMessage || '',
+              acuiteDroite: item.acuiteDroite || 0,
+              acuiteGauche: item.acuiteGauche || 0,
+              nombreCle: item.nombreCle || '',
+              nbJourDepassement: item.nbJourDepassement || 0,
+            },
+          });
+        }
+      }
+
+      this.logger.log(`Created BS ${bulletinSoin.numBs} from MY TUNICLAIM`);
+    } catch (error) {
+      this.logger.error(`Failed to create BS from MY TUNICLAIM: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private calculateDueDate(dateCreation: string | Date, delaiReglement: number): Date {
+    const baseDate = typeof dateCreation === 'string' ? new Date(dateCreation) : dateCreation;
+    return new Date(baseDate.getTime() + delaiReglement * 24 * 60 * 60 * 1000);
+  }
 }

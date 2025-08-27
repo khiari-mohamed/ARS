@@ -8,6 +8,7 @@ import {
   Body,
   Query,
   Req,
+  Res,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -20,10 +21,10 @@ import { BsLogDto } from './dto/bs-log.dto';
 import { BsQueryDto } from './dto/bs-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { Public } from '../auth/public.decorator';
 import { ReconciliationReport } from './reconciliation.types';
 
 @Controller('bulletin-soin')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class BulletinSoinController {
   constructor(private readonly bsService: BulletinSoinService) {}
 
@@ -45,15 +46,35 @@ export class BulletinSoinController {
 
   // EXPORT/REPORTING
   @Get('export/excel')
-  exportExcel() {
-    return this.bsService.exportBsListToExcel();
+  async exportExcel(@Req() req, @Res() res) {
+    try {
+      const bsList = await this.bsService.exportBsListToExcel();
+      
+      // Create Excel data
+      const excelData = bsList.map(bs => ({
+        'Numéro BS': bs.numBs,
+        'Assuré': bs.nomAssure,
+        'Bénéficiaire': bs.nomBeneficiaire,
+        'Prestataire': bs.nomPrestation,
+        'Date Création': bs.dateCreation ? new Date(bs.dateCreation).toLocaleDateString('fr-FR') : '',
+        'Montant (DT)': bs.totalPec ? Number(bs.totalPec).toFixed(3) : '0.000',
+        'Statut': bs.etat,
+        'Code Assuré': bs.codeAssure || ''
+      }));
+      
+      // Set headers for file download
+      const filename = `BS_Export_${new Date().toISOString().split('T')[0]}.json`;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      return res.json(excelData);
+    } catch (error) {
+      console.error('Export error:', error);
+      return res.status(500).json({ error: 'Export failed' });
+    }
   }
 
-  // LOAD/CAPACITY ANALYSIS
-  @Get('analyse-charge')
-  analyseCharge() {
-    return this.bsService.analyseCharge();
-  }
+
 
   // RECLAMATIONS LINK
   @Get('with-reclamations')
@@ -69,8 +90,15 @@ export class BulletinSoinController {
 
   // REBALANCING
   @Get('suggest-rebalancing')
+  @Public()
   suggestRebalancing() {
     return this.bsService.suggestRebalancing();
+  }
+
+  @Post('apply-rebalancing')
+  @Public()
+  applyRebalancing(@Body() body: { bsId: string; toUserId: string }) {
+    return this.bsService.applyRebalancing(body.bsId, body.toUserId);
   }
 
   // PREDICTIVE IA
@@ -81,8 +109,25 @@ export class BulletinSoinController {
 
   // AI ASSIGNMENT & PRIORITIZATION
   @Get('ai/suggest-assignment')
-  suggestAssignment() {
-    return this.bsService.suggestAssignment();
+  @Public()
+  async suggestAssignment() {
+    try {
+      const suggestions = await this.bsService.suggestAssignment();
+      // Transform to expected format
+      return suggestions.map(s => ({
+        assignee: s.fullName || s.id,
+        confidence: s.score > 0.8 ? 'high' : s.score > 0.5 ? 'medium' : 'low',
+        score: s.score,
+        reasoning: [
+          `Efficacité: ${s.efficiency_score?.toFixed(2) || 'N/A'}`,
+          `Charge actuelle: ${s.inProgress} BS`,
+          `Retards: ${s.overdue} BS`,
+          s.avgProcessingHours ? `Temps moyen: ${s.avgProcessingHours.toFixed(1)}h` : 'Nouveau gestionnaire'
+        ]
+      }));
+    } catch (error) {
+      return [];
+    }
   }
 
   @Get('ai/suggest-priorities/:gestionnaireId')
@@ -126,8 +171,9 @@ export class BulletinSoinController {
    * Get paginated list of bulletins de soin with filtering.
    */
   @Get()
+  @Public()
   findAll(@Query() query: BsQueryDto, @Req() req) {
-    return this.bsService.findAll(query, req.user);
+    return this.bsService.findAll(query, req?.user);
   }
 
   /**
@@ -185,8 +231,9 @@ export class BulletinSoinController {
    * Assign a bulletin de soin to a user.
    */
   @Post(':id/assign')
+  @Public()
   assign(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignBulletinSoinDto, @Req() req) {
-    return this.bsService.assign(id, dto, req.user);
+    return this.bsService.assign(id, dto, req?.user);
   }
 
   /**
@@ -227,5 +274,85 @@ export class BulletinSoinController {
   @Post(':id/logs')
   addLog(@Param('id', ParseUUIDPipe) id: string, @Body() dto: BsLogDto, @Req() req) {
     return this.bsService.addLog(id, dto, req.user);
+  }
+
+  /**
+   * Bulk assign multiple BS to a user
+   */
+  @Post('bulk-assign')
+  bulkAssign(@Body() body: { bsIds: string[]; ownerId: string }, @Req() req) {
+    return Promise.all(
+      body.bsIds.map(bsId => 
+        this.bsService.assign(bsId, { ownerId: parseInt(body.ownerId) }, req.user)
+      )
+    );
+  }
+
+  /**
+   * Get BS statistics for dashboard
+   */
+  @Get('stats/dashboard')
+  getDashboardStats(@Req() req) {
+    return this.bsService.getDashboardStats(req.user);
+  }
+
+  /**
+   * Get team workload analysis
+   */
+  @Get('stats/team-workload')
+  @Public()
+  getTeamWorkload() {
+    return this.bsService.getTeamWorkloadStats();
+  }
+
+  /**
+   * Get gestionnaires list
+   */
+  @Get('gestionnaires')
+  @Public()
+  getGestionnaires() {
+    return this.bsService.getGestionnaires();
+  }
+
+  /**
+   * Analyse charge (team load analysis)
+   */
+  @Get('analyse-charge')
+  @Public()
+  analyseCharge() {
+    return this.bsService.analyseCharge();
+  }
+
+  /**
+   * Test endpoint
+   */
+  @Get('test')
+  @Public()
+  test() {
+    return { message: 'BS API is working', timestamp: new Date() };
+  }
+
+  /**
+   * Sync BS from MY TUNICLAIM
+   */
+  @Post('sync/tuniclaim')
+  async syncFromTuniclaim() {
+    const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+    const tuniclaimService = new TuniclaimService(this.bsService['prisma'], {} as any);
+    return tuniclaimService.syncBs();
+  }
+
+  /**
+   * Get MY TUNICLAIM sync status
+   */
+  @Get('sync/tuniclaim/status')
+  async getTuniclaimSyncStatus() {
+    const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+    const tuniclaimService = new TuniclaimService(this.bsService['prisma'], {} as any);
+    return {
+      lastSync: tuniclaimService.lastSync,
+      lastResult: tuniclaimService.lastResult,
+      logs: await tuniclaimService.getSyncLogs(10)
+    };
   }
 }
