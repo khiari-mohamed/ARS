@@ -10,7 +10,6 @@ const { RangePicker } = DatePicker;
 
 const BSListPage: React.FC = () => {
   const [filters, setFilters] = useState({
-    search: '',
     etat: undefined,
     prestataire: '',
     dateRange: null as [any, any] | null,
@@ -37,18 +36,23 @@ const BSListPage: React.FC = () => {
     setFilters(prev => ({ ...prev, ...newFilters, page: 1 }));
   };
 
+
+
+  const handleDateRangeChange = (dates: any) => {
+    if (dates && dates.length === 2) {
+      handleFiltersChange({ 
+        dateStart: dates[0].format('YYYY-MM-DD'),
+        dateEnd: dates[1].format('YYYY-MM-DD')
+      });
+    } else {
+      handleFiltersChange({ dateStart: undefined, dateEnd: undefined });
+    }
+  };
+
   return (
     <div style={{ padding: 24 }}>
       {/* Filters Section */}
       <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search
-          placeholder="Recherche BS, assuré, bénéficiaire..."
-          value={filters.search}
-          onSearch={v => handleFiltersChange({ search: v })}
-          onChange={e => e.target.value === '' && handleFiltersChange({ search: '' })}
-          allowClear
-          style={{ width: 250 }}
-        />
         <Select
           placeholder="Statut"
           style={{ width: 150 }}
@@ -68,17 +72,23 @@ const BSListPage: React.FC = () => {
           style={{ width: 150 }}
           value={filters.prestataire}
           onChange={e => handleFiltersChange({ prestataire: e.target.value })}
+          allowClear
         />
         <RangePicker
           value={filters.dateRange}
-          onChange={dates => handleFiltersChange({ dateRange: dates })}
+          onChange={dates => {
+            setFilters(prev => ({ ...prev, dateRange: dates }));
+            handleDateRangeChange(dates);
+          }}
+          format="DD/MM/YYYY"
+          placeholder={['Date début', 'Date fin']}
         />
         <Button
           type="primary"
           onClick={() => {
             const link = document.createElement('a');
             link.href = 'http://localhost:5000/api/bulletin-soin/export/excel';
-            link.download = `BS_Export_${new Date().toISOString().split('T')[0]}.json`;
+            link.download = `BS_Export_${new Date().toISOString().split('T')[0]}.xls`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

@@ -12,7 +12,26 @@ export const fetchBSList = async (params: any): Promise<BSListResponse> => {
   try {
     const token = localStorage.getItem('token');
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const { data } = await axios.get(API_BASE, { params, headers });
+    
+    // Clean up params to match backend expectations
+    const cleanParams: any = {
+      page: params.page,
+      limit: params.limit,
+      etat: params.etat,
+      search: params.search,
+      prestataire: params.prestataire,
+      dateStart: params.dateStart,
+      dateEnd: params.dateEnd
+    };
+    
+    // Remove undefined values
+    Object.keys(cleanParams).forEach(key => {
+      if (cleanParams[key] === undefined || cleanParams[key] === '') {
+        delete cleanParams[key];
+      }
+    });
+    
+    const { data } = await axios.get(API_BASE, { params: cleanParams, headers });
     return data;
   } catch (error) {
     console.error('BS List API error:', error);
@@ -133,5 +152,31 @@ export const fetchTeamWorkload = async () => {
 // Notification Center (example, if you have a notifications endpoint)
 export const fetchNotifications = async () => {
   const { data } = await axios.get(`${API_BASE}/notifications`);
+  return data;
+};
+
+// BS Analytics APIs
+export const fetchBSAnalyticsDashboard = async (period?: string) => {
+  const { data } = await axios.get(`${API_BASE}/analytics/dashboard`, { params: { period } });
+  return data;
+};
+
+export const fetchBSTrends = async (period?: string) => {
+  const { data } = await axios.get(`${API_BASE}/analytics/trends`, { params: { period } });
+  return data;
+};
+
+export const fetchBSSlaCompliance = async (period?: string) => {
+  const { data } = await axios.get(`${API_BASE}/analytics/sla-compliance`, { params: { period } });
+  return data;
+};
+
+export const fetchBSTeamPerformance = async (period?: string) => {
+  const { data } = await axios.get(`${API_BASE}/analytics/team-performance`, { params: { period } });
+  return data;
+};
+
+export const fetchBSVolumeStats = async (period?: string) => {
+  const { data } = await axios.get(`${API_BASE}/analytics/volume-stats`, { params: { period } });
   return data;
 };

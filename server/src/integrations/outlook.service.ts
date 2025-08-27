@@ -1,91 +1,109 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import axios from 'axios';
-
-const MS_GRAPH_API = 'https://graph.microsoft.com/v1.0';
+import { Injectable, Logger } from '@nestjs/common';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class OutlookService {
-  // In production, store tokens in DB per user/admin
-  private accessToken: string | null = null;
-  private refreshToken: string | null = null;
+  private readonly logger = new Logger(OutlookService.name);
+  private transporter: nodemailer.Transporter;
 
-  // Step 1: Generate OAuth2 URL for user to connect their account
-  getAuthUrl(redirectUri: string) {
-    const clientId = process.env.MS_CLIENT_ID;
-    const tenant = process.env.MS_TENANT_ID || 'common';
-    const scopes = encodeURIComponent('offline_access Mail.Send Mail.Read');
-    return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&response_mode=query&scope=${scopes}`;
+  constructor() {
+    this.initializeTransporter();
   }
 
-  // Step 2: Exchange code for tokens
-  async exchangeCodeForToken(code: string, redirectUri: string) {
-    const clientId = process.env.MS_CLIENT_ID;
-    const clientSecret = process.env.MS_CLIENT_SECRET;
-    const tenant = process.env.MS_TENANT_ID || 'common';
-    const url = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
-    const params = new URLSearchParams();
-    params.append('client_id', clientId!);
-    params.append('scope', 'offline_access Mail.Send Mail.Read');
-    params.append('code', code);
-    params.append('redirect_uri', redirectUri);
-    params.append('grant_type', 'authorization_code');
-    params.append('client_secret', clientSecret!);
-    const res = await axios.post(url, params);
-    this.accessToken = res.data.access_token;
-    this.refreshToken = res.data.refresh_token;
-    return res.data;
-  }
-
-  // Step 3: Use access token to send email
-  async sendMail(to: string, subject: string, text: string) {
-    if (!this.accessToken) {
-      console.warn('Outlook not connected - email notification skipped');
-      return { status: 'skipped', reason: 'Outlook not connected' };
-    }
-    
+  private initializeTransporter() {
     try {
-      const res = await axios.post(
-        `${MS_GRAPH_API}/me/sendMail`,
-        {
-          message: {
-            subject,
-            body: { contentType: 'Text', content: text },
-            toRecipients: [{ emailAddress: { address: to } }],
-          },
-          saveToSentItems: 'true',
+      this.transporter = nodemailer.createTransport({
+        host: 'smtp.gnet.tn',
+        port: 465,
+        secure: true, // SSL
+        auth: {
+          user: 'noreply@arstunisia.com',
+          pass: 'NR*ars2025**##'
         },
-        {
-          headers: { Authorization: `Bearer ${this.accessToken}` },
+        tls: {
+          rejectUnauthorized: false
         }
-      );
-      return res.data;
+      });
+
+      this.logger.log('SMTP transporter initialized successfully');
     } catch (error) {
-      console.warn('Failed to send email via Outlook:', error.message);
-      return { status: 'failed', error: error.message };
+      this.logger.error('Failed to initialize SMTP transporter:', error.message);
     }
   }
 
-  // Step 4: Refresh token if needed (not shown: implement token expiry check)
-  async refreshAccessToken(redirectUri: string) {
-    const clientId = process.env.MS_CLIENT_ID;
-    const clientSecret = process.env.MS_CLIENT_SECRET;
-    const tenant = process.env.MS_TENANT_ID || 'common';
-    const url = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
-    const params = new URLSearchParams();
-    params.append('client_id', clientId!);
-    params.append('scope', 'offline_access Mail.Send Mail.Read');
-    params.append('refresh_token', this.refreshToken!);
-    params.append('redirect_uri', redirectUri);
-    params.append('grant_type', 'refresh_token');
-    params.append('client_secret', clientSecret!);
-    const res = await axios.post(url, params);
-    this.accessToken = res.data.access_token;
-    this.refreshToken = res.data.refresh_token;
-    return res.data;
+  async sendMail(to: string, subject: string, text: string, html?: string): Promise<void> {
+    try {
+      if (!this.transporter) {
+        this.logger.warn('SMTP transporter not initialized, skipping email');
+        return;
+      }
+
+      const mailOptions = {
+        from: 'noreply@arstunisia.com',
+        to,
+        subject,
+        text,
+        html: html || `<p>${text.replace(/\n/g, '<br>')}</p>`
+      };
+
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Email sent successfully to ${to}: ${result.messageId}`);
+    } catch (error) {
+      this.logger.error(`Failed to send email to ${to}:`, error.message);
+      throw error;
+    }
   }
 
-  // Step 5: Get connection status
-  isConnected() {
-    return !!this.accessToken;
+  async sendTuniclaimSyncNotification(
+    to: string, 
+    syncResult: { imported: number; errors: number; duration?: string }
+  ): Promise<void> {
+    const subject = syncResult.errors > 0 
+      ? 'MY TUNICLAIM - Synchronisation avec erreurs'
+      : 'MY TUNICLAIM - Synchronisation réussie';
+
+    const text = `
+Synchronisation MY TUNICLAIM terminée
+
+Résultats:
+- Bordereaux importés: ${syncResult.imported}
+- Erreurs: ${syncResult.errors}
+${syncResult.duration ? `- Durée: ${syncResult.duration}` : ''}
+
+Timestamp: ${new Date().toLocaleString('fr-FR')}
+
+${syncResult.errors > 0 ? 'Veuillez vérifier les logs pour plus de détails.' : ''}
+    `.trim();
+
+    await this.sendMail(to, subject, text);
+  }
+
+  async testConnection(): Promise<boolean> {
+    try {
+      if (!this.transporter) {
+        return false;
+      }
+      
+      await this.transporter.verify();
+      this.logger.log('SMTP connection test successful');
+      return true;
+    } catch (error) {
+      this.logger.error('SMTP connection test failed:', error.message);
+      return false;
+    }
+  }
+
+  isConnected(): boolean {
+    return !!this.transporter;
+  }
+
+  getAuthUrl(redirectUri: string): string {
+    // Placeholder for OAuth implementation
+    return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=placeholder&redirect_uri=${redirectUri}`;
+  }
+
+  async exchangeCodeForToken(code: string, redirectUri: string): Promise<any> {
+    // Placeholder for OAuth implementation
+    return { access_token: 'placeholder', expires_in: 3600 };
   }
 }

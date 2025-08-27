@@ -50,27 +50,59 @@ export class BulletinSoinController {
     try {
       const bsList = await this.bsService.exportBsListToExcel();
       
-      // Create Excel data
-      const excelData = bsList.map(bs => ({
-        'Numéro BS': bs.numBs,
-        'Assuré': bs.nomAssure,
-        'Bénéficiaire': bs.nomBeneficiaire,
-        'Prestataire': bs.nomPrestation,
-        'Date Création': bs.dateCreation ? new Date(bs.dateCreation).toLocaleDateString('fr-FR') : '',
-        'Montant (DT)': bs.totalPec ? Number(bs.totalPec).toFixed(3) : '0.000',
-        'Statut': bs.etat,
-        'Code Assuré': bs.codeAssure || ''
-      }));
+      // Create Excel-compatible CSV with proper formatting
+      const headers = ['Numéro BS', 'Assuré', 'Bénéficiaire', 'Prestataire', 'Date Création', 'Montant (DT)', 'Statut', 'Code Assuré'];
+      const csvRows = [headers.join('\t')]; // Use tab separator for better Excel compatibility
       
-      // Set headers for file download
-      const filename = `BS_Export_${new Date().toISOString().split('T')[0]}.json`;
-      res.setHeader('Content-Type', 'application/json');
+      bsList.forEach(bs => {
+        const row = [
+          bs.numBs || '',
+          bs.nomAssure || '',
+          bs.nomBeneficiaire || '',
+          bs.nomPrestation || '',
+          bs.dateCreation ? new Date(bs.dateCreation).toLocaleDateString('fr-FR') : '',
+          bs.totalPec ? Number(bs.totalPec).toFixed(3) : '0.000',
+          bs.etat || '',
+          bs.codeAssure || ''
+        ];
+        csvRows.push(row.join('\t'));
+      });
+      
+      const csvContent = csvRows.join('\r\n');
+      const filename = `BS_Export_${new Date().toISOString().split('T')[0]}.xls`;
+      
+      res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       
-      return res.json(excelData);
+      return res.send('\uFEFF' + csvContent); // Add BOM for Excel UTF-8 support
     } catch (error) {
       console.error('Export error:', error);
-      return res.status(500).json({ error: 'Export failed' });
+      // Fallback to CSV if Excel fails
+      const headers = ['Numéro BS', 'Assuré', 'Bénéficiaire', 'Prestataire', 'Date Création', 'Montant (DT)', 'Statut', 'Code Assuré'];
+      const csvRows = [headers.join(',')];
+      const bsList = await this.bsService.exportBsListToExcel();
+      
+      bsList.forEach(bs => {
+        const row = [
+          bs.numBs || '',
+          bs.nomAssure || '',
+          bs.nomBeneficiaire || '',
+          bs.nomPrestation || '',
+          bs.dateCreation ? new Date(bs.dateCreation).toLocaleDateString('fr-FR') : '',
+          bs.totalPec ? Number(bs.totalPec).toFixed(3) : '0.000',
+          bs.etat || '',
+          bs.codeAssure || ''
+        ];
+        csvRows.push(row.map(field => `"${field}"`).join(','));
+      });
+      
+      const csvContent = csvRows.join('\n');
+      const filename = `BS_Export_${new Date().toISOString().split('T')[0]}.csv`;
+      
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      return res.send('\uFEFF' + csvContent);
     }
   }
 
@@ -277,6 +309,39 @@ export class BulletinSoinController {
   }
 
   /**
+   * BS ANALYTICS ENDPOINTS
+   */
+  @Get('analytics/dashboard')
+  @Public()
+  getAnalyticsDashboard(@Query('period') period?: string) {
+    return this.bsService.getAnalyticsDashboard(period);
+  }
+
+  @Get('analytics/trends')
+  @Public()
+  getTrends(@Query('period') period?: string) {
+    return this.bsService.getTrends(period);
+  }
+
+  @Get('analytics/sla-compliance')
+  @Public()
+  getSlaCompliance(@Query('period') period?: string) {
+    return this.bsService.getSlaCompliance(period);
+  }
+
+  @Get('analytics/team-performance')
+  @Public()
+  getTeamPerformanceAnalytics(@Query('period') period?: string) {
+    return this.bsService.getTeamPerformanceAnalytics(period);
+  }
+
+  @Get('analytics/volume-stats')
+  @Public()
+  getVolumeAnalytics(@Query('period') period?: string) {
+    return this.bsService.getVolumeStats(period);
+  }
+
+  /**
    * Bulk assign multiple BS to a user
    */
   @Post('bulk-assign')
@@ -336,23 +401,119 @@ export class BulletinSoinController {
    * Sync BS from MY TUNICLAIM
    */
   @Post('sync/tuniclaim')
+  @Public()
   async syncFromTuniclaim() {
-    const { TuniclaimService } = await import('../integrations/tuniclaim.service');
-    const tuniclaimService = new TuniclaimService(this.bsService['prisma'], {} as any);
-    return tuniclaimService.syncBs();
+    try {
+      const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+      const { OutlookService } = await import('../integrations/outlook.service');
+      
+      const outlookService = new OutlookService();
+      const tuniclaimService = new TuniclaimService(this.bsService['prisma'], outlookService);
+      
+      const result = await tuniclaimService.syncBs();
+      
+      return {
+        success: true,
+        ...result,
+        message: result.errors > 0 
+          ? `Synchronisation terminée avec ${result.errors} erreur(s). ${result.imported} bordereaux importés.`
+          : `Synchronisation réussie! ${result.imported} bordereaux importés.`
+      };
+    } catch (error) {
+      return {
+        success: false,
+        imported: 0,
+        errors: 1,
+        error: error.message,
+        message: 'Erreur lors de la synchronisation avec MY TUNICLAIM'
+      };
+    }
   }
 
   /**
    * Get MY TUNICLAIM sync status
    */
   @Get('sync/tuniclaim/status')
+  @Public()
   async getTuniclaimSyncStatus() {
-    const { TuniclaimService } = await import('../integrations/tuniclaim.service');
-    const tuniclaimService = new TuniclaimService(this.bsService['prisma'], {} as any);
-    return {
-      lastSync: tuniclaimService.lastSync,
-      lastResult: tuniclaimService.lastResult,
-      logs: await tuniclaimService.getSyncLogs(10)
-    };
+    try {
+      const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+      const { OutlookService } = await import('../integrations/outlook.service');
+      
+      const outlookService = new OutlookService();
+      const tuniclaimService = new TuniclaimService(this.bsService['prisma'], outlookService);
+      
+      const logs = await tuniclaimService.getSyncLogs(10);
+      const status = tuniclaimService.getSyncStatus();
+      
+      return {
+        ...status,
+        logs
+      };
+    } catch (error) {
+      return {
+        lastSync: null,
+        lastResult: null,
+        isHealthy: false,
+        logs: [],
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Push status update to MY TUNICLAIM
+   */
+  @Post('sync/tuniclaim/push-status')
+  @Public()
+  async pushStatusToTuniclaim(@Body() body: { bordereauId: string; statusData: any }) {
+    try {
+      const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+      const { OutlookService } = await import('../integrations/outlook.service');
+      
+      const outlookService = new OutlookService();
+      const tuniclaimService = new TuniclaimService(this.bsService['prisma'], outlookService);
+      
+      await tuniclaimService.pushStatusUpdate(body.bordereauId, body.statusData);
+      
+      return {
+        success: true,
+        message: 'Status update pushed to MY TUNICLAIM successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        message: 'Failed to push status update to MY TUNICLAIM'
+      };
+    }
+  }
+
+  /**
+   * Push payment update to MY TUNICLAIM
+   */
+  @Post('sync/tuniclaim/push-payment')
+  @Public()
+  async pushPaymentToTuniclaim(@Body() body: { bordereauId: string; paymentData: any }) {
+    try {
+      const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+      const { OutlookService } = await import('../integrations/outlook.service');
+      
+      const outlookService = new OutlookService();
+      const tuniclaimService = new TuniclaimService(this.bsService['prisma'], outlookService);
+      
+      await tuniclaimService.pushPaymentUpdate(body.bordereauId, body.paymentData);
+      
+      return {
+        success: true,
+        message: 'Payment update pushed to MY TUNICLAIM successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        message: 'Failed to push payment update to MY TUNICLAIM'
+      };
+    }
   }
 }

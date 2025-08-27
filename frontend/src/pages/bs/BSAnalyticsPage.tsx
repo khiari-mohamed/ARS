@@ -1,79 +1,274 @@
-import React from 'react';
-import { Row, Col, Card, Statistic } from 'antd';
-import { PerformanceChart } from '../../components/BS/PerformanceChart';
-import { useTeamWorkload, useSlaAlerts, usePerformanceMetrics } from '../../hooks/useBS';
+import React, { useState } from 'react';
+import { Row, Col, Card, Statistic, Select, DatePicker, Button, Progress, Table, Tag, Tabs } from 'antd';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { TrophyOutlined, ClockCircleOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
+
+const { RangePicker } = DatePicker;
+const { TabPane } = Tabs;
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+const fetchBSAnalytics = async (endpoint: string, period?: string) => {
+  const { data } = await axios.get(`http://localhost:5000/api/bulletin-soin/analytics/${endpoint}`, {
+    params: { period }
+  });
+  return data;
+};
 
 const BSAnalyticsPage: React.FC = () => {
-  const { data: teamWorkload } = useTeamWorkload();
-  const { data: slaAlerts } = useSlaAlerts();
-  const { data: performanceMetrics } = usePerformanceMetrics({});
+  const [period, setPeriod] = useState('30d');
+  const [activeTab, setActiveTab] = useState('overview');
 
-  const totalBS = teamWorkload?.reduce((sum: number, t: any) => sum + t.total, 0) || 0;
-  const inProgressBS = teamWorkload?.reduce((sum: number, t: any) => sum + t.inProgress, 0) || 0;
-  const overdueBS = teamWorkload?.reduce((sum: number, t: any) => sum + t.overdue, 0) || 0;
-  const validatedBS = teamWorkload?.reduce((sum: number, t: any) => sum + t.validated, 0) || 0;
+  const { data: dashboard, isLoading: dashboardLoading } = useQuery({
+    queryKey: ['bs-analytics-dashboard', period],
+    queryFn: () => fetchBSAnalytics('dashboard', period)
+  });
+
+  const { data: trends, isLoading: trendsLoading } = useQuery({
+    queryKey: ['bs-analytics-trends', period],
+    queryFn: () => fetchBSAnalytics('trends', period)
+  });
+
+  const { data: slaCompliance, isLoading: slaLoading } = useQuery({
+    queryKey: ['bs-analytics-sla', period],
+    queryFn: () => fetchBSAnalytics('sla-compliance', period)
+  });
+
+  const { data: teamPerformance, isLoading: teamLoading } = useQuery({
+    queryKey: ['bs-analytics-team', period],
+    queryFn: () => fetchBSAnalytics('team-performance', period)
+  });
+
+  const { data: volumeStats, isLoading: volumeLoading } = useQuery({
+    queryKey: ['bs-analytics-volume', period],
+    queryFn: () => fetchBSAnalytics('volume-stats', period)
+  });
+
+  const exportAnalytics = () => {
+    const link = document.createElement('a');
+    link.href = 'http://localhost:5000/api/bulletin-soin/export/excel';
+    link.download = `BS_Analytics_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const teamColumns = [
+    {
+      title: 'Gestionnaire',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text: string) => <strong>{text}</strong>
+    },
+    {
+      title: 'Traités',
+      dataIndex: 'processed',
+      key: 'processed',
+      render: (value: number) => <Tag color="green">{value}</Tag>
+    },
+    {
+      title: 'En cours',
+      dataIndex: 'inProgress',
+      key: 'inProgress',
+      render: (value: number) => <Tag color="blue">{value}</Tag>
+    },
+    {
+      title: 'En retard',
+      dataIndex: 'overdue',
+      key: 'overdue',
+      render: (value: number) => <Tag color="red">{value}</Tag>
+    },
+    {
+      title: 'Efficacité',
+      dataIndex: 'efficiency',
+      key: 'efficiency',
+      render: (value: number) => (
+        <Progress 
+          percent={Math.round(value)} 
+          size="small" 
+          status={value >= 80 ? 'success' : value >= 60 ? 'active' : 'exception'}
+        />
+      )
+    },
+    {
+      title: 'Risque',
+      dataIndex: 'risk',
+      key: 'risk',
+      render: (risk: string) => (
+        <Tag color={risk === 'HIGH' ? 'red' : risk === 'MEDIUM' ? 'orange' : 'green'}>
+          {risk}
+        </Tag>
+      )
+    }
+  ];
+
+  const slaData = slaCompliance ? [
+    { name: 'À temps', value: slaCompliance.onTime, color: '#52c41a' },
+    { name: 'Proche échéance', value: slaCompliance.approaching, color: '#faad14' },
+    { name: 'En retard', value: slaCompliance.overdue, color: '#ff4d4f' }
+  ] : [];
 
   return (
-    <div>
-      <h2>Analytiques BS</h2>
-      
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic title="Total BS" value={totalBS} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="En cours" value={inProgressBS} valueStyle={{ color: '#1890ff' }} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="En retard" value={overdueBS} valueStyle={{ color: '#cf1322' }} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic title="Validés" value={validatedBS} valueStyle={{ color: '#52c41a' }} />
-          </Card>
-        </Col>
-      </Row>
+    <div style={{ padding: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h2>Analytiques BS</h2>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <Select
+            value={period}
+            onChange={setPeriod}
+            style={{ width: 120 }}
+            options={[
+              { value: '7d', label: '7 jours' },
+              { value: '30d', label: '30 jours' },
+              { value: '90d', label: '3 mois' },
+              { value: '365d', label: '1 an' }
+            ]}
+          />
+          <Button type="primary" onClick={exportAnalytics}>
+            Exporter
+          </Button>
+        </div>
+      </div>
 
-      <Row gutter={[16, 16]}>
-        <Col span={24}>
-          <PerformanceChart />
-        </Col>
-      </Row>
+      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+        <TabPane tab="Vue d'ensemble" key="overview">
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col span={6}>
+              <Card loading={dashboardLoading}>
+                <Statistic 
+                  title="Total BS" 
+                  value={dashboard?.overview?.total || 0}
+                  prefix={<CheckCircleOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card loading={dashboardLoading}>
+                <Statistic 
+                  title="En cours" 
+                  value={dashboard?.overview?.inProgress || 0}
+                  valueStyle={{ color: '#1890ff' }}
+                  prefix={<ClockCircleOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card loading={dashboardLoading}>
+                <Statistic 
+                  title="En retard" 
+                  value={dashboard?.overview?.overdue || 0}
+                  valueStyle={{ color: '#cf1322' }}
+                  prefix={<ExclamationCircleOutlined />}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card loading={dashboardLoading}>
+                <Statistic 
+                  title="Taux de réussite" 
+                  value={dashboard?.overview?.completionRate || 0}
+                  precision={1}
+                  suffix="%"
+                  valueStyle={{ color: '#52c41a' }}
+                  prefix={<TrophyOutlined />}
+                />
+              </Card>
+            </Col>
+          </Row>
 
-      {teamWorkload && (
-        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col span={24}>
-            <Card title="Charge de travail par gestionnaire">
-              <Row gutter={[16, 16]}>
-                {teamWorkload.map((member: any) => (
-                  <Col span={8} key={member.id}>
-                    <Card size="small">
-                      <Statistic 
-                        title={member.fullName} 
-                        value={member.workload}
-                        suffix="BS"
-                        valueStyle={{ 
-                          color: member.risk === 'HIGH' ? '#cf1322' : 
-                                 member.risk === 'MEDIUM' ? '#fa8c16' : '#52c41a' 
-                        }}
-                      />
-                      <div style={{ fontSize: '12px', color: '#666', marginTop: 8 }}>
-                        En retard: {member.overdue} | Validés: {member.validated}
-                      </div>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </Card>
-          </Col>
-        </Row>
-      )}
+          <Row gutter={[16, 16]}>
+            <Col span={16}>
+              <Card title="Tendances de volume" loading={trendsLoading}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={volumeStats || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="sent" stroke="#8884d8" name="Envoyés" />
+                    <Line type="monotone" dataKey="received" stroke="#82ca9d" name="Reçus" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Card>
+            </Col>
+            <Col span={8}>
+              <Card title="Conformité SLA" loading={slaLoading}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={slaData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {slaData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            </Col>
+          </Row>
+        </TabPane>
+
+        <TabPane tab="Performance équipe" key="team">
+          <Row gutter={[16, 16]}>
+            <Col span={24}>
+              <Card title="Performance par gestionnaire" loading={teamLoading}>
+                <Table
+                  dataSource={teamPerformance?.teamPerformance || []}
+                  columns={teamColumns}
+                  rowKey="id"
+                  pagination={false}
+                  size="middle"
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+            <Col span={24}>
+              <Card title="Efficacité par gestionnaire" loading={teamLoading}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={teamPerformance?.teamPerformance || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="efficiency" fill="#8884d8" name="Efficacité (%)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            </Col>
+          </Row>
+        </TabPane>
+
+        <TabPane tab="Tendances" key="trends">
+          <Row gutter={[16, 16]}>
+            <Col span={24}>
+              <Card title="Évolution des performances" loading={trendsLoading}>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={trends?.performanceTrend || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="processed" stroke="#8884d8" name="Traités" />
+                    <Line type="monotone" dataKey="efficiency" stroke="#82ca9d" name="Efficacité (%)" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Card>
+            </Col>
+          </Row>
+        </TabPane>
+      </Tabs>
     </div>
   );
 };

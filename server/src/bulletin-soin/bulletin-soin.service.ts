@@ -19,7 +19,7 @@ export class BulletinSoinService {
 
   // FIND ALL (with pagination, filtering, and role-based access)
   async findAll(query: BsQueryDto, user?: any) {
-    const { page = 1, limit = 20, etat, ownerId, bordereauId, search } = query;
+    const { page = 1, limit = 20, etat, ownerId, bordereauId, search, prestataire, dateStart, dateEnd } = query;
     
     try {
       const where: any = { deletedAt: null };
@@ -33,11 +33,20 @@ export class BulletinSoinService {
       if (etat) where.etat = etat;
       if (ownerId) where.ownerId = ownerId;
       if (bordereauId) where.bordereauId = bordereauId;
+      if (prestataire) {
+        where.nomPrestation = { contains: prestataire, mode: 'insensitive' };
+      }
+      if (dateStart || dateEnd) {
+        where.dateCreation = {};
+        if (dateStart) where.dateCreation.gte = new Date(dateStart);
+        if (dateEnd) where.dateCreation.lte = new Date(dateEnd);
+      }
       if (search) {
         where.OR = [
           { numBs: { contains: search, mode: 'insensitive' } },
           { nomAssure: { contains: search, mode: 'insensitive' } },
           { nomBeneficiaire: { contains: search, mode: 'insensitive' } },
+          { nomPrestation: { contains: search, mode: 'insensitive' } },
         ];
       }
 
@@ -156,8 +165,13 @@ export class BulletinSoinService {
 
   // UPDATE (status, assignment, etc.)
   async update(id: string, dto: UpdateBulletinSoinDto, user: any) {
-    const bs = await this.prisma.bulletinSoin.findUnique({ where: { id: String(id) } });
+    const bs = await this.prisma.bulletinSoin.findUnique({ 
+      where: { id: String(id) },
+      include: { bordereau: true }
+    });
     if (!bs || bs.deletedAt) throw new NotFoundException('Bulletin de soin not found');
+    
+    const oldEtat = bs.etat;
     
     // Only include valid database fields
     const updateData: any = {};
@@ -173,8 +187,6 @@ export class BulletinSoinService {
     if (dto.codeAssure !== undefined) updateData.codeAssure = dto.codeAssure;
     if (dto.ownerId !== undefined) updateData.ownerId = dto.ownerId ?? undefined;
     
-    // Skip fields that don't exist in schema: dueDate, codeBeneficiaire, observations
-    
     if (dto.etat && ['VALIDATED', 'REJECTED'].includes(dto.etat)) {
       updateData.processedById = user.id;
       updateData.processedAt = new Date();
@@ -183,11 +195,28 @@ export class BulletinSoinService {
       updateData.virementId = (dto as any).virementId;
     }
     
-    return this.prisma.bulletinSoin.update({
+    const updatedBs = await this.prisma.bulletinSoin.update({
       where: { id: String(id) },
       data: updateData,
-      include: { items: true, expertises: true, logs: true },
+      include: { items: true, expertises: true, logs: true, bordereau: true },
     });
+
+    // Push status update to MY TUNICLAIM if status changed
+    if (dto.etat && dto.etat !== oldEtat && updatedBs.bordereau) {
+      this.pushStatusToTuniclaim(updatedBs.bordereau.id, {
+        bordereauId: updatedBs.bordereau.reference,
+        bsId: updatedBs.numBs,
+        oldStatus: oldEtat,
+        newStatus: dto.etat,
+        processedBy: user?.fullName || user?.email,
+        processedAt: new Date().toISOString(),
+        gestionnaireId: user?.id
+      }).catch(error => {
+        console.error('Failed to push status to MY TUNICLAIM:', error.message);
+      });
+    }
+    
+    return updatedBs;
   }
 
   // CREATE
@@ -744,7 +773,36 @@ export class BulletinSoinService {
     console.log(`Overload notification: User ${gestionnaireId} has ${riskLevel} risk`);
   }
 
-  // Other placeholder methods
+  // MY TUNICLAIM Integration Methods
+  private async pushStatusToTuniclaim(bordereauId: string, statusData: any): Promise<void> {
+    try {
+      const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+      const { OutlookService } = await import('../integrations/outlook.service');
+      
+      const outlookService = new OutlookService();
+      const tuniclaimService = new TuniclaimService(this.prisma, outlookService);
+      
+      await tuniclaimService.pushStatusUpdate(bordereauId, statusData);
+    } catch (error) {
+      console.error('Failed to push status to MY TUNICLAIM:', error.message);
+    }
+  }
+
+  private async pushPaymentToTuniclaim(bordereauId: string, paymentData: any): Promise<void> {
+    try {
+      const { TuniclaimService } = await import('../integrations/tuniclaim.service');
+      const { OutlookService } = await import('../integrations/outlook.service');
+      
+      const outlookService = new OutlookService();
+      const tuniclaimService = new TuniclaimService(this.prisma, outlookService);
+      
+      await tuniclaimService.pushPaymentUpdate(bordereauId, paymentData);
+    } catch (error) {
+      console.error('Failed to push payment to MY TUNICLAIM:', error.message);
+    }
+  }
+
+  // Other methods
   async getPerformanceMetrics({ start, end }: { start: Date; end: Date }) {
     return [];
   }
@@ -792,7 +850,34 @@ export class BulletinSoinService {
   }
 
   async markBsAsPaid(bsId: string) {
-    return this.prisma.bulletinSoin.update({ where: { id: bsId }, data: { etat: 'PAID' } });
+    const bs = await this.prisma.bulletinSoin.findUnique({ 
+      where: { id: bsId },
+      include: { bordereau: true, virement: true }
+    });
+    
+    if (!bs) throw new NotFoundException('Bulletin de soin not found');
+    
+    const updatedBs = await this.prisma.bulletinSoin.update({ 
+      where: { id: bsId }, 
+      data: { etat: 'PAID' },
+      include: { bordereau: true, virement: true }
+    });
+
+    // Push payment update to MY TUNICLAIM
+    if (bs.bordereau && bs.virement) {
+      this.pushPaymentToTuniclaim(bs.bordereau.id, {
+        bordereauId: bs.bordereau.reference,
+        bsId: bs.numBs,
+        paymentStatus: 'PAID',
+        paymentDate: new Date().toISOString(),
+        amount: bs.virement.montant,
+        virementReference: bs.virement.referenceBancaire
+      }).catch(error => {
+        console.error('Failed to push payment status to MY TUNICLAIM:', error.message);
+      });
+    }
+    
+    return updatedBs;
   }
 
   async reconcilePaymentsWithAccounting(): Promise<ReconciliationReport> {
@@ -840,5 +925,117 @@ export class BulletinSoinService {
         id: expertiseData.id != null ? String(expertiseData.id) : undefined,
       },
     });
+  }
+
+  // ANALYTICS METHODS
+  async getAnalyticsDashboard(period: string = '30d') {
+    const stats = await this.getDashboardStats({});
+    const teamWorkload = await this.getTeamWorkloadStats();
+    const slaAlerts = await this.getSlaAlerts();
+    const volumeStats = await this.getVolumeStats(period);
+    
+    return {
+      overview: stats,
+      teamWorkload,
+      slaAlerts,
+      volumeStats,
+      period
+    };
+  }
+
+  async getTrends(period: string = '30d') {
+    const volumeData = await this.getVolumeStats(period);
+    const teamStats = await this.getTeamWorkloadStats();
+    
+    return {
+      volumeTrend: volumeData,
+      performanceTrend: teamStats.map(t => ({
+        date: new Date().toISOString().split('T')[0],
+        gestionnaire: t.fullName,
+        processed: t.validated,
+        efficiency: t.total > 0 ? (t.validated / t.total) * 100 : 0
+      })),
+      period
+    };
+  }
+
+  async getSlaCompliance(period: string = '30d') {
+    const { overdue, approaching } = await this.getSlaAlerts();
+    const stats = await this.getDashboardStats({});
+    
+    const complianceRate = stats.total > 0 ? ((stats.total - overdue.length) / stats.total) * 100 : 100;
+    
+    return {
+      complianceRate,
+      overdue: overdue.length,
+      approaching: approaching.length,
+      onTime: stats.total - overdue.length - approaching.length,
+      total: stats.total,
+      period
+    };
+  }
+
+  async getTeamPerformanceAnalytics(period: string = '30d') {
+    const teamStats = await this.getTeamWorkloadStats();
+    
+    return {
+      teamPerformance: teamStats.map(member => ({
+        id: member.id,
+        name: member.fullName,
+        processed: member.validated,
+        inProgress: member.inProgress,
+        overdue: member.overdue,
+        efficiency: member.total > 0 ? (member.validated / member.total) * 100 : 0,
+        workload: member.workload,
+        risk: member.risk
+      })),
+      averageEfficiency: teamStats.length > 0 ? 
+        teamStats.reduce((sum, t) => sum + (t.total > 0 ? (t.validated / t.total) * 100 : 0), 0) / teamStats.length : 0,
+      totalProcessed: teamStats.reduce((sum, t) => sum + t.validated, 0),
+      period
+    };
+  }
+
+  async getVolumeStats(period: string = '7d') {
+    const startDate = this.getStartDateForPeriod(period);
+    const endDate = new Date();
+    const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 1000 * 24));
+    
+    const volumeData: Array<{date: string; sent: number; received: number}> = [];
+    for (let i = 0; i < days; i++) {
+      const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+      const sent = await this.prisma.bulletinSoin.count({
+        where: {
+          dateCreation: {
+            gte: new Date(date.setHours(0, 0, 0, 0)),
+            lt: new Date(date.setHours(23, 59, 59, 999))
+          },
+          deletedAt: null
+        }
+      });
+      const received = sent;
+      volumeData.push({
+        date: date.toISOString().split('T')[0],
+        sent,
+        received
+      });
+    }
+    return volumeData;
+  }
+
+  private getStartDateForPeriod(period: string): Date {
+    const now = new Date();
+    switch (period) {
+      case '7d':
+        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      case '30d':
+        return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      case '90d':
+        return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      case '365d':
+        return new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      default:
+        return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
   }
 }
