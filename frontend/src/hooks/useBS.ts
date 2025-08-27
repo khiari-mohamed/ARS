@@ -44,6 +44,12 @@ export const useSlaAlerts = () =>
     queryFn: bsApi.fetchSlaAlerts,
   });
 
+export const useAnalyseCharge = () =>
+  useQuery({
+    queryKey: ['analyse-charge'],
+    queryFn: bsApi.fetchAnalyseCharge,
+  });
+
 export const usePerformanceMetrics = (params: any) =>
   useQuery({
     queryKey: ['performance-metrics', params],
@@ -54,6 +60,14 @@ export const useAssignmentSuggestions = () =>
   useQuery({
     queryKey: ['assignment-suggestions'],
     queryFn: bsApi.fetchAssignmentSuggestions,
+    retry: 1,
+    staleTime: 30000,
+  });
+
+export const useTeamWorkload = () =>
+  useQuery({
+    queryKey: ['team-workload'],
+    queryFn: bsApi.fetchTeamWorkload,
   });
 
 export const usePriorities = (gestionnaireId: string | number) =>
@@ -90,7 +104,7 @@ export const useNotifications = () =>
 
 // Types for mutations
 type UpdateBSVariables = { id: number | string } & Partial<BulletinSoin>;
-type AssignBSVariables = { id: number | string; ownerId: number };
+type AssignBSVariables = { id: number | string; ownerId: string | number };
 
 // Mutations
 export const useUpdateBS = () => {
@@ -122,11 +136,34 @@ export const useAssignBS = () => {
   >({
     mutationFn: async ({ id, ownerId }: AssignBSVariables) => {
       const response = await bsApi.assignBS(id, ownerId);
-      return response.data;
+      return response;
     },
     onSuccess: (data: unknown, variables: AssignBSVariables) => {
       queryClient.invalidateQueries({ queryKey: ['bs-details', variables.id] });
       queryClient.invalidateQueries({ queryKey: ['bs-list'] });
+      queryClient.invalidateQueries({ queryKey: ['team-workload'] });
+      queryClient.invalidateQueries({ queryKey: ['assignment-suggestions'] });
+    },
+  });
+};
+
+export const useApplyRebalancing = () => {
+  const queryClient = useQueryClient();
+  return useMutation<
+    unknown,
+    Error,
+    { bsId: string; toUserId: string },
+    unknown
+  >({
+    mutationFn: async ({ bsId, toUserId }) => {
+      const response = await bsApi.applyRebalancing(bsId, toUserId);
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bs-list'] });
+      queryClient.invalidateQueries({ queryKey: ['team-workload'] });
+      queryClient.invalidateQueries({ queryKey: ['rebalancing-suggestions'] });
+      queryClient.invalidateQueries({ queryKey: ['assignment-suggestions'] });
     },
   });
 };

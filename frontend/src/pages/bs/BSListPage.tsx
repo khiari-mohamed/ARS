@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Input, Button, DatePicker, Select, Space, Badge } from 'antd';
+import { Input, Button, DatePicker, Select, Space, Badge, Row, Col } from 'antd';
 import BSList from '../../components/BS/BSList';
 import { useSlaAlerts, useNotifications } from '../../hooks/useBS';
 import { NotificationCenter } from '../../components/BS/NotificationCenter';
-// ADD THESE IMPORTS:
 import { PrioritiesDashboard } from '../../components/BS/PrioritiesDashboard';
 import { RebalancingSuggestions } from '../../components/BS/RebalancingSuggestions';
 
@@ -12,9 +11,11 @@ const { RangePicker } = DatePicker;
 const BSListPage: React.FC = () => {
   const [filters, setFilters] = useState({
     search: '',
-    status: undefined,
+    etat: undefined,
     prestataire: '',
-    dateRange: [] as any[],
+    dateRange: null as [any, any] | null,
+    page: 1,
+    limit: 20
   });
 
   const { data: slaAlerts } = useSlaAlerts();
@@ -22,9 +23,9 @@ const BSListPage: React.FC = () => {
   const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
 
   React.useEffect(() => {
-    // Fetch managers (GESTIONNAIRE) from backend using LocalAPI
+    // Fetch gestionnaires from BS module
     import('../../services/axios').then(({ LocalAPI }) => {
-      LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
+      LocalAPI.get('/bulletin-soin/gestionnaires')
         .then(res => setManagers(res.data || []))
         .catch(() => setManagers([]));
     });
@@ -32,21 +33,31 @@ const BSListPage: React.FC = () => {
 
   const slaCount = (slaAlerts?.overdue?.length || 0) + (slaAlerts?.approaching?.length || 0);
 
+  const handleFiltersChange = (newFilters: any) => {
+    setFilters(prev => ({ ...prev, ...newFilters, page: 1 }));
+  };
+
   return (
     <div style={{ padding: 24 }}>
+      {/* Filters Section */}
       <Space style={{ marginBottom: 16 }} wrap>
         <Input.Search
           placeholder="Recherche BS, assuré, bénéficiaire..."
-          onSearch={v => setFilters(f => ({ ...f, search: v }))}
+          value={filters.search}
+          onSearch={v => handleFiltersChange({ search: v })}
+          onChange={e => e.target.value === '' && handleFiltersChange({ search: '' })}
           allowClear
+          style={{ width: 250 }}
         />
         <Select
           placeholder="Statut"
-          style={{ width: 120 }}
+          style={{ width: 150 }}
           allowClear
-          onChange={status => setFilters(f => ({ ...f, status }))}
+          value={filters.etat}
+          onChange={etat => handleFiltersChange({ etat })}
           options={[
             { value: 'IN_PROGRESS', label: 'En cours' },
+            { value: 'EN_COURS', label: 'En cours' },
             { value: 'VALIDATED', label: 'Validé' },
             { value: 'REJECTED', label: 'Rejeté' },
             { value: 'CLOTURE', label: 'Clôturé' },
@@ -55,13 +66,23 @@ const BSListPage: React.FC = () => {
         <Input
           placeholder="Prestataire"
           style={{ width: 150 }}
-          onChange={e => setFilters(f => ({ ...f, prestataire: e.target.value }))}
+          value={filters.prestataire}
+          onChange={e => handleFiltersChange({ prestataire: e.target.value })}
         />
         <RangePicker
-          onChange={dates => setFilters(f => ({ ...f, dateRange: dates ? dates : [] }))}
+          value={filters.dateRange}
+          onChange={dates => handleFiltersChange({ dateRange: dates })}
         />
         <Button
-          onClick={() => window.open('https://197.14.56.112:8083/api/bulletin-soin/export/excel', '_blank')}
+          type="primary"
+          onClick={() => {
+            const link = document.createElement('a');
+            link.href = 'http://localhost:5000/api/bulletin-soin/export/excel';
+            link.download = `BS_Export_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }}
         >
           Exporter Excel
         </Button>
@@ -71,15 +92,26 @@ const BSListPage: React.FC = () => {
           </span>
         </Badge>
       </Space>
-      {/* AI/CDC widgets at the top */}
-      <div style={{ marginBottom: 32 }}>
-        <PrioritiesDashboard />
-        <RebalancingSuggestions />
-      </div>
-      <BSList params={filters} />
-      <div style={{ marginTop: 24 }}>
-        <NotificationCenter notifications={notifications || []} />
-      </div>
+
+      {/* AI/Analytics Widgets */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col span={12}>
+          <PrioritiesDashboard />
+        </Col>
+        <Col span={12}>
+          <RebalancingSuggestions />
+        </Col>
+      </Row>
+
+      {/* BS List Table */}
+      <BSList params={filters} onParamsChange={setFilters} />
+
+      {/* Notifications */}
+      {notifications && notifications.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <NotificationCenter notifications={notifications} />
+        </div>
+      )}
     </div>
   );
 };

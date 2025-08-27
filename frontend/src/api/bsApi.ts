@@ -6,11 +6,18 @@ import {
   ExpertiseInfo,
 } from '../types/bs';
 
-const API_BASE = 'https://197.14.56.112:8083/api/bulletin-soin';
+const API_BASE = 'http://localhost:5000/api/bulletin-soin';
 
 export const fetchBSList = async (params: any): Promise<BSListResponse> => {
-  const { data } = await axios.get(API_BASE, { params });
-  return data;
+  try {
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const { data } = await axios.get(API_BASE, { params, headers });
+    return data;
+  } catch (error) {
+    console.error('BS List API error:', error);
+    return { items: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+  }
 };
 
 export const fetchBSDetails = async (id: number | string): Promise<BulletinSoin> => {
@@ -23,7 +30,7 @@ export const updateBS = async (id: number | string, payload: Partial<BulletinSoi
   return data;
 };
 
-export const assignBS = async (id: number | string, ownerId: number) => {
+export const assignBS = async (id: number | string, ownerId: string | number) => {
   const { data } = await axios.post(`${API_BASE}/${id}/assign`, { ownerId });
   return data;
 };
@@ -88,6 +95,12 @@ export const fetchRebalancingSuggestions = async () => {
   return data;
 };
 
+// Apply Rebalancing
+export const applyRebalancing = async (bsId: string, toUserId: string) => {
+  const { data } = await axios.post(`${API_BASE}/apply-rebalancing`, { bsId, toUserId });
+  return data;
+};
+
 // Reconciliation Report
 export const fetchReconciliationReport = async () => {
   const { data } = await axios.get(`${API_BASE}/reconcile-payments`);
@@ -103,6 +116,17 @@ export const fetchPaymentStatus = async (id: number | string) => {
 // Mark BS as Paid
 export const markBsAsPaid = async (id: number | string) => {
   const { data } = await axios.patch(`${API_BASE}/${id}/mark-paid`);
+  return data;
+};
+
+// Team workload analysis
+export const fetchAnalyseCharge = async () => {
+  const { data } = await axios.get(`${API_BASE}/analyse-charge`);
+  return data;
+};
+
+export const fetchTeamWorkload = async () => {
+  const { data } = await axios.get(`${API_BASE}/stats/team-workload`);
   return data;
 };
 

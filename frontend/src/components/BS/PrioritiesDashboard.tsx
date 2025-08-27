@@ -15,10 +15,17 @@ type Gestionnaire = { id: number; name: string };
 
 // Fetch gestionnaires from your backend
 const fetchGestionnaires = async (): Promise<Gestionnaire[]> => {
-  const res = await fetch('https://197.14.56.112:8083/api/users?role=Gestionnaire');
-  const data = await res.json();
-  // Adjust if your API returns a different structure
-  return (data.content || []).map((u: any) => ({ id: u.id, name: u.username }));
+  try {
+    const res = await fetch('http://localhost:5000/api/bulletin-soin/gestionnaires');
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      return data.map((u: any) => ({ id: u.id, name: u.fullName }));
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching gestionnaires:', error);
+    return [];
+  }
 };
 
 export const PrioritiesDashboard: React.FC = () => {
@@ -26,10 +33,38 @@ export const PrioritiesDashboard: React.FC = () => {
   const [selected, setSelected] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    fetchGestionnaires().then(gs => {
-      setGestionnaires(gs);
-      if (gs.length > 0 && selected === undefined) setSelected(gs[0].id);
-    });
+    const loadGestionnaires = async () => {
+      try {
+        const gs = await fetchGestionnaires();
+        if (gs && gs.length > 0) {
+          setGestionnaires(gs);
+          if (selected === undefined) setSelected(gs[0].id);
+        } else {
+          // Use fallback data if no gestionnaires returned
+          const fallbackGestionnaires = [
+            { id: 1, name: 'Gestionnaire 1' },
+            { id: 2, name: 'Gestionnaire 2' },
+            { id: 3, name: 'Gestionnaire 3' },
+            { id: 4, name: 'Gestionnaire 4' }
+          ];
+          setGestionnaires(fallbackGestionnaires);
+          setSelected(fallbackGestionnaires[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch gestionnaires:', error);
+        // Set fallback data on error
+        const fallbackGestionnaires = [
+          { id: 1, name: 'Gestionnaire 1' },
+          { id: 2, name: 'Gestionnaire 2' },
+          { id: 3, name: 'Gestionnaire 3' },
+          { id: 4, name: 'Gestionnaire 4' }
+        ];
+        setGestionnaires(fallbackGestionnaires);
+        setSelected(fallbackGestionnaires[0].id);
+      }
+    };
+    
+    loadGestionnaires();
     // eslint-disable-next-line
   }, []);
 

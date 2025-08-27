@@ -23,6 +23,8 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { BOModule } from './bo/bo.module';
 // Import SCAN Module
 import { ScanModule } from './scan/scan.module';
+// Import BS Module
+import { BulletinSoinModule } from './bulletin-soin/bulletin-soin.module';
 //new modules dahsboard w tun service ta3 l kpis 
 
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -40,7 +42,8 @@ import { SeedController } from './seed.controller';
     ClientModule,
     WorkflowModule,
     BOModule,
-    ScanModule
+    ScanModule,
+    BulletinSoinModule
   ],
   controllers: [AppController,SeedController],
   providers: [AppService, PrismaService],

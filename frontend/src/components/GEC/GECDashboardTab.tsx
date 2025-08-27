@@ -18,13 +18,24 @@ const GECDashboardTab: React.FC = () => {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Mock data - replace with actual API calls
+        // Load real analytics data
+        const analyticsResponse = await fetch('/api/courriers/analytics?period=30d');
+        const analytics = await analyticsResponse.json();
+        
+        const slaBreachesResponse = await fetch('/api/courriers/sla-breaches');
+        const slaBreaches = await slaBreachesResponse.json();
+        
+        const volumeResponse = await fetch('/api/courriers/volume-stats?period=7d');
+        const volumeData = await volumeResponse.json();
+        
         setStats({
-          totalThisMonth: 245,
-          pendingReplies: 18,
-          slaCompliance: 92.5,
-          urgentCount: 5
+          totalThisMonth: analytics.totalCourriers || 0,
+          pendingReplies: analytics.pendingCourriers || 0,
+          slaCompliance: analytics.successRate || 0,
+          urgentCount: slaBreaches.length || 0
         });
+        
+        setVolumeData(volumeData || []);
 
         setVolumeData([
           { date: '2025-01-10', sent: 12, received: 8 },
@@ -41,11 +52,18 @@ const GECDashboardTab: React.FC = () => {
           { name: 'Autre', value: 10, color: '#388e3c' }
         ]);
 
-        setUrgentItems([
-          { id: '1', subject: 'Réclamation Client A - Urgent', type: 'RECLAMATION', daysOverdue: 2, priority: 'CRITIQUE' },
-          { id: '2', subject: 'Relance Paiement Client B', type: 'RELANCE', daysOverdue: 1, priority: 'URGENT' },
-          { id: '3', subject: 'Courrier Règlement en retard', type: 'REGLEMENT', daysOverdue: 3, priority: 'CRITIQUE' }
-        ]);
+        // Map SLA breaches to urgent items
+        const urgentItems = slaBreaches.map((breach: any) => ({
+          id: breach.id,
+          subject: breach.subject,
+          type: breach.type,
+          daysOverdue: breach.daysOverdue,
+          priority: breach.daysOverdue > 5 ? 'CRITIQUE' : 'URGENT',
+          uploader: breach.uploader,
+          client: breach.client
+        }));
+        
+        setUrgentItems(urgentItems);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
       }
