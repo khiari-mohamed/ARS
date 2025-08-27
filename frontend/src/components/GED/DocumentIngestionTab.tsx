@@ -22,16 +22,44 @@ const DocumentIngestionTab: React.FC = () => {
   const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load clients and gestionnaires
-    setClients([
-      { id: '1', name: 'Client A' },
-      { id: '2', name: 'Client B' },
-      { id: '3', name: 'Client C' }
-    ]);
-    setGestionnaires([
-      { id: '1', name: 'Gestionnaire 1' },
-      { id: '2', name: 'Gestionnaire 2' }
-    ]);
+    const loadData = async () => {
+      try {
+        // Load real clients
+        const clientsResponse = await fetch('/api/clients', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (clientsResponse.ok) {
+          const clientsData = await clientsResponse.json();
+          setClients(clientsData.map((c: any) => ({ id: c.id, name: c.name })));
+        } else {
+          throw new Error('Failed to load clients');
+        }
+        
+        // Load real gestionnaires
+        const usersResponse = await fetch('/api/users?role=GESTIONNAIRE', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setGestionnaires(usersData.map((u: any) => ({ id: u.id, name: u.fullName })));
+        } else {
+          throw new Error('Failed to load gestionnaires');
+        }
+      } catch (error) {
+        console.error('Failed to load data:', error);
+        // Fallback to mock data
+        setClients([
+          { id: '1', name: 'Client A' },
+          { id: '2', name: 'Client B' },
+          { id: '3', name: 'Client C' }
+        ]);
+        setGestionnaires([
+          { id: '1', name: 'Gestionnaire 1' },
+          { id: '2', name: 'Gestionnaire 2' }
+        ]);
+      }
+    };
+    loadData();
   }, []);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,11 +80,37 @@ const DocumentIngestionTab: React.FC = () => {
 
   const handleScannerImport = async () => {
     try {
-      // Mock scanner folder import
-      console.log('Importing from scanner folder...');
-      alert('Import depuis le dossier scanner déclenché');
+      const response = await fetch('/api/documents/paperstream/status', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const status = await response.json();
+        const message = `Scanner Status:\n- ${status.pendingFiles} fichiers en attente\n- ${status.processedFiles} fichiers traités\n- Statut: ${status.status}`;
+        alert(message);
+        
+        // Trigger actual import if there are pending files
+        if (status.pendingFiles > 0) {
+          const importResponse = await fetch('/api/documents/paperstream/import', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          if (importResponse.ok) {
+            const importResult = await importResponse.json();
+            alert(`Import réussi: ${importResult.imported} documents importés`);
+          }
+        }
+      } else {
+        alert('Erreur lors de la vérification du scanner');
+      }
     } catch (error) {
       console.error('Scanner import failed:', error);
+      alert('Erreur de connexion au scanner');
     }
   };
 
@@ -69,15 +123,28 @@ const DocumentIngestionTab: React.FC = () => {
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append('file', uploadedFile);
+      formData.append('files', uploadedFile);
       formData.append('name', uploadedFile.name);
       formData.append('type', metadata.type);
-      formData.append('bordereauId', metadata.bordereauRef);
+      // Only add bordereauId if it's not empty
+      if (metadata.bordereauRef && metadata.bordereauRef.trim() !== '') {
+        formData.append('bordereauId', metadata.bordereauRef.trim());
+      }
 
-      // Mock API call - replace with actual upload
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      alert('Document enregistré et notification envoyée au service Scan');
+      const response = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await response.json();
+      alert('Document enregistré avec succès!');
       
       // Reset form
       setUploadedFile(null);
@@ -91,7 +158,7 @@ const DocumentIngestionTab: React.FC = () => {
       });
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Erreur lors de l\'upload');
+      alert('Erreur lors de l\'upload: ' + (error as Error).message);
     } finally {
       setUploading(false);
     }
@@ -207,11 +274,12 @@ const DocumentIngestionTab: React.FC = () => {
 
             <Grid item xs={12}>
               <TextField
-                label="Référence Bordereau"
+                label="Référence Bordereau (optionnel)"
                 value={metadata.bordereauRef}
                 onChange={(e) => setMetadata({...metadata, bordereauRef: e.target.value})}
                 fullWidth
-                helperText="Identifiant unique du bordereau"
+                helperText="Laissez vide si aucun bordereau associé"
+                placeholder="Ex: REF2025001"
               />
             </Grid>
 

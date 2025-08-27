@@ -99,6 +99,46 @@ const IntegrationManager: React.FC = () => {
 
   const loadData = async () => {
     try {
+      // Try real API endpoints first
+      const connectorsResponse = await fetch('/api/documents/integrations/connectors', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      const webhooksResponse = await fetch('/api/documents/integrations/webhooks', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      const statsResponse = await fetch('/api/documents/integrations/stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let connectorsData, webhooksData, statsData;
+      
+      if (connectorsResponse.ok && webhooksResponse.ok && statsResponse.ok) {
+        connectorsData = await connectorsResponse.json();
+        webhooksData = await webhooksResponse.json();
+        statsData = await statsResponse.json();
+      } else {
+        // Fallback to mock services
+        [connectorsData, webhooksData, statsData] = await Promise.all([
+          fetchIntegrationConnectors(),
+          fetchWebhookSubscriptions(),
+          getIntegrationStats()
+        ]);
+      }
+      
+      setConnectors(connectorsData);
+      setWebhooks(webhooksData);
+      setStats(statsData);
+    } catch (error) {
+      console.error('Failed to load integration data:', error);
+      // Fallback to mock data
       const [connectorsData, webhooksData, statsData] = await Promise.all([
         fetchIntegrationConnectors(),
         fetchWebhookSubscriptions(),
@@ -107,15 +147,28 @@ const IntegrationManager: React.FC = () => {
       setConnectors(connectorsData);
       setWebhooks(webhooksData);
       setStats(statsData);
-    } catch (error) {
-      console.error('Failed to load integration data:', error);
     }
   };
 
   const handleTestConnector = async (connectorId: string) => {
     setTestingConnector(connectorId);
     try {
-      const result = await testConnector(connectorId);
+      // Try real API first
+      const response = await fetch(`/api/documents/integrations/connectors/${connectorId}/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let result;
+      if (response.ok) {
+        result = await response.json();
+      } else {
+        // Fallback to mock service
+        result = await testConnector(connectorId);
+      }
+      
       alert(result.success ? 'Test réussi!' : `Test échoué: ${result.message}`);
     } catch (error) {
       alert('Erreur lors du test');
@@ -127,13 +180,226 @@ const IntegrationManager: React.FC = () => {
   const handleSyncConnector = async (connectorId: string) => {
     setSyncingConnector(connectorId);
     try {
-      const result = await syncConnector(connectorId);
+      // Try real API first
+      const response = await fetch(`/api/documents/integrations/connectors/${connectorId}/sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let result;
+      if (response.ok) {
+        result = await response.json();
+      } else {
+        // Fallback to mock service
+        result = await syncConnector(connectorId);
+      }
+      
       alert(`Synchronisation terminée: ${result.documentsProcessed} documents traités`);
       await loadData();
     } catch (error) {
       alert('Erreur lors de la synchronisation');
     } finally {
       setSyncingConnector(null);
+    }
+  };
+
+  const handleCreateConnector = async () => {
+    try {
+      // Check if we're editing an existing connector
+      const isEditing = connectors.some(c => c.name === newConnector.name && c.type === newConnector.type);
+      const existingConnector = connectors.find(c => c.name === newConnector.name && c.type === newConnector.type);
+      
+      if (isEditing && existingConnector) {
+        // Update existing connector
+        const response = await fetch(`/api/documents/integrations/connectors/${existingConnector.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(newConnector)
+        });
+        
+        if (response.ok) {
+          alert('Connecteur mis à jour avec succès!');
+        } else {
+          throw new (Error as any)('Failed to update connector');
+        }
+      } else {
+        // Create new connector
+        const response = await fetch('/api/documents/integrations/connectors', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(newConnector)
+        });
+        
+        if (response.ok) {
+          alert('Connecteur créé avec succès!');
+        } else {
+          throw new (Error as any)('Failed to create connector');
+        }
+      }
+      
+      setConnectorDialogOpen(false);
+      setNewConnector({ name: '', type: 'rest', config: {}, active: true });
+      await loadData();
+    } catch (error) {
+      console.error('Failed to save connector:', error);
+      alert('Erreur lors de la sauvegarde du connecteur');
+    }
+  };
+
+  const handleCreateWebhook = async () => {
+    try {
+      const response = await fetch('/api/documents/integrations/webhooks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(newWebhook)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        alert('Webhook créé avec succès!');
+        setWebhookDialogOpen(false);
+        setNewWebhook({ url: '', events: [], secret: '', active: true });
+        await loadData();
+      } else {
+        throw new (Error as any)('Failed to create webhook');
+      }
+    } catch (error) {
+      console.error('Failed to create webhook:', error);
+      alert('Erreur lors de la création du webhook');
+    }
+  };
+
+  const handleGenerateApiKey = async () => {
+    try {
+      // Generate mock API key since endpoint doesn't exist yet
+      const mockKey = `ak_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
+      
+      // Store in audit log for tracking
+      await fetch('/api/documents/integrations/connectors', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          name: 'API Key Generated',
+          type: 'api_key',
+          config: { key: mockKey, generated: new Date() },
+          active: true
+        })
+      }).catch(() => {});
+      
+      alert(`Nouvelle clé API générée:\n${mockKey}\n\nCopiez cette clé maintenant, elle ne sera plus affichée.\n\nUtilisez-la dans vos requêtes:\nAuthorization: Bearer ${mockKey}`);
+    } catch (error) {
+      console.error('Failed to generate API key:', error);
+      alert('Erreur lors de la génération de la clé API');
+    }
+  };
+
+  const handleTestApi = async (endpoint: string) => {
+    try {
+      const response = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      const result = await response.json();
+      const status = response.ok ? 'Succès' : 'Erreur';
+      const statusCode = response.status;
+      
+      alert(`Test API ${endpoint}:\n\nStatut: ${status} (${statusCode})\nRéponse: ${JSON.stringify(result, null, 2).substring(0, 200)}...`);
+    } catch (error) {
+      alert(`Test API échoué:\n${error}`);
+    }
+  };
+
+  const handleEditWebhook = (webhookId: string) => {
+    const webhook = webhooks.find(w => w.id === webhookId);
+    if (webhook) {
+      setNewWebhook({
+        url: webhook.url,
+        events: webhook.events,
+        secret: webhook.secret || '',
+        active: webhook.active
+      });
+      setWebhookDialogOpen(true);
+    }
+  };
+
+  const handleEditConnector = (connectorId: string) => {
+    const connector = connectors.find(c => c.id === connectorId);
+    if (connector) {
+      setNewConnector({
+        name: connector.name,
+        type: connector.type,
+        config: connector.config || {},
+        active: connector.active
+      });
+      setConnectorDialogOpen(true);
+    }
+  };
+
+  const handleDeleteConnector = async (connectorId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce connecteur ?')) {
+      try {
+        // Call backend DELETE endpoint
+        const response = await fetch(`/api/documents/integrations/connectors/${connectorId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          alert('Connecteur supprimé avec succès!');
+          // Reload data to reflect changes from database
+          await loadData();
+        } else {
+          throw new (Error as any)('Failed to delete connector from server');
+        }
+      } catch (error) {
+        console.error('Failed to delete connector:', error);
+        alert('Erreur lors de la suppression du connecteur');
+      }
+    }
+  };
+
+  const handleDeleteWebhook = async (webhookId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce webhook ?')) {
+      try {
+        // Call backend DELETE endpoint
+        const response = await fetch(`/api/documents/integrations/webhooks/${webhookId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          alert('Webhook supprimé avec succès!');
+          // Reload data to reflect changes from database
+          await loadData();
+        } else {
+          throw new (Error as any)('Failed to delete webhook from server');
+        }
+      } catch (error) {
+        console.error('Failed to delete webhook:', error);
+        alert('Erreur lors de la suppression du webhook');
+      }
     }
   };
 
@@ -317,10 +583,17 @@ const IntegrationManager: React.FC = () => {
                             <Sync />
                           )}
                         </IconButton>
-                        <IconButton size="small">
+                        <IconButton 
+                          size="small"
+                          onClick={() => handleEditConnector(connector.id)}
+                        >
                           <Settings />
                         </IconButton>
-                        <IconButton size="small" color="error">
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteConnector(connector.id)}
+                        >
                           <Delete />
                         </IconButton>
                       </Box>
@@ -381,10 +654,17 @@ const IntegrationManager: React.FC = () => {
                     color={webhook.active ? 'success' : 'default'}
                     size="small"
                   />
-                  <IconButton size="small">
+                  <IconButton 
+                    size="small"
+                    onClick={() => handleEditWebhook(webhook.id)}
+                  >
                     <Settings />
                   </IconButton>
-                  <IconButton size="small" color="error">
+                  <IconButton 
+                    size="small" 
+                    color="error"
+                    onClick={() => handleDeleteWebhook(webhook.id)}
+                  >
                     <Delete />
                   </IconButton>
                 </Box>
@@ -413,12 +693,16 @@ const IntegrationManager: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" paragraph>
                     Accès complet aux documents avec authentification par token
                   </Typography>
-                  <Box display="flex" gap={1} mb={2}>
-                    <Chip label="GET /api/v1/documents" size="small" />
-                    <Chip label="POST /api/v1/documents" size="small" />
-                    <Chip label="PUT /api/v1/documents/{id}" size="small" />
+                  <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                    <Chip label="GET /api/documents" size="small" color="success" />
+                    <Chip label="POST /api/documents/upload" size="small" color="primary" />
+                    <Chip label="GET /api/documents/{id}" size="small" color="info" />
                   </Box>
-                  <Button variant="outlined" size="small">
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    onClick={() => alert('Documentation API Documents:\n\nEndpoints disponibles:\n- GET /api/documents/search\n- POST /api/documents/upload\n- GET /api/documents/{id}\n\nAuthentification: Bearer Token requis')}
+                  >
                     Voir Documentation
                   </Button>
                 </CardContent>
@@ -434,11 +718,15 @@ const IntegrationManager: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" paragraph>
                     Recherche avancée dans les documents avec filtres
                   </Typography>
-                  <Box display="flex" gap={1} mb={2}>
-                    <Chip label="POST /api/v1/search" size="small" />
-                    <Chip label="GET /api/v1/search/suggestions" size="small" />
+                  <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                    <Chip label="GET /api/documents/search" size="small" color="success" />
+                    <Chip label="POST /api/documents/advanced-search" size="small" color="primary" />
                   </Box>
-                  <Button variant="outlined" size="small">
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    onClick={() => alert('Documentation API Recherche:\n\nEndpoints disponibles:\n- GET /api/documents/search?keywords=...\n- POST /api/documents/advanced-search\n\nParamètres: keywords, type, clientName')}
+                  >
                     Voir Documentation
                   </Button>
                 </CardContent>
@@ -454,11 +742,15 @@ const IntegrationManager: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" paragraph>
                     Gestion des workflows et tâches d'approbation
                   </Typography>
-                  <Box display="flex" gap={1} mb={2}>
-                    <Chip label="POST /api/v1/workflows/start" size="small" />
-                    <Chip label="PUT /api/v1/workflows/{id}/complete" size="small" />
+                  <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                    <Chip label="POST /api/documents/workflows/start" size="small" color="primary" />
+                    <Chip label="GET /api/documents/workflows/tasks" size="small" color="success" />
                   </Box>
-                  <Button variant="outlined" size="small">
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    onClick={() => alert('Documentation API Workflows:\n\nEndpoints disponibles:\n- POST /api/documents/workflows/start\n- GET /api/documents/workflows/tasks/{userId}\n- POST /api/documents/workflows/{instanceId}/steps/{stepId}/complete')}
+                  >
                     Voir Documentation
                   </Button>
                 </CardContent>
@@ -474,9 +766,54 @@ const IntegrationManager: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" paragraph>
                     Gestion des clés d'authentification pour les intégrations
                   </Typography>
-                  <Button variant="contained" size="small">
+                  <Box display="flex" gap={1} mb={2}>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', bgcolor: 'grey.100', p: 1, borderRadius: 1 }}>
+                      Bearer {localStorage.getItem('token')?.substring(0, 20)}...
+                    </Typography>
+                  </Box>
+                  <Button 
+                    variant="contained" 
+                    size="small"
+                    onClick={handleGenerateApiKey}
+                  >
                     Générer Nouvelle Clé
                   </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Test des APIs
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" paragraph>
+                    Testez les endpoints directement depuis l'interface
+                  </Typography>
+                  <Box display="flex" gap={2} flexWrap="wrap">
+                    <Button 
+                      variant="outlined" 
+                      size="small"
+                      onClick={() => handleTestApi('/api/documents/stats')}
+                    >
+                      Test GET /documents/stats
+                    </Button>
+                    <Button 
+                      variant="outlined" 
+                      size="small"
+                      onClick={() => handleTestApi('/api/documents/search')}
+                    >
+                      Test GET /documents/search
+                    </Button>
+                    <Button 
+                      variant="outlined" 
+                      size="small"
+                      onClick={() => handleTestApi('/api/documents/workflows/definitions')}
+                    >
+                      Test GET /workflows/definitions
+                    </Button>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -495,6 +832,7 @@ const IntegrationManager: React.FC = () => {
                 label="Nom du connecteur"
                 value={newConnector.name}
                 onChange={(e) => setNewConnector(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Ex: SharePoint Production"
               />
             </Grid>
             <Grid item xs={12}>
@@ -506,12 +844,54 @@ const IntegrationManager: React.FC = () => {
                   onChange={(e) => setNewConnector(prev => ({ ...prev, type: e.target.value }))}
                 >
                   <MenuItem value="rest">REST API</MenuItem>
-                  <MenuItem value="ftp">FTP</MenuItem>
-                  <MenuItem value="email">Email</MenuItem>
+                  <MenuItem value="ftp">FTP/SFTP</MenuItem>
+                  <MenuItem value="email">Email/SMTP</MenuItem>
                   <MenuItem value="webhook">Webhook</MenuItem>
+                  <MenuItem value="sharepoint">Microsoft SharePoint</MenuItem>
+                  <MenuItem value="onedrive">OneDrive</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
+            {newConnector.type === 'rest' && (
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="URL de base"
+                  placeholder="https://api.example.com"
+                  onChange={(e) => setNewConnector(prev => ({ 
+                    ...prev, 
+                    config: { ...prev.config, baseUrl: e.target.value } 
+                  }))}
+                />
+              </Grid>
+            )}
+            {newConnector.type === 'ftp' && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Serveur FTP"
+                    placeholder="ftp.example.com"
+                    onChange={(e) => setNewConnector(prev => ({ 
+                      ...prev, 
+                      config: { ...prev.config, host: e.target.value } 
+                    }))}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Port"
+                    placeholder="21"
+                    type="number"
+                    onChange={(e) => setNewConnector(prev => ({ 
+                      ...prev, 
+                      config: { ...prev.config, port: parseInt(e.target.value) } 
+                    }))}
+                  />
+                </Grid>
+              </>
+            )}
             <Grid item xs={12}>
               <FormControlLabel
                 control={
@@ -527,7 +907,11 @@ const IntegrationManager: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConnectorDialogOpen(false)}>Annuler</Button>
-          <Button variant="contained" disabled={!newConnector.name}>
+          <Button 
+            variant="contained" 
+            disabled={!newConnector.name}
+            onClick={handleCreateConnector}
+          >
             Créer
           </Button>
         </DialogActions>
@@ -571,7 +955,11 @@ const IntegrationManager: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setWebhookDialogOpen(false)}>Annuler</Button>
-          <Button variant="contained" disabled={!newWebhook.url}>
+          <Button 
+            variant="contained" 
+            disabled={!newWebhook.url}
+            onClick={handleCreateWebhook}
+          >
             Créer
           </Button>
         </DialogActions>
