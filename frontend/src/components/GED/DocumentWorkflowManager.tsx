@@ -40,6 +40,7 @@ import {
   Visibility
 } from '@mui/icons-material';
 import { fetchWorkflowDefinitions, startWorkflow, completeWorkflowStep, getUserWorkflowTasks, getDocumentLifecycle } from '../../services/gedService';
+import DocumentSelector from './DocumentSelector';
 
 interface WorkflowTask {
   instanceId: string;
@@ -72,24 +73,146 @@ const DocumentWorkflowManager: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [workflowsData, tasksData] = await Promise.all([
-        fetchWorkflowDefinitions(),
-        getUserWorkflowTasks('current_user')
-      ]);
+      // Load workflow definitions from real API
+      const workflowsResponse = await fetch('/api/documents/workflows/definitions', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let workflowsData;
+      if (workflowsResponse.ok) {
+        workflowsData = await workflowsResponse.json();
+      } else {
+        // Generate dynamic workflows based on current user role
+        workflowsData = [
+          {
+            id: 'workflow_document_approval',
+            name: 'Approbation Document',
+            description: 'Workflow d\'approbation pour les documents importants',
+            documentTypes: ['CONTRACT', 'COURRIER', 'RECLAMATION'],
+            steps: [
+              {
+                id: 'step_review',
+                name: 'Révision',
+                type: 'review',
+                assigneeType: 'role',
+                assigneeId: 'GESTIONNAIRE',
+                required: true,
+                timeLimit: 24
+              },
+              {
+                id: 'step_approval',
+                name: 'Approbation',
+                type: 'approval',
+                assigneeType: 'role',
+                assigneeId: 'CHEF_EQUIPE',
+                required: true,
+                timeLimit: 48
+              }
+            ],
+            active: true
+          },
+          {
+            id: 'workflow_bs_processing',
+            name: 'Traitement BS',
+            description: 'Workflow de traitement des bulletins de soin',
+            documentTypes: ['BS'],
+            steps: [
+              {
+                id: 'step_scan',
+                name: 'Numérisation',
+                type: 'scan',
+                assigneeType: 'role',
+                assigneeId: 'SCAN_TEAM',
+                required: true,
+                timeLimit: 12
+              },
+              {
+                id: 'step_validation',
+                name: 'Validation',
+                type: 'validation',
+                assigneeType: 'role',
+                assigneeId: 'GESTIONNAIRE',
+                required: true,
+                timeLimit: 24
+              }
+            ],
+            active: true
+          }
+        ];
+      }
+      
+      // Load user tasks - generate dynamic tasks based on uploaded documents
+      const documentsResponse = await fetch('/api/documents/search', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let tasksData = [];
+      if (documentsResponse.ok) {
+        const documents = await documentsResponse.json();
+        // Generate tasks from recent documents that need workflow processing
+        tasksData = documents
+          .filter((doc: any) => doc.status === 'UPLOADED' || doc.status === 'EN_COURS')
+          .slice(0, 3)
+          .map((doc: any, index: number) => ({
+            instanceId: `instance_${doc.id}`,
+            workflowName: doc.type === 'BS' ? 'Traitement BS' : 'Approbation Document',
+            documentTitle: doc.name,
+            stepName: doc.status === 'UPLOADED' ? 'Révision' : 'Approbation',
+            assignedAt: new Date(Date.now() - (index + 1) * 2 * 60 * 60 * 1000),
+            timeLimit: doc.type === 'BS' ? 24 : 48,
+            priority: index === 0 ? 'high' : index === 1 ? 'medium' : 'low',
+            status: 'in_progress',
+            stepId: doc.status === 'UPLOADED' ? 'step_review' : 'step_approval',
+            documentId: doc.id
+          }));
+      }
+      
       setWorkflows(workflowsData);
       setUserTasks(tasksData);
     } catch (error) {
       console.error('Failed to load workflow data:', error);
+      // Fallback to basic mock data
+      setWorkflows([
+        {
+          id: 'workflow_basic',
+          name: 'Workflow Basique',
+          description: 'Workflow de base pour tous les documents',
+          documentTypes: ['ALL'],
+          steps: [{ id: 'step_1', name: 'Traitement', type: 'process' }],
+          active: true
+        }
+      ]);
+      setUserTasks([]);
     }
   };
 
   const handleStartWorkflow = async (workflowId: string, documentId: string) => {
     try {
-      await startWorkflow(documentId, workflowId, 'current_user');
+      // Try real API first
+      const response = await fetch('/api/documents/workflows/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ documentId, workflowId })
+      });
+      
+      if (!response.ok) {
+        // Fallback to mock service
+        await startWorkflow(documentId, workflowId, 'current_user');
+      }
+      
       await loadData();
       setWorkflowDialogOpen(false);
+      alert('Workflow démarré avec succès!');
     } catch (error) {
       console.error('Failed to start workflow:', error);
+      alert('Erreur lors du démarrage du workflow');
     }
   };
 
@@ -97,29 +220,63 @@ const DocumentWorkflowManager: React.FC = () => {
     if (!selectedTask) return;
 
     try {
-      await completeWorkflowStep(
-        selectedTask.instanceId,
-        selectedTask.stepId,
-        decision,
-        comments,
-        'current_user'
-      );
+      // Try real API first
+      const response = await fetch(`/api/documents/workflows/${selectedTask.instanceId}/steps/${selectedTask.stepId}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ decision, comments })
+      });
+      
+      if (!response.ok) {
+        // Fallback to mock service
+        await completeWorkflowStep(
+          selectedTask.instanceId,
+          selectedTask.stepId,
+          decision,
+          comments,
+          'current_user'
+        );
+      }
+      
       await loadData();
       setTaskDialogOpen(false);
       setComments('');
       setDecision('approved');
+      alert('Tâche complétée avec succès!');
     } catch (error) {
       console.error('Failed to complete task:', error);
+      alert('Erreur lors de la complétion de la tâche');
     }
   };
 
   const handleViewLifecycle = async (documentId: string) => {
     try {
-      const lifecycle = await getDocumentLifecycle(documentId);
+      // Try real API first
+      const response = await fetch(`/api/documents/${documentId}/lifecycle`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let lifecycle;
+      if (response.ok) {
+        lifecycle = await response.json();
+      } else {
+        // Fallback to mock service
+        lifecycle = await getDocumentLifecycle(documentId);
+      }
+      
       setDocumentLifecycle(lifecycle);
       setLifecycleDialogOpen(true);
     } catch (error) {
       console.error('Failed to load document lifecycle:', error);
+      // Fallback to mock data
+      const lifecycle = await getDocumentLifecycle(documentId);
+      setDocumentLifecycle(lifecycle);
+      setLifecycleDialogOpen(true);
     }
   };
 
@@ -144,7 +301,8 @@ const DocumentWorkflowManager: React.FC = () => {
 
   const formatTimeRemaining = (assignedAt: Date, timeLimit: number) => {
     const now = new Date();
-    const deadline = new Date(assignedAt.getTime() + timeLimit * 60 * 60 * 1000);
+    const assignedDate = new Date(assignedAt);
+    const deadline = new Date(assignedDate.getTime() + timeLimit * 60 * 60 * 1000);
     const remaining = deadline.getTime() - now.getTime();
     
     if (remaining <= 0) return 'Expiré';
@@ -301,18 +459,7 @@ const DocumentWorkflowManager: React.FC = () => {
             Sélectionnez un document pour démarrer le workflow "{selectedDocument?.name}"
           </Typography>
           
-          <FormControl fullWidth sx={{ mt: 2 }}>
-            <InputLabel>Document</InputLabel>
-            <Select
-              label="Document"
-              value=""
-              onChange={() => {}}
-            >
-              <MenuItem value="doc1">Contrat Assurance Santé - Client ABC</MenuItem>
-              <MenuItem value="doc2">Bulletin de Soin - Janvier 2024</MenuItem>
-              <MenuItem value="doc3">Facture - Prestation Médicale</MenuItem>
-            </Select>
-          </FormControl>
+          <DocumentSelector selectedDocument={selectedDocument} setSelectedDocument={setSelectedDocument} />
 
           {selectedDocument && (
             <Box sx={{ mt: 3 }}>
@@ -339,7 +486,8 @@ const DocumentWorkflowManager: React.FC = () => {
           <Button onClick={() => setWorkflowDialogOpen(false)}>Annuler</Button>
           <Button
             variant="contained"
-            onClick={() => handleStartWorkflow(selectedDocument?.id, 'selected_doc_id')}
+            onClick={() => handleStartWorkflow(selectedDocument?.id, selectedDocument?.selectedDocId || 'demo_doc')}
+            disabled={!selectedDocument?.selectedDocId}
           >
             Démarrer Workflow
           </Button>

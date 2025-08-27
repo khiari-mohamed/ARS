@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem,
   TextField, Button, Card, CardContent, Box, Stack
@@ -10,28 +10,84 @@ import TableViewIcon from '@mui/icons-material/TableView';
 
 const ReportsTab: React.FC = () => {
   const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
+    dateFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    dateTo: new Date().toISOString().split('T')[0],
     client: '',
     type: ''
   });
+  const [reportData, setReportData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [clients, setClients] = useState<string[]>([]);
 
-  // Mock data for charts
-  const slaComplianceData = [
+  useEffect(() => {
+    loadReportData();
+    loadClients();
+  }, [filters]);
+
+  const loadClients = async () => {
+    try {
+      const response = await fetch('/api/documents/search', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const documents = await response.json();
+        const uniqueClients = [...new Set(documents.map((d: any) => d.clientName).filter(Boolean))] as string[];
+        setClients(uniqueClients);
+      }
+    } catch (error) {
+      console.error('Failed to load clients:', error);
+      setClients(['Client A', 'Client B', 'Client C']);
+    }
+  };
+
+  const loadReportData = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/documents/analytics?' + new URLSearchParams({
+        period: '30d',
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        client: filters.client,
+        type: filters.type
+      }), {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setReportData(data);
+      } else {
+        throw new Error('Failed to load analytics');
+      }
+    } catch (error) {
+      console.error('Failed to load report data:', error);
+      // Keep existing mock data as fallback
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Dynamic data from API or fallback to mock
+  const slaComplianceData = reportData?.slaByClient || [
     { client: 'Client A', compliance: 92 },
     { client: 'Client B', compliance: 87 },
     { client: 'Client C', compliance: 95 },
     { client: 'Client D', compliance: 83 }
   ];
 
-  const processingTimeData = [
+  const processingTimeData = reportData?.processingTimeByType || [
     { type: 'BS', avgTime: 2.3 },
     { type: 'Contrat', avgTime: 4.1 },
     { type: 'Courrier', avgTime: 1.8 },
     { type: 'Réclamation', avgTime: 3.2 }
   ];
 
-  const volumeData = [
+  const volumeData = reportData?.volumeByDepartment || [
     { name: 'Bureau d\'Ordre', value: 35, color: '#8884d8' },
     { name: 'Service Scan', value: 25, color: '#82ca9d' },
     { name: 'Gestionnaires', value: 30, color: '#ffc658' },
@@ -62,10 +118,38 @@ const ReportsTab: React.FC = () => {
   ];
 
   const handleExport = async (format: 'pdf' | 'excel', reportType?: string) => {
-    console.log('Exporting report:', format, reportType, filters);
-    // Mock export
-    const filename = `ged_report_${reportType || 'custom'}_${Date.now()}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-    alert(`Rapport généré: ${filename}`);
+    try {
+      // Try real API first
+      const response = await fetch('/api/documents/reports/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          type: reportType || 'custom',
+          format: format === 'pdf' ? 'pdf' : 'xlsx',
+          filters
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        alert(`Rapport généré: ${result.filename}`);
+        
+        // If download URL is provided, trigger download
+        if (result.downloadUrl) {
+          window.open(result.downloadUrl, '_blank');
+        }
+      } else {
+        throw new Error('Failed to generate report');
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      // Fallback to mock export
+      const filename = `ged_report_${reportType || 'custom'}_${Date.now()}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      alert(`Rapport généré (mode démo): ${filename}`);
+    }
   };
 
   return (
@@ -92,13 +176,19 @@ const ReportsTab: React.FC = () => {
             InputLabelProps={{ shrink: true }}
           />
           
-          <TextField
-            label="Client"
-            value={filters.client}
-            onChange={(e) => setFilters({...filters, client: e.target.value})}
-            size="small"
-            sx={{ minWidth: 150 }}
-          />
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Client</InputLabel>
+            <Select
+              value={filters.client}
+              onChange={(e) => setFilters({...filters, client: e.target.value})}
+              label="Client"
+            >
+              <MenuItem value="">Tous</MenuItem>
+              {clients.map(client => (
+                <MenuItem key={client} value={client}>{client}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Type</InputLabel>
@@ -109,8 +199,10 @@ const ReportsTab: React.FC = () => {
             >
               <MenuItem value="">Tous</MenuItem>
               <MenuItem value="BS">BS</MenuItem>
-              <MenuItem value="CONTRAT">Contrat</MenuItem>
+              <MenuItem value="CONTRACT">Contrat</MenuItem>
               <MenuItem value="COURRIER">Courrier</MenuItem>
+              <MenuItem value="FACTURE">Facture</MenuItem>
+              <MenuItem value="RECLAMATION">Réclamation</MenuItem>
             </Select>
           </FormControl>
         </Stack>
@@ -121,15 +213,21 @@ const ReportsTab: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Conformité SLA par Client</Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={slaComplianceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="client" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="compliance" fill="#1976d2" />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <Box display="flex" justifyContent="center" alignItems="center" height={300}>
+                <Typography>Chargement des données...</Typography>
+              </Box>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={slaComplianceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="client" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${value}%`, 'Conformité']} />
+                  <Bar dataKey="compliance" fill="#1976d2" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </Paper>
         </Grid>
 
@@ -147,7 +245,7 @@ const ReportsTab: React.FC = () => {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {volumeData.map((entry, index) => (
+                  {volumeData.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -155,7 +253,7 @@ const ReportsTab: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
             <Box sx={{ mt: 2 }}>
-              {volumeData.map((item, index) => (
+              {volumeData.map((item: any, index: number) => (
                 <Box key={index} display="flex" alignItems="center" sx={{ mb: 1 }}>
                   <Box sx={{ width: 12, height: 12, bgcolor: item.color, borderRadius: '50%', mr: 1 }} />
                   <Typography variant="body2">{item.name}: {item.value}%</Typography>
@@ -168,15 +266,21 @@ const ReportsTab: React.FC = () => {
         <Grid item xs={12}>
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Temps de Traitement par Type</Typography>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={processingTimeData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="type" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="avgTime" fill="#4caf50" />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <Box display="flex" justifyContent="center" alignItems="center" height={250}>
+                <Typography>Chargement des données...</Typography>
+              </Box>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={processingTimeData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="type" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => [`${value}h`, 'Temps moyen']} />
+                  <Bar dataKey="avgTime" fill="#4caf50" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </Paper>
         </Grid>
 
@@ -201,6 +305,7 @@ const ReportsTab: React.FC = () => {
                           variant="contained"
                           startIcon={<PictureAsPdfIcon />}
                           onClick={() => handleExport('pdf', report.type)}
+                          disabled={loading}
                         >
                           PDF
                         </Button>
@@ -209,6 +314,7 @@ const ReportsTab: React.FC = () => {
                           variant="outlined"
                           startIcon={<TableViewIcon />}
                           onClick={() => handleExport('excel', report.type)}
+                          disabled={loading}
                         >
                           Excel
                         </Button>
@@ -233,6 +339,7 @@ const ReportsTab: React.FC = () => {
                 variant="contained"
                 startIcon={<PictureAsPdfIcon />}
                 onClick={() => handleExport('pdf')}
+                disabled={loading}
               >
                 Générer PDF
               </Button>
@@ -240,8 +347,16 @@ const ReportsTab: React.FC = () => {
                 variant="outlined"
                 startIcon={<TableViewIcon />}
                 onClick={() => handleExport('excel')}
+                disabled={loading}
               >
                 Générer Excel
+              </Button>
+              <Button
+                variant="text"
+                onClick={loadReportData}
+                disabled={loading}
+              >
+                {loading ? 'Actualisation...' : 'Actualiser'}
               </Button>
             </Stack>
           </Paper>

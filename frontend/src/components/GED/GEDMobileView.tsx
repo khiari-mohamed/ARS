@@ -1,75 +1,235 @@
-import React from 'react';
-import { 
-  Box, Card, CardContent, Typography, Grid, Button
+import React, { useState } from 'react';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  IconButton,
+  Fab,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  Chip,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Avatar,
+  useTheme
 } from '@mui/material';
-import DescriptionIcon from '@mui/icons-material/Description';
+import {
+  Dashboard,
+  CloudUpload,
+  Search,
+  Assignment,
+  Settings,
+  BarChart,
+  Description,
+  CheckCircle,
+  Warning,
+  Error
+} from '@mui/icons-material';
 
-interface Props {
+interface GEDMobileViewProps {
   onTabChange: (tab: number) => void;
 }
 
-const GEDMobileView: React.FC<Props> = ({ onTabChange }) => {
+const GEDMobileView: React.FC<GEDMobileViewProps> = ({ onTabChange }) => {
+  const [speedDialOpen, setSpeedDialOpen] = useState(false);
+  const theme = useTheme();
+
   const quickActions = [
-    { label: 'Dashboard', tab: 0, icon: '📊', color: '#2e7d32' },
-    { label: 'Ingestion', tab: 1, icon: '📤', color: '#1976d2' },
-    { label: 'Corbeille', tab: 2, icon: '📋', color: '#ed6c02' },
-    { label: 'Recherche', tab: 3, icon: '🔍', color: '#9c27b0' },
-    { label: 'Rapports', tab: 4, icon: '📄', color: '#d32f2f' }
+    { icon: <CloudUpload />, name: 'Upload', action: () => onTabChange(1) },
+    { icon: <Search />, name: 'Recherche', action: () => onTabChange(3) },
+    { icon: <Assignment />, name: 'Workflows', action: () => onTabChange(4) },
+    { icon: <BarChart />, name: 'Rapports', action: () => onTabChange(6) }
   ];
 
+  const recentDocuments = [
+    { id: '1', name: 'BS_Client_A_001.pdf', type: 'BS', status: 'TRAITE', sla: 'green' },
+    { id: '2', name: 'Contrat_Client_B.pdf', type: 'CONTRAT', status: 'EN_COURS', sla: 'orange' },
+    { id: '3', name: 'Courrier_Reclamation.pdf', type: 'COURRIER', status: 'UPLOADED', sla: 'red' }
+  ];
+
+  const getSLAIcon = (sla: string) => {
+    switch (sla) {
+      case 'green': return <CheckCircle color="success" />;
+      case 'orange': return <Warning color="warning" />;
+      case 'red': return <Error color="error" />;
+      default: return <CheckCircle color="action" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'TRAITE': return 'success';
+      case 'EN_COURS': return 'primary';
+      case 'UPLOADED': return 'default';
+      default: return 'default';
+    }
+  };
+
   return (
-    <Box sx={{ p: 2 }}>
-      {/* Mobile Header */}
-      <Card elevation={3} sx={{ mb: 2, background: 'linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)', color: 'white' }}>
+    <Box sx={{ pb: 8 }}>
+      {/* Quick Stats */}
+      <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Box display="flex" alignItems="center" gap={2}>
-            <DescriptionIcon sx={{ fontSize: 32 }} />
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Module GED
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                Gestion électronique des documents
-              </Typography>
+          <Typography variant="h6" gutterBottom>
+            Vue d'ensemble
+          </Typography>
+          <Box display="flex" justifyContent="space-between" flexWrap="wrap" gap={1}>
+            <Box textAlign="center" onClick={() => onTabChange(0)} sx={{ cursor: 'pointer' }}>
+              <Typography variant="h4" color="primary">156</Typography>
+              <Typography variant="caption">Total Docs</Typography>
+            </Box>
+            <Box textAlign="center" onClick={() => onTabChange(2)} sx={{ cursor: 'pointer' }}>
+              <Typography variant="h4" color="warning.main">23</Typography>
+              <Typography variant="caption">En cours</Typography>
+            </Box>
+            <Box textAlign="center" onClick={() => onTabChange(2)} sx={{ cursor: 'pointer' }}>
+              <Typography variant="h4" color="error.main">5</Typography>
+              <Typography variant="caption">En retard</Typography>
             </Box>
           </Box>
         </CardContent>
       </Card>
 
-      {/* Quick Navigation */}
-      <Card elevation={1}>
+      {/* Recent Documents */}
+      <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-            Navigation Rapide
+          <Typography variant="h6" gutterBottom>
+            Documents Récents
           </Typography>
-          <Grid container spacing={1}>
-            {quickActions.map((action, index) => (
-              <Grid item xs={6} key={index}>
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  size="small"
-                  onClick={() => onTabChange(action.tab)}
-                  startIcon={<span>{action.icon}</span>}
-                  sx={{ 
-                    py: 1.5,
-                    textTransform: 'none',
-                    borderRadius: 2,
-                    borderColor: action.color,
-                    color: action.color,
-                    '&:hover': {
-                      borderColor: action.color,
-                      bgcolor: `${action.color}10`
-                    }
-                  }}
-                >
-                  {action.label}
-                </Button>
-              </Grid>
+          <List dense>
+            {recentDocuments.map((doc) => (
+              <ListItem key={doc.id} sx={{ px: 0 }}>
+                <ListItemIcon>
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                    <Description fontSize="small" />
+                  </Avatar>
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography variant="body2" noWrap sx={{ flex: 1 }}>
+                        {doc.name}
+                      </Typography>
+                      {getSLAIcon(doc.sla)}
+                    </Box>
+                  }
+                  secondary={
+                    <Box display="flex" alignItems="center" gap={1} mt={0.5}>
+                      <Chip 
+                        label={doc.type} 
+                        size="small" 
+                        variant="outlined" 
+                      />
+                      <Chip 
+                        label={doc.status} 
+                        size="small" 
+                        color={getStatusColor(doc.status) as any}
+                      />
+                    </Box>
+                  }
+                />
+              </ListItem>
             ))}
-          </Grid>
+          </List>
         </CardContent>
       </Card>
+
+      {/* Quick Access Tabs */}
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Accès Rapide
+          </Typography>
+          <Box display="grid" gridTemplateColumns="repeat(2, 1fr)" gap={2}>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(0)}
+            >
+              <Dashboard color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">Dashboard</Typography>
+            </Box>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(1)}
+            >
+              <CloudUpload color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">Upload</Typography>
+            </Box>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(2)}
+            >
+              <Assignment color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">Corbeille</Typography>
+            </Box>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(3)}
+            >
+              <Search color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">Recherche</Typography>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Speed Dial for Quick Actions */}
+      <SpeedDial
+        ariaLabel="Actions rapides"
+        sx={{ position: 'fixed', bottom: 16, right: 16 }}
+        icon={<SpeedDialIcon />}
+        open={speedDialOpen}
+        onClose={() => setSpeedDialOpen(false)}
+        onOpen={() => setSpeedDialOpen(true)}
+      >
+        {quickActions.map((action) => (
+          <SpeedDialAction
+            key={action.name}
+            icon={action.icon}
+            tooltipTitle={action.name}
+            onClick={() => {
+              action.action();
+              setSpeedDialOpen(false);
+            }}
+          />
+        ))}
+      </SpeedDial>
     </Box>
   );
 };

@@ -39,7 +39,7 @@ export class GedController {
 
  @Post('upload')
 @UseInterceptors(
-  FileInterceptor('file', {
+  FileInterceptor('files', {
     storage: diskStorage({
       destination: './uploads',
       filename: (req, file, cb) => {
@@ -47,6 +47,17 @@ export class GedController {
         cb(null, uniqueSuffix + extname(file.originalname));
       },
     }),
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('File type not allowed'), false);
+      }
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
   }),
 )
 async uploadDocument(
@@ -55,74 +66,125 @@ async uploadDocument(
   @Req() req: any,
 ) {
   const user = getUserFromRequest(req);
-  if (!file) throw new Error('No file(s) uploaded.');
+  if (!file) throw new Error('No file uploaded.');
   return this.gedService.uploadDocument(file, body, user);
 }
 
-  // TEMP: Seed demo user, client, contract, and bordereau for testing
-  @Get('seed-demo')
-  async seedDemo(@Req() req: any) {
-    // Seed a demo user
-    await this.gedService['prisma'].user.upsert({
-      where: { id: 'demo' },
-      update: {},
-      create: {
-        id: 'demo',
-        email: 'demo@example.com',
-        password: 'password',
-        fullName: 'Demo User',
-        role: 'SUPER_ADMIN',
-        createdAt: new Date(),
-      },
-    });
-    // Seed a demo client
-    await this.gedService['prisma'].client.upsert({
-      where: { id: 'demo-client' },
-      update: {},
-      create: {
-        id: 'demo-client',
-        name: 'Demo Client',
-        reglementDelay: 30,
-        reclamationDelay: 15,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-    // Seed a demo contract
-    await this.gedService['prisma'].contract.upsert({
-      where: { id: 'demo-contract' },
-      update: {},
-      create: {
-        id: 'demo-contract',
-        clientId: 'demo-client',
-        clientName: 'Demo Client',
-        delaiReglement: 30,
-        delaiReclamation: 15,
-        assignedManagerId: 'demo',
-        documentPath: '',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      },
-    });
-    // Seed a demo bordereau
-    await this.gedService['prisma'].bordereau.upsert({
-      where: { id: '12345' },
-      update: {},
-      create: {
-        id: '12345',
-        reference: 'REF12345',
-        clientId: 'demo-client',
-        contractId: 'demo-contract',
-        dateReception: new Date(),
-        delaiReglement: 30,
-        nombreBS: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-    return { message: 'Demo user, client, contract, and bordereau seeded.' };
+  // Advanced search endpoint
+  @Post('advanced-search')
+  async advancedSearch(@Body() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.performAdvancedSearch(query, user);
+  }
+
+  // Document workflow endpoints
+  @Get('workflows/definitions')
+  async getWorkflowDefinitions(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getWorkflowDefinitions(user);
+  }
+
+  @Post('workflows/start')
+  async startWorkflow(@Body() body: { documentId: string; workflowId: string }, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.startWorkflow(body.documentId, body.workflowId, user);
+  }
+
+  @Get('workflows/tasks/:userId')
+  async getUserTasks(@Param('userId') userId: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getUserWorkflowTasks(userId, user);
+  }
+
+  @Post('workflows/:instanceId/steps/:stepId/complete')
+  async completeWorkflowStep(
+    @Param('instanceId') instanceId: string,
+    @Param('stepId') stepId: string,
+    @Body() body: { decision: string; comments: string },
+    @Req() req: any,
+  ) {
+    const user = getUserFromRequest(req);
+    return this.gedService.completeWorkflowStep(instanceId, stepId, body.decision, body.comments, user);
+  }
+
+  @Get(':id/lifecycle')
+  async getDocumentLifecycle(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getDocumentLifecycle(id, user);
+  }
+
+  // Integration endpoints
+  @Get('integrations/connectors')
+  async getConnectors(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getIntegrationConnectors(user);
+  }
+
+  @Post('integrations/connectors')
+  async createConnector(@Body() connectorData: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.createConnector(connectorData, user);
+  }
+
+  @Delete('integrations/connectors/:id')
+  async deleteConnector(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.deleteConnector(id, user);
+  }
+
+  @Patch('integrations/connectors/:id')
+  async updateConnector(@Param('id') id: string, @Body() connectorData: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.updateConnector(id, connectorData, user);
+  }
+
+  @Post('integrations/connectors/:id/test')
+  async testConnector(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.testConnector(id, user);
+  }
+
+  @Post('integrations/connectors/:id/sync')
+  async syncConnector(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.syncConnector(id, user);
+  }
+
+  @Get('integrations/webhooks')
+  async getWebhooks(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getWebhookSubscriptions(user);
+  }
+
+  @Post('integrations/webhooks')
+  async createWebhook(@Body() webhookData: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.createWebhook(webhookData, user);
+  }
+
+  @Delete('integrations/webhooks/:id')
+  async deleteWebhook(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.deleteWebhook(id, user);
+  }
+
+  @Get('integrations/stats')
+  async getIntegrationStats(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getIntegrationStats(user);
+  }
+
+  // Analytics and reports
+  @Get('analytics')
+  async getAnalytics(@Query('period') period: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getGEDAnalytics(period || '30d', user);
+  }
+
+  @Post('reports/generate')
+  async generateReport(@Body() body: { type: string; format: string; filters?: any }, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.generateReport(body.type, body.format, body.filters, user);
   }
 
   @Get('search')
@@ -195,6 +257,13 @@ async uploadDocument(
   async deleteDocument(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.gedService.deleteDocument(id, user);
+  }
+
+  // PaperStream integration status
+  @Get('paperstream/status')
+  async getPaperStreamStatus(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getPaperStreamStatus(user);
   }
 
   // Catch-all route MUST BE LAST
