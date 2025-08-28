@@ -1,11 +1,21 @@
 import React from 'react';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+  Box
+} from '@mui/material';
+import { Close } from '@mui/icons-material';
 
 interface ModalViewerProps {
   open: boolean;
   onClose: () => void;
-  title?: string;
-  fileUrl?: string;
-  fileType?: 'pdf' | 'image';
+  title: string;
+  fileUrl: string;
+  fileType: 'pdf' | 'image';
 }
 
 export const ModalViewer: React.FC<ModalViewerProps> = ({
@@ -13,36 +23,54 @@ export const ModalViewer: React.FC<ModalViewerProps> = ({
   onClose,
   title,
   fileUrl,
-  fileType = 'pdf',
+  fileType
 }) => {
-  if (!open) return null;
+  const renderContent = () => {
+    if (fileType === 'pdf') {
+      return (
+        <iframe
+          src={fileUrl}
+          width="100%"
+          height="600px"
+          style={{ border: 'none' }}
+          title={title}
+        />
+      );
+    } else {
+      return (
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+          <img
+            src={fileUrl}
+            alt={title}
+            style={{ maxWidth: '100%', maxHeight: '600px', objectFit: 'contain' }}
+          />
+        </Box>
+      );
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-      <div className="bg-white rounded shadow-lg max-w-3xl w-full p-4 relative">
-        <button
-          className="absolute top-2 right-2 text-gray-600 hover:text-black"
-          onClick={onClose}
-          aria-label="Fermer"
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+      <DialogTitle>
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          {title}
+          <IconButton onClick={onClose}>
+            <Close />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        {renderContent()}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Fermer</Button>
+        <Button
+          variant="contained"
+          onClick={() => window.open(fileUrl, '_blank')}
         >
-          ✕
-        </button>
-        {title && <h3 className="mb-2 font-bold">{title}</h3>}
-        <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-          {fileType === 'pdf' && fileUrl && (
-            <iframe
-              src={fileUrl}
-              title="Document PDF"
-              width="100%"
-              height="500px"
-              style={{ border: 'none' }}
-            />
-          )}
-          {fileType === 'image' && fileUrl && (
-            <img src={fileUrl} alt="Document" className="max-w-full max-h-[60vh] mx-auto" />
-          )}
-          {!fileUrl && <div className="text-gray-500">Aucun document à afficher.</div>}
-        </div>
-      </div>
-    </div>
+          Ouvrir dans un nouvel onglet
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };

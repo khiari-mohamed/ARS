@@ -1,139 +1,193 @@
 import React, { useState } from 'react';
 import {
+  Box,
   Grid,
   Card,
   CardContent,
   Typography,
-  Box,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Button,
-  Paper
+  CircularProgress,
+  Alert
 } from '@mui/material';
-import { Pie, Bar, Line } from 'react-chartjs-2';
-import { useAlertsDashboard, useAlertHistory } from '../hooks/useAlertsQuery';
-import { AlertsDashboardQuery } from '../types/alerts.d';
-import 'chart.js/auto';
-
-interface KPICardProps {
-  title: string;
-  value: number | string;
-  color: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success';
-  subtitle?: string;
-}
-
-const KPICard: React.FC<KPICardProps> = ({ title, value, color, subtitle }) => (
-  <Card>
-    <CardContent>
-      <Typography color="textSecondary" gutterBottom variant="h6">
-        {title}
-      </Typography>
-      <Typography variant="h4" component="div" color={color}>
-        {value}
-      </Typography>
-      {subtitle && (
-        <Typography variant="body2" color="textSecondary">
-          {subtitle}
-        </Typography>
-      )}
-    </CardContent>
-  </Card>
-);
+import {
+  useAlertEffectiveness,
+  useFalsePositiveAnalysis,
+  useAlertTrends,
+  useAlertRecommendations
+} from '../hooks/useAlertsKPI';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 const AlertsAnalytics: React.FC = () => {
-  const [dateRange, setDateRange] = useState('7');
-  const [filters] = useState<AlertsDashboardQuery>({
-    fromDate: new Date(Date.now() - parseInt(dateRange) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  });
+  const [period, setPeriod] = useState('30d');
+  const [alertType, setAlertType] = useState('');
 
-  const { data: alerts = [] } = useAlertsDashboard(filters);
-  const { data: history = [] } = useAlertHistory(filters);
-
-  const totalAlerts = alerts.length;
-  const criticalAlerts = alerts.filter((a: any) => a.alertLevel === 'red').length;
-  const warningAlerts = alerts.filter((a: any) => a.alertLevel === 'orange').length;
-  const resolvedAlerts = history.filter((h: any) => h.resolved).length;
-  
-  const avgResolutionTime = history.length > 0 
-    ? Math.round(history
-        .filter((h: any) => h.resolved && h.resolvedAt)
-        .reduce((acc: number, h: any) => {
-          const time = (new Date(h.resolvedAt!).getTime() - new Date(h.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-          return acc + time;
-        }, 0) / resolvedAlerts)
-    : 0;
-
-  const alertsByTypeData = {
-    labels: ['SLA Breach', 'Risk of Delay', 'Team Overload', 'System Error'],
-    datasets: [{
-      data: [
-        alerts.filter((a: any) => a.reason === 'SLA breach').length,
-        alerts.filter((a: any) => a.reason === 'Risk of delay').length,
-        alerts.filter((a: any) => a.reason === 'Team overloaded').length,
-        alerts.filter((a: any) => a.reason.includes('Error')).length
-      ],
-      backgroundColor: ['#f44336', '#ff9800', '#2196f3', '#9c27b0']
-    }]
-  };
-
-  const alertsByUrgencyData = {
-    labels: ['Critique', 'Alerte', 'Normal'],
-    datasets: [{
-      data: [
-        criticalAlerts,
-        warningAlerts,
-        alerts.filter((a: any) => a.alertLevel === 'green').length
-      ],
-      backgroundColor: ['#f44336', '#ff9800', '#4caf50']
-    }]
-  };
+  const { data: effectiveness, isLoading: loadingEffectiveness, error: errorEffectiveness } = useAlertEffectiveness(alertType, period);
+  const { data: falsePositives, isLoading: loadingFP } = useFalsePositiveAnalysis(period);
+  const { data: trends, isLoading: loadingTrends } = useAlertTrends(period);
+  const { data: recommendations, isLoading: loadingRecs } = useAlertRecommendations(period);
 
   return (
-    <div className="space-y-6">
-      <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h5">Analytics & Rapports</Typography>
+    <Box>
+      <Typography variant="h6" gutterBottom>
+        Analytics & Rapports
+      </Typography>
+
+      {/* Controls */}
+      <Box display="flex" gap={2} mb={3}>
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Période</InputLabel>
-          <Select value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
-            <MenuItem value="7">7 jours</MenuItem>
-            <MenuItem value="30">30 jours</MenuItem>
-            <MenuItem value="90">90 jours</MenuItem>
+          <Select
+            value={period}
+            label="Période"
+            onChange={(e) => setPeriod(e.target.value)}
+          >
+            <MenuItem value="7d">7 jours</MenuItem>
+            <MenuItem value="30d">30 jours</MenuItem>
+            <MenuItem value="90d">90 jours</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 150 }}>
+          <InputLabel>Type d'Alerte</InputLabel>
+          <Select
+            value={alertType}
+            label="Type d'Alerte"
+            onChange={(e) => setAlertType(e.target.value)}
+          >
+            <MenuItem value="">Tous</MenuItem>
+            <MenuItem value="SLA_BREACH">Dépassement SLA</MenuItem>
+            <MenuItem value="SYSTEM_DOWN">Système Indisponible</MenuItem>
+            <MenuItem value="HIGH_VOLUME">Volume Élevé</MenuItem>
           </Select>
         </FormControl>
       </Box>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} sm={6} md={3}>
-          <KPICard title="Total Alertes" value={totalAlerts} color="primary" />
+        {/* Effectiveness Chart */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Efficacité des Alertes
+              </Typography>
+              {loadingEffectiveness ? (
+                <CircularProgress />
+              ) : errorEffectiveness ? (
+                <Alert severity="error">Erreur lors du chargement</Alert>
+              ) : effectiveness && effectiveness.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={effectiveness}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="alertType" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="precision" fill="#8884d8" name="Précision %" />
+                    <Bar dataKey="recall" fill="#82ca9d" name="Rappel %" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <Typography>Aucune donnée disponible</Typography>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <KPICard title="Alertes Critiques" value={criticalAlerts} color="error" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <KPICard title="Temps Moyen" value={`${avgResolutionTime}j`} color="info" />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <KPICard title="Taux Résolution" value={`${totalAlerts > 0 ? Math.round((resolvedAlerts / totalAlerts) * 100) : 0}%`} color="success" />
-        </Grid>
-      </Grid>
 
-      <Grid container spacing={3}>
+        {/* Trends Chart */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>Répartition par Type</Typography>
-            <Pie data={alertsByTypeData} />
-          </Paper>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Tendances des Alertes
+              </Typography>
+              {loadingTrends ? (
+                <CircularProgress />
+              ) : trends && trends.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={trends.slice(-14)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="count" stroke="#8884d8" name="Nombre d'Alertes" />
+                    <Line type="monotone" dataKey="avgResolutionTime" stroke="#82ca9d" name="Temps Résolution (min)" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <Typography>Aucune donnée de tendance</Typography>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
+
+        {/* False Positives */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>Répartition par Urgence</Typography>
-            <Pie data={alertsByUrgencyData} />
-          </Paper>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Faux Positifs Récents
+              </Typography>
+              {loadingFP ? (
+                <CircularProgress />
+              ) : falsePositives && falsePositives.length > 0 ? (
+                <Box>
+                  {falsePositives.slice(0, 3).map((fp: any, index: number) => (
+                    <Box key={index} mb={2} p={2} bgcolor="grey.50" borderRadius={1}>
+                      <Typography variant="subtitle2" fontWeight={600} mb={1}>
+                        {fp.alertType}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" mb={1}>
+                        {fp.reason}
+                      </Typography>
+                      <Typography variant="caption" color="success.main">
+                        💡 {fp.suggestedFix}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography>Aucun faux positif récent</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Recommendations */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Recommandations
+              </Typography>
+              {loadingRecs ? (
+                <CircularProgress />
+              ) : recommendations && recommendations.length > 0 ? (
+                <Box>
+                  {recommendations.slice(0, 3).map((rec: any, index: number) => (
+                    <Box key={index} mb={2} p={2} bgcolor="info.light" borderRadius={1}>
+                      <Typography variant="subtitle2" fontWeight={600} mb={1}>
+                        {rec.type.replace('_', ' ').toUpperCase()}
+                      </Typography>
+                      <Typography variant="body2" mb={1}>
+                        {rec.description}
+                      </Typography>
+                      <Typography variant="caption" color="success.main">
+                        📈 {rec.expectedImpact}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography>Aucune recommandation disponible</Typography>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
-    </div>
+    </Box>
   );
 };
 

@@ -17,6 +17,9 @@ import pandas as pd
 import joblib
 from prophet import Prophet
 import warnings
+import asyncio
+import schedule
+import threading
 warnings.filterwarnings("ignore")
 
 # Import our custom modules
@@ -843,8 +846,24 @@ async def health_check():
         ]
     }
 
+# Background task scheduler
+def run_scheduler():
+    while True:
+        schedule.run_pending()
+        asyncio.sleep(60)  # Check every minute
+
+# Schedule periodic tasks
+schedule.every(10).minutes.do(lambda: logger.info("AI service health check"))
+schedule.every().hour.do(lambda: logger.info("Hourly AI model refresh"))
+
 if __name__ == "__main__":
     import uvicorn
     import os
+    
+    # Start scheduler in background thread
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+    
     port = int(os.getenv('AI_SERVICE_PORT', 8002))
+    logger.info(f"Starting AI microservice on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)

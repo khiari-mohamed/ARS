@@ -1,694 +1,1054 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { LocalAPI } from '../../services/axios';
+import { useAuth } from '../../contexts/AuthContext';
 import {
-  Box,
-  Grid,
   Card,
   CardContent,
   Typography,
+  Grid,
+  TextField,
   Button,
+  Box,
   Stepper,
   Step,
   StepLabel,
-  StepContent,
-  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Chip,
-  LinearProgress,
-  // Timeline components removed - will use custom implementation
   Paper,
+  LinearProgress,
+  Chip,
   Alert,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Rating,
   List,
   ListItem,
   ListItemText,
-  ListItemIcon
+  Snackbar,
+  IconButton,
+  Tooltip,
+  Avatar,
+  Divider,
+  Badge,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
+
 import {
-  Add,
-  Upload,
-  Visibility,
+  Send,
   CheckCircle,
   Schedule,
+  Person,
+  Email,
+  Phone,
+  AttachFile,
+  Refresh,
+  Download,
+  Close,
   Warning,
+  Info,
+  Error,
+  CheckCircleOutline,
+  ExpandMore,
+  History,
+  Visibility,
+  Edit,
+  Delete,
+  Reply,
   Star,
-  Message,
-  AttachFile
+  StarBorder
 } from '@mui/icons-material';
-import { submitCustomerClaim, getCustomerClaimStatus, getCustomerPortalStats, addCustomerResponse } from '../../services/reclamationsService';
 
-interface ClaimSubmission {
+interface CustomerClaimSubmission {
+  clientId: string;
   type: string;
   category: string;
   subject: string;
   description: string;
-  priority: string;
-  contactPreference: string;
-  attachments: File[];
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  contactPreference: 'email' | 'phone' | 'mail';
+  attachments?: File[];
+  bordereauReference?: string;
+  contractReference?: string;
 }
 
+interface CustomerClaim {
+  id: string;
+  reference: string;
+  subject: string;
+  description: string;
+  category: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+  assignedAgent?: string;
+  estimatedResolution?: string;
+  progress: number;
+  timeline: Array<{
+    id: string;
+    action: string;
+    description: string;
+    date: string;
+    user?: string;
+  }>;
+  attachments: Array<{
+    id: string;
+    name: string;
+    url: string;
+    uploadedAt: string;
+  }>;
+  canCustomerRespond: boolean;
+  rating?: number;
+  feedback?: string;
+  statusLabel?: string;
+  lastUpdate?: string;
+  availableActions?: string[];
+}
+
+const submitCustomerClaim = async (submission: CustomerClaimSubmission) => {
+  const formData = new FormData();
+  Object.entries(submission).forEach(([key, value]) => {
+    if (key === 'attachments' && Array.isArray(value)) {
+      value.forEach(file => formData.append('attachments', file));
+    } else if (value !== undefined) {
+      formData.append(key, value.toString());
+    }
+  });
+  const { data } = await LocalAPI.post('/reclamations/customer/submit', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return data;
+};
+
+const getCustomerClaimStatus = async (claimId: string, clientId: string): Promise<CustomerClaim> => {
+  const { data } = await LocalAPI.get(`/reclamations/customer/${claimId}/status`, {
+    params: { clientId }
+  });
+  return data;
+};
+
+const getCustomerPortalStats = async (clientId: string) => {
+  const { data } = await LocalAPI.get(`/reclamations/customer/${clientId}/stats`);
+  return data;
+};
+
+const getCustomerClaims = async (clientId: string) => {
+  const { data } = await LocalAPI.get(`/reclamations/customer/${clientId}/claims`);
+  return data;
+};
+
+const submitClaimResponse = async (claimId: string, response: string, attachments?: File[]) => {
+  const formData = new FormData();
+  formData.append('message', response);
+  if (attachments) {
+    attachments.forEach(file => formData.append('attachments', file));
+  }
+  const { data } = await LocalAPI.post(`/reclamations/customer/${claimId}/response`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return data;
+};
+
+const rateClaim = async (claimId: string, rating: number, feedback?: string) => {
+  const { data } = await LocalAPI.post(`/reclamations/customer/${claimId}/feedback`, {
+    rating,
+    comments: feedback
+  });
+  return data;
+};
+
 const CustomerPortalInterface: React.FC = () => {
-  const [activeStep, setActiveStep] = useState(0);
-  const [portalStats, setPortalStats] = useState<any>(null);
-  const [claimSubmission, setClaimSubmission] = useState<ClaimSubmission>({
-    type: '',
+  const { user } = useAuth();
+  const [activeView, setActiveView] = useState<'submit' | 'track' | 'stats' | 'my-claims'>('my-claims');
+  const [formData, setFormData] = useState<CustomerClaimSubmission>({
+    clientId: user?.id || '',
+    type: 'reclamation',
     category: '',
     subject: '',
     description: '',
     priority: 'medium',
-    contactPreference: 'email',
-    attachments: []
+    contactPreference: 'email'
   });
-  const [submittedClaim, setSubmittedClaim] = useState<any>(null);
-  const [claimStatus, setClaimStatus] = useState<any>(null);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [responseDialog, setResponseDialog] = useState(false);
-  const [feedbackDialog, setFeedbackDialog] = useState(false);
-  const [customerResponse, setCustomerResponse] = useState('');
-  const [feedback, setFeedback] = useState({ rating: 0, comments: '' });
-  const [loading, setLoading] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [trackingId, setTrackingId] = useState('');
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const [responseDialog, setResponseDialog] = useState<{ open: boolean; claim: CustomerClaim | null }>({ open: false, claim: null });
+  const [ratingDialog, setRatingDialog] = useState<{ open: boolean; claim: CustomerClaim | null }>({ open: false, claim: null });
+  const [responseText, setResponseText] = useState('');
+  const [responseFiles, setResponseFiles] = useState<File[]>([]);
+  const [rating, setRating] = useState(0);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'success' });
 
-  useEffect(() => {
-    loadPortalStats();
-  }, []);
+  const queryClient = useQueryClient();
 
-  const loadPortalStats = async () => {
-    try {
-      const stats = await getCustomerPortalStats('current_client');
-      setPortalStats(stats);
-    } catch (error) {
-      console.error('Failed to load portal stats:', error);
+  const { data: customerClaims = [], isLoading: claimsLoading, error: claimsError, refetch: refetchClaims } = useQuery(
+    ['customer-claims', user?.id],
+    () => getCustomerClaims(user?.id || ''),
+    { 
+      enabled: !!user?.id,
+      retry: 2,
+      onError: (error: any) => {
+        setSnackbar({ 
+          open: true, 
+          message: error?.response?.data?.message || 'Erreur lors du chargement des réclamations', 
+          severity: 'error' 
+        });
+      }
     }
-  };
+  );
 
-  const handleSubmitClaim = async () => {
-    setLoading(true);
-    try {
-      const result = await submitCustomerClaim({
-        clientId: 'current_client',
-        ...claimSubmission
+  const submitMutation = useMutation(submitCustomerClaim, {
+    onSuccess: (data) => {
+      setSuccessDialogOpen(true);
+      setSnackbar({ open: true, message: 'Réclamation soumise avec succès!', severity: 'success' });
+      setFormData({
+        clientId: user?.id || '',
+        type: 'reclamation',
+        category: '',
+        subject: '',
+        description: '',
+        priority: 'medium',
+        contactPreference: 'email'
       });
-      
-      setSubmittedClaim(result);
-      setActiveStep(3); // Move to confirmation step
-    } catch (error) {
-      console.error('Failed to submit claim:', error);
-    } finally {
-      setLoading(false);
+      setFiles([]);
+      queryClient.invalidateQueries(['customer-claims']);
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error?.response?.data?.message || 'Erreur lors de la soumission', severity: 'error' });
     }
-  };
+  });
 
-  const handleViewStatus = async (claimId: string) => {
-    try {
-      const status = await getCustomerClaimStatus(claimId, 'current_client');
-      setClaimStatus(status);
-      setStatusDialogOpen(true);
-    } catch (error) {
-      console.error('Failed to get claim status:', error);
+  const responseMutation = useMutation(
+    ({ claimId, response, attachments }: { claimId: string; response: string; attachments?: File[] }) =>
+      submitClaimResponse(claimId, response, attachments),
+    {
+      onSuccess: () => {
+        setSnackbar({ open: true, message: 'Réponse envoyée avec succès', severity: 'success' });
+        setResponseDialog({ open: false, claim: null });
+        setResponseText('');
+        setResponseFiles([]);
+        queryClient.invalidateQueries(['customer-claims']);
+        queryClient.invalidateQueries(['claim-status']);
+      },
+      onError: (error: any) => {
+        setSnackbar({ open: true, message: error?.response?.data?.message || 'Erreur lors de l\'envoi de la réponse', severity: 'error' });
+      }
     }
-  };
+  );
 
-  const handleAddResponse = async () => {
-    if (!claimStatus || !customerResponse.trim()) return;
-
-    try {
-      await addCustomerResponse(claimStatus.id, 'current_client', customerResponse);
-      setResponseDialog(false);
-      setCustomerResponse('');
-      // Refresh status
-      await handleViewStatus(claimStatus.id);
-    } catch (error) {
-      console.error('Failed to add response:', error);
+  const ratingMutation = useMutation(
+    ({ claimId, rating, feedback }: { claimId: string; rating: number; feedback?: string }) =>
+      rateClaim(claimId, rating, feedback),
+    {
+      onSuccess: () => {
+        setSnackbar({ open: true, message: 'Évaluation enregistrée avec succès', severity: 'success' });
+        setRatingDialog({ open: false, claim: null });
+        setRating(0);
+        setRatingFeedback('');
+        queryClient.invalidateQueries(['customer-claims']);
+        queryClient.invalidateQueries(['claim-status']);
+      },
+      onError: (error: any) => {
+        setSnackbar({ open: true, message: error?.response?.data?.message || 'Erreur lors de l\'évaluation', severity: 'error' });
+      }
     }
-  };
+  );
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    setClaimSubmission(prev => ({
-      ...prev,
-      attachments: [...prev.attachments, ...files]
-    }));
-  };
+  const { data: claimStatus, isLoading: trackingLoading, error: trackingError } = useQuery(
+    ['claim-status', trackingId],
+    () => getCustomerClaimStatus(trackingId, user?.id || ''),
+    { 
+      enabled: !!trackingId && activeView === 'track' && !!user?.id,
+      retry: 2,
+      onError: (error: any) => {
+        setSnackbar({ 
+          open: true, 
+          message: error?.response?.data?.message || 'Réclamation non trouvée', 
+          severity: 'error' 
+        });
+      }
+    }
+  );
 
-  const removeAttachment = (index: number) => {
-    setClaimSubmission(prev => ({
-      ...prev,
-      attachments: prev.attachments.filter((_, i) => i !== index)
-    }));
-  };
+  const { data: portalStats, isLoading: statsLoading, error: statsError } = useQuery(
+    ['portal-stats', user?.id],
+    () => getCustomerPortalStats(user?.id || ''),
+    { 
+      enabled: activeView === 'stats' && !!user?.id,
+      retry: 2,
+      onError: (error: any) => {
+        setSnackbar({ 
+          open: true, 
+          message: error?.response?.data?.message || 'Erreur lors du chargement des statistiques', 
+          severity: 'error' 
+        });
+      }
+    }
+  );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'NOUVEAU': return 'info';
-      case 'EN_COURS': return 'primary';
-      case 'ATTENTE_CLIENT': return 'warning';
-      case 'RESOLU': return 'success';
-      case 'FERME': return 'default';
-      case 'REJETE': return 'error';
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'critical': return 'error';
+      case 'high': return 'warning';
+      case 'medium': return 'info';
+      case 'low': return 'success';
       default: return 'default';
     }
   };
 
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleString('fr-FR');
+  const getStatusColor = (status: string) => {
+    const normalizedStatus = status?.toUpperCase();
+    switch (normalizedStatus) {
+      case 'RESOLU':
+      case 'RESOLVED':
+      case 'FERME':
+      case 'CLOSED':
+        return 'success';
+      case 'EN_COURS':
+      case 'IN_PROGRESS':
+      case 'ANALYSE':
+        return 'info';
+      case 'NOUVEAU':
+      case 'OPEN':
+      case 'OUVERTE':
+        return 'warning';
+      case 'ATTENTE_CLIENT':
+      case 'PENDING_CLIENT_REPLY':
+        return 'secondary';
+      case 'REJETE':
+      case 'REJECTED':
+        return 'error';
+      case 'ESCALATED':
+      case 'ESCALADE':
+        return 'error';
+      default: 
+        return 'default';
+    }
   };
 
-  const steps = [
-    'Type de réclamation',
-    'Détails de la réclamation',
-    'Pièces jointes',
-    'Confirmation'
-  ];
+  const getStatusLabel = (status: string) => {
+    const normalizedStatus = status?.toUpperCase();
+    const statusLabels: Record<string, string> = {
+      'NOUVEAU': 'Nouvelle',
+      'OPEN': 'Ouverte',
+      'OUVERTE': 'Ouverte',
+      'EN_COURS': 'En cours',
+      'IN_PROGRESS': 'En cours',
+      'ANALYSE': 'En analyse',
+      'ATTENTE_CLIENT': 'En attente de votre réponse',
+      'PENDING_CLIENT_REPLY': 'En attente de votre réponse',
+      'RESOLUTION': 'En cours de résolution',
+      'RESOLU': 'Résolue',
+      'RESOLVED': 'Résolue',
+      'FERME': 'Fermée',
+      'CLOSED': 'Fermée',
+      'REJETE': 'Rejetée',
+      'REJECTED': 'Rejetée',
+      'ESCALATED': 'Escaladée',
+      'ESCALADE': 'Escaladée'
+    };
+    return statusLabels[normalizedStatus] || status;
+  };
 
-  if (!portalStats) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <LinearProgress sx={{ width: '50%' }} />
-      </Box>
-    );
-  }
+  const handleResponse = (claim: CustomerClaim) => {
+    setResponseDialog({ open: true, claim });
+  };
 
-  return (
-    <Box>
-      {/* Header */}
-      <Typography variant="h6" gutterBottom>
-        Portail Client - Réclamations
-      </Typography>
+  const handleRating = (claim: CustomerClaim) => {
+    setRatingDialog({ open: true, claim });
+  };
 
-      {/* Dashboard Stats */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom variant="body2">
-                Total Réclamations
+  const handleSubmitResponse = () => {
+    if (responseDialog.claim && responseText.trim()) {
+      const formData = {
+        claimId: responseDialog.claim.id,
+        response: responseText,
+        attachments: responseFiles,
+        clientId: user?.id || ''
+      };
+      responseMutation.mutate(formData);
+    }
+  };
+
+  const handleSubmitRating = () => {
+    if (ratingDialog.claim && rating > 0) {
+      ratingMutation.mutate({
+        claimId: ratingDialog.claim.id,
+        rating,
+        feedback: ratingFeedback
+      });
+    }
+  };
+
+  const handleSubmit = () => {
+    const submission = { ...formData, attachments: files };
+    submitMutation.mutate(submission);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files));
+    }
+  };
+
+  const renderSubmissionForm = () => (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          Soumettre une nouvelle réclamation
+        </Typography>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth required>
+              <InputLabel>Catégorie</InputLabel>
+              <Select
+                value={formData.category}
+                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+              >
+                <MenuItem value="REMBOURSEMENT">Remboursement</MenuItem>
+                <MenuItem value="DELAI_TRAITEMENT">Délai de traitement</MenuItem>
+                <MenuItem value="QUALITE_SERVICE">Qualité de service</MenuItem>
+                <MenuItem value="ERREUR_DOSSIER">Erreur de dossier</MenuItem>
+                <MenuItem value="TECHNIQUE">Problème technique</MenuItem>
+                <MenuItem value="AUTRE">Autre</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth required>
+              <InputLabel>Priorité</InputLabel>
+              <Select
+                value={formData.priority}
+                onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as 'low' | 'medium' | 'high' | 'critical' }))}
+              >
+                <MenuItem value="low">Normale</MenuItem>
+                <MenuItem value="medium">Urgente</MenuItem>
+                <MenuItem value="high">Haute</MenuItem>
+                <MenuItem value="critical">Critique</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              required
+              label="Objet de la réclamation"
+              value={formData.subject}
+              onChange={(e) => setFormData(prev => ({ ...prev, subject: e.target.value }))}
+              placeholder="Résumez votre réclamation en quelques mots"
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              required
+              multiline
+              rows={6}
+              label="Description détaillée"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Décrivez votre réclamation en détail..."
+            />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <FormControl fullWidth>
+              <InputLabel>Contact préféré</InputLabel>
+              <Select
+                value={formData.contactPreference}
+                onChange={(e) => setFormData(prev => ({ ...prev, contactPreference: e.target.value as any }))}
+              >
+                <MenuItem value="email">
+                  <Email sx={{ mr: 1 }} />
+                  Email
+                </MenuItem>
+                <MenuItem value="phone">
+                  <Phone sx={{ mr: 1 }} />
+                  Téléphone
+                </MenuItem>
+                <MenuItem value="mail">Courrier postal</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Box>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={handleFileChange}
+                style={{ marginBottom: 8 }}
+              />
+              <Typography variant="caption" color="textSecondary" display="block">
+                Formats acceptés: PDF, Images, Documents Word
               </Typography>
-              <Typography variant="h4" component="div">
-                {portalStats.totalClaims}
-              </Typography>
-            </CardContent>
-          </Card>
+              {files.length > 0 && (
+                <Box sx={{ mt: 1 }}>
+                  {files.map((file, index) => (
+                    <Chip
+                      key={index}
+                      label={file.name}
+                      size="small"
+                      sx={{ mr: 1, mb: 1 }}
+                      onDelete={() => setFiles(prev => prev.filter((_, i) => i !== index))}
+                    />
+                  ))}
+                </Box>
+              )}
+            </Box>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Button
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={!formData.category || !formData.subject || !formData.description || submitMutation.isLoading || !user?.id}
+                startIcon={submitMutation.isLoading ? <Schedule /> : <Send />}
+                size="large"
+              >
+                {submitMutation.isLoading ? 'Envoi en cours...' : 'Soumettre la réclamation'}
+              </Button>
+              
+              {(!formData.category || !formData.subject || !formData.description) && (
+                <Alert severity="warning" sx={{ flex: 1 }}>
+                  Veuillez remplir tous les champs obligatoires
+                </Alert>
+              )}
+              
+              {!user?.id && (
+                <Alert severity="error" sx={{ flex: 1 }}>
+                  Vous devez être connecté pour soumettre une réclamation
+                </Alert>
+              )}
+            </Box>
+          </Grid>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom variant="body2">
-                En Cours
-              </Typography>
-              <Typography variant="h4" component="div">
-                {portalStats.openClaims}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom variant="body2">
-                Résolues
-              </Typography>
-              <Typography variant="h4" component="div">
-                {portalStats.resolvedClaims}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom variant="body2">
-                Satisfaction
-              </Typography>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Typography variant="h4" component="div">
-                  {portalStats.satisfactionScore.toFixed(1)}
+      </CardContent>
+    </Card>
+  );
+
+  const renderClaimTracking = () => (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          Suivi de réclamation
+        </Typography>
+
+        <Box sx={{ mb: 3 }}>
+          <TextField
+            fullWidth
+            label="Numéro de réclamation"
+            value={trackingId}
+            onChange={(e) => setTrackingId(e.target.value)}
+            placeholder="Saisissez votre numéro de réclamation"
+            sx={{ mb: 2 }}
+          />
+          {trackingLoading && <LinearProgress />}
+        </Box>
+
+        {trackingError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Réclamation non trouvée. Vérifiez le numéro saisi.
+          </Alert>
+        )}
+
+        {claimStatus && (
+          <Paper sx={{ p: 3 }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>
+                  Réclamation {claimStatus.reference}
                 </Typography>
-                <Rating value={portalStats.satisfactionScore} readOnly size="small" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+                <Typography><strong>Statut:</strong> {claimStatus.statusLabel || getStatusLabel(claimStatus.status)}</Typography>
+                <Typography><strong>Agent assigné:</strong> {claimStatus.assignedAgent || 'En attente'}</Typography>
+                <Typography><strong>Dernière mise à jour:</strong> {new Date(claimStatus.lastUpdate || claimStatus.updatedAt).toLocaleString('fr-FR')}</Typography>
+                {claimStatus.estimatedResolution && (
+                  <Typography><strong>Résolution estimée:</strong> {new Date(claimStatus.estimatedResolution).toLocaleDateString('fr-FR')}</Typography>
+                )}
+              </Grid>
 
-      {/* Main Content */}
-      <Grid container spacing={3}>
-        {/* Claim Submission Form */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Nouvelle Réclamation
-              </Typography>
+              <Grid item xs={12} md={6}>
+                <Box textAlign="center">
+                  <Typography variant="h4" color="primary" gutterBottom>
+                    {claimStatus.progress}%
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={claimStatus.progress}
+                    sx={{ mb: 2 }}
+                  />
+                  <Typography variant="body2" color="textSecondary">
+                    Progression du traitement
+                  </Typography>
+                </Box>
+              </Grid>
 
-              <Stepper activeStep={activeStep} orientation="vertical">
-                <Step>
-                  <StepLabel>Type de réclamation</StepLabel>
-                  <StepContent>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Type</InputLabel>
-                          <Select
-                            value={claimSubmission.type}
-                            label="Type"
-                            onChange={(e) => setClaimSubmission(prev => ({ ...prev, type: e.target.value }))}
-                          >
-                            <MenuItem value="RECLAMATION">Réclamation</MenuItem>
-                            <MenuItem value="DEMANDE_INFO">Demande d'information</MenuItem>
-                            <MenuItem value="SUGGESTION">Suggestion</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Catégorie</InputLabel>
-                          <Select
-                            value={claimSubmission.category}
-                            label="Catégorie"
-                            onChange={(e) => setClaimSubmission(prev => ({ ...prev, category: e.target.value }))}
-                          >
-                            <MenuItem value="REMBOURSEMENT">Remboursement</MenuItem>
-                            <MenuItem value="DELAI_TRAITEMENT">Délai de traitement</MenuItem>
-                            <MenuItem value="QUALITE_SERVICE">Qualité de service</MenuItem>
-                            <MenuItem value="ERREUR_DOSSIER">Erreur de dossier</MenuItem>
-                            <MenuItem value="TECHNIQUE">Problème technique</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                    </Grid>
-                    <Box sx={{ mb: 1, mt: 2 }}>
-                      <Button
-                        variant="contained"
-                        onClick={() => setActiveStep(1)}
-                        disabled={!claimSubmission.type || !claimSubmission.category}
-                      >
-                        Continuer
-                      </Button>
-                    </Box>
-                  </StepContent>
-                </Step>
-
-                <Step>
-                  <StepLabel>Détails de la réclamation</StepLabel>
-                  <StepContent>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Objet"
-                          value={claimSubmission.subject}
-                          onChange={(e) => setClaimSubmission(prev => ({ ...prev, subject: e.target.value }))}
-                          placeholder="Résumé de votre réclamation"
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          multiline
-                          rows={6}
-                          label="Description détaillée"
-                          value={claimSubmission.description}
-                          onChange={(e) => setClaimSubmission(prev => ({ ...prev, description: e.target.value }))}
-                          placeholder="Décrivez votre réclamation en détail..."
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Priorité</InputLabel>
-                          <Select
-                            value={claimSubmission.priority}
-                            label="Priorité"
-                            onChange={(e) => setClaimSubmission(prev => ({ ...prev, priority: e.target.value }))}
-                          >
-                            <MenuItem value="low">Basse</MenuItem>
-                            <MenuItem value="medium">Moyenne</MenuItem>
-                            <MenuItem value="high">Haute</MenuItem>
-                            <MenuItem value="urgent">Urgente</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Contact préféré</InputLabel>
-                          <Select
-                            value={claimSubmission.contactPreference}
-                            label="Contact préféré"
-                            onChange={(e) => setClaimSubmission(prev => ({ ...prev, contactPreference: e.target.value }))}
-                          >
-                            <MenuItem value="email">Email</MenuItem>
-                            <MenuItem value="phone">Téléphone</MenuItem>
-                            <MenuItem value="mail">Courrier</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                    </Grid>
-                    <Box sx={{ mb: 1, mt: 2 }}>
-                      <Button
-                        variant="contained"
-                        onClick={() => setActiveStep(2)}
-                        disabled={!claimSubmission.subject || !claimSubmission.description}
-                        sx={{ mr: 1 }}
-                      >
-                        Continuer
-                      </Button>
-                      <Button onClick={() => setActiveStep(0)}>
-                        Retour
-                      </Button>
-                    </Box>
-                  </StepContent>
-                </Step>
-
-                <Step>
-                  <StepLabel>Pièces jointes</StepLabel>
-                  <StepContent>
-                    <Box>
-                      <input
-                        accept="*/*"
-                        style={{ display: 'none' }}
-                        id="file-upload"
-                        multiple
-                        type="file"
-                        onChange={handleFileUpload}
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Historique
+                </Typography>
+                <List>
+                  {claimStatus.timeline?.map((event: any, index: number) => (
+                    <ListItem key={event.id}>
+                      <ListItemText
+                        primary={event.description}
+                        secondary={`${new Date(event.date).toLocaleString('fr-FR')}${event.user ? ` - ${event.user}` : ''}`}
                       />
-                      <label htmlFor="file-upload">
-                        <Button
-                          variant="outlined"
-                          component="span"
-                          startIcon={<Upload />}
-                          sx={{ mb: 2 }}
-                        >
-                          Ajouter des fichiers
-                        </Button>
-                      </label>
+                    </ListItem>
+                  ))}
+                </List>
+              </Grid>
 
-                      {claimSubmission.attachments.length > 0 && (
-                        <List>
-                          {claimSubmission.attachments.map((file, index) => (
-                            <ListItem key={index}>
-                              <ListItemIcon>
-                                <AttachFile />
-                              </ListItemIcon>
-                              <ListItemText
-                                primary={file.name}
-                                secondary={`${(file.size / 1024).toFixed(1)} KB`}
-                              />
-                              <Button
-                                size="small"
-                                color="error"
-                                onClick={() => removeAttachment(index)}
-                              >
-                                Supprimer
-                              </Button>
-                            </ListItem>
-                          ))}
-                        </List>
+              {claimStatus.canCustomerRespond && (
+                <Grid item xs={12}>
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      Vous pouvez répondre à cette réclamation ou ajouter des informations complémentaires.
+                    </Typography>
+                    <Box sx={{ mt: 1 }}>
+                      {claimStatus.availableActions?.map((action: string, index: number) => (
+                        <Button key={index} size="small" sx={{ mr: 1 }}>
+                          {action}
+                        </Button>
+                      )) || (
+                        <Button size="small" onClick={() => handleResponse(claimStatus)}>
+                          Répondre
+                        </Button>
                       )}
                     </Box>
-                    <Box sx={{ mb: 1, mt: 2 }}>
-                      <Button
-                        variant="contained"
-                        onClick={handleSubmitClaim}
-                        disabled={loading}
-                        sx={{ mr: 1 }}
-                      >
-                        {loading ? 'Envoi...' : 'Soumettre la réclamation'}
-                      </Button>
-                      <Button onClick={() => setActiveStep(1)}>
-                        Retour
-                      </Button>
-                    </Box>
-                  </StepContent>
-                </Step>
+                  </Alert>
+                </Grid>
+              )}
+            </Grid>
+          </Paper>
+        )}
+      </CardContent>
+    </Card>
+  );
 
-                <Step>
-                  <StepLabel>Confirmation</StepLabel>
-                  <StepContent>
-                    {submittedClaim && (
-                      <Alert severity="success" sx={{ mb: 2 }}>
-                        <Typography variant="h6" gutterBottom>
-                          Réclamation soumise avec succès !
-                        </Typography>
-                        <Typography variant="body2">
-                          Référence: <strong>{submittedClaim.reference}</strong>
-                        </Typography>
-                        <Typography variant="body2">
-                          Vous recevrez une confirmation par email et pourrez suivre l'évolution de votre réclamation.
-                        </Typography>
-                      </Alert>
-                    )}
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        setActiveStep(0);
-                        setClaimSubmission({
-                          type: '',
-                          category: '',
-                          subject: '',
-                          description: '',
-                          priority: 'medium',
-                          contactPreference: 'email',
-                          attachments: []
-                        });
-                        setSubmittedClaim(null);
-                      }}
-                    >
-                      Nouvelle réclamation
-                    </Button>
-                  </StepContent>
-                </Step>
-              </Stepper>
+  const renderPortalStats = () => {
+    if (statsLoading) {
+      return (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Chargement des statistiques...
+            </Typography>
+            <LinearProgress />
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (statsError) {
+      return (
+        <Card>
+          <CardContent>
+            <Alert severity="error">
+              Erreur lors du chargement des statistiques.
+              <Button size="small" onClick={() => window.location.reload()} sx={{ ml: 1 }}>
+                Réessayer
+              </Button>
+            </Alert>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Total Réclamations
+              </Typography>
+              <Typography variant="h4">
+                {portalStats?.totalClaims || 0}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Recent Activity */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                En Cours
+              </Typography>
+              <Typography variant="h4" color="info.main">
+                {portalStats?.openClaims || 0}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Résolues
+              </Typography>
+              <Typography variant="h4" color="success.main">
+                {portalStats?.resolvedClaims || 0}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Temps Moyen
+              </Typography>
+              <Typography variant="h4">
+                {portalStats?.avgResolutionTime || 0}j
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Activité Récente
               </Typography>
-              <List>
-                {portalStats.recentActivity.map((activity: any) => (
-                  <ListItem key={activity.id}>
-                    <ListItemIcon>
-                      {activity.type === 'claim_submitted' && <Add />}
-                      {activity.type === 'status_updated' && <Schedule />}
-                      {activity.type === 'message_received' && <Message />}
-                      {activity.type === 'claim_resolved' && <CheckCircle />}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={activity.description}
-                      secondary={formatDate(activity.date)}
-                    />
-                    {activity.claimReference && (
-                      <Button
-                        size="small"
-                        startIcon={<Visibility />}
-                        onClick={() => handleViewStatus(activity.claimReference)}
-                      >
-                        Voir
-                      </Button>
-                    )}
-                  </ListItem>
-                ))}
-              </List>
+              {portalStats?.recentActivity && portalStats.recentActivity.length > 0 ? (
+                portalStats.recentActivity.map((activity: any) => (
+                  <Paper key={activity.id} sx={{ p: 2, mb: 1, cursor: 'pointer' }} onClick={() => {
+                    if (activity.claimReference) {
+                      setTrackingId(activity.claimReference);
+                      setActiveView('track');
+                    }
+                  }}>
+                    <Typography variant="body1">{activity.description}</Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      {new Date(activity.date).toLocaleString('fr-FR')}
+                    </Typography>
+                  </Paper>
+                ))
+              ) : (
+                <Alert severity="info">
+                  Aucune activité récente
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+    );
+  };
 
-      {/* Status Dialog */}
-      <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)} maxWidth="md" fullWidth>
+  return (
+    <div className="customer-portal p-4">
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          Portail Client - Réclamations
+        </Typography>
+        <Typography variant="body1" color="textSecondary">
+          Bienvenue {user?.fullName || 'Client'}. Vous pouvez ici soumettre de nouvelles réclamations, suivre leur progression et consulter vos statistiques.
+        </Typography>
+      </Box>
+
+      <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Button
+          variant={activeView === 'my-claims' ? 'contained' : 'outlined'}
+          onClick={() => setActiveView('my-claims')}
+          startIcon={<History />}
+        >
+          Mes Réclamations
+        </Button>
+        <Button
+          variant={activeView === 'submit' ? 'contained' : 'outlined'}
+          onClick={() => setActiveView('submit')}
+          startIcon={<Send />}
+        >
+          Nouvelle Réclamation
+        </Button>
+        <Button
+          variant={activeView === 'track' ? 'contained' : 'outlined'}
+          onClick={() => setActiveView('track')}
+          startIcon={<Visibility />}
+        >
+          Suivi par Numéro
+        </Button>
+        <Button
+          variant={activeView === 'stats' ? 'contained' : 'outlined'}
+          onClick={() => setActiveView('stats')}
+          startIcon={<Person />}
+        >
+          Mes Statistiques
+        </Button>
+        </Box>
+        
+        <Box>
+          <Tooltip title="Actualiser les données">
+            <IconButton 
+              onClick={() => {
+                refetchClaims();
+                queryClient.invalidateQueries(['portal-stats']);
+                queryClient.invalidateQueries(['claim-status']);
+              }}
+              disabled={claimsLoading || statsLoading || trackingLoading}
+            >
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
+
+      {activeView === 'my-claims' && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Mes Réclamations
+            </Typography>
+            {claimsLoading ? (
+              <LinearProgress />
+            ) : claimsError ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                Erreur lors du chargement des réclamations. 
+                <Button size="small" onClick={() => refetchClaims()} sx={{ ml: 1 }}>
+                  Réessayer
+                </Button>
+              </Alert>
+            ) : customerClaims.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Info sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Aucune réclamation trouvée
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                  Vous n'avez pas encore soumis de réclamation.
+                </Typography>
+                <Button 
+                  variant="contained" 
+                  startIcon={<Send />}
+                  onClick={() => setActiveView('submit')}
+                >
+                  Soumettre une réclamation
+                </Button>
+              </Box>
+            ) : (
+              <Grid container spacing={2}>
+                {customerClaims.map((claim: any) => (
+                  <Grid item xs={12} key={claim.id}>
+                    <Paper sx={{ p: 2 }}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="h6">{claim.reference}</Typography>
+                        <Chip
+                          label={claim.statusLabel || getStatusLabel(claim.status)}
+                          color={getStatusColor(claim.status) as any}
+                          size="small"
+                        />
+                      </Box>
+                      <Typography variant="body1" gutterBottom>{claim.subject}</Typography>
+                      <Typography variant="body2" color="textSecondary" gutterBottom>
+                        Catégorie: {claim.category} | Priorité: {claim.priority}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Créée le: {new Date(claim.createdAt).toLocaleDateString('fr-FR')}
+                        {claim.assignedAgent && ` | Agent: ${claim.assignedAgent}`}
+                      </Typography>
+                      {claim.progress && (
+                        <Box sx={{ mt: 1 }}>
+                          <LinearProgress variant="determinate" value={claim.progress} />
+                          <Typography variant="caption">{claim.progress}% complété</Typography>
+                        </Box>
+                      )}
+                      <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Button 
+                          size="small" 
+                          startIcon={<Visibility />}
+                          onClick={() => {
+                            setTrackingId(claim.id);
+                            setActiveView('track');
+                          }}
+                        >
+                          Voir détails
+                        </Button>
+                        {claim.canRespond && (
+                          <Button size="small" startIcon={<Reply />} onClick={() => handleResponse(claim)}>
+                            Répondre
+                          </Button>
+                        )}
+                        {(claim.status === 'RESOLU' || claim.status === 'FERME') && !claim.rating && (
+                          <Button size="small" startIcon={<Star />} onClick={() => handleRating(claim)}>
+                            Évaluer
+                          </Button>
+                        )}
+                      </Box>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {activeView === 'submit' && renderSubmissionForm()}
+      {activeView === 'track' && renderClaimTracking()}
+      {activeView === 'stats' && renderPortalStats()}
+
+      {/* Success Dialog */}
+      <Dialog open={successDialogOpen} onClose={() => setSuccessDialogOpen(false)}>
         <DialogTitle>
-          Suivi de la Réclamation - {claimStatus?.reference}
+          <Box display="flex" alignItems="center" gap={1}>
+            <CheckCircle color="success" />
+            Réclamation soumise avec succès
+          </Box>
         </DialogTitle>
         <DialogContent>
-          {claimStatus && (
-            <Box>
-              {/* Status Overview */}
-              <Grid container spacing={2} mb={3}>
-                <Grid item xs={12} sm={6}>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="subtitle1">Statut:</Typography>
-                    <Chip
-                      label={claimStatus.statusLabel}
-                      color={getStatusColor(claimStatus.status) as any}
-                    />
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Typography variant="subtitle1">Progression:</Typography>
-                    <Box sx={{ width: '100%', ml: 1 }}>
-                      <LinearProgress
-                        variant="determinate"
-                        value={claimStatus.progress}
-                        sx={{ height: 8, borderRadius: 4 }}
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        {claimStatus.progress}%
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Grid>
-              </Grid>
-
-              {/* Custom Timeline */}
-              <Typography variant="h6" gutterBottom>
-                Historique
+          <Typography sx={{ mb: 2 }}>
+            Votre réclamation a été enregistrée et sera traitée dans les plus brefs délais.
+            Vous recevrez un accusé de réception par email.
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Vous pouvez suivre l'évolution de votre réclamation dans l'onglet "Mes Réclamations" ou en utilisant le numéro de référence dans "Suivi par Numéro".
+          </Typography>
+          {submitMutation.data && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Numéro de réclamation:</strong> {submitMutation.data.reference}
               </Typography>
-              <Box>
-                {claimStatus.timeline.map((event: any, index: number) => (
-                  <Box key={event.id} display="flex" mb={2}>
-                    {/* Timeline Dot */}
-                    <Box display="flex" flexDirection="column" alignItems="center" mr={2}>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: '50%',
-                          bgcolor: 'primary.main',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white'
-                        }}
-                      >
-                        {event.event === 'CLAIM_SUBMITTED' && <Add />}
-                        {event.event === 'CUSTOMER_RESPONSE' && <Message />}
-                        {event.event === 'CLAIM_RESOLVED' && <CheckCircle />}
-                      </Box>
-                      {index < claimStatus.timeline.length - 1 && (
-                        <Box
-                          sx={{
-                            width: 2,
-                            height: 40,
-                            bgcolor: 'divider',
-                            mt: 1
-                          }}
-                        />
-                      )}
-                    </Box>
-                    {/* Timeline Content */}
-                    <Box flex={1}>
-                      <Paper sx={{ p: 2 }}>
-                        <Typography variant="subtitle2" fontWeight={600}>
-                          {event.description}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatDate(event.date)} - {event.actor}
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-
-              {/* Available Actions */}
-              {claimStatus.availableActions.length > 0 && (
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Actions Disponibles
-                  </Typography>
-                  <Box display="flex" gap={1} flexWrap="wrap">
-                    {claimStatus.availableActions.map((action: string) => (
-                      <Button
-                        key={action}
-                        variant="outlined"
-                        size="small"
-                        onClick={() => {
-                          if (action === 'Répondre') {
-                            setResponseDialog(true);
-                          } else if (action === 'Évaluer le service') {
-                            setFeedbackDialog(true);
-                          }
-                        }}
-                      >
-                        {action}
-                      </Button>
-                    ))}
-                  </Box>
-                </Box>
-              )}
-            </Box>
+            </Alert>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>Fermer</Button>
+          <Button onClick={() => setSuccessDialogOpen(false)}>Fermer</Button>
         </DialogActions>
       </Dialog>
 
       {/* Response Dialog */}
-      <Dialog open={responseDialog} onClose={() => setResponseDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Ajouter une Réponse</DialogTitle>
+      <Dialog open={responseDialog.open} onClose={() => setResponseDialog({ open: false, claim: null })} maxWidth="md" fullWidth>
+        <DialogTitle>Répondre à la réclamation</DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
             multiline
-            rows={6}
+            rows={4}
             label="Votre réponse"
-            value={customerResponse}
-            onChange={(e) => setCustomerResponse(e.target.value)}
-            placeholder="Ajoutez des informations complémentaires..."
-            sx={{ mt: 2 }}
+            value={responseText}
+            onChange={(e) => setResponseText(e.target.value)}
+            sx={{ mb: 2 }}
           />
+          <Box sx={{ mt: 2 }}>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              onChange={(e) => setResponseFiles(e.target.files ? Array.from(e.target.files) : [])}
+              style={{ marginBottom: 8 }}
+            />
+            <Typography variant="caption" color="textSecondary" display="block">
+              Formats acceptés: PDF, Images, Documents Word
+            </Typography>
+            {responseFiles.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                {responseFiles.map((file, index) => (
+                  <Chip
+                    key={index}
+                    label={file.name}
+                    size="small"
+                    sx={{ mr: 1, mb: 1 }}
+                    onDelete={() => setResponseFiles(prev => prev.filter((_, i) => i !== index))}
+                  />
+                ))}
+              </Box>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setResponseDialog(false)}>Annuler</Button>
-          <Button
-            onClick={handleAddResponse}
-            variant="contained"
-            disabled={!customerResponse.trim()}
+          <Button 
+            onClick={() => {
+              setResponseDialog({ open: false, claim: null });
+              setResponseText('');
+              setResponseFiles([]);
+            }}
+            disabled={responseMutation.isLoading}
           >
-            Envoyer
+            Annuler
+          </Button>
+          <Button 
+            onClick={handleSubmitResponse} 
+            variant="contained" 
+            disabled={!responseText.trim() || responseMutation.isLoading}
+            startIcon={responseMutation.isLoading ? <Schedule /> : <Send />}
+          >
+            {responseMutation.isLoading ? 'Envoi...' : 'Envoyer'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Feedback Dialog */}
-      <Dialog open={feedbackDialog} onClose={() => setFeedbackDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Évaluer le Service</DialogTitle>
+      {/* Rating Dialog */}
+      <Dialog open={ratingDialog.open} onClose={() => setRatingDialog({ open: false, claim: null })}>
+        <DialogTitle>Évaluer la réclamation</DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Note globale:
-            </Typography>
-            <Rating
-              value={feedback.rating}
-              onChange={(_, value) => setFeedback(prev => ({ ...prev, rating: value || 0 }))}
-              size="large"
-            />
-            
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              label="Commentaires (optionnel)"
-              value={feedback.comments}
-              onChange={(e) => setFeedback(prev => ({ ...prev, comments: e.target.value }))}
-              placeholder="Partagez votre expérience..."
-              sx={{ mt: 3 }}
-            />
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <IconButton key={star} onClick={() => setRating(star)}>
+                {star <= rating ? <Star color="primary" /> : <StarBorder />}
+              </IconButton>
+            ))}
           </Box>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="Commentaire (optionnel)"
+            value={ratingFeedback}
+            onChange={(e) => setRatingFeedback(e.target.value)}
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setFeedbackDialog(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            disabled={feedback.rating === 0}
+          <Button 
+            onClick={() => {
+              setRatingDialog({ open: false, claim: null });
+              setRating(0);
+              setRatingFeedback('');
+            }}
+            disabled={ratingMutation.isLoading}
           >
-            Envoyer l'Évaluation
+            Annuler
+          </Button>
+          <Button 
+            onClick={handleSubmitRating} 
+            variant="contained" 
+            disabled={rating === 0 || ratingMutation.isLoading}
+            startIcon={ratingMutation.isLoading ? <Schedule /> : <Star />}
+          >
+            {ratingMutation.isLoading ? 'Évaluation...' : 'Évaluer'}
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </div>
   );
 };
 

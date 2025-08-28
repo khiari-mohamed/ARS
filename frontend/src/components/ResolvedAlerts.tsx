@@ -39,7 +39,7 @@ const ResolvedAlerts: React.FC = () => {
       ['ID', 'Bordereau', 'Type', 'Niveau', 'Message', 'Résolu le', 'Temps de résolution'],
       ...resolvedAlerts.map((alert: AlertHistoryEntry) => [
         alert.id,
-        alert.bordereauId || '-',
+        alert.bordereauId || alert.bordereau?.id || '-',
         alert.alertType,
         alertLevelLabel(alert.alertLevel),
         alert.message,
@@ -144,13 +144,13 @@ const ResolvedAlerts: React.FC = () => {
                     <TableRow key={alert.id}>
                       <TableCell>{alert.id}</TableCell>
                       <TableCell>
-                        {alert.bordereauId ? (
+                        {(alert.bordereauId || alert.bordereau?.id) ? (
                           <Button
                             variant="text"
                             size="small"
-                            onClick={() => window.open(`/bordereaux/${alert.bordereauId}`, '_blank')}
+                            onClick={() => window.open(`/bordereaux/${alert.bordereauId || alert.bordereau?.id}`, '_blank')}
                           >
-                            {alert.bordereauId}
+                            {alert.bordereauId || alert.bordereau?.id}
                           </Button>
                         ) : '-'}
                       </TableCell>

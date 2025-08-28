@@ -1,7 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { AnalyticsPerformanceDto } from '../../types/analytics';
-import LoadingSpinner from '../LoadingSpinner';
-import { getPerformanceAI } from '../../services/analyticsService';
+import { LocalAPI } from '../../services/axios';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  CircularProgress,
+  Alert,
+  Grid,
+  Chip
+} from '@mui/material';
+import { Refresh, TrendingUp, TrendingDown, Remove } from '@mui/icons-material';
 
 const defaultFilters: AnalyticsPerformanceDto = {
   fromDate: undefined,
@@ -11,88 +34,254 @@ const defaultFilters: AnalyticsPerformanceDto = {
   role: undefined,
 };
 
+interface PerformanceData {
+  userId: string;
+  userName: string;
+  actual: number;
+  expected: number;
+  delta: number;
+  status: 'above' | 'below' | 'on_target';
+  role: string;
+}
+
 const PerformanceDashboard: React.FC = () => {
   const [filters, setFilters] = useState<AnalyticsPerformanceDto>(defaultFilters);
-  const [aiData, setAiData] = useState<any>(null);
+  const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilters({ ...filters, [e.target.name]: e.target.value || undefined });
   };
 
- useEffect(() => {
-  // Only send the request if at least one filter is set
-  const hasValidFilter = Object.values(filters).some(v => v !== undefined && v !== '');
-  if (!hasValidFilter) {
-    setAiData([]);
-    return;
-  }
-  setLoading(true);
-  setError(null);
-  getPerformanceAI({ users: [filters] })
-    .then(data => setAiData(data.performance || []))
-    .catch(e => setError(e.message))
-    .finally(() => setLoading(false));
-}, [filters]);
+  const handleSelectChange = (e: any) => {
+    setFilters({ ...filters, [e.target.name]: e.target.value || undefined });
+  };
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <div className="text-red-600">Erreur chargement performance IA: {error}</div>;
+  const fetchPerformanceData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        users: [{
+          fromDate: filters.fromDate,
+          toDate: filters.toDate,
+          teamId: filters.teamId,
+          userId: filters.userId,
+          role: filters.role
+        }]
+      };
+      
+      const response = await LocalAPI.post('/analytics/ai/performance', payload);
+      const aiData = response.data.performance || [];
+      
+      // Transform AI data to our format
+      const transformedData: PerformanceData[] = aiData.map((item: any) => ({
+        userId: item.user_id,
+        userName: item.user_name || item.user_id,
+        actual: item.actual,
+        expected: item.expected,
+        delta: item.delta,
+        status: item.status === 'above_target' ? 'above' : 
+                item.status === 'below_target' ? 'below' : 'on_target',
+        role: item.role || 'GESTIONNAIRE'
+      }));
+      
+      setPerformanceData(transformedData);
+    } catch (e: any) {
+      console.error('Performance AI Error:', e);
+      setError(e.response?.data?.message || e.message);
+      setPerformanceData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPerformanceData();
+  }, [filters]);
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'above':
+        return <TrendingUp color="success" />;
+      case 'below':
+        return <TrendingDown color="error" />;
+      default:
+        return <Remove color="info" />;
+    }
+  };
+
+  const getStatusChip = (status: string, delta: number) => {
+    switch (status) {
+      case 'above':
+        return <Chip label={`+${delta}`} color="success" size="small" />;
+      case 'below':
+        return <Chip label={`${delta}`} color="error" size="small" />;
+      default:
+        return <Chip label="0" color="default" size="small" />;
+    }
+  };
 
   return (
-    <div className="dashboard-sharp-panel">
-      <h3 className="dashboard-sharp-title">Performance par utilisateur (IA)</h3>
-      <div className="performance-filters-bar">
-        <input name="fromDate" type="date" onChange={handleFilterChange} className="performance-filter-input" />
-        <input name="toDate" type="date" onChange={handleFilterChange} className="performance-filter-input" />
-        <input name="teamId" placeholder="ID équipe" onChange={handleFilterChange} className="performance-filter-input" />
-        <input name="userId" placeholder="ID utilisateur" onChange={handleFilterChange} className="performance-filter-input" />
-        <select name="role" onChange={handleFilterChange} className="performance-filter-input performance-filter-select">
-          <option value="">Tous rôles</option>
-          <option value="GESTIONNAIRE">Gestionnaire</option>
-          <option value="CHEF_EQUIPE">Chef d'équipe</option>
-          <option value="SUPER_ADMIN">Super Admin</option>
-        </select>
-        <button
-          className="performance-filter-reset"
-          onClick={() => setFilters(defaultFilters)}
-        >
-          Réinitialiser
-        </button>
-      </div>
-      <div className="performance-table-wrapper">
-        <table className="performance-table">
-          <thead>
-            <tr>
-              <th className="performance-th">Utilisateur</th>
-              <th className="performance-th">Réel</th>
-              <th className="performance-th">Attendu</th>
-              <th className="performance-th">Delta</th>
-              <th className="performance-th">Statut</th>
-            </tr>
-          </thead>
-          <tbody>
-            {aiData && aiData.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-center text-gray-500 py-4">
-                  Aucun utilisateur trouvé pour les filtres sélectionnés.
-                </td>
-              </tr>
-            ) : (
-              aiData && aiData.map((u: any) => (
-                <tr key={u.user_id}>
-                  <td>{u.user_id}</td>
-                  <td>{u.actual}</td>
-                  <td>{u.expected}</td>
-                  <td>{u.delta}</td>
-                  <td>{u.status}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          Performance par utilisateur (IA)
+        </Typography>
+        
+        {/* Filters */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              name="fromDate"
+              type="date"
+              label="Date début"
+              value={filters.fromDate || ''}
+              onChange={handleFilterChange}
+              fullWidth
+              size="small"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              name="toDate"
+              type="date"
+              label="Date fin"
+              value={filters.toDate || ''}
+              onChange={handleFilterChange}
+              fullWidth
+              size="small"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              name="teamId"
+              label="ID équipe"
+              value={filters.teamId || ''}
+              onChange={handleFilterChange}
+              fullWidth
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              name="userId"
+              label="ID utilisateur"
+              value={filters.userId || ''}
+              onChange={handleFilterChange}
+              fullWidth
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Rôle</InputLabel>
+              <Select
+                name="role"
+                value={filters.role || ''}
+                onChange={handleSelectChange}
+                label="Rôle"
+              >
+                <MenuItem value="">Tous rôles</MenuItem>
+                <MenuItem value="GESTIONNAIRE">Gestionnaire</MenuItem>
+                <MenuItem value="CHEF_EQUIPE">Chef d'équipe</MenuItem>
+                <MenuItem value="CLIENT_SERVICE">Service Client</MenuItem>
+                <MenuItem value="SUPER_ADMIN">Super Admin</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <Button
+              variant="outlined"
+              startIcon={<Refresh />}
+              onClick={() => setFilters(defaultFilters)}
+              fullWidth
+              size="small"
+            >
+              Réinitialiser
+            </Button>
+          </Grid>
+        </Grid>
+
+        {/* Loading State */}
+        {loading && (
+          <Box display="flex" justifyContent="center" p={3}>
+            <CircularProgress />
+          </Box>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Erreur chargement performance: {error}
+          </Alert>
+        )}
+
+        {/* Data Table */}
+        {!loading && !error && (
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: 'grey.50' }}>
+                  <TableCell sx={{ fontWeight: 600 }}>Utilisateur</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="center">Réel</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="center">Attendu</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="center">Delta</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="center">Statut</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {performanceData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                      <Typography color="text.secondary">
+                        Aucun utilisateur trouvé pour les filtres sélectionnés.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  performanceData.map((user) => (
+                    <TableRow key={user.userId} hover>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight={500}>
+                            {user.userName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {user.userId}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Typography variant="body2" fontWeight={500}>
+                          {user.actual}%
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Typography variant="body2">
+                          {user.expected}%
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        {getStatusChip(user.status, user.delta)}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          {getStatusIcon(user.status)}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

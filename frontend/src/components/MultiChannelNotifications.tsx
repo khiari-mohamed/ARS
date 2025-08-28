@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { LocalAPI } from '../services/axios';
 import {
   Box,
   Grid,
@@ -48,9 +50,6 @@ import {
 } from '@mui/icons-material';
 
 const MultiChannelNotifications: React.FC = () => {
-  const [channels, setChannels] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [deliveryStats, setDeliveryStats] = useState<any>(null);
   const [channelDialog, setChannelDialog] = useState(false);
   const [testDialog, setTestDialog] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<any>(null);
@@ -62,110 +61,179 @@ const MultiChannelNotifications: React.FC = () => {
     active: true,
     priority: 1
   });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const queryClient = useQueryClient();
 
-  const loadData = async () => {
-    try {
-      setChannels([
-        {
-          id: 'email_primary',
-          name: 'Email Principal',
-          type: 'email',
-          active: true,
-          priority: 1,
-          rateLimits: { maxPerMinute: 60, maxPerHour: 1000 }
-        },
-        {
-          id: 'sms_primary',
-          name: 'SMS Principal',
-          type: 'sms',
-          active: true,
-          priority: 2,
-          rateLimits: { maxPerMinute: 10, maxPerHour: 100 }
-        },
-        {
-          id: 'push_mobile',
-          name: 'Push Mobile',
-          type: 'push',
-          active: true,
-          priority: 3,
-          rateLimits: { maxPerMinute: 100, maxPerHour: 2000 }
-        },
-        {
-          id: 'slack_alerts',
-          name: 'Slack Alerts',
-          type: 'slack',
-          active: true,
-          priority: 4,
-          rateLimits: { maxPerMinute: 30, maxPerHour: 500 }
-        },
-        {
-          id: 'teams_notifications',
-          name: 'Microsoft Teams',
-          type: 'teams',
-          active: true,
-          priority: 5,
-          rateLimits: { maxPerMinute: 20, maxPerHour: 300 }
-        }
-      ]);
+  // Fetch notification channels
+  const { data: channels = [], isLoading: channelsLoading, refetch: refetchChannels } = useQuery({
+    queryKey: ['notification-channels'],
+    queryFn: async () => {
+      try {
+        const response = await LocalAPI.get('/alerts/notifications/channels');
+        return response.data || [];
+      } catch (error) {
+        console.error('Failed to fetch channels:', error);
+        return [];
+      }
+    }
+  });
 
-      setTemplates([
-        {
-          id: 'email_sla_breach',
-          name: 'SLA Breach Alert',
-          channel: 'email',
-          subject: 'URGENT: SLA Breach Alert - {{alertType}}',
-          active: true
-        },
-        {
-          id: 'sms_critical_alert',
-          name: 'Critical Alert SMS',
-          channel: 'sms',
-          body: 'CRITICAL: {{alertType}} - {{description}}',
-          active: true
-        }
-      ]);
+  // Fetch notification templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['notification-templates'],
+    queryFn: async () => {
+      try {
+        const response = await LocalAPI.get('/alerts/notifications/templates');
+        return response.data || [];
+      } catch (error) {
+        console.error('Failed to fetch templates:', error);
+        return [];
+      }
+    }
+  });
 
-      setDeliveryStats({
-        totalSent: 1275,
-        delivered: 1198,
-        failed: 45,
-        bounced: 32,
-        byChannel: {
-          email: { sent: 450, delivered: 425, failed: 15 },
-          sms: { sent: 200, delivered: 195, failed: 3 },
-          push: { sent: 300, delivered: 285, failed: 8 },
-          slack: { sent: 80, delivered: 78, failed: 1 },
-          teams: { sent: 45, delivered: 43, failed: 1 }
-        }
+  // Fetch delivery statistics
+  const { data: deliveryStats } = useQuery({
+    queryKey: ['notification-stats'],
+    queryFn: async () => {
+      try {
+        const response = await LocalAPI.get('/alerts/notifications/stats');
+        return response.data;
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+        return {
+          totalSent: 0,
+          delivered: 0,
+          failed: 0,
+          bounced: 0,
+          byChannel: {}
+        };
+      }
+    },
+    refetchInterval: 60000 // Refresh every minute
+  });
+
+  // Create channel mutation
+  const createChannelMutation = useMutation({
+    mutationFn: async (channelData: any) => {
+      try {
+        const response = await LocalAPI.post('/alerts/notifications/channels', channelData);
+        return response.data;
+      } catch (error) {
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-channels'] });
+      setSnackbar({ open: true, message: 'Canal créé avec succès', severity: 'success' });
+      setChannelDialog(false);
+      setSelectedChannel(null);
+      setNewChannel({ name: '', type: '', config: {}, active: true, priority: 1 });
+    },
+    onError: (error) => {
+      console.error('Create channel error:', error);
+      setSnackbar({ open: true, message: 'Erreur lors de la création', severity: 'error' });
+    }
+  });
+
+  // Update channel mutation
+  const updateChannelMutation = useMutation({
+    mutationFn: async ({ channelId, updates }: { channelId: string; updates: any }) => {
+      try {
+        await LocalAPI.patch(`/alerts/notifications/channels/${channelId}`, updates);
+      } catch (error) {
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-channels'] });
+      setSnackbar({ open: true, message: 'Canal mis à jour avec succès', severity: 'success' });
+    },
+    onError: (error) => {
+      console.error('Update channel error:', error);
+      setSnackbar({ open: true, message: 'Erreur lors de la mise à jour', severity: 'error' });
+    }
+  });
+
+  // Delete channel mutation
+  const deleteChannelMutation = useMutation({
+    mutationFn: async (channelId: string) => {
+      try {
+        await LocalAPI.delete(`/alerts/notifications/channels/${channelId}`);
+      } catch (error) {
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-channels'] });
+      setSnackbar({ open: true, message: 'Canal supprimé avec succès', severity: 'success' });
+    },
+    onError: (error) => {
+      console.error('Delete channel error:', error);
+      setSnackbar({ open: true, message: 'Erreur lors de la suppression', severity: 'error' });
+    }
+  });
+
+  // Test channel mutation
+  const testChannelMutation = useMutation({
+    mutationFn: async (channelId: string) => {
+      try {
+        const response = await LocalAPI.post(`/alerts/notifications/channels/${channelId}/test`);
+        return response.data;
+      } catch (error) {
+        throw error;
+      }
+    },
+    onSuccess: (data) => {
+      setTestResult({
+        success: data.success,
+        message: data.message || (data.success ? 'Test réussi' : 'Échec du test')
       });
-    } catch (error) {
-      console.error('Failed to load notification data:', error);
+    },
+    onError: (error) => {
+      console.error('Test channel error:', error);
+      setTestResult({
+        success: false,
+        message: 'Erreur lors du test'
+      });
+    }
+  });
+
+  const handleCreateChannel = () => {
+    createChannelMutation.mutate(newChannel);
+  };
+
+  const handleToggleChannel = (channelId: string, currentStatus: boolean) => {
+    updateChannelMutation.mutate({ 
+      channelId, 
+      updates: { active: !currentStatus } 
+    });
+  };
+
+  const handleEditChannel = (channel: any) => {
+    setNewChannel({
+      name: channel.name,
+      type: channel.type,
+      config: channel.config || {},
+      active: channel.active,
+      priority: channel.priority || 1
+    });
+    setSelectedChannel(channel);
+    setChannelDialog(true);
+  };
+
+  const handleDeleteChannel = (channelId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce canal ?')) {
+      deleteChannelMutation.mutate(channelId);
     }
   };
 
   const handleTestChannel = async (channel: any) => {
     setSelectedChannel(channel);
     setTestDialog(true);
-    
-    try {
-      // Mock test
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const success = Math.random() > 0.1;
-      
-      setTestResult({
-        success,
-        message: success ? 'Test réussi' : 'Échec du test - vérifier la configuration'
-      });
-    } catch (error) {
-      setTestResult({
-        success: false,
-        message: 'Erreur lors du test'
-      });
-    }
+    setTestResult(null);
+    testChannelMutation.mutate(channel.id);
   };
 
   const getChannelIcon = (type: string) => {
@@ -291,7 +359,7 @@ const MultiChannelNotifications: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {channels.map((channel) => (
+                    {channels.map((channel: any) => (
                       <TableRow key={channel.id}>
                         <TableCell>
                           <Box display="flex" alignItems="center" gap={1}>
@@ -323,24 +391,45 @@ const MultiChannelNotifications: React.FC = () => {
                           </Box>
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={channel.active ? 'Actif' : 'Inactif'}
-                            color={getStatusColor(channel.active) as any}
-                            size="small"
-                          />
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Switch
+                              checked={channel.active}
+                              onChange={() => handleToggleChannel(channel.id, channel.active)}
+                              disabled={updateChannelMutation.isLoading}
+                              size="small"
+                            />
+                            <Typography variant="caption">
+                              {channel.active ? 'Actif' : 'Inactif'}
+                            </Typography>
+                          </Box>
                         </TableCell>
                         <TableCell>
                           <Box display="flex" gap={1}>
                             <IconButton
                               size="small"
                               onClick={() => handleTestChannel(channel)}
+                              disabled={testChannelMutation.isLoading}
+                              title="Tester le canal"
+                              color="primary"
                             >
                               <TestTube />
                             </IconButton>
-                            <IconButton size="small">
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleEditChannel(channel)}
+                              disabled={updateChannelMutation.isLoading}
+                              color="info"
+                              title="Modifier"
+                            >
                               <Edit />
                             </IconButton>
-                            <IconButton size="small" color="error">
+                            <IconButton 
+                              size="small" 
+                              color="error"
+                              onClick={() => handleDeleteChannel(channel.id)}
+                              disabled={deleteChannelMutation.isLoading}
+                              title="Supprimer"
+                            >
                               <Delete />
                             </IconButton>
                           </Box>
@@ -363,7 +452,7 @@ const MultiChannelNotifications: React.FC = () => {
               </Typography>
               
               <List>
-                {templates.map((template) => (
+                {templates.map((template: any) => (
                   <ListItem key={template.id}>
                     <ListItemIcon>
                       {getChannelIcon(template.channel)}
@@ -454,7 +543,9 @@ const MultiChannelNotifications: React.FC = () => {
 
       {/* Create Channel Dialog */}
       <Dialog open={channelDialog} onClose={() => setChannelDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Nouveau Canal de Notification</DialogTitle>
+        <DialogTitle>
+          {selectedChannel ? 'Modifier le Canal' : 'Nouveau Canal de Notification'}
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -505,12 +596,32 @@ const MultiChannelNotifications: React.FC = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setChannelDialog(false)}>Annuler</Button>
+          <Button onClick={() => {
+            setChannelDialog(false);
+            setSelectedChannel(null);
+            setNewChannel({ name: '', type: '', config: {}, active: true, priority: 1 });
+          }}>Annuler</Button>
           <Button
             variant="contained"
-            disabled={!newChannel.name || !newChannel.type}
+            onClick={() => {
+              if (selectedChannel) {
+                updateChannelMutation.mutate({ 
+                  channelId: selectedChannel.id, 
+                  updates: newChannel 
+                });
+                setChannelDialog(false);
+                setSelectedChannel(null);
+                setNewChannel({ name: '', type: '', config: {}, active: true, priority: 1 });
+              } else {
+                handleCreateChannel();
+              }
+            }}
+            disabled={!newChannel.name || !newChannel.type || createChannelMutation.isLoading || updateChannelMutation.isLoading}
           >
-            Créer
+            {createChannelMutation.isLoading || updateChannelMutation.isLoading 
+              ? (selectedChannel ? 'Modification...' : 'Création...') 
+              : (selectedChannel ? 'Modifier' : 'Créer')
+            }
           </Button>
         </DialogActions>
       </Dialog>
@@ -521,21 +632,45 @@ const MultiChannelNotifications: React.FC = () => {
           Test du Canal - {selectedChannel?.name}
         </DialogTitle>
         <DialogContent>
-          {testResult ? (
-            <Alert severity={testResult.success ? 'success' : 'error'} sx={{ mt: 2 }}>
-              {testResult.message}
-            </Alert>
-          ) : (
+          {testChannelMutation.isLoading ? (
             <Box display="flex" alignItems="center" gap={2} sx={{ mt: 2 }}>
               <LinearProgress sx={{ flexGrow: 1 }} />
               <Typography variant="body2">Test en cours...</Typography>
             </Box>
-          )}
+          ) : testResult ? (
+            <Alert severity={testResult.success ? 'success' : 'error'} sx={{ mt: 2 }}>
+              {testResult.message}
+            </Alert>
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTestDialog(false)}>Fermer</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for notifications */}
+      <div>
+        {snackbar.open && (
+          <div style={{ 
+            position: 'fixed', 
+            bottom: 20, 
+            right: 20, 
+            backgroundColor: snackbar.severity === 'success' ? '#4caf50' : '#f44336',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '4px',
+            zIndex: 1000
+          }}>
+            {snackbar.message}
+            <button 
+              onClick={() => setSnackbar({ ...snackbar, open: false })}
+              style={{ marginLeft: 10, background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
     </Box>
   );
 };

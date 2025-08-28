@@ -1,99 +1,113 @@
 import React from 'react';
-import { Box, Card, CardContent, Typography, Chip, IconButton, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
-import { ExpandMore, Warning, CheckCircle, Schedule } from '@mui/icons-material';
-import { Alert } from '../../types/alerts.d';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Chip,
+  Button,
+  Grid,
+  Fab
+} from '@mui/material';
+import { CheckCircle, Visibility, Add } from '@mui/icons-material';
+import { alertLevelColor, alertLevelLabel } from '../../utils/alertUtils';
 
-interface Props {
-  alerts: Alert[];
-  kpiData?: any;
-  onResolve: (alertId: string) => void;
+interface AlertsMobileViewProps {
+  alerts: any[];
+  kpiData: any;
+  onResolve: () => void;
 }
 
-const AlertsMobileView: React.FC<Props> = ({ alerts, kpiData, onResolve }) => {
+const AlertsMobileView: React.FC<AlertsMobileViewProps> = ({ alerts, kpiData, onResolve }) => {
   return (
-    <Box sx={{ display: { xs: 'block', md: 'none' }, p: 2 }}>
+    <Box>
       {/* Mobile KPI Cards */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Indicateurs Clés</Typography>
-        <Box display="flex" gap={1} sx={{ overflowX: 'auto', pb: 1 }}>
-          <Card sx={{ minWidth: 120, borderLeft: '4px solid #faad14' }}>
-            <CardContent sx={{ p: 1.5 }}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Warning color="warning" fontSize="small" />
-                <Box>
-                  <Typography variant="h6">{kpiData?.totalAlerts || 0}</Typography>
-                  <Typography variant="caption">Alertes</Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-          
-          <Card sx={{ minWidth: 120, borderLeft: '4px solid #ff4d4f' }}>
-            <CardContent sx={{ p: 1.5 }}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <Warning color="error" fontSize="small" />
-                <Box>
-                  <Typography variant="h6">{kpiData?.criticalAlerts || 0}</Typography>
-                  <Typography variant="caption">Critiques</Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-          
-          <Card sx={{ minWidth: 120, borderLeft: '4px solid #52c41a' }}>
-            <CardContent sx={{ p: 1.5 }}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <CheckCircle color="success" fontSize="small" />
-                <Box>
-                  <Typography variant="h6">{kpiData?.resolvedToday || 0}</Typography>
-                  <Typography variant="caption">Résolues</Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
+      {kpiData && (
+        <Grid container spacing={2} mb={3}>
+          <Grid item xs={6}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="h5" color="error">
+                  {kpiData.criticalAlerts || 0}
+                </Typography>
+                <Typography variant="caption">Critiques</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="h5" color="success.main">
+                  {kpiData.resolvedToday || 0}
+                </Typography>
+                <Typography variant="caption">Résolues</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
 
-      {/* Mobile Alerts List */}
-      <Typography variant="h6" gutterBottom>Alertes Actives</Typography>
-      {alerts.map((alert, index) => (
-        <Accordion key={alert.id || index} sx={{ mb: 1 }}>
-          <AccordionSummary expandIcon={<ExpandMore />}>
-            <Box display="flex" alignItems="center" justifyContent="space-between" width="100%">
-              <Box>
-                <Typography variant="subtitle2">
-                  Bordereau: {alert.bordereau.id}
+      {/* Mobile Alert Cards */}
+      <Box>
+        {alerts?.slice(0, 10).map((alert: any) => (
+          <Card key={alert.bordereau.id} sx={{ mb: 2 }}>
+            <CardContent>
+              <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  #{alert.bordereau.id}
                 </Typography>
                 <Chip
+                  label={alertLevelLabel(alert.alertLevel)}
+                  sx={{
+                    backgroundColor: alertLevelColor(alert.alertLevel),
+                    color: '#fff',
+                  }}
                   size="small"
-                  label={alert.alertLevel === 'red' ? 'Critique' : alert.alertLevel === 'orange' ? 'Alerte' : 'Normal'}
-                  color={alert.alertLevel === 'red' ? 'error' : alert.alertLevel === 'orange' ? 'warning' : 'success'}
                 />
               </Box>
-            </Box>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {alert.reason}
-            </Typography>
-            <Box display="flex" gap={1} mt={1}>
-              <Chip
-                size="small"
-                label="Résoudre"
-                color="success"
-                onClick={() => onResolve(alert.id || alert.bordereau.id)}
-                clickable
-              />
-              <Chip
-                size="small"
-                label="Détails"
-                variant="outlined"
-                clickable
-              />
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-      ))}
+              
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                {alert.reason}
+              </Typography>
+              
+              <Box display="flex" gap={1} mb={2}>
+                <Chip
+                  label={alert.bordereau.statut}
+                  color={alert.bordereau.statut === 'CLOTURE' ? 'success' : 'warning'}
+                  size="small"
+                />
+              </Box>
+              
+              <Box display="flex" gap={1}>
+                <Button
+                  size="small"
+                  startIcon={<CheckCircle />}
+                  color="success"
+                  onClick={onResolve}
+                >
+                  Résoudre
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<Visibility />}
+                  onClick={() => window.open(`/bordereaux/${alert.bordereau.id}`, '_blank')}
+                >
+                  Voir
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+
+      {/* Floating Action Button */}
+      <Fab
+        color="primary"
+        sx={{ position: 'fixed', bottom: 16, right: 16 }}
+        onClick={() => window.location.reload()}
+      >
+        <Add />
+      </Fab>
     </Box>
   );
 };

@@ -1,7 +1,7 @@
 import { LocalAPI } from '../services/axios';
 import {
   Alert,
-  TeamOverloadAlert,
+  TeamOverload,
   ReclamationAlert,
   DelayPrediction,
   PriorityBordereau,
@@ -31,7 +31,7 @@ export const getAlertsDashboard = async (params: AlertsDashboardQuery): Promise<
 /**
  * Fetch team overload alerts.
  */
-export const getTeamOverloadAlerts = async (): Promise<TeamOverloadAlert[]> => {
+export const getTeamOverloadAlerts = async (): Promise<TeamOverload[]> => {
   const { data } = await LocalAPI.get('/alerts/team-overload');
   return data;
 };

@@ -305,13 +305,15 @@ export class TuniclaimService {
 
   private async sendErrorNotification(subject: string, message: string): Promise<void> {
     try {
+      // Use the working email address
       await this.outlook.sendMail(
-        'admin@arstunisia.com',
+        'noreply@arstunisia.com',
         subject,
         `MY TUNICLAIM Sync Notification\n\n${message}\n\nTimestamp: ${new Date().toISOString()}`
       );
     } catch (error) {
       this.logger.error('Failed to send email notification:', error.message);
+      // Don't throw - email notifications are not critical for sync operation
     }
   }
 

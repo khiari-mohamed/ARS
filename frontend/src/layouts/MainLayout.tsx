@@ -6,6 +6,8 @@ import { LocalAPI } from '../services/axios';
 import io from 'socket.io-client';
 import { getSocketUrl } from '../utils/getSocketUrl';
 import { Sidebar } from '../components/Sidebar';
+import { IconButton, Badge, Menu, MenuItem, Typography, Box } from '@mui/material';
+import { Notifications as NotificationsIcon } from '@mui/icons-material';
 
 const MainLayout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
@@ -53,33 +55,74 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Listen for SLA alerts via socket.io
+  // Poll for notifications every 30 seconds
   useEffect(() => {
-    const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
-    socket.on('sla_alert', (data: any) => {
-      setNotifications(prev => [
-        { message: data.message, read: false, _type: 'sla' },
-        ...prev.filter(n => n._type !== 'sla')
-      ]);
-    });
-    return () => { socket.disconnect(); };
-  }, []);
+    const fetchNotifications = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const { data } = await LocalAPI.get('/notifications');
+        if (Array.isArray(data)) {
+          setNotifications(data.map((n: any) => ({
+            message: n.message,
+            read: n.read,
+            _type: n.type
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error);
+      }
+    };
+    
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    
+    return () => clearInterval(interval);
+  }, [user?.id]);
 
-  // TODO: Add more sources (finance, virement, etc.) as needed, following the same pattern
+  // Mark notifications as read when clicked
+  const markAsRead = async (index: number) => {
+    setNotifications(prev => prev.map((n, i) => i === index ? {...n, read: true} : n));
+  };
+
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className={`layout-root${sidebarOpen ? "" : " sidebar-collapsed"}`}>
       {/* Sidebar Component */}
       <Sidebar open={sidebarOpen} onToggle={handleToggleSidebar} userRole={userRole} />
-      <main className="main-content   style={{
-    marginLeft: sidebarOpen ? 250 : 0,
-    padding: '1rem',
-    transition: 'margin-left 0.3s ease',
-  }}">
-        {/* Global Notification Center */}
-        <div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 1000, width: 350 }}>
-          <NotificationCenter notifications={notifications} />
-        </div>
+      
+      {/* Header with Bell Icon */}
+      <Box sx={{ position: 'fixed', top: 16, right: 16, zIndex: 1200 }}>
+        <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
+          <Badge badgeContent={unreadCount} color="error">
+            <NotificationsIcon />
+          </Badge>
+        </IconButton>
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={() => setAnchorEl(null)}
+          PaperProps={{ sx: { width: 320, maxHeight: 400 } }}
+        >
+          {notifications.length === 0 ? (
+            <MenuItem><Typography>Aucune notification</Typography></MenuItem>
+          ) : (
+            notifications.map((notif, i) => (
+              <MenuItem key={i} sx={{ opacity: notif.read ? 0.6 : 1 }}>
+                <Typography variant="body2">{notif.message}</Typography>
+              </MenuItem>
+            ))
+          )}
+        </Menu>
+      </Box>
+
+      <main style={{
+        marginLeft: window.innerWidth > 900 ? (sidebarOpen ? 250 : 0) : 0,
+        padding: '1rem',
+        transition: 'margin-left 0.3s ease',
+      }}>
         <Outlet />
       </main>
     </div>

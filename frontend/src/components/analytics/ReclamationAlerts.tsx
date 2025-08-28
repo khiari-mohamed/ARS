@@ -1,93 +1,73 @@
 import React from 'react';
-import { ReclamationAlert } from '../../types/alerts.d';
-import { List, ListItem, ListItemText, Chip, Typography, Link, Box } from '@mui/material';
-import { alertLevelColor } from '../../utils/alertUtils';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import {
+  Card,
+  CardContent,
+  Typography,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Chip,
+  Box,
+  CircularProgress
+} from '@mui/material';
+import { Report, Warning } from '@mui/icons-material';
 
-interface Props {
-  reclamations?: ReclamationAlert[];
+interface ReclamationAlertsProps {
+  reclamations?: any[];
+  data?: any[];
+  loading?: boolean;
 }
 
-const ReclamationAlerts: React.FC<Props> = ({ reclamations }) => {
-  if (!reclamations || reclamations.length === 0) {
-    return <Typography>Aucune réclamation en cours.</Typography>;
+const ReclamationAlerts: React.FC<ReclamationAlertsProps> = ({ reclamations, data, loading }) => {
+  const reclamationData = reclamations || data || [];
+  
+  if (loading) {
+    return <CircularProgress />;
   }
 
   return (
-    <>
-      <Typography variant="h6" gutterBottom>
-        Alertes réclamations
-      </Typography>
-      <List>
-        {reclamations.map((r, idx) => {
-          const reclamationId = r.reclamation.id || idx;
-          const clientId = r.reclamation.clientId;
-          const courrierId = r.reclamation.courrierId || r.reclamation.id; // fallback if courrierId not present
-
-          return (
-            <ListItem key={reclamationId} divider alignItems="flex-start">
-              <Chip
-                label="Réclamation"
-                sx={{
-                  backgroundColor: alertLevelColor('red'),
-                  color: '#fff',
-                  mr: 2,
-                  minWidth: 100,
-                }}
-              />
-              <Box flex={1}>
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          Alertes Réclamations ({reclamationData.length})
+        </Typography>
+        
+        {reclamationData.length === 0 ? (
+          <Typography color="text.secondary">
+            Aucune réclamation récente
+          </Typography>
+        ) : (
+          <List>
+            {reclamationData.slice(0, 5).map((reclamation, index) => (
+              <ListItem key={index}>
+                <ListItemIcon>
+                  <Report color="error" />
+                </ListItemIcon>
                 <ListItemText
-                  primary={
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <span>
-                        Réclamation #{reclamationId}
-                        {clientId && (
-                          <Link
-                            href={`/clients/${clientId}`}
-                            target="_blank"
-                            rel="noopener"
-                            underline="hover"
-                            sx={{ ml: 1 }}
-                          >
-                            Voir client <OpenInNewIcon fontSize="inherit" sx={{ verticalAlign: 'middle' }} />
-                          </Link>
-                        )}
-                        {courrierId && (
-                          <Link
-                            href={`/reclamations/${courrierId}`}
-                            target="_blank"
-                            rel="noopener"
-                            underline="hover"
-                            sx={{ ml: 2 }}
-                          >
-                            Voir courrier <OpenInNewIcon fontSize="inherit" sx={{ verticalAlign: 'middle' }} />
-                          </Link>
-                        )}
-                      </span>
+                  primary={`Réclamation #${reclamation.reclamation.id}`}
+                  secondary={
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {reclamation.reason}
+                      </Typography>
+                      <Typography variant="caption">
+                        Statut: {reclamation.status}
+                      </Typography>
                     </Box>
                   }
-                  secondary={
-                    <>
-                      <Typography component="span" variant="body2" color="text.secondary">
-                        {r.reason}
-                      </Typography>
-                      <Box mt={0.5}>
-                        <Chip
-                          label={`Statut: ${r.status || 'Inconnu'}`}
-                          size="small"
-                          color="default"
-                          sx={{ ml: 0, background: '#eee', color: '#333' }}
-                        />
-                      </Box>
-                    </>
-                  }
                 />
-              </Box>
-            </ListItem>
-          );
-        })}
-      </List>
-    </>
+                <Chip
+                  label="Critique"
+                  color="error"
+                  size="small"
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

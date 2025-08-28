@@ -1,89 +1,73 @@
 import React from 'react';
-import { TeamOverloadAlert } from '../../types/alerts.d';
 import {
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
+  Card,
+  CardContent,
   Typography,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
   Chip,
   Box,
-  CircularProgress,
-  Alert as MuiAlert,
+  CircularProgress
 } from '@mui/material';
-import { alertLevelColor, alertLevelLabel } from '../../utils/alertUtils';
+import { Warning, Group } from '@mui/icons-material';
 
-interface Props {
-  overloads?: TeamOverloadAlert[];
-  isLoading?: boolean;
-  error?: Error | null;
+interface TeamOverloadPanelProps {
+  overloads?: any[];
+  data?: any[];
+  loading?: boolean;
 }
 
-const TeamOverloadPanel: React.FC<Props> = ({ overloads, isLoading = false, error = null }) => {
-  if (isLoading) {
-    return (
-      <Box display="flex" alignItems="center" gap={1} mt={2}>
-        <CircularProgress size={20} />
-        <Typography>Chargement des surcharges d'équipe...</Typography>
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <MuiAlert severity="error" sx={{ mt: 2 }}>
-        Erreur lors du chargement des surcharges d'équipe : {error.message}
-      </MuiAlert>
-    );
-  }
-
-  if (!overloads || overloads.length === 0) {
-    return <Typography>Aucune surcharge détectée.</Typography>;
+const TeamOverloadPanel: React.FC<TeamOverloadPanelProps> = ({ overloads, data, loading }) => {
+  const teamData = overloads || data || [];
+  
+  if (loading) {
+    return <CircularProgress />;
   }
 
   return (
-    <>
-      <Typography variant="h6" gutterBottom>
-        Surcharge par équipe
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Equipe</TableCell>
-            <TableCell>Email</TableCell>
-            <TableCell>Date création</TableCell>
-            <TableCell>Nb. Bordereaux</TableCell>
-            <TableCell>Niveau</TableCell>
-            <TableCell>Cause</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {overloads.map((o) => (
-            <TableRow key={o.team.id}>
-              <TableCell>{o.team.fullName}</TableCell>
-              <TableCell>{o.team.email}</TableCell>
-              <TableCell>
-                {o.team.createdAt
-                  ? new Date(o.team.createdAt).toLocaleDateString()
-                  : '-'}
-              </TableCell>
-              <TableCell>{o.count}</TableCell>
-              <TableCell>
-                <Chip
-                  label={alertLevelLabel(o.alert)}
-                  sx={{
-                    backgroundColor: alertLevelColor(o.alert),
-                    color: '#fff',
-                  }}
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          Surcharge d'Équipe ({teamData.length})
+        </Typography>
+        
+        {teamData.length === 0 ? (
+          <Typography color="text.secondary">
+            Aucune surcharge détectée
+          </Typography>
+        ) : (
+          <List>
+            {teamData.map((overload, index) => (
+              <ListItem key={index}>
+                <ListItemIcon>
+                  <Group color={overload.alert === 'red' ? 'error' : 'warning'} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={overload.team.fullName}
+                  secondary={
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {overload.reason}
+                      </Typography>
+                      <Typography variant="caption">
+                        Charge: {overload.count} dossiers
+                      </Typography>
+                    </Box>
+                  }
                 />
-              </TableCell>
-              <TableCell>{o.reason}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </>
+                <Chip
+                  label={overload.alert === 'red' ? 'Critique' : 'Alerte'}
+                  color={overload.alert === 'red' ? 'error' : 'warning'}
+                  size="small"
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

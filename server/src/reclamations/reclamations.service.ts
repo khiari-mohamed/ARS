@@ -4,15 +4,21 @@ import { CreateReclamationDto } from './dto/create-reclamation.dto';
 import { UpdateReclamationDto } from './dto/update-reclamation.dto';
 import { SearchReclamationDto } from './dto/search-reclamation.dto';
 import { NotificationService } from './notification.service';
+import { AdvancedAnalyticsService } from './advanced-analytics.service';
+import { AIClassificationService } from './ai-classification.service';
+import { CustomerPortalService } from './customer-portal.service';
 import axios from 'axios';
 
-const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8001';
+const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
 
 @Injectable()
 export class ReclamationsService {
   constructor(
     private prisma: PrismaService,
     public notificationService: NotificationService,
+    public advancedAnalyticsService: AdvancedAnalyticsService,
+    public aiClassificationService: AIClassificationService,
+    public customerPortalService: CustomerPortalService,
   ) {}
 
 
@@ -276,6 +282,39 @@ export class ReclamationsService {
     return reclamation;
   }
 
+  async getAllReclamations(query: any, user: any) {
+    this.checkRole(user, 'view');
+    const where: any = {};
+    
+    // Apply filters
+    if (query.clientId) where.clientId = query.clientId;
+    if (query.status) where.status = query.status;
+    if (query.severity) where.severity = query.severity;
+    if (query.type) where.type = query.type;
+    if (query.assignedToId) where.assignedToId = query.assignedToId;
+    if (query.fromDate) {
+      where.createdAt = { ...where.createdAt, gte: new Date(query.fromDate) };
+    }
+    if (query.toDate) {
+      where.createdAt = { ...where.createdAt, lte: new Date(query.toDate) };
+    }
+    
+    const take = query.take ? parseInt(query.take) : 1000;
+    const skip = query.skip ? parseInt(query.skip) : 0;
+    
+    return this.prisma.reclamation.findMany({
+      where,
+      include: {
+        client: true,
+        assignedTo: true,
+        createdBy: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+    });
+  }
+
   async getReclamation(id: string, user: any) {
     this.checkRole(user, 'view');
     return this.prisma.reclamation.findUnique({
@@ -370,30 +409,102 @@ export class ReclamationsService {
   // Analytics: dashboard, reporting, performance tracking
   async analytics(user: any) {
     this.checkRole(user, 'view');
-    // Number of complaints (daily, weekly, by client or user)
-    const total = await this.prisma.reclamation.count();
-    const open = await this.prisma.reclamation.count({ where: { status: 'OPEN' } });
-    const resolved = await this.prisma.reclamation.count({ where: { status: 'RESOLVED' } });
-    const byType = await this.prisma.reclamation.groupBy({ by: ['type'], _count: { id: true } });
-    const bySeverity = await this.prisma.reclamation.groupBy({ by: ['severity'], _count: { id: true } });
-    const byDepartment = await this.prisma.reclamation.groupBy({ by: ['department'], _count: { id: true } });
-    // Resolution time (avg, min, max)
-    const histories = await this.prisma.reclamationHistory.findMany({
-      where: { toStatus: 'RESOLVED' },
-      include: { reclamation: true },
-    });
-    const times = histories.map(h => {
-      const created = h.reclamation.createdAt.getTime();
-      const resolved = h.createdAt.getTime();
-      return (resolved - created) / 1000; // seconds
-    });
-    const avgResolution = times.length ? times.reduce((a,b)=>a+b,0)/times.length : 0;
-    const minResolution = times.length ? Math.min(...times) : 0;
-    const maxResolution = times.length ? Math.max(...times) : 0;
-    // Performance by user/manager
-    const byUser = await this.prisma.reclamation.groupBy({ by: ['assignedToId'], _count: { id: true } });
-    const byManager = await this.prisma.reclamation.groupBy({ by: ['createdById'], _count: { id: true } });
-    return { total, open, resolved, byType, bySeverity, byDepartment, avgResolution, minResolution, maxResolution, byUser, byManager };
+    
+    try {
+      const total = await this.prisma.reclamation.count();
+      
+      const statusCounts = await this.prisma.reclamation.groupBy({
+        by: ['status'],
+        _count: { id: true }
+      });
+      
+      let open = 0;
+      let resolved = 0;
+      
+      statusCounts.forEach(s => {
+        const status = s.status?.toUpperCase();
+        if (status === 'OPEN' || status === 'OUVERTE') {
+          open += s._count.id;
+        } else if (status === 'RESOLVED' || status === 'RESOLU' || status === 'FERMEE') {
+          resolved += s._count.id;
+        }
+      });
+      
+      const byType = await this.prisma.reclamation.groupBy({
+        by: ['type'],
+        _count: { id: true }
+      });
+      
+      const severityData = await this.prisma.reclamation.groupBy({
+        by: ['severity'],
+        _count: { id: true }
+      });
+      
+      const bySeverity = severityData.map(s => {
+        let normalizedSeverity = s.severity;
+        const sev = s.severity?.toLowerCase();
+        
+        if (sev === 'low' || sev === 'faible' || sev === 'basse') {
+          normalizedSeverity = 'low';
+        } else if (sev === 'medium' || sev === 'moyenne' || sev === 'moyen') {
+          normalizedSeverity = 'medium';
+        } else if (sev === 'high' || sev === 'haute' || sev === 'critical' || sev === 'critique') {
+          normalizedSeverity = 'critical';
+        }
+        
+        return {
+          severity: normalizedSeverity,
+          _count: s._count
+        };
+      });
+      
+      const resolvedReclamations = await this.prisma.reclamation.findMany({
+        where: {
+          OR: [
+            { status: 'RESOLVED' },
+            { status: 'RESOLU' },
+            { status: 'FERMEE' }
+          ]
+        },
+        select: {
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+      
+      const times = resolvedReclamations.map(r => {
+        const created = r.createdAt.getTime();
+        const resolved = r.updatedAt.getTime();
+        return resolved - created;
+      });
+      
+      const avgResolution = times.length ? times.reduce((a,b) => a + b, 0) / times.length : 0;
+      const minResolution = times.length ? Math.min(...times) : 0;
+      const maxResolution = times.length ? Math.max(...times) : 0;
+      
+      return {
+        total,
+        open,
+        resolved,
+        byType: byType || [],
+        bySeverity: bySeverity || [],
+        avgResolution,
+        minResolution,
+        maxResolution
+      };
+      
+    } catch (error) {
+      return {
+        total: 0,
+        open: 0,
+        resolved: 0,
+        byType: [],
+        bySeverity: [],
+        avgResolution: 0,
+        minResolution: 0,
+        maxResolution: 0
+      };
+    }
   }
 
   // Complaint trend analytics (for charting)

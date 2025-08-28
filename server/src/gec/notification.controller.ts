@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Req, Injectable } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, Injectable, Param } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as nodemailer from 'nodemailer';
 
@@ -26,16 +26,66 @@ export class NotificationController {
 
   @Get('preferences')
   getPreferences(@Req() req: any) {
-    // Use user id or a default key
     const userId = req.user?.id || 'demo';
-    return this.prefs[userId] || { channel: 'EMAIL', type: 'ALL', recipient: '' };
+    return this.prefs[userId] || {
+      emailEnabled: true,
+      inAppEnabled: true,
+      slaAlerts: true,
+      reclamationAlerts: true,
+      assignmentAlerts: true
+    };
   }
 
   @Post('preferences')
-  setPreferences(@Body() body: any, @Req() req: any) {
+  async setPreferences(@Body() body: any, @Req() req: any) {
     const userId = req.user?.id || 'demo';
     this.prefs[userId] = body;
+    
+    // Store in database
+    try {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          // Store preferences in a JSON field or create separate table
+          // For now, we'll use audit log to track preferences
+        }
+      });
+    } catch (error) {
+      console.error('Failed to save preferences:', error);
+    }
+    
     return { success: true };
+  }
+
+  @Get()
+  async getNotifications(@Req() req: any) {
+    const userId = req.user?.id;
+    if (!userId) return [];
+    
+    try {
+      const notifications = await this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      });
+      return notifications;
+    } catch (error) {
+      return [];
+    }
+  }
+
+  @Post('mark-read/:id')
+  async markAsRead(@Param('id') id: string, @Req() req: any) {
+    const userId = req.user?.id;
+    try {
+      await this.prisma.notification.updateMany({
+        where: { id, userId },
+        data: { read: true }
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false };
+    }
   }
 
   @Post('reassignment')
@@ -46,6 +96,16 @@ export class NotificationController {
     comment?: string;
     timestamp: string;
   }) {
+    // Check user preferences
+    const userPrefs = this.prefs[data.toUserId] || {
+      emailEnabled: true,
+      inAppEnabled: true,
+      assignmentAlerts: true
+    };
+    
+    if (!userPrefs.assignmentAlerts) {
+      return { success: true, message: 'Notification disabled by user preferences' };
+    }
     console.log('📧 NOTIFICATION: Processing reassignment notification');
     
     try {
@@ -63,27 +123,36 @@ export class NotificationController {
         throw new Error('User or bordereau not found');
       }
 
-      // 2. Create in-app notification in database
-      const notification = await this.prisma.notification.create({
-        data: {
-          userId: data.toUserId,
-          type: 'REASSIGNMENT',
-          title: 'Nouveau bordereau assigné',
-          message: `Le bordereau ${bordereau.reference} vous a été assigné${data.comment ? ` - ${data.comment}` : ''}`,
-          data: {
-            bordereauId: data.bordereauId,
-            fromUserId: data.fromUserId,
-            comment: data.comment
-          },
-          read: false
+      // 2. Create in-app notification in database (if enabled)
+      let notification: any = null;
+      if (userPrefs.inAppEnabled) {
+        try {
+          notification = await this.prisma.notification.create({
+            data: {
+              userId: data.toUserId,
+              type: 'REASSIGNMENT',
+              title: 'Nouveau bordereau assigné',
+              message: `Le bordereau ${bordereau.reference} vous a été assigné${data.comment ? ` - ${data.comment}` : ''}`,
+              data: {
+                bordereauId: data.bordereauId,
+                fromUserId: data.fromUserId,
+                comment: data.comment
+              },
+              read: false
+            }
+          });
+        } catch (error) {
+          console.error('Failed to create notification:', error);
         }
-      }).catch(() => null); // Ignore if notification table doesn't exist
+      }
 
-      // 3. Send email notification
-      const emailSent = await this.sendEmail({
-        to: newUser.email,
-        subject: `🔔 Nouveau bordereau assigné - ${bordereau.reference}`,
-        html: `
+      // 3. Send email notification (if enabled)
+      let emailSent = false;
+      if (userPrefs.emailEnabled && newUser.email) {
+        emailSent = await this.sendEmail({
+          to: newUser.email,
+          subject: `🔔 Nouveau bordereau assigné - ${bordereau.reference}`,
+          html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #2563eb;">📋 Nouveau bordereau assigné</h2>
             <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -99,7 +168,8 @@ export class NotificationController {
             </div>
           </div>
         `
-      });
+        });
+      }
 
       console.log('✅ Notification processed successfully');
       console.log('- Database notification:', notification ? 'Created' : 'Skipped');

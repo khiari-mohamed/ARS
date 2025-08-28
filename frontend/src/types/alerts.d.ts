@@ -1,80 +1,202 @@
-export type AlertLevel = 'green' | 'orange' | 'red';
-
-export type AlertType = 'SLA_BREACH' | 'PERFORMANCE' | 'WORKLOAD' | 'CLAIM' | 'SYSTEM';
-
-export type AlertStatus = 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED';
-
-export interface AlertBordereau {
-  id: string;
-  statut: string;
-  teamId: string;
-  clientId: string;
-  userId?: string;
-  dateReception?: string;
-  createdAt: string;
-  courriers?: any[];
-  virement?: any;
-  [key: string]: any;
-}
-
 export interface Alert {
   id?: string;
-  bordereau: AlertBordereau;
-  alertLevel: AlertLevel;
-  alertType?: AlertType;
-  status?: AlertStatus;
+  bordereau: {
+    id: string;
+    reference: string;
+    statut: string;
+    clientId?: string;
+    teamId?: string;
+    dateReception?: string;
+    createdAt: string;
+    assignedToUserId?: string;
+  };
+  alertLevel: 'green' | 'orange' | 'red';
+  alertType?: string;
   reason: string;
-  assignedToId?: string;
+  slaThreshold?: number;
+  daysSinceReception?: number;
+  aiScore?: number;
+  aiPrediction?: any;
   assignedTo?: {
     id: string;
     fullName: string;
+    email: string;
   };
-  acknowledgedAt?: string;
-  resolvedAt?: string;
   comments?: AlertComment[];
+  createdAt?: string;
+  resolved?: boolean;
+  resolvedAt?: string;
 }
 
 export interface AlertComment {
   id: string;
-  alertId: string;
-  userId: string;
+  comment: string;
   user?: {
     id: string;
     fullName: string;
   };
-  comment: string;
   createdAt: string;
 }
 
-export interface TeamOverloadAlert {
+export interface AlertKPI {
+  totalAlerts: number;
+  criticalAlerts: number;
+  resolvedToday: number;
+  avgResolutionTime: number;
+  slaCompliance: number;
+  alertsByDay: Array<{
+    date: string;
+    critical: number;
+    warning: number;
+    normal: number;
+  }>;
+  alertsByType: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
+}
+
+export interface DelayPrediction {
+  forecast: any[];
+  trend_direction: string;
+  recommendations: Array<{
+    action: string;
+    priority: string;
+    reasoning: string;
+  }>;
+  ai_confidence: number;
+  next_week_prediction: number;
+  nextWeekForecast?: number;
+  recommendation?: string;
+}
+
+export interface TeamOverload {
   team: {
     id: string;
     fullName: string;
-    email: string;
     role: string;
-    createdAt: string;
-    password?: string;
   };
   count: number;
-  alert: AlertLevel;
+  alert: string;
   reason: string;
 }
 
 export interface ReclamationAlert {
-  reclamation: any;
-  alert: AlertLevel;
+  reclamation: {
+    id: string;
+    type: string;
+    status: string;
+    description: string;
+    createdAt: string;
+  };
+  alert: string;
   reason: string;
   status: string;
 }
 
-export interface DelayPrediction {
-  slope: number;
-  intercept: number;
-  nextWeekForecast: number;
-  recommendation: string;
+export interface FinanceAlert {
+  bordereau: {
+    id: string;
+    reference: string;
+  };
+  alertLevel: 'red';
+  reason: string;
+  alertType: string;
+  hoursOverdue: number;
 }
 
-export interface PriorityBordereau extends Alert {}
+export interface EscalationRule {
+  id: string;
+  name: string;
+  alertType: string;
+  severity: string;
+  active: boolean;
+}
+
+export interface EscalationMetrics {
+  totalEscalations: number;
+  acknowledgedEscalations: number;
+  resolvedEscalations: number;
+  avgEscalationTime: number;
+  successRate: number;
+}
+
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  type: 'email' | 'sms' | 'push' | 'slack' | 'teams';
+  active: boolean;
+  priority: number;
+}
+
+export interface AlertAnalytics {
+  alertType: string;
+  totalAlerts: number;
+  truePositives: number;
+  falsePositives: number;
+  precision: number;
+  recall: number;
+  f1Score: number;
+}
+
+export interface AlertFilters {
+  teamId?: string;
+  userId?: string;
+  clientId?: string;
+  fromDate?: string;
+  toDate?: string;
+  alertLevel?: string;
+}
+
+export interface AlertsDashboardQuery {
+  teamId?: string;
+  userId?: string;
+  clientId?: string;
+  fromDate?: string;
+  toDate?: string;
+  alertLevel?: string;
+  alertType?: string;
+  status?: string;
+}
+
+export interface AlertHistoryQuery {
+  bordereauId?: string;
+  userId?: string;
+  alertLevel?: string;
+  fromDate?: string;
+  toDate?: string;
+}
+
+export interface AlertHistoryEntry {
+  id: string;
+  alertType: string;
+  alertLevel: 'green' | 'orange' | 'red';
+  message: string;
+  createdAt: string;
+  resolved: boolean;
+  resolvedAt?: string;
+  bordereauId?: string;
+  userId?: string;
+  user?: {
+    id: string;
+    fullName: string;
+  };
+  bordereau?: {
+    id: string;
+    reference: string;
+  };
+}
+
+export interface PriorityBordereau {
+  id: string;
+  reference: string;
+  priority: number;
+  alertLevel: 'green' | 'orange' | 'red';
+  reason: string;
+  daysSinceReception: number;
+  slaThreshold: number;
+}
 
 export interface ComparativeAnalytics {
   planned: number;
@@ -82,57 +204,13 @@ export interface ComparativeAnalytics {
   gap: number;
 }
 
-export interface AlertHistoryEntry {
-  id: string;
-  bordereauId?: string;
-  documentId?: string;
-  userId?: string;
-  alertType: string;
-  alertLevel: AlertLevel;
-  message: string;
-  notifiedRoles: string[];
-  createdAt: string;
-  resolved?: boolean;
-  resolvedAt?: string;
-  acknowledgedAt?: string;
-  bordereau?: AlertBordereau;
-  document?: any;
-  user?: any;
-  comments?: AlertComment[];
-}
-
-export interface AlertsDashboardQuery {
-  teamId?: string;
-  userId?: string;
-  clientId?: string;
-  alertType?: AlertType;
-  status?: AlertStatus;
-  fromDate?: string;
-  toDate?: string;
-}
-
-export interface AlertHistoryQuery {
-  bordereauId?: string;
-  userId?: string;
-  alertLevel?: AlertLevel;
-  alertType?: AlertType;
-  resolved?: boolean;
-  fromDate?: string;
-  toDate?: string;
-}
-
-export interface CreateAlertDTO {
-  bordereauId?: string;
-  documentId?: string;
-  alertType: AlertType;
-  alertLevel: AlertLevel;
-  message: string;
-  assignedToId?: string;
-}
-
-export interface UpdateAlertDTO {
-  status?: AlertStatus;
-  assignedToId?: string;
-  acknowledgedAt?: string;
-  resolvedAt?: string;
+export interface TeamOverloadAlert {
+  team: {
+    id: string;
+    fullName: string;
+    role: string;
+  };
+  count: number;
+  alert: string;
+  reason: string;
 }

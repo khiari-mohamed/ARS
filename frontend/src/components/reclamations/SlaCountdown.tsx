@@ -1,98 +1,130 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Chip, Tooltip } from '@mui/material';
-import { AccessTime, Warning, Error } from '@mui/icons-material';
+import { Warning, Schedule, CheckCircle, Error } from '@mui/icons-material';
 
 interface SlaCountdownProps {
   createdAt: string | Date;
   slaDays: number;
-  status?: string;
+  status: string;
+  clientName?: string;
 }
 
-function getTimeLeft(createdAt: Date, slaDays: number) {
-  const deadline = new Date(createdAt.getTime() + slaDays * 24 * 60 * 60 * 1000);
-  const now = new Date();
-  const diff = deadline.getTime() - now.getTime();
-  
-  const totalHours = diff / (1000 * 60 * 60);
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-  const minutes = Math.floor((diff / (1000 * 60)) % 60);
-  
-  return { 
-    days, 
-    hours, 
-    minutes, 
-    totalHours,
-    isOverdue: diff <= 0,
-    isAtRisk: totalHours <= 24 && totalHours > 0, // Less than 24h remaining
-    deadline: deadline.toLocaleString()
-  };
+interface SLAStatus {
+  status: 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL';
+  remainingTime: number; // in hours
+  percentageUsed: number;
+  color: 'success' | 'info' | 'warning' | 'error';
+  icon: React.ReactElement;
+  label: string;
 }
 
-export const SlaCountdown: React.FC<SlaCountdownProps> = ({ createdAt, slaDays, status }) => {
-  const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(new Date(createdAt), slaDays));
+const SlaCountdown: React.FC<SlaCountdownProps> = ({ 
+  createdAt, 
+  slaDays, 
+  status, 
+  clientName 
+}) => {
+  const [slaStatus, setSlaStatus] = useState<SLAStatus | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeLeft(getTimeLeft(new Date(createdAt), slaDays));
-    }, 30000); // update every 30 seconds for more accuracy
+    const calculateSLA = () => {
+      if (status === 'RESOLVED' || status === 'CLOSED') {
+        setSlaStatus({
+          status: 'ON_TIME',
+          remainingTime: 0,
+          percentageUsed: 100,
+          color: 'success',
+          icon: <CheckCircle />,
+          label: 'Résolu'
+        });
+        return;
+      }
+
+      const now = new Date();
+      const created = new Date(createdAt);
+      const deadline = new Date(created.getTime() + slaDays * 24 * 60 * 60 * 1000);
+      
+      const totalTime = deadline.getTime() - created.getTime();
+      const elapsedTime = now.getTime() - created.getTime();
+      const remainingTime = Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60)));
+      
+      const percentageUsed = Math.min(100, (elapsedTime / totalTime) * 100);
+      
+      let slaData: SLAStatus;
+
+      if (remainingTime <= 0) {
+        slaData = {
+          status: 'OVERDUE',
+          remainingTime: 0,
+          percentageUsed: 100,
+          color: 'error',
+          icon: <Error />,
+          label: 'En retard'
+        };
+      } else if (percentageUsed >= 90) {
+        slaData = {
+          status: 'CRITICAL',
+          remainingTime,
+          percentageUsed,
+          color: 'error',
+          icon: <Warning />,
+          label: `${remainingTime}h`
+        };
+      } else if (percentageUsed >= 70) {
+        slaData = {
+          status: 'AT_RISK',
+          remainingTime,
+          percentageUsed,
+          color: 'warning',
+          icon: <Warning />,
+          label: `${remainingTime}h`
+        };
+      } else {
+        slaData = {
+          status: 'ON_TIME',
+          remainingTime,
+          percentageUsed,
+          color: 'success',
+          icon: <Schedule />,
+          label: `${remainingTime}h`
+        };
+      }
+
+      setSlaStatus(slaData);
+    };
+
+    calculateSLA();
+    const interval = setInterval(calculateSLA, 60000); // Update every minute
+
     return () => clearInterval(interval);
-  }, [createdAt, slaDays]);
+  }, [createdAt, slaDays, status]);
 
-  // Don't show countdown for resolved/closed claims
-  if (status === 'RESOLVED' || status === 'CLOSED') {
-    return (
-      <Chip 
-        label="Terminé" 
-        color="success" 
-        size="small" 
-        icon={<AccessTime />}
-      />
-    );
-  }
+  if (!slaStatus) return null;
 
-  if (timeLeft.isOverdue) {
-    const overdueDays = Math.abs(timeLeft.days);
-    const overdueHours = Math.abs(timeLeft.hours);
+  const getTooltipContent = () => {
+    const created = new Date(createdAt);
+    const deadline = new Date(created.getTime() + slaDays * 24 * 60 * 60 * 1000);
     
     return (
-      <Tooltip title={`Échéance dépassée le ${timeLeft.deadline}`}>
-        <Chip 
-          label={`En retard: ${overdueDays > 0 ? `${overdueDays}j ` : ''}${overdueHours}h`}
-          color="error" 
-          size="small" 
-          icon={<Error />}
-          sx={{ animation: 'pulse 2s infinite' }}
-        />
-      </Tooltip>
+      <div>
+        <div><strong>Client:</strong> {clientName || 'N/A'}</div>
+        <div><strong>SLA:</strong> {slaDays} jours</div>
+        <div><strong>Créé le:</strong> {created.toLocaleString('fr-FR')}</div>
+        <div><strong>Échéance:</strong> {deadline.toLocaleString('fr-FR')}</div>
+        <div><strong>Temps utilisé:</strong> {slaStatus.percentageUsed.toFixed(1)}%</div>
+        <div><strong>Statut:</strong> {slaStatus.status}</div>
+      </div>
     );
-  }
-
-  if (timeLeft.isAtRisk) {
-    return (
-      <Tooltip title={`Échéance: ${timeLeft.deadline}`}>
-        <Chip 
-          label={`Risque: ${timeLeft.hours}h ${timeLeft.minutes}m`}
-          color="warning" 
-          size="small" 
-          icon={<Warning />}
-          sx={{ animation: 'pulse 2s infinite' }}
-        />
-      </Tooltip>
-    );
-  }
+  };
 
   return (
-    <Tooltip title={`Échéance: ${timeLeft.deadline}`}>
-      <Chip 
-        label={
-          timeLeft.days > 0 
-            ? `${timeLeft.days}j ${timeLeft.hours}h restants`
-            : `${timeLeft.hours}h ${timeLeft.minutes}m restants`
-        }
-        color="success" 
-        size="small" 
-        icon={<AccessTime />}
+    <Tooltip title={getTooltipContent()} arrow>
+      <Chip
+        icon={slaStatus.icon}
+        label={slaStatus.label}
+        color={slaStatus.color}
+        size="small"
+        variant={slaStatus.status === 'OVERDUE' ? 'filled' : 'outlined'}
       />
     </Tooltip>
   );

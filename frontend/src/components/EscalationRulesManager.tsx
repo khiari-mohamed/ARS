@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { LocalAPI } from '../services/axios';
 import {
   Box,
   Grid,
@@ -46,11 +48,10 @@ import {
 } from '@mui/icons-material';
 
 const EscalationRulesManager: React.FC = () => {
-  const [rules, setRules] = useState<any[]>([]);
-  const [activeEscalations, setActiveEscalations] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState<any>(null);
   const [ruleDialog, setRuleDialog] = useState(false);
+  const [editDialog, setEditDialog] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
+  const [editingRule, setEditingRule] = useState<any>(null);
   const [newRule, setNewRule] = useState({
     name: '',
     alertType: '',
@@ -63,48 +64,47 @@ const EscalationRulesManager: React.FC = () => {
     }>,
     active: true
   });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const queryClient = useQueryClient();
 
-  const loadData = async () => {
-    try {
-      setRules([
-        {
-          id: 'rule_sla_breach',
-          name: 'SLA Breach Escalation',
-          alertType: 'SLA_BREACH',
-          severity: 'high',
-          escalationPath: [
-            { level: 1, delayMinutes: 15, recipients: ['SUPERVISOR'] },
-            { level: 2, delayMinutes: 60, recipients: ['MANAGER'] },
-            { level: 3, delayMinutes: 180, recipients: ['DIRECTOR'] }
-          ],
-          active: true
-        }
-      ]);
-      setActiveEscalations([
-        {
-          id: 'escalation_001',
-          alertId: 'alert_001',
-          currentLevel: 1,
-          startedAt: new Date(Date.now() - 30 * 60 * 1000)
-        }
-      ]);
-      setMetrics({
-        totalEscalations: 45,
-        successRate: 84.4,
-        avgEscalationTime: 2.3
-      });
-    } catch (error) {
-      console.error('Failed to load escalation data:', error);
+  // Fetch escalation rules
+  const { data: rules = [], isLoading: rulesLoading, refetch: refetchRules } = useQuery({
+    queryKey: ['escalation-rules'],
+    queryFn: async () => {
+      const response = await LocalAPI.get('/alerts/escalation/rules');
+      return response.data;
     }
-  };
+  });
 
-  const handleCreateRule = async () => {
-    try {
-      await loadData();
+  // Fetch active escalations
+  const { data: activeEscalations = [] } = useQuery({
+    queryKey: ['active-escalations'],
+    queryFn: async () => {
+      const response = await LocalAPI.get('/alerts/escalation/active');
+      return response.data;
+    },
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  // Fetch escalation metrics
+  const { data: metrics } = useQuery({
+    queryKey: ['escalation-metrics'],
+    queryFn: async () => {
+      const response = await LocalAPI.get('/alerts/escalation/metrics');
+      return response.data;
+    }
+  });
+
+  // Create escalation rule mutation
+  const createRuleMutation = useMutation({
+    mutationFn: async (ruleData: any) => {
+      const response = await LocalAPI.post('/alerts/escalation/rules', ruleData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escalation-rules'] });
+      setSnackbar({ open: true, message: 'Règle créée avec succès', severity: 'success' });
       setRuleDialog(false);
       setNewRule({
         name: '',
@@ -114,9 +114,107 @@ const EscalationRulesManager: React.FC = () => {
         active: true
       });
       setActiveStep(0);
-    } catch (error) {
-      console.error('Failed to create escalation rule:', error);
+    },
+    onError: () => {
+      setSnackbar({ open: true, message: 'Erreur lors de la création', severity: 'error' });
     }
+  });
+
+  // Delete escalation rule mutation
+  const deleteRuleMutation = useMutation({
+    mutationFn: async (ruleId: string) => {
+      await LocalAPI.delete(`/alerts/escalation/rules/${ruleId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escalation-rules'] });
+      setSnackbar({ open: true, message: 'Règle supprimée avec succès', severity: 'success' });
+    },
+    onError: () => {
+      setSnackbar({ open: true, message: 'Erreur lors de la suppression', severity: 'error' });
+    }
+  });
+
+  // Toggle rule status mutation
+  const toggleRuleMutation = useMutation({
+    mutationFn: async ({ ruleId, active }: { ruleId: string; active: boolean }) => {
+      await LocalAPI.patch(`/alerts/escalation/rules/${ruleId}`, { active });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escalation-rules'] });
+      setSnackbar({ open: true, message: 'Statut mis à jour', severity: 'success' });
+    }
+  });
+
+  // Update rule mutation
+  const updateRuleMutation = useMutation({
+    mutationFn: async ({ ruleId, ruleData }: { ruleId: string; ruleData: any }) => {
+      await LocalAPI.patch(`/alerts/escalation/rules/${ruleId}`, ruleData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['escalation-rules'] });
+      setSnackbar({ open: true, message: 'Règle mise à jour avec succès', severity: 'success' });
+    },
+    onError: () => {
+      setSnackbar({ open: true, message: 'Erreur lors de la mise à jour', severity: 'error' });
+    }
+  });
+
+  const handleCreateRule = async () => {
+    createRuleMutation.mutate(newRule);
+  };
+
+  const handleDeleteRule = (ruleId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette règle ?')) {
+      deleteRuleMutation.mutate(ruleId);
+    }
+  };
+
+  const handleToggleRule = (ruleId: string, currentStatus: boolean) => {
+    toggleRuleMutation.mutate({ ruleId, active: !currentStatus });
+  };
+
+  const handleEditRule = (rule: any) => {
+    setEditingRule(rule);
+    setNewRule({
+      name: rule.name,
+      alertType: rule.alertType,
+      severity: rule.severity,
+      escalationPath: rule.escalationPath || [],
+      active: rule.active
+    });
+    setEditDialog(true);
+    setActiveStep(0);
+  };
+
+  const handleUpdateRule = () => {
+    if (editingRule) {
+      updateRuleMutation.mutate({ 
+        ruleId: editingRule.id, 
+        ruleData: newRule 
+      });
+      setEditDialog(false);
+      setEditingRule(null);
+      setNewRule({
+        name: '',
+        alertType: '',
+        severity: '',
+        escalationPath: [],
+        active: true
+      });
+      setActiveStep(0);
+    }
+  };
+
+  const resetForm = () => {
+    setNewRule({
+      name: '',
+      alertType: '',
+      severity: '',
+      escalationPath: [],
+      active: true
+    });
+    setActiveStep(0);
+    setEditingRule(null);
   };
 
   const addEscalationStep = () => {
@@ -233,7 +331,7 @@ const EscalationRulesManager: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {rules.map((rule) => (
+                    {rules.map((rule: any) => (
                       <TableRow key={rule.id}>
                         <TableCell>
                           <Typography variant="subtitle2" fontWeight={600}>
@@ -258,10 +356,21 @@ const EscalationRulesManager: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Box display="flex" gap={1}>
-                            <IconButton size="small">
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleEditRule(rule)}
+                              color="primary"
+                              title="Modifier"
+                            >
                               <Edit />
                             </IconButton>
-                            <IconButton size="small" color="error">
+                            <IconButton 
+                              size="small" 
+                              color="error"
+                              onClick={() => handleDeleteRule(rule.id)}
+                              disabled={deleteRuleMutation.isLoading}
+                              title="Supprimer"
+                            >
                               <Delete />
                             </IconButton>
                           </Box>
@@ -283,7 +392,7 @@ const EscalationRulesManager: React.FC = () => {
               </Typography>
               
               <List>
-                {activeEscalations.map((escalation) => (
+                {activeEscalations.map((escalation: any) => (
                   <ListItem key={escalation.id}>
                     <ListItemIcon>
                       <PlayArrow color="warning" />
@@ -315,7 +424,8 @@ const EscalationRulesManager: React.FC = () => {
         </Grid>
       </Grid>
 
-      <Dialog open={ruleDialog} onClose={() => setRuleDialog(false)} maxWidth="md" fullWidth>
+      {/* Create Rule Dialog */}
+      <Dialog open={ruleDialog} onClose={() => { setRuleDialog(false); resetForm(); }} maxWidth="md" fullWidth>
         <DialogTitle>Nouvelle Règle d'Escalade</DialogTitle>
         <DialogContent>
           <Stepper activeStep={activeStep} orientation="vertical">
@@ -442,10 +552,10 @@ const EscalationRulesManager: React.FC = () => {
                   <Button
                     variant="contained"
                     onClick={handleCreateRule}
-                    disabled={newRule.escalationPath.length === 0}
+                    disabled={newRule.escalationPath.length === 0 || createRuleMutation.isLoading}
                     sx={{ mr: 1 }}
                   >
-                    Créer la Règle
+                    {createRuleMutation.isLoading ? 'Création...' : 'Créer la Règle'}
                   </Button>
                   <Button onClick={() => setActiveStep(0)}>
                     Retour
@@ -456,9 +566,179 @@ const EscalationRulesManager: React.FC = () => {
           </Stepper>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRuleDialog(false)}>Annuler</Button>
+          <Button onClick={() => { setRuleDialog(false); resetForm(); }}>Annuler</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit Rule Dialog */}
+      <Dialog open={editDialog} onClose={() => { setEditDialog(false); resetForm(); }} maxWidth="md" fullWidth>
+        <DialogTitle>Modifier la Règle d'Escalade</DialogTitle>
+        <DialogContent>
+          <Stepper activeStep={activeStep} orientation="vertical">
+            <Step>
+              <StepLabel>Configuration de Base</StepLabel>
+              <StepContent>
+                <Grid container spacing={2} sx={{ mt: 1 }}>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Nom de la règle"
+                      value={newRule.name}
+                      onChange={(e) => setNewRule(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Type d'Alerte</InputLabel>
+                      <Select
+                        value={newRule.alertType}
+                        label="Type d'Alerte"
+                        onChange={(e) => setNewRule(prev => ({ ...prev, alertType: e.target.value }))}
+                      >
+                        <MenuItem value="SLA_BREACH">Dépassement SLA</MenuItem>
+                        <MenuItem value="SYSTEM_DOWN">Système Indisponible</MenuItem>
+                        <MenuItem value="HIGH_VOLUME">Volume Élevé</MenuItem>
+                        <MenuItem value="PROCESSING_DELAY">Retard de Traitement</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Sévérité</InputLabel>
+                      <Select
+                        value={newRule.severity}
+                        label="Sévérité"
+                        onChange={(e) => setNewRule(prev => ({ ...prev, severity: e.target.value }))}
+                      >
+                        <MenuItem value="low">Basse</MenuItem>
+                        <MenuItem value="medium">Moyenne</MenuItem>
+                        <MenuItem value="high">Haute</MenuItem>
+                        <MenuItem value="critical">Critique</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={newRule.active}
+                          onChange={(e) => setNewRule(prev => ({ ...prev, active: e.target.checked }))}
+                        />
+                      }
+                      label="Règle active"
+                    />
+                  </Grid>
+                </Grid>
+                <Box sx={{ mb: 1, mt: 2 }}>
+                  <Button
+                    variant="contained"
+                    onClick={() => setActiveStep(1)}
+                    disabled={!newRule.name || !newRule.alertType || !newRule.severity}
+                  >
+                    Continuer
+                  </Button>
+                </Box>
+              </StepContent>
+            </Step>
+
+            <Step>
+              <StepLabel>Chemin d'Escalade</StepLabel>
+              <StepContent>
+                <Box sx={{ mb: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Add />}
+                    onClick={addEscalationStep}
+                    sx={{ mb: 2 }}
+                  >
+                    Ajouter un Niveau
+                  </Button>
+
+                  {newRule.escalationPath.map((step: any, index: number) => (
+                    <Card key={index} sx={{ mb: 2, p: 2 }}>
+                      <Typography variant="subtitle1" gutterBottom>
+                        Niveau {step.level}
+                      </Typography>
+                      
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <TextField
+                            fullWidth
+                            label="Délai (minutes)"
+                            type="number"
+                            value={step.delayMinutes}
+                            onChange={(e) => {
+                              const newPath = [...newRule.escalationPath];
+                              newPath[index].delayMinutes = parseInt(e.target.value);
+                              setNewRule(prev => ({ ...prev, escalationPath: newPath }));
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={step.stopOnAcknowledge}
+                                onChange={(e) => {
+                                  const newPath = [...newRule.escalationPath];
+                                  newPath[index].stopOnAcknowledge = e.target.checked;
+                                  setNewRule(prev => ({ ...prev, escalationPath: newPath }));
+                                }}
+                              />
+                            }
+                            label="Arrêter si acquitté"
+                          />
+                        </Grid>
+                      </Grid>
+                    </Card>
+                  ))}
+                </Box>
+
+                <Box sx={{ mb: 1 }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleUpdateRule}
+                    disabled={newRule.escalationPath.length === 0 || updateRuleMutation.isLoading}
+                    sx={{ mr: 1 }}
+                  >
+                    {updateRuleMutation.isLoading ? 'Mise à jour...' : 'Mettre à Jour'}
+                  </Button>
+                  <Button onClick={() => setActiveStep(0)}>
+                    Retour
+                  </Button>
+                </Box>
+              </StepContent>
+            </Step>
+          </Stepper>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setEditDialog(false); resetForm(); }}>Annuler</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <div>
+        {snackbar.open && (
+          <div style={{ 
+            position: 'fixed', 
+            bottom: 20, 
+            right: 20, 
+            backgroundColor: snackbar.severity === 'success' ? '#4caf50' : '#f44336',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '4px',
+            zIndex: 1000
+          }}>
+            {snackbar.message}
+            <button 
+              onClick={() => setSnackbar({ ...snackbar, open: false })}
+              style={{ marginLeft: 10, background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
     </Box>
   );
 };
