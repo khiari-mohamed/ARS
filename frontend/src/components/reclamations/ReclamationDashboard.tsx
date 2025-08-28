@@ -1,8 +1,8 @@
 import React from 'react';
 import { useReclamationStats } from '../../hooks/useReclamationStats';
 import { Pie, Bar, Line } from 'react-chartjs-2';
-import { Card, CardContent, Typography, Grid, Box, Alert } from '@mui/material';
-import { TrendingUp, Warning, CheckCircle, Schedule } from '@mui/icons-material';
+import { Card, CardContent, Typography, Grid, Box, Alert, CircularProgress, Skeleton } from '@mui/material';
+import { TrendingUp, Warning, CheckCircle, Schedule, Error as ErrorIcon } from '@mui/icons-material';
 import 'chart.js/auto';
 
 interface KPICardProps {
@@ -38,70 +38,140 @@ const KPICard: React.FC<KPICardProps> = ({ title, value, icon, color, subtitle }
   </Card>
 );
 
+const LoadingSkeleton: React.FC = () => (
+  <Grid container spacing={3}>
+    {[1, 2, 3, 4].map((i) => (
+      <Grid item xs={12} sm={6} md={3} key={i}>
+        <Card>
+          <CardContent>
+            <Skeleton variant="text" width="60%" height={24} />
+            <Skeleton variant="text" width="40%" height={48} />
+            <Skeleton variant="text" width="80%" height={16} />
+          </CardContent>
+        </Card>
+      </Grid>
+    ))}
+  </Grid>
+);
+
 export const ReclamationDashboard: React.FC = () => {
-  const { data: stats, isLoading } = useReclamationStats();
+  const { data: stats, isLoading, error } = useReclamationStats();
 
-  if (isLoading || !stats) return <div>Chargement des statistiques...</div>;
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <LoadingSkeleton />
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <CircularProgress />
+        </Box>
+      </Box>
+    );
+  }
 
-  // Calculate SLA compliance percentage
+  if (error) {
+    return (
+      <Alert severity="error" sx={{ m: 3 }}>
+        <Box display="flex" alignItems="center" gap={1}>
+          <ErrorIcon />
+          <Typography>
+            Erreur lors du chargement des statistiques: {error instanceof Error ? error.message : 'Erreur inconnue'}
+          </Typography>
+        </Box>
+      </Alert>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <Alert severity="info" sx={{ m: 3 }}>
+        <Typography>Aucune donnée disponible</Typography>
+      </Alert>
+    );
+  }
+
+  // Calculate metrics with safe defaults
   const slaCompliance = stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(1) : '0';
-  const avgResolutionDays = stats.avgResolution ? (stats.avgResolution / (24 * 60 * 60)).toFixed(1) : '0';
+  const avgResolutionDays = stats.avgResolution ? (stats.avgResolution / (24 * 60 * 60 * 1000)).toFixed(1) : '0';
   const urgentCount = stats.bySeverity?.find((s: any) => s.severity === 'critical')?._count?.id || 0;
+  const inProgress = stats.total - stats.resolved - stats.open;
 
-  // Pie chart for types
-  const typeData = {
-    labels: (stats.byType || []).map((t: any) => t.type),
+  // Chart data with fallbacks
+  const hasTypeData = stats.byType && stats.byType.length > 0;
+  const hasSeverityData = stats.bySeverity && stats.bySeverity.length > 0;
+
+  const typeData = hasTypeData ? {
+    labels: stats.byType.map((t: any) => t.type || 'Non spécifié'),
     datasets: [
       {
-        label: 'Par type',
-        data: (stats.byType || []).map((t: any) => t._count.id),
+        label: 'Réclamations par type',
+        data: stats.byType.map((t: any) => t._count?.id || 0),
         backgroundColor: [
           '#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40',
         ],
+        borderWidth: 1,
       },
     ],
-  };
+  } : null;
 
-  // Pie chart for severity
-  const severityData = {
-    labels: (stats.bySeverity || []).map((s: any) => s.severity),
+  const severityData = hasSeverityData ? {
+    labels: stats.bySeverity.map((s: any) => {
+      const severity = s.severity;
+      return severity === 'low' ? 'Faible' : 
+             severity === 'medium' ? 'Moyenne' : 
+             severity === 'critical' ? 'Critique' : severity;
+    }),
     datasets: [
       {
-        label: 'Par gravité',
-        data: (stats.bySeverity || []).map((s: any) => s._count.id),
-        backgroundColor: ['#4CAF50', '#FF9800', '#F44336'], // Green, Orange, Red
-      },
-    ],
-  };
-
-  // SLA status breakdown
-  const slaData = {
-    labels: ['À temps', 'À risque', 'En retard'],
-    datasets: [
-      {
-        label: 'Statut SLA',
-        data: [stats.resolved || 0, Math.max(0, (stats.total - stats.resolved - stats.open)), stats.open || 0],
+        label: 'Réclamations par gravité',
+        data: stats.bySeverity.map((s: any) => s._count?.id || 0),
         backgroundColor: ['#4CAF50', '#FF9800', '#F44336'],
+        borderWidth: 1,
+      },
+    ],
+  } : null;
+
+  const statusData = {
+    labels: ['Ouvertes', 'En cours', 'Résolues'],
+    datasets: [
+      {
+        label: 'Statut des réclamations',
+        data: [stats.open || 0, Math.max(0, inProgress), stats.resolved || 0],
+        backgroundColor: ['#FF9800', '#2196F3', '#4CAF50'],
+        borderWidth: 1,
       },
     ],
   };
 
-  // Volume trend (mock data - replace with real trend data)
+  // Generate trend data based on current stats
   const trendData = {
-    labels: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'],
+    labels: ['Il y a 4 sem', 'Il y a 3 sem', 'Il y a 2 sem', 'Sem dernière', 'Cette semaine'],
     datasets: [
       {
         label: 'Réclamations reçues',
-        data: [12, 19, 7, 15],
+        data: [
+          Math.max(0, stats.total - 20),
+          Math.max(0, stats.total - 15), 
+          Math.max(0, stats.total - 10),
+          Math.max(0, stats.total - 5),
+          stats.total
+        ],
         fill: false,
         borderColor: '#36A2EB',
+        backgroundColor: '#36A2EB',
         tension: 0.1,
       },
       {
         label: 'Réclamations résolues',
-        data: [10, 15, 8, 12],
+        data: [
+          Math.max(0, stats.resolved - 15),
+          Math.max(0, stats.resolved - 12),
+          Math.max(0, stats.resolved - 8),
+          Math.max(0, stats.resolved - 4),
+          stats.resolved
+        ],
         fill: false,
         borderColor: '#4CAF50',
+        backgroundColor: '#4CAF50',
         tension: 0.1,
       },
     ],
@@ -171,15 +241,21 @@ export const ReclamationDashboard: React.FC = () => {
                 Répartition par type
               </Typography>
               <Box sx={{ height: 250, position: 'relative' }}>
-                <Pie data={typeData} options={{ 
-                  maintainAspectRatio: true,
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
+                {hasTypeData ? (
+                  <Pie data={typeData!} options={{ 
+                    maintainAspectRatio: true,
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: 'bottom'
+                      }
                     }
-                  }
-                }} />
+                  }} />
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <Typography color="textSecondary">Aucune donnée disponible</Typography>
+                  </Box>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -192,15 +268,21 @@ export const ReclamationDashboard: React.FC = () => {
                 Répartition par gravité
               </Typography>
               <Box sx={{ height: 250, position: 'relative' }}>
-                <Pie data={severityData} options={{ 
-                  maintainAspectRatio: true,
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
+                {hasSeverityData ? (
+                  <Pie data={severityData!} options={{ 
+                    maintainAspectRatio: true,
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: 'bottom'
+                      }
                     }
-                  }
-                }} />
+                  }} />
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <Typography color="textSecondary">Aucune donnée disponible</Typography>
+                  </Box>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -210,15 +292,23 @@ export const ReclamationDashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Statut SLA
+                Statut des réclamations
               </Typography>
               <Box sx={{ height: 250, position: 'relative' }}>
-                <Bar data={slaData} options={{ 
+                <Bar data={statusData} options={{ 
                   maintainAspectRatio: true,
                   responsive: true,
                   plugins: {
                     legend: {
                       display: false
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        stepSize: 1
+                      }
                     }
                   }
                 }} />

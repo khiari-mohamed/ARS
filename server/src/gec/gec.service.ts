@@ -307,7 +307,7 @@ export class GecService {
           relancesSent++;
         }
         
-        // Notify gestionnaire
+        // Notify gestionnaire via email and WebSocket
         if (courrier.uploader?.email) {
           await this.sendNotificationEmail(
             courrier.uploader.email,
@@ -315,6 +315,22 @@ export class GecService {
             `Courrier "${courrier.subject}" requires follow-up. No response received for 3+ days.`,
             courrier
           );
+          
+          // Create in-app notification
+          try {
+            await this.prisma.notification.create({
+              data: {
+                userId: courrier.uploadedById,
+                type: 'SLA_ALERT',
+                title: 'Relance Requise',
+                message: `Relance requise: ${courrier.subject}`,
+                data: { courrierId: courrier.id },
+                read: false
+              }
+            });
+          } catch (error) {
+            console.error('Failed to create SLA notification:', error);
+          }
         }
         
         // Update courrier status

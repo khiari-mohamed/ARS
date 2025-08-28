@@ -215,3 +215,207 @@ cwd: None
 2025-08-26 09:15:37,480 - monitoring - INFO - Completed trend_forecast in 0.43s
 2025-08-26 09:15:37,498 - monitoring - INFO - Starting predict_resources endpoint call
 2025-08-26 09:15:37,499 - monitoring - INFO - Completed predict_resources in 0.00s
+2025-08-28 12:10:43,015 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-28 12:29:57,560 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:29:57,565 - monitoring - ERROR - Error in performance after 0.01s: 'id'
+2025-08-28 12:31:32,978 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:31:32,980 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:15,862 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:15,865 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:15,890 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:15,895 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:23,654 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:23,655 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:26,813 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:26,814 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:31,156 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:31,156 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:34,438 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:34,438 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:43,817 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:43,818 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:36:46,691 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:36:46,692 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:37:37,102 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:37:37,102 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:37:37,108 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:37:37,109 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:39:54,407 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:39:54,408 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:39:54,411 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:39:54,412 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 12:51:14,786 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:51:14,797 - monitoring - INFO - Completed performance in 0.01s
+2025-08-28 12:51:14,806 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 12:51:14,807 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:30:58,285 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:30:58,291 - monitoring - INFO - Completed performance in 0.01s
+2025-08-28 15:30:58,297 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:30:58,297 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:31:48,372 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:31:48,372 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:31:48,709 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:31:48,709 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:38:23,509 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:38:23,511 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:38:23,518 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:38:23,518 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:43:20,895 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:43:20,902 - monitoring - INFO - Completed performance in 0.01s
+2025-08-28 15:43:22,412 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:43:22,578 - monitoring - INFO - Completed performance in 0.17s
+2025-08-28 15:44:15,624 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:44:15,625 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:44:16,422 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:44:16,422 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:56:57,304 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:56:57,304 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 15:56:57,309 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 15:56:57,311 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:02:06,909 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:02:06,912 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:02:06,926 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:02:06,929 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:02:37,436 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:02:37,436 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:02:37,444 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:02:37,444 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:03:44,123 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:03:44,124 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:04:04,553 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:04:04,553 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:04:04,563 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:04:04,565 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:04:38,361 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:04:38,364 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:04:38,422 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:04:38,424 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:06:39,478 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:06:39,479 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:06:39,493 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:06:39,495 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:12:05,634 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:12:05,640 - monitoring - INFO - Completed performance in 0.01s
+2025-08-28 16:12:05,652 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:12:05,653 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:14:04,278 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:14:04,279 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:14:04,287 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:14:04,288 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:14:27,156 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:14:27,157 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:14:27,166 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:14:27,166 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:16:20,454 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:16:20,456 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:16:20,466 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:16:20,469 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:25:46,367 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:25:46,370 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:25:46,379 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:25:46,380 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:30:03,701 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:30:03,705 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:30:03,711 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:30:03,711 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:42:15,316 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:42:15,325 - monitoring - INFO - Completed performance in 0.01s
+2025-08-28 16:42:15,333 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:42:15,334 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:43:15,375 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:43:15,376 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:43:15,384 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:43:15,384 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:54:43,235 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:54:43,237 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 16:54:43,247 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 16:54:43,247 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 17:18:11,293 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 17:18:11,303 - monitoring - INFO - Completed performance in 0.01s
+2025-08-28 17:18:11,318 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 17:18:11,319 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 17:22:01,942 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 17:22:01,943 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 17:22:02,294 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 17:22:02,295 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 18:01:49,263 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 18:01:49,272 - monitoring - INFO - Completed performance in 0.01s
+2025-08-28 18:01:49,282 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 18:01:49,283 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 20:47:22,806 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-28 20:47:24,813 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 20:47:24,815 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 20:47:24,826 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 20:47:24,827 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 20:49:44,815 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 20:49:44,815 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 20:49:44,828 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 20:49:44,829 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 20:49:53,532 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 20:49:53,532 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 20:49:53,538 - monitoring - INFO - Starting performance endpoint call
+2025-08-28 20:49:53,539 - monitoring - INFO - Completed performance in 0.00s
+2025-08-28 22:20:29,916 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-28 22:20:31,221 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-28 22:20:31,316 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-28 22:20:31,372 - cmdstanpy - DEBUG - Adding TBB (C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\prophet\stan_model\cmdstan-2.33.1\stan\lib\stan_math\lib\tbb) to PATH
+2025-08-28 22:20:31,420 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-28 22:20:31,473 - monitoring - INFO - Completed trend_forecast in 0.25s
+2025-08-28 22:20:31,494 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-28 22:20:31,499 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-28 22:20:31,533 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-28 22:20:31,546 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-28 22:20:31,581 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-08-28 22:22:47,824 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-28 22:23:44,893 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-28 22:23:45,228 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-28 22:23:45,343 - cmdstanpy - DEBUG - Adding TBB (C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\prophet\stan_model\cmdstan-2.33.1\stan\lib\stan_math\lib\tbb) to PATH
+2025-08-28 22:23:45,467 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-28 22:23:45,684 - monitoring - INFO - Completed trend_forecast in 0.79s
+2025-08-28 22:23:48,345 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-28 22:23:48,360 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-28 22:23:48,390 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-28 22:23:48,401 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-28 22:23:48,440 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-08-28 22:24:48,625 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-28 22:24:48,637 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-28 22:24:48,667 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-28 22:24:48,685 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-28 22:24:48,769 - monitoring - INFO - Completed trend_forecast in 0.14s
+2025-08-28 22:24:48,775 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-08-28 22:24:48,780 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-08-28 22:24:48,810 - cmdstanpy - DEBUG - TBB already found in load path
+2025-08-28 22:24:48,834 - prophet - INFO - n_changepoints greater than number of observations. Using 23.
+2025-08-28 22:24:48,912 - monitoring - INFO - Completed trend_forecast in 0.14s
+2025-08-28 22:27:20,469 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'

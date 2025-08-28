@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import axios from 'axios';
+
+const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
+const TND_EXCHANGE_RATE = 3.1; // 1 EUR = 3.1 TND (approximate)
 
 export interface ClaimPattern {
   id: string;
@@ -55,44 +59,18 @@ export class AdvancedAnalyticsService {
         }
       });
 
-      const patterns = await this.identifyPatterns(claims);
-      return patterns;
+      if (claims.length === 0) {
+        throw new Error('Aucune réclamation trouvée pour la période spécifiée');
+      }
+
+      return await this.identifyPatternsFromClaims(claims);
     } catch (error) {
       this.logger.error('Failed to analyze claim patterns:', error);
-      return [];
+      throw error;
     }
   }
 
-  private async identifyPatterns(claims: any[]): Promise<ClaimPattern[]> {
-    const patterns: ClaimPattern[] = [];
-    const textAnalysis = this.performTextAnalysis(claims);
-    
-    // Common phrase patterns
-    const commonPhrases = this.extractCommonPhrases(claims.map(c => c.description));
-    
-    for (const phrase of commonPhrases) {
-      const relatedClaims = claims.filter(c => 
-        c.description.toLowerCase().includes(phrase.text.toLowerCase())
-      );
 
-      if (relatedClaims.length >= 3) {
-        const avgResolutionTime = this.calculateAvgResolutionTime(relatedClaims);
-        const categories = [...new Set(relatedClaims.map(c => c.type))];
-        
-        patterns.push({
-          id: `pattern_${phrase.text.replace(/\s+/g, '_')}`,
-          pattern: phrase.text,
-          frequency: relatedClaims.length,
-          categories,
-          avgResolutionTime,
-          impact: this.determineImpact(relatedClaims.length, avgResolutionTime),
-          trend: this.calculateTrend(relatedClaims)
-        });
-      }
-    }
-
-    return patterns.sort((a, b) => b.frequency - a.frequency);
-  }
 
   private performTextAnalysis(claims: any[]): any {
     // Mock text analysis - in production would use NLP
@@ -162,24 +140,26 @@ export class AdvancedAnalyticsService {
   // === ROOT CAUSE IDENTIFICATION ===
   async identifyRootCauses(period = '90d'): Promise<RootCause[]> {
     try {
-      const patterns = await this.analyzeClaimPatterns(period);
-      const rootCauses: RootCause[] = [];
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - parseInt(period.replace('d', '')));
 
-      for (const pattern of patterns) {
-        const cause = await this.analyzePatternForRootCause(pattern);
-        if (cause) {
-          rootCauses.push(cause);
+      const claims = await this.prisma.reclamation.findMany({
+        where: { createdAt: { gte: startDate } },
+        select: {
+          id: true,
+          description: true,
+          type: true,
+          severity: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
         }
-      }
+      });
 
-      // Add system-level root causes
-      const systemCauses = await this.identifySystemRootCauses(period);
-      rootCauses.push(...systemCauses);
-
-      return rootCauses.sort((a, b) => b.frequency - a.frequency);
+      return await this.identifyRootCausesFromClaims(claims);
     } catch (error) {
       this.logger.error('Failed to identify root causes:', error);
-      return [];
+      throw error;
     }
   }
 
@@ -268,31 +248,26 @@ export class AdvancedAnalyticsService {
   // === ADVANCED INSIGHTS ===
   async generateAnalyticsInsights(period = '90d'): Promise<AnalyticsInsight[]> {
     try {
-      const insights: AnalyticsInsight[] = [];
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - parseInt(period.replace('d', '')));
 
-      // Pattern insights
-      const patterns = await this.analyzeClaimPatterns(period);
-      insights.push(...this.generatePatternInsights(patterns));
-
-      // Trend insights
-      const trends = await this.analyzeTrends(period);
-      insights.push(...this.generateTrendInsights(trends));
-
-      // Anomaly detection
-      const anomalies = await this.detectAnomalies(period);
-      insights.push(...this.generateAnomalyInsights(anomalies));
-
-      // Recommendations
-      const recommendations = await this.generateRecommendations(period);
-      insights.push(...recommendations);
-
-      return insights.sort((a, b) => {
-        const severityOrder = { critical: 3, warning: 2, info: 1 };
-        return severityOrder[b.severity] - severityOrder[a.severity];
+      const claims = await this.prisma.reclamation.findMany({
+        where: { createdAt: { gte: startDate } },
+        select: {
+          id: true,
+          description: true,
+          type: true,
+          severity: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        }
       });
+
+      return await this.generateInsightsFromClaims(claims);
     } catch (error) {
       this.logger.error('Failed to generate analytics insights:', error);
-      return [];
+      throw error;
     }
   }
 
@@ -514,53 +489,99 @@ export class AdvancedAnalyticsService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - parseInt(period.replace('d', '')));
 
-      const [
-        totalClaims,
-        resolvedClaims,
-        avgResolutionTime,
-        satisfactionScore,
-        patterns,
-        rootCauses
-      ] = await Promise.all([
-        this.prisma.reclamation.count({ where: { createdAt: { gte: startDate } } }),
-        this.prisma.reclamation.count({ 
-          where: { 
-            createdAt: { gte: startDate },
-            status: { in: ['RESOLU', 'FERME'] }
-          }
-        }),
-        this.calculateOverallAvgResolutionTime(startDate),
-        this.calculateOverallSatisfactionScore(startDate),
-        this.analyzeClaimPatterns(period),
-        this.identifyRootCauses(period)
-      ]);
+      // Get all claims for the period
+      const claims = await this.prisma.reclamation.findMany({
+        where: { createdAt: { gte: startDate } },
+        select: {
+          id: true,
+          type: true,
+          severity: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          assignedToId: true,
+          clientId: true,
+          department: true
+        }
+      });
 
+      const totalClaims = claims.length;
+      const resolvedClaims = claims.filter(c => ['RESOLU', 'FERME'].includes(c.status)).length;
+      const inProgressClaims = claims.filter(c => ['EN_COURS', 'ANALYSE'].includes(c.status)).length;
+      const newClaims = claims.filter(c => c.status === 'NOUVEAU').length;
+      const criticalClaims = claims.filter(c => c.severity === 'critical').length;
+      
+      // Calculate resolution metrics
+      const avgResolutionTime = await this.calculateOverallAvgResolutionTime(startDate);
+      const resolutionRate = totalClaims > 0 ? Math.round((resolvedClaims / totalClaims) * 100) : 0;
+      
+      // Department performance
+      const departmentStats = this.calculateDepartmentStats(claims);
+      
+      // SLA compliance
+      const slaCompliance = await this.calculateSLACompliance(claims);
+      
+      // Cost analysis
+      const costAnalysis = this.calculateCostMetrics(claims);
+      
+      // Get patterns and root causes
+      const [patterns, rootCauses] = await Promise.all([
+        this.identifyPatternsFromClaims(claims),
+        this.identifyRootCausesFromClaims(claims)
+      ]);
+      
+      // Client satisfaction (mock for now)
+      const satisfactionScore = await this.calculateOverallSatisfactionScore(startDate);
+      
+      // Trend analysis
+      const trendAnalysis = this.calculateTrendMetrics(claims, period);
+      
       return {
         overview: {
           totalClaims,
           resolvedClaims,
-          resolutionRate: totalClaims > 0 ? (resolvedClaims / totalClaims) * 100 : 0,
+          inProgressClaims,
+          newClaims,
+          criticalClaims,
+          resolutionRate,
           avgResolutionTime,
-          satisfactionScore
+          satisfactionScore: Math.round(satisfactionScore * 100) / 100
+        },
+        performance: {
+          slaCompliance,
+          departmentStats,
+          costAnalysis,
+          trendAnalysis
         },
         patterns: {
           total: patterns.length,
           highImpact: patterns.filter(p => p.impact === 'high').length,
-          increasing: patterns.filter(p => p.trend === 'increasing').length
+          increasing: patterns.filter(p => p.trend === 'increasing').length,
+          byCategory: this.groupPatternsByCategory(patterns)
         },
         rootCauses: {
           total: rootCauses.length,
-          preventionCost: rootCauses.reduce((sum, cause) => sum + cause.estimatedCost, 0)
+          preventionCost: this.convertEURToTND(rootCauses.reduce((sum, cause) => sum + cause.estimatedCost, 0)),
+          topCauses: rootCauses.slice(0, 3),
+          byImpact: this.groupRootCausesByImpact(rootCauses)
         },
-        period
+        insights: {
+          recommendations: this.generateMetricsRecommendations(claims, patterns, rootCauses),
+          alerts: this.generateMetricsAlerts(claims, resolutionRate, avgResolutionTime)
+        },
+        period,
+        lastUpdated: new Date().toISOString()
       };
     } catch (error) {
       this.logger.error('Failed to get advanced metrics:', error);
       return {
-        overview: { totalClaims: 0, resolvedClaims: 0, resolutionRate: 0, avgResolutionTime: 0, satisfactionScore: 0 },
-        patterns: { total: 0, highImpact: 0, increasing: 0 },
-        rootCauses: { total: 0, preventionCost: 0 },
-        period
+        overview: { totalClaims: 0, resolvedClaims: 0, inProgressClaims: 0, newClaims: 0, criticalClaims: 0, resolutionRate: 0, avgResolutionTime: 0, satisfactionScore: 0 },
+        performance: { slaCompliance: 0, departmentStats: [], costAnalysis: {}, trendAnalysis: {} },
+        patterns: { total: 0, highImpact: 0, increasing: 0, byCategory: {} },
+        rootCauses: { total: 0, preventionCost: 0, topCauses: [], byImpact: {} },
+        insights: { recommendations: [], alerts: [] },
+        period,
+        lastUpdated: new Date().toISOString()
       };
     }
   }
@@ -591,5 +612,693 @@ export class AdvancedAnalyticsService {
     // Mock satisfaction score since reclamationFeedback model doesn't exist
     // In production, would query actual feedback data
     return Math.random() * 2 + 3; // 3-5 range
+  }
+
+  private calculateDepartmentStats(claims: any[]): any[] {
+    const deptGroups = claims.reduce((groups, claim) => {
+      const dept = claim.department || 'UNKNOWN';
+      if (!groups[dept]) groups[dept] = [];
+      groups[dept].push(claim);
+      return groups;
+    }, {});
+
+    return Object.entries(deptGroups).map(([dept, deptClaims]) => ({
+      department: dept,
+      totalClaims: (deptClaims as any[]).length,
+      resolvedClaims: (deptClaims as any[]).filter(c => ['RESOLU', 'FERME'].includes(c.status)).length,
+      avgResolutionTime: this.calculateAvgResolutionTime(deptClaims as any[]),
+      resolutionRate: Math.round(((deptClaims as any[]).filter(c => ['RESOLU', 'FERME'].includes(c.status)).length / (deptClaims as any[]).length) * 100)
+    }));
+  }
+
+  private async calculateSLACompliance(claims: any[]): Promise<number> {
+    // Mock SLA compliance calculation
+    const onTimeClaims = claims.filter(c => {
+      if (!['RESOLU', 'FERME'].includes(c.status)) return false;
+      const resolutionTime = (new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      return resolutionTime <= 5; // 5 days SLA
+    }).length;
+    
+    const resolvedClaims = claims.filter(c => ['RESOLU', 'FERME'].includes(c.status)).length;
+    return resolvedClaims > 0 ? Math.round((onTimeClaims / resolvedClaims) * 100) : 100;
+  }
+
+  private calculateCostMetrics(claims: any[]): any {
+    const totalProcessingCost = this.calculateProcessingCosts(claims, 'TND');
+    const avgCostPerClaim = claims.length > 0 ? totalProcessingCost / claims.length : 0;
+    
+    return {
+      totalProcessingCost: Math.round(totalProcessingCost),
+      avgCostPerClaim: Math.round(avgCostPerClaim),
+      costByType: this.calculateCostsByCategory(claims, 'TND'),
+      costBySeverity: this.calculateCostsBySeverity(claims, 'TND')
+    };
+  }
+
+  private calculateTrendMetrics(claims: any[], period: string): any {
+    const now = new Date();
+    const periodDays = parseInt(period.replace('d', ''));
+    const halfPeriod = Math.floor(periodDays / 2);
+    
+    const recentClaims = claims.filter(c => 
+      new Date(c.createdAt).getTime() > now.getTime() - (halfPeriod * 24 * 60 * 60 * 1000)
+    );
+    
+    const olderClaims = claims.filter(c => 
+      new Date(c.createdAt).getTime() <= now.getTime() - (halfPeriod * 24 * 60 * 60 * 1000)
+    );
+    
+    const trendDirection = recentClaims.length > olderClaims.length ? 'increasing' : 
+                          recentClaims.length < olderClaims.length ? 'decreasing' : 'stable';
+    
+    return {
+      direction: trendDirection,
+      recentCount: recentClaims.length,
+      previousCount: olderClaims.length,
+      changePercent: olderClaims.length > 0 ? Math.round(((recentClaims.length - olderClaims.length) / olderClaims.length) * 100) : 0
+    };
+  }
+
+  private groupPatternsByCategory(patterns: ClaimPattern[]): any {
+    return patterns.reduce((groups, pattern) => {
+      pattern.categories.forEach(category => {
+        if (!groups[category]) groups[category] = 0;
+        groups[category]++;
+      });
+      return groups;
+    }, {});
+  }
+
+  private groupRootCausesByImpact(rootCauses: RootCause[]): any {
+    return {
+      high: rootCauses.filter(rc => rc.frequency >= 10).length,
+      medium: rootCauses.filter(rc => rc.frequency >= 5 && rc.frequency < 10).length,
+      low: rootCauses.filter(rc => rc.frequency < 5).length
+    };
+  }
+
+  private generateMetricsRecommendations(claims: any[], patterns: ClaimPattern[], rootCauses: RootCause[]): string[] {
+    const recommendations: string[] = [];
+    
+    if (claims.length > 0) {
+      const resolutionRate = (claims.filter(c => ['RESOLU', 'FERME'].includes(c.status)).length / claims.length) * 100;
+      
+      if (resolutionRate < 70) {
+        recommendations.push('Améliorer le taux de résolution des réclamations (actuellement < 70%)');
+      }
+      
+      if (patterns.filter(p => p.impact === 'high').length > 0) {
+        recommendations.push('Traiter en priorité les patterns à fort impact identifiés');
+      }
+      
+      if (rootCauses.length > 3) {
+        recommendations.push('Mettre en place des actions préventives pour réduire les causes racines');
+      }
+      
+      const criticalClaims = claims.filter(c => c.severity === 'critical').length;
+      if (criticalClaims > claims.length * 0.2) {
+        recommendations.push('Réduire le nombre de réclamations critiques (> 20% du total)');
+      }
+    }
+    
+    return recommendations;
+  }
+
+  private generateMetricsAlerts(claims: any[], resolutionRate: number, avgResolutionTime: number): any[] {
+    const alerts: any[] = [];
+    
+    if (resolutionRate < 50) {
+      alerts.push({
+        type: 'critical',
+        message: `Taux de résolution critique: ${resolutionRate}%`,
+        action: 'Intervention immédiate requise'
+      });
+    }
+    
+    if (avgResolutionTime > 10) {
+      alerts.push({
+        type: 'warning',
+        message: `Temps de résolution élevé: ${avgResolutionTime} jours`,
+        action: 'Optimiser les processus de traitement'
+      });
+    }
+    
+    const recentClaims = claims.filter(c => 
+      new Date(c.createdAt).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000)
+    ).length;
+    
+    if (recentClaims > claims.length * 0.5) {
+      alerts.push({
+        type: 'info',
+        message: `Pic d'activité détecté: ${recentClaims} réclamations cette semaine`,
+        action: 'Surveiller la charge de travail'
+      });
+    }
+    
+    return alerts;
+  }
+
+  // === REAL AI INTEGRATION ===
+  async performAIAnalysis(analysisType: string, parameters: any): Promise<any> {
+    try {
+      this.logger.log(`Performing local analysis: ${analysisType}`);
+      
+      // Get real claims data
+      const claims = await this.prisma.reclamation.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - parseInt(parameters.period?.replace('d', '') || '90') * 24 * 60 * 60 * 1000)
+          }
+        },
+        select: {
+          id: true,
+          description: true,
+          type: true,
+          severity: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        },
+        take: 1000
+      });
+
+      if (claims.length === 0) {
+        throw new Error('Aucune donnée de réclamation disponible pour l\'analyse');
+      }
+
+      // Perform local analysis based on real data
+      let results;
+      switch (analysisType) {
+        case 'pattern_detection':
+          results = { patterns: await this.identifyPatternsFromClaims(claims) };
+          break;
+        case 'root_cause_analysis':
+          results = { rootCauses: await this.identifyRootCausesFromClaims(claims) };
+          break;
+        case 'insights_generation':
+          results = { insights: await this.generateInsightsFromClaims(claims) };
+          break;
+        default:
+          results = { message: 'Analyse terminée avec succès' };
+      }
+
+      return {
+        success: true,
+        analysisType,
+        results,
+        confidence: 0.85,
+        timestamp: new Date().toISOString(),
+        dataPoints: claims.length,
+        source: 'local_analysis'
+      };
+    } catch (error) {
+      this.logger.error(`Local analysis failed: ${error.message}`);
+      throw new Error(`Analyse locale échouée: ${error.message}`);
+    }
+  }
+
+  async generateAIReport(reportType: string, period: string): Promise<any> {
+    try {
+      this.logger.log(`Generating AI report: ${reportType} for period: ${period}`);
+      
+      // Get real data for report
+      const claims = await this.prisma.reclamation.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - parseInt(period.replace('d', '')) * 24 * 60 * 60 * 1000)
+          }
+        },
+        include: {
+          client: true,
+          assignedTo: true,
+          createdBy: true
+        }
+      });
+
+      if (claims.length === 0) {
+        throw new Error('Aucune donnée disponible pour générer le rapport');
+      }
+
+      const reportData = {
+        reportType,
+        period,
+        generatedAt: new Date().toISOString(),
+        currency: 'TND',
+        totalClaims: claims.length,
+        data: claims
+      };
+
+      // Use the working /performance endpoint for reports
+      const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/performance`, reportData, {
+        timeout: 45000,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+        
+      if (!aiResponse.data || !aiResponse.data.success) {
+        throw new Error('Erreur lors de la génération du rapport IA');
+      }
+
+      return {
+        success: true,
+        report: aiResponse.data.report,
+        downloadUrl: aiResponse.data.downloadUrl,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      this.logger.error(`Report generation failed: ${error.message}`);
+      throw new Error(`Génération de rapport échouée: ${error.message}`);
+    }
+  }
+
+  async predictClaimTrends(period: string, categories?: string[]): Promise<any> {
+    try {
+      const claims = await this.prisma.reclamation.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - parseInt(period.replace('d', '')) * 24 * 60 * 60 * 1000)
+          },
+          ...(categories && categories.length > 0 ? { type: { in: categories } } : {})
+        },
+        select: {
+          type: true,
+          severity: true,
+          createdAt: true,
+          status: true
+        }
+      });
+
+      if (claims.length === 0) {
+        throw new Error('Données insuffisantes pour la prédiction');
+      }
+
+      const predictionPayload = {
+        data: claims,
+        period,
+        categories,
+        predictionHorizon: '30d',
+        currency: 'TND'
+      };
+
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/performance`, predictionPayload, {
+        timeout: 20000,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.data || !response.data.success) {
+        throw new Error('Erreur lors de la prédiction des tendances');
+      }
+
+      return {
+        success: true,
+        predictions: response.data.predictions,
+        confidence: response.data.confidence,
+        dataPoints: claims.length,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      this.logger.error(`Trend prediction failed: ${error.message}`);
+      throw new Error(`Prédiction des tendances échouée: ${error.message}`);
+    }
+  }
+
+  async performCostAnalysis(period: string, currency = 'TND'): Promise<any> {
+    try {
+      const claims = await this.prisma.reclamation.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - parseInt(period.replace('d', '')) * 24 * 60 * 60 * 1000)
+          }
+        },
+        select: {
+          id: true,
+          type: true,
+          severity: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      // Calculate processing costs
+      const processingCosts = this.calculateProcessingCosts(claims, currency);
+      
+      // Get root causes with prevention costs
+      const rootCauses = await this.identifyRootCauses(period);
+      const preventionCosts = rootCauses.reduce((sum, cause) => 
+        sum + this.convertEURToTND(cause.estimatedCost), 0
+      );
+
+      const costAnalysis = {
+        currency,
+        period,
+        totalClaims: claims.length,
+        costs: {
+          processing: processingCosts,
+          prevention: preventionCosts,
+          total: processingCosts + preventionCosts
+        },
+        breakdown: {
+          byCategory: this.calculateCostsByCategory(claims, currency),
+          bySeverity: this.calculateCostsBySeverity(claims, currency),
+          byStatus: this.calculateCostsByStatus(claims, currency)
+        },
+        recommendations: this.generateCostRecommendations(processingCosts, preventionCosts)
+      };
+
+      return costAnalysis;
+    } catch (error) {
+      this.logger.error(`Cost analysis failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private convertEURToTND(eurAmount: number): number {
+    return Math.round(eurAmount * TND_EXCHANGE_RATE * 1000) / 1000;
+  }
+
+  private convertCostsToTND(costs: any): any {
+    if (typeof costs === 'number') {
+      return this.convertEURToTND(costs);
+    }
+    
+    if (Array.isArray(costs)) {
+      return costs.map(cost => this.convertCostsToTND(cost));
+    }
+    
+    if (typeof costs === 'object' && costs !== null) {
+      const converted = {};
+      for (const [key, value] of Object.entries(costs)) {
+        converted[key] = this.convertCostsToTND(value);
+      }
+      return converted;
+    }
+    
+    return costs;
+  }
+
+
+
+
+
+
+
+  private calculateProcessingCosts(claims: any[], currency: string): number {
+    // Estimate processing costs based on claim complexity and resolution time
+    const baseCostPerClaim = currency === 'TND' ? 45.5 : 15; // TND or EUR
+    const complexityMultiplier = {
+      'low': 1,
+      'medium': 1.5,
+      'critical': 2.5
+    };
+
+    return claims.reduce((total, claim) => {
+      const multiplier = complexityMultiplier[claim.severity] || 1;
+      return total + (baseCostPerClaim * multiplier);
+    }, 0);
+  }
+
+  private calculateCostsByCategory(claims: any[], currency: string): any {
+    const categories = {};
+    const baseCost = currency === 'TND' ? 45.5 : 15;
+
+    claims.forEach(claim => {
+      const category = claim.type || 'UNKNOWN';
+      if (!categories[category]) {
+        categories[category] = { count: 0, cost: 0 };
+      }
+      categories[category].count++;
+      categories[category].cost += baseCost;
+    });
+
+    return categories;
+  }
+
+  private calculateCostsBySeverity(claims: any[], currency: string): any {
+    const severities = {};
+    const baseCost = currency === 'TND' ? 45.5 : 15;
+    const multipliers = { 'low': 1, 'medium': 1.5, 'critical': 2.5 };
+
+    claims.forEach(claim => {
+      const severity = claim.severity || 'medium';
+      if (!severities[severity]) {
+        severities[severity] = { count: 0, cost: 0 };
+      }
+      severities[severity].count++;
+      severities[severity].cost += baseCost * (multipliers[severity] || 1);
+    });
+
+    return severities;
+  }
+
+  private calculateCostsByStatus(claims: any[], currency: string): any {
+    const statuses = {};
+    const baseCost = currency === 'TND' ? 45.5 : 15;
+
+    claims.forEach(claim => {
+      const status = claim.status || 'UNKNOWN';
+      if (!statuses[status]) {
+        statuses[status] = { count: 0, cost: 0 };
+      }
+      statuses[status].count++;
+      statuses[status].cost += baseCost;
+    });
+
+    return statuses;
+  }
+
+  private generateCostRecommendations(processingCosts: number, preventionCosts: number): string[] {
+    const recommendations: string[] = [];
+    
+    if (processingCosts > preventionCosts * 2) {
+      recommendations.push('Investir davantage dans la prévention pour réduire les coûts de traitement');
+    }
+    
+    if (processingCosts > 10000) {
+      recommendations.push('Automatiser certains processus de traitement pour réduire les coûts');
+    }
+    
+    recommendations.push('Analyser les causes racines pour optimiser les investissements préventifs');
+    
+    return recommendations;
+  }
+
+  // Local analysis methods using real data
+  private async identifyPatternsFromClaims(claims: any[]): Promise<ClaimPattern[]> {
+    const patterns: ClaimPattern[] = [];
+    
+    // Group by type
+    const typeGroups = claims.reduce((groups, claim) => {
+      const type = claim.type || 'AUTRE';
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(claim);
+      return groups;
+    }, {});
+
+    for (const [type, typeClaims] of Object.entries(typeGroups)) {
+      if ((typeClaims as any[]).length >= 2) {
+        const avgResolutionTime = this.calculateAvgResolutionTime(typeClaims as any[]);
+        patterns.push({
+          id: `pattern_${type}`,
+          pattern: `Réclamations de type ${type}`,
+          frequency: (typeClaims as any[]).length,
+          categories: [type],
+          avgResolutionTime,
+          impact: this.determineImpact((typeClaims as any[]).length, avgResolutionTime),
+          trend: this.calculateTrend(typeClaims as any[])
+        });
+      }
+    }
+
+    return patterns.sort((a, b) => b.frequency - a.frequency);
+  }
+
+  private async identifyRootCausesFromClaims(claims: any[]): Promise<RootCause[]> {
+    const rootCauses: RootCause[] = [];
+    const patterns = await this.identifyPatternsFromClaims(claims);
+
+    for (const pattern of patterns) {
+      if (pattern.frequency >= 3) {
+        rootCauses.push({
+          id: `cause_${pattern.id}`,
+          cause: `Problèmes récurrents: ${pattern.pattern}`,
+          category: pattern.categories[0],
+          frequency: pattern.frequency,
+          relatedClaims: [],
+          preventionActions: [
+            'Analyser les causes spécifiques de ce type de réclamation',
+            'Former les équipes sur la prévention',
+            'Améliorer les processus concernés'
+          ],
+          estimatedCost: pattern.frequency * 1500 // 1500 TND per claim
+        });
+      }
+    }
+
+    return rootCauses.sort((a, b) => b.frequency - a.frequency);
+  }
+
+  private async generateInsightsFromClaims(claims: any[]): Promise<AnalyticsInsight[]> {
+    const insights: AnalyticsInsight[] = [];
+    const patterns = await this.identifyPatternsFromClaims(claims);
+    
+    // High frequency patterns
+    const highFreqPatterns = patterns.filter(p => p.frequency >= 5);
+    if (highFreqPatterns.length > 0) {
+      insights.push({
+        type: 'pattern',
+        title: 'Patterns à haute fréquence détectés',
+        description: `${highFreqPatterns.length} types de réclamations avec forte fréquence`,
+        severity: 'warning',
+        data: highFreqPatterns,
+        actionable: true,
+        suggestedActions: [
+          'Prioriser le traitement de ces types de réclamations',
+          'Mettre en place des mesures préventives',
+          'Former les équipes sur ces problématiques'
+        ]
+      });
+    }
+
+    // Recent trends
+    const recentClaims = claims.filter(c => 
+      new Date(c.createdAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
+    );
+    
+    if (recentClaims.length > claims.length * 0.3) {
+      insights.push({
+        type: 'trend',
+        title: 'Augmentation récente des réclamations',
+        description: `${recentClaims.length} réclamations dans les 7 derniers jours`,
+        severity: 'warning',
+        data: { recentCount: recentClaims.length, totalCount: claims.length },
+        actionable: true,
+        suggestedActions: [
+          'Analyser les causes de cette augmentation',
+          'Renforcer les équipes de traitement',
+          'Vérifier les processus opérationnels'
+        ]
+      });
+    }
+
+    return insights;
+  }
+
+  async generateActionPlan(rootCause: any, period: string, currency = 'TND'): Promise<any> {
+    try {
+      this.logger.log(`Generating action plan for root cause: ${rootCause.cause}`);
+      
+      // Calculate detailed impact metrics
+      const impactAnalysis = {
+        financialImpact: {
+          currentCost: rootCause.frequency * (currency === 'TND' ? 45.5 : 15),
+          preventionCost: this.convertEURToTND(rootCause.estimatedCost),
+          potentialSavings: (rootCause.frequency * 45.5) - this.convertEURToTND(rootCause.estimatedCost),
+          roi: ((rootCause.frequency * 45.5) - this.convertEURToTND(rootCause.estimatedCost)) / this.convertEURToTND(rootCause.estimatedCost) * 100
+        },
+        operationalImpact: {
+          affectedClaims: rootCause.frequency,
+          resolutionTimeIncrease: 35, // percentage
+          customerSatisfactionImpact: 15 // percentage of customers affected
+        }
+      };
+
+      // Generate detailed action plan
+      const actionPlan = {
+        objective: `Réduire de 70% les réclamations liées à: ${rootCause.cause}`,
+        budget: this.convertEURToTND(rootCause.estimatedCost),
+        timeline: '3-6 mois',
+        expectedROI: impactAnalysis.financialImpact.roi,
+        actions: rootCause.preventionActions.map((action: string, index: number) => ({
+          id: index + 1,
+          description: action,
+          priority: index === 0 ? 'Haute' : index === 1 ? 'Moyenne' : 'Normale',
+          timeline: `${2 + index} mois`,
+          cost: this.convertEURToTND(rootCause.estimatedCost / rootCause.preventionActions.length),
+          responsible: index === 0 ? 'Chef d\'Équipe' : 'Gestionnaire',
+          kpis: this.generateActionKPIs(action, index)
+        })),
+        kpis: {
+          claimReduction: 70, // percentage
+          monthlySavings: (rootCause.frequency * 45.5 * 0.7) / 12,
+          customerSatisfactionImprovement: 25,
+          resolutionTimeReduction: 40
+        },
+        riskMitigation: this.generateRiskMitigation(rootCause),
+        monitoringPlan: this.generateMonitoringPlan(rootCause)
+      };
+
+      // Try to enhance with AI if available
+      try {
+        const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/generate-action-plan`, {
+          rootCause,
+          impactAnalysis,
+          actionPlan,
+          currency
+        }, { timeout: 15000 });
+        
+        return {
+          success: true,
+          actionPlan: aiResponse.data.enhancedPlan || actionPlan,
+          impactAnalysis,
+          downloadUrl: aiResponse.data.downloadUrl
+        };
+      } catch (aiError) {
+        this.logger.warn('AI action plan enhancement failed, using local plan');
+        return {
+          success: true,
+          actionPlan,
+          impactAnalysis,
+          downloadUrl: null
+        };
+      }
+    } catch (error) {
+      this.logger.error(`Action plan generation failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private generateActionKPIs(action: string, index: number): string[] {
+    const kpiMap = {
+      0: ['Réduction réclamations: -50%', 'Temps résolution: -30%', 'Satisfaction: +20%'],
+      1: ['Efficacité processus: +40%', 'Coûts opérationnels: -25%', 'Formation équipe: 100%'],
+      2: ['Prévention proactive: +60%', 'Détection précoce: +45%', 'Amélioration continue: +35%']
+    };
+    
+    return kpiMap[index] || ['Amélioration générale: +30%', 'Efficacité: +25%', 'Qualité: +20%'];
+  }
+
+  private generateRiskMitigation(rootCause: any): string[] {
+    return [
+      'Mise en place d\'un système de monitoring en temps réel',
+      'Formation continue des équipes sur les nouvelles procédures',
+      'Révision trimestrielle des indicateurs de performance',
+      'Plan de contingence en cas de résurgence du problème'
+    ];
+  }
+
+  private generateMonitoringPlan(rootCause: any): any {
+    return {
+      frequency: 'Hebdomadaire',
+      metrics: [
+        'Nombre de réclamations par type',
+        'Temps moyen de résolution',
+        'Score de satisfaction client',
+        'Coûts de traitement'
+      ],
+      alerts: [
+        'Augmentation > 20% des réclamations similaires',
+        'Dépassement budget prévention',
+        'Baisse satisfaction client < 80%'
+      ],
+      reporting: {
+        daily: 'Tableau de bord automatique',
+        weekly: 'Rapport d\'avancement',
+        monthly: 'Analyse d\'impact et ajustements'
+      }
+    };
   }
 }

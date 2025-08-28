@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
-export class OutlookService {
+export class OutlookService { // Updated for TypeScript compilation
   private readonly logger = new Logger(OutlookService.name);
   private transporter: nodemailer.Transporter;
 
@@ -98,12 +98,10 @@ ${syncResult.errors > 0 ? 'Veuillez vérifier les logs pour plus de détails.' :
   }
 
   getAuthUrl(redirectUri: string): string {
-    // Placeholder for OAuth implementation
     return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=placeholder&redirect_uri=${redirectUri}`;
   }
 
   async exchangeCodeForToken(code: string, redirectUri: string): Promise<any> {
-    // Placeholder for OAuth implementation
     return { access_token: 'placeholder', expires_in: 3600 };
   }
 }

@@ -1,138 +1,146 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LocalAPI } from '../services/axios';
-import { AlertsDashboardQuery, AlertHistoryQuery } from '../types/alerts.d';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 
-// Fetch alerts dashboard
-export const useAlertsDashboard = (query: AlertsDashboardQuery) => {
-  return useQuery(['alerts-dashboard', query], async () => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value) params.append(key, value.toString());
-    });
-    const { data } = await LocalAPI.get(`/alerts/dashboard?${params}`);
-    return data;
-  });
-};
-
-// Fetch alert history
-export const useAlertHistory = (query: AlertHistoryQuery) => {
-  return useQuery(['alert-history', query], async () => {
-    const params = new URLSearchParams();
-    Object.entries(query).forEach(([key, value]) => {
-      if (value) params.append(key, value.toString());
-    });
-    const { data } = await LocalAPI.get(`/alerts/history?${params}`);
-    return data;
-  });
-};
-
-// Fetch delay predictions
-export const useDelayPredictions = () => {
-  return useQuery(['delay-predictions'], async () => {
-    const { data } = await LocalAPI.get('/alerts/delay-predictions');
-    return data;
-  });
-};
-
-// Fetch comparative analytics
-export const useComparativeAnalytics = () => {
-  return useQuery(['comparative-analytics'], async () => {
-    const { data } = await LocalAPI.get('/alerts/comparative-analytics');
-    return data;
-  });
-};
-
-// Fetch priority list
-export const usePriorityList = () => {
-  return useQuery(['priority-list'], async () => {
-    const { data } = await LocalAPI.get('/alerts/priority-list');
-    return data;
-  });
-};
-
-// Fetch team overload alerts
-export const useTeamOverloadAlerts = () => {
-  return useQuery(['team-overload'], async () => {
-    const { data } = await LocalAPI.get('/alerts/team-overload');
-    return data;
-  });
-};
-
-// Fetch reclamation alerts
-export const useReclamationAlerts = () => {
-  return useQuery(['reclamation-alerts'], async () => {
-    const { data } = await LocalAPI.get('/alerts/reclamations');
-    return data;
-  });
-};
-
-// Resolve alert mutation
 export const useResolveAlert = () => {
   const queryClient = useQueryClient();
   
-  return useMutation(
-    async (alertId: string) => {
-      const { data } = await LocalAPI.post(`/alerts/${alertId}/resolve`);
-      return data;
+  return useMutation({
+    mutationFn: async (alertId: string) => {
+      const response = await axios.get(`/api/alerts/resolve?alertId=${alertId}`);
+      return response.data;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['alerts-dashboard']);
-        queryClient.invalidateQueries(['alert-history']);
-      },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
     }
-  );
+  });
 };
 
-// Assign alert mutation
-export const useAssignAlert = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation(
-    async ({ alertId, userId }: { alertId: string; userId: string }) => {
-      const { data } = await LocalAPI.post(`/alerts/${alertId}/assign`, { userId });
-      return data;
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['alerts-dashboard']);
-        queryClient.invalidateQueries(['alert-history']);
-      },
-    }
-  );
-};
-
-// Acknowledge alert mutation
-export const useAcknowledgeAlert = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation(
-    async (alertId: string) => {
-      const { data } = await LocalAPI.post(`/alerts/${alertId}/acknowledge`);
-      return data;
-    },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['alerts-dashboard']);
-        queryClient.invalidateQueries(['alert-history']);
-      },
-    }
-  );
-};
-
-// Add comment to alert mutation
 export const useAddAlertComment = () => {
   const queryClient = useQueryClient();
   
-  return useMutation(
-    async ({ alertId, comment }: { alertId: string; comment: string }) => {
-      const { data } = await LocalAPI.post(`/alerts/${alertId}/comment`, { comment });
-      return data;
+  return useMutation({
+    mutationFn: async ({ alertId, comment }: { alertId: string; comment: string }) => {
+      const response = await axios.post(`/api/alerts/comments`, {
+        alertId,
+        comment
+      });
+      return response.data;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['alert-history']);
-      },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
     }
-  );
+  });
+};
+
+export const useTriggerAlert = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (alertData: any) => {
+      const response = await axios.post('/api/alerts/trigger', alertData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    }
+  });
+};
+
+export const useEscalateAlert = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ alertId, escalationLevel }: { alertId: string; escalationLevel: string }) => {
+      const response = await axios.post(`/api/alerts/escalate`, {
+        alertId,
+        escalationLevel
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    }
+  });
+};
+
+export const useAlertsDashboard = (filters?: any) => {
+  return useQuery({
+    queryKey: ['alerts-dashboard', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) params.append(key, value as string);
+        });
+      }
+      const response = await axios.get(`/api/alerts/dashboard?${params}`);
+      return response.data;
+    }
+  });
+};
+
+export const useDelayPredictions = () => {
+  return useQuery({
+    queryKey: ['delay-predictions'],
+    queryFn: async () => {
+      const response = await axios.get('/api/alerts/delay-predictions');
+      return response.data;
+    }
+  });
+};
+
+export const useComparativeAnalytics = () => {
+  return useQuery({
+    queryKey: ['comparative-analytics'],
+    queryFn: async () => {
+      const response = await axios.get('/api/alerts/comparative-analytics');
+      return response.data;
+    }
+  });
+};
+
+export const usePriorityList = () => {
+  return useQuery({
+    queryKey: ['priority-list'],
+    queryFn: async () => {
+      const response = await axios.get('/api/alerts/priority-list');
+      return response.data;
+    }
+  });
+};
+
+export const useTeamOverloadAlerts = () => {
+  return useQuery({
+    queryKey: ['team-overload'],
+    queryFn: async () => {
+      const response = await axios.get('/api/alerts/team-overload');
+      return response.data;
+    }
+  });
+};
+
+export const useReclamationAlerts = () => {
+  return useQuery({
+    queryKey: ['reclamation-alerts'],
+    queryFn: async () => {
+      const response = await axios.get('/api/alerts/reclamations');
+      return response.data;
+    }
+  });
+};
+
+export const useAlertHistory = (filters?: any) => {
+  return useQuery({
+    queryKey: ['alert-history', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) params.append(key, value as string);
+        });
+      }
+      const response = await axios.get(`/api/alerts/history?${params}`);
+      return response.data;
+    }
+  });
 };

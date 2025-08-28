@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Paper,
   Table,
@@ -22,9 +22,15 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Select
+  Select,
+  CircularProgress,
+  Alert as MuiAlert,
+  Snackbar,
+  Card,
+  CardContent,
+  Grid
 } from '@mui/material';
-import { Visibility, Assignment, CheckCircle } from '@mui/icons-material';
+import { Visibility, Assignment, CheckCircle, Refresh, FilterList, Download } from '@mui/icons-material';
 import { useAlertsDashboard, useResolveAlert } from '../hooks/useAlertsQuery';
 import { AlertsDashboardQuery, Alert } from '../types/alerts.d';
 import { alertLevelColor, alertLevelLabel } from '../utils/alertUtils';
@@ -41,21 +47,60 @@ const ActiveAlerts: React.FC = () => {
   const [filters, setFilters] = useState<AlertsDashboardQuery>({});
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [assignDialog, setAssignDialog] = useState<{ open: boolean; alert: Alert | null }>({ open: false, alert: null });
+  const [assignDialog, setAssignDialog] = useState<{ open: boolean; alert: any | null }>({ open: false, alert: null });
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [detailDialog, setDetailDialog] = useState<{ open: boolean; alert: Alert | null }>({ open: false, alert: null });
+  const [detailDialog, setDetailDialog] = useState<{ open: boolean; alert: any | null }>({ open: false, alert: null });
+  const [showFilters, setShowFilters] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
-  const { data: alerts = [], isLoading } = useAlertsDashboard(filters);
+  const { data: alerts = [], isLoading, error, refetch } = useAlertsDashboard(filters);
   const { data: users = [] } = useQuery(['users'], fetchUsers);
   const resolveMutation = useResolveAlert();
 
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      refetch();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, refetch]);
+
   const activeAlerts = alerts.filter((a: any) => a.alertLevel === 'red' || a.alertLevel === 'orange');
 
-  const handleResolve = async (alert: Alert) => {
-    await resolveMutation.mutateAsync(alert.bordereau.id);
+  const handleResolve = async (alert: any) => {
+    try {
+      await resolveMutation.mutateAsync(alert.bordereau.id);
+      setSnackbar({ open: true, message: 'Alerte résolue avec succès', severity: 'success' });
+      refetch();
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Erreur lors de la résolution', severity: 'error' });
+    }
   };
 
-  const getSLAStatus = (alert: Alert) => {
+  const handleFilterChange = (field: keyof AlertsDashboardQuery, value: any) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+    setPage(0);
+  };
+
+  const handleExport = async () => {
+    try {
+      const response = await LocalAPI.get('/alerts/export?format=excel', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'alertes-actives.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setSnackbar({ open: true, message: 'Export réussi', severity: 'success' });
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Erreur lors de l\'export', severity: 'error' });
+    }
+  };
+
+  const getSLAStatus = (alert: any) => {
     const daysSince = alert.bordereau.dateReception 
       ? (new Date().getTime() - new Date(alert.bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
       : 0;
@@ -63,12 +108,100 @@ const ActiveAlerts: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <Typography variant="h5" gutterBottom>
-        Alertes Actives ({activeAlerts.length})
-      </Typography>
+    <Box sx={{ p: 2 }}>
+      <>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h5">
+          Alertes Actives ({activeAlerts.length})
+        </Typography>
+        <Box display="flex" gap={1}>
+          <Tooltip title="Actualiser">
+            <IconButton onClick={() => refetch()} disabled={isLoading}>
+              <Refresh />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Filtres">
+            <IconButton onClick={() => setShowFilters(!showFilters)}>
+              <FilterList />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Exporter">
+            <IconButton onClick={handleExport}>
+              <Download />
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant={autoRefresh ? "contained" : "outlined"}
+            size="small"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+          >
+            Auto-refresh {autoRefresh ? 'ON' : 'OFF'}
+          </Button>
+        </Box>
+      </Box>
 
-      <AlertFilters filters={filters} setFilters={setFilters} />
+      {showFilters && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  fullWidth
+                  label="ID Équipe"
+                  value={filters.teamId || ''}
+                  onChange={(e) => handleFilterChange('teamId', e.target.value)}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  fullWidth
+                  label="ID Utilisateur"
+                  value={filters.userId || ''}
+                  onChange={(e) => handleFilterChange('userId', e.target.value)}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Niveau d'Alerte</InputLabel>
+                  <Select
+                    value={filters.alertLevel || ''}
+                    onChange={(e) => handleFilterChange('alertLevel', e.target.value)}
+                  >
+                    <MenuItem value="">Tous</MenuItem>
+                    <MenuItem value="red">Critique</MenuItem>
+                    <MenuItem value="orange">Attention</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Date de début"
+                  value={filters.fromDate || ''}
+                  onChange={(e) => handleFilterChange('fromDate', e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading && (
+        <Box display="flex" justifyContent="center" p={3}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {error && (
+        <MuiAlert severity="error" sx={{ mb: 2 }}>
+          Erreur lors du chargement des alertes
+        </MuiAlert>
+      )}
 
       <Paper>
         <TableContainer>
@@ -187,7 +320,18 @@ const ActiveAlerts: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </div>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <MuiAlert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+          {snackbar.message}
+        </MuiAlert>
+      </Snackbar>
+      </>
+    </Box>
   );
 };
 

@@ -8,37 +8,88 @@ import { Reporting } from '../../components/reclamations/Reporting';
 import AIClassificationPanel from '../../components/reclamations/AIClassificationPanel';
 import CustomerPortalInterface from '../../components/reclamations/CustomerPortalInterface';
 import AdvancedAnalyticsDashboard from '../../components/reclamations/AdvancedAnalyticsDashboard';
+import ChefCorbeille from '../../components/reclamations/ChefCorbeille';
+import GestionnaireCorbeille from '../../components/reclamations/GestionnaireCorbeille';
+import BOReclamationForm from '../../components/reclamations/BOReclamationForm';
+import RealTimeAlerts from '../../components/reclamations/RealTimeAlerts';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ReclamationsModule: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
+  const { user } = useAuth();
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
   };
 
+  // Role-specific tab configurations
+  const getTabsForRole = () => {
+    switch (user?.role) {
+      case 'CHEF_EQUIPE':
+        return [
+          { label: 'Corbeille Chef', component: <ChefCorbeille /> },
+          { label: 'Dashboard', component: <ReclamationDashboard /> },
+          { label: 'Liste Complète', component: <ReclamationsList /> },
+          { label: 'Analyses Avancées', component: <AdvancedAnalyticsDashboard /> },
+          { label: 'Rapports', component: <Reporting /> }
+        ];
+      
+      case 'GESTIONNAIRE':
+        return [
+          { label: 'Ma Corbeille', component: <GestionnaireCorbeille /> },
+          { label: 'Nouvelle Réclamation', component: <ReclamationForm onSuccess={() => setActiveTab(0)} /> },
+          { label: 'Recherche', component: <ReclamationSearch /> }
+        ];
+      
+      case 'BUREAU_ORDRE':
+        return [
+          { label: 'Nouvelle Réclamation', component: <BOReclamationForm onSuccess={() => setActiveTab(1)} /> },
+          { label: 'Dashboard BO', component: <ReclamationDashboard /> },
+          { label: 'Liste', component: <ReclamationsList /> }
+        ];
+      
+      case 'CLIENT_SERVICE':
+        return [
+          { label: 'Dashboard', component: <ReclamationDashboard /> },
+          { label: 'Liste des Réclamations', component: <ReclamationsList /> },
+          { label: 'Portail Client', component: <CustomerPortalInterface /> },
+          { label: 'Recherche', component: <ReclamationSearch /> }
+        ];
+      
+      case 'SUPER_ADMIN':
+        return [
+          { label: 'Dashboard', component: <ReclamationDashboard /> },
+          { label: 'Corbeille Chef', component: <ChefCorbeille /> },
+          { label: 'Liste Complète', component: <ReclamationsList /> },
+          { label: 'Classification IA', component: <AIClassificationPanel /> },
+          { label: 'Portail Client', component: <CustomerPortalInterface /> },
+          { label: 'Analyses Avancées', component: <AdvancedAnalyticsDashboard /> },
+          { label: 'Rapports', component: <Reporting /> }
+        ];
+      
+      default:
+        return [
+          { label: 'Dashboard', component: <ReclamationDashboard /> },
+          { label: 'Liste des Réclamations', component: <ReclamationsList /> }
+        ];
+    }
+  };
+
+  const tabs = getTabsForRole();
+
   return (
     <div className="reclamations-module">
+      <RealTimeAlerts />
+      
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={handleTabChange}>
-          <Tab label="Dashboard" />
-          <Tab label="Nouvelle Réclamation" />
-          <Tab label="Liste des Réclamations" />
-          <Tab label="Classification IA" />
-          <Tab label="Portail Client" />
-          <Tab label="Analyses Avancées" />
-          <Tab label="Recherche & Filtres" />
-          <Tab label="Rapports" />
+          {tabs.map((tab, index) => (
+            <Tab key={index} label={tab.label} />
+          ))}
         </Tabs>
       </Box>
 
-      {activeTab === 0 && <ReclamationDashboard />}
-      {activeTab === 1 && <ReclamationForm onSuccess={() => setActiveTab(2)} />}
-      {activeTab === 2 && <ReclamationsList />}
-      {activeTab === 3 && <AIClassificationPanel />}
-      {activeTab === 4 && <CustomerPortalInterface />}
-      {activeTab === 5 && <AdvancedAnalyticsDashboard />}
-      {activeTab === 6 && <ReclamationSearch />}
-      {activeTab === 7 && <Reporting />}
+      {tabs[activeTab]?.component}
     </div>
   );
 };

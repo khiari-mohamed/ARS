@@ -1,69 +1,77 @@
-import React, { useEffect, useState } from 'react';
-import { PriorityBordereau } from '../../types/alerts.d';
+import React from 'react';
 import {
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
+  Card,
+  CardContent,
   Typography,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
   Chip,
-  Link,
-  IconButton,
-  Tooltip,
+  Box,
+  CircularProgress
 } from '@mui/material';
+import { PriorityHigh, Assignment } from '@mui/icons-material';
 import { alertLevelColor, alertLevelLabel } from '../../utils/alertUtils';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { getPrioritiesAI } from '../../services/analyticsService';
 
-interface Props {
-  items?: any[]; // Array of bordereaux or relevant objects for AI
+interface PriorityListProps {
+  items?: any[];
+  alerts?: any[];
+  loading?: boolean;
 }
 
-const PriorityList: React.FC<Props> = ({ items }) => {
-  const [priorities, setPriorities] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-  // Only call the API if items is a non-empty array and every item has an id
-  if (!items || !Array.isArray(items) || items.length === 0 || !items.every(i => i && i.id)) {
-    setPriorities([]);
-    return;
+const PriorityList: React.FC<PriorityListProps> = ({ items, alerts, loading }) => {
+  const data = items || alerts || [];
+  
+  if (loading) {
+    return <CircularProgress />;
   }
-  setLoading(true);
-  getPrioritiesAI(items)
-    .then(data => setPriorities(data.priorities || []))
-    .catch(e => setError(e.message))
-    .finally(() => setLoading(false));
-}, [items]);
-
-  if (loading) return <Typography>Chargement des priorités IA...</Typography>;
-  if (error) return <Typography color="error">Erreur: {error}</Typography>;
-  if (!priorities.length) return <Typography>Aucun bordereau prioritaire.</Typography>;
 
   return (
-    <>
-      <Typography variant="h6" gutterBottom>
-        Bordereaux prioritaires (IA)
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>ID</TableCell>
-            <TableCell>Score de priorité</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {priorities.map((b) => (
-            <TableRow key={b.id}>
-              <TableCell>{b.id}</TableCell>
-              <TableCell>{b.priority_score}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </>
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          Bordereaux Prioritaires ({data.length})
+        </Typography>
+        
+        {data.length === 0 ? (
+          <Typography color="text.secondary">
+            Aucun bordereau prioritaire
+          </Typography>
+        ) : (
+          <List>
+            {data.slice(0, 10).map((item, index) => (
+              <ListItem key={index}>
+                <ListItemIcon>
+                  <PriorityHigh color={item.alertLevel === 'red' ? 'error' : 'warning'} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={`Bordereau #${item.bordereau.id}`}
+                  secondary={
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {item.reason}
+                      </Typography>
+                      <Typography variant="caption">
+                        SLA: {item.daysSinceReception} jours
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <Chip
+                  label={alertLevelLabel(item.alertLevel)}
+                  sx={{
+                    backgroundColor: alertLevelColor(item.alertLevel),
+                    color: '#fff',
+                  }}
+                  size="small"
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

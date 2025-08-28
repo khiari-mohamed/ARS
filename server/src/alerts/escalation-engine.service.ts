@@ -70,26 +70,47 @@ export class EscalationEngineService {
   // === ESCALATION RULES MANAGEMENT ===
   async createEscalationRule(rule: Omit<EscalationRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<EscalationRule> {
     try {
-      const newRule: EscalationRule = {
-        id: `rule_${Date.now()}`,
-        ...rule,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      await this.prisma.auditLog.create({
+      const newRule = await this.prisma.escalationRule.create({
         data: {
-          userId: 'SYSTEM',
-          action: 'ESCALATION_RULE_CREATED',
-          details: {
-            ruleId: newRule.id,
-            name: newRule.name,
-            alertType: newRule.alertType
-          }
+          name: rule.name,
+          alertType: rule.alertType,
+          severity: rule.severity,
+          conditions: JSON.parse(JSON.stringify(rule.conditions || [])),
+          escalationPath: JSON.parse(JSON.stringify(rule.escalationPath)),
+          active: rule.active
         }
       });
 
-      return newRule;
+      try {
+        const systemUser = await this.prisma.user.findFirst();
+        if (systemUser) {
+          await this.prisma.auditLog.create({
+            data: {
+              userId: systemUser.id,
+              action: 'ESCALATION_RULE_CREATED',
+              details: {
+                ruleId: newRule.id,
+                name: newRule.name,
+                alertType: newRule.alertType
+              }
+            }
+          });
+        }
+      } catch (error) {
+        this.logger.log(`Escalation rule created: ${newRule.id}`);
+      }
+
+      return {
+        id: newRule.id,
+        name: newRule.name,
+        alertType: newRule.alertType,
+        severity: newRule.severity,
+        conditions: (newRule.conditions as any) || [],
+        escalationPath: (newRule.escalationPath as any),
+        active: newRule.active,
+        createdAt: newRule.createdAt,
+        updatedAt: newRule.updatedAt
+      };
     } catch (error) {
       this.logger.error('Failed to create escalation rule:', error);
       throw error;
@@ -98,99 +119,25 @@ export class EscalationEngineService {
 
   async getEscalationRules(filters?: any): Promise<EscalationRule[]> {
     try {
-      // Mock escalation rules - in production would query database
-      return [
-        {
-          id: 'rule_sla_breach',
-          name: 'SLA Breach Escalation',
-          alertType: 'SLA_BREACH',
-          severity: 'high',
-          conditions: [
-            { field: 'delayHours', operator: 'greater_than', value: 24 }
-          ],
-          escalationPath: [
-            {
-              level: 1,
-              delayMinutes: 15,
-              recipients: [
-                { type: 'role', identifier: 'SUPERVISOR', channels: ['email', 'slack'] }
-              ],
-              actions: [
-                { type: 'email', config: { template: 'sla_breach_l1' } },
-                { type: 'slack', config: { channel: '#alerts' } }
-              ],
-              stopOnAcknowledge: false
-            },
-            {
-              level: 2,
-              delayMinutes: 60,
-              recipients: [
-                { type: 'role', identifier: 'MANAGER', channels: ['email', 'sms'] }
-              ],
-              actions: [
-                { type: 'email', config: { template: 'sla_breach_l2' } },
-                { type: 'sms', config: { urgent: true } }
-              ],
-              stopOnAcknowledge: true
-            },
-            {
-              level: 3,
-              delayMinutes: 180,
-              recipients: [
-                { type: 'role', identifier: 'DIRECTOR', channels: ['email', 'sms', 'teams'] }
-              ],
-              actions: [
-                { type: 'email', config: { template: 'sla_breach_l3' } },
-                { type: 'teams', config: { channel: 'Management' } },
-                { type: 'ticket', config: { priority: 'critical' } }
-              ],
-              stopOnAcknowledge: true
-            }
-          ],
-          active: true,
-          createdAt: new Date('2024-01-01'),
-          updatedAt: new Date('2024-01-15')
-        },
-        {
-          id: 'rule_system_down',
-          name: 'System Down Escalation',
-          alertType: 'SYSTEM_DOWN',
-          severity: 'critical',
-          conditions: [
-            { field: 'duration', operator: 'greater_than', value: 5 }
-          ],
-          escalationPath: [
-            {
-              level: 1,
-              delayMinutes: 0,
-              recipients: [
-                { type: 'role', identifier: 'TECH_TEAM', channels: ['email', 'sms', 'slack'] }
-              ],
-              actions: [
-                { type: 'email', config: { template: 'system_down_immediate' } },
-                { type: 'sms', config: { urgent: true } },
-                { type: 'slack', config: { channel: '#incidents' } }
-              ],
-              stopOnAcknowledge: false
-            },
-            {
-              level: 2,
-              delayMinutes: 10,
-              recipients: [
-                { type: 'role', identifier: 'IT_MANAGER', channels: ['email', 'sms'] }
-              ],
-              actions: [
-                { type: 'email', config: { template: 'system_down_escalated' } },
-                { type: 'sms', config: { urgent: true } }
-              ],
-              stopOnAcknowledge: true
-            }
-          ],
-          active: true,
-          createdAt: new Date('2024-01-01'),
-          updatedAt: new Date('2024-01-10')
-        }
-      ];
+      const rules = await this.prisma.escalationRule.findMany({
+        where: filters ? {
+          active: filters.active,
+          alertType: filters.alertType
+        } : undefined,
+        orderBy: { createdAt: 'desc' }
+      });
+
+      return rules.map(rule => ({
+        id: rule.id,
+        name: rule.name,
+        alertType: rule.alertType,
+        severity: rule.severity,
+        conditions: (rule.conditions as any) || [],
+        escalationPath: (rule.escalationPath as any),
+        active: rule.active,
+        createdAt: rule.createdAt,
+        updatedAt: rule.updatedAt
+      }));
     } catch (error) {
       this.logger.error('Failed to get escalation rules:', error);
       return [];
@@ -199,17 +146,38 @@ export class EscalationEngineService {
 
   async updateEscalationRule(ruleId: string, updates: Partial<EscalationRule>): Promise<void> {
     try {
-      await this.prisma.auditLog.create({
-        data: {
-          userId: 'SYSTEM',
-          action: 'ESCALATION_RULE_UPDATED',
-          details: {
-            ruleId,
-            updates: Object.keys(updates),
-            timestamp: new Date().toISOString()
-          }
-        }
+      const updateData: any = {};
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.alertType !== undefined) updateData.alertType = updates.alertType;
+      if (updates.severity !== undefined) updateData.severity = updates.severity;
+      if (updates.conditions !== undefined) updateData.conditions = JSON.parse(JSON.stringify(updates.conditions));
+      if (updates.escalationPath !== undefined) updateData.escalationPath = JSON.parse(JSON.stringify(updates.escalationPath));
+      if (updates.active !== undefined) updateData.active = updates.active;
+      updateData.updatedAt = new Date();
+
+      await this.prisma.escalationRule.update({
+        where: { id: ruleId },
+        data: updateData
       });
+
+      try {
+        const systemUser = await this.prisma.user.findFirst();
+        if (systemUser) {
+          await this.prisma.auditLog.create({
+            data: {
+              userId: systemUser.id,
+              action: 'ESCALATION_RULE_UPDATED',
+              details: {
+                ruleId,
+                updates: Object.keys(updates),
+                timestamp: new Date().toISOString()
+              }
+            }
+          });
+        }
+      } catch (error) {
+        this.logger.log(`Escalation rule updated: ${ruleId}`);
+      }
     } catch (error) {
       this.logger.error('Failed to update escalation rule:', error);
       throw error;
@@ -310,18 +278,25 @@ export class EscalationEngineService {
       }, step.delayMinutes * 60 * 1000);
     }
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId: 'SYSTEM',
-        action: 'ESCALATION_STARTED',
-        details: {
-          escalationId: escalationInstance.id,
-          alertId,
-          ruleId: rule.id,
-          timestamp: new Date().toISOString()
-        }
+    try {
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'ESCALATION_STARTED',
+            details: {
+              escalationId: escalationInstance.id,
+              alertId,
+              ruleId: rule.id,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
       }
-    });
+    } catch (error) {
+      this.logger.log(`Escalation started: ${escalationInstance.id}`);
+    }
   }
 
   private async executeEscalationLevel(
@@ -373,18 +348,25 @@ export class EscalationEngineService {
       }
     }
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId: 'SYSTEM',
-        action: 'ESCALATION_LEVEL_EXECUTED',
-        details: {
-          escalationId: instance.id,
-          level,
-          recipients: step.recipients.length,
-          timestamp: new Date().toISOString()
-        }
+    try {
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'ESCALATION_LEVEL_EXECUTED',
+            details: {
+              escalationId: instance.id,
+              level,
+              recipients: step.recipients.length,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
       }
-    });
+    } catch (error) {
+      this.logger.log(`Escalation level executed: ${instance.id} level ${level}`);
+    }
   }
 
   private async sendNotification(
@@ -431,16 +413,24 @@ export class EscalationEngineService {
   // === ESCALATION MANAGEMENT ===
   async acknowledgeEscalation(escalationId: string, userId: string): Promise<void> {
     try {
-      await this.prisma.auditLog.create({
-        data: {
-          userId,
-          action: 'ESCALATION_ACKNOWLEDGED',
-          details: {
-            escalationId,
-            timestamp: new Date().toISOString()
-          }
+      try {
+        const systemUser = await this.prisma.user.findFirst();
+        const auditUserId = userId || systemUser?.id;
+        if (auditUserId) {
+          await this.prisma.auditLog.create({
+            data: {
+              userId: auditUserId,
+              action: 'ESCALATION_ACKNOWLEDGED',
+              details: {
+                escalationId,
+                timestamp: new Date().toISOString()
+              }
+            }
+          });
         }
-      });
+      } catch (error) {
+        this.logger.log(`Escalation acknowledged: ${escalationId}`);
+      }
     } catch (error) {
       this.logger.error('Failed to acknowledge escalation:', error);
       throw error;
@@ -449,17 +439,25 @@ export class EscalationEngineService {
 
   async resolveEscalation(escalationId: string, userId: string, resolution: string): Promise<void> {
     try {
-      await this.prisma.auditLog.create({
-        data: {
-          userId,
-          action: 'ESCALATION_RESOLVED',
-          details: {
-            escalationId,
-            resolution,
-            timestamp: new Date().toISOString()
-          }
+      try {
+        const systemUser = await this.prisma.user.findFirst();
+        const auditUserId = userId || systemUser?.id;
+        if (auditUserId) {
+          await this.prisma.auditLog.create({
+            data: {
+              userId: auditUserId,
+              action: 'ESCALATION_RESOLVED',
+              details: {
+                escalationId,
+                resolution,
+                timestamp: new Date().toISOString()
+              }
+            }
+          });
         }
-      });
+      } catch (error) {
+        this.logger.log(`Escalation resolved: ${escalationId}`);
+      }
     } catch (error) {
       this.logger.error('Failed to resolve escalation:', error);
       throw error;
@@ -539,6 +537,35 @@ export class EscalationEngineService {
         successRate: 0,
         period
       };
+    }
+  }
+
+  async deleteEscalationRule(ruleId: string): Promise<void> {
+    try {
+      await this.prisma.escalationRule.delete({
+        where: { id: ruleId }
+      });
+
+      try {
+        const systemUser = await this.prisma.user.findFirst();
+        if (systemUser) {
+          await this.prisma.auditLog.create({
+            data: {
+              userId: systemUser.id,
+              action: 'ESCALATION_RULE_DELETED',
+              details: {
+                ruleId,
+                timestamp: new Date().toISOString()
+              }
+            }
+          });
+        }
+      } catch (auditError) {
+        this.logger.error('Failed to create audit log:', auditError);
+      }
+    } catch (error) {
+      this.logger.error('Failed to delete escalation rule:', error);
+      throw error;
     }
   }
 }

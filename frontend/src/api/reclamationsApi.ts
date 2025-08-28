@@ -12,7 +12,7 @@ import {
  * Fetch a paginated and filtered list of reclamations.
  */
 export const fetchReclamations = async (params: SearchReclamationDTO) => {
-  const { data } = await LocalAPI.get<Reclamation[]>('/reclamations/search', { params });
+  const { data } = await LocalAPI.get<Reclamation[]>('/reclamations', { params });
   return data;
 };
 

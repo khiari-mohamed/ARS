@@ -11,19 +11,39 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.CHEF_EQUIPE)
   @Get()
   async getAllUsers(@Request() req) {
-    // Support filtering by role via query param
-    const role = req.query?.role;
-    let users;
-    if (role) {
-      users = await this.usersService.findByRole(role);
-    } else {
-      users = await this.usersService.findAll();
+    try {
+      // Support filtering by role via query param
+      const role = req.query?.role;
+      let users;
+      if (role) {
+        users = await this.usersService.findByRole(role);
+      } else {
+        users = await this.usersService.findAll();
+      }
+      
+      // Return relevant fields for assignment dropdowns
+      return users
+        .filter(user => {
+          const userRole = user.role?.toUpperCase();
+          return user.active !== false && 
+                 (userRole === 'GESTIONNAIRE' || 
+                  userRole === 'CUSTOMER_SERVICE' || 
+                  userRole === 'CLIENT_SERVICE');
+        })
+        .map(({ id, fullName, email, role, active }) => ({ 
+          id, 
+          fullName: fullName || email, // Fallback to email if no fullName
+          email, 
+          role: role?.toUpperCase(), // Normalize role to uppercase
+          active 
+        }));
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      return [];
     }
-    // Only return id and fullName for dropdowns
-    return users.map(({ id, fullName }) => ({ id, fullName }));
   }
 
   @UseGuards(JwtAuthGuard)

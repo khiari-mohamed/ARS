@@ -1,39 +1,33 @@
 import React from 'react';
-import { Box, Typography, Chip, Alert } from '@mui/material';
+import { Box } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 
-interface Props {
+interface RoleBasedAlertsProps {
   children: React.ReactNode;
-  allowedRoles?: string[];
-  fallback?: React.ReactNode;
 }
 
-const RoleBasedAlerts: React.FC<Props> = ({ 
-  children, 
-  allowedRoles = ['SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'], 
-  fallback 
-}): JSX.Element => {
+const RoleBasedAlerts: React.FC<RoleBasedAlertsProps> = ({ children }) => {
   const { user } = useAuth();
 
-  if (!user) {
-    return (
-      <Alert severity="warning">
-        Authentification requise pour accéder aux alertes
-      </Alert>
-    );
-  }
+  // Add role-based styling or behavior if needed
+  const getRoleStyles = () => {
+    switch (user?.role) {
+      case 'SUPER_ADMIN':
+        return { borderLeft: '4px solid #1976d2' };
+      case 'CHEF_EQUIPE':
+        return { borderLeft: '4px solid #ed6c02' };
+      case 'GESTIONNAIRE':
+        return { borderLeft: '4px solid #2e7d32' };
+      default:
+        return {};
+    }
+  };
 
-  if (!allowedRoles.includes(user.role)) {
-    return (fallback as JSX.Element) || (
-      <Alert severity="info">
-        <Typography variant="body2">
-          Accès restreint. Votre rôle: <Chip size="small" label={user.role} />
-        </Typography>
-      </Alert>
-    );
-  }
-
-  return <>{children}</>;
+  return (
+    <Box sx={getRoleStyles()}>
+      {children}
+    </Box>
+  );
 };
 
 export default RoleBasedAlerts;
