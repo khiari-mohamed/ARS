@@ -538,4 +538,12 @@ export class BordereauxController {
       approachingDeadlines: await this.bordereauxService.getApproachingDeadlines()
     };
   }
+  
+  @Post('check-overload')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async checkTeamOverload() {
+    // Manually trigger overload check
+    await (this.bordereauxService as any).checkAndNotifyOverload();
+    return { success: true, message: 'Overload check completed' };
+  }
 }

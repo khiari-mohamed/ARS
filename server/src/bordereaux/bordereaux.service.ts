@@ -313,6 +313,188 @@ export class BordereauxService {
     return results;
   }
 
+  // AUTO-NOTIFICATION METHODS
+  
+  /**
+   * Notify SCAN team when new bordereau is created by BO
+   */
+  private async notifyScanTeam(bordereauId: string, reference: string): Promise<void> {
+    try {
+      const scanUsers = await this.prisma.user.findMany({
+        where: { role: 'SCAN_TEAM', active: true }
+      });
+      
+      for (const user of scanUsers) {
+        await this.prisma.notification.create({
+          data: {
+            userId: user.id,
+            type: 'NEW_BORDEREAU_SCAN',
+            title: 'Nouveau bordereau à scanner',
+            message: `Bordereau ${reference} prêt pour numérisation`,
+            data: { bordereauId, reference },
+            read: false
+          }
+        }).catch(() => console.log('Failed to create SCAN notification'));
+      }
+      
+      console.log(`📨 Notified ${scanUsers.length} SCAN team members about new bordereau ${reference}`);
+    } catch (error) {
+      console.error('Error notifying SCAN team:', error);
+    }
+  }
+  
+  /**
+   * Notify Chef when scan is completed and bordereau needs assignment
+   */
+  private async notifyChefForAssignment(bordereauId: string, reference: string, clientId: string): Promise<void> {
+    try {
+      // Get client with gestionnaires (chargé de compte)
+      const client = await this.prisma.client.findUnique({
+        where: { id: clientId },
+        include: { gestionnaires: true }
+      });
+      
+      // Find chef responsible for this client's "chargé de compte"
+      let targetChefs: any[] = [];
+      
+      if (client?.gestionnaires && client.gestionnaires.length > 0) {
+        // Find chefs who manage these gestionnaires
+        targetChefs = await this.prisma.user.findMany({
+          where: { 
+            role: 'CHEF_EQUIPE', 
+            active: true 
+          }
+        });
+      } else {
+        // Fallback: notify all chefs
+        targetChefs = await this.prisma.user.findMany({
+          where: { role: 'CHEF_EQUIPE', active: true }
+        });
+      }
+      
+      for (const chef of targetChefs) {
+        await this.prisma.notification.create({
+          data: {
+            userId: chef.id,
+            type: 'BORDEREAU_READY_ASSIGNMENT',
+            title: 'Bordereau prêt pour affectation',
+            message: `Bordereau ${reference} (${client?.name}) scanné et prêt pour affectation`,
+            data: { bordereauId, reference, clientName: client?.name },
+            read: false
+          }
+        }).catch(() => console.log('Failed to create Chef notification'));
+      }
+      
+      console.log(`📨 Notified ${targetChefs.length} Chef(s) about scanned bordereau ${reference}`);
+    } catch (error) {
+      console.error('Error notifying Chef for assignment:', error);
+    }
+  }
+  
+  /**
+   * Notify Chef when gestionnaire returns a bordereau
+   */
+  private async notifyChefOfReturn(bordereauId: string, reference: string, reason: string, gestionnaireNom?: string): Promise<void> {
+    try {
+      const chefs = await this.prisma.user.findMany({
+        where: { role: 'CHEF_EQUIPE', active: true }
+      });
+      
+      for (const chef of chefs) {
+        await this.prisma.notification.create({
+          data: {
+            userId: chef.id,
+            type: 'BORDEREAU_RETURNED',
+            title: 'Bordereau retourné',
+            message: `Bordereau ${reference} retourné par ${gestionnaireNom || 'gestionnaire'}: ${reason}`,
+            data: { bordereauId, reference, reason, returnedBy: gestionnaireNom },
+            read: false
+          }
+        }).catch(() => console.log('Failed to create return notification'));
+      }
+      
+      console.log(`📨 Notified ${chefs.length} Chef(s) about returned bordereau ${reference}`);
+    } catch (error) {
+      console.error('Error notifying Chef of return:', error);
+    }
+  }
+  
+  /**
+   * Notify Super Admin when auto-assignment fails
+   */
+  private async notifySuperAdminAssignmentFailure(bordereauId: string, reference: string): Promise<void> {
+    try {
+      const superAdmins = await this.prisma.user.findMany({
+        where: { role: 'SUPER_ADMIN', active: true }
+      });
+      
+      for (const admin of superAdmins) {
+        await this.prisma.notification.create({
+          data: {
+            userId: admin.id,
+            type: 'ASSIGNMENT_FAILURE',
+            title: 'Échec d\'affectation automatique',
+            message: `Impossible d\'affecter automatiquement le bordereau ${reference} - aucun gestionnaire disponible`,
+            data: { bordereauId, reference },
+            read: false
+          }
+        }).catch(() => console.log('Failed to create assignment failure notification'));
+      }
+      
+      console.log(`🚨 Notified Super Admins about assignment failure for bordereau ${reference}`);
+    } catch (error) {
+      console.error('Error notifying Super Admin of assignment failure:', error);
+    }
+  }
+  
+  /**
+   * Check for team overload and notify Super Admin
+   */
+  async checkAndNotifyOverload(): Promise<void> {
+    try {
+      const teams = await this.prisma.user.findMany({
+        where: { role: 'CHEF_EQUIPE', active: true },
+        include: {
+          bordereauxTeam: {
+            where: { statut: { notIn: ['CLOTURE', 'TRAITE'] } }
+          }
+        }
+      });
+      
+      const overloadThreshold = 50; // Configurable threshold
+      const overloadedTeams = teams.filter(team => team.bordereauxTeam.length > overloadThreshold);
+      
+      if (overloadedTeams.length > 0) {
+        const superAdmins = await this.prisma.user.findMany({
+          where: { role: 'SUPER_ADMIN', active: true }
+        });
+        
+        for (const admin of superAdmins) {
+          await this.prisma.notification.create({
+            data: {
+              userId: admin.id,
+              type: 'TEAM_OVERLOAD_ALERT',
+              title: 'Alerte surcharge équipe',
+              message: `${overloadedTeams.length} équipe(s) en surcharge détectée(s)`,
+              data: { 
+                overloadedTeams: overloadedTeams.map(t => ({ 
+                  id: t.id, 
+                  name: t.fullName, 
+                  workload: t.bordereauxTeam.length 
+                }))
+              },
+              read: false
+            }
+          }).catch(() => console.log('Failed to create overload notification'));
+        }
+        
+        console.log(`⚠️ Notified Super Admins about ${overloadedTeams.length} overloaded team(s)`);
+      }
+    } catch (error) {
+      console.error('Error checking team overload:', error);
+    }
+  }
+  
   // --- Seed test data for development/demo ---
   async seedTestData(): Promise<any> {
     // 1. Ensure test users exist
@@ -462,9 +644,12 @@ export class BordereauxService {
       createdBy, // This field doesn't exist in schema, will be ignored
     } = createBordereauDto;
 
-    // Validate clientId
+    // Validate clientId and get client with gestionnaires
     console.log('🔍 Validating client:', clientId);
-    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    const client = await this.prisma.client.findUnique({ 
+      where: { id: clientId },
+      include: { gestionnaires: true }
+    });
     if (!client) {
       console.error('❌ Client not found:', clientId);
       throw new BadRequestException('Invalid clientId');
@@ -496,11 +681,16 @@ export class BordereauxService {
       });
       if (activeContract) {
         contractId = activeContract.id;
-        // Optionally, use contract's delaiReglement if not provided
+        // AUTO-POPULATE CLIENT PARAMETERS: Use contract's delaiReglement if not provided
         if (!delaiReglement && typeof activeContract.delaiReglement === 'number') {
           delaiReglement = activeContract.delaiReglement;
         }
       }
+    }
+    
+    // AUTO-POPULATE CLIENT PARAMETERS: Use client's reglementDelay if still not set
+    if (!delaiReglement && client.reglementDelay) {
+      delaiReglement = client.reglementDelay;
     }
     // -------------------------------------------------------------
 
@@ -555,19 +745,11 @@ export class BordereauxService {
       });
       console.log('✅ Bordereau created successfully:', bordereau.reference);
     
+      // AUTO-NOTIFICATION: BO → SCAN team notification
+      await this.notifyScanTeam(bordereau.id, bordereau.reference);
+      
       // Trigger workflow progression
       await this.progressWorkflow(bordereau.id, 'CREATED');
-      
-      // Notify SCAN team of new bordereau (optional)
-      try {
-        await this.alertsService.triggerAlert({
-          type: 'NEW_BORDEREAU',
-          bsId: bordereau.id,
-        });
-        console.log('✅ Alert triggered successfully');
-      } catch (alertError) {
-        console.log('⚠️ Alert service not available, continuing without alert');
-      }
       
       await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
       console.log('🎉 Bordereau creation completed successfully');
@@ -1414,6 +1596,8 @@ private async progressWorkflow(bordereauId: string, trigger: string): Promise<vo
         // Assigned to gestionnaire -> in progress
         newStatus = Statut.EN_COURS;
         updateData.dateReceptionSante = new Date();
+        // Check for team overload after assignment
+        setTimeout(() => this.checkAndNotifyOverload(), 1000);
         break;
         
       case 'PROCESSING_STARTED':
@@ -1462,23 +1646,54 @@ private async progressWorkflow(bordereauId: string, trigger: string): Promise<vo
 }
 
 /**
- * Auto-assign to available gestionnaire after scan
+ * Auto-assign to available gestionnaire after scan (with chargé de compte integration)
  */
 private async autoAssignToGestionnaire(bordereauId: string): Promise<void> {
   try {
-    const availableUsers = await this.prisma.user.findMany({
-      where: {
-        role: 'GESTIONNAIRE',
-        active: true,
-      },
+    // Get bordereau with client and gestionnaires (chargé de compte)
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: {
+        client: {
+          include: { gestionnaires: true }
+        }
+      }
     });
     
-    if (availableUsers.length === 0) {
-      this.logger.warn('No available gestionnaires for auto-assignment');
+    if (!bordereau) {
+      this.logger.warn(`Bordereau ${bordereauId} not found for auto-assignment`);
       return;
     }
     
-    // Find user with lowest workload
+    let availableUsers: any[] = [];
+    
+    // CHARGÉ DE COMPTE INTEGRATION: Prefer client's gestionnaires
+    if (bordereau.client.gestionnaires && bordereau.client.gestionnaires.length > 0) {
+      availableUsers = bordereau.client.gestionnaires.filter(user => 
+        user.role === 'GESTIONNAIRE' && user.active
+      );
+      this.logger.log(`Found ${availableUsers.length} gestionnaires assigned to client ${bordereau.client.name}`);
+    }
+    
+    // Fallback: get all available gestionnaires
+    if (availableUsers.length === 0) {
+      availableUsers = await this.prisma.user.findMany({
+        where: {
+          role: 'GESTIONNAIRE',
+          active: true,
+        },
+      });
+      this.logger.log(`Using fallback: ${availableUsers.length} available gestionnaires`);
+    }
+    
+    if (availableUsers.length === 0) {
+      this.logger.warn('No available gestionnaires for auto-assignment');
+      // Notify Super Admin of assignment failure
+      await this.notifySuperAdminAssignmentFailure(bordereauId, bordereau.reference);
+      return;
+    }
+    
+    // Find user with lowest workload among available gestionnaires
     const workloads = await Promise.all(availableUsers.map(async user => {
       const count = await this.prisma.bordereau.count({
         where: { assignedToUserId: user.id, statut: { not: 'CLOTURE' } },
@@ -1492,10 +1707,10 @@ private async autoAssignToGestionnaire(bordereauId: string): Promise<void> {
     await this.assignBordereau({
       bordereauId,
       assignedToUserId: selectedUser.id,
-      notes: 'Auto-assigned after scan completion',
+      notes: `Auto-assigned after scan completion (chargé de compte: ${bordereau.client.gestionnaires.length > 0 ? 'Yes' : 'No'})`,
     });
     
-    this.logger.log(`Auto-assigned bordereau ${bordereauId} to gestionnaire ${selectedUser.id}`);
+    this.logger.log(`Auto-assigned bordereau ${bordereauId} to gestionnaire ${selectedUser.fullName} (workload: ${workloads[0].count})`);
   } catch (error) {
     this.logger.error(`Error auto-assigning to gestionnaire: ${error.message}`);
   }
@@ -1535,6 +1750,12 @@ async findByUser(userId: string): Promise<BordereauResponseDto[]> {
 }
 
 async returnBordereau(id: string, reason: string) {
+  // Get bordereau with current handler info
+  const currentBordereau = await this.prisma.bordereau.findUnique({
+    where: { id },
+    include: { currentHandler: true, client: true, contract: true }
+  });
+  
   // Set status to EN_DIFFICULTE or similar
   const bordereau = await this.prisma.bordereau.update({
     where: { id },
@@ -1545,6 +1766,9 @@ async returnBordereau(id: string, reason: string) {
     },
     include: { client: true, contract: true },
   });
+
+  // AUTO-NOTIFICATION: Gestionnaire → Chef return notification
+  await this.notifyChefOfReturn(bordereau.id, bordereau.reference, reason, currentBordereau?.currentHandler?.fullName);
 
   // Log the event
   await this.auditLogService.logBordereauEvent(id, 'RETURNED', undefined, { reason });

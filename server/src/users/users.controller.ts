@@ -235,7 +235,34 @@ export class UsersController {
       throw new ForbiddenException('Access denied');
     }
     
-    const user = await this.usersService.findById(id);
-    return user.notifications || [];
+    return this.usersService.getUserNotifications(id);
+  }
+  
+  @Patch(':id/notifications/:notificationId/read')
+  async markNotificationAsRead(
+    @Param('id') userId: string,
+    @Param('notificationId') notificationId: string,
+    @Request() req
+  ) {
+    const currentUser = req.user;
+    
+    // Users can only mark their own notifications as read
+    if (currentUser.id !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    
+    return this.usersService.markNotificationAsRead(userId, notificationId);
+  }
+  
+  @Patch(':id/notifications/mark-all-read')
+  async markAllNotificationsAsRead(@Param('id') userId: string, @Request() req) {
+    const currentUser = req.user;
+    
+    // Users can only mark their own notifications as read
+    if (currentUser.id !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    
+    return this.usersService.markAllNotificationsAsRead(userId);
   }
 }
