@@ -29,24 +29,36 @@ const CreateCorrespondenceTab: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const { getEmailTemplates } = await import('../../services/gecService');
-        const templatesData = await getEmailTemplates();
-        setTemplates(templatesData);
+        const token = localStorage.getItem('token');
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+        
+        // Load real templates
+        const templatesResponse = await fetch('http://localhost:5000/api/courriers/templates', { headers });
+        if (templatesResponse.ok) {
+          const templatesData = await templatesResponse.json();
+          setTemplates(templatesData.map((t: any) => ({ id: t.id, name: t.name, type: t.type })));
+        } else {
+          setTemplates([
+            { id: '1', name: 'Courrier de Règlement', type: 'REGLEMENT' },
+            { id: '2', name: 'Courrier de Réclamation', type: 'RECLAMATION' },
+            { id: '3', name: 'Relance Client', type: 'RELANCE' }
+          ]);
+        }
+        
+        // Load real clients
+        const clientsResponse = await fetch('http://localhost:5000/api/clients', { headers });
+        if (clientsResponse.ok) {
+          const clientsData = await clientsResponse.json();
+          setClients(clientsData.map((c: any) => ({ id: c.id, name: c.name, email: c.email })));
+        } else {
+          setClients([
+            { id: '1', name: 'Client A', email: 'clienta@example.com' },
+            { id: '2', name: 'Client B', email: 'clientb@example.com' }
+          ]);
+        }
       } catch (error) {
-        console.error('Failed to load templates:', error);
-        // Fallback to mock data
-        setTemplates([
-          { id: '1', name: 'Courrier de Règlement', type: 'REGLEMENT' },
-          { id: '2', name: 'Courrier de Réclamation', type: 'RECLAMATION' },
-          { id: '3', name: 'Relance Client', type: 'RELANCE' }
-        ]);
+        console.error('Failed to load data:', error);
       }
-      
-      // Mock clients - replace with actual API
-      setClients([
-        { id: '1', name: 'Client A', email: 'clienta@example.com' },
-        { id: '2', name: 'Client B', email: 'clientb@example.com' }
-      ]);
     };
     loadData();
   }, []);
@@ -56,22 +68,26 @@ const CreateCorrespondenceTab: React.FC = () => {
     
     if (templateId) {
       try {
-        const { renderTemplate } = await import('../../services/gecService');
-        const template = await renderTemplate(templateId, {});
+        const token = localStorage.getItem('token');
+        const response = await fetch(`http://localhost:5000/api/courriers/templates/${templateId}/render`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({})
+        });
         
-        setFormData(prev => ({
-          ...prev,
-          subject: template.subject,
-          body: template.body
-        }));
+        if (response.ok) {
+          const template = await response.json();
+          setFormData(prev => ({
+            ...prev,
+            subject: template.subject || 'Objet du template',
+            body: template.body || 'Corps du message avec variables {{clientName}}'
+          }));
+        }
       } catch (error) {
         console.error('Failed to load template:', error);
-        // Fallback to mock
-        setFormData(prev => ({
-          ...prev,
-          subject: 'Objet automatique du template',
-          body: 'Corps du message avec variables {{clientName}}'
-        }));
       }
     }
   };
@@ -93,26 +109,55 @@ const CreateCorrespondenceTab: React.FC = () => {
   const handleSave = async (action: 'draft' | 'send' | 'schedule') => {
     setSaving(true);
     try {
-      const { sendOutlookEmail } = await import('../../services/gecService');
-      
-      // Create and send correspondence
-      if (action === 'send') {
-        await sendOutlookEmail('current-user', {
+      // First create the courrier in database
+      const createResponse = await fetch('http://localhost:5000/api/courriers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
           subject: formData.subject,
           body: formData.body,
-          to: [formData.recipientEmail]
+          type: getCourrierType(),
+          templateUsed: formData.templateId || null,
+          bordereauId: formData.linkedTo || null
+        })
+      });
+      
+      if (!createResponse.ok) {
+        throw new Error('Failed to create courrier');
+      }
+      
+      const courrier = await createResponse.json();
+      
+      // If sending, call the send endpoint
+      if (action === 'send' && formData.recipientEmail) {
+        const sendResponse = await fetch(`http://localhost:5000/api/courriers/${courrier.id}/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            recipientEmail: formData.recipientEmail
+          })
         });
+        
+        if (!sendResponse.ok) {
+          throw new Error('Failed to send courrier');
+        }
       }
       
       const actionMessages = {
-        draft: 'Brouillon sauvegardé',
+        draft: 'Brouillon sauvegardé avec succès',
         send: 'Courrier envoyé avec succès',
-        schedule: 'Courrier programmé'
+        schedule: 'Courrier programmé avec succès'
       };
       
       alert(actionMessages[action]);
       
-      // Reset form after send
+      // Reset form after successful action
       if (action === 'send') {
         setFormData({
           templateId: '',
@@ -128,10 +173,24 @@ const CreateCorrespondenceTab: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to save:', error);
-      alert('Erreur lors de la sauvegarde');
+      alert('Erreur lors de la sauvegarde: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setSaving(false);
     }
+  };
+  
+  const getCourrierType = () => {
+    const template = templates.find(t => t.id === formData.templateId);
+    if (template?.type && ['REGLEMENT', 'RELANCE', 'RECLAMATION', 'AUTRE'].includes(template.type)) {
+      return template.type;
+    }
+    
+    // Determine type from subject/content
+    const subject = formData.subject.toLowerCase();
+    if (subject.includes('règlement') || subject.includes('reglement')) return 'REGLEMENT';
+    if (subject.includes('réclamation') || subject.includes('reclamation')) return 'RECLAMATION';
+    if (subject.includes('relance')) return 'RELANCE';
+    return 'AUTRE';
   };
 
   return (

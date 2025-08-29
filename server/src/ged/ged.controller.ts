@@ -5,6 +5,7 @@ import {
   UploadedFile,
   Body,
   Req,
+  Res,
   Get,
   Query,
   Param,
@@ -185,6 +186,27 @@ async uploadDocument(
   async generateReport(@Body() body: { type: string; format: string; filters?: any }, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.gedService.generateReport(body.type, body.format, body.filters, user);
+  }
+
+  @Post('export')
+  async exportReport(@Body() body: { type: string; format: string; filters?: any; reportData?: any }, @Req() req: any, @Res() res: any) {
+    const user = getUserFromRequest(req);
+    try {
+      const buffer = await this.gedService.exportReport(body.type, body.format, body.filters, body.reportData, user);
+      
+      const filename = `ged_report_${body.type}_${new Date().toISOString().split('T')[0]}.${body.format}`;
+      
+      if (body.format === 'xlsx') {
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      } else if (body.format === 'pdf') {
+        res.setHeader('Content-Type', 'application/pdf');
+      }
+      
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to export report: ' + error.message });
+    }
   }
 
   @Get('search')

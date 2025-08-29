@@ -14,7 +14,7 @@ interface AlertRule {
 @Injectable()
 export class EnhancedAlertsService {
   private readonly logger = new Logger(EnhancedAlertsService.name);
-  private emailTransporter: nodemailer.Transporter;
+  private emailTransporter: nodemailer.Transporter | null;
 
   private alertRules: AlertRule[] = [
     {
@@ -52,13 +52,27 @@ export class EnhancedAlertsService {
   }
 
   private setupEmailTransporter() {
+    const smtpUser = process.env.SMTP_USER?.replace(/^mailto:mailto:/, '').replace(/^mailto:/, '');
+    
+    if (!process.env.SMTP_HOST || !smtpUser) {
+      this.logger.warn('SMTP configuration incomplete. Email notifications disabled.');
+      this.emailTransporter = null;
+      return;
+    }
+
     this.emailTransporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'localhost',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '465'),
+      secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
+        user: smtpUser,
         pass: process.env.SMTP_PASS
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false
       }
     });
   }
@@ -268,18 +282,26 @@ export class EnhancedAlertsService {
   }
 
   private async sendEmailNotification(email: string, alert: any, details: any) {
+    if (!this.emailTransporter) {
+      this.logger.debug(`Email skipped (no SMTP config): ${email}`);
+      return;
+    }
+
     try {
+      const cleanEmail = email.replace(/^mailto:mailto:/, '').replace(/^mailto:/, '');
+      const cleanFrom = process.env.SMTP_FROM?.replace(/mailto:mailto:/g, '').replace(/mailto:/g, '') || 'noreply@arstunisia.com';
+      
       const subject = `[ARS Alert] ${alert.alertLevel} - ${alert.alertType}`;
       const html = this.generateEmailTemplate(alert, details);
 
       await this.emailTransporter.sendMail({
-        from: process.env.SMTP_FROM || 'noreply@ars.com',
-        to: email,
+        from: cleanFrom,
+        to: cleanEmail,
         subject,
         html
       });
 
-      this.logger.log(`Email sent to ${email} for alert ${alert.id}`);
+      this.logger.log(`Email sent to ${cleanEmail} for alert ${alert.id}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${email}:`, error);
     }

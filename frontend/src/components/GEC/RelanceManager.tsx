@@ -35,6 +35,7 @@ import {
   Add as AddIcon,
   Visibility as ViewIcon
 } from '@mui/icons-material';
+import { apiService } from '../../services/apiService';
 
 interface RelanceItem {
   id: string;
@@ -65,16 +66,37 @@ const RelanceManager: React.FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadRelanceData = async () => {
+    console.log('🔍 Loading relance data...');
+    console.log('🔗 API URL:', process.env.REACT_APP_API_URL || 'http://localhost:5000/api');
     setLoading(true);
     try {
-      // Load SLA breaches (overdue items)
-      const response = await fetch('/api/courriers/sla-breaches');
-      const breaches = await response.json();
+      const token = localStorage.getItem('token');
+      console.log('🔑 Token present:', !!token);
+      
+      const fullUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/sla-breaches`;
+      console.log('🔗 Full URL:', fullUrl);
+      
+      const response = await fetch(fullUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('📡 SLA breaches response status:', response.status);
+      console.log('📡 SLA breaches response headers:', response.headers);
       
       if (response.ok) {
+        const breaches = await response.json();
+        console.log('📊 SLA breaches data:', breaches);
         setRelanceItems(breaches);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ SLA breaches error:', response.status, errorText);
+        setMessage({ type: 'error', text: `Failed to load relance data: ${response.status} - ${errorText}` });
       }
     } catch (error) {
+      console.error('❌ Failed to load relance data:', error);
       setMessage({ type: 'error', text: 'Failed to load relance data' });
     } finally {
       setLoading(false);
@@ -84,14 +106,10 @@ const RelanceManager: React.FC = () => {
   const triggerAutomaticRelances = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/courriers/trigger-relances', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      const result = await response.json();
+      const response = await apiService.post('/courriers/trigger-relances');
       
       if (response.ok) {
+        const result = await response.json();
         setStats({
           totalOverdue: result.overdue,
           relancesSent: result.relancesSent,
@@ -107,10 +125,15 @@ const RelanceManager: React.FC = () => {
         setMessage({ type: 'error', text: 'Failed to trigger relances' });
       }
     } catch (error) {
+      console.error('Failed to trigger relances:', error);
       setMessage({ type: 'error', text: 'Failed to trigger relances' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewDetails = (item: RelanceItem) => {
+    alert(`Détails de la relance:\n\nSujet: ${item.subject}\nType: ${item.type}\nClient: ${item.client}\nGestionnaire: ${item.uploader}\nEnvoyé le: ${new Date(item.sentAt).toLocaleString()}\nJours de retard: ${item.daysOverdue}\nStatut: ${item.status}`);
   };
 
   const createManualRelance = async () => {
@@ -118,9 +141,13 @@ const RelanceManager: React.FC = () => {
     
     setLoading(true);
     try {
-      const response = await fetch(`/api/courriers/bordereau/${selectedBordereau}/relance`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/courriers/bordereau/${selectedBordereau}/relance`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ type: relanceType })
       });
       
@@ -130,9 +157,12 @@ const RelanceManager: React.FC = () => {
         setSelectedBordereau('');
         loadRelanceData();
       } else {
-        setMessage({ type: 'error', text: 'Failed to create relance' });
+        const errorText = await response.text();
+        console.error('Create relance error:', errorText);
+        setMessage({ type: 'error', text: `Failed to create relance: ${response.status}` });
       }
     } catch (error) {
+      console.error('Failed to create relance:', error);
       setMessage({ type: 'error', text: 'Failed to create relance' });
     } finally {
       setLoading(false);
@@ -315,7 +345,7 @@ const RelanceManager: React.FC = () => {
                   <TableCell>{getStatusChip(item.status)}</TableCell>
                   <TableCell>
                     <Tooltip title="Voir détails">
-                      <IconButton size="small">
+                      <IconButton size="small" onClick={() => handleViewDetails(item)}>
                         <ViewIcon />
                       </IconButton>
                     </Tooltip>
@@ -337,7 +367,8 @@ const RelanceManager: React.FC = () => {
               label="ID Bordereau"
               value={selectedBordereau}
               onChange={(e) => setSelectedBordereau(e.target.value)}
-              placeholder="Entrez l'ID du bordereau"
+              placeholder="Ex: 24c8a21f-2dae-4cdc-918c-28de49e80a1d"
+              helperText="Utilisez un ID de bordereau existant"
               sx={{ mb: 3 }}
             />
             

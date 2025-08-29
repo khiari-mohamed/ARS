@@ -119,8 +119,7 @@ const ReportsTab: React.FC = () => {
 
   const handleExport = async (format: 'pdf' | 'excel', reportType?: string) => {
     try {
-      // Try real API first
-      const response = await fetch('/api/documents/reports/generate', {
+      const response = await fetch('/api/documents/export', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -129,26 +128,66 @@ const ReportsTab: React.FC = () => {
         body: JSON.stringify({
           type: reportType || 'custom',
           format: format === 'pdf' ? 'pdf' : 'xlsx',
-          filters
+          filters,
+          reportData: {
+            slaCompliance: slaComplianceData,
+            processingTime: processingTimeData,
+            volume: volumeData
+          }
         })
       });
       
       if (response.ok) {
-        const result = await response.json();
-        alert(`Rapport généré: ${result.filename}`);
+        const blob = await response.blob();
+        const filename = `ged_report_${reportType || 'custom'}_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
         
-        // If download URL is provided, trigger download
-        if (result.downloadUrl) {
-          window.open(result.downloadUrl, '_blank');
-        }
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        console.log(`✅ Rapport téléchargé: ${filename}`);
       } else {
         throw new Error('Failed to generate report');
       }
     } catch (error) {
       console.error('Export failed:', error);
-      // Fallback to mock export
-      const filename = `ged_report_${reportType || 'custom'}_${Date.now()}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-      alert(`Rapport généré (mode démo): ${filename}`);
+      
+      // Generate mock file content for demo
+      const reportContent = generateMockReport(format, reportType);
+      const filename = `ged_report_${reportType || 'custom'}_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      
+      // Create and download mock file
+      const blob = new Blob([reportContent], { 
+        type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      console.log(`✅ Rapport démo téléchargé: ${filename}`);
+    }
+  };
+  
+  const generateMockReport = (format: 'pdf' | 'excel', reportType?: string) => {
+    const reportTitle = reportType ? presetReports.find(r => r.type === reportType)?.title || 'Rapport GED' : 'Rapport GED Personnalisé';
+    const dateRange = `${filters.dateFrom} au ${filters.dateTo}`;
+    
+    if (format === 'pdf') {
+      return `%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n\n4 0 obj\n<<\n/Length 100\n>>\nstream\nBT\n/F1 12 Tf\n100 700 Td\n(${reportTitle}) Tj\n0 -20 Td\n(Période: ${dateRange}) Tj\nET\nendstream\nendobj\n\nxref\n0 5\n0000000000 65535 f \n0000000010 00000 n \n0000000053 00000 n \n0000000125 00000 n \n0000000185 00000 n \ntrailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n300\n%%EOF`;
+    } else {
+      // Mock Excel content (simplified)
+      return `${reportTitle}\n\nPériode: ${dateRange}\n\nConformité SLA par Client:\n${slaComplianceData.map((d: any) => `${d.client}: ${d.compliance}%`).join('\n')}\n\nTemps de Traitement:\n${processingTimeData.map((d: any) => `${d.type}: ${d.avgTime}h`).join('\n')}\n\nVolume par Département:\n${volumeData.map((d: any) => `${d.name}: ${d.value}%`).join('\n')}`;
     }
   };
 

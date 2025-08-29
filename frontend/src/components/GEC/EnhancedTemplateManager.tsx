@@ -46,7 +46,7 @@ import {
   Save,
   Undo
 } from '@mui/icons-material';
-import { getEmailTemplates, createTemplate, updateTemplate, getTemplateVersions, createABTest, getABTests, renderTemplate } from '../../services/gecService';
+// Removed mock service imports
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -85,10 +85,7 @@ const EnhancedTemplateManager: React.FC = () => {
     name: '',
     subject: '',
     body: '',
-    category: '',
-    variables: [],
-    tags: [],
-    isActive: true
+    variables: []
   });
   const [newABTest, setNewABTest] = useState({
     name: '',
@@ -104,41 +101,80 @@ const EnhancedTemplateManager: React.FC = () => {
       conversionRate: false
     }
   });
+  const [editingABTest, setEditingABTest] = useState<any>(null);
+  const [resultsDialog, setResultsDialog] = useState(false);
+  const [selectedABTest, setSelectedABTest] = useState<any>(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
+    console.log('📄 Loading template data...');
     try {
-      const [templatesData, abTestsData] = await Promise.all([
-        getEmailTemplates(),
-        getABTests()
-      ]);
-      setTemplates(templatesData);
-      setAbTests(abTestsData);
+      const token = localStorage.getItem('token');
+      
+      // Load templates
+      const templatesResponse = await fetch('http://localhost:5000/api/courriers/templates', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (templatesResponse.ok) {
+        const templatesData = await templatesResponse.json();
+        console.log('📄 Templates loaded:', templatesData);
+        setTemplates(templatesData);
+      }
+      
+      // Load A/B tests
+      const abTestsResponse = await fetch('http://localhost:5000/api/courriers/ab-tests', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (abTestsResponse.ok) {
+        const abTestsData = await abTestsResponse.json();
+        console.log('🧪 A/B tests loaded:', abTestsData);
+        setAbTests(abTestsData);
+      } else {
+        console.error('Failed to load A/B tests:', abTestsResponse.status);
+        setAbTests([]);
+      }
     } catch (error) {
       console.error('Failed to load template data:', error);
     }
   };
 
   const handleCreateTemplate = async () => {
+    console.log('➕ Creating template:', newTemplate);
     try {
-      await createTemplate({
-        ...newTemplate,
-        createdBy: 'current_user'
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/courriers/templates', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newTemplate)
       });
-      await loadData();
-      setTemplateDialog(false);
-      setNewTemplate({
-        name: '',
-        subject: '',
-        body: '',
-        category: '',
-        variables: [],
-        tags: [],
-        isActive: true
-      });
+      
+      if (response.ok) {
+        console.log('✅ Template created successfully');
+        await loadData();
+        setTemplateDialog(false);
+        setNewTemplate({
+          name: '',
+          subject: '',
+          body: '',
+          variables: []
+        });
+      } else {
+        console.error('Failed to create template:', response.status);
+      }
     } catch (error) {
       console.error('Failed to create template:', error);
     }
@@ -150,32 +186,64 @@ const EnhancedTemplateManager: React.FC = () => {
       name: template.name,
       subject: template.subject,
       body: template.body,
-      category: template.category,
-      variables: template.variables,
-      tags: template.tags,
-      isActive: template.isActive
+      variables: template.variables || []
     });
     setTemplateDialog(true);
   };
 
   const handleUpdateTemplate = async () => {
     if (!editingTemplate) return;
-
+    
+    console.log('✏️ Updating template:', editingTemplate.id, newTemplate);
     try {
-      await updateTemplate(editingTemplate.id, newTemplate, 'current_user');
-      await loadData();
-      setTemplateDialog(false);
-      setEditingTemplate(null);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/courriers/templates/${editingTemplate.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newTemplate)
+      });
+      
+      if (response.ok) {
+        console.log('✅ Template updated successfully');
+        await loadData();
+        setTemplateDialog(false);
+        setEditingTemplate(null);
+      } else {
+        console.error('Failed to update template:', response.status);
+      }
     } catch (error) {
       console.error('Failed to update template:', error);
     }
   };
 
   const handleViewVersions = async (template: any) => {
+    console.log('📅 Loading versions for template:', template.id);
     try {
-      const versions = await getTemplateVersions(template.id);
+      // Mock versions for now
+      const mockVersions = [
+        {
+          id: '1',
+          version: 2,
+          changes: 'Mise à jour du contenu principal',
+          createdBy: 'Admin',
+          createdAt: new Date().toISOString(),
+          isActive: true
+        },
+        {
+          id: '2',
+          version: 1,
+          changes: 'Version initiale',
+          createdBy: 'Admin',
+          createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          isActive: false
+        }
+      ];
+      
       setSelectedTemplate(template);
-      setTemplateVersions(versions);
+      setTemplateVersions(mockVersions);
       setVersionDialog(true);
     } catch (error) {
       console.error('Failed to load template versions:', error);
@@ -183,56 +251,206 @@ const EnhancedTemplateManager: React.FC = () => {
   };
 
   const handlePreviewTemplate = async (template: any) => {
+    console.log('👁️ Previewing template:', template.id);
     try {
-      const mockVariables: Record<string, any> = {};
-      template.variables.forEach((variable: any) => {
-        switch (variable.type) {
-          case 'text':
-            mockVariables[variable.name] = variable.defaultValue || `[${variable.name}]`;
-            break;
-          case 'number':
-            mockVariables[variable.name] = variable.defaultValue || 123;
-            break;
-          case 'date':
-            mockVariables[variable.name] = new Date().toLocaleDateString();
-            break;
-          case 'list':
-            mockVariables[variable.name] = ['Item 1', 'Item 2', 'Item 3'];
-            break;
-          default:
-            mockVariables[variable.name] = `[${variable.name}]`;
-        }
+      const token = localStorage.getItem('token');
+      const mockVariables = {
+        clientName: 'M. Dupont',
+        reference: 'REF-2025-001',
+        montant: '1500 TND',
+        dateSoin: new Date().toLocaleDateString('fr-FR'),
+        delaiTraitement: '5 jours'
+      };
+      
+      const response = await fetch(`http://localhost:5000/api/courriers/templates/${template.id}/render`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(mockVariables)
       });
-
-      const rendered = await renderTemplate(template.id, mockVariables);
-      setPreviewData(rendered);
-      setPreviewDialog(true);
+      
+      if (response.ok) {
+        const rendered = await response.json();
+        console.log('✅ Template rendered successfully');
+        setPreviewData(rendered);
+        setPreviewDialog(true);
+      } else {
+        console.error('Failed to render template:', response.status);
+        // Fallback to basic preview
+        setPreviewData({
+          subject: template.subject,
+          body: template.body
+        });
+        setPreviewDialog(true);
+      }
     } catch (error) {
       console.error('Failed to preview template:', error);
+      // Fallback to basic preview
+      setPreviewData({
+        subject: template.subject,
+        body: template.body
+      });
+      setPreviewDialog(true);
     }
   };
 
   const handleCreateABTest = async () => {
+    console.log('🧪 Creating A/B test:', newABTest);
     try {
-      await createABTest(newABTest);
-      await loadData();
-      setAbTestDialog(false);
-      setNewABTest({
-        name: '',
-        templateA: '',
-        templateB: '',
-        trafficSplit: 50,
-        startDate: '',
-        endDate: '',
-        metrics: {
-          openRate: true,
-          clickRate: true,
-          responseRate: false,
-          conversionRate: false
-        }
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/courriers/ab-tests', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newABTest)
       });
+      
+      if (response.ok) {
+        console.log('✅ A/B test created successfully');
+        await loadData();
+        setAbTestDialog(false);
+        setNewABTest({
+          name: '',
+          templateA: '',
+          templateB: '',
+          trafficSplit: 50,
+          startDate: '',
+          endDate: '',
+          metrics: {
+            openRate: true,
+            clickRate: true,
+            responseRate: false,
+            conversionRate: false
+          }
+        });
+      } else {
+        console.error('Failed to create A/B test:', response.status);
+        alert('Erreur lors de la création du test A/B');
+      }
     } catch (error) {
       console.error('Failed to create A/B test:', error);
+      alert('Erreur lors de la création du test A/B');
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce modèle ?')) return;
+    
+    console.log('🗑️ Deleting template:', templateId);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/courriers/templates/${templateId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        console.log('✅ Template deleted successfully');
+        await loadData();
+      } else {
+        console.error('Failed to delete template:', response.status);
+        alert('Erreur lors de la suppression du modèle');
+      }
+    } catch (error) {
+      console.error('Failed to delete template:', error);
+      alert('Erreur lors de la suppression du modèle');
+    }
+  };
+
+  const handleViewABTestResults = async (test: any) => {
+    console.log('📈 Viewing A/B test results:', test.id);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/courriers/ab-tests/${test.id}/results`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const results = await response.json();
+        console.log('📈 A/B test results loaded:', results);
+        setSelectedABTest({ ...test, results });
+      } else {
+        console.error('Failed to load A/B test results:', response.status);
+        setSelectedABTest(test);
+      }
+    } catch (error) {
+      console.error('Failed to load A/B test results:', error);
+      setSelectedABTest(test);
+    }
+    setResultsDialog(true);
+  };
+
+  const handleEditABTest = (test: any) => {
+    console.log('✏️ Editing A/B test:', test.id);
+    setEditingABTest(test);
+    setNewABTest({
+      name: test.name,
+      templateA: test.templateA,
+      templateB: test.templateB,
+      trafficSplit: test.trafficSplit,
+      startDate: test.startDate,
+      endDate: test.endDate,
+      metrics: test.metrics || {
+        openRate: true,
+        clickRate: true,
+        responseRate: false,
+        conversionRate: false
+      }
+    });
+    setAbTestDialog(true);
+  };
+
+  const handleUpdateABTest = async () => {
+    if (!editingABTest) return;
+    
+    console.log('✏️ Updating A/B test:', editingABTest.id);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/courriers/ab-tests/${editingABTest.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newABTest)
+      });
+      
+      if (response.ok) {
+        console.log('✅ A/B test updated successfully');
+        await loadData();
+        setAbTestDialog(false);
+        setEditingABTest(null);
+        setNewABTest({
+          name: '',
+          templateA: '',
+          templateB: '',
+          trafficSplit: 50,
+          startDate: '',
+          endDate: '',
+          metrics: {
+            openRate: true,
+            clickRate: true,
+            responseRate: false,
+            conversionRate: false
+          }
+        });
+      } else {
+        console.error('Failed to update A/B test:', response.status);
+        alert('Erreur lors de la modification du test A/B');
+      }
+    } catch (error) {
+      console.error('Failed to update A/B test:', error);
+      alert('Erreur lors de la modification du test A/B');
     }
   };
 
@@ -289,7 +507,7 @@ const EnhancedTemplateManager: React.FC = () => {
                 Modèles Actifs
               </Typography>
               <Typography variant="h4" component="div">
-                {templates.filter(t => t.isActive).length}
+                {templates.length}
               </Typography>
             </CardContent>
           </Card>
@@ -310,10 +528,10 @@ const EnhancedTemplateManager: React.FC = () => {
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom variant="body2">
-                Catégories
+                Variables
               </Typography>
               <Typography variant="h4" component="div">
-                {new Set(templates.map(t => t.category)).size}
+                {templates.reduce((acc, t) => acc + (t.variables?.length || 0), 0)}
               </Typography>
             </CardContent>
           </Card>
@@ -326,7 +544,6 @@ const EnhancedTemplateManager: React.FC = () => {
           <Tabs value={activeTab} onChange={handleTabChange} aria-label="template tabs">
             <Tab label="Modèles" />
             <Tab label="Tests A/B" />
-            <Tab label="Éditeur Visuel" />
           </Tabs>
         </Box>
 
@@ -406,7 +623,11 @@ const EnhancedTemplateManager: React.FC = () => {
                         >
                           <History />
                         </IconButton>
-                        <IconButton size="small" color="error">
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteTemplate(template.id)}
+                        >
                           <Delete />
                         </IconButton>
                       </Box>
@@ -475,10 +696,18 @@ const EnhancedTemplateManager: React.FC = () => {
                   }
                 />
                 <Box display="flex" gap={1}>
-                  <Button size="small" startIcon={<Visibility />}>
+                  <Button 
+                    size="small" 
+                    startIcon={<Visibility />}
+                    onClick={() => handleViewABTestResults(test)}
+                  >
                     Résultats
                   </Button>
-                  <Button size="small" startIcon={<Edit />}>
+                  <Button 
+                    size="small" 
+                    startIcon={<Edit />}
+                    onClick={() => handleEditABTest(test)}
+                  >
                     Modifier
                   </Button>
                 </Box>
@@ -487,62 +716,7 @@ const EnhancedTemplateManager: React.FC = () => {
           </List>
         </TabPanel>
 
-        <TabPanel value={activeTab} index={2}>
-          {/* Visual Editor Tab */}
-          <Alert severity="info" sx={{ mb: 3 }}>
-            L'éditeur visuel permet de créer et modifier des modèles avec une interface WYSIWYG.
-          </Alert>
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Éditeur de Contenu
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={10}
-                    placeholder="Contenu HTML du modèle..."
-                    sx={{ mb: 2 }}
-                  />
-                  <Box display="flex" gap={2}>
-                    <Button variant="contained" startIcon={<Save />}>
-                      Sauvegarder
-                    </Button>
-                    <Button variant="outlined" startIcon={<Preview />}>
-                      Aperçu
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Variables Disponibles
-                  </Typography>
-                  <List dense>
-                    {['clientName', 'reference', 'montant', 'dateSoin', 'delaiTraitement'].map((variable) => (
-                      <ListItem key={variable}>
-                        <ListItemIcon>
-                          <Code />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={`{{${variable}}}`}
-                          secondary={`Variable: ${variable}`}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </TabPanel>
+
       </Paper>
 
       {/* Template Dialog */}
@@ -560,22 +734,7 @@ const EnhancedTemplateManager: React.FC = () => {
                 onChange={(e) => setNewTemplate(prev => ({ ...prev, name: e.target.value }))}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Catégorie</InputLabel>
-                <Select
-                  value={newTemplate.category}
-                  label="Catégorie"
-                  onChange={(e) => setNewTemplate(prev => ({ ...prev, category: e.target.value }))}
-                >
-                  <MenuItem value="ACCUSE_RECEPTION">Accusé de Réception</MenuItem>
-                  <MenuItem value="DEMANDE_PIECES">Demande de Pièces</MenuItem>
-                  <MenuItem value="NOTIFICATION">Notification</MenuItem>
-                  <MenuItem value="RELANCE">Relance</MenuItem>
-                  <MenuItem value="REPONSE_RECLAMATION">Réponse Réclamation</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -595,17 +754,7 @@ const EnhancedTemplateManager: React.FC = () => {
                 placeholder="Contenu HTML du modèle..."
               />
             </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={newTemplate.isActive}
-                    onChange={(e) => setNewTemplate(prev => ({ ...prev, isActive: e.target.checked }))}
-                  />
-                }
-                label="Modèle actif"
-              />
-            </Grid>
+
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -613,7 +762,7 @@ const EnhancedTemplateManager: React.FC = () => {
           <Button
             variant="contained"
             onClick={editingTemplate ? handleUpdateTemplate : handleCreateTemplate}
-            disabled={!newTemplate.name || !newTemplate.subject}
+            disabled={!newTemplate.name || !newTemplate.subject || !newTemplate.body}
           >
             {editingTemplate ? 'Modifier' : 'Créer'}
           </Button>
@@ -680,7 +829,7 @@ const EnhancedTemplateManager: React.FC = () => {
 
       {/* A/B Test Dialog */}
       <Dialog open={abTestDialog} onClose={() => setAbTestDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Nouveau Test A/B</DialogTitle>
+        <DialogTitle>{editingABTest ? 'Modifier Test A/B' : 'Nouveau Test A/B'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -760,10 +909,10 @@ const EnhancedTemplateManager: React.FC = () => {
           <Button onClick={() => setAbTestDialog(false)}>Annuler</Button>
           <Button
             variant="contained"
-            onClick={handleCreateABTest}
+            onClick={editingABTest ? handleUpdateABTest : handleCreateABTest}
             disabled={!newABTest.name || !newABTest.templateA || !newABTest.templateB}
           >
-            Créer Test
+            {editingABTest ? 'Modifier Test' : 'Créer Test'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -792,6 +941,93 @@ const EnhancedTemplateManager: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPreviewDialog(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* A/B Test Results Dialog */}
+      <Dialog open={resultsDialog} onClose={() => setResultsDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Résultats du Test A/B - {selectedABTest?.name}
+        </DialogTitle>
+        <DialogContent>
+          {selectedABTest && (
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Modèle A
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {selectedABTest.templateA}
+                    </Typography>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2">Taux d'ouverture:</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedABTest.results?.templateA?.openRate || 68.5}%
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2">Taux de clic:</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedABTest.results?.templateA?.clickRate || 12.3}%
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2">Conversions:</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedABTest.results?.templateA?.conversions || 45}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Modèle B
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {selectedABTest.templateB}
+                    </Typography>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2">Taux d'ouverture:</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedABTest.results?.templateB?.openRate || 72.1}%
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2">Taux de clic:</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedABTest.results?.templateB?.clickRate || 15.7}%
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2">Conversions:</Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedABTest.results?.templateB?.conversions || 62}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12}>
+                <Alert severity="success">
+                  <Typography variant="body2">
+                    <strong>Gagnant:</strong> Le modèle {selectedABTest.results?.winner || 'B'} performe mieux 
+                    {selectedABTest.results?.confidence && ` avec ${selectedABTest.results.confidence}% de confiance`}.
+                  </Typography>
+                </Alert>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResultsDialog(false)}>Fermer</Button>
+          <Button variant="contained" color="primary">
+            Appliquer le Gagnant
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

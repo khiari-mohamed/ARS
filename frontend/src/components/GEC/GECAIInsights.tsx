@@ -46,7 +46,13 @@ const GECAIInsights: React.FC = () => {
     setError(null);
     
     try {
-      const response = await fetch('/api/courriers/ai-insights');
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/courriers/ai-insights', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       const data = await response.json();
       
       if (response.ok) {
