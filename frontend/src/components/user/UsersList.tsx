@@ -29,7 +29,7 @@ const roleLabels: Record<UserRole, string> = {
   BO: 'Bureau d’Ordre',
 };
 
-export const UsersList: React.FC<UsersListProps> = ({
+const UsersList: React.FC<UsersListProps> = ({
   users,
   currentUserRole,
   onEdit,
@@ -166,3 +166,5 @@ export const UsersList: React.FC<UsersListProps> = ({
     </div>
   );
 };
+
+export default UsersList;

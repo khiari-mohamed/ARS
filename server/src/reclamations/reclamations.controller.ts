@@ -245,7 +245,7 @@ export class ReclamationsController {
 
   // BO Integration endpoints
   @Post('bo/create')
-  @Roles(UserRole.BUREAU_ORDRE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.BO, UserRole.SUPER_ADMIN)
   @UseInterceptors(FileInterceptor('files', { dest: './uploads/reclamations' }))
   async createFromBO(
     @UploadedFile() files: Express.Multer.File,
@@ -258,13 +258,13 @@ export class ReclamationsController {
   }
 
   @Get('bo/stats')
-  @Roles(UserRole.BUREAU_ORDRE, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.BO, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
   async getBOStats() {
     return this.boIntegrationService.getBOStats();
   }
 
   @Post('bo/validate')
-  @Roles(UserRole.BUREAU_ORDRE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.BO, UserRole.SUPER_ADMIN)
   async validateReclamationData(@Body() dto: any) {
     return this.boIntegrationService.validateReclamationData(dto);
   }

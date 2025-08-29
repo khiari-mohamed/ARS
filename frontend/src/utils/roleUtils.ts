@@ -1,32 +1,4 @@
-import { UserRole as ReclamationUserRole } from '../types/reclamation.d';
 import { User, UserRole } from '../types/user.d';
-
-/* =========================
-   Reclamation Module Permissions
-   ========================= */
-
-export const canView = (role: ReclamationUserRole) => true;
-
-export const canCreate = (role: ReclamationUserRole) =>
-  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role);
-
-export const canAssign = (role: ReclamationUserRole) =>
-  ['CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role);
-
-export const canResolve = (role: ReclamationUserRole) =>
-  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role);
-
-export const canDelete = (role: ReclamationUserRole) =>
-  ['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role);
-
-export const canEdit = (
-  role: ReclamationUserRole,
-  createdById: string,
-  userId: string
-) =>
-  role === 'SUPER_ADMIN' ||
-  role === 'CHEF_EQUIPE' ||
-  (role === 'GESTIONNAIRE' && createdById === userId);
 
 /* =========================
    User Management Module Permissions
@@ -46,7 +18,7 @@ export function canEditUser(currentRole: UserRole, targetUser: User): boolean {
       !['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(targetUser.role)) return true;
   // Chef d'équipe can edit their team members
   if (currentRole === 'CHEF_EQUIPE' && 
-      ['GESTIONNAIRE', 'CHEF_EQUIPE'].includes(targetUser.role)) return true;
+      ['GESTIONNAIRE', 'CLIENT_SERVICE'].includes(targetUser.role)) return true;
   return false;
 }
 
@@ -66,3 +38,46 @@ export function canViewUsers(currentRole: UserRole): boolean {
 export function canDisableUser(currentRole: UserRole): boolean {
   return ['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(currentRole);
 }
+
+export function canManageUser(currentRole: UserRole, targetRole: UserRole): boolean {
+  const roleHierarchy: Record<UserRole, number> = {
+    'SUPER_ADMIN': 10,
+    'ADMINISTRATEUR': 8,
+    'RESPONSABLE_DEPARTEMENT': 6,
+    'CHEF_EQUIPE': 5,
+    'GESTIONNAIRE': 3,
+    'CLIENT_SERVICE': 3,
+    'FINANCE': 3,
+    'SCAN_TEAM': 2,
+    'BO': 2
+  };
+  
+  return (roleHierarchy[currentRole] || 0) > (roleHierarchy[targetRole] || 0);
+}
+
+/* =========================
+   Legacy Reclamation Module Permissions (for backward compatibility)
+   ========================= */
+
+export const canView = (role: string) => true;
+
+export const canCreate = (role: string) =>
+  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role);
+
+export const canAssign = (role: string) =>
+  ['CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role);
+
+export const canResolve = (role: string) =>
+  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role);
+
+export const canDelete = (role: string) =>
+  ['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role);
+
+export const canEdit = (
+  role: string,
+  createdById: string,
+  userId: string
+) =>
+  role === 'SUPER_ADMIN' ||
+  role === 'CHEF_EQUIPE' ||
+  (role === 'GESTIONNAIRE' && createdById === userId);

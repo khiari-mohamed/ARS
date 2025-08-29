@@ -63,7 +63,7 @@ export const ReclamationDetail: React.FC<Props> = ({ id }) => {
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
 
   // Fetch users for assignment
-  const { data: users = [] } = useQuery<User[]>(['users'], fetchUsers);
+  const { data: users = [] } = useQuery<User[]>(['users'], () => fetchUsers());
 
   // Fetch auto-reply suggestion
   useEffect(() => {

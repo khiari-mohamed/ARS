@@ -13,7 +13,7 @@ interface Props {
   onDisable: (user: User) => void;
 }
 
-const roleColors = {
+const roleColors: Record<UserRole, string> = {
   SUPER_ADMIN: '#f50057',
   ADMINISTRATEUR: '#3f51b5',
   RESPONSABLE_DEPARTEMENT: '#ff9800',

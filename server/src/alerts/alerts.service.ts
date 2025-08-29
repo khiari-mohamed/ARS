@@ -87,7 +87,7 @@ export class AlertsService {
     
     const where: any = {};
     if (query.teamId) where.teamId = query.teamId;
-    if (query.userId) where.assignedToId = query.userId;
+    if (query.userId) where.currentHandlerId = query.userId;
     if (query.clientId) where.clientId = query.clientId;
     if (query.fromDate || query.toDate) {
       where.createdAt = {};
@@ -97,7 +97,7 @@ export class AlertsService {
     
     // Role-based filtering
     if (user.role === 'GESTIONNAIRE') {
-      where.assignedToId = user.id;
+      where.currentHandlerId = user.id;
     } else if (user.role === 'CHEF_EQUIPE') {
       where.teamId = user.id;
     }

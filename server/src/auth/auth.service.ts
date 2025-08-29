@@ -22,13 +22,16 @@ export class AuthService {
     if (isLockedOut(email)) {
       throw new ForbiddenException('Account locked due to too many failed attempts. Try again later.');
     }
+    
     const user = await this.usersService.findByEmail(email);
+    
     if (user && await bcrypt.compare(password, user.password)) {
       resetLockout(email);
       const { password, ...result } = user;
       await this.usersService.logAction(user.id, 'LOGIN_SUCCESS');
       return result;
     }
+    
     const locked = recordFailedAttempt(email);
     if (user) await this.usersService.logAction(user.id, 'LOGIN_FAIL');
     if (locked) throw new ForbiddenException('Account locked due to too many failed attempts.');
@@ -57,8 +60,8 @@ export class AuthService {
     if (existing) {
       throw new BadRequestException('A user with this email already exists.');
     }
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-    const user = await this.usersService.create({ ...data, password: hashedPassword });
+    // Pass raw password to users service - it will handle hashing
+    const user = await this.usersService.create(data);
     await this.usersService.logAction(user.id, 'REGISTER');
     return user;
   }
@@ -103,5 +106,12 @@ export class AuthService {
       data: { used: true }
     });
     await this.usersService.logAction(reset.userId, 'PASSWORD_RESET');
+  }
+
+  async getUserById(id: string) {
+    const user = await this.usersService.findById(id);
+    if (!user) return null;
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 }

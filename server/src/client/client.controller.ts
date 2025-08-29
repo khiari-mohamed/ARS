@@ -35,7 +35,7 @@ export class ClientController {
 
 
   @Post()
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async create(@Body() dto: CreateClientDto) {
     // Validate input
     if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number') {
@@ -61,7 +61,7 @@ export class ClientController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
     return this.clientService.update(id, dto);
   }
@@ -84,7 +84,7 @@ export class ClientController {
 
   // Export clients to Excel
   @Post('export/excel')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async exportExcel(@Body() query: SearchClientDto, @Res() res: Response) {
     const buffer = await this.clientService.exportToExcel(query);
     res.set({
@@ -96,7 +96,7 @@ export class ClientController {
 
   // Export clients to PDF
   @Post('export/pdf')
- @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+ @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async exportPDF(@Body() query: SearchClientDto, @Res() res: Response) {
     const buffer = await this.clientService.exportToPDF(query);
     res.set({
@@ -139,7 +139,7 @@ export class ClientController {
   // --- GED: Upload contract document ---
   @Post(':id/upload-contract')
   @UseInterceptors(FileInterceptor('file'))
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async uploadContract(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -164,7 +164,7 @@ export class ClientController {
 
   // --- GED: Download contract document ---
   @Get('contract/:documentId/download')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async downloadContract(
     @Param('documentId') documentId: string,
     @Res() res: Response
@@ -174,7 +174,7 @@ export class ClientController {
 
   // --- SLA Config ---
   @Patch(':id/sla-config')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   updateSlaConfig(@Param('id') id: string, @Body() config: any) {
     return this.clientService.updateSlaConfig(id, config);
   }
@@ -191,7 +191,7 @@ export class ClientController {
 
   // --- Create complaint for client ---
   @Post(':id/complaints')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   createComplaint(@Param('id') id: string, @Body() data: any, @Req() req: Request) {
     const user = req['user'] as any;
     const userId = user?.id || user?.userId || user?.sub;
@@ -236,7 +236,7 @@ export class ClientController {
 
   // --- Update SLA alerts ---
   @Post(':id/alerts')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   updateSLAAlerts(@Param('id') id: string, @Body() alertConfig: any) {
     return this.clientService.updateSLAAlerts(id, alertConfig);
   }
@@ -266,7 +266,7 @@ export class ClientController {
   }
 
   @Get('export/advanced')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async exportAdvanced(
     @Query('format') format: 'csv' | 'excel' | 'pdf' = 'csv',
     @Query() filters: any,
@@ -296,7 +296,7 @@ export class ClientController {
 
   // --- Communication History ---
   @Post(':id/communication')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   addCommunicationLog(
     @Param('id') id: string,
     @Body() logData: CommunicationLogDto,
@@ -324,7 +324,7 @@ export class ClientController {
   }
 
   @Post(':id/risk-thresholds')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.MANAGER, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   updateRiskThresholds(
     @Param('id') id: string,
     @Body() thresholds: RiskThresholdsDto
