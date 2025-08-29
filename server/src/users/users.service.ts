@@ -579,4 +579,29 @@ export class UsersService {
       }
     });
   }
+  
+  // NOTIFICATION METHODS
+  async getUserNotifications(userId: string) {
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    });
+  }
+  
+  async markNotificationAsRead(userId: string, notificationId: string) {
+    await this.prisma.notification.updateMany({
+      where: { id: notificationId, userId },
+      data: { read: true }
+    });
+    return { success: true };
+  }
+  
+  async markAllNotificationsAsRead(userId: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true }
+    });
+    return { success: true };
+  }
 }

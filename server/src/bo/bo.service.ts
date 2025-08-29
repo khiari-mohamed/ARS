@@ -441,6 +441,9 @@ export class BOService {
       
       if (!client) return { error: 'Client not found' };
       
+      // AUTO-POPULATE: Get chargé de compte information
+      const chargeDeCompte = client.gestionnaires.length > 0 ? client.gestionnaires[0] : null;
+      
       return {
         client: {
           id: client.id,
@@ -449,7 +452,18 @@ export class BOService {
           reclamationDelay: client.reclamationDelay
         },
         activeContract: client.contracts[0] || null,
-        gestionnaires: client.gestionnaires
+        gestionnaires: client.gestionnaires,
+        chargeDeCompte: chargeDeCompte ? {
+          id: chargeDeCompte.id,
+          name: chargeDeCompte.fullName,
+          role: chargeDeCompte.role
+        } : null,
+        // AUTO-POPULATE: Contract parameters for BO form
+        autoFillData: {
+          delaiReglement: client.contracts[0]?.delaiReglement || client.reglementDelay,
+          delaiReclamation: client.contracts[0]?.delaiReclamation || client.reclamationDelay,
+          contractId: client.contracts[0]?.id || null
+        }
       };
     } catch (error) {
       return { error: 'Failed to retrieve client info' };

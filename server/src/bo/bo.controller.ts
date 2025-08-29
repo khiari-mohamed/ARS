@@ -88,11 +88,16 @@ export class BOController {
     };
   }
 
-  // Auto-retrieve client info for BO entry
+  // Auto-retrieve client info for BO entry with chargé de compte integration
   @Get('client-info/:clientId')
   @UseGuards(JwtAuthGuard)
   async getClientInfo(@Param('clientId') clientId: string) {
-    return await this.boService.getClientInfoForBO(clientId);
+    const clientInfo = await this.boService.getClientInfoForBO(clientId);
+    console.log(`📝 BO: Retrieved client info for ${clientId}:`, {
+      hasChargeDeCompte: !!clientInfo.chargeDeCompte,
+      autoFillData: clientInfo.autoFillData
+    });
+    return clientInfo;
   }
 
   // Search clients for BO entry
