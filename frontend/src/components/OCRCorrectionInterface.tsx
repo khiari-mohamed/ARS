@@ -72,7 +72,10 @@ const OCRCorrectionInterface: React.FC = () => {
   };
 
   const handlePerformOCR = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      alert('Veuillez sélectionner un document');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -80,43 +83,98 @@ const OCRCorrectionInterface: React.FC = () => {
       formData.append('file', selectedFile);
       
       const result = await performMultiEngineOCR(formData);
-      setOcrResults(result.results);
       
-      if (result.bestResult) {
-        setOriginalText(result.bestResult.text);
-        setCorrectedText(result.bestResult.text);
+      if (result.results && result.results.length > 0) {
+        setOcrResults(result.results);
+        
+        // Select best result automatically
+        const bestResult = result.bestResult || result.results[0];
+        setOriginalText(bestResult.text);
+        setCorrectedText(bestResult.text);
+        setSelectedEngine(0);
+        
+        // Generate document ID if not provided
+        if (!documentId) {
+          setDocumentId(`DOC_${Date.now()}`);
+        }
+      } else {
+        alert('❌ Aucun texte détecté dans le document');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('OCR processing failed:', error);
+      alert(`❌ Erreur OCR: ${error.response?.data?.message || error.message || 'Traitement échoué'}`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSaveCorrection = async () => {
-    if (!documentId || !originalText || !correctedText) {
-      alert('Veuillez remplir tous les champs requis');
+    if (!documentId.trim()) {
+      alert('⚠️ Veuillez saisir un ID de document');
+      return;
+    }
+    
+    if (!originalText.trim() || !correctedText.trim()) {
+      alert('⚠️ Le texte original et corrigé ne peuvent pas être vides');
+      return;
+    }
+    
+    if (originalText === correctedText) {
+      alert('ℹ️ Aucune correction détectée (texte identique)');
       return;
     }
 
     setSaving(true);
     try {
       await saveOCRCorrection(documentId, originalText, correctedText);
-      alert('Correction sauvegardée avec succès!');
-    } catch (error) {
+      
+      // Calculate improvement metrics
+      const improvementPercent = Math.round(
+        ((correctedText.length - originalText.length) / originalText.length) * 100
+      );
+      
+      alert(`✅ Correction sauvegardée avec succès!\n\n📊 Statistiques:\n• Caractères originaux: ${originalText.length}\n• Caractères corrigés: ${correctedText.length}\n• Amélioration: ${improvementPercent > 0 ? '+' : ''}${improvementPercent}%\n\n🤖 Cette correction aidera à améliorer la précision de l'OCR pour des documents similaires.`);
+      
+      // Reset form
+      setSelectedFile(null);
+      setOcrResults([]);
+      setOriginalText('');
+      setCorrectedText('');
+      setDocumentId('');
+      setSelectedEngine(0);
+      
+    } catch (error: any) {
       console.error('Failed to save correction:', error);
-      alert('Erreur lors de la sauvegarde');
+      alert(`❌ Erreur lors de la sauvegarde: ${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
     } finally {
       setSaving(false);
     }
   };
 
   const handleSelectEngineResult = (index: number) => {
-    setSelectedEngine(index);
-    if (ocrResults[index]) {
-      setOriginalText(ocrResults[index].text);
-      setCorrectedText(ocrResults[index].text);
+    if (index >= 0 && index < ocrResults.length) {
+      setSelectedEngine(index);
+      const selectedResult = ocrResults[index];
+      setOriginalText(selectedResult.text);
+      setCorrectedText(selectedResult.text);
     }
+  };
+  
+  const calculateTextDifferences = () => {
+    if (!originalText || !correctedText) return null;
+    
+    const originalWords = originalText.split(/\s+/).length;
+    const correctedWords = correctedText.split(/\s+/).length;
+    const wordDiff = correctedWords - originalWords;
+    
+    return {
+      originalLength: originalText.length,
+      correctedLength: correctedText.length,
+      originalWords,
+      correctedWords,
+      wordDiff,
+      hasChanges: originalText !== correctedText
+    };
   };
 
   const getConfidenceColor = (confidence: number) => {
@@ -235,16 +293,25 @@ const OCRCorrectionInterface: React.FC = () => {
 
                 <TextField
                   fullWidth
-                  label="ID Document"
+                  label="ID Document *"
                   value={documentId}
                   onChange={(e) => setDocumentId(e.target.value)}
                   margin="normal"
                   size="small"
+                  placeholder="Ex: DOC_BS_2024_001"
+                  helperText="Identifiant unique du document pour le suivi des corrections"
+                  required
                 />
 
                 <Tabs value={selectedEngine} onChange={(_, newValue) => setSelectedEngine(newValue)}>
-                  <Tab label="Texte Original" />
-                  <Tab label="Texte Corrigé" />
+                  <Tab 
+                    label={`📄 Texte Original (${originalText.length} car.)`} 
+                    disabled={!originalText}
+                  />
+                  <Tab 
+                    label={`✏️ Texte Corrigé (${correctedText.length} car.)`}
+                    disabled={!correctedText}
+                  />
                 </Tabs>
 
                 <TabPanel value={selectedEngine} index={0}>
@@ -252,13 +319,18 @@ const OCRCorrectionInterface: React.FC = () => {
                     fullWidth
                     multiline
                     rows={12}
-                    label="Texte OCR Original"
+                    label="📄 Texte OCR Original (Lecture seule)"
                     value={originalText}
-                    onChange={(e) => setOriginalText(e.target.value)}
                     InputProps={{
                       readOnly: true,
-                      style: { fontFamily: 'monospace', fontSize: '0.9rem' }
+                      style: { 
+                        fontFamily: 'Consolas, Monaco, monospace', 
+                        fontSize: '0.9rem',
+                        backgroundColor: '#f8f9fa',
+                        lineHeight: 1.5
+                      }
                     }}
+                    helperText={`${originalText.split('\n').length} lignes • ${originalText.split(/\s+/).length} mots`}
                   />
                 </TabPanel>
 
@@ -267,41 +339,73 @@ const OCRCorrectionInterface: React.FC = () => {
                     fullWidth
                     multiline
                     rows={12}
-                    label="Texte Corrigé"
+                    label="✏️ Texte Corrigé (Éditable)"
                     value={correctedText}
                     onChange={(e) => setCorrectedText(e.target.value)}
                     InputProps={{
-                      style: { fontFamily: 'monospace', fontSize: '0.9rem' }
+                      style: { 
+                        fontFamily: 'Consolas, Monaco, monospace', 
+                        fontSize: '0.9rem',
+                        lineHeight: 1.5
+                      }
                     }}
+                    helperText={`${correctedText.split('\n').length} lignes • ${correctedText.split(/\s+/).length} mots • ${originalText !== correctedText ? '⚠️ Modifié' : '✅ Identique'}`}
                   />
                 </TabPanel>
+                
+                {/* Text Comparison Summary */}
+                {(() => {
+                  const diff = calculateTextDifferences();
+                  return diff && diff.hasChanges ? (
+                    <Box mt={2} p={2} bgcolor="info.light" borderRadius={1}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        📊 Résumé des modifications:
+                      </Typography>
+                      <Typography variant="body2">
+                        • Caractères: {diff.originalLength} → {diff.correctedLength} ({diff.correctedLength - diff.originalLength > 0 ? '+' : ''}{diff.correctedLength - diff.originalLength})
+                        • Mots: {diff.originalWords} → {diff.correctedWords} ({diff.wordDiff > 0 ? '+' : ''}{diff.wordDiff})
+                      </Typography>
+                    </Box>
+                  ) : null;
+                })()}
 
-                <Box mt={2} display="flex" gap={2}>
+                <Box mt={3} display="flex" gap={2} flexWrap="wrap">
                   <Button
                     variant="contained"
-                    startIcon={<Save />}
+                    size="large"
+                    startIcon={saving ? <Refresh /> : <Save />}
                     onClick={handleSaveCorrection}
-                    disabled={saving || !documentId || !originalText || !correctedText}
+                    disabled={saving || !documentId.trim() || !originalText || !correctedText || originalText === correctedText}
+                    sx={{ minWidth: 200 }}
                   >
-                    {saving ? 'Sauvegarde...' : 'Sauvegarder Correction'}
+                    {saving ? 'Sauvegarde...' : '💾 Sauvegarder Correction'}
+                  </Button>
+                  
+                  <Button
+                    variant="outlined"
+                    startIcon={<Edit />}
+                    onClick={() => {
+                      if (window.confirm('Réinitialiser le texte corrigé avec le texte original?')) {
+                        setCorrectedText(originalText);
+                      }
+                    }}
+                    disabled={!originalText || saving}
+                  >
+                    🔄 Réinitialiser
                   </Button>
                   
                   <Button
                     variant="outlined"
                     startIcon={<Visibility />}
                     onClick={() => {
-                      // Show diff view
+                      const diff = calculateTextDifferences();
+                      if (diff) {
+                        alert(`📊 Statistiques de correction:\n\n• Caractères: ${diff.originalLength} → ${diff.correctedLength}\n• Mots: ${diff.originalWords} → ${diff.correctedWords}\n• Modifications: ${diff.hasChanges ? 'Oui' : 'Non'}`);
+                      }
                     }}
+                    disabled={!originalText || !correctedText}
                   >
-                    Voir Différences
-                  </Button>
-                  
-                  <Button
-                    variant="outlined"
-                    startIcon={<Edit />}
-                    onClick={() => setCorrectedText(originalText)}
-                  >
-                    Réinitialiser
+                    📊 Statistiques
                   </Button>
                 </Box>
               </CardContent>

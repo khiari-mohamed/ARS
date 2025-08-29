@@ -41,14 +41,19 @@ import ScannerControl from '../components/ScannerControl';
 import QualityValidator from '../components/QualityValidator';
 import OCRCorrectionInterface from '../components/OCRCorrectionInterface';
 import FolderMonitor from '../components/FolderMonitor';
-import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, simulatePaperStreamImport, getDashboardStats } from '../services/scanService';
+import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
 
 const ScanDashboard: React.FC = () => {
   const [scanStatus, setScanStatus] = useState<any>(null);
   const [scanActivity, setScanActivity] = useState<any[]>([]);
+  const [scanQueue, setScanQueue] = useState<any[]>([]);
+  const [selectedBordereau, setSelectedBordereau] = useState<any>(null);
+  const [overloadStatus, setOverloadStatus] = useState<any>(null);
+  const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [initializingScanner, setInitializingScanner] = useState(false);
+  const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -58,12 +63,18 @@ const ScanDashboard: React.FC = () => {
 
   const loadDashboard = async () => {
     try {
-      const [statusData, activityData] = await Promise.all([
+      const [statusData, activityData, queueData, overloadData, chartData] = await Promise.all([
         fetchScanStatus(),
-        fetchScanActivity()
+        fetchScanActivity(),
+        getScanQueue(),
+        checkScanOverload(),
+        getScanActivityChart()
       ]);
       setScanStatus(statusData);
       setScanActivity(activityData);
+      setScanQueue(queueData);
+      setOverloadStatus(overloadData);
+      setChartData(chartData);
     } catch (error) {
       console.error('Failed to load scan dashboard:', error);
     } finally {
@@ -88,10 +99,19 @@ const ScanDashboard: React.FC = () => {
     try {
       const result = await processScanQueue();
       console.log('Queue processing result:', result);
+      
+      // Show success message with details
+      if (result.processedCount > 0) {
+        alert(`✅ Traitement de la file terminé avec succès!\n\n📊 Résultats:\n• ${result.processedCount} bordereau(x) traité(s)\n• Statut: En cours de scan\n\n🔄 Le tableau va se rafraîchir automatiquement...`);
+      } else {
+        alert(`ℹ️ Traitement de la file terminé\n\n📊 Résultats:\n• Aucun nouveau bordereau à traiter\n• File d'attente vide ou déjà en cours\n\n✅ Système à jour`);
+      }
+      
       // Refresh dashboard after processing
       setTimeout(loadDashboard, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Queue processing failed:', error);
+      alert(`❌ Erreur lors du traitement de la file\n\n🔍 Détails:\n${error.response?.data?.message || error.message || 'Erreur inconnue'}\n\n💡 Veuillez réessayer ou contacter l'administrateur`);
     } finally {
       setLoading(false);
     }
@@ -100,14 +120,56 @@ const ScanDashboard: React.FC = () => {
   const handlePaperStreamImport = async () => {
     setLoading(true);
     try {
-      const result = await simulatePaperStreamImport();
+      const result = await triggerPaperStreamImport();
       console.log('PaperStream import result:', result);
+      
+      // Show detailed import results
+      if (result.importedCount > 0) {
+        const filesList = result.files?.map((f: any) => `• ${f.fileName}`).join('\n') || '';
+        alert(`✅ Import PaperStream terminé avec succès!\n\n📊 Résultats:\n• ${result.importedCount} fichier(s) importé(s)\n\n📄 Fichiers traités:\n${filesList}\n\n🔄 Actualisation du tableau...`);
+      } else {
+        alert(`ℹ️ Import PaperStream terminé\n\n📊 Résultats:\n• Aucun nouveau fichier détecté\n• Dossier d'entrée vide\n\n💡 Placez des fichiers dans le dossier 'paperstream-input' pour les traiter`);
+      }
+      
       // Refresh dashboard after import
       setTimeout(loadDashboard, 1000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('PaperStream import failed:', error);
+      alert(`❌ Erreur lors de l'import PaperStream\n\n🔍 Détails:\n${error.response?.data?.message || error.message || 'Erreur inconnue'}\n\n💡 Vérifiez que le dossier 'paperstream-input' existe et est accessible`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStartScanning = async (bordereauId: string) => {
+    setProcessing(bordereauId);
+    try {
+      await startScanning(bordereauId);
+      await loadDashboard();
+    } catch (error) {
+      console.error('Failed to start scanning:', error);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleViewBordereau = async (bordereauId: string) => {
+    try {
+      const bordereau = await getBordereauForScan(bordereauId);
+      setSelectedBordereau(bordereau);
+      setActiveDialog('bordereau-details');
+    } catch (error) {
+      console.error('Failed to load bordereau:', error);
+    }
+  };
+
+  const handleValidateScanning = async (bordereauId: string) => {
+    try {
+      await validateScanning(bordereauId);
+      setActiveDialog(null);
+      await loadDashboard();
+    } catch (error) {
+      console.error('Failed to validate scanning:', error);
     }
   };
 
@@ -195,12 +257,41 @@ const ScanDashboard: React.FC = () => {
           >
             Import PaperStream
           </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={async () => {
+              try {
+                const debug = await debugBordereaux();
+                console.log('Debug bordereaux:', debug);
+                alert(`📊 Debug Info:\n\n📋 Total bordereaux: ${debug.totalCount}\n\n📈 Status counts:\n${debug.statusCounts.map((s: any) => `• ${s.statut}: ${s._count.id}`).join('\n')}\n\n🔍 Check console for detailed info`);
+              } catch (error) {
+                console.error('Debug failed:', error);
+              }
+            }}
+            sx={{ minWidth: 120 }}
+          >
+            🔍 Debug
+          </Button>
+
         </Box>
       </Box>
 
-      {/* Status Alert */}
+      {/* Status Alerts */}
+      {overloadStatus?.overloaded && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            🚨 SCAN Service Surchargé!
+          </Typography>
+          <Typography variant="body2">
+            {overloadStatus.totalWorkload} éléments en file d'attente (seuil: {overloadStatus.threshold})
+            {overloadStatus.slaAtRisk > 0 && ` - ${overloadStatus.slaAtRisk} bordereaux à risque SLA`}
+          </Typography>
+        </Alert>
+      )}
+      
       {scanStatus?.errorCount > 0 && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
+        <Alert severity="warning" sx={{ mb: 2 }}>
           {scanStatus.errorCount} document(s) en erreur nécessitent une attention
         </Alert>
       )}
@@ -294,37 +385,79 @@ const ScanDashboard: React.FC = () => {
         {/* Activity Chart */}
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Activité de Scan (24h)
-            </Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={scanActivity.slice(-24)}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="timestamp" 
-                  tickFormatter={(value) => new Date(value).toLocaleTimeString()}
-                />
-                <YAxis />
-                <RechartsTooltip 
-                  labelFormatter={(value) => new Date(value).toLocaleString()}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="count" 
-                  stroke="#8884d8" 
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">
+                📈 Activité de Scan (24h)
+              </Typography>
+              <Chip 
+                label={`${chartData.reduce((sum, item) => sum + item.count, 0)} activités`}
+                color="primary"
+                size="small"
+              />
+            </Box>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="timestamp" 
+                    tickFormatter={(value) => {
+                      const date = new Date(value);
+                      return `${date.getHours()}h`;
+                    }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis 
+                    label={{ value: 'Activités', angle: -90, position: 'insideLeft' }}
+                  />
+                  <RechartsTooltip 
+                    labelFormatter={(value) => {
+                      const date = new Date(value);
+                      return `${date.toLocaleDateString()} à ${date.getHours()}h`;
+                    }}
+                    formatter={(value: any) => [`${value} activité(s)`, 'Nombre']}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="count" 
+                    stroke="#1976d2" 
+                    strokeWidth={3}
+                    dot={{ fill: '#1976d2', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: '#1976d2', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box 
+                display="flex" 
+                alignItems="center" 
+                justifyContent="center" 
+                height={300}
+                bgcolor="grey.50"
+                borderRadius={1}
+              >
+                <Typography color="text.secondary">
+                  📊 Aucune activité de scan dans les dernières 24h
+                </Typography>
+              </Box>
+            )}
+            <Box mt={2} display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="caption" color="text.secondary">
+                Dernière mise à jour: {new Date().toLocaleTimeString()}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Pic d'activité: {chartData.length > 0 ? Math.max(...chartData.map(d => d.count)) : 0} activités/h
+              </Typography>
+            </Box>
           </Paper>
         </Grid>
 
-        {/* Recent Activity */}
+        {/* SCAN Queue - Main Interface */}
         <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6">
-                Activité Récente
+                File d'Attente SCAN ({scanQueue.length} bordereaux)
               </Typography>
               <IconButton onClick={loadDashboard}>
                 <Refresh />
@@ -334,15 +467,125 @@ const ScanDashboard: React.FC = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Heure</TableCell>
-                    <TableCell>Action</TableCell>
-                    <TableCell>Détails</TableCell>
-                    <TableCell>Statut</TableCell>
+                    <TableCell>Référence</TableCell>
+                    <TableCell>Client</TableCell>
+                    <TableCell>Date Réception</TableCell>
+                    <TableCell>Délai Règlement</TableCell>
+                    <TableCell>Chargé de Compte</TableCell>
+                    <TableCell>Documents</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {scanActivity.slice(0, 10).map((activity, index) => (
+                  {scanQueue.map((bordereau) => {
+                    const daysPending = Math.floor((Date.now() - new Date(bordereau.dateReception).getTime()) / (24 * 60 * 60 * 1000));
+                    const isUrgent = daysPending > 1;
+                    const chargeDeCompte = bordereau.client?.gestionnaires?.find((g: any) => g.role === 'CHEF_EQUIPE');
+                    
+                    return (
+                      <TableRow 
+                        key={bordereau.id}
+                        sx={{ 
+                          backgroundColor: isUrgent ? 'rgba(255, 152, 0, 0.1)' : 'inherit',
+                          '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
+                        }}
+                      >
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            {isUrgent && <Warning color="warning" fontSize="small" />}
+                            <Typography variant="body2" fontWeight={isUrgent ? 'bold' : 'normal'}>
+                              {bordereau.reference}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {bordereau.client?.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {new Date(bordereau.dateReception).toLocaleDateString()}
+                            <br />
+                            <Typography variant="caption" color={isUrgent ? 'warning.main' : 'text.secondary'}>
+                              {daysPending} jour{daysPending > 1 ? 's' : ''}
+                            </Typography>
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {bordereau.contract?.delaiReglement || bordereau.delaiReglement} jours
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {chargeDeCompte?.fullName || 'Non assigné'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={`${bordereau.documents?.length || 0} docs`}
+                            size="small"
+                            color={bordereau.documents?.length > 0 ? 'success' : 'default'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" gap={1}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<PlayArrow />}
+                              onClick={() => handleStartScanning(bordereau.id)}
+                              disabled={processing === bordereau.id}
+                            >
+                              Scanner
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Visibility />}
+                              onClick={() => handleViewBordereau(bordereau.id)}
+                            >
+                              Voir
+                            </Button>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {scanQueue.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center">
+                        <Typography color="text.secondary" sx={{ py: 4 }}>
+                          Aucun bordereau en attente de scan
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Grid>
+
+        {/* Recent Activity */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Activité Récente
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Heure</TableCell>
+                    <TableCell>Action</TableCell>
+                    <TableCell>Détails</TableCell>
+                    <TableCell>Statut</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {scanActivity.slice(0, 5).map((activity, index) => (
                     <TableRow key={index}>
                       <TableCell>
                         {new Date(activity.timestamp).toLocaleTimeString()}
@@ -355,7 +598,7 @@ const ScanDashboard: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {activity.details?.fileName || activity.details?.scannerId || '--'}
+                          {activity.details?.reference || activity.details?.fileName || '--'}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -365,30 +608,16 @@ const ScanDashboard: React.FC = () => {
                           size="small"
                         />
                       </TableCell>
-                      <TableCell>
-                        <Tooltip title="Voir Détails">
-                          <IconButton size="small">
-                            <Visibility />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
                     </TableRow>
                   ))}
-                  {scanActivity.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        <Typography color="text.secondary">
-                          Aucune activité récente
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           </Paper>
         </Grid>
       </Grid>
+
+
 
       {/* Dialogs */}
       <Dialog 
@@ -432,6 +661,60 @@ const ScanDashboard: React.FC = () => {
           <OCRCorrectionInterface />
         </DialogContent>
         <DialogActions>
+          <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bordereau Details Dialog */}
+      <Dialog 
+        open={activeDialog === 'bordereau-details'} 
+        onClose={() => setActiveDialog(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          Détails Bordereau - {selectedBordereau?.reference}
+        </DialogTitle>
+        <DialogContent>
+          {selectedBordereau && (
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>Informations Client</Typography>
+                <Typography><strong>Client:</strong> {selectedBordereau.client?.name}</Typography>
+                <Typography><strong>Délai Règlement:</strong> {selectedBordereau.contract?.delaiReglement || selectedBordereau.delaiReglement} jours</Typography>
+                <Typography><strong>Chargé de Compte:</strong> {selectedBordereau.client?.gestionnaires?.find((g: any) => g.role === 'CHEF_EQUIPE')?.fullName || 'Non assigné'}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6" gutterBottom>Documents ({selectedBordereau.documents?.length || 0})</Typography>
+                {selectedBordereau.documents?.map((doc: any) => (
+                  <Box key={doc.id} display="flex" alignItems="center" gap={1} mb={1}>
+                    <Chip label={doc.type} size="small" />
+                    <Typography variant="body2">{doc.name}</Typography>
+                    <Chip label={doc.status} color={doc.status === 'TRAITE' ? 'success' : 'default'} size="small" />
+                  </Box>
+                ))}
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>Historique</Typography>
+                {selectedBordereau.traitementHistory?.map((history: any, index: number) => (
+                  <Typography key={index} variant="body2">
+                    {new Date(history.createdAt).toLocaleString()} - {history.action}
+                  </Typography>
+                ))}
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {selectedBordereau?.statut === 'SCAN_EN_COURS' && (
+            <Button 
+              variant="contained" 
+              color="success"
+              onClick={() => handleValidateScanning(selectedBordereau.id)}
+            >
+              Valider Scan
+            </Button>
+          )}
           <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
         </DialogActions>
       </Dialog>
