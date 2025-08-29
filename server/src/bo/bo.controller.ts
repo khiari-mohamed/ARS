@@ -121,7 +121,7 @@ export class BOController {
 
   // Document quality validation
   @Post('validate-document')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CLIENT_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   @UseInterceptors(FileInterceptor('file'))
   async validateDocument(
     @UploadedFile() file: Express.Multer.File
@@ -134,7 +134,7 @@ export class BOController {
 
   // Batch document validation
   @Post('validate-documents')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CLIENT_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   @UseInterceptors(FilesInterceptor('files', 20))
   async validateDocuments(
     @UploadedFiles() files: Express.Multer.File[]
@@ -193,7 +193,7 @@ export class BOController {
 
   // Batch entry creation
   @Post('create-batch')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CLIENT_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async createBatch(
     @Body() data: { entries: CreateBOEntryDto[] },
     @Req() req: Request
@@ -216,7 +216,7 @@ export class BOController {
 
   // BO Performance metrics
   @Get('performance')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CLIENT_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async getPerformance(
     @Req() req: Request,
     @Query('period') period: string = 'daily',
@@ -234,7 +234,7 @@ export class BOController {
 
   // Physical document tracking
   @Post('track-document')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CLIENT_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async trackDocument(
     @Body() trackingData: {
       reference: string;
@@ -248,7 +248,7 @@ export class BOController {
 
   // Get document tracking history
   @Get('tracking/:reference')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CLIENT_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async getTrackingHistory(@Param('reference') reference: string) {
     try {
       // Fetch actual tracking history from audit logs
@@ -272,7 +272,7 @@ export class BOController {
 
   // BO Statistics for reporting
   @Get('statistics')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CUSTOMER_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.BO, UserRole.CLIENT_SERVICE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE)
   async getStatistics(
     @Query('from') fromDate?: string,
     @Query('to') toDate?: string,

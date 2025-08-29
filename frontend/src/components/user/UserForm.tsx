@@ -23,7 +23,7 @@ interface UserFormProps {
   showPassword?: boolean;
 }
 
-export const UserForm: React.FC<UserFormProps> = ({
+const UserForm: React.FC<UserFormProps> = ({
   mode,
   initial = {},
   onSubmit,
@@ -171,3 +171,5 @@ export const UserForm: React.FC<UserFormProps> = ({
     </form>
   );
 };
+
+export default UserForm;

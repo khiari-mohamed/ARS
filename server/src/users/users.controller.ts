@@ -1,152 +1,241 @@
-import { Controller, Get, Param, UseGuards, Post, Body, Put, Delete, Patch, Request } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Post, Body, Put, Delete, Patch, Request, Query, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../auth/user-role.enum';
 
+function canManageUser(currentRole: string, targetRole: string): boolean {
+  const roleHierarchy = {
+    'SUPER_ADMIN': 10,
+    'ADMINISTRATEUR': 8,
+    'RESPONSABLE_DEPARTEMENT': 6,
+    'CHEF_EQUIPE': 5,
+    'GESTIONNAIRE': 3,
+    'CLIENT_SERVICE': 3,
+    'FINANCE': 3,
+    'SCAN_TEAM': 2,
+    'BO': 2
+  };
+  
+  return (roleHierarchy[currentRole] || 0) > (roleHierarchy[targetRole] || 0);
+}
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.CHEF_EQUIPE)
   @Get()
-  async getAllUsers(@Request() req) {
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE)
+  async getAllUsers(@Request() req, @Query() query: any) {
     try {
-      // Support filtering by role via query param
-      const role = req.query?.role;
-      let users;
-      if (role) {
-        users = await this.usersService.findByRole(role);
-      } else {
-        users = await this.usersService.findAll();
-      }
+      const filters = {
+        role: query.role,
+        department: query.department,
+        active: query.active !== undefined ? query.active === 'true' : undefined,
+        search: query.search
+      };
       
-      // Return relevant fields for assignment dropdowns
-      return users
-        .filter(user => {
-          const userRole = user.role?.toUpperCase();
-          return user.active !== false && 
-                 (userRole === 'GESTIONNAIRE' || 
-                  userRole === 'CUSTOMER_SERVICE' || 
-                  userRole === 'CLIENT_SERVICE');
-        })
-        .map(({ id, fullName, email, role, active }) => ({ 
-          id, 
-          fullName: fullName || email, // Fallback to email if no fullName
-          email, 
-          role: role?.toUpperCase(), // Normalize role to uppercase
-          active 
-        }));
+      const users = await this.usersService.findAll(filters);
+      
+      // Return users without password
+      return users.map(({ password, ...user }) => user);
     } catch (error) {
       console.error('Error fetching users:', error);
       return [];
     }
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Get('dashboard/stats')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async getDashboardStats(@Request() req) {
+    const user = req.user;
+    return this.usersService.getDashboardStats(user.role, user.id);
+  }
+
   @Get(':id')
-  async getUser(@Param('id') id: string) {
-    return this.usersService.findById(id).then(user => {
-      if (!user) return null;
-      const { password, ...rest } = user;
-      return rest;
-    });
+  async getUser(@Param('id') id: string, @Request() req) {
+    const user = await this.usersService.findById(id);
+    if (!user) return null;
+    
+    // Check if current user can view this user
+    const currentUser = req.user;
+    if (currentUser.id !== id && !canManageUser(currentUser.role, user.role)) {
+      throw new ForbiddenException('Access denied');
+    }
+    
+    const { password, ...rest } = user;
+    return rest;
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
   @Post()
-  async createUser(@Body() body: { 
-    email: string; 
-    password: string; 
-    fullName: string; 
-    role: string;
-    department?: string;
-    team?: string;
-    phone?: string;
-    position?: string;
-    photo?: string;
-    permissions?: string[];
-    assignedClients?: string[];
-  }) {
-    // Validate input
-    if (!body.email || !body.password || !body.fullName || !body.role) {
-      throw new Error('All fields (email, password, fullName, role) are required.');
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async createUser(@Body() createUserDto: any, @Request() req) {
+    const currentUser = req.user;
+    
+    // Validate required fields
+    if (!createUserDto.email || !createUserDto.password || !createUserDto.fullName || !createUserDto.role) {
+      throw new BadRequestException('All fields (email, password, fullName, role) are required.');
     }
-    // Check for existing user
-    const existing = await this.usersService.findByEmail(body.email);
-    if (existing) {
-      throw new Error('A user with this email already exists.');
+    
+    // Check if current user can create user with this role
+    if (currentUser.role !== 'SUPER_ADMIN' && !canManageUser(currentUser.role, createUserDto.role)) {
+      throw new ForbiddenException('You cannot create a user with this role');
     }
-    // Hash password
-    const bcrypt = require('bcrypt');
-    const hashed = await bcrypt.hash(body.password, 10);
-    const user = await this.usersService.create({ ...body, password: hashed });
-    return { ...user, password: undefined };
+    
+    try {
+      const user = await this.usersService.create(createUserDto, currentUser.id);
+      const { password, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    } catch (error) {
+      if (error.message.includes('already exists')) {
+        throw new BadRequestException('A user with this email already exists');
+      }
+      throw new BadRequestException(error.message || 'Failed to create user');
+    }
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
   @Put(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
   async updateUser(
     @Param('id') id: string,
-    @Body() body: Partial<{ 
-      email: string; 
-      password: string; 
-      fullName: string; 
-      role: string;
-      department?: string;
-      team?: string;
-      phone?: string;
-      position?: string;
-      photo?: string;
-      permissions?: string[];
-      assignedClients?: string[];
-      active?: boolean;
-    }>
+    @Body() updateUserDto: any,
+    @Request() req
   ) {
-    return this.usersService.update(id, body).then(({ password, ...rest }) => rest);
+    const currentUser = req.user;
+    const targetUser = await this.usersService.findById(id);
+    
+    // Check permissions
+    if (!canManageUser(currentUser.role, targetUser.role)) {
+      throw new ForbiddenException('You cannot modify this user');
+    }
+    
+    const user = await this.usersService.update(id, updateUserDto, currentUser.id);
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
   @Delete(':id')
-  async deleteUser(@Param('id') id: string) {
-    return this.usersService.delete(id).then(({ password, ...rest }) => rest);
+  @Roles(UserRole.SUPER_ADMIN)
+  async deleteUser(@Param('id') id: string, @Request() req) {
+    const currentUser = req.user;
+    const user = await this.usersService.delete(id, currentUser.id);
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
+  @Patch(':id/disable')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async disableUser(@Param('id') id: string, @Request() req) {
+    const currentUser = req.user;
+    const user = await this.usersService.disableUser(id, currentUser.id);
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  @Patch(':id/activate')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async activateUser(@Param('id') id: string, @Request() req) {
+    const currentUser = req.user;
+    const user = await this.usersService.enableUser(id, currentUser.id);
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  @Post(':id/reset-password')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async resetUserPassword(@Param('id') id: string, @Body() body: { password: string }, @Request() req) {
+    const currentUser = req.user;
+    const user = await this.usersService.resetPassword(id, body.password, currentUser.id);
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
   @Get(':id/audit-logs')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
   async getUserAuditLogs(@Param('id') id: string) {
     return this.usersService.getAuditLogsForUser(id);
   }
 
   @Get(':id/performance')
-  async getUserPerformance(@Param('id') id: string) {
+  async getUserPerformance(@Param('id') id: string, @Request() req) {
+    const currentUser = req.user;
+    
+    // Users can view their own performance, managers can view their team's
+    if (currentUser.id !== id) {
+      const targetUser = await this.usersService.findById(id);
+      if (!canManageUser(currentUser.role, targetUser.role)) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
+    
     return this.usersService.getUserPerformanceStats(id);
   }
 
+  @Get(':id/activity')
+  async getUserActivity(@Param('id') id: string, @Request() req) {
+    const currentUser = req.user;
+    
+    // Users can view their own activity, managers can view their team's
+    if (currentUser.id !== id) {
+      const targetUser = await this.usersService.findById(id);
+      if (!canManageUser(currentUser.role, targetUser.role)) {
+        throw new ForbiddenException('Access denied');
+      }
+    }
+    
+    return this.usersService.getUserActivitySummary(id);
+  }
+
   @Post('bulk-action')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.MANAGER)
-  async bulkUserAction(@Body() body: { userIds: string[]; action: string; data?: any }) {
-    return this.usersService.performBulkAction(body.userIds, body.action, body.data);
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async bulkUserAction(@Body() body: { userIds: string[]; action: string; data?: any }, @Request() req) {
+    const currentUser = req.user;
+    return this.usersService.performBulkAction(body.userIds, body.action, body.data, currentUser.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  @Patch(':id/disable')
-  async disableUser(@Param('id') id: string) {
-    return this.usersService.disableUser(id).then(({ password, ...rest }) => rest);
+  @Post('export')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async exportUsers(@Body() body: { userIds: string[]; format?: 'csv' | 'excel' }) {
+    const data = await this.usersService.exportUsers(body.userIds, body.format);
+    
+    if (body.format === 'excel') {
+      // Return Excel format (would need additional library like xlsx)
+      return data;
+    }
+    
+    // Return CSV format
+    const headers = ['ID', 'Nom', 'Email', 'Rôle', 'Département', 'Actif', 'Créé le', 'Bordereaux', 'Réclamations'];
+    const rows = data.map(user => [
+      user.id,
+      user.fullName,
+      user.email,
+      user.role,
+      user.department || '',
+      user.active ? 'Oui' : 'Non',
+      new Date(user.createdAt).toLocaleDateString(),
+      user.bordereauxCount,
+      user.reclamationsCount
+    ]);
+    
+    const csv = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    
+    return { csv };
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  @Post(':id/reset-password')
-  async resetUserPassword(@Param('id') id: string, @Body() body: { password: string }) {
-    return this.usersService.resetPassword(id, body.password).then(({ password, ...rest }) => rest);
+  @Get(':id/notifications')
+  async getUserNotifications(@Param('id') id: string, @Request() req) {
+    const currentUser = req.user;
+    
+    // Users can only view their own notifications
+    if (currentUser.id !== id && currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied');
+    }
+    
+    const user = await this.usersService.findById(id);
+    return user.notifications || [];
   }
 }

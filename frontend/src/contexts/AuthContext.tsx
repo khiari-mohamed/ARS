@@ -32,18 +32,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+    
     if (token) {
       // Try to get current user
       import('../services/authService').then(({ getCurrentUser }) => {
         getCurrentUser()
-          .then(setUser)
+          .then((userData) => {
+            if (userData) {
+              setUser(userData);
+            } else {
+              localStorage.removeItem('token');
+              setUser(null);
+            }
+          })
           .catch(() => {
             localStorage.removeItem('token');
             setUser(null);
           })
           .finally(() => setLoading(false));
+      }).catch(() => {
+        localStorage.removeItem('token');
+        setUser(null);
+        setLoading(false);
       });
     } else {
+      setUser(null);
       setLoading(false);
     }
   }, []);

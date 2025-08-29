@@ -41,6 +41,14 @@ export const logout = async () => {
 };
 
 export const getCurrentUser = async () => {
-  const { data } = await LocalAPI.get('/auth/me');
-  return data;
+  try {
+    const { data } = await LocalAPI.get('/auth/me');
+    return data;
+  } catch (error: any) {
+    // If token is invalid, remove it
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+    }
+    throw error;
+  }
 };
