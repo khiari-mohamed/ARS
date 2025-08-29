@@ -974,13 +974,13 @@ export class FinanceService {
       console.log('🔍 Found bordereaux:', allBordereaux.map(b => `${b.reference}: ${b.statut}`));
       
       // Filter for valid statuses - allow more statuses for demo purposes
-      const bordereaux = allBordereaux.filter(b => ['TRAITE', 'PRET_VIREMENT', 'A_SCANNER', 'SCANNE', 'EN_COURS'].includes(b.statut));
+      const bordereaux = allBordereaux.filter(b => ['TRAITE', 'PRET_VIREMENT', 'A_SCANNER', 'SCANNE', 'EN_COURS', 'EN_ATTENTE'].includes(b.statut));
       
       console.log('✅ Valid bordereaux for OV:', bordereaux.map(b => `${b.reference}: ${b.statut}`));
 
       if (bordereaux.length === 0) {
         const availableStatuses = allBordereaux.map(b => b.statut).join(', ');
-        throw new Error(`Aucun bordereau valide trouvé pour la génération OV. Statuts disponibles: ${availableStatuses}. Requis: TRAITE, PRET_VIREMENT, A_SCANNER, SCANNE, ou EN_COURS`);
+        throw new Error(`Aucun bordereau valide trouvé pour la génération OV. Statuts disponibles: ${availableStatuses}. Requis: TRAITE, PRET_VIREMENT, A_SCANNER, SCANNE, EN_COURS, ou EN_ATTENTE`);
       }
 
       const totalBS = bordereaux.reduce((sum, b) => sum + (b.nombreBS || 0), 0);

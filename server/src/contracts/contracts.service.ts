@@ -173,14 +173,24 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
+    // Map DTO fields to correct Prisma schema fields
+    const updateData: any = {};
+    
+    if (dto.contractNumber) updateData.clientName = dto.contractNumber;
+    if (dto.treatmentDelay) updateData.delaiReglement = parseInt(dto.treatmentDelay.toString());
+    if (dto.claimsReplyDelay) updateData.delaiReclamation = parseInt(dto.claimsReplyDelay.toString());
+    if (dto.paymentDelay) updateData.delaiReglement = parseInt(dto.paymentDelay.toString());
+    if (dto.warningThreshold) updateData.escalationThreshold = parseInt(dto.warningThreshold.toString());
+    if (dto.accountOwnerId) updateData.assignedManagerId = dto.accountOwnerId;
+    if (dto.startDate) updateData.startDate = new Date(dto.startDate);
+    if (dto.endDate) updateData.endDate = new Date(dto.endDate);
+    if (dto.notes) updateData.signature = dto.notes;
+    
+    updateData.updatedAt = new Date();
+
     const updated = await this.prisma.contract.update({
       where: { id },
-      data: {
-        ...dto,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
-        updatedAt: new Date()
-      },
+      data: updateData,
       include: {
         client: true,
         assignedManager: true
