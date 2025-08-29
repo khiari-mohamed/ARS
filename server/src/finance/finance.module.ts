@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { FinanceController } from './finance.controller';
+import { FinanceApiController } from './finance-api.controller';
 import { FinanceService } from './finance.service';
 import { OVGeneratorService } from './ov-generator.service';
 import { MultiBankFormatService } from './multi-bank-format.service';
@@ -9,7 +10,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [FinanceController],
+  controllers: [FinanceController, FinanceApiController],
   providers: [
     FinanceService,
     OVGeneratorService,
