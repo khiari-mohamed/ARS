@@ -64,7 +64,7 @@ export class ScanController {
   async enhanceImage(
     @UploadedFile() file: Express.Multer.File
   ) {
-    const enhancedPath = await this.scanService.enhanceImage(file.path);
+    const enhancedPath = await this.scanService.enhanceImage(file);
     return { enhancedPath };
   }
 
@@ -106,6 +106,12 @@ export class ScanController {
     return this.scanService.getRecentScanActivity();
   }
 
+  @Get('activity-chart')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getScanActivityChart() {
+    return this.scanService.getScanActivityChart();
+  }
+
   @Post('retry/:fileName')
   @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async retryFailedScan(@Param('fileName') fileName: string) {
@@ -120,8 +126,60 @@ export class ScanController {
 
   @Post('paperstream-import')
   @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
-  async simulatePaperStreamImport() {
-    return this.scanService.simulatePaperStreamImport();
+  async triggerPaperStreamImport() {
+    return this.scanService.triggerPaperStreamImport();
+  }
+
+  @Get('queue')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getScanQueue() {
+    return this.scanService.getScanQueue();
+  }
+
+  @Get('bordereau/:id')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async getBordereauForScan(@Param('id') id: string) {
+    return this.scanService.getBordereauForScan(id);
+  }
+
+  @Post('start/:bordereauId')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async startScanning(
+    @Param('bordereauId') bordereauId: string,
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.scanService.startScanning(bordereauId, userId);
+  }
+
+  @Post('validate/:bordereauId')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async validateScanning(
+    @Param('bordereauId') bordereauId: string,
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.scanService.validateScanning(bordereauId, userId);
+  }
+
+  @Get('overload-check')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async checkOverload() {
+    return this.scanService.checkScanOverload();
+  }
+
+  @Get('debug-bordereaux')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async debugBordereaux() {
+    return this.scanService.debugBordereauxStatus();
+  }
+
+  @Post('create-test-bordereau')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async createTestBordereau(@Req() req: Request) {
+    return this.scanService.createTestBordereau();
   }
 
   @Get('dashboard-stats')

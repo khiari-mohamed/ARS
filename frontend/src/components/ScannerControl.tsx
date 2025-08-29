@@ -58,45 +58,80 @@ const ScannerControl: React.FC<Props> = ({ onScanComplete }) => {
   };
 
   const handleStartScan = async () => {
-    if (!selectedScanner) return;
+    if (!selectedScanner) {
+      alert('Veuillez sélectionner un scanner');
+      return;
+    }
 
     setScanning(true);
     try {
-      const job = await startScanJob(selectedScanner, scanSettings);
-      setScanJob(job);
+      // Validate scan settings
+      if (scanSettings.resolution < 150 || scanSettings.resolution > 600) {
+        throw new Error('Résolution invalide (150-600 DPI)');
+      }
+
+      const job = await startScanJob(selectedScanner, {
+        ...scanSettings,
+        timestamp: new Date().toISOString(),
+        operator: 'SCAN_TEAM'
+      });
       
-      // Poll for job status updates
+      setScanJob({
+        ...job,
+        settings: scanSettings,
+        startTime: new Date()
+      });
+      
+      // Real-time job status polling
       const pollInterval = setInterval(async () => {
         try {
           const status = await getScanJobStatus(job.id);
-          setScanJob((prev: any) => ({ ...prev, ...status }));
+          setScanJob((prev: any) => ({ 
+            ...prev, 
+            ...status,
+            settings: scanSettings // Preserve settings
+          }));
           
           if (status.status === 'completed' || status.status === 'completed_assigned' || status.status === 'error') {
             clearInterval(pollInterval);
             setScanning(false);
             
+            // Show completion message
+            if (status.status === 'completed_assigned') {
+              alert(`✅ Scan terminé avec succès!\nBordereau: ${status.reference}\nAssigné automatiquement au Chef d'Équipe`);
+            } else if (status.status === 'completed') {
+              alert(`✅ Scan terminé avec succès!\nBordereau: ${status.reference}`);
+            } else {
+              alert(`❌ Erreur de scan: ${status.error || 'Erreur inconnue'}`);
+            }
+            
             setTimeout(() => {
               setScanJob(null);
               onScanComplete();
-            }, 2000); // Show completion for 2 seconds
+            }, 3000);
           }
         } catch (error) {
           console.error('Failed to get job status:', error);
           clearInterval(pollInterval);
           setScanning(false);
+          setScanJob(null);
         }
-      }, 1000); // Poll every second
+      }, 1000);
       
     } catch (error: any) {
       console.error('Scan job failed:', error);
       setScanning(false);
-      alert(error.response?.data?.message || error.message || 'Scan failed');
+      const errorMessage = error.response?.data?.message || error.message || 'Échec du démarrage du scan';
+      alert(`❌ Erreur: ${errorMessage}`);
     }
   };
 
   const handleStopScan = () => {
-    setScanning(false);
-    setScanJob(null);
+    if (window.confirm('Êtes-vous sûr de vouloir arrêter le scan en cours?')) {
+      setScanning(false);
+      setScanJob(null);
+      alert('⏹️ Scan arrêté par l\'utilisateur');
+    }
   };
 
   const updateSetting = (key: string, value: any) => {
@@ -152,9 +187,11 @@ const ScannerControl: React.FC<Props> = ({ onScanComplete }) => {
           Paramètres de Scan
         </Typography>
         
-        <Grid container spacing={2}>
+        <Grid container spacing={3}>
           <Grid item xs={12} sm={6}>
-            <Typography gutterBottom>Résolution: {getResolutionLabel(scanSettings.resolution)}</Typography>
+            <Typography gutterBottom fontWeight="medium">
+              Résolution: {getResolutionLabel(scanSettings.resolution)}
+            </Typography>
             <Slider
               value={scanSettings.resolution}
               onChange={(_, value) => updateSetting('resolution', value)}
@@ -162,69 +199,95 @@ const ScannerControl: React.FC<Props> = ({ onScanComplete }) => {
               max={600}
               step={50}
               marks={[
-                { value: 150, label: '150' },
-                { value: 300, label: '300' },
-                { value: 600, label: '600' }
+                { value: 150, label: '150 DPI' },
+                { value: 300, label: '300 DPI' },
+                { value: 600, label: '600 DPI' }
               ]}
+              sx={{ mt: 2 }}
+              disabled={scanning}
             />
+            <Typography variant="caption" color="text.secondary">
+              Recommandé: 300 DPI pour documents standards
+            </Typography>
           </Grid>
           
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
+            <FormControl fullWidth disabled={scanning}>
               <InputLabel>Mode Couleur</InputLabel>
               <Select
                 value={scanSettings.colorMode}
                 label="Mode Couleur"
                 onChange={(e) => updateSetting('colorMode', e.target.value)}
               >
-                <MenuItem value="color">Couleur</MenuItem>
-                <MenuItem value="grayscale">Niveaux de gris</MenuItem>
-                <MenuItem value="bw">Noir et blanc</MenuItem>
+                <MenuItem value="color">🎨 Couleur (Recommandé)</MenuItem>
+                <MenuItem value="grayscale">⚫ Niveaux de gris</MenuItem>
+                <MenuItem value="bw">⚪ Noir et blanc</MenuItem>
               </Select>
             </FormControl>
           </Grid>
           
           <Grid item xs={12} sm={6}>
-            <Typography gutterBottom>Luminosité: {scanSettings.brightness}%</Typography>
+            <Typography gutterBottom fontWeight="medium">
+              Luminosité: {scanSettings.brightness}%
+            </Typography>
             <Slider
               value={scanSettings.brightness}
               onChange={(_, value) => updateSetting('brightness', value)}
               min={0}
               max={100}
+              marks={[
+                { value: 0, label: '0%' },
+                { value: 50, label: '50%' },
+                { value: 100, label: '100%' }
+              ]}
+              disabled={scanning}
             />
           </Grid>
           
           <Grid item xs={12} sm={6}>
-            <Typography gutterBottom>Contraste: {scanSettings.contrast}%</Typography>
+            <Typography gutterBottom fontWeight="medium">
+              Contraste: {scanSettings.contrast}%
+            </Typography>
             <Slider
               value={scanSettings.contrast}
               onChange={(_, value) => updateSetting('contrast', value)}
               min={0}
               max={100}
+              marks={[
+                { value: 0, label: '0%' },
+                { value: 50, label: '50%' },
+                { value: 100, label: '100%' }
+              ]}
+              disabled={scanning}
             />
           </Grid>
           
           <Grid item xs={12}>
-            <Box display="flex" gap={2}>
+            <Box display="flex" gap={3} flexWrap="wrap">
               <FormControlLabel
                 control={
                   <Switch
                     checked={scanSettings.duplex}
                     onChange={(e) => updateSetting('duplex', e.target.checked)}
+                    disabled={scanning}
                   />
                 }
-                label="Scan recto-verso"
+                label="📄 Scan recto-verso"
               />
               <FormControlLabel
                 control={
                   <Switch
                     checked={scanSettings.autoDetect}
                     onChange={(e) => updateSetting('autoDetect', e.target.checked)}
+                    disabled={scanning}
                   />
                 }
-                label="Détection automatique"
+                label="🔍 Détection automatique"
               />
             </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              La détection automatique optimise les paramètres selon le type de document
+            </Typography>
           </Grid>
         </Grid>
       </Box>
@@ -274,37 +337,42 @@ const ScannerControl: React.FC<Props> = ({ onScanComplete }) => {
         </Alert>
       )}
 
-      <Box display="flex" gap={2} justifyContent="center">
+      <Box display="flex" gap={2} justifyContent="center" flexWrap="wrap">
         <Button
           variant="contained"
           size="large"
-          startIcon={<PlayArrow />}
-          onClick={handleStartScan}
-          disabled={!selectedScanner || scanning || scanners.find((s: any) => s.id === selectedScanner)?.status !== 'ready'}
+          startIcon={scanning ? <Stop /> : <PlayArrow />}
+          onClick={scanning ? handleStopScan : handleStartScan}
+          disabled={!selectedScanner || scanners.find((s: any) => s.id === selectedScanner)?.status !== 'ready'}
+          color={scanning ? 'error' : 'primary'}
+          sx={{ minWidth: 160 }}
         >
-          Démarrer Scan
+          {scanning ? 'Arrêter Scan' : 'Démarrer Scan'}
         </Button>
-        
-        {scanning && (
-          <Button
-            variant="outlined"
-            size="large"
-            startIcon={<Stop />}
-            onClick={handleStopScan}
-            color="error"
-          >
-            Arrêter Scan
-          </Button>
-        )}
         
         <Button
           variant="outlined"
           size="large"
           startIcon={<Settings />}
           onClick={loadScanners}
+          disabled={scanning}
+          sx={{ minWidth: 140 }}
         >
-          Actualiser
+          Actualiser Scanners
         </Button>
+      </Box>
+      
+      {/* Settings Summary */}
+      <Box mt={2} p={2} bgcolor="grey.50" borderRadius={1}>
+        <Typography variant="subtitle2" gutterBottom>
+          📋 Résumé des Paramètres:
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {getResolutionLabel(scanSettings.resolution)} • {scanSettings.colorMode === 'color' ? 'Couleur' : scanSettings.colorMode === 'grayscale' ? 'Niveaux de gris' : 'Noir et blanc'} • 
+          Luminosité {scanSettings.brightness}% • Contraste {scanSettings.contrast}% • 
+          {scanSettings.duplex ? 'Recto-verso' : 'Simple face'} • 
+          {scanSettings.autoDetect ? 'Détection auto activée' : 'Détection auto désactivée'}
+        </Typography>
       </Box>
 
       {scanners.length === 0 && (

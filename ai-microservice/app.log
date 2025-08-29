@@ -3712,3 +3712,209 @@ h11._util.LocalProtocolError: can't handle event type ConnectionClosed when role
 2025-08-29 11:15:08,841 - monitoring - INFO - Completed priorities in 0.00s
 2025-08-29 11:15:11,081 - monitoring - INFO - Starting recommendations endpoint call
 2025-08-29 11:15:11,082 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:15:44,431 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:15:44,436 - monitoring - INFO - Completed reassignment in 0.01s
+2025-08-29 11:15:48,890 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:15:49,022 - monitoring - INFO - Completed automated_decisions in 0.13s
+2025-08-29 11:16:17,884 - asyncio - ERROR - Exception in callback H11Protocol.timeout_keep_alive_handler()
+handle: <TimerHandle when=2498416.656 H11Protocol.timeout_keep_alive_handler()>
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\asyncio\events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 363, in timeout_keep_alive_handler
+    self.conn.send(event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 538, in send
+    data_list = self.send_with_data_passthrough(event)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 563, in send_with_data_passthrough
+    self._process_event(self.our_role, event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 284, in _process_event
+    self._cstate.process_event(role, type(event), server_switch_event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 291, in process_event
+    self._fire_event_triggered_transitions(role, _event_type)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 309, in _fire_event_triggered_transitions
+    raise LocalProtocolError(
+h11._util.LocalProtocolError: can't handle event type ConnectionClosed when role=SERVER and state=SEND_BODY
+2025-08-29 11:17:07,728 - asyncio - ERROR - Exception in callback H11Protocol.timeout_keep_alive_handler()
+handle: <TimerHandle when=2498467.125 H11Protocol.timeout_keep_alive_handler()>
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\asyncio\events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 363, in timeout_keep_alive_handler
+    self.conn.send(event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 538, in send
+    data_list = self.send_with_data_passthrough(event)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 563, in send_with_data_passthrough
+    self._process_event(self.our_role, event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 284, in _process_event
+    self._cstate.process_event(role, type(event), server_switch_event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 291, in process_event
+    self._fire_event_triggered_transitions(role, _event_type)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 309, in _fire_event_triggered_transitions
+    raise LocalProtocolError(
+h11._util.LocalProtocolError: can't handle event type ConnectionClosed when role=SERVER and state=SEND_RESPONSE
+2025-08-29 11:17:47,830 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:17:47,832 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:17:47,840 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:17:47,840 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:17:47,841 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:17:47,842 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:17:47,845 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:17:47,846 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:17:47,958 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:17:47,959 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:18:04,845 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:18:04,846 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:18:04,848 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:18:04,849 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:18:04,858 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:18:04,859 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:18:04,861 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:18:04,862 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:18:04,965 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:18:04,966 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:18:05,216 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:18:05,217 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:18:41,159 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:18:41,163 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:18:41,173 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:18:41,177 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:18:41,187 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:18:41,190 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:18:43,649 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:18:43,657 - monitoring - INFO - Completed priorities in 0.01s
+2025-08-29 11:18:43,673 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:18:43,675 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:18:43,939 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:18:43,943 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:19:15,687 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:19:15,687 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:19:16,176 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:19:16,176 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:19:16,179 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:19:16,180 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:19:16,180 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:19:16,181 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:19:16,296 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:19:16,297 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:19:16,679 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:19:16,680 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:19:48,155 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:19:48,156 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:19:48,158 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:19:48,159 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:19:48,503 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:19:48,503 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:19:48,509 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:19:48,510 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:19:48,612 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:19:48,613 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:19:48,702 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:19:48,703 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:20:19,760 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:20:19,760 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:20:20,092 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:20:20,092 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:20:20,096 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:20:20,096 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:20:20,101 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:20:20,103 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:20:20,207 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:20:20,207 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:20:20,610 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:20:20,611 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:20:54,921 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:20:54,924 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:20:54,942 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:20:54,944 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:20:54,950 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:20:54,951 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:20:54,964 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:20:54,967 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:20:55,072 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:20:55,075 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:20:55,213 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:20:55,215 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:21:19,459 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:21:19,459 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:21:19,462 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:21:19,463 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:21:19,472 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:21:19,473 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:21:19,821 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:21:19,822 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:21:24,713 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:21:24,713 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:21:24,722 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:21:24,722 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:21:24,725 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:21:24,726 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:21:24,775 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:21:24,776 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:21:32,744 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:21:32,744 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:21:32,745 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:21:32,746 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:21:32,747 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:21:32,748 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:21:32,756 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:21:32,757 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:21:32,868 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:21:32,869 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:21:32,921 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:21:32,922 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:21:47,137 - monitoring - INFO - Starting analyze endpoint call
+2025-08-29 11:21:47,477 - database - ERROR - Error saving prediction result: la relation « prediction_logs » n'existe pas
+2025-08-29 11:21:47,621 - monitoring - INFO - Completed analyze in 0.48s
+2025-08-29 11:21:51,435 - monitoring - INFO - Starting suggestions endpoint call
+2025-08-29 11:21:51,717 - monitoring - INFO - Completed suggestions in 0.28s
+2025-08-29 11:22:05,262 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:22:05,264 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:22:05,266 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:22:05,267 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:22:06,139 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:22:06,140 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:22:06,148 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:22:06,149 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:22:06,255 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:22:06,256 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:22:06,603 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:22:06,604 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:22:14,296 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:22:14,297 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:22:27,339 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:22:27,340 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:22:39,363 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:22:39,364 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:22:39,367 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:22:39,368 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:22:39,371 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:22:39,372 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:22:39,378 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:22:39,379 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:22:39,484 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:22:39,486 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:22:39,528 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:22:39,529 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:22:40,458 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:22:40,459 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:22:45,742 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:22:45,742 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-29 11:22:57,965 - monitoring - INFO - Starting analyze endpoint call
+2025-08-29 11:22:57,967 - database - ERROR - Error saving prediction result: la relation « prediction_logs » n'existe pas
+2025-08-29 11:22:57,971 - monitoring - INFO - Completed analyze in 0.01s
+2025-08-29 11:23:02,370 - monitoring - INFO - Starting suggestions endpoint call
+2025-08-29 11:23:02,404 - monitoring - INFO - Completed suggestions in 0.03s
+2025-08-29 11:23:11,177 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:23:11,177 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:23:12,662 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 11:23:12,663 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 11:23:12,665 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 11:23:12,666 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-29 11:23:12,668 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 11:23:12,668 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 11:23:12,758 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 11:23:12,758 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-29 11:23:12,820 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-29 11:23:12,820 - monitoring - INFO - Completed recommendations in 0.00s
