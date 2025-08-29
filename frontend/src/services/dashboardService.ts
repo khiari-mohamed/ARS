@@ -78,3 +78,36 @@ export const getDepartments = async () => {
     ];
   }
 };
+
+export const getRoleBasedDashboard = async (filters?: any) => {
+  try {
+    const { data } = await LocalAPI.get('/dashboard/role-based', { params: filters });
+    return data;
+  } catch (error) {
+    console.error('Role-based dashboard error:', error);
+    throw error;
+  }
+};
+
+export const getRealTimeData = async (filters?: any) => {
+  try {
+    const { data } = await LocalAPI.get('/dashboard/real-time', { params: filters });
+    return data;
+  } catch (error) {
+    console.error('Real-time data error:', error);
+    throw error;
+  }
+};
+
+export const exportDashboard = async (filters?: any, format: 'excel' | 'pdf' = 'excel') => {
+  try {
+    const response = await LocalAPI.get('/dashboard/export', {
+      params: { ...filters, format },
+      responseType: 'blob'
+    });
+    return response;
+  } catch (error) {
+    console.error('Export error:', error);
+    throw error;
+  }
+};

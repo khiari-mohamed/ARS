@@ -9,8 +9,10 @@ import { ReclamationsModule } from '../reclamations/reclamations.module';
 import { BordereauxModule } from '../bordereaux/bordereaux.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { AlertsModule } from '../alerts/alerts.module';
+import { PrismaModule } from '../prisma/prisma.module';
+
 @Module({
-  imports: [IntegrationModule, ReclamationsModule, BordereauxModule, AnalyticsModule, AlertsModule], 
+  imports: [IntegrationModule, ReclamationsModule, BordereauxModule, AnalyticsModule, AlertsModule, PrismaModule], 
   controllers: [DashboardController],
   providers: [
     DashboardService,

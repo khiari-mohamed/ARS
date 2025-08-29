@@ -120,7 +120,7 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
       ]);
 
       // Enhanced SLA predictions with AI
-      const enhancedSLAPredictions = aiSLAPredictions.sla_predictions?.map((pred: any) => ({
+      const enhancedSLAPredictions = aiSLAPredictions.predictions?.map((pred: any) => ({
         id: pred.id,
         risk: pred.risk,
         score: pred.score,

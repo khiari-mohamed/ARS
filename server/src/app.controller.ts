@@ -22,22 +22,5 @@ export class AppController {
     return { message: 'Test endpoint working', timestamp: new Date().toISOString() };
   }
 
-  @Post('feedback')
-  async submitFeedback(@Body() body: { message: string; page: string }) {
-    console.log('🔥 FEEDBACK ENDPOINT HIT!', body);
-    try {
-      await this.prisma.feedback.create({
-        data: {
-          userId: 'debug-user',
-          message: body.message,
-          page: body.page,
-        },
-      });
-      console.log('✅ Feedback saved successfully');
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Feedback error:', error);
-      return { success: false, error: 'Failed to save feedback' };
-    }
-  }
+
 }

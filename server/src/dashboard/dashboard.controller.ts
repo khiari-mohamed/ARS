@@ -122,4 +122,29 @@ export class DashboardController {
   async test() {
     return { success: true, message: 'Dashboard test endpoint working' };
   }
+
+  @Get('role-based')
+  @UseGuards(JwtAuthGuard)
+  async getRoleBasedDashboard(@Query() query: any, @Req() req) {
+    return this.dashboardService.getRoleBasedDashboard(req.user, query);
+  }
+
+  @Get('real-time')
+  @UseGuards(JwtAuthGuard)
+  async getRealTimeData(@Query() query: any, @Req() req) {
+    const [kpis, performance, slaStatus, alerts] = await Promise.all([
+      this.dashboardService.getKpis(req.user, query),
+      this.dashboardService.getPerformance(req.user, query),
+      this.dashboardService.getSlaStatus(req.user, query),
+      this.dashboardService.getAlerts(req.user, query)
+    ]);
+    
+    return {
+      kpis,
+      performance,
+      slaStatus,
+      alerts,
+      timestamp: new Date().toISOString()
+    };
+  }
 }
