@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException 
+import { Injectable, ForbiddenException, NotFoundException, Res 
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -921,6 +921,129 @@ export class GedService {
       generatedAt: new Date(),
       size: Math.floor(Math.random() * 1000000) + 100000
     };
+  }
+
+  async exportReport(type: string, format: string, filters: any, reportData: any, user: User) {
+    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR'].includes(user.role)) {
+      throw new ForbiddenException('You do not have permission to export reports');
+    }
+
+    const ExcelJS = require('exceljs');
+    const PDFDocument = require('pdfkit');
+    
+    try {
+      if (format === 'xlsx') {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Rapport GED');
+        
+        // Add headers
+        worksheet.columns = [
+          { header: 'Client', key: 'client', width: 20 },
+          { header: 'Conformité SLA (%)', key: 'compliance', width: 15 },
+          { header: 'Type Document', key: 'type', width: 15 },
+          { header: 'Temps Moyen (h)', key: 'avgTime', width: 15 },
+          { header: 'Département', key: 'department', width: 20 },
+          { header: 'Volume (%)', key: 'volume', width: 12 }
+        ];
+        
+        // Add SLA compliance data
+        if (reportData?.slaCompliance) {
+          reportData.slaCompliance.forEach((item: any) => {
+            worksheet.addRow({
+              client: item.client,
+              compliance: item.compliance,
+              type: '',
+              avgTime: '',
+              department: '',
+              volume: ''
+            });
+          });
+        }
+        
+        // Add processing time data
+        if (reportData?.processingTime) {
+          reportData.processingTime.forEach((item: any) => {
+            worksheet.addRow({
+              client: '',
+              compliance: '',
+              type: item.type,
+              avgTime: item.avgTime,
+              department: '',
+              volume: ''
+            });
+          });
+        }
+        
+        // Add volume data
+        if (reportData?.volume) {
+          reportData.volume.forEach((item: any) => {
+            worksheet.addRow({
+              client: '',
+              compliance: '',
+              type: '',
+              avgTime: '',
+              department: item.name,
+              volume: item.value
+            });
+          });
+        }
+        
+        const buffer = await workbook.xlsx.writeBuffer();
+        return Buffer.from(buffer);
+        
+      } else if (format === 'pdf') {
+        return new Promise((resolve, reject) => {
+          const doc = new PDFDocument();
+          const chunks: Buffer[] = [];
+          
+          doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+          doc.on('end', () => resolve(Buffer.concat(chunks)));
+          doc.on('error', reject);
+          
+          // PDF content
+          doc.fontSize(20).text('Rapport GED', { align: 'center' });
+          doc.moveDown();
+          
+          doc.fontSize(14).text(`Type: ${type}`);
+          doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`);
+          doc.moveDown();
+          
+          if (reportData?.slaCompliance) {
+            doc.fontSize(16).text('Conformité SLA par Client', { underline: true });
+            doc.moveDown();
+            reportData.slaCompliance.forEach((item: any) => {
+              doc.fontSize(12).text(`${item.client}: ${item.compliance}%`);
+            });
+            doc.moveDown();
+          }
+          
+          if (reportData?.processingTime) {
+            doc.fontSize(16).text('Temps de Traitement par Type', { underline: true });
+            doc.moveDown();
+            reportData.processingTime.forEach((item: any) => {
+              doc.fontSize(12).text(`${item.type}: ${item.avgTime}h`);
+            });
+            doc.moveDown();
+          }
+          
+          if (reportData?.volume) {
+            doc.fontSize(16).text('Volume par Département', { underline: true });
+            doc.moveDown();
+            reportData.volume.forEach((item: any) => {
+              doc.fontSize(12).text(`${item.name}: ${item.value}%`);
+            });
+          }
+          
+          doc.end();
+        });
+      }
+      
+      throw new Error('Unsupported format');
+      
+    } catch (error) {
+      console.error('Export error:', error);
+      throw new Error('Failed to export report: ' + error.message);
+    }
   }
 
   // PaperStream Integration

@@ -15,10 +15,11 @@ interface OutboxItem {
   dateSent: string;
   type: string;
   linkedTo: string;
-  status: 'SENT' | 'DELIVERED' | 'PENDING_RESPONSE' | 'RESPONDED' | 'FAILED';
+  status: 'SENT' | 'PENDING_RESPONSE' | 'RESPONDED' | 'FAILED';
   slaStatus: 'green' | 'orange' | 'red';
   priority: 'NORMAL' | 'URGENT' | 'CRITIQUE';
   subject: string;
+  body?: string;
 }
 
 const OutboxTab: React.FC = () => {
@@ -32,41 +33,61 @@ const OutboxTab: React.FC = () => {
 
   useEffect(() => {
     const loadItems = async () => {
-      // Mock data - replace with actual API call when available
-      setItems([
-        {
-          id: '1',
-          reference: 'OUT/2025/001',
-          to: 'client.a@example.com',
-          dateSent: '2025-01-15',
-          type: 'REGLEMENT',
-          linkedTo: 'BS-123',
-          status: 'PENDING_RESPONSE',
-          slaStatus: 'green',
-          priority: 'NORMAL',
-          subject: 'Courrier de règlement - Dossier BS-123'
-        },
-        {
-          id: '2',
-          reference: 'OUT/2025/002',
-          to: 'client.b@example.com',
-          dateSent: '2025-01-14',
-          type: 'NOTIFICATION',
-          linkedTo: 'CONTRAT-456',
-          status: 'DELIVERED',
-          slaStatus: 'green',
-          priority: 'NORMAL',
-          subject: 'Notification de traitement'
+      try {
+        const token = localStorage.getItem('token');
+        const queryParams = new URLSearchParams();
+        if (filters.status) queryParams.append('status', filters.status);
+        if (filters.priority) queryParams.append('priority', filters.priority);
+        if (filters.dateFrom) queryParams.append('createdAfter', filters.dateFrom);
+        if (filters.dateTo) queryParams.append('createdBefore', filters.dateTo);
+        
+        const response = await fetch(`http://localhost:5000/api/courriers/search?${queryParams}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const courriers = await response.json();
+          // Filter for sent courriers only
+          const sentCourriers = courriers.filter((c: any) => ['SENT', 'PENDING_RESPONSE', 'RESPONDED', 'FAILED'].includes(c.status));
+          
+          const mappedItems = sentCourriers.map((courrier: any) => ({
+            id: courrier.id,
+            reference: `OUT/${new Date(courrier.createdAt).getFullYear()}/${courrier.id.substring(0, 3)}`,
+            to: 'client@example.com', // Would come from courrier data in real implementation
+            dateSent: courrier.sentAt || courrier.createdAt,
+            type: courrier.type,
+            linkedTo: courrier.bordereauId || 'N/A',
+            status: courrier.status,
+            slaStatus: getSLAStatusFromDate(courrier.sentAt || courrier.createdAt),
+            priority: 'NORMAL',
+            subject: courrier.subject,
+            body: courrier.body
+          }));
+          setItems(mappedItems);
         }
-      ]);
+      } catch (error) {
+        console.error('Failed to load outbox items:', error);
+      }
     };
     loadItems();
   }, [filters]);
+  
+  const getSLAStatusFromDate = (dateStr: string): 'green' | 'orange' | 'red' => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const daysDiff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff <= 2) return 'green';
+    if (daysDiff <= 5) return 'orange';
+    return 'red';
+  };
 
   const getStatusChip = (status: string) => {
     const statusConfig = {
       'SENT': { label: 'Envoyé', color: 'info' },
-      'DELIVERED': { label: 'Livré', color: 'success' },
       'PENDING_RESPONSE': { label: 'En attente réponse', color: 'warning' },
       'RESPONDED': { label: 'Répondu', color: 'success' },
       'FAILED': { label: 'Échec', color: 'error' }
@@ -95,24 +116,68 @@ const OutboxTab: React.FC = () => {
     return <Chip label={label} color={color as any} size="small" />;
   };
 
-  const handleAction = (action: string, itemId: string) => {
-    console.log(`${action} for item ${itemId}`);
+  const handleAction = async (action: string, itemId: string) => {
     const item = items.find(i => i.id === itemId);
+    if (!item) return;
     
     switch (action) {
       case 'view':
-        alert(`Voir le détail du courrier ${item?.reference}`);
+        alert(`Détail du courrier:\n\nSujet: ${item.subject}\nDestinataire: ${item.to}\nDate: ${new Date(item.dateSent).toLocaleString()}\nStatut: ${item.status}\n\nContenu:\n${item.body || 'Contenu non disponible'}`);
         break;
+        
       case 'resend':
         if (window.confirm('Êtes-vous sûr de vouloir renvoyer ce courrier ?')) {
-          alert(`Courrier ${item?.reference} renvoyé`);
+          try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`http://localhost:5000/api/courriers/${itemId}/send`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ recipientEmail: item.to })
+            });
+            
+            if (response.ok) {
+              setItems(prev => prev.map(i => 
+                i.id === itemId ? {...i, status: 'SENT' as const} : i
+              ));
+              alert('Courrier renvoyé avec succès');
+            } else {
+              alert('Erreur lors du renvoi');
+            }
+          } catch (error) {
+            console.error('Failed to resend:', error);
+            alert('Erreur lors du renvoi');
+          }
         }
         break;
+        
       case 'cancel':
         if (window.confirm('Êtes-vous sûr de vouloir annuler ce courrier ?')) {
-          setItems(prev => prev.map(i => 
-            i.id === itemId ? {...i, status: 'FAILED' as any} : i
-          ));
+          try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`http://localhost:5000/api/courriers/${itemId}/status`, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ status: 'FAILED' })
+            });
+            
+            if (response.ok) {
+              setItems(prev => prev.map(i => 
+                i.id === itemId ? {...i, status: 'FAILED' as const} : i
+              ));
+              alert('Courrier annulé');
+            } else {
+              alert('Erreur lors de l\'annulation');
+            }
+          } catch (error) {
+            console.error('Failed to cancel:', error);
+            alert('Erreur lors de l\'annulation');
+          }
         }
         break;
     }
@@ -136,7 +201,7 @@ const OutboxTab: React.FC = () => {
             >
               <MenuItem value="">Tous</MenuItem>
               <MenuItem value="SENT">Envoyé</MenuItem>
-              <MenuItem value="DELIVERED">Livré</MenuItem>
+
               <MenuItem value="PENDING_RESPONSE">En attente réponse</MenuItem>
               <MenuItem value="RESPONDED">Répondu</MenuItem>
               <MenuItem value="FAILED">Échec</MenuItem>
@@ -222,7 +287,7 @@ const OutboxTab: React.FC = () => {
                       Renvoyer
                     </Button>
                   )}
-                  {['SENT', 'DELIVERED'].includes(item.status) && (
+                  {['SENT'].includes(item.status) && (
                     <Button
                       size="small"
                       startIcon={<CancelIcon />}

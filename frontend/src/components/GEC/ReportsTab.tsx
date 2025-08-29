@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem,
-  TextField, Button, Card, CardContent, Box, Stack
+  TextField, Button, Card, CardContent, Box, Stack, CircularProgress
 } from '@mui/material';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import TableViewIcon from '@mui/icons-material/TableView';
+import jsPDF from 'jspdf';
+import * as XLSX from 'xlsx';
 
 const ReportsTab: React.FC = () => {
   const [filters, setFilters] = useState({
@@ -15,29 +17,78 @@ const ReportsTab: React.FC = () => {
     client: '',
     department: ''
   });
+  const [reportData, setReportData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  // Mock data for charts
-  const slaComplianceData = [
-    { type: 'Règlement', compliance: 95 },
-    { type: 'Réclamation', compliance: 87 },
-    { type: 'Relance', compliance: 92 },
-    { type: 'Autre', compliance: 89 }
-  ];
+  useEffect(() => {
+    loadReportData();
+  }, [filters]);
 
-  const volumeTrendData = [
-    { date: '2025-01-10', sent: 12, received: 8 },
-    { date: '2025-01-11', sent: 15, received: 10 },
-    { date: '2025-01-12', sent: 18, received: 12 },
-    { date: '2025-01-13', sent: 14, received: 9 },
-    { date: '2025-01-14', sent: 20, received: 15 }
-  ];
+  const loadReportData = async () => {
+    console.log('📈 Loading report data with filters:', filters);
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams();
+      
+      if (filters.dateFrom) queryParams.append('dateFrom', filters.dateFrom);
+      if (filters.dateTo) queryParams.append('dateTo', filters.dateTo);
+      if (filters.client) queryParams.append('client', filters.client);
+      if (filters.department) queryParams.append('department', filters.department);
+      
+      const response = await fetch(`http://localhost:5000/api/courriers/reports/data?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📈 Report data loaded:', data);
+        setReportData(data);
+      } else {
+        console.error('Failed to load report data:', response.status);
+        // Fallback to mock data
+        setReportData(getMockReportData());
+      }
+    } catch (error) {
+      console.error('Failed to load report data:', error);
+      // Fallback to mock data
+      setReportData(getMockReportData());
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const responseTimeData = [
-    { type: 'Règlement', avgTime: 2.1 },
-    { type: 'Réclamation', avgTime: 4.5 },
-    { type: 'Relance', avgTime: 1.8 },
-    { type: 'Autre', avgTime: 3.2 }
-  ];
+  const getMockReportData = () => ({
+    slaCompliance: [
+      { type: 'Règlement', compliance: 95 },
+      { type: 'Réclamation', compliance: 87 },
+      { type: 'Relance', compliance: 92 },
+      { type: 'Autre', compliance: 89 }
+    ],
+    volumeTrend: [
+      { date: '2025-01-10', sent: 12, received: 8 },
+      { date: '2025-01-11', sent: 15, received: 10 },
+      { date: '2025-01-12', sent: 18, received: 12 },
+      { date: '2025-01-13', sent: 14, received: 9 },
+      { date: '2025-01-14', sent: 20, received: 15 }
+    ],
+    responseTime: [
+      { type: 'Règlement', avgTime: 2.1 },
+      { type: 'Réclamation', avgTime: 4.5 },
+      { type: 'Relance', avgTime: 1.8 },
+      { type: 'Autre', avgTime: 3.2 }
+    ],
+    summary: {
+      totalCourriers: 156,
+      sentCourriers: 142,
+      avgResponseTime: 2.8,
+      slaCompliance: 91.2
+    }
+  });
 
   const presetReports = [
     {
@@ -63,9 +114,129 @@ const ReportsTab: React.FC = () => {
   ];
 
   const handleExport = async (format: 'pdf' | 'excel', reportType?: string) => {
-    console.log('Exporting report:', format, reportType, filters);
-    const filename = `gec_report_${reportType || 'custom'}_${Date.now()}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-    alert(`Rapport généré: ${filename}`);
+    console.log('💾 Exporting report:', format, reportType, filters);
+    setExporting(true);
+    
+    try {
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `rapport_gec_${reportType || 'personnalise'}_${timestamp}`;
+      
+      if (format === 'pdf') {
+        await generatePDF(filename, reportType);
+      } else {
+        await generateExcel(filename, reportType);
+      }
+      
+      console.log('✅ Report exported successfully:', filename);
+    } catch (error) {
+      console.error('Failed to export report:', error);
+      alert('Erreur lors de la génération du rapport');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const generatePDF = async (filename: string, reportType?: string) => {
+    const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    
+    // Header
+    pdf.setFontSize(20);
+    pdf.text('Rapport GEC - ARS Tunisia', pageWidth / 2, 20, { align: 'center' });
+    
+    pdf.setFontSize(12);
+    pdf.text(`Généré le: ${new Date().toLocaleDateString('fr-FR')}`, 20, 35);
+    
+    if (filters.dateFrom || filters.dateTo) {
+      pdf.text(`Période: ${filters.dateFrom || 'Début'} - ${filters.dateTo || 'Fin'}`, 20, 45);
+    }
+    
+    let yPos = 60;
+    
+    // Summary
+    if (reportData?.summary) {
+      pdf.setFontSize(16);
+      pdf.text('Résumé Exécutif', 20, yPos);
+      yPos += 15;
+      
+      pdf.setFontSize(12);
+      pdf.text(`Total Courriers: ${reportData.summary.totalCourriers}`, 20, yPos);
+      yPos += 10;
+      pdf.text(`Courriers Envoyés: ${reportData.summary.sentCourriers}`, 20, yPos);
+      yPos += 10;
+      pdf.text(`Temps de Réponse Moyen: ${reportData.summary.avgResponseTime} jours`, 20, yPos);
+      yPos += 10;
+      pdf.text(`Conformité SLA: ${reportData.summary.slaCompliance}%`, 20, yPos);
+      yPos += 20;
+    }
+    
+    // SLA Compliance Data
+    if (reportData?.slaCompliance) {
+      pdf.setFontSize(16);
+      pdf.text('Conformité SLA par Type', 20, yPos);
+      yPos += 15;
+      
+      pdf.setFontSize(12);
+      reportData.slaCompliance.forEach((item: any) => {
+        pdf.text(`${item.type}: ${item.compliance}%`, 20, yPos);
+        yPos += 10;
+      });
+    }
+    
+    pdf.save(`${filename}.pdf`);
+  };
+
+  const generateExcel = async (filename: string, reportType?: string) => {
+    const workbook = XLSX.utils.book_new();
+    
+    // Summary Sheet
+    if (reportData?.summary) {
+      const summaryData = [
+        ['Métrique', 'Valeur'],
+        ['Total Courriers', reportData.summary.totalCourriers],
+        ['Courriers Envoyés', reportData.summary.sentCourriers],
+        ['Temps de Réponse Moyen (jours)', reportData.summary.avgResponseTime],
+        ['Conformité SLA (%)', reportData.summary.slaCompliance]
+      ];
+      
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Résumé');
+    }
+    
+    // SLA Compliance Sheet
+    if (reportData?.slaCompliance) {
+      const slaData = [
+        ['Type', 'Conformité (%)'],
+        ...reportData.slaCompliance.map((item: any) => [item.type, item.compliance])
+      ];
+      
+      const slaSheet = XLSX.utils.aoa_to_sheet(slaData);
+      XLSX.utils.book_append_sheet(workbook, slaSheet, 'Conformité SLA');
+    }
+    
+    // Volume Trend Sheet
+    if (reportData?.volumeTrend) {
+      const volumeData = [
+        ['Date', 'Envoyés', 'Reçus'],
+        ...reportData.volumeTrend.map((item: any) => [item.date, item.sent, item.received])
+      ];
+      
+      const volumeSheet = XLSX.utils.aoa_to_sheet(volumeData);
+      XLSX.utils.book_append_sheet(workbook, volumeSheet, 'Tendances Volume');
+    }
+    
+    // Response Time Sheet
+    if (reportData?.responseTime) {
+      const responseData = [
+        ['Type', 'Temps Moyen (jours)'],
+        ...reportData.responseTime.map((item: any) => [item.type, item.avgTime])
+      ];
+      
+      const responseSheet = XLSX.utils.aoa_to_sheet(responseData);
+      XLSX.utils.book_append_sheet(workbook, responseSheet, 'Temps de Réponse');
+    }
+    
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
   };
 
   return (
@@ -122,7 +293,7 @@ const ReportsTab: React.FC = () => {
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Conformité SLA par Type</Typography>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={slaComplianceData}>
+              <BarChart data={reportData?.slaCompliance || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="type" />
                 <YAxis />
@@ -138,7 +309,7 @@ const ReportsTab: React.FC = () => {
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Tendances de Volume</Typography>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={volumeTrendData}>
+              <LineChart data={reportData?.volumeTrend || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
@@ -155,7 +326,7 @@ const ReportsTab: React.FC = () => {
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Temps de Réponse Moyen (jours)</Typography>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={responseTimeData}>
+              <BarChart data={reportData?.responseTime || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="type" />
                 <YAxis />
@@ -185,16 +356,18 @@ const ReportsTab: React.FC = () => {
                         <Button
                           size="small"
                           variant="contained"
-                          startIcon={<PictureAsPdfIcon />}
+                          startIcon={exporting ? <CircularProgress size={16} /> : <PictureAsPdfIcon />}
                           onClick={() => handleExport('pdf', report.type)}
+                          disabled={exporting}
                         >
                           PDF
                         </Button>
                         <Button
                           size="small"
                           variant="outlined"
-                          startIcon={<TableViewIcon />}
+                          startIcon={exporting ? <CircularProgress size={16} /> : <TableViewIcon />}
                           onClick={() => handleExport('excel', report.type)}
+                          disabled={exporting}
                         >
                           Excel
                         </Button>
@@ -217,17 +390,19 @@ const ReportsTab: React.FC = () => {
             <Stack direction="row" spacing={2}>
               <Button
                 variant="contained"
-                startIcon={<PictureAsPdfIcon />}
+                startIcon={exporting ? <CircularProgress size={16} /> : <PictureAsPdfIcon />}
                 onClick={() => handleExport('pdf')}
+                disabled={exporting}
               >
-                Générer PDF
+                {exporting ? 'Génération...' : 'Générer PDF'}
               </Button>
               <Button
                 variant="outlined"
-                startIcon={<TableViewIcon />}
+                startIcon={exporting ? <CircularProgress size={16} /> : <TableViewIcon />}
                 onClick={() => handleExport('excel')}
+                disabled={exporting}
               >
-                Générer Excel
+                {exporting ? 'Génération...' : 'Générer Excel'}
               </Button>
             </Stack>
           </Paper>

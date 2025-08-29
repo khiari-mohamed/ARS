@@ -264,6 +264,9 @@ export class ReclamationsService {
 
   async escalateReclamation(id: string, user: any) {
     this.checkRole(user, 'escalate');
+    const oldReclamation = await this.prisma.reclamation.findUnique({ where: { id } });
+    if (!oldReclamation) throw new NotFoundException('Reclamation not found');
+    
     const reclamation = await this.prisma.reclamation.update({
       where: { id },
       data: { status: 'ESCALATED' },
@@ -273,7 +276,7 @@ export class ReclamationsService {
         reclamationId: id,
         userId: user.id,
         action: 'ESCALATE',
-        fromStatus: reclamation.status,
+        fromStatus: oldReclamation.status,
         toStatus: 'ESCALATED',
       },
     });
