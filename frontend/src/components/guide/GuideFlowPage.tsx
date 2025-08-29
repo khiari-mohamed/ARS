@@ -172,22 +172,47 @@ const GuideFlowPage: React.FC = () => {
               <AccordionDetails>
                 <Box sx={{ pl: 2 }}>
                   <Typography variant="body1" paragraph>
-                    <strong>Étape 1:</strong> 📥 Bureau d'Ordre reçoit le dossier → enregistrement initial avec référence unique
+                    <strong>Étape 1:</strong> 📥 Bureau d'Ordre reçoit le dossier → enregistrement initial avec référence unique → validation qualité → statut A_SCANNER
                   </Typography>
                   <Typography variant="body1" paragraph>
-                    <strong>Étape 2:</strong> 🖨️ Scan numérise + indexe GED → affectation automatique selon la charge
+                    <strong>Étape 2:</strong> 🖨️ Scan numérise (A_SCANNER → SCAN_EN_COURS → SCANNE) + OCR correction feedback loop + indexe GED → affectation automatique selon la charge
                   </Typography>
                   <Typography variant="body1" paragraph>
-                    <strong>Étape 3:</strong> 👨⚕️ Chef d'équipe affecte → gestionnaires traitent → suivi SLA temps réel
+                    <strong>Étape 3:</strong> 👨⚕️ Chef d'équipe affecte (A_AFFECTER → EN_COURS) → gestionnaires traitent → validation qualité checkpoints → suivi SLA temps réel
                   </Typography>
                   <Typography variant="body1" paragraph>
-                    <strong>Étape 4:</strong> ✉️ Réclamations et GEC gérés en parallèle avec IA de classification
+                    <strong>Étape 4:</strong> ✉️ Réclamations et GEC gérés en parallèle avec IA de classification → exception handling → audit trail complet
                   </Typography>
                   <Typography variant="body1" paragraph>
-                    <strong>Étape 5:</strong> 💰 Finance exécute les virements → confirmation → archivage automatique
+                    <strong>Étape 5:</strong> 💰 Finance exécute les virements → confirmation bancaire → compliance validation → archivage automatique
                   </Typography>
                   <Typography variant="body1" paragraph>
-                    <strong>Étape 6:</strong> 📊 Analytics centralise KPIs, Alertes temps réel, IA optimise les affectations
+                    <strong>Étape 6:</strong> 📊 Analytics centralise KPIs, Alertes temps réel Socket.io, IA optimise les affectations → performance metrics visualization
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                    <strong>🔍 Points de Contrôle:</strong> Validation qualité à chaque étape • OCR correction feedback • Exception handling automatique • Audit trail complet • Compliance RGPD/ISO27001
+                  </Typography>
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+            
+            <Accordion sx={{ mt: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="h6">📊 Flux de Données & Intégrations</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box sx={{ pl: 2 }}>
+                  <Typography variant="body1" paragraph>
+                    <strong>🔄 Status Flow:</strong> RECU → A_SCANNER → SCAN_EN_COURS → SCANNE → A_AFFECTER → EN_COURS → TRAITE → PAYE → ARCHIVE
+                  </Typography>
+                  <Typography variant="body1" paragraph>
+                    <strong>📡 Intégrations Externes:</strong> PaperStream Capture • Outlook MS365 • Banques (SEPA/SWIFT) • Twilio SMS • SendGrid Email
+                  </Typography>
+                  <Typography variant="body1" paragraph>
+                    <strong>👥 User Journey Paths:</strong> BO Team (Reception→Processing) • SCAN Team (Digitization→Quality) • Chef (Assignment→Management) • Gestionnaire (Processing→Validation)
+                  </Typography>
+                  <Typography variant="body1" paragraph>
+                    <strong>⚡ Performance Metrics:</strong> Temps traitement moyen: 2.3h • SLA respect: 99.1% • Précision OCR: 96% • Satisfaction client: 4.7/5
                   </Typography>
                 </Box>
               </AccordionDetails>
@@ -219,7 +244,30 @@ const GuideFlowPage: React.FC = () => {
                     variant="outlined"
                     size="small"
                   />
+                  <Chip
+                    icon={<Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#2196f3' }} />}
+                    label="En cours de traitement"
+                    variant="outlined"
+                    size="small"
+                  />
+                  <Chip
+                    icon={<Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#9c27b0' }} />}
+                    label="Validation qualité"
+                    variant="outlined"
+                    size="small"
+                  />
+                  <Chip
+                    icon={<Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#795548' }} />}
+                    label="Exception handling"
+                    variant="outlined"
+                    size="small"
+                  />
                 </Box>
+                <Typography variant="caption" sx={{ mt: 2, display: 'block', fontStyle: 'italic' }}>
+                  🔄 Flux temps réel via Socket.io<br/>
+                  📊 Métriques mises à jour toutes les 30s<br/>
+                  🤖 IA optimise les affectations en continu
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
