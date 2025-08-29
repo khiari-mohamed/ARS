@@ -14,7 +14,7 @@ const FeedbackForm: React.FC<{ page: string }> = ({ page }) => {
     }
     
     try {
-      await LocalAPI.post('/simple-feedback', { message: message.trim(), page });
+      await LocalAPI.post('/feedback', { message: message.trim(), page });
       setSubmitted(true);
       setMessage('');
     } catch (error) {

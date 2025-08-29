@@ -137,16 +137,8 @@ export const useAnalytics = (initialFilters: AnalyticsFilters = {}) => {
       return await AIAnalyticsService.getReassignmentRecommendations(payload);
     }, []),
 
-    analyzePerformance: useCallback(async (payload: any) => {
-      return await AIAnalyticsService.analyzePerformance(payload);
-    }, []),
-
     comparePerformance: useCallback(async (planned: any[], actual: any[]) => {
       return await AIAnalyticsService.comparePerformance(planned, actual);
-    }, []),
-
-    detectAnomalies: useCallback(async (data: any[], method?: 'isolation_forest' | 'lof') => {
-      return await AIAnalyticsService.detectAnomalies(data, method);
     }, []),
 
     forecastTrends: useCallback(async (historicalData: any[], forecastDays?: number) => {
@@ -155,7 +147,19 @@ export const useAnalytics = (initialFilters: AnalyticsFilters = {}) => {
 
     generateComprehensiveReport: useCallback(async () => {
       return await AIAnalyticsService.generateComprehensiveReport(filters);
-    }, [filters])
+    }, [filters]),
+
+    predictRequiredResources: useCallback(async (payload: any) => {
+      return await AIAnalyticsService.predictRequiredResources(payload);
+    }, []),
+
+    getSuggestedAssignment: useCallback(async (task: any) => {
+      return await AIAnalyticsService.getSuggestedAssignment(task);
+    }, []),
+
+    makeAutomatedDecision: useCallback(async (context: any, decisionType: string) => {
+      return await AIAnalyticsService.makeAutomatedDecision(context, decisionType);
+    }, [])
   };
 
   // Export functions
