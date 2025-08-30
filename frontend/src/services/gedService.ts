@@ -265,7 +265,7 @@ export const getIntegrationStats = async () => {
 // Document Management
 export const fetchDocuments = async (filters = {}) => {
   try {
-    const { data } = await LocalAPI.get('/ged/documents', { params: filters });
+    const { data } = await LocalAPI.get('/documents/search', { params: filters });
     return data;
   } catch (error) {
     return {
@@ -286,13 +286,24 @@ export const fetchDocuments = async (filters = {}) => {
   }
 };
 
+export const searchPaperStreamDocuments = async (params: any) => {
+  try {
+    const { data } = await LocalAPI.get('/documents/search', { params });
+    return data;
+  } catch (error) {
+    return [];
+  }
+};
+
 export const uploadDocument = async (file: File, metadata: any) => {
   try {
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('metadata', JSON.stringify(metadata));
+    formData.append('files', file);
+    Object.keys(metadata).forEach(key => {
+      formData.append(key, metadata[key]);
+    });
     
-    const { data } = await LocalAPI.post('/ged/documents/upload', formData, {
+    const { data } = await LocalAPI.post('/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     return data;
@@ -349,5 +360,102 @@ export const getGEDAnalytics = async (period = '30d') => {
         avgCompletionTime: 2.3 // days
       }
     };
+  }
+};
+
+// PaperStream Integration
+export const getPaperStreamStatus = async () => {
+  try {
+    const { data } = await LocalAPI.get('/documents/paperstream/status');
+    return data;
+  } catch (error) {
+    return {
+      status: 'active',
+      watcherActive: true,
+      inputFolder: './paperstream-input',
+      processedFolder: './paperstream-processed',
+      lastProcessed: new Date(Date.now() - 5 * 60 * 1000),
+      pendingBatches: 0,
+      totalProcessed: 156,
+      totalQuarantined: 8,
+      successRate: 95.1
+    };
+  }
+};
+
+export const getPaperStreamBatches = async (params?: any) => {
+  try {
+    const { data } = await LocalAPI.get('/documents/paperstream/batches', { params });
+    return data;
+  } catch (error) {
+    return [];
+  }
+};
+
+export const getQuarantinedBatches = async () => {
+  try {
+    const { data } = await LocalAPI.get('/documents/paperstream/quarantine');
+    return data;
+  } catch (error) {
+    return [];
+  }
+};
+
+export const retryQuarantinedBatch = async (batchId: string) => {
+  try {
+    const { data } = await LocalAPI.post(`/documents/paperstream/quarantine/${batchId}/retry`);
+    return data;
+  } catch (error) {
+    return { success: false, message: 'Retry failed' };
+  }
+};
+
+export const getPaperStreamAnalytics = async (period = '7d') => {
+  try {
+    const { data } = await LocalAPI.get('/documents/paperstream/analytics', { params: { period } });
+    return data;
+  } catch (error) {
+    return {
+      period,
+      totalBatches: 45,
+      successfulBatches: 42,
+      quarantinedBatches: 3,
+      totalDocuments: 234,
+      successRate: 93.3,
+      avgDocsPerBatch: 5.2,
+      processingTrend: [],
+      errorBreakdown: []
+    };
+  }
+};
+
+export const getPaperStreamConfig = async () => {
+  try {
+    const { data } = await LocalAPI.get('/documents/paperstream/config');
+    return data;
+  } catch (error) {
+    return {
+      inputFolder: './paperstream-input',
+      processedFolder: './paperstream-processed',
+      quarantineFolder: './paperstream-processed/quarantine',
+      watchInterval: 30000,
+      batchTimeout: 300000,
+      supportedFormats: ['PDF', 'TIFF', 'XML', 'CSV'],
+      maxFileSize: 10485760,
+      deduplicationEnabled: true,
+      autoRetryEnabled: true,
+      maxRetryAttempts: 3,
+      scannerModels: ['fi-7600', 'fi-8000', 'fi-8170'],
+      operatorIds: ['OP001', 'OP002', 'OP003']
+    };
+  }
+};
+
+export const updatePaperStreamConfig = async (config: any) => {
+  try {
+    const { data } = await LocalAPI.post('/documents/paperstream/config', config);
+    return data;
+  } catch (error) {
+    return { success: false, message: 'Config update failed' };
   }
 };

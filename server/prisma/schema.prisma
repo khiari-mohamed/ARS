@@ -263,6 +263,16 @@ model Document {
   ocrText      String?
   status       DocumentStatus?
   hash         String?         @unique
+  batchId      String?
+  barcodeValues String[]
+  pageCount    Int?
+  resolution   Int?
+  colorMode    String?
+  operatorId   String?
+  scannerModel String?
+  imprinterIds String[]
+  ingestStatus String?
+  ingestTimestamp DateTime?
   AlertLog     AlertLog[]
   bordereau    Bordereau?      @relation("BordereauDocuments", fields: [bordereauId], references: [id])
   uploader     User            @relation("UserDocuments", fields: [uploadedById], references: [id])

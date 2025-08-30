@@ -2,22 +2,27 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BordereauxService } from '../bordereaux/bordereaux.service';
 import { AlertsService } from '../alerts/alerts.service';
+import { PaperStreamBatchProcessor } from './paperstream-batch-processor.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
+const chokidar = require('chokidar');
 
 @Injectable()
 export class PaperStreamWatcherService {
   private readonly logger = new Logger(PaperStreamWatcherService.name);
-  private readonly watchFolder = process.env.PAPERSTREAM_WATCH_FOLDER || './watch-folder';
+  private readonly watchFolder = process.env.PAPERSTREAM_WATCH_FOLDER || './paperstream-input';
+  private folderWatcher: any = null;
 
   constructor(
     private prisma: PrismaService,
     private bordereauxService: BordereauxService,
     private alertsService: AlertsService,
+    private batchProcessor: PaperStreamBatchProcessor,
   ) {
     this.ensureWatchFolder();
+    this.startFolderWatcher();
   }
 
   private ensureWatchFolder() {
@@ -26,17 +31,90 @@ export class PaperStreamWatcherService {
     }
   }
 
+  private startFolderWatcher() {
+    if (this.folderWatcher) {
+      this.folderWatcher.close();
+    }
+    
+    this.folderWatcher = chokidar.watch(this.watchFolder, {
+      ignored: /^\./,
+      persistent: true,
+      ignoreInitial: true,
+      depth: 3
+    });
+    
+    this.folderWatcher.on('addDir', async (dirPath: string) => {
+      if (this.isBatchFolder(dirPath)) {
+        setTimeout(() => this.processBatchFolder(dirPath), 5000);
+      }
+    });
+    
+    this.folderWatcher.on('add', async (filePath: string) => {
+      if (this.isValidFile(path.basename(filePath))) {
+        await this.processIndividualFile(filePath);
+      }
+    });
+    
+    this.logger.log(`PaperStream folder watcher started: ${this.watchFolder}`);
+  }
+  
+  private isBatchFolder(dirPath: string): boolean {
+    const relativePath = path.relative(this.watchFolder, dirPath);
+    const parts = relativePath.split(path.sep);
+    
+    // Only process leaf directories (actual batch folders)
+    // Expected: client/date/batchID (3 levels) or just batchID (1 level)
+    if (parts.length !== 3 && parts.length !== 1) return false;
+    if (parts[parts.length - 1].startsWith('.')) return false;
+    
+    // Check if it contains batch files
+    try {
+      const files = require('fs').readdirSync(dirPath);
+      const hasDocuments = files.some(f => /\.(pdf|jpg|jpeg|png|tiff|tif)$/i.test(f));
+      const hasIndex = files.some(f => f.toLowerCase().endsWith('.xml') || f.toLowerCase().endsWith('.csv'));
+      return hasDocuments && hasIndex;
+    } catch {
+      return false;
+    }
+  }
+  
+  private async processBatchFolder(batchFolderPath: string) {
+    try {
+      this.logger.log(`New batch folder detected: ${batchFolderPath}`);
+      if (!this.validateBatchFolder(batchFolderPath)) {
+        this.logger.warn(`Invalid batch folder: ${batchFolderPath}`);
+        return;
+      }
+      await this.batchProcessor.processBatchFolder(batchFolderPath);
+    } catch (error) {
+      this.logger.error(`Batch folder processing failed: ${error.message}`);
+    }
+  }
+  
+  private validateBatchFolder(batchFolderPath: string): boolean {
+    try {
+      const files = fs.readdirSync(batchFolderPath);
+      const hasDocuments = files.some(f => this.isValidFile(f));
+      const hasIndex = files.some(f => f.toLowerCase().endsWith('.xml') || f.toLowerCase().endsWith('.csv'));
+      return hasDocuments && hasIndex;
+    } catch (error) {
+      return false;
+    }
+  }
+  
   @Cron(CronExpression.EVERY_30_SECONDS)
   async watchForNewFiles() {
     try {
       const files = fs.readdirSync(this.watchFolder);
       for (const filename of files) {
-        if (this.isValidFile(filename)) {
-          await this.processFile(filename);
+        const filePath = path.join(this.watchFolder, filename);
+        const stats = fs.statSync(filePath);
+        if (stats.isFile() && this.isValidFile(filename)) {
+          await this.processIndividualFile(filePath);
         }
       }
     } catch (error) {
-      this.logger.error('Error watching folder:', error);
+      this.logger.error('Error in legacy file watching:', error);
     }
   }
 
@@ -45,8 +123,8 @@ export class PaperStreamWatcherService {
     return validExtensions.some(ext => filename.toLowerCase().endsWith(ext));
   }
 
-  private async processFile(filename: string) {
-    const filePath = path.join(this.watchFolder, filename);
+  private async processIndividualFile(filePath: string) {
+    const filename = path.basename(filePath);
     
     try {
       // Calculate file hash for deduplication
@@ -79,7 +157,14 @@ export class PaperStreamWatcherService {
       // Move file to permanent storage
       const permanentPath = await this.moveToStorage(filePath, filename);
 
-      // Create document record
+      const systemUser = await this.prisma.user.findFirst({
+        where: { role: 'SUPER_ADMIN' }
+      });
+      
+      if (!systemUser) {
+        throw new Error('No system user found');
+      }
+      
       const document = await this.prisma.document.create({
         data: {
           name: filename,
@@ -87,8 +172,18 @@ export class PaperStreamWatcherService {
           path: permanentPath,
           hash,
           status: 'UPLOADED',
-          uploadedById: 'SYSTEM', // System user for auto-imports
+          uploadedById: systemUser.id,
           bordereauId,
+          batchId: `LEGACY_${Date.now()}`,
+          barcodeValues: [],
+          pageCount: 1,
+          resolution: 300,
+          colorMode: 'color',
+          operatorId: 'LEGACY_IMPORT',
+          scannerModel: 'UNKNOWN',
+          imprinterIds: [],
+          ingestStatus: 'INGESTED',
+          ingestTimestamp: new Date()
         }
       });
 
