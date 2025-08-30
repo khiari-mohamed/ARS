@@ -1519,31 +1519,106 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
 // Add this method to get KPIs
 
 // --- AI Microservice Integration ---
-// Call Python AI microservice for recurrent complaint detection
+// Call AI microservice for recurrent complaint detection
 async analyzeReclamationsAI(): Promise<any> {
-  const complaints = await this.prisma.reclamation.findMany();
-  const { data } = await axios.post('http://localhost:8001/analyze', complaints);
-  return data;
+  try {
+    const complaints = await this.prisma.reclamation.findMany({
+      include: { client: true },
+      take: 100
+    });
+    
+    const complaintsData = complaints.map(c => ({
+      id: c.id,
+      description: c.description || '',
+      type: c.type || 'General',
+      client: c.client?.name || 'Unknown',
+      date: c.createdAt.toISOString()
+    }));
+
+    const { data } = await axios.post('http://localhost:8002/analyze', complaintsData, {
+      headers: {
+        'Authorization': `Bearer ${await this.getAIToken()}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+    return data;
+  } catch (error) {
+    this.logger.error('AI reclamation analysis failed:', error.message);
+    return { recurrent: [], summary: 'Service IA indisponible' };
+  }
 }
 
-// Get AI-  generated response suggestions for a specific complaint
+// Get AI-generated response suggestions for a specific complaint
 async getReclamationSuggestions(id: string): Promise<any> {
-  const complaint = await this.prisma.reclamation.findUnique({ where: { id } });
-  const { data } = await axios.post('http://localhost:8001/suggestions', { complaint });
-  return data;
+  try {
+    const complaint = await this.prisma.reclamation.findUnique({ 
+      where: { id },
+      include: { client: true }
+    });
+    
+    if (!complaint) {
+      throw new Error('Complaint not found');
+    }
+
+    const { data } = await axios.post('http://localhost:8002/suggestions', {
+      complaint: {
+        id: complaint.id,
+        description: complaint.description,
+        type: complaint.type,
+        client: complaint.client?.name
+      }
+    }, {
+      headers: {
+        'Authorization': `Bearer ${await this.getAIToken()}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+    return data;
+  } catch (error) {
+    this.logger.error('AI suggestion failed:', error.message);
+    return { suggestion: 'Service IA indisponible pour les suggestions' };
+  }
 }
 
 // Get resource allocation recommendations
 async getTeamRecommendations(): Promise<any> {
-try {
-const teams: any[] = []; // No Team model, so empty array
-const workload = await this.prisma.bordereau.groupBy({ by: ['teamId'], _count: { id: true } });
-const { data } = await axios.post('http://localhost:5000/recommendations', { teams, workload });
-return data;
-} catch (error) {
-this.logger.error('AI microservice error (getTeamRecommendations):', error.message);
-return { message: 'AI microservice unavailable', error: error.message };
-}
+  try {
+    // Get workload data by team/user
+    const workload = await this.prisma.bordereau.groupBy({ 
+      by: ['assignedToUserId'], 
+      _count: { id: true },
+      where: {
+        statut: { in: ['ASSIGNE', 'EN_COURS'] },
+        archived: false
+      }
+    });
+
+    // Get team/user information
+    const teams = await this.prisma.user.findMany({
+      where: { role: 'GESTIONNAIRE', active: true },
+      select: { id: true, fullName: true }
+    });
+
+    const { data } = await axios.post('http://localhost:8002/recommendations', { 
+      teams, 
+      workload 
+    }, {
+      headers: {
+        'Authorization': `Bearer ${await this.getAIToken()}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+    return data;
+  } catch (error) {
+    this.logger.error('AI team recommendations failed:', error.message);
+    return { 
+      message: 'Service IA indisponible pour les recommandations d\'équipe', 
+      recommendations: []
+    };
+  }
 }
 
 // Add this method to log actions
@@ -1906,25 +1981,85 @@ async estimateStaffing(days: number = 7, avgPerStaffPerDay: number = 5): Promise
   return { forecast, staffNeeded };
 }
 
-// --- AI Integration (stubs) ---
+// --- AI Integration ---
 /**
  * Predict required resources using AI microservice
  */
 async getPredictResourcesAI(payload: any): Promise<any> {
   try {
-    const { data } = await axios.post('http://localhost:8001/predict_resources', payload);
+    const { data } = await axios.post('http://localhost:8002/predict_resources', payload, {
+      headers: {
+        'Authorization': `Bearer ${await this.getAIToken()}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
     return data;
   } catch (error) {
+    this.logger.error('AI resource prediction failed:', error.message);
     return { message: 'AI microservice unavailable', error: error.message };
   }
 }
 
 /**
- * Analyze complaints using AI (stub)
+ * Analyze complaints using AI
  */
 async analyzeComplaintsAI(): Promise<{ message: string; analysis?: any }> {
-  // Placeholder for future AI integration
-  return { message: 'AI complaint analysis not implemented yet.' };
+  try {
+    // Get recent complaints/reclamations
+    const complaints = await this.prisma.reclamation.findMany({
+      where: {
+        createdAt: {
+          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+        }
+      },
+      include: { client: true },
+      take: 100
+    });
+
+    if (complaints.length < 3) {
+      return { message: 'Pas assez de réclamations pour l\'analyse IA', analysis: null };
+    }
+
+    // Prepare data for AI pattern recognition
+    const complaintsData = complaints.map(c => ({
+      id: c.id,
+      description: c.description || '',
+      date: c.createdAt.toISOString(),
+      client: c.client?.name || 'Unknown',
+      type: c.type || 'General'
+    }));
+
+    // Call AI microservice for recurring issue detection
+    const aiResponse = await axios.post('http://localhost:8002/pattern_recognition/recurring_issues', {
+      complaints: complaintsData
+    }, {
+      headers: {
+        'Authorization': `Bearer ${await this.getAIToken()}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+
+    const analysis = aiResponse.data;
+    
+    return {
+      message: `IA: ${analysis.total_groups} groupes de réclamations récurrentes détectés`,
+      analysis: {
+        recurring_groups: analysis.recurring_groups,
+        total_complaints: complaints.length,
+        recurrence_rate: analysis.recurrence_rate,
+        summary: analysis.summary
+      }
+    };
+
+  } catch (error) {
+    this.logger.error('AI complaint analysis failed:', error.message);
+    return { 
+      message: 'Service IA indisponible pour l\'analyse des réclamations',
+      analysis: null
+    };
+  }
 }
 
 async updateThresholds(id: string, thresholds: any) {
@@ -1937,27 +2072,115 @@ async updateThresholds(id: string, thresholds: any) {
  * Get AI recommendations (stub)
  */
 async getAIRecommendations(): Promise<{ message: string; recommendations?: any[] }> {
-// Example: Prioritize bordereaux by risk (SLA breach, overdue, high montant, etc.)
-const bordereaux = await this.prisma.bordereau.findMany({
-where: { statut: { not: 'CLOTURE' } },
-include: { client: true, contract: true },
-});
-// Simple scoring: overdue +2, close to SLA +1, montant > 10k +1
-const now = new Date();
-const recommendations = bordereaux.map(b => {
-let score = 0;
-const daysSinceReception = b.dateReception ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) : 0;
-let slaThreshold = 5;
-if (b.contract && typeof b.contract.delaiReglement === 'number') slaThreshold = b.contract.delaiReglement;
-else if (b.client && typeof b.client.reglementDelay === 'number') slaThreshold = b.client.reglementDelay;
-if (daysSinceReception > slaThreshold) score += 2;
-else if (daysSinceReception > slaThreshold - 2) score += 1;
-const bWithMontant = b as any as { montant?: number };
-if (bWithMontant.montant && bWithMontant.montant > 10000) score += 1;
-return { id: b.id, reference: b.reference, score, daysSinceReception, slaThreshold };
-});
-recommendations.sort((a, b) => b.score - a.score);
-return { message: 'AI prioritization complete.', recommendations };
+  try {
+    // Get active bordereaux for AI analysis
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: { statut: { not: 'CLOTURE' }, archived: false },
+      include: { client: true, contract: true },
+      orderBy: { dateReception: 'asc' },
+      take: 50 // Limit for performance
+    });
+
+    if (bordereaux.length === 0) {
+      return { message: 'Aucun bordereau actif trouvé', recommendations: [] };
+    }
+
+    // Prepare data for AI microservice
+    const aiPayload = bordereaux.map(b => {
+      const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+      const slaThreshold = b.contract?.delaiReglement || b.client?.reglementDelay || 30;
+      
+      return {
+        id: b.id,
+        reference: b.reference,
+        sla_urgency: Math.max(0, daysSinceReception - slaThreshold + 5),
+        volume: b.nombreBS || 1,
+        client_importance: b.client?.name?.includes('IMPORTANT') ? 3 : 1,
+        deadline: new Date(new Date(b.dateReception).getTime() + slaThreshold * 24 * 60 * 60 * 1000).toISOString(),
+        days_since_reception: daysSinceReception,
+        sla_threshold: slaThreshold
+      };
+    });
+
+    // Call AI microservice for prioritization
+    const aiResponse = await axios.post('http://localhost:8002/priorities', aiPayload, {
+      headers: {
+        'Authorization': `Bearer ${await this.getAIToken()}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+
+    const priorities = aiResponse.data.priorities || [];
+    
+    // Map AI results back to our format
+    const recommendations = priorities.slice(0, 10).map((p: any) => {
+      const bordereau = bordereaux.find(b => b.id === p.id);
+      return {
+        id: p.id,
+        reference: bordereau?.reference || 'Unknown',
+        score: Math.min(5, Math.max(1, Math.round(p.priority_score / 3))),
+        daysSinceReception: aiPayload.find(a => a.id === p.id)?.days_since_reception || 0,
+        slaThreshold: aiPayload.find(a => a.id === p.id)?.sla_threshold || 30,
+        priority_score: p.priority_score
+      };
+    });
+
+    return {
+      message: `IA: ${recommendations.length} recommandations générées`,
+      recommendations
+    };
+
+  } catch (error) {
+    this.logger.error('AI recommendations failed:', error.message);
+    
+    // Fallback to basic scoring only if AI service is unavailable
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: { statut: { not: 'CLOTURE' }, archived: false },
+      include: { client: true, contract: true },
+      take: 10
+    });
+
+    const now = new Date();
+    const recommendations = bordereaux.map(b => {
+      const daysSinceReception = Math.floor((now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+      const slaThreshold = b.contract?.delaiReglement || b.client?.reglementDelay || 30;
+      const score = daysSinceReception > slaThreshold ? 3 : daysSinceReception > slaThreshold - 3 ? 2 : 1;
+      
+      return {
+        id: b.id,
+        reference: b.reference,
+        score,
+        daysSinceReception,
+        slaThreshold
+      };
+    }).sort((a, b) => b.score - a.score);
+
+    return {
+      message: 'Service IA indisponible - Analyse basique utilisée',
+      recommendations
+    };
+  }
+}
+
+private async getAIToken(): Promise<string> {
+  try {
+    const response = await axios.post('http://localhost:8002/token', 
+      new URLSearchParams({
+        grant_type: 'password',
+        username: 'admin',
+        password: 'secret'
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 5000
+      }
+    );
+    return response.data.access_token;
+  } catch (error) {
+    this.logger.warn('AI authentication failed, using fallback');
+    throw new Error('AI service authentication failed');
+  }
 }
 
 // --- Full-Text Search ---
@@ -1989,25 +2212,84 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
   async getAISLAAnalysis(): Promise<any> {
     try {
       const bordereaux = await this.prisma.bordereau.findMany({
-        where: { statut: { not: 'CLOTURE' } },
-        include: { client: true, contract: true }
+        where: { statut: { not: 'CLOTURE' }, archived: false },
+        include: { client: true, contract: true },
+        take: 50
       });
 
-      const risks = bordereaux.map(b => {
+      if (bordereaux.length === 0) {
+        return { risks: [], total_analyzed: 0 };
+      }
+
+      // Prepare data for AI SLA prediction
+      const slaItems = bordereaux.map(b => {
         const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
-        const daysLeft = b.delaiReglement - daysSinceReception;
-        const score = daysLeft <= 0 ? 1.0 : daysLeft <= 3 ? 0.8 : daysLeft <= 7 ? 0.5 : 0.2;
+        const slaThreshold = b.contract?.delaiReglement || b.client?.reglementDelay || 30;
         
         return {
           id: b.id,
-          reference: b.reference,
-          days_left: daysLeft,
-          score,
-          client: b.client?.name
+          start_date: b.dateReception.toISOString(),
+          deadline: new Date(new Date(b.dateReception).getTime() + slaThreshold * 24 * 60 * 60 * 1000).toISOString(),
+          current_progress: b.statut === 'TRAITE' ? 100 : b.statut === 'EN_COURS' ? 50 : 10,
+          total_required: 100,
+          sla_days: slaThreshold
         };
-      }).filter(r => r.score > 0.5);
+      });
 
-      return { risks, total_analyzed: bordereaux.length };
+      try {
+        // Call AI SLA prediction service
+        const aiResponse = await axios.post('http://localhost:8002/sla_prediction', slaItems, {
+          params: { explain: false },
+          headers: {
+            'Authorization': `Bearer ${await this.getAIToken()}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        });
+
+        const predictions = aiResponse.data.sla_predictions || [];
+        
+        // Map AI results back to our format
+        const risks = predictions
+          .filter((p: any) => p.score > 0.5)
+          .map((p: any) => {
+            const bordereau = bordereaux.find(b => b.id === p.id);
+            return {
+              id: p.id,
+              reference: bordereau?.reference || 'Unknown',
+              days_left: p.days_left,
+              score: p.score,
+              risk: p.risk,
+              client: bordereau?.client?.name
+            };
+          });
+
+        return { 
+          risks, 
+          total_analyzed: bordereaux.length,
+          ai_powered: true
+        };
+
+      } catch (aiError) {
+        this.logger.warn('AI SLA analysis failed, using fallback:', aiError.message);
+        
+        // Fallback to basic calculation
+        const risks = bordereaux.map(b => {
+          const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+          const daysLeft = b.delaiReglement - daysSinceReception;
+          const score = daysLeft <= 0 ? 1.0 : daysLeft <= 3 ? 0.8 : daysLeft <= 7 ? 0.5 : 0.2;
+          
+          return {
+            id: b.id,
+            reference: b.reference,
+            days_left: daysLeft,
+            score,
+            client: b.client?.name
+          };
+        }).filter(r => r.score > 0.5);
+
+        return { risks, total_analyzed: bordereaux.length };
+      }
     } catch (error) {
       return { risks: [], error: error.message };
     }
@@ -2072,47 +2354,94 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         where: {
           dateReception: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
-          }
+          },
+          archived: false
         },
-        include: { client: true }
+        include: { client: true, contract: true },
+        take: 100
       });
 
-      const anomalies: any[] = [];
-      
-      // Detect unusual processing times
-      const avgProcessingTime = 5; // days
-      recentBordereaux.forEach(b => {
-        const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSinceReception > avgProcessingTime * 2 && b.statut !== 'CLOTURE') {
-          anomalies.push({
-            type: 'processing_delay',
-            severity: 'high',
-            description: `Délai de traitement anormalement long: ${daysSinceReception} jours`,
-            bordereau_id: b.id,
-            reference: b.reference
-          });
-        }
-      });
+      if (recentBordereaux.length < 10) {
+        return { anomalies: [], analyzed_period: '30 days', total_bordereaux: recentBordereaux.length };
+      }
 
-      // Detect unusual client patterns
-      const clientCounts = recentBordereaux.reduce((acc, b) => {
-        acc[b.clientId] = (acc[b.clientId] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+      try {
+        // Prepare data for AI anomaly detection
+        const anomalyData = recentBordereaux.map(b => {
+          const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+          const slaThreshold = b.contract?.delaiReglement || b.client?.reglementDelay || 30;
+          
+          return {
+            id: b.id,
+            features: [
+              daysSinceReception, // processing time
+              b.nombreBS || 1, // volume
+              slaThreshold, // expected processing time
+              b.priority || 1, // priority level
+              b.client?.reglementDelay || 30 // client SLA
+            ]
+          };
+        });
 
-      Object.entries(clientCounts).forEach(([clientId, count]) => {
-        if (count > 20) { // Unusual volume threshold
-          const client = recentBordereaux.find(b => b.clientId === clientId)?.client;
-          anomalies.push({
-            type: 'volume_spike',
-            severity: 'medium',
-            description: `Volume inhabituel pour ${client?.name}: ${count} bordereaux ce mois`,
-            client_id: clientId
-          });
-        }
-      });
+        // Call AI anomaly detection service
+        const aiResponse = await axios.post('http://localhost:8002/anomaly_detection', {
+          data: anomalyData,
+          method: 'isolation_forest',
+          contamination: 0.1
+        }, {
+          headers: {
+            'Authorization': `Bearer ${await this.getAIToken()}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
+        });
 
-      return { anomalies, analyzed_period: '30 days', total_bordereaux: recentBordereaux.length };
+        const aiAnomalies = aiResponse.data.anomalies || [];
+        
+        // Map AI results to our format
+        const anomalies = aiAnomalies.map((a: any) => {
+          const bordereau = recentBordereaux.find(b => b.id === a.id);
+          return {
+            type: 'ai_detected_anomaly',
+            severity: a.severity,
+            description: `IA: Anomalie détectée (score: ${a.anomaly_score.toFixed(2)})`,
+            bordereau_id: a.id,
+            reference: bordereau?.reference,
+            anomaly_score: a.anomaly_score,
+            features: a.features
+          };
+        });
+
+        return { 
+          anomalies, 
+          analyzed_period: '30 days', 
+          total_bordereaux: recentBordereaux.length,
+          ai_powered: true,
+          method: 'isolation_forest'
+        };
+
+      } catch (aiError) {
+        this.logger.warn('AI anomaly detection failed, using fallback:', aiError.message);
+        
+        // Fallback to basic anomaly detection
+        const anomalies: any[] = [];
+        const avgProcessingTime = 5;
+        
+        recentBordereaux.forEach(b => {
+          const daysSinceReception = Math.floor((new Date().getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+          if (daysSinceReception > avgProcessingTime * 2 && b.statut !== 'CLOTURE') {
+            anomalies.push({
+              type: 'processing_delay',
+              severity: 'high',
+              description: `Délai de traitement anormalement long: ${daysSinceReception} jours`,
+              bordereau_id: b.id,
+              reference: b.reference
+            });
+          }
+        });
+
+        return { anomalies, analyzed_period: '30 days', total_bordereaux: recentBordereaux.length };
+      }
     } catch (error) {
       return { anomalies: [], error: error.message };
     }
@@ -2123,14 +2452,14 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
     try {
       const bordereau = await this.prisma.bordereau.findUnique({
         where: { id: bordereauId },
-        include: { client: true }
+        include: { client: true, contract: true }
       });
 
       if (!bordereau) {
         throw new Error('Bordereau not found');
       }
 
-      // AI Logic: Find optimal gestionnaire based on workload
+      // Get available gestionnaires with workload
       const gestionnaires = await this.prisma.user.findMany({
         where: { role: 'GESTIONNAIRE', active: true },
         include: {
@@ -2140,12 +2469,72 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         }
       });
 
-      // Find gestionnaire with lowest workload
+      if (gestionnaires.length === 0) {
+        throw new Error('No available gestionnaires');
+      }
+
+      // Prepare task data for AI smart routing
+      const daysSinceReception = Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+      const slaThreshold = bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
+      
+      const taskData = {
+        id: bordereau.id,
+        priority: Math.min(5, Math.max(1, daysSinceReception > slaThreshold ? 5 : 2)),
+        complexity: Math.min(5, Math.max(1, Math.ceil(bordereau.nombreBS / 10))),
+        estimated_time: Math.max(1, slaThreshold - daysSinceReception),
+        client_importance: bordereau.client?.name?.includes('IMPORTANT') ? 5 : 3,
+        sla_urgency: Math.max(1, Math.min(5, daysSinceReception - slaThreshold + 3)),
+        document_count: bordereau.nombreBS,
+        requires_expertise: bordereau.nombreBS > 50 ? 1 : 0,
+        is_recurring: 0,
+        type: 'bordereau_processing'
+      };
+
+      const availableTeams = gestionnaires.map(g => g.id);
+
+      try {
+        // Call AI smart routing service
+        const aiResponse = await axios.post('http://localhost:8002/smart_routing/suggest_assignment', {
+          task: taskData,
+          available_teams: availableTeams
+        }, {
+          headers: {
+            'Authorization': `Bearer ${await this.getAIToken()}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        });
+
+        const aiRecommendation = aiResponse.data;
+        const recommendedGestionnaire = gestionnaires.find(g => g.id === aiRecommendation.recommended_assignee);
+
+        if (recommendedGestionnaire) {
+          // Assign using AI recommendation
+          await this.prisma.bordereau.update({
+            where: { id: bordereauId },
+            data: {
+              assignedToUserId: recommendedGestionnaire.id,
+              statut: 'ASSIGNE'
+            }
+          });
+
+          return {
+            success: true,
+            assignedTo: recommendedGestionnaire.fullName,
+            reason: `IA: ${aiRecommendation.reasoning?.join(', ') || 'Assignation optimale'}`,
+            confidence: aiRecommendation.confidence,
+            score: aiRecommendation.score
+          };
+        }
+      } catch (aiError) {
+        this.logger.warn('AI routing failed, using fallback:', aiError.message);
+      }
+
+      // Fallback: Find gestionnaire with lowest workload
       const optimalGestionnaire = gestionnaires.reduce((best, current) => 
         current.bordereaux.length < best.bordereaux.length ? current : best
       );
 
-      // Assign bordereau
       await this.prisma.bordereau.update({
         where: { id: bordereauId },
         data: {
@@ -2157,7 +2546,8 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
       return {
         success: true,
         assignedTo: optimalGestionnaire.fullName,
-        reason: `Charge de travail optimale: ${optimalGestionnaire.bordereaux.length} dossiers actifs`
+        reason: `Charge de travail optimale: ${optimalGestionnaire.bordereaux.length} dossiers actifs`,
+        confidence: 'medium'
       };
     } catch (error) {
       return { success: false, error: error.message };
@@ -2167,43 +2557,110 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
   async aiPrioritize(bordereauId: string): Promise<any> {
     try {
       const bordereau = await this.prisma.bordereau.findUnique({
-        where: { id: bordereauId }
+        where: { id: bordereauId },
+        include: { client: true, contract: true }
       });
 
       if (!bordereau) {
         throw new Error('Bordereau not found');
       }
 
-      // AI Logic: Calculate priority based on SLA risk
       const daysSinceReception = Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24));
-      const daysLeft = bordereau.delaiReglement - daysSinceReception;
-      
-      let priority = 1;
-      let reason = 'Priorité normale';
-      
-      if (daysLeft <= 0) {
-        priority = 5; // Critical
-        reason = 'SLA dépassé - CRITIQUE';
-      } else if (daysLeft <= 3) {
-        priority = 4; // High
-        reason = 'Risque SLA élevé - 3 jours restants';
-      } else if (daysLeft <= 7) {
-        priority = 3; // Medium
-        reason = 'Attention SLA - 7 jours restants';
+      const slaThreshold = bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
+      const daysLeft = slaThreshold - daysSinceReception;
+
+      try {
+        // Prepare data for AI SLA breach prediction
+        const slaData = {
+          item_data: {
+            id: bordereau.id,
+            start_date: bordereau.dateReception.toISOString(),
+            deadline: new Date(new Date(bordereau.dateReception).getTime() + slaThreshold * 24 * 60 * 60 * 1000).toISOString(),
+            current_progress: bordereau.statut === 'TRAITE' ? 100 : bordereau.statut === 'EN_COURS' ? 50 : 10,
+            total_required: 100,
+            workload: bordereau.nombreBS || 1,
+            complexity: Math.min(5, Math.max(1, Math.ceil(bordereau.nombreBS / 20))),
+            team_efficiency: 1.0,
+            historical_performance: 1.0,
+            client_priority: bordereau.client?.name?.includes('IMPORTANT') ? 3 : 1
+          }
+        };
+
+        // Call AI SLA breach prediction
+        const aiResponse = await axios.post('http://localhost:8002/sla_breach_prediction/predict', slaData, {
+          headers: {
+            'Authorization': `Bearer ${await this.getAIToken()}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
+        });
+
+        const prediction = aiResponse.data.prediction;
+        let priority = 1;
+        let reason = 'Priorité normale';
+
+        // Map AI risk levels to priority
+        switch (prediction.risk_level) {
+          case 'High':
+            priority = 5;
+            reason = `IA: Risque élevé (${Math.round(prediction.breach_probability * 100)}% de dépassement SLA)`;
+            break;
+          case 'Medium':
+            priority = 3;
+            reason = `IA: Risque modéré (${Math.round(prediction.breach_probability * 100)}% de dépassement SLA)`;
+            break;
+          case 'Low':
+            priority = 1;
+            reason = `IA: Risque faible (${Math.round(prediction.breach_probability * 100)}% de dépassement SLA)`;
+            break;
+        }
+
+        // Update bordereau priority
+        await this.prisma.bordereau.update({
+          where: { id: bordereauId },
+          data: { priority }
+        });
+
+        return {
+          success: true,
+          priority,
+          reason,
+          daysLeft,
+          ai_confidence: prediction.confidence,
+          breach_probability: prediction.breach_probability,
+          risk_level: prediction.risk_level
+        };
+
+      } catch (aiError) {
+        this.logger.warn('AI prioritization failed, using fallback:', aiError.message);
+        
+        // Fallback logic
+        let priority = 1;
+        let reason = 'Priorité normale';
+        
+        if (daysLeft <= 0) {
+          priority = 5;
+          reason = 'SLA dépassé - CRITIQUE';
+        } else if (daysLeft <= 3) {
+          priority = 4;
+          reason = 'Risque SLA élevé - 3 jours restants';
+        } else if (daysLeft <= 7) {
+          priority = 3;
+          reason = 'Attention SLA - 7 jours restants';
+        }
+
+        await this.prisma.bordereau.update({
+          where: { id: bordereauId },
+          data: { priority }
+        });
+
+        return {
+          success: true,
+          priority,
+          reason,
+          daysLeft
+        };
       }
-
-      // Update bordereau priority
-      await this.prisma.bordereau.update({
-        where: { id: bordereauId },
-        data: { priority }
-      });
-
-      return {
-        success: true,
-        priority,
-        reason,
-        daysLeft
-      };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -2212,50 +2669,107 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
   async aiResourceAlert(): Promise<any> {
     try {
       const activeBordereaux = await this.prisma.bordereau.count({
-        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
+        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] }, archived: false }
       });
       
       const availableGestionnaires = await this.prisma.user.count({
         where: { role: 'GESTIONNAIRE', active: true }
       });
 
-      const avgProcessingRate = 5; // BS per day per gestionnaire
-      const requiredGestionnaires = Math.ceil(activeBordereaux / avgProcessingRate);
-      const shortage = Math.max(0, requiredGestionnaires - availableGestionnaires);
+      try {
+        // Call AI resource prediction
+        const resourceData = {
+          sla_days: 30,
+          historical_rate: 5, // bordereaux per day per gestionnaire
+          volume: activeBordereaux
+        };
 
-      // Send alert to admins if shortage detected
-      if (shortage > 0) {
-        // Create notification for admins
-        const admins = await this.prisma.user.findMany({
-          where: { role: { in: ['SUPER_ADMIN', 'CHEF_EQUIPE'] } }
+        const aiResponse = await axios.post('http://localhost:8002/predict_resources', resourceData, {
+          headers: {
+            'Authorization': `Bearer ${await this.getAIToken()}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000
         });
 
-        for (const admin of admins) {
-          await this.prisma.notification.create({
-            data: {
-              userId: admin.id,
-              type: 'RESOURCE_ALERT',
-              title: 'Alerte IA: Ressources insuffisantes',
-              message: `${shortage} gestionnaire(s) supplémentaire(s) nécessaire(s) pour respecter les SLA`,
-              data: {
-                current: availableGestionnaires,
-                needed: requiredGestionnaires,
-                shortage,
-                workload: activeBordereaux
-              },
-              read: false
-            }
-          }).catch(() => console.log('Failed to create notification'));
-        }
-      }
+        const requiredGestionnaires = aiResponse.data.required_managers || Math.ceil(activeBordereaux / 5);
+        const shortage = Math.max(0, requiredGestionnaires - availableGestionnaires);
 
-      return {
-        success: true,
-        current: availableGestionnaires,
-        needed: requiredGestionnaires,
-        shortage,
-        alert_sent: shortage > 0
-      };
+        // Send alert to admins if shortage detected
+        if (shortage > 0) {
+          const admins = await this.prisma.user.findMany({
+            where: { role: { in: ['SUPER_ADMIN', 'CHEF_EQUIPE'] } }
+          });
+
+          for (const admin of admins) {
+            await this.prisma.notification.create({
+              data: {
+                userId: admin.id,
+                type: 'RESOURCE_ALERT',
+                title: 'Alerte IA: Ressources insuffisantes',
+                message: `IA prédit ${shortage} gestionnaire(s) supplémentaire(s) nécessaire(s) pour respecter les SLA`,
+                data: {
+                  current: availableGestionnaires,
+                  needed: requiredGestionnaires,
+                  shortage,
+                  workload: activeBordereaux,
+                  ai_prediction: true
+                },
+                read: false
+              }
+            }).catch(() => console.log('Failed to create notification'));
+          }
+        }
+
+        return {
+          success: true,
+          current: availableGestionnaires,
+          needed: requiredGestionnaires,
+          shortage,
+          alert_sent: shortage > 0,
+          ai_prediction: true
+        };
+
+      } catch (aiError) {
+        this.logger.warn('AI resource prediction failed, using fallback:', aiError.message);
+        
+        // Fallback calculation
+        const avgProcessingRate = 5;
+        const requiredGestionnaires = Math.ceil(activeBordereaux / avgProcessingRate);
+        const shortage = Math.max(0, requiredGestionnaires - availableGestionnaires);
+
+        if (shortage > 0) {
+          const admins = await this.prisma.user.findMany({
+            where: { role: { in: ['SUPER_ADMIN', 'CHEF_EQUIPE'] } }
+          });
+
+          for (const admin of admins) {
+            await this.prisma.notification.create({
+              data: {
+                userId: admin.id,
+                type: 'RESOURCE_ALERT',
+                title: 'Alerte: Ressources insuffisantes',
+                message: `${shortage} gestionnaire(s) supplémentaire(s) nécessaire(s) pour respecter les SLA`,
+                data: {
+                  current: availableGestionnaires,
+                  needed: requiredGestionnaires,
+                  shortage,
+                  workload: activeBordereaux
+                },
+                read: false
+              }
+            }).catch(() => console.log('Failed to create notification'));
+          }
+        }
+
+        return {
+          success: true,
+          current: availableGestionnaires,
+          needed: requiredGestionnaires,
+          shortage,
+          alert_sent: shortage > 0
+        };
+      }
     } catch (error) {
       return { success: false, error: error.message };
     }

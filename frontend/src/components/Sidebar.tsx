@@ -11,7 +11,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import MailIcon from '@mui/icons-material/Mail';
 import ReportIcon from '@mui/icons-material/Report';
 import GroupIcon from '@mui/icons-material/Group';
-import TimelineIcon from '@mui/icons-material/Timeline';
+
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import InputIcon from '@mui/icons-material/Input';
 import ScannerIcon from '@mui/icons-material/Scanner';
@@ -31,7 +31,7 @@ const sidebarLinks = [
   { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
   { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
   { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN'] },
-  { to: "/home/workflow", label: "Workflow", icon: <TimelineIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
+
   { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'FINANCE'] },
   { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'SCAN_TEAM'] },
 ];

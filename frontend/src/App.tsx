@@ -15,8 +15,7 @@ import GedViewer from './pages/ged/GedViewer';
 import GecManager from './pages/gec/GecManager';
 import ReclamationsModule from './pages/reclamations/ReclamationsModule';
 import UserManagement from './pages/users/UserManagement';
-import WorkflowTimeline from './pages/workflow/WorkflowTimeline';
-import WorkflowPage from './pages/workflow/WorkflowPage'; // <-- add this import
+
 import AlertsModule from './pages/AlertsModule';
 import BODashboard from './pages/BODashboard';
 import ScanDashboard from './pages/ScanDashboard';
@@ -57,7 +56,7 @@ const App: React.FC = () => {
           <Route path="/home/gec" element={<GecManager />} />
           <Route path="/home/reclamations" element={<ReclamationsModule />} />
           <Route path="/home/users" element={<UserManagement />} />
-          <Route path="/home/workflow" element={<WorkflowPage />} />
+
           <Route path="/home/alerts" element={<AlertsModule />} />
           <Route path="/home/bo" element={<BODashboard />} />
           <Route path="/home/scan" element={<ScanDashboard />} />
