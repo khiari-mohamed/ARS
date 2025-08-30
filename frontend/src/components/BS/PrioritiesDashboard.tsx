@@ -16,7 +16,12 @@ type Gestionnaire = { id: number; name: string };
 // Fetch gestionnaires from your backend
 const fetchGestionnaires = async (): Promise<Gestionnaire[]> => {
   try {
-    const res = await fetch('http://localhost:5000/api/bulletin-soin/gestionnaires');
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/users?role=GESTIONNAIRE', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     const data = await res.json();
     if (Array.isArray(data)) {
       return data.map((u: any) => ({ id: u.id, name: u.fullName }));
@@ -39,28 +44,9 @@ export const PrioritiesDashboard: React.FC = () => {
         if (gs && gs.length > 0) {
           setGestionnaires(gs);
           if (selected === undefined) setSelected(gs[0].id);
-        } else {
-          // Use fallback data if no gestionnaires returned
-          const fallbackGestionnaires = [
-            { id: 1, name: 'Gestionnaire 1' },
-            { id: 2, name: 'Gestionnaire 2' },
-            { id: 3, name: 'Gestionnaire 3' },
-            { id: 4, name: 'Gestionnaire 4' }
-          ];
-          setGestionnaires(fallbackGestionnaires);
-          setSelected(fallbackGestionnaires[0].id);
         }
       } catch (error) {
         console.error('Failed to fetch gestionnaires:', error);
-        // Set fallback data on error
-        const fallbackGestionnaires = [
-          { id: 1, name: 'Gestionnaire 1' },
-          { id: 2, name: 'Gestionnaire 2' },
-          { id: 3, name: 'Gestionnaire 3' },
-          { id: 4, name: 'Gestionnaire 4' }
-        ];
-        setGestionnaires(fallbackGestionnaires);
-        setSelected(fallbackGestionnaires[0].id);
       }
     };
     

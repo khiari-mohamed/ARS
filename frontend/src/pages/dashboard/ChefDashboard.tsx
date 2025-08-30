@@ -238,12 +238,12 @@ const ChefDashboard: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Tableau de bord Chef d'équipe</h1>
+    <div style={{ padding: '12px 8px', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+      <h1 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>Tableau de bord Chef d'équipe</h1>
       
       {/* KPI Cards */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
+      <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
               title="BS non assignés"
@@ -253,7 +253,7 @@ const ChefDashboard: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
               title="BS en cours"
@@ -263,7 +263,7 @@ const ChefDashboard: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
               title="BS en retard"
@@ -273,7 +273,7 @@ const ChefDashboard: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
             <Statistic
               title="Membres à risque"
@@ -301,34 +301,39 @@ const ChefDashboard: React.FC = () => {
         />
       )}
 
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+      <Tabs activeKey={activeTab} onChange={setActiveTab} size="small" style={{ width: '100%' }}>
         <TabPane tab="Vue d'ensemble" key="overview">
-          <Row gutter={16}>
-            <Col span={16}>
+          <Row gutter={[8, 8]}>
+            <Col xs={24} lg={16} style={{ marginBottom: '8px' }}>
               <Card 
                 title="Corbeille globale" 
+                size="small"
                 extra={
                   <Space>
                     <Button 
                       type="primary" 
                       onClick={handleBulkAssign}
                       disabled={selectedBsIds.length === 0}
+                      size="small"
                     >
                       Assigner sélectionnés ({selectedBsIds.length})
                     </Button>
                   </Space>
                 }
               >
-                <Table
-                  dataSource={bsList}
-                  columns={bsColumns}
-                  rowKey="id"
-                  pagination={{ pageSize: 10 }}
-                  size="small"
-                />
+                <div style={{ overflowX: 'auto' }}>
+                  <Table
+                    dataSource={bsList}
+                    columns={bsColumns}
+                    rowKey="id"
+                    pagination={{ pageSize: 10 }}
+                    size="small"
+                    scroll={{ x: 600 }}
+                  />
+                </div>
               </Card>
             </Col>
-            <Col span={8}>
+            <Col xs={24} lg={8} style={{ marginBottom: '8px' }}>
               <AssignmentSuggestions 
                 onSelectAssignee={(assigneeId) => {
                   // Handle assignee selection

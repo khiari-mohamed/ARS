@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { Layout, Menu, Breadcrumb } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Layout, Menu, Breadcrumb, Button, Drawer } from 'antd';
 import { 
   DashboardOutlined,
   FileTextOutlined,
   BarChartOutlined,
   RobotOutlined,
   SettingOutlined,
-  CloudDownloadOutlined
+  CloudDownloadOutlined,
+  MenuOutlined
 } from '@ant-design/icons';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { BSWorkflowRouter } from '../../components/BS/BSWorkflowRouter';
@@ -22,40 +23,66 @@ const { Content, Sider } = Layout;
 
 const BSModule: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const menuItems = [
     {
       key: '/home/bs',
       icon: <DashboardOutlined />,
       label: 'Tableau de bord',
-      onClick: () => navigate('/home/bs')
+      onClick: () => {
+        navigate('/home/bs');
+        if (isMobile) setMobileMenuOpen(false);
+      }
     },
     {
       key: '/home/bs/list',
       icon: <FileTextOutlined />,
       label: 'Liste des BS',
-      onClick: () => navigate('/home/bs/list')
+      onClick: () => {
+        navigate('/home/bs/list');
+        if (isMobile) setMobileMenuOpen(false);
+      }
     },
     {
       key: '/home/bs/analytics',
       icon: <BarChartOutlined />,
       label: 'Analytiques',
-      onClick: () => navigate('/home/bs/analytics')
+      onClick: () => {
+        navigate('/home/bs/analytics');
+        if (isMobile) setMobileMenuOpen(false);
+      }
     },
     {
       key: '/home/bs/ai',
       icon: <RobotOutlined />,
       label: 'IA & Suggestions',
-      onClick: () => navigate('/home/bs/ai')
+      onClick: () => {
+        navigate('/home/bs/ai');
+        if (isMobile) setMobileMenuOpen(false);
+      }
     },
     {
       key: '/home/bs/tuniclaim',
       icon: <CloudDownloadOutlined />,
       label: 'MY TUNICLAIM',
-      onClick: () => navigate('/home/bs/tuniclaim')
+      onClick: () => {
+        navigate('/home/bs/tuniclaim');
+        if (isMobile) setMobileMenuOpen(false);
+      }
     }
   ];
 
@@ -65,7 +92,10 @@ const BSModule: React.FC = () => {
       key: '/home/bs/admin',
       icon: <SettingOutlined />,
       label: 'Administration',
-      onClick: () => navigate('/home/bs/admin')
+      onClick: () => {
+        navigate('/home/bs/admin');
+        if (isMobile) setMobileMenuOpen(false);
+      }
     });
   }
 
@@ -94,42 +124,88 @@ const BSModule: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider 
-        collapsible 
-        collapsed={collapsed} 
-        onCollapse={setCollapsed}
-        theme="light"
-        width={250}
-      >
-        <div style={{ 
-          height: 64, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          borderBottom: '1px solid #f0f0f0',
-          fontWeight: 'bold',
-          fontSize: '16px'
-        }}>
-          {collapsed ? 'BS' : 'Bulletin de Soins'}
-        </div>
-        
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          style={{ borderRight: 0 }}
-        />
-      </Sider>
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <Sider 
+          collapsible 
+          collapsed={collapsed} 
+          onCollapse={setCollapsed}
+          theme="light"
+          width={250}
+        >
+          <div style={{ 
+            height: 64, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            borderBottom: '1px solid #f0f0f0',
+            fontWeight: 'bold',
+            fontSize: '16px'
+          }}>
+            {collapsed ? 'BS' : 'Bulletin de Soins'}
+          </div>
+          
+          <Menu
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            items={menuItems}
+            style={{ borderRight: 0 }}
+          />
+        </Sider>
+      )}
+      
+      {/* Mobile Drawer */}
+      {isMobile && (
+        <Drawer
+          title="Bulletin de Soins"
+          placement="left"
+          onClose={() => setMobileMenuOpen(false)}
+          open={mobileMenuOpen}
+          bodyStyle={{ padding: 0 }}
+          width={250}
+        >
+          <Menu
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            items={menuItems}
+            style={{ borderRight: 0 }}
+          />
+        </Drawer>
+      )}
       
       <Layout>
-        <Content style={{ margin: '0 16px' }}>
+        <Content style={{ margin: isMobile ? '0 8px' : '0 16px' }}>
+          {/* Mobile Menu Button */}
+          {isMobile && (
+            <div style={{ 
+              padding: '16px 0', 
+              borderBottom: '1px solid #f0f0f0',
+              marginBottom: '16px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <Button 
+                type="primary" 
+                icon={<MenuOutlined />}
+                onClick={() => setMobileMenuOpen(true)}
+                size="large"
+                style={{ 
+                  minWidth: '140px',
+                  height: '40px'
+                }}
+              >
+                Menu BS
+              </Button>
+            </div>
+          )}
           <Breadcrumb 
             items={getBreadcrumbItems()}
             style={{ margin: '16px 0' }}
           />
           
           <div style={{ 
-            padding: 24, 
+            padding: isMobile ? 12 : 24, 
             minHeight: 360, 
             background: '#fff',
             borderRadius: 6

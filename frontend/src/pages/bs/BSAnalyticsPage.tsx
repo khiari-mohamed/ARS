@@ -178,92 +178,103 @@ const BSAnalyticsPage: React.FC = () => {
             </Col>
           </Row>
 
-          <Row gutter={[16, 16]}>
-            <Col span={16}>
-              <Card title="Tendances de volume" loading={trendsLoading}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={volumeStats || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="sent" stroke="#8884d8" name="Envoyés" />
-                    <Line type="monotone" dataKey="received" stroke="#82ca9d" name="Reçus" />
-                  </LineChart>
-                </ResponsiveContainer>
+          <Row gutter={[8, 8]}>
+            <Col xs={24} lg={16} style={{ marginBottom: '8px' }}>
+              <Card title="Tendances de volume" loading={trendsLoading} size="small">
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height={250} minWidth={350}>
+                    <LineChart data={volumeStats || []}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" fontSize={12} />
+                      <YAxis fontSize={12} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="sent" stroke="#8884d8" name="Envoyés" />
+                      <Line type="monotone" dataKey="received" stroke="#82ca9d" name="Reçus" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
             </Col>
-            <Col span={8}>
-              <Card title="Conformité SLA" loading={slaLoading}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={slaData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {slaData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+            <Col xs={24} lg={8} style={{ marginBottom: '8px' }}>
+              <Card title="Conformité SLA" loading={slaLoading} size="small">
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height={250} minWidth={200}>
+                    <PieChart>
+                      <Pie
+                        data={slaData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={60}
+                        fill="#8884d8"
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {slaData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
             </Col>
           </Row>
         </TabPane>
 
         <TabPane tab="Performance équipe" key="team">
-          <Row gutter={[16, 16]}>
+          <Row gutter={[8, 8]}>
             <Col span={24}>
-              <Card title="Performance par gestionnaire" loading={teamLoading}>
-                <Table
-                  dataSource={teamPerformance?.teamPerformance || []}
-                  columns={teamColumns}
-                  rowKey="id"
-                  pagination={false}
-                  size="middle"
-                />
+              <Card title="Performance par gestionnaire" loading={teamLoading} size="small">
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <Table
+                    dataSource={teamPerformance?.teamPerformance || []}
+                    columns={teamColumns}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 800 }}
+                  />
+                </div>
               </Card>
             </Col>
           </Row>
 
-          <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
             <Col span={24}>
-              <Card title="Efficacité par gestionnaire" loading={teamLoading}>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={teamPerformance?.teamPerformance || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="efficiency" fill="#8884d8" name="Efficacité (%)" />
-                  </BarChart>
-                </ResponsiveContainer>
+              <Card title="Efficacité par gestionnaire" loading={teamLoading} size="small">
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height={250} minWidth={350}>
+                    <BarChart data={teamPerformance?.teamPerformance || []}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" fontSize={12} />
+                      <YAxis fontSize={12} />
+                      <Tooltip />
+                      <Bar dataKey="efficiency" fill="#8884d8" name="Efficacité (%)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
             </Col>
           </Row>
         </TabPane>
 
         <TabPane tab="Tendances" key="trends">
-          <Row gutter={[16, 16]}>
+          <Row gutter={[8, 8]}>
             <Col span={24}>
-              <Card title="Évolution des performances" loading={trendsLoading}>
-                <ResponsiveContainer width="100%" height={400}>
-                  <LineChart data={trends?.performanceTrend || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="processed" stroke="#8884d8" name="Traités" />
-                    <Line type="monotone" dataKey="efficiency" stroke="#82ca9d" name="Efficacité (%)" />
-                  </LineChart>
-                </ResponsiveContainer>
+              <Card title="Évolution des performances" loading={trendsLoading} size="small">
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height={300} minWidth={400}>
+                    <LineChart data={trends?.performanceTrend || []}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" fontSize={12} />
+                      <YAxis fontSize={12} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="processed" stroke="#8884d8" name="Traités" />
+                      <Line type="monotone" dataKey="efficiency" stroke="#82ca9d" name="Efficacité (%)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
             </Col>
           </Row>

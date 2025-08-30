@@ -5415,3 +5415,79 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-08-30 18:27:26,960 - monitoring - INFO - Completed priorities in 0.00s
 2025-08-30 18:27:27,869 - monitoring - INFO - Starting priorities endpoint call
 2025-08-30 18:27:27,870 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:26,092 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-30 19:05:28,480 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 19:05:28,526 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 19:05:28,528 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.05s: 
+2025-08-30 19:05:28,547 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:28,550 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:30,603 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 19:05:30,606 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 19:05:30,607 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.00s: 
+2025-08-30 19:05:30,616 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:30,619 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:31,931 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:31,932 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:32,735 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:32,736 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:54,515 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 19:05:54,515 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 19:05:54,516 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.00s: 
+2025-08-30 19:05:54,518 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:54,518 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:55,554 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 19:05:55,555 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 19:05:55,556 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.00s: 
+2025-08-30 19:05:55,558 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:55,559 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:56,433 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:56,434 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:05:57,427 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:05:57,430 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:06:24,577 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:06:24,578 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:06:54,729 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:06:54,731 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:07:24,730 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:07:24,733 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:07:54,417 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:07:54,419 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:08:25,817 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:08:25,818 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:08:54,756 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:08:54,757 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:45:39,803 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-30 19:45:41,367 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 19:45:41,405 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 19:45:41,406 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.04s: 
+2025-08-30 19:45:41,410 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:45:41,411 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:45:42,998 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 19:45:42,999 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 19:45:43,000 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.00s: 
+2025-08-30 19:45:43,014 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:45:43,015 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:45:43,856 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:45:43,857 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:45:44,478 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:45:44,478 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:46:10,438 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:46:10,439 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:46:40,450 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:46:40,452 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:47:10,485 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:47:10,486 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:47:42,575 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:47:42,579 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 19:48:10,983 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 19:48:10,985 - monitoring - INFO - Completed priorities in 0.00s
