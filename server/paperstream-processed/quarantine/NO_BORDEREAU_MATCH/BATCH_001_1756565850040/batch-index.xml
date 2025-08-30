@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PaperStreamBatch>
+    <BatchID>BATCH_001</BatchID>
+    <OperatorID>OP001</OperatorID>
+    <ScannerModel>fi-7600</ScannerModel>
+    <Timestamp>2025-01-30T15:54:00Z</Timestamp>
+    <Files>
+        <File>
+            <FileName>test-document.pdf</FileName>
+            <PageCount>1</PageCount>
+            <Resolution>300</Resolution>
+            <ColorMode>color</ColorMode>
+            <Barcodes>
+                <Barcode>
+                    <Value>BORD-2025-001</Value>
+                </Barcode>
+            </Barcodes>
+            <ImprinterIDs>
+                <ID>IMP-001-001</ID>
+            </ImprinterIDs>
+        </File>
+    </Files>
+</PaperStreamBatch>

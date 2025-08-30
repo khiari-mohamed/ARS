@@ -33,7 +33,7 @@ export class PaperStreamBatchProcessor {
 
   constructor(private prisma: PrismaService) {}
 
-  async processBatchFolder(batchFolderPath: string): Promise<void> {
+  async processBatchFolder(batchFolderPath: string, hierarchyInfo?: { clientName?: string; scanDate?: string }): Promise<void> {
     // Prevent duplicate processing
     if (processingLocks.has(batchFolderPath)) {
       this.logger.warn(`Batch already being processed: ${batchFolderPath}`);
@@ -61,7 +61,7 @@ export class PaperStreamBatchProcessor {
       }
 
       // Process all files in batch together
-      await this.ingestBatchFiles(batch, bordereauId);
+      await this.ingestBatchFiles(batch, bordereauId, hierarchyInfo);
       
       // Update bordereau status
       await this.updateBordereauScanStatus(bordereauId, batch);
@@ -297,7 +297,7 @@ export class PaperStreamBatchProcessor {
     return null;
   }
 
-  private async ingestBatchFiles(batch: PaperStreamBatch, bordereauId: string): Promise<void> {
+  private async ingestBatchFiles(batch: PaperStreamBatch, bordereauId: string, hierarchyInfo?: { clientName?: string; scanDate?: string }): Promise<void> {
     const systemUser = await this.prisma.user.findFirst({
       where: { role: 'SUPER_ADMIN' }
     });
@@ -322,7 +322,7 @@ export class PaperStreamBatchProcessor {
       }
       
       // Move file to permanent storage with proper naming
-      const permanentPath = await this.moveFileToStorage(file, batch);
+      const permanentPath = await this.moveFileToStorage(file, batch, hierarchyInfo);
       
       // Create document record with all PaperStream metadata
       await this.prisma.document.create({
@@ -373,12 +373,24 @@ export class PaperStreamBatchProcessor {
     return existing;
   }
 
-  private async moveFileToStorage(file: PaperStreamFile, batch: PaperStreamBatch): Promise<string> {
-    const storageDir = path.join(process.cwd(), 'uploads', 'paperstream', 
-      batch.timestamp.getFullYear().toString(),
-      String(batch.timestamp.getMonth() + 1).padStart(2, '0'),
-      batch.batchId
-    );
+  private async moveFileToStorage(file: PaperStreamFile, batch: PaperStreamBatch, hierarchyInfo?: { clientName?: string; scanDate?: string }): Promise<string> {
+    let storageDir: string;
+    
+    if (hierarchyInfo?.clientName && hierarchyInfo?.scanDate) {
+      // Use hierarchical structure: client/date/batch
+      storageDir = path.join(process.cwd(), 'uploads', 'paperstream', 
+        hierarchyInfo.clientName,
+        hierarchyInfo.scanDate,
+        batch.batchId
+      );
+    } else {
+      // Fallback to timestamp-based structure
+      storageDir = path.join(process.cwd(), 'uploads', 'paperstream', 
+        batch.timestamp.getFullYear().toString(),
+        String(batch.timestamp.getMonth() + 1).padStart(2, '0'),
+        batch.batchId
+      );
+    }
     
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
@@ -449,9 +461,7 @@ export class PaperStreamBatchProcessor {
       await this.prisma.auditLog.create({
         data: {
           action: 'PAPERSTREAM_BATCH_QUARANTINED',
-          entityType: 'BATCH',
-          entityId: batchName,
-          details: `Batch quarantined: ${errorType} - ${details || 'No details'}`,
+          details: `Batch quarantined: ${errorType} - ${details || 'No details'} (Batch: ${batchName})`,
           userId: systemUser?.id || null,
           timestamp: new Date(),
         }

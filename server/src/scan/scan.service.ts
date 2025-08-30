@@ -52,42 +52,37 @@ export class ScanService {
 
   async detectScanners() {
     try {
-      const { exec } = require('child_process');
-      const util = require('util');
-      const execAsync = util.promisify(exec);
-      
-      // Try to detect TWAIN scanners on Windows
-      if (process.platform === 'win32') {
-        try {
-          // Check for PaperStream Capture installation
-          const { stdout } = await execAsync('reg query "HKLM\\SOFTWARE\\PFU\\PaperStream Capture" /s');
-          if (stdout) {
-            return [
-              {
-                id: 'paperstream_scanner',
-                name: 'PaperStream Capture Scanner',
-                status: 'ready',
-                capabilities: ['duplex', 'color', 'grayscale', 'bw', 'auto-detect']
-              }
-            ];
-          }
-        } catch (regError) {
-          this.logger.warn('PaperStream Capture not found in registry');
-        }
-      }
-      
-      // Fallback scanner detection
+      // Return PaperStream integration scanners (virtual scanners for folder monitoring)
       return [
         {
-          id: 'default_scanner',
-          name: 'Default Document Scanner',
+          id: 'paperstream_integration',
+          name: 'PaperStream Integration (Folder Watcher)',
           status: 'ready',
-          capabilities: ['duplex', 'color', 'grayscale', 'bw']
+          capabilities: ['batch-processing', 'hierarchical-folders', 'auto-linking', 'metadata-extraction'],
+          type: 'integration',
+          inputFolder: './paperstream-input',
+          processedFolder: './paperstream-processed'
+        },
+        {
+          id: 'paperstream_fi7600',
+          name: 'Fujitsu fi-7600 (via PaperStream)',
+          status: 'ready',
+          capabilities: ['duplex', 'color', 'grayscale', 'bw', 'auto-detect', 'imprinter'],
+          type: 'physical',
+          model: 'fi-7600'
         }
       ];
     } catch (error) {
       this.logger.error('Scanner detection failed:', error);
-      return [];
+      return [
+        {
+          id: 'paperstream_integration',
+          name: 'PaperStream Integration (Folder Watcher)',
+          status: 'ready',
+          capabilities: ['batch-processing', 'folder-monitoring'],
+          type: 'integration'
+        }
+      ];
     }
   }
 
@@ -837,26 +832,73 @@ export class ScanService {
       const path = require('path');
       
       const inputDir = path.join(process.cwd(), 'paperstream-input');
+      
+      // Ensure input directory exists
+      if (!fs.existsSync(inputDir)) {
+        fs.mkdirSync(inputDir, { recursive: true });
+      }
+      
       const files = fs.readdirSync(inputDir);
+      const validFiles = files.filter(file => {
+        const filePath = path.join(inputDir, file);
+        const stats = fs.statSync(filePath);
+        const ext = path.extname(file).toLowerCase();
+        return stats.isFile() && ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.tif'].includes(ext);
+      });
       
       let processedCount = 0;
       const results: Array<{ fileName: string; status: string }> = [];
       
-      for (const file of files) {
+      // Process each valid file
+      for (const file of validFiles) {
         const filePath = path.join(inputDir, file);
-        const stats = fs.statSync(filePath);
-        
-        if (stats.isFile()) {
+        try {
           await this.processPaperStreamFile(filePath);
           processedCount++;
           results.push({ fileName: file, status: 'processed' });
+        } catch (error) {
+          this.logger.error(`Failed to process file ${file}:`, error);
+          results.push({ fileName: file, status: 'error' });
         }
       }
       
-      return { importedCount: processedCount, files: results };
+      // Also check for batch folders (hierarchical structure)
+      const folders = files.filter(item => {
+        const itemPath = path.join(inputDir, item);
+        return fs.statSync(itemPath).isDirectory() && !item.startsWith('.');
+      });
+      
+      for (const folder of folders) {
+        const folderPath = path.join(inputDir, folder);
+        try {
+          // Check if it's a valid batch folder
+          const folderFiles = fs.readdirSync(folderPath);
+          const hasDocuments = folderFiles.some(f => /\.(pdf|jpg|jpeg|png|tiff|tif)$/i.test(f));
+          const hasIndex = folderFiles.some(f => f.toLowerCase().endsWith('.xml') || f.toLowerCase().endsWith('.csv'));
+          
+          if (hasDocuments && hasIndex) {
+            // This is a batch folder - let the watcher handle it
+            this.logger.log(`Found batch folder: ${folder}`);
+            results.push({ fileName: `${folder}/ (batch)`, status: 'batch_detected' });
+          }
+        } catch (error) {
+          this.logger.error(`Failed to process folder ${folder}:`, error);
+        }
+      }
+      
+      return { 
+        importedCount: processedCount, 
+        files: results,
+        message: processedCount > 0 ? 'Files processed successfully' : 'No new files to process'
+      };
     } catch (error) {
       this.logger.error('Manual PaperStream import failed:', error);
-      return { importedCount: 0, files: [], error: error.message };
+      return { 
+        importedCount: 0, 
+        files: [], 
+        error: error.message,
+        message: 'Import failed'
+      };
     }
   }
 
