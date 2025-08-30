@@ -18,12 +18,17 @@ const AnalyticsMobileView: React.FC<Props> = ({ filters, onFilterChange, onTabCh
   const [expanded, setExpanded] = useState(false);
 
   const quickActions = [
-    { label: 'Vue d\'ensemble', tab: 0, icon: '📊' },
-    { label: 'Performance', tab: 1, icon: '🎯' },
-    { label: 'Réclamations', tab: 2, icon: '⚠️' },
-    { label: 'Risques SLA', tab: 3, icon: '🚨' },
-    { label: 'Prévisions', tab: 4, icon: '🔮' },
-    { label: 'Rapports', tab: 5, icon: '📄' }
+    { label: 'Temps Réel', tab: 0, icon: '⚡' },
+    { label: 'Vue d\'ensemble', tab: 1, icon: '📊' },
+    { label: 'Performance', tab: 2, icon: '🎯' },
+    { label: 'Réclamations', tab: 3, icon: '⚠️' },
+    { label: 'Risques SLA', tab: 4, icon: '🚨' },
+    { label: 'OV Analytics', tab: 5, icon: '💰' },
+    { label: 'Prévisions', tab: 6, icon: '🔮' },
+    { label: 'Analyses Prédictives', tab: 7, icon: '🤖' },
+    { label: 'Filtrage Avancé', tab: 8, icon: '🔍' },
+    { label: 'Rapports Programmés', tab: 9, icon: '📅' },
+    { label: 'Rapports', tab: 10, icon: '📄' }
   ];
 
   return (
@@ -144,7 +149,7 @@ const AnalyticsMobileView: React.FC<Props> = ({ filters, onFilterChange, onTabCh
           </Typography>
           <Grid container spacing={1}>
             {quickActions.map((action, index) => (
-              <Grid item xs={6} key={index}>
+              <Grid item xs={6} sm={4} key={index}>
                 <Button
                   variant="outlined"
                   fullWidth
@@ -154,7 +159,8 @@ const AnalyticsMobileView: React.FC<Props> = ({ filters, onFilterChange, onTabCh
                   sx={{ 
                     py: 1.5,
                     textTransform: 'none',
-                    borderRadius: 2
+                    borderRadius: 2,
+                    fontSize: '0.75rem'
                   }}
                 >
                   {action.label}

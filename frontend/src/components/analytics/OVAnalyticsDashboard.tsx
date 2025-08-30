@@ -85,63 +85,19 @@ const OVAnalyticsDashboard: React.FC = () => {
       setData(response.data);
     } catch (error) {
       console.error('Failed to load OV data:', error);
-      // Set fallback data
       setData({
         overview: {
-          totalOV: 156,
-          executedOV: 132,
-          pendingOV: 18,
-          rejectedOV: 6,
-          executionRate: 84.6,
-          avgExecutionTime: 2.3
+          totalOV: 0,
+          executedOV: 0,
+          pendingOV: 0,
+          rejectedOV: 0,
+          executionRate: 0,
+          avgExecutionTime: 0
         },
-        ovList: [
-          {
-            id: '1',
-            societe: 'ARS SARL',
-            numeroBordereau: 'BDX/2025/001',
-            dateInjection: new Date().toISOString(),
-            dateExecution: new Date().toISOString(),
-            etatVirement: 'EXECUTE',
-            delaiExecution: 2,
-            donneurOrdre: 'ARS',
-            montant: 15000,
-            observations: 'Virement standard',
-            alertLevel: 'success'
-          },
-          {
-            id: '2',
-            societe: 'Client ABC',
-            numeroBordereau: 'BDX/2025/002',
-            dateInjection: new Date().toISOString(),
-            etatVirement: 'EN_ATTENTE',
-            donneurOrdre: 'ARS',
-            montant: 8500,
-            observations: 'En cours de traitement',
-            alertLevel: 'warning'
-          }
-        ],
-        byStatus: [
-          { status: 'EXECUTE', count: 132 },
-          { status: 'EN_ATTENTE', count: 18 },
-          { status: 'REJETE', count: 6 }
-        ],
-        trend: [
-          { date: '2025-01-24', created: 12, executed: 10, executionRate: 83.3 },
-          { date: '2025-01-25', created: 15, executed: 13, executionRate: 86.7 },
-          { date: '2025-01-26', created: 18, executed: 16, executionRate: 88.9 }
-        ],
-        alerts: [
-          {
-            type: 'pending',
-            ovId: 'OV-001',
-            reference: 'BDX/2025/003',
-            clientName: 'Client XYZ',
-            daysPending: 3,
-            message: 'OV en attente depuis 3 jours',
-            severity: 'warning'
-          }
-        ]
+        ovList: [],
+        byStatus: [],
+        trend: [],
+        alerts: []
       });
     } finally {
       setLoading(false);
@@ -200,19 +156,28 @@ const OVAnalyticsDashboard: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
+      <Box 
+        display="flex" 
+        justifyContent="space-between" 
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        flexDirection={{ xs: 'column', md: 'row' }}
+        gap={2}
+        mb={3}
+      >
+        <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '2rem' } }}>
           💰 Tableau de Bord OV (Ordres de Virement)
         </Typography>
-        <Box display="flex" gap={2}>
+        <Box display="flex" gap={1} flexDirection={{ xs: 'column', sm: 'row' }} width={{ xs: '100%', md: 'auto' }}>
           <Button
             variant="outlined"
             startIcon={<Download />}
             onClick={handleExport}
+            size="small"
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Exporter Excel
           </Button>
-          <IconButton onClick={loadOVData}>
+          <IconButton onClick={loadOVData} size="small">
             <Refresh />
           </IconButton>
         </Box>
@@ -434,8 +399,8 @@ const OVAnalyticsDashboard: React.FC = () => {
           Liste des Ordres de Virement ({data?.ovList.length || 0})
         </Typography>
         
-        <Box sx={{ overflow: 'auto' }}>
-          <Table>
+        <Box sx={{ overflowX: 'auto', width: '100%' }}>
+          <Table sx={{ minWidth: 800 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Société</TableCell>

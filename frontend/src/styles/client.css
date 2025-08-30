@@ -58,7 +58,8 @@
   background-repeat: no-repeat;
   background-position: 12px center;
   background-size: 16px;
-  min-width: 300px;
+  min-width: 250px;
+  box-sizing: border-box;
 }
 
 .search-input:focus {
@@ -913,44 +914,164 @@
   .client-list-panel {
     height: 400px;
   }
+  
+  .client-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .client-stats {
+    align-self: stretch;
+    justify-content: space-around;
+  }
 }
 
 @media (max-width: 768px) {
   .client-module {
-    padding: 12px;
+    padding: 8px;
+  }
+  
+  .client-header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .client-title {
+    font-size: 1.5rem;
+  }
+  
+  .client-subtitle {
+    font-size: 1rem;
   }
   
   .client-search-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
   
   .search-input-group {
     min-width: auto;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .search-input {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .filter-select {
+    min-width: auto;
+    width: 100%;
   }
   
   .action-buttons {
-    justify-content: stretch;
+    flex-direction: column;
+    gap: 8px;
   }
   
-  .action-buttons .btn {
-    flex: 1;
+  .btn {
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 0.875rem;
   }
   
   .client-stats {
     flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .stat-item {
+    display: flex;
+    align-items: center;
     gap: 12px;
+    text-align: left;
+  }
+  
+  .stat-value {
+    font-size: 1.25rem;
   }
   
   .tab-list {
-    flex-wrap: wrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab-button {
+    padding: 12px 16px;
+    min-width: 120px;
+  }
+  
+  .tab-label {
+    font-size: 0.75rem;
+  }
+  
+  .tab-panel {
+    padding: 16px;
   }
   
   .info-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .info-card {
+    padding: 16px;
   }
   
   .form-row {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .sla-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    text-align: left;
+  }
+  
+  .sla-item label {
+    font-weight: 600;
+  }
+  
+  .analytics-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .chart-bars,
+  .trend-bars {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .modal-content {
+    width: 95%;
+    margin: 20px;
+  }
+  
+  .modal-header {
+    padding: 16px 20px;
+  }
+  
+  .client-form {
+    padding: 20px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .form-actions .btn {
+    width: 100%;
   }
 }

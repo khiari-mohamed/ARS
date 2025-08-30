@@ -79,14 +79,7 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
         slaRate: Math.round(user.complianceRate || 0)
       }));
 
-      // Add fallback if no real data
-      if (teamRanking.length === 0) {
-        teamRanking.push(
-          { name: 'Équipe A', processed: 245, slaRate: 94 },
-          { name: 'Équipe B', processed: 198, slaRate: 89 },
-          { name: 'Équipe C', processed: 167, slaRate: 86 }
-        );
-      }
+
 
       setData({
         departmentPerformance,
@@ -95,19 +88,9 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('Failed to load performance data:', error);
-      // Set fallback data
       setData({
-        departmentPerformance: [
-          { department: 'SCAN', slaCompliance: 92, avgTime: 2.1, workload: 156 },
-          { department: 'BO', slaCompliance: 87, avgTime: 3.2, workload: 203 },
-          { department: 'Gestion', slaCompliance: 84, avgTime: 4.1, workload: 178 },
-          { department: 'Finance', slaCompliance: 91, avgTime: 2.8, workload: 89 }
-        ],
-        teamRanking: [
-          { name: 'Équipe A', processed: 245, slaRate: 94 },
-          { name: 'Équipe B', processed: 198, slaRate: 89 },
-          { name: 'Équipe C', processed: 167, slaRate: 86 }
-        ],
+        departmentPerformance: [],
+        teamRanking: [],
         userPerformance: []
       });
       setPerformanceKpis({
@@ -250,43 +233,45 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       <Grid item xs={12}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Détail par Département</Typography>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Département</TableCell>
-                <TableCell>Conformité SLA</TableCell>
-                <TableCell>Temps Moyen</TableCell>
-                <TableCell>Charge de Travail</TableCell>
-                <TableCell>Performance</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.departmentPerformance.map((dept: any, index: number) => (
-                <TableRow key={index}>
-                  <TableCell>
-                    <Typography variant="subtitle2">{dept.department}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={`${dept.slaCompliance}%`} 
-                      color={getSLAColor(dept.slaCompliance) as any}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>{dept.avgTime}j</TableCell>
-                  <TableCell>{dept.workload}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={dept.slaCompliance >= 90 ? 'Excellent' : dept.slaCompliance >= 80 ? 'Bon' : 'Améliorer'}
-                      color={getSLAColor(dept.slaCompliance) as any}
-                      variant="outlined"
-                      size="small"
-                    />
-                  </TableCell>
+          <Box sx={{ overflowX: 'auto', width: '100%' }}>
+            <Table sx={{ minWidth: 650 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Département</TableCell>
+                  <TableCell>Conformité SLA</TableCell>
+                  <TableCell>Temps Moyen</TableCell>
+                  <TableCell>Charge de Travail</TableCell>
+                  <TableCell>Performance</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {data.departmentPerformance.map((dept: any, index: number) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <Typography variant="subtitle2">{dept.department}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={`${dept.slaCompliance}%`} 
+                        color={getSLAColor(dept.slaCompliance) as any}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>{dept.avgTime}j</TableCell>
+                    <TableCell>{dept.workload}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={dept.slaCompliance >= 90 ? 'Excellent' : dept.slaCompliance >= 80 ? 'Bon' : 'Améliorer'}
+                        color={getSLAColor(dept.slaCompliance) as any}
+                        variant="outlined"
+                        size="small"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       </Grid>
     </Grid>

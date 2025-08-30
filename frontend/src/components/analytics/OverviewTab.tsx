@@ -48,11 +48,7 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
       const volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
         date: new Date(day.createdAt).toLocaleDateString('fr-FR'),
         volume: day._count?.id || 0
-      })) || [
-        { date: '2025-01-01', volume: 45 },
-        { date: '2025-01-02', volume: 52 },
-        { date: '2025-01-03', volume: 38 }
-      ];
+      })) || [];
 
       // Calculate SLA distribution
       const totalSLA = slaCompliant + slaAtRisk + slaOverdue;
@@ -60,11 +56,7 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
         { name: 'À temps', value: slaCompliant, color: '#4caf50' },
         { name: 'À risque', value: slaAtRisk, color: '#ff9800' },
         { name: 'En retard', value: slaOverdue, color: '#f44336' }
-      ] : [
-        { name: 'À temps', value: 75, color: '#4caf50' },
-        { name: 'À risque', value: 15, color: '#ff9800' },
-        { name: 'En retard', value: 10, color: '#f44336' }
-      ];
+      ] : [];
 
       setData({
         volumeTrend,
@@ -72,18 +64,9 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('Failed to load overview data:', error);
-      // Set fallback data
       setData({
-        volumeTrend: [
-          { date: '2025-01-01', volume: 45 },
-          { date: '2025-01-02', volume: 52 },
-          { date: '2025-01-03', volume: 38 }
-        ],
-        slaDistribution: [
-          { name: 'À temps', value: 75, color: '#4caf50' },
-          { name: 'À risque', value: 15, color: '#ff9800' },
-          { name: 'En retard', value: 10, color: '#f44336' }
-        ]
+        volumeTrend: [],
+        slaDistribution: []
       });
       setKpis({
         totalBordereaux: 0,

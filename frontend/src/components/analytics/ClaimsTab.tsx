@@ -54,12 +54,7 @@ const ClaimsTab: React.FC<Props> = ({ filters, dateRange }) => {
           resolved,
           avgResolutionTime: 1.5 + Math.random() * 2 // 1.5-3.5 days
         };
-      }) || [
-        { type: 'Délai traitement', volume: 45, resolved: 38, avgResolutionTime: 2.3 },
-        { type: 'Erreur saisie', volume: 23, resolved: 20, avgResolutionTime: 1.8 },
-        { type: 'Document manquant', volume: 18, resolved: 15, avgResolutionTime: 3.1 },
-        { type: 'Montant incorrect', volume: 12, resolved: 10, avgResolutionTime: 2.7 }
-      ];
+      }) || [];
 
       // Generate claims trend (simulate monthly data)
       const claimsTrend = [
@@ -82,24 +77,10 @@ const ClaimsTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('Failed to load claims data:', error);
-      // Set fallback data
       setData({
-        claimsByType: [
-          { type: 'Délai traitement', volume: 45, resolved: 38, avgResolutionTime: 2.3 },
-          { type: 'Erreur saisie', volume: 23, resolved: 20, avgResolutionTime: 1.8 },
-          { type: 'Document manquant', volume: 18, resolved: 15, avgResolutionTime: 3.1 },
-          { type: 'Montant incorrect', volume: 12, resolved: 10, avgResolutionTime: 2.7 }
-        ],
-        claimsTrend: [
-          { month: 'Jan', claims: 45, resolved: 38 },
-          { month: 'Fév', claims: 52, resolved: 45 },
-          { month: 'Mar', claims: 38, resolved: 35 }
-        ],
-        statusDistribution: [
-          { name: 'Résolues', value: 85, color: '#4caf50' },
-          { name: 'En cours', value: 10, color: '#ff9800' },
-          { name: 'En attente', value: 5, color: '#f44336' }
-        ]
+        claimsByType: [],
+        claimsTrend: [],
+        statusDistribution: []
       });
       setClaimsKpis({
         totalClaims: 0,
@@ -270,37 +251,39 @@ const ClaimsTab: React.FC<Props> = ({ filters, dateRange }) => {
       <Grid item xs={12} md={6}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Analyse Détaillée</Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Type</TableCell>
-                <TableCell>Volume</TableCell>
-                <TableCell>Taux</TableCell>
-                <TableCell>Temps</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.claimsByType.map((claim: any, index: number) => {
-                const resolutionRate = getResolutionRate(claim.resolved, claim.volume);
-                return (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <Typography variant="body2">{claim.type}</Typography>
-                    </TableCell>
-                    <TableCell>{claim.volume}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={`${resolutionRate}%`}
-                        color={getResolutionColor(resolutionRate) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{claim.avgResolutionTime.toFixed(1)}j</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <Box sx={{ overflowX: 'auto', width: '100%' }}>
+            <Table size="small" sx={{ minWidth: 400 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Volume</TableCell>
+                  <TableCell>Taux</TableCell>
+                  <TableCell>Temps</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.claimsByType.map((claim: any, index: number) => {
+                  const resolutionRate = getResolutionRate(claim.resolved, claim.volume);
+                  return (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <Typography variant="body2">{claim.type}</Typography>
+                      </TableCell>
+                      <TableCell>{claim.volume}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={`${resolutionRate}%`}
+                          color={getResolutionColor(resolutionRate) as any}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{claim.avgResolutionTime.toFixed(1)}j</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       </Grid>
     </Grid>
