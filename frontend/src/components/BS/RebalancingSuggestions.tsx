@@ -33,14 +33,14 @@ export const RebalancingSuggestions: React.FC = () => {
 
   if (error) {
     return (
-      <Card title="Suggestions de rééquilibrage IA">
+      <Card title="Suggestions de rééquilibrage IA" style={{ width: '100%', maxWidth: '100%' }}>
         <Alert type="error" message="Erreur lors du chargement des suggestions" />
       </Card>
     );
   }
 
   return (
-    <Card title="Suggestions de rééquilibrage IA" loading={isLoading}>
+    <Card title="Suggestions de rééquilibrage IA" loading={isLoading} style={{ width: '100%', maxWidth: '100%' }}>
       {suggestions && suggestions.length === 0 && (
         <Alert 
           type="info" 

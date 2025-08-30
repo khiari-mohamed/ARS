@@ -42,7 +42,7 @@ export const AssignmentSuggestions: React.FC<AssignmentSuggestionsProps> = ({
 
   if (error) {
     return (
-      <Card title="Suggestions d'assignation IA">
+      <Card title="Suggestions d'assignation IA" style={{ width: '100%', maxWidth: '100%' }}>
         <Alert
           type="warning"
           message="Suggestions IA temporairement indisponibles"
@@ -61,7 +61,7 @@ export const AssignmentSuggestions: React.FC<AssignmentSuggestionsProps> = ({
     <Card 
       title="Suggestions d'assignation IA" 
       extra={isLoading && <Spin size="small" />}
-      style={{ height: '400px' }}
+      style={{ height: '400px', width: '100%', maxWidth: '100%' }}
       bodyStyle={{ height: 'calc(100% - 57px)', overflow: 'auto', padding: '12px' }}
     >
       {isLoading ? (

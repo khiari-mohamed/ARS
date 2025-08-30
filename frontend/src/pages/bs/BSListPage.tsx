@@ -50,9 +50,9 @@ const BSListPage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: '12px 8px', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* Filters Section */}
-      <Space style={{ marginBottom: 16 }} wrap>
+      <Space style={{ marginBottom: 16 }} wrap size="small">
         <Select
           placeholder="Statut"
           style={{ width: 150 }}
@@ -104,11 +104,11 @@ const BSListPage: React.FC = () => {
       </Space>
 
       {/* AI/Analytics Widgets */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col span={12}>
+      <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={12} style={{ marginBottom: '8px' }}>
           <PrioritiesDashboard />
         </Col>
-        <Col span={12}>
+        <Col xs={24} lg={12} style={{ marginBottom: '8px' }}>
           <RebalancingSuggestions />
         </Col>
       </Row>

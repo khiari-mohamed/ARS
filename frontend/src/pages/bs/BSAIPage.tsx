@@ -12,16 +12,16 @@ const BSAIPage: React.FC = () => {
         Intelligence artificielle pour l'optimisation des assignations et la gestion des priorités
       </p>
       
-      <Row gutter={[16, 16]}>
-        <Col span={12}>
+      <Row gutter={[8, 8]}>
+        <Col xs={24} lg={12} style={{ marginBottom: '8px' }}>
           <AssignmentSuggestions />
         </Col>
-        <Col span={12}>
+        <Col xs={24} lg={12} style={{ marginBottom: '8px' }}>
           <RebalancingSuggestions />
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+      <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
         <Col span={24}>
           <PrioritiesDashboard />
         </Col>
