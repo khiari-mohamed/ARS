@@ -1330,7 +1330,9 @@ export class GedService {
       autoRetryEnabled: true,
       maxRetryAttempts: 3,
       scannerModels: ['fi-7600', 'fi-8000', 'fi-8170'],
-      operatorIds: ['OP001', 'OP002', 'OP003']
+      operatorIds: ['OP001', 'OP002', 'OP003'],
+      hierarchicalFolders: true,
+      folderStructure: 'client/date/batch'
     };
 
     if (latestConfig) {

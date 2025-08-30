@@ -62,10 +62,16 @@ export class PaperStreamWatcherService {
     const relativePath = path.relative(this.watchFolder, dirPath);
     const parts = relativePath.split(path.sep);
     
-    // Only process leaf directories (actual batch folders)
+    // Support both hierarchical (client/date/batch) and flat (batch) structures
     // Expected: client/date/batchID (3 levels) or just batchID (1 level)
     if (parts.length !== 3 && parts.length !== 1) return false;
     if (parts[parts.length - 1].startsWith('.')) return false;
+    
+    // For hierarchical structure, validate date format in middle part
+    if (parts.length === 3) {
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      if (!datePattern.test(parts[1])) return false;
+    }
     
     // Check if it contains batch files
     try {
@@ -85,7 +91,22 @@ export class PaperStreamWatcherService {
         this.logger.warn(`Invalid batch folder: ${batchFolderPath}`);
         return;
       }
-      await this.batchProcessor.processBatchFolder(batchFolderPath);
+      
+      // Extract client and date from hierarchical path if present
+      const relativePath = path.relative(this.watchFolder, batchFolderPath);
+      const parts = relativePath.split(path.sep);
+      
+      let clientName: string | undefined;
+      let scanDate: string | undefined;
+      
+      if (parts.length === 3) {
+        // Hierarchical structure: client/date/batch
+        clientName = parts[0];
+        scanDate = parts[1];
+        this.logger.log(`Processing hierarchical batch - Client: ${clientName}, Date: ${scanDate}, Batch: ${parts[2]}`);
+      }
+      
+      await (this.batchProcessor as any).processBatchFolder(batchFolderPath, { clientName, scanDate });
     } catch (error) {
       this.logger.error(`Batch folder processing failed: ${error.message}`);
     }
