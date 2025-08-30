@@ -11,16 +11,21 @@ export class OVAnalyticsService {
   async getOVDashboard(user: any, filters: any = {}) {
     const where: any = {};
     
-    // Apply date filters
+    // Apply date filters ONLY if explicitly provided
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
       if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
       if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
     }
+    // No default date filtering - show all records
 
-    // Apply company filter
+    // Apply company filter (search in client name)
     if (filters.company) {
-      where.donneurOrdre = { contains: filters.company, mode: 'insensitive' };
+      where.bordereau = {
+        client: {
+          name: { contains: filters.company, mode: 'insensitive' }
+        }
+      };
     }
 
     // Apply status filter
@@ -46,7 +51,7 @@ export class OVAnalyticsService {
       this.prisma.virement.count({ where }),
       this.prisma.virement.count({ where: { ...where, confirmed: true } }),
       this.prisma.virement.count({ where: { ...where, confirmed: false } }),
-      0, // No rejected status in current schema
+      0, // No rejected status in Virement table
       this.getOVList(where, filters),
       this.getAvgExecutionTime(where),
       this.getOVByStatus(where),
@@ -133,12 +138,12 @@ export class OVAnalyticsService {
   private getOVAlertLevel(ov: any, executionDelay: number | null) {
     if (ov.confirmed) return 'success';
     
-    if (executionDelay === null && ov.dateDepot) {
+    if (!ov.confirmed && ov.dateDepot) {
       const daysSinceInjection = Math.floor(
         (new Date().getTime() - new Date(ov.dateDepot).getTime()) / (1000 * 60 * 60 * 24)
       );
       
-      if (daysSinceInjection > 1) return 'critical'; // > 24h rule
+      if (daysSinceInjection > 1) return 'critical';
       if (daysSinceInjection > 0.5) return 'warning';
     }
     
@@ -149,9 +154,7 @@ export class OVAnalyticsService {
     const executedOV = await this.prisma.virement.findMany({
       where: {
         ...where,
-        confirmed: true,
-        dateDepot: { not: null },
-        dateExecution: { not: null }
+        confirmed: true
       },
       select: {
         dateDepot: true,
@@ -162,13 +165,16 @@ export class OVAnalyticsService {
     if (executedOV.length === 0) return 0;
 
     const totalDays = executedOV.reduce((sum, ov) => {
-      const days = Math.floor(
-        (new Date(ov.dateExecution).getTime() - new Date(ov.dateDepot).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      return sum + days;
+      if (ov.dateExecution && ov.dateDepot) {
+        const days = Math.floor(
+          (new Date(ov.dateExecution).getTime() - new Date(ov.dateDepot).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        return sum + Math.max(days, 0);
+      }
+      return sum;
     }, 0);
 
-    return totalDays / executedOV.length;
+    return executedOV.length > 0 ? totalDays / executedOV.length : 0;
   }
 
   private async getOVByStatus(where: any) {
@@ -188,13 +194,11 @@ export class OVAnalyticsService {
   private async getOVByDay(where: any) {
     const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     
+    // Get all OV, not just last 30 days, to ensure we show data
     const dailyOV = await this.prisma.virement.groupBy({
       by: ['createdAt'],
       _count: { id: true },
-      where: {
-        ...where,
-        createdAt: { gte: last30Days }
-      },
+      where,
       orderBy: { createdAt: 'asc' }
     });
 
@@ -217,8 +221,7 @@ export class OVAnalyticsService {
       _count: { id: true },
       where: {
         ...where,
-        confirmed: true,
-        dateExecution: { gte: last30Days, not: null }
+        confirmed: true
       }
     });
 
@@ -259,9 +262,6 @@ export class OVAnalyticsService {
       },
       orderBy: { dateDepot: 'asc' }
     });
-
-    // Get rejected OV (none in current schema, return empty)
-    const rejectedOV: any[] = [];
 
     const alerts: any[] = [];
 
@@ -372,7 +372,7 @@ export class OVAnalyticsService {
       this.prisma.virement.count({ where }),
       this.prisma.virement.count({ where: { ...where, confirmed: true } }),
       this.prisma.virement.count({ where: { ...where, confirmed: false } }),
-      0, // No rejected status in current schema
+      0, // No rejected status in Virement table
       this.getAvgExecutionTime(where),
       this.prisma.virement.aggregate({
         _sum: { montant: true },
