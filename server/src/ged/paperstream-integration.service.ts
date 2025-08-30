@@ -25,16 +25,60 @@ export class PaperStreamIntegrationService {
   @Cron(CronExpression.EVERY_30_SECONDS)
   async processNewScannedFiles() {
     try {
-      const files = fs.readdirSync(this.watchFolder);
-      const imageFiles = files.filter(file => 
-        /\.(pdf|jpg|jpeg|png|tiff|tif)$/i.test(file)
-      );
-
-      for (const file of imageFiles) {
-        await this.processScannedFile(file);
+      // Check for batch folders first
+      const items = fs.readdirSync(this.watchFolder);
+      
+      for (const item of items) {
+        const itemPath = path.join(this.watchFolder, item);
+        const stats = fs.statSync(itemPath);
+        
+        if (stats.isDirectory()) {
+          // Process as batch folder
+          await this.processBatchFolder(itemPath);
+        } else if (stats.isFile() && /\.(pdf|jpg|jpeg|png|tiff|tif)$/i.test(item)) {
+          // Process individual file (legacy mode)
+          await this.processScannedFile(item);
+        }
       }
     } catch (error) {
       this.logger.error('Error processing scanned files:', error);
+    }
+  }
+  
+  private async processBatchFolder(batchFolderPath: string) {
+    try {
+      this.logger.log(`Processing PaperStream batch folder: ${batchFolderPath}`);
+      
+      // Check if this is a leaf directory with actual batch files
+      const files = fs.readdirSync(batchFolderPath);
+      const hasIndex = files.some(f => f.toLowerCase().endsWith('.xml') || f.toLowerCase().endsWith('.csv'));
+      const hasDocuments = files.some(f => /\.(pdf|jpg|jpeg|png|tiff|tif)$/i.test(f));
+      
+      if (!hasIndex || !hasDocuments) {
+        // This might be a parent directory, check subdirectories
+        const subdirs = files.filter(f => {
+          const fullPath = path.join(batchFolderPath, f);
+          return fs.statSync(fullPath).isDirectory();
+        });
+        
+        // Process each subdirectory that might be a batch folder
+        for (const subdir of subdirs) {
+          const subdirPath = path.join(batchFolderPath, subdir);
+          await this.processBatchFolder(subdirPath);
+        }
+        return;
+      }
+      
+      // This is an actual batch folder, process it
+      this.logger.log(`Found valid batch folder: ${batchFolderPath}`);
+      
+      // Use the batch processor
+      const { PaperStreamBatchProcessor } = require('./paperstream-batch-processor.service');
+      const batchProcessor = new PaperStreamBatchProcessor(this.prisma);
+      await batchProcessor.processBatchFolder(batchFolderPath);
+      
+    } catch (error) {
+      this.logger.error(`Batch folder processing failed: ${error.message}`);
     }
   }
 
@@ -82,16 +126,40 @@ export class PaperStreamIntegrationService {
         });
         bordereauId = bordereau?.id ?? null;
       }
+      
+      // Get system user
+      const systemUser = await this.prisma.user.findFirst({
+        where: { role: 'SUPER_ADMIN' }
+      });
+      
+      if (!systemUser) {
+        throw new Error('No system user found');
+      }
+      
+      // Calculate file hash
+      const fileBuffer = fs.readFileSync(filePath);
+      const hash = require('crypto').createHash('sha256').update(fileBuffer).digest('hex');
 
-      // Create document record
+      // Create document record with PaperStream fields
       await this.prisma.document.create({
         data: {
           name: fileName,
           type: 'SCANNED_DOCUMENT',
           path: filePath,
-          uploadedById: 'PAPERSTREAM_SYSTEM',
+          uploadedById: systemUser.id,
           bordereauId,
-          status: 'UPLOADED'
+          status: 'UPLOADED',
+          hash,
+          batchId: metadata.batchId || `LEGACY_${Date.now()}`,
+          barcodeValues: metadata.barcodes || [],
+          pageCount: metadata.pageCount || 1,
+          resolution: metadata.resolution || 300,
+          colorMode: metadata.colorMode || 'color',
+          operatorId: metadata.operatorId || 'LEGACY_SCAN',
+          scannerModel: metadata.scannerModel || 'UNKNOWN',
+          imprinterIds: metadata.imprinterIds || [],
+          ingestStatus: 'INGESTED',
+          ingestTimestamp: new Date()
         }
       });
     } catch (error) {

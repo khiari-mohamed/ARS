@@ -23,7 +23,9 @@ import {
   ListItemIcon,
   Divider,
   Paper,
-  LinearProgress
+  LinearProgress,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Search,
@@ -35,6 +37,7 @@ import {
   Person
 } from '@mui/icons-material';
 import { performAdvancedSearch, getSearchSuggestions } from '../../services/gedService';
+import PaperStreamDocumentSearch from './PaperStreamDocumentSearch';
 
 interface SearchFacet {
   field: string;
@@ -56,6 +59,7 @@ interface SearchResult {
 }
 
 const AdvancedSearchInterface: React.FC = () => {
+  const [activeTab, setActiveTab] = useState(0);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [facets, setFacets] = useState<SearchFacet[]>([]);
@@ -266,8 +270,24 @@ const AdvancedSearchInterface: React.FC = () => {
 
   return (
     <Box>
-      {/* Search Header */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Typography variant="h5" gutterBottom>
+        Recherche Avancée
+      </Typography>
+
+      {/* Search Type Tabs */}
+      <Paper sx={{ mb: 3 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+          <Tab label="Recherche Générale" />
+          <Tab label="Recherche PaperStream" />
+        </Tabs>
+      </Paper>
+
+      {activeTab === 1 ? (
+        <PaperStreamDocumentSearch />
+      ) : (
+        <Box>
+          {/* Search Header */}
+          <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Recherche Avancée de Documents
         </Typography>
@@ -472,6 +492,8 @@ const AdvancedSearchInterface: React.FC = () => {
           )}
         </Grid>
       </Grid>
+        </Box>
+      )}
     </Box>
   );
 };

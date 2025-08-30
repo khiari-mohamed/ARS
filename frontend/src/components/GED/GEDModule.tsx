@@ -8,6 +8,7 @@ import CorbeilleTab from './CorbeilleTab';
 import AdvancedSearchInterface from './AdvancedSearchInterface';
 import DocumentWorkflowManager from './DocumentWorkflowManager';
 import IntegrationManager from './IntegrationManager';
+import PaperStreamDashboard from './PaperStreamDashboard';
 import ReportsTab from './ReportsTab';
 import GEDMobileView from './GEDMobileView';
 import { useAuth } from '../../contexts/AuthContext';
@@ -25,6 +26,7 @@ const GEDModule: React.FC = () => {
     'Recherche',
     'Workflows',
     'Intégrations',
+    'PaperStream',
     'Rapports'
   ];
 
@@ -67,7 +69,8 @@ const GEDModule: React.FC = () => {
             {tab === 3 && <AdvancedSearchInterface />}
             {tab === 4 && <DocumentWorkflowManager />}
             {tab === 5 && <IntegrationManager />}
-            {tab === 6 && <ReportsTab />}
+            {tab === 6 && <PaperStreamDashboard />}
+            {tab === 7 && <ReportsTab />}
           </Box>
         </Paper>
       )}

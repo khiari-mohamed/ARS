@@ -10,16 +10,22 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
+import { getPaperStreamStatus } from '../../services/gedService';
 
 const GEDDashboardTab: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [slaData, setSlaData] = useState<any[]>([]);
   const [recentDocs, setRecentDocs] = useState<any[]>([]);
+  const [paperStreamStatus, setPaperStreamStatus] = useState<any>(null);
   const { user } = useAuth();
 
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
+        // Load PaperStream status
+        const psStatus = await getPaperStreamStatus();
+        setPaperStreamStatus(psStatus);
+        
         // Try to load real analytics data
         const analyticsResponse = await LocalAPI.get('/documents/analytics');
         const analytics = analyticsResponse.data;
@@ -62,7 +68,10 @@ const GEDDashboardTab: React.FC = () => {
           name: doc.name,
           type: doc.type,
           uploadedAt: doc.uploadedAt,
-          status: doc.status || 'UPLOADED'
+          status: doc.status || 'UPLOADED',
+          batchId: doc.batchId,
+          operatorId: doc.operatorId,
+          ingestStatus: doc.ingestStatus
         })));
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
@@ -81,10 +90,18 @@ const GEDDashboardTab: React.FC = () => {
         ]);
 
         setRecentDocs([
-          { id: '1', name: 'BS_Client_A_001.pdf', type: 'BS', uploadedAt: '2025-01-15', status: 'SCANNE' },
+          { id: '1', name: 'BS_Client_A_001.pdf', type: 'BS', uploadedAt: '2025-01-15', status: 'SCANNE', batchId: 'BATCH_001', operatorId: 'OP001', ingestStatus: 'INGESTED' },
           { id: '2', name: 'Contrat_Client_B.pdf', type: 'CONTRAT', uploadedAt: '2025-01-15', status: 'EN_COURS' },
           { id: '3', name: 'Justificatif_001.pdf', type: 'JUSTIFICATIF', uploadedAt: '2025-01-14', status: 'TRAITE' }
         ]);
+        
+        setPaperStreamStatus({
+          status: 'active',
+          watcherActive: true,
+          totalProcessed: 156,
+          totalQuarantined: 8,
+          successRate: 95.1
+        });
       }
     };
     loadDashboardData();
@@ -259,9 +276,40 @@ const GEDDashboardTab: React.FC = () => {
           </Paper>
         </Grid>
 
-        {/* Role-Specific Widget */}
+        {/* PaperStream Status Widget */}
         <Grid item xs={12} md={6}>
-          {getRoleSpecificWidget()}
+          <Paper elevation={2} sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+              <ScannerIcon sx={{ mr: 1, color: paperStreamStatus?.watcherActive ? 'success.main' : 'error.main' }} />
+              PaperStream Integration
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="textSecondary">Statut</Typography>
+                <Chip 
+                  label={paperStreamStatus?.watcherActive ? 'Actif' : 'Inactif'} 
+                  color={paperStreamStatus?.watcherActive ? 'success' : 'error'}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="textSecondary">Taux de Succès</Typography>
+                <Typography variant="h6" color="success.main">
+                  {paperStreamStatus?.successRate?.toFixed(1) || 0}%
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="textSecondary">Lots Traités</Typography>
+                <Typography variant="h6">{paperStreamStatus?.totalProcessed || 0}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="textSecondary">Quarantaine</Typography>
+                <Typography variant="h6" color={paperStreamStatus?.totalQuarantined > 0 ? 'error.main' : 'textPrimary'}>
+                  {paperStreamStatus?.totalQuarantined || 0}
+                </Typography>
+              </Grid>
+            </Grid>
+          </Paper>
         </Grid>
 
         {/* Recent Documents */}
@@ -275,6 +323,7 @@ const GEDDashboardTab: React.FC = () => {
                   <TableCell>Type</TableCell>
                   <TableCell>Date Upload</TableCell>
                   <TableCell>Statut</TableCell>
+                  <TableCell>PaperStream</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -284,6 +333,24 @@ const GEDDashboardTab: React.FC = () => {
                     <TableCell>{doc.type}</TableCell>
                     <TableCell>{new Date(doc.uploadedAt).toLocaleDateString()}</TableCell>
                     <TableCell>{getStatusChip(doc.status)}</TableCell>
+                    <TableCell>
+                      {doc.batchId ? (
+                        <Box>
+                          <Chip label={`Lot: ${doc.batchId}`} size="small" variant="outlined" sx={{ mb: 0.5 }} />
+                          {doc.operatorId && <Chip label={`Op: ${doc.operatorId}`} size="small" variant="outlined" />}
+                          {doc.ingestStatus && (
+                            <Chip 
+                              label={doc.ingestStatus} 
+                              size="small" 
+                              color={doc.ingestStatus === 'INGESTED' ? 'success' : 'default'}
+                              sx={{ ml: 0.5 }}
+                            />
+                          )}
+                        </Box>
+                      ) : (
+                        <Typography variant="caption" color="textSecondary">-</Typography>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

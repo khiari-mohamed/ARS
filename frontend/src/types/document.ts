@@ -12,7 +12,19 @@ export interface Document {
   ocrResult?: any;
   status?: string;      // Added for workflow status
   slaStatus?: string;   // Added for SLA color status
-  // ...any other fields
+  
+  // PaperStream-specific fields
+  batchId?: string;
+  barcodeValues?: string[];
+  pageCount?: number;
+  resolution?: number;
+  colorMode?: string;
+  operatorId?: string;
+  scannerModel?: string;
+  imprinterIds?: string[];
+  ingestStatus?: 'PENDING' | 'INGESTED' | 'ERROR' | 'QUARANTINED';
+  ingestTimestamp?: string;
+  hash?: string;
 }
 
 export interface DocumentUploadPayload {
@@ -30,4 +42,11 @@ export interface DocumentSearchParams {
   uploadedAfter?: string;
   uploadedBefore?: string;
   keywords?: string;
+  
+  // PaperStream search parameters
+  batchId?: string;
+  operatorId?: string;
+  scannerModel?: string;
+  ingestStatus?: string;
+  barcodeValue?: string;
 }

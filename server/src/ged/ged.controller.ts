@@ -281,11 +281,47 @@ async uploadDocument(
     return this.gedService.deleteDocument(id, user);
   }
 
-  // PaperStream integration status
+  // PaperStream integration endpoints
   @Get('paperstream/status')
   async getPaperStreamStatus(@Req() req: any) {
     const user = getUserFromRequest(req);
     return this.gedService.getPaperStreamStatus(user);
+  }
+
+  @Get('paperstream/batches')
+  async getPaperStreamBatches(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getPaperStreamBatches(query, user);
+  }
+
+  @Get('paperstream/quarantine')
+  async getQuarantinedBatches(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getQuarantinedBatches(user);
+  }
+
+  @Post('paperstream/quarantine/:batchId/retry')
+  async retryQuarantinedBatch(@Param('batchId') batchId: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.retryQuarantinedBatch(batchId, user);
+  }
+
+  @Get('paperstream/analytics')
+  async getPaperStreamAnalytics(@Query('period') period: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getPaperStreamAnalytics(period || '7d', user);
+  }
+
+  @Post('paperstream/config')
+  async updatePaperStreamConfig(@Body() config: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.updatePaperStreamConfig(config, user);
+  }
+
+  @Get('paperstream/config')
+  async getPaperStreamConfig(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getPaperStreamConfig(user);
   }
 
   // Catch-all route MUST BE LAST

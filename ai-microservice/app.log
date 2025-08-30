@@ -4436,3 +4436,90 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-08-29 17:12:48,018 - monitoring - INFO - Completed performance in 0.00s
 2025-08-29 17:12:48,023 - monitoring - INFO - Starting performance endpoint call
 2025-08-29 17:12:48,023 - monitoring - INFO - Completed performance in 0.00s
+2025-08-29 17:33:45,537 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 17:33:45,544 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-08-29 17:33:45,555 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 17:33:45,556 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 17:33:45,618 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 17:33:45,701 - monitoring - INFO - Completed automated_decisions in 0.08s
+2025-08-29 17:33:46,684 - monitoring - INFO - Starting priorities endpoint call
+2025-08-29 17:33:46,755 - monitoring - INFO - Completed priorities in 0.07s
+2025-08-29 17:33:46,804 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-29 17:33:46,808 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-29 17:33:54,046 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-29 17:33:54,047 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-29 17:33:54,053 - asyncio - ERROR - Exception in callback H11Protocol.timeout_keep_alive_handler()
+handle: <TimerHandle when=2521074.89 H11Protocol.timeout_keep_alive_handler()>
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\asyncio\events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 363, in timeout_keep_alive_handler
+    self.conn.send(event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 538, in send
+    data_list = self.send_with_data_passthrough(event)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 563, in send_with_data_passthrough
+    self._process_event(self.our_role, event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 284, in _process_event
+    self._cstate.process_event(role, type(event), server_switch_event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 291, in process_event
+    self._fire_event_triggered_transitions(role, _event_type)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 309, in _fire_event_triggered_transitions
+    raise LocalProtocolError(
+h11._util.LocalProtocolError: can't handle event type ConnectionClosed when role=SERVER and state=SEND_RESPONSE
+2025-08-29 17:34:02,339 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-29 17:34:02,343 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-30 14:03:32,472 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-30 14:03:34,160 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:03:34,161 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:03:34,162 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:03:34,162 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:03:34,164 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-30 14:03:34,164 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-30 14:03:34,172 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-30 14:03:34,174 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-30 14:03:34,279 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 14:03:34,279 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 14:03:35,947 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-30 14:03:35,947 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-30 14:03:35,957 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:03:35,957 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:03:35,958 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:03:35,958 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:03:35,960 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-30 14:03:35,960 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-30 14:03:36,410 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-30 14:03:36,410 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-30 14:03:36,476 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 14:03:36,476 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 14:03:36,586 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-30 14:03:36,586 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-30 14:04:07,782 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:04:07,783 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:04:07,787 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-30 14:04:07,787 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-30 14:04:08,189 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:04:08,190 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:04:08,193 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-30 14:04:08,194 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-30 14:04:08,301 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 14:04:08,301 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 14:04:08,337 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-30 14:04:08,338 - monitoring - INFO - Completed recommendations in 0.00s
+2025-08-30 14:04:39,154 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:04:39,155 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:04:39,479 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-30 14:04:39,479 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-30 14:04:39,482 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-30 14:04:39,482 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-30 14:04:39,485 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-30 14:04:39,487 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-30 14:04:39,586 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 14:04:39,588 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 14:04:39,933 - monitoring - INFO - Starting recommendations endpoint call
+2025-08-30 14:04:39,933 - monitoring - INFO - Completed recommendations in 0.00s
