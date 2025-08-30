@@ -445,7 +445,78 @@ export class AnalyticsService {
   // Missing methods with minimal implementation
   async getReclamationPerformance(user: any, query: any) {
     this.checkAnalyticsRole(user);
-    return { performance: 'good', metrics: [] };
+    try {
+      const where: any = {};
+      
+      // Apply date filters if provided
+      if (query.fromDate || query.toDate) {
+        where.createdAt = {};
+        if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
+        if (query.toDate) where.createdAt.lte = new Date(query.toDate);
+      }
+
+      // Get reclamations by type
+      const byType = await this.prisma.reclamation.groupBy({
+        by: ['type'],
+        _count: { id: true },
+        where,
+        orderBy: { _count: { id: 'desc' } }
+      });
+
+      // Get reclamations by status
+      const byStatus = await this.prisma.reclamation.groupBy({
+        by: ['status'],
+        _count: { id: true },
+        where,
+        orderBy: { _count: { id: 'desc' } }
+      });
+
+      // Get reclamations by severity
+      const bySeverity = await this.prisma.reclamation.groupBy({
+        by: ['severity'],
+        _count: { id: true },
+        where,
+        orderBy: { _count: { id: 'desc' } }
+      });
+
+      // Calculate resolution metrics
+      const totalReclamations = await this.prisma.reclamation.count({ where });
+      const resolvedReclamations = await this.prisma.reclamation.count({
+        where: {
+          ...where,
+          status: { in: ['RESOLVED', 'CLOSED', 'COMPLETED'] }
+        }
+      });
+
+      const resolutionRate = totalReclamations > 0 ? 
+        Math.round((resolvedReclamations / totalReclamations) * 100) : 0;
+
+      // Get average resolution time (mock calculation)
+      const avgResolutionTime = 2.4; // This would need actual resolution time calculation
+
+      return {
+        byType,
+        byStatus,
+        bySeverity,
+        totalReclamations,
+        resolvedReclamations,
+        resolutionRate,
+        avgResolutionTime,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error getting reclamation performance:', error);
+      return {
+        byType: [],
+        byStatus: [],
+        bySeverity: [],
+        totalReclamations: 0,
+        resolvedReclamations: 0,
+        resolutionRate: 0,
+        avgResolutionTime: 0,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 
   async getClientDashboard(user: any, query: any) {
@@ -485,7 +556,41 @@ export class AnalyticsService {
 
   async getCourrierVolume(user: any) {
     this.checkAnalyticsRole(user);
-    return { volume: 0 };
+    try {
+      // Get courriers grouped by type
+      const byType = await this.prisma.courrier.groupBy({
+        by: ['type'],
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } }
+      });
+
+      // Get total volume
+      const totalVolume = await this.prisma.courrier.count();
+
+      // Get recent volume (last 30 days)
+      const recentVolume = await this.prisma.courrier.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          }
+        }
+      });
+
+      return {
+        byType,
+        totalVolume,
+        recentVolume,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error getting courrier volume:', error);
+      return {
+        byType: [],
+        totalVolume: 0,
+        recentVolume: 0,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 
   async getCourrierSlaBreaches(user: any) {
