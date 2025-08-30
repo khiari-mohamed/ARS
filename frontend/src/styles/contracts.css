@@ -2,7 +2,11 @@
 .contracts-module {
   min-height: 100vh;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  padding: 20px;
+  padding: 12px 8px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .contracts-header {
@@ -15,9 +19,11 @@
 
 .contracts-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .stat-card {
@@ -45,16 +51,20 @@
 
 .contracts-filters {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid #e5e7eb;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .filter-input {
-  min-width: 200px;
+  min-width: 180px;
+  flex: 1;
+  box-sizing: border-box;
 }
 
 .contracts-layout {
@@ -328,32 +338,99 @@
   .contracts-filters {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
   
   .filter-input {
     min-width: auto;
+    width: 100%;
   }
 }
 
 @media (max-width: 768px) {
   .contracts-module {
-    padding: 12px;
+    padding: 8px;
+  }
+  
+  .contracts-header {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  /* Fix header buttons overflow on mobile */
+  .contracts-module .MuiBox-root:first-of-type .MuiBox-root:last-child {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  
+  .contracts-module .MuiButton-root {
+    width: 100%;
+    min-width: auto;
+    padding: 8px 16px;
+    font-size: 0.875rem;
   }
   
   .contracts-stats {
     grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .stat-card {
+    padding: 12px;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  
+  .contracts-filters {
+    margin-top: 16px;
+    padding-top: 16px;
+  }
+  
+  .contracts-list,
+  .contract-details {
+    height: auto;
+    min-height: 400px;
+  }
+  
+  .contracts-list-header,
+  .contract-details-header {
+    padding: 16px;
+  }
+  
+  .contract-tab-content {
+    padding: 16px;
   }
   
   .form-row {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
   
   .sla-compliance-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
   
   .associations-section {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .document-section {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+  
+  .sla-chips {
+    justify-content: center;
+  }
+  
+  .file-upload-area {
+    padding: 16px;
   }
 }
 

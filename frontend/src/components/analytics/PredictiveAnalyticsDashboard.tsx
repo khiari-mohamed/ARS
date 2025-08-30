@@ -162,7 +162,6 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
 
     } catch (error) {
       console.error('Failed to load predictive data:', error);
-      // Fallback data
       setData({
         slaPredictions: [],
         capacityAnalysis: [],
@@ -349,28 +348,36 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box 
+        display="flex" 
+        justifyContent="space-between" 
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        flexDirection={{ xs: 'column', md: 'row' }}
+        gap={2}
+        mb={3}
+      >
         <Box>
-          <Typography variant="h4" component="h1">
+          <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '2rem' } }}>
             🔮 Analyses Prédictives IA
           </Typography>
           {aiInsights && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
               Confiance IA: {aiInsights.confidence}% | Tendance: {aiInsights.trendDirection} | 
               {aiInsights.anomalies.length} anomalie(s) détectée(s)
             </Typography>
           )}
         </Box>
-        <Box display="flex" gap={2}>
+        <Box display="flex" gap={1} flexDirection={{ xs: 'column', sm: 'row' }} width={{ xs: '100%', md: 'auto' }}>
           <Button
             variant={realTimeUpdates ? 'contained' : 'outlined'}
             size="small"
             onClick={() => setRealTimeUpdates(!realTimeUpdates)}
             color={realTimeUpdates ? 'success' : 'primary'}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             {realTimeUpdates ? '🟢 Temps Réel' : '⏸️ Pausé'}
           </Button>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
             <InputLabel>Horizon</InputLabel>
             <Select
               value={timeHorizon}
@@ -446,7 +453,7 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
 
       {/* Tabs */}
       <Paper sx={{ p: 3 }}>
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 3 }} variant="scrollable" scrollButtons="auto">
           <Tab 
             label={`Prédictions SLA (${data?.slaPredictions.length || 0})`} 
             icon={<Warning />} 
@@ -478,59 +485,61 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
               Prédictions de Dépassement SLA
             </Typography>
             
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Bordereau</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Assigné à</TableCell>
-                  <TableCell>Risque</TableCell>
-                  <TableCell>Score</TableCell>
-                  <TableCell>Jours Restants</TableCell>
-                  <TableCell>Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data?.slaPredictions.slice(0, 10).map((pred) => (
-                  <TableRow key={pred.id}>
-                    <TableCell>{pred.bordereau?.reference || pred.id.slice(-8)}</TableCell>
-                    <TableCell>{pred.bordereau?.clientName || 'N/A'}</TableCell>
-                    <TableCell>{pred.bordereau?.assignedTo || 'N/A'}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={pred.risk}
-                        color={getRiskColor(pred.risk)}
-                      />
-                    </TableCell>
-                    <TableCell>{(pred.score * 100).toFixed(0)}%</TableCell>
-                    <TableCell>{pred.days_left}</TableCell>
-                    <TableCell>
-                      {pred.risk === '🔴' && (
-                        <Button 
-                          size="small" 
-                          color="error" 
-                          variant="outlined"
-                          onClick={() => handleAIReassignment(pred.id)}
-                        >
-                          🤖 Réassigner IA
-                        </Button>
-                      )}
-                      {pred.risk === '🟠' && (
-                        <Button 
-                          size="small" 
-                          color="warning" 
-                          variant="text"
-                          onClick={() => handlePriorityBoost(pred.id)}
-                        >
-                          Prioriser
-                        </Button>
-                      )}
-                    </TableCell>
+            <Box sx={{ overflowX: 'auto', width: '100%' }}>
+              <Table sx={{ minWidth: 700 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Bordereau</TableCell>
+                    <TableCell>Client</TableCell>
+                    <TableCell>Assigné à</TableCell>
+                    <TableCell>Risque</TableCell>
+                    <TableCell>Score</TableCell>
+                    <TableCell>Jours Restants</TableCell>
+                    <TableCell>Action</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {data?.slaPredictions.slice(0, 10).map((pred) => (
+                    <TableRow key={pred.id}>
+                      <TableCell>{pred.bordereau?.reference || pred.id.slice(-8)}</TableCell>
+                      <TableCell>{pred.bordereau?.clientName || 'N/A'}</TableCell>
+                      <TableCell>{pred.bordereau?.assignedTo || 'N/A'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={pred.risk}
+                          color={getRiskColor(pred.risk)}
+                        />
+                      </TableCell>
+                      <TableCell>{(pred.score * 100).toFixed(0)}%</TableCell>
+                      <TableCell>{pred.days_left}</TableCell>
+                      <TableCell>
+                        {pred.risk === '🔴' && (
+                          <Button 
+                            size="small" 
+                            color="error" 
+                            variant="outlined"
+                            onClick={() => handleAIReassignment(pred.id)}
+                          >
+                            🤖 Réassigner IA
+                          </Button>
+                        )}
+                        {pred.risk === '🟠' && (
+                          <Button 
+                            size="small" 
+                            color="warning" 
+                            variant="text"
+                            onClick={() => handlePriorityBoost(pred.id)}
+                          >
+                            Prioriser
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
           </Box>
         )}
 
@@ -541,42 +550,44 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
               Analyse de Capacité par Gestionnaire
             </Typography>
             
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Gestionnaire</TableCell>
-                  <TableCell>Bordereaux Actifs</TableCell>
-                  <TableCell>Temps Moyen</TableCell>
-                  <TableCell>Capacité Quotidienne</TableCell>
-                  <TableCell>Jours pour Terminer</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell>Recommandation</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data?.capacityAnalysis.map((analysis) => (
-                  <TableRow key={analysis.userId}>
-                    <TableCell>{analysis.userName}</TableCell>
-                    <TableCell>{analysis.activeBordereaux}</TableCell>
-                    <TableCell>{analysis.avgProcessingTime.toFixed(1)} j</TableCell>
-                    <TableCell>{analysis.dailyCapacity.toFixed(1)}</TableCell>
-                    <TableCell>{analysis.daysToComplete.toFixed(1)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={analysis.capacityStatus}
-                        color={getCapacityColor(analysis.capacityStatus)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ maxWidth: 200 }}>
-                        {analysis.recommendation}
-                      </Typography>
-                    </TableCell>
+            <Box sx={{ overflowX: 'auto', width: '100%' }}>
+              <Table sx={{ minWidth: 800 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Gestionnaire</TableCell>
+                    <TableCell>Bordereaux Actifs</TableCell>
+                    <TableCell>Temps Moyen</TableCell>
+                    <TableCell>Capacité Quotidienne</TableCell>
+                    <TableCell>Jours pour Terminer</TableCell>
+                    <TableCell>Statut</TableCell>
+                    <TableCell>Recommandation</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {data?.capacityAnalysis.map((analysis) => (
+                    <TableRow key={analysis.userId}>
+                      <TableCell>{analysis.userName}</TableCell>
+                      <TableCell>{analysis.activeBordereaux}</TableCell>
+                      <TableCell>{analysis.avgProcessingTime.toFixed(1)} j</TableCell>
+                      <TableCell>{analysis.dailyCapacity.toFixed(1)}</TableCell>
+                      <TableCell>{analysis.daysToComplete.toFixed(1)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={analysis.capacityStatus}
+                          color={getCapacityColor(analysis.capacityStatus)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ maxWidth: 200 }}>
+                          {analysis.recommendation}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
           </Box>
         )}
 

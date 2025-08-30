@@ -86,43 +86,16 @@ const AnalyticsDashboard: React.FC = () => {
       ]);
 
       setFilterOptions({
-        clients: clientsResponse.data || [
-          { id: 'client1', name: 'Client A' },
-          { id: 'client2', name: 'Client B' },
-          { id: 'client3', name: 'Client C' }
-        ],
-        departments: departmentsResponse.data || [
-          { id: 'scan', name: 'SCAN' },
-          { id: 'bo', name: 'Bureau d\'Ordre' },
-          { id: 'gestion', name: 'Gestion' },
-          { id: 'finance', name: 'Finance' }
-        ],
-        teams: teamsResponse.data || [
-          { id: 'team1', name: 'Équipe Alpha' },
-          { id: 'team2', name: 'Équipe Beta' },
-          { id: 'team3', name: 'Équipe Gamma' }
-        ]
+        clients: clientsResponse.data || [],
+        departments: departmentsResponse.data || [],
+        teams: teamsResponse.data || []
       });
     } catch (error) {
       console.error('Failed to load filter options:', error);
-      // Use fallback data
       setFilterOptions({
-        clients: [
-          { id: 'client1', name: 'Client A' },
-          { id: 'client2', name: 'Client B' },
-          { id: 'client3', name: 'Client C' }
-        ],
-        departments: [
-          { id: 'scan', name: 'SCAN' },
-          { id: 'bo', name: 'Bureau d\'Ordre' },
-          { id: 'gestion', name: 'Gestion' },
-          { id: 'finance', name: 'Finance' }
-        ],
-        teams: [
-          { id: 'team1', name: 'Équipe Alpha' },
-          { id: 'team2', name: 'Équipe Beta' },
-          { id: 'team3', name: 'Équipe Gamma' }
-        ]
+        clients: [],
+        departments: [],
+        teams: []
       });
     }
   };
@@ -144,21 +117,20 @@ const AnalyticsDashboard: React.FC = () => {
       });
 
       setGlobalKPIs({
-        slaCompliance: kpisResponse.data.slaCompliance || 87.5,
-        totalBordereaux: kpisResponse.data.totalCount || 1245,
-        avgProcessingTime: kpisResponse.data.avgDelay || 3.2,
-        rejectionRate: kpisResponse.data.rejectionRate || 2.1,
-        activeAlerts: kpisResponse.data.activeAlerts || 8
+        slaCompliance: kpisResponse.data.slaCompliance || 0,
+        totalBordereaux: kpisResponse.data.totalCount || 0,
+        avgProcessingTime: kpisResponse.data.avgDelay || 0,
+        rejectionRate: kpisResponse.data.rejectionRate || 0,
+        activeAlerts: kpisResponse.data.activeAlerts || 0
       });
     } catch (error) {
       console.error('Failed to load analytics data:', error);
-      // Fallback data
       setGlobalKPIs({
-        slaCompliance: 87.5,
-        totalBordereaux: 1245,
-        avgProcessingTime: 3.2,
-        rejectionRate: 2.1,
-        activeAlerts: 8
+        slaCompliance: 0,
+        totalBordereaux: 0,
+        avgProcessingTime: 0,
+        rejectionRate: 0,
+        activeAlerts: 0
       });
     } finally {
       setLoading(false);
@@ -295,12 +267,34 @@ const AnalyticsDashboard: React.FC = () => {
 
       {/* Mobile View */}
       {isMobile && (
-        <AnalyticsMobileView 
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          onTabChange={setTab}
-          globalKPIs={globalKPIs}
-        />
+        <>
+          <AnalyticsMobileView 
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            onTabChange={setTab}
+            globalKPIs={globalKPIs}
+          />
+          
+          {/* Mobile Tab Content */}
+          <Paper elevation={2} sx={{ p: 2, mt: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              {tabLabels[tab]}
+            </Typography>
+            <Box>
+              {tab === 0 && <RealTimeDashboard />}
+              {tab === 1 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 2 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 3 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 4 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 5 && <OVAnalyticsDashboard />}
+              {tab === 6 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 7 && <PredictiveAnalyticsDashboard />}
+              {tab === 8 && <AdvancedFilteringDashboard />}
+              {tab === 9 && <ScheduledReportsManager />}
+              {tab === 10 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
+            </Box>
+          </Paper>
+        </>
       )}
 
       {/* Desktop View */}

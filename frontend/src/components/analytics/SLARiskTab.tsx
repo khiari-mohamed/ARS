@@ -47,7 +47,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
 
       // Process at-risk bordereaux from alerts
-      const atRiskBordereaux = [];
+      const atRiskBordereaux: any[] = [];
       
       // Add critical alerts
       if (alertsData.critical) {
@@ -79,13 +79,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
         });
       }
 
-      // Add fallback data if no real alerts
-      if (atRiskBordereaux.length === 0) {
-        atRiskBordereaux.push(
-          { id: 'BDX/2025/001', client: 'Client A', daysRemaining: 1, status: 'warning', workload: 'high', reference: 'REF-001', assignedTo: 'Utilisateur 1' },
-          { id: 'BDX/2025/002', client: 'Client B', daysRemaining: -2, status: 'critical', workload: 'medium', reference: 'REF-002', assignedTo: 'Utilisateur 2' }
-        );
-      }
+
 
       // Process workload distribution from capacity data
       const workloadDistribution = capacityData.length > 0 ? capacityData.map((user: any) => ({
@@ -109,18 +103,9 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('Failed to load SLA risk data:', error);
-      // Set fallback data
       setData({
-        atRiskBordereaux: [
-          { id: 'BDX/2025/001', client: 'Client A', daysRemaining: 1, status: 'warning', workload: 'high', reference: 'REF-001', assignedTo: 'Utilisateur 1' },
-          { id: 'BDX/2025/002', client: 'Client B', daysRemaining: -2, status: 'critical', workload: 'medium', reference: 'REF-002', assignedTo: 'Utilisateur 2' },
-          { id: 'BDX/2025/003', client: 'Client C', daysRemaining: 0, status: 'critical', workload: 'high', reference: 'REF-003', assignedTo: 'Utilisateur 3' }
-        ],
-        workloadDistribution: [
-          { team: 'Équipe A', workload: 85, capacity: 100, risk: 'medium', recommendation: 'Surveiller la charge' },
-          { team: 'Équipe B', workload: 95, capacity: 100, risk: 'high', recommendation: 'Réduire la charge' },
-          { team: 'Équipe C', workload: 65, capacity: 100, risk: 'low', recommendation: 'Capacité disponible' }
-        ],
+        atRiskBordereaux: [],
+        workloadDistribution: [],
         slaBreaches: [],
         predictions: []
       });
@@ -257,47 +242,49 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
       <Grid item xs={12}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Bordereaux à Risque SLA ({data.atRiskBordereaux.length})</Typography>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Référence</TableCell>
-                <TableCell>Client</TableCell>
-                <TableCell>Assigné à</TableCell>
-                <TableCell>Status SLA</TableCell>
-                <TableCell>Jours Restants</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.atRiskBordereaux.map((item: any, index: number) => (
-                <TableRow key={index} sx={{ bgcolor: item.status === 'critical' ? 'error.light' : item.status === 'warning' ? 'warning.light' : 'inherit' }}>
-                  <TableCell>
-                    <Typography variant="subtitle2">{item.reference || item.id}</Typography>
-                  </TableCell>
-                  <TableCell>{item.client}</TableCell>
-                  <TableCell>{item.assignedTo}</TableCell>
-                  <TableCell>{getSLAStatusChip(item.daysRemaining)}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color={item.daysRemaining < 0 ? 'error' : item.daysRemaining <= 1 ? 'warning.main' : 'textPrimary'}>
-                      {item.daysRemaining < 0 ? `${Math.abs(item.daysRemaining)} jours de retard` : 
-                       item.daysRemaining === 0 ? 'Échéance aujourd\'hui' :
-                       `${item.daysRemaining} jour(s) restant(s)`}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Button 
-                      variant={item.daysRemaining <= 0 ? 'contained' : 'outlined'}
-                      color={item.daysRemaining <= 0 ? 'error' : 'primary'}
-                      size="small"
-                      onClick={() => handleReallocate(item.id)}
-                    >
-                      {item.daysRemaining <= 0 ? 'Urgent' : 'Réallouer'}
-                    </Button>
-                  </TableCell>
+          <Box sx={{ overflowX: 'auto', width: '100%' }}>
+            <Table sx={{ minWidth: 700 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Assigné à</TableCell>
+                  <TableCell>Status SLA</TableCell>
+                  <TableCell>Jours Restants</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {data.atRiskBordereaux.map((item: any, index: number) => (
+                  <TableRow key={index} sx={{ bgcolor: item.status === 'critical' ? 'error.light' : item.status === 'warning' ? 'warning.light' : 'inherit' }}>
+                    <TableCell>
+                      <Typography variant="subtitle2">{item.reference || item.id}</Typography>
+                    </TableCell>
+                    <TableCell>{item.client}</TableCell>
+                    <TableCell>{item.assignedTo}</TableCell>
+                    <TableCell>{getSLAStatusChip(item.daysRemaining)}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color={item.daysRemaining < 0 ? 'error' : item.daysRemaining <= 1 ? 'warning.main' : 'textPrimary'}>
+                        {item.daysRemaining < 0 ? `${Math.abs(item.daysRemaining)} jours de retard` : 
+                         item.daysRemaining === 0 ? 'Échéance aujourd\'hui' :
+                         `${item.daysRemaining} jour(s) restant(s)`}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Button 
+                        variant={item.daysRemaining <= 0 ? 'contained' : 'outlined'}
+                        color={item.daysRemaining <= 0 ? 'error' : 'primary'}
+                        size="small"
+                        onClick={() => handleReallocate(item.id)}
+                      >
+                        {item.daysRemaining <= 0 ? 'Urgent' : 'Réallouer'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       </Grid>
 
