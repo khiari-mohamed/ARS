@@ -201,79 +201,127 @@ const ScanDashboard: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 2, sm: 3 } }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" fontWeight={600}>
-          SCAN Service Dashboard
-        </Typography>
-        <Box display="flex" gap={2}>
-          <Button
-            variant="contained"
-            startIcon={<Settings />}
-            onClick={handleInitializeScanner}
-            disabled={initializingScanner}
-            sx={{ minWidth: 140 }}
-          >
-            {initializingScanner ? 'Initialisation...' : 'Initialiser'}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<Scanner />}
-            onClick={() => setActiveDialog('scanner')}
-            sx={{ minWidth: 140 }}
-          >
-            Contrôle Scanner
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={< AutoFixHigh />}
-            onClick={() => setActiveDialog('quality')}
-            sx={{ minWidth: 140 }}
-          >
-            Validation Qualité
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<TextFields />}
-            onClick={() => setActiveDialog('ocr')}
-            sx={{ minWidth: 140 }}
-          >
-            Correction OCR
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<PlayArrow />}
-            onClick={handleProcessQueue}
-            sx={{ minWidth: 140 }}
-          >
-            Traiter File
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<Scanner />}
-            onClick={handlePaperStreamImport}
-            sx={{ minWidth: 140 }}
-          >
-            Import PaperStream
-          </Button>
-          <Button
-            variant="outlined"
-            color="secondary"
-            onClick={async () => {
-              try {
-                const debug = await debugBordereaux();
-                console.log('Debug bordereaux:', debug);
-                alert(`📊 Debug Info:\n\n📋 Total bordereaux: ${debug.totalCount}\n\n📈 Status counts:\n${debug.statusCounts.map((s: any) => `• ${s.statut}: ${s._count.id}`).join('\n')}\n\n🔍 Check console for detailed info`);
-              } catch (error) {
-                console.error('Debug failed:', error);
-              }
+      <Box mb={3}>
+        <Box 
+          display="flex" 
+          flexDirection={{ xs: 'column', sm: 'row' }}
+          justifyContent="space-between" 
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          gap={{ xs: 2, sm: 0 }}
+        >
+          <Typography 
+            variant="h4"
+            fontWeight={600}
+            sx={{ 
+              fontSize: { xs: '1.5rem', sm: '2rem' },
+              lineHeight: 1.2
             }}
-            sx={{ minWidth: 120 }}
           >
-            🔍 Debug
-          </Button>
-
+            SCAN Service Dashboard
+          </Typography>
+          <Box 
+            display="flex" 
+            flexDirection={{ xs: 'column', sm: 'row' }}
+            gap={{ xs: 1, sm: 2 }}
+            width={{ xs: '100%', sm: 'auto' }}
+            sx={{ flexWrap: { sm: 'wrap', md: 'nowrap' } }}
+          >
+            <Button
+              variant="contained"
+              startIcon={<Settings />}
+              onClick={handleInitializeScanner}
+              disabled={initializingScanner}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 120 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              {initializingScanner ? 'Init...' : 'Initialiser'}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<Scanner />}
+              onClick={() => setActiveDialog('scanner')}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 120 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              Scanner
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<AutoFixHigh />}
+              onClick={() => setActiveDialog('quality')}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 120 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              Qualité
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<TextFields />}
+              onClick={() => setActiveDialog('ocr')}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 120 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              OCR
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<PlayArrow />}
+              onClick={handleProcessQueue}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 120 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              Traiter File
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<Scanner />}
+              onClick={handlePaperStreamImport}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 120 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              Import
+            </Button>
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={async () => {
+                try {
+                  const debug = await debugBordereaux();
+                  console.log('Debug bordereaux:', debug);
+                  alert(`📊 Debug Info:\n\n📋 Total bordereaux: ${debug.totalCount}\n\n📈 Status counts:\n${debug.statusCounts.map((s: any) => `• ${s.statut}: ${s._count.id}`).join('\n')}\n\n🔍 Check console for detailed info`);
+                } catch (error) {
+                  console.error('Debug failed:', error);
+                }
+              }}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 100 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              🔍 Debug
+            </Button>
+          </Box>
         </Box>
       </Box>
 
@@ -297,7 +345,7 @@ const ScanDashboard: React.FC = () => {
       )}
 
       {/* KPI Cards */}
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={{ xs: 2, sm: 3 }} mb={4} sx={{ mx: { xs: -2, sm: 0 }, width: { xs: 'calc(100% + 16px)', sm: '100%' } }}>
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
@@ -371,10 +419,10 @@ const ScanDashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ mx: { xs: -2, sm: 0 }, width: { xs: 'calc(100% + 16px)', sm: '100%' } }}>
         {/* Folder Monitor */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography variant="h6" gutterBottom>
               Surveillance des Dossiers
             </Typography>
@@ -384,7 +432,7 @@ const ScanDashboard: React.FC = () => {
 
         {/* Activity Chart */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: { xs: 2, sm: 3 } }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6">
                 📈 Activité de Scan (24h)
@@ -454,26 +502,39 @@ const ScanDashboard: React.FC = () => {
 
         {/* SCAN Queue - Main Interface */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">
+          <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box 
+              display="flex" 
+              flexDirection={{ xs: 'column', sm: 'row' }}
+              justifyContent="space-between" 
+              alignItems={{ xs: 'flex-start', sm: 'center' }}
+              gap={{ xs: 1, sm: 0 }}
+              mb={2}
+            >
+              <Typography 
+                variant="h6"
+                sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+              >
                 File d'Attente SCAN ({scanQueue.length} bordereaux)
               </Typography>
-              <IconButton onClick={loadDashboard}>
+              <IconButton 
+                onClick={loadDashboard}
+                size="small"
+              >
                 <Refresh />
               </IconButton>
             </Box>
-            <TableContainer>
-              <Table>
+            <TableContainer sx={{ overflowX: 'auto', mx: { xs: -2, sm: 0 } }}>
+              <Table sx={{ minWidth: 650 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Référence</TableCell>
-                    <TableCell>Client</TableCell>
-                    <TableCell>Date Réception</TableCell>
-                    <TableCell>Délai Règlement</TableCell>
-                    <TableCell>Chargé de Compte</TableCell>
-                    <TableCell>Documents</TableCell>
-                    <TableCell>Actions</TableCell>
+                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Référence</TableCell>
+                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Client</TableCell>
+                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Date Réception</TableCell>
+                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Délai Règlement</TableCell>
+                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Chargé de Compte</TableCell>
+                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Documents</TableCell>
+                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -490,53 +551,83 @@ const ScanDashboard: React.FC = () => {
                           '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
                         }}
                       >
-                        <TableCell>
+                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
                           <Box display="flex" alignItems="center" gap={1}>
                             {isUrgent && <Warning color="warning" fontSize="small" />}
-                            <Typography variant="body2" fontWeight={isUrgent ? 'bold' : 'normal'}>
+                            <Typography 
+                              variant="body2" 
+                              fontWeight={isUrgent ? 'bold' : 'normal'}
+                              sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                            >
                               {bordereau.reference}
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
+                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
+                          <Typography 
+                            variant="body2"
+                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                          >
                             {bordereau.client?.name}
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
+                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
+                          <Typography 
+                            variant="body2"
+                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                          >
                             {new Date(bordereau.dateReception).toLocaleDateString()}
                             <br />
-                            <Typography variant="caption" color={isUrgent ? 'warning.main' : 'text.secondary'}>
+                            <Typography 
+                              variant="caption" 
+                              color={isUrgent ? 'warning.main' : 'text.secondary'}
+                              sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
+                            >
                               {daysPending} jour{daysPending > 1 ? 's' : ''}
                             </Typography>
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
+                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
+                          <Typography 
+                            variant="body2"
+                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                          >
                             {bordereau.contract?.delaiReglement || bordereau.delaiReglement} jours
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
+                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
+                          <Typography 
+                            variant="body2"
+                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                          >
                             {chargeDeCompte?.fullName || 'Non assigné'}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
                           <Chip
                             label={`${bordereau.documents?.length || 0} docs`}
                             size="small"
                             color={bordereau.documents?.length > 0 ? 'success' : 'default'}
+                            sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
                           />
                         </TableCell>
-                        <TableCell>
-                          <Box display="flex" gap={1}>
+                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
+                          <Box 
+                            display="flex" 
+                            flexDirection={{ xs: 'column', sm: 'row' }}
+                            gap={{ xs: 0.5, sm: 1 }}
+                          >
                             <Button
                               size="small"
                               variant="contained"
                               startIcon={<PlayArrow />}
                               onClick={() => handleStartScanning(bordereau.id)}
                               disabled={processing === bordereau.id}
+                              sx={{ 
+                                fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                minWidth: { xs: 'auto', sm: 'auto' },
+                                px: { xs: 1, sm: 2 }
+                              }}
                             >
                               Scanner
                             </Button>
@@ -545,6 +636,11 @@ const ScanDashboard: React.FC = () => {
                               variant="outlined"
                               startIcon={<Visibility />}
                               onClick={() => handleViewBordereau(bordereau.id)}
+                              sx={{ 
+                                fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                minWidth: { xs: 'auto', sm: 'auto' },
+                                px: { xs: 1, sm: 2 }
+                              }}
                             >
                               Voir
                             </Button>
@@ -556,7 +652,13 @@ const ScanDashboard: React.FC = () => {
                   {scanQueue.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center">
-                        <Typography color="text.secondary" sx={{ py: 4 }}>
+                        <Typography 
+                          color="text.secondary" 
+                          sx={{ 
+                            py: { xs: 2, sm: 4 },
+                            fontSize: { xs: '0.875rem', sm: '1rem' }
+                          }}
+                        >
                           Aucun bordereau en attente de scan
                         </Typography>
                       </TableCell>
@@ -570,7 +672,7 @@ const ScanDashboard: React.FC = () => {
 
         {/* Recent Activity */}
         <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography variant="h6" gutterBottom>
               Activité Récente
             </Typography>

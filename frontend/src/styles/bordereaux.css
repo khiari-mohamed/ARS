@@ -16,12 +16,15 @@
 }
 
 .bordereau-header-content {
-  max-width: 1280px !important;
-  margin: 0 auto !important;
+  max-width: none !important;
+  margin: 0 !important;
   padding: 0 24px !important;
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 .bordereau-title {
@@ -45,9 +48,10 @@
 
 /* Main Content Container */
 .bordereau-main {
-  max-width: 1280px !important;
-  margin: 0 auto !important;
+  max-width: none !important;
+  margin: 0 !important;
   padding: 32px 24px !important;
+  width: 100% !important;
 }
 
 /* KPI Cards Container */
@@ -56,6 +60,9 @@
   flex-wrap: wrap !important;
   gap: 24px !important;
   margin-bottom: 32px !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 /* Individual KPI Card */
@@ -174,6 +181,9 @@
   border: 1px solid #e5e7eb !important;
   padding: 24px !important;
   margin-bottom: 32px !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 .bordereau-actions-content {
@@ -252,13 +262,42 @@
   border-radius: 16px !important;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
   border: 1px solid #e5e7eb !important;
-  overflow: hidden !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  box-sizing: border-box !important;
 }
 
 .bordereau-table {
   width: 100% !important;
+  min-width: 600px !important;
   border-collapse: separate !important;
   border-spacing: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .bordereau-table-container {
+    overflow-x: scroll !important;
+    -webkit-overflow-scrolling: touch !important;
+    max-width: calc(100vw - 16px) !important;
+    margin: 0 !important;
+  }
+  
+  .bordereau-table {
+    min-width: 700px !important;
+    font-size: 0.75rem !important;
+    width: auto !important;
+  }
+  
+  .bordereau-table th,
+  .bordereau-table td {
+    padding: 8px 6px !important;
+    white-space: nowrap !important;
+    font-size: 0.7rem !important;
+  }
 }
 
 .bordereau-table th {
@@ -301,6 +340,9 @@
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)) !important;
   gap: 24px !important;
   margin-top: 24px !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 .bordereau-kanban-column {
@@ -500,9 +542,60 @@
 
 /* Responsive Kanban */
 @media (max-width: 768px) {
+  .bordereau-dashboard {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+  
+  .bordereau-main {
+    margin: 0 !important;
+    padding: 16px 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  .bordereau-kpi-container {
+    flex-direction: column !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  
+  .bordereau-kpi-card {
+    min-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  
+  .bordereau-actions-bar {
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  
+  .bordereau-header-content {
+    padding: 0 8px !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    text-align: center !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  
+  .bordereau-table-container {
+    margin: 0 !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
   .bordereau-kanban-container {
     grid-template-columns: 1fr !important;
     gap: 16px !important;
+    margin: 0 -8px !important;
+    width: calc(100% + 16px) !important;
   }
   
   .bordereau-kanban-column {
@@ -783,14 +876,24 @@
 @media (max-width: 768px) {
   .bordereau-kpi-container {
     flex-direction: column !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   
   .bordereau-kpi-card {
     min-width: 100% !important;
+    width: 100% !important;
   }
   
   .bordereau-main {
-    padding: 16px !important;
+    padding: 16px 8px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  .bordereau-actions-bar {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   
   .bordereau-header-content {

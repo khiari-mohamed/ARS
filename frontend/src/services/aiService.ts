@@ -411,15 +411,7 @@ class AIService {
       return response.data;
     } catch (error: any) {
       console.error('Recommendations failed:', error.response?.status || error.message);
-      // Return fallback data instead of throwing
-      return {
-        recommendations: [
-          {
-            teamId: 'general',
-            recommendation: 'Service IA temporairement indisponible - Données de base utilisées'
-          }
-        ]
-      };
+      throw error; // Let the backend handle fallback
     }
   }
 

@@ -25,21 +25,20 @@ import {
 import {
   Add,
   Upload,
-  Assessment,
+
   Speed,
   Error,
   CheckCircle,
   Visibility,
   FileUpload,
-  BatchPrediction
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import BOEntryForm from '../components/BOEntryForm';
-import BOBatchForm from '../components/BOBatchForm';
+
 import BOPerformanceMetrics from '../components/BOPerformanceMetrics';
 import DocumentUploadPortal from '../components/DocumentUploadPortal';
-import { fetchBODashboard, simulateWorkflow } from '../services/boService';
+import { fetchBODashboard } from '../services/boService';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -71,20 +70,7 @@ const BODashboard: React.FC = () => {
     }
   };
 
-  const handleSimulateWorkflow = async () => {
-    try {
-      setLoading(true);
-      const result = await simulateWorkflow();
-      console.log('Workflow simulation result:', result);
-      // Refresh dashboard after simulation
-      setTimeout(loadDashboard, 1000);
-    } catch (error: any) {
-      console.error('Workflow simulation failed:', error);
-      setError('Erreur lors de la simulation du workflow');
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const getStatusColor = (statut: string) => {
     switch (statut) {
@@ -119,44 +105,56 @@ const BODashboard: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" fontWeight={600}>
-          Bureau d'Ordre Dashboard
-        </Typography>
-        <Box display="flex" gap={2}>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setActiveDialog('entry')}
-            sx={{ minWidth: 140 }}
+    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+      <Box mb={3}>
+        <Box 
+          display="flex" 
+          flexDirection={{ xs: 'column', sm: 'row' }}
+          justifyContent="space-between" 
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          gap={{ xs: 2, sm: 0 }}
+        >
+          <Typography 
+            variant="h4"
+            fontWeight={600}
+            sx={{ 
+              fontSize: { xs: '1.5rem', sm: '2rem' },
+              lineHeight: 1.2
+            }}
           >
-            Nouvelle Entrée
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<BatchPrediction />}
-            onClick={() => setActiveDialog('batch')}
-            sx={{ minWidth: 140 }}
+            Bureau d'Ordre Dashboard
+          </Typography>
+          <Box 
+            display="flex" 
+            flexDirection={{ xs: 'column', sm: 'row' }}
+            gap={{ xs: 1, sm: 2 }}
+            width={{ xs: '100%', sm: 'auto' }}
           >
-            Entrée Lot
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<FileUpload />}
-            onClick={() => setActiveDialog('upload')}
-            sx={{ minWidth: 140 }}
-          >
-            Upload Documents
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<Assessment />}
-            onClick={handleSimulateWorkflow}
-            sx={{ minWidth: 140 }}
-          >
-            Simuler Workflow
-          </Button>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => setActiveDialog('entry')}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 140 },
+                fontSize: '0.875rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              Nouvelle Entrée
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FileUpload />}
+              onClick={() => setActiveDialog('upload')}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 140 },
+                fontSize: '0.875rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              Upload Documents
+            </Button>
+          </Box>
         </Box>
       </Box>
 
@@ -230,7 +228,7 @@ const BODashboard: React.FC = () => {
                     {dashboardData?.performance?.errorRate?.toFixed(1) || '0.0'}%
                   </Typography>
                 </Box>
-                <Assessment color="secondary" sx={{ fontSize: 40 }} />
+                <Error color="secondary" sx={{ fontSize: 40 }} />
               </Box>
             </CardContent>
           </Card>
@@ -243,25 +241,44 @@ const BODashboard: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Distribution par Statut (7 derniers jours)
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={dashboardData?.statusCounts || dashboardData?.documentTypes || []}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ statut, _count }) => `${statut}: ${_count?.id || 0}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="_count.id"
-                >
+            <Box sx={{ height: { xs: 250, sm: 350 } }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={dashboardData?.statusCounts || dashboardData?.documentTypes || []}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="_count.id"
+                  >
                   {(dashboardData?.statusCounts || dashboardData?.documentTypes || []).map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <RechartsTooltip />
-              </PieChart>
-            </ResponsiveContainer>
+                <RechartsTooltip 
+                  formatter={(value: any, name: any, props: any) => [
+                    `${value} entrées`,
+                    props.payload.statut
+                  ]}
+                />
+                </PieChart>
+              </ResponsiveContainer>
+            </Box>
+            <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {(dashboardData?.statusCounts || dashboardData?.documentTypes || []).map((entry: any, index: number) => (
+                <Chip
+                  key={entry.statut}
+                  label={`${entry.statut}: ${entry._count?.id || 0}`}
+                  sx={{ 
+                    backgroundColor: COLORS[index % COLORS.length],
+                    color: 'white',
+                    fontSize: '0.75rem'
+                  }}
+                  size="small"
+                />
+              ))}
+            </Box>
           </Paper>
         </Grid>
 
@@ -279,8 +296,8 @@ const BODashboard: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Entrées Récentes
             </Typography>
-            <TableContainer>
-              <Table>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: { xs: 650, sm: 'auto' } }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Référence</TableCell>
@@ -349,14 +366,7 @@ const BODashboard: React.FC = () => {
         }}
       />
 
-      <BOBatchForm
-        open={activeDialog === 'batch'}
-        onClose={() => setActiveDialog(null)}
-        onSuccess={() => {
-          setActiveDialog(null);
-          setTimeout(loadDashboard, 500);
-        }}
-      />
+
 
       <DocumentUploadPortal
         open={activeDialog === 'upload'}

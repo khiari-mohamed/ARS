@@ -182,15 +182,10 @@ export const getAIRecommendations = async () => {
     const response = await LocalAPI.get('/bordereaux/ai/recommendations');
     return response.data;
   } catch (error) {
+    console.error('AI recommendations failed:', error);
     return {
-      message: 'Recommandations IA générées avec succès',
-      recommendations: [
-        { reference: 'BORD-2024-001', score: 3, daysSinceReception: 15, slaThreshold: 30 },
-        { reference: 'BORD-2024-002', score: 2, daysSinceReception: 8, slaThreshold: 30 },
-        { reference: 'BORD-2024-003', score: 2, daysSinceReception: 12, slaThreshold: 45 },
-        { reference: 'BORD-2024-004', score: 1, daysSinceReception: 5, slaThreshold: 30 },
-        { reference: 'BORD-2024-005', score: 1, daysSinceReception: 3, slaThreshold: 30 }
-      ]
+      message: 'Service IA temporairement indisponible',
+      recommendations: []
     };
   }
 };

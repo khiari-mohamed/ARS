@@ -15,6 +15,8 @@ interface AIInsight {
 const AIRecommendations: React.FC = () => {
   const [recommendations, setRecommendations] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [modalResult, setModalResult] = useState<any>(null);
 
   useEffect(() => {
     loadRecommendations();
@@ -52,7 +54,6 @@ const AIRecommendations: React.FC = () => {
 
   const handleBordereauClick = async (bordereauId: string) => {
     try {
-      // AI Action: Auto-assign bordereau to optimal gestionnaire
       const response = await fetch(`/api/bordereaux/${bordereauId}/ai-assign`, {
         method: 'POST',
         headers: {
@@ -63,14 +64,32 @@ const AIRecommendations: React.FC = () => {
       
       if (response.ok) {
         const result = await response.json();
-        alert(`✅ IA: Bordereau ${bordereauId} assigné automatiquement à ${result.assignedTo}\nRaison: ${result.reason}`);
-        loadRecommendations(); // Refresh data
+        setModalResult({
+          type: 'assignment',
+          success: true,
+          title: '🤖 Assignation Automatique IA',
+          data: result
+        });
+        setShowResultModal(true);
+        loadRecommendations();
       } else {
-        alert('❌ Erreur lors de l\'assignation automatique');
+        setModalResult({
+          type: 'assignment',
+          success: false,
+          title: '❌ Erreur d\'Assignation',
+          error: 'Erreur lors de l\'assignation automatique'
+        });
+        setShowResultModal(true);
       }
     } catch (error) {
       console.error('AI assignment error:', error);
-      alert('❌ Erreur de connexion');
+      setModalResult({
+        type: 'assignment',
+        success: false,
+        title: '❌ Erreur de Connexion',
+        error: 'Impossible de contacter le service IA'
+      });
+      setShowResultModal(true);
     }
   };
 
@@ -90,14 +109,32 @@ const AIRecommendations: React.FC = () => {
       
       if (response.ok) {
         const result = await response.json();
-        alert(`⚡ IA: Bordereau ${bordereauId} priorisé\nNouvelle priorité: ${result.priority}\nRaison: ${result.reason}`);
+        setModalResult({
+          type: 'prioritization',
+          success: true,
+          title: '⚡ Priorisation IA',
+          data: result
+        });
+        setShowResultModal(true);
         loadRecommendations();
       } else {
-        alert('❌ Erreur lors de la priorisation');
+        setModalResult({
+          type: 'prioritization',
+          success: false,
+          title: '❌ Erreur de Priorisation',
+          error: 'Erreur lors de la priorisation'
+        });
+        setShowResultModal(true);
       }
     } catch (error) {
       console.error('AI prioritization error:', error);
-      alert('❌ Erreur de connexion');
+      setModalResult({
+        type: 'prioritization',
+        success: false,
+        title: '❌ Erreur de Connexion',
+        error: 'Impossible de contacter le service IA'
+      });
+      setShowResultModal(true);
     }
   };
 
@@ -113,10 +150,23 @@ const AIRecommendations: React.FC = () => {
       
       if (response.ok) {
         const result = await response.json();
-        alert(`👥 IA: Alerte ressources envoyée\nGestionnaires nécessaires: ${result.needed}\nActuels: ${result.current}`);
+        setModalResult({
+          type: 'resource_alert',
+          success: true,
+          title: '👥 Alerte Ressources IA',
+          data: result
+        });
+        setShowResultModal(true);
       }
     } catch (error) {
       console.error('Resource alert error:', error);
+      setModalResult({
+        type: 'resource_alert',
+        success: false,
+        title: '❌ Erreur d\'Alerte',
+        error: 'Erreur lors de l\'envoi de l\'alerte'
+      });
+      setShowResultModal(true);
     }
   };
 
@@ -217,14 +267,14 @@ const AIRecommendations: React.FC = () => {
                   <button
                     className="bordereau-btn bordereau-btn-primary"
                     style={{fontSize: '0.7rem', padding: '3px 6px', flex: 1}}
-                    onClick={() => handleBordereauClick(rec.id)}
+                    onClick={() => handleBordereauClick(rec.id || rec.reference)}
                   >
                     🤖 Assigner Auto
                   </button>
                   <button
                     className="bordereau-btn bordereau-btn-secondary"
                     style={{fontSize: '0.7rem', padding: '3px 6px', flex: 1}}
-                    onClick={() => handlePrioritize(rec.id)}
+                    onClick={() => handlePrioritize(rec.id || rec.reference)}
                   >
                     ⚡ Prioriser
                   </button>
@@ -258,6 +308,232 @@ const AIRecommendations: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Result Modal */}
+      {showResultModal && modalResult && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '1.25rem',
+                fontWeight: 600,
+                color: modalResult.success ? '#059669' : '#dc2626'
+              }}>
+                {modalResult.title}
+              </h3>
+              <button
+                onClick={() => setShowResultModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  padding: '4px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              {modalResult.success ? (
+                <div>
+                  {modalResult.type === 'assignment' && (
+                    <div style={{ padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#059669' }}>Assigné à:</strong>
+                        <span style={{ marginLeft: '8px', fontSize: '1.1rem', fontWeight: 600 }}>
+                          {modalResult.data.assignedTo}
+                        </span>
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#059669' }}>Raison:</strong>
+                        <p style={{ margin: '4px 0', color: '#374151' }}>
+                          {modalResult.data.reason}
+                        </p>
+                      </div>
+                      {modalResult.data.confidence && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <strong style={{ color: '#059669' }}>Confiance IA:</strong>
+                          <span style={{
+                            marginLeft: '8px',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            backgroundColor: modalResult.data.confidence === 'high' ? '#dcfce7' : '#fef3c7',
+                            color: modalResult.data.confidence === 'high' ? '#166534' : '#92400e'
+                          }}>
+                            {modalResult.data.confidence.toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      {modalResult.data.score && (
+                        <div>
+                          <strong style={{ color: '#059669' }}>Score:</strong>
+                          <span style={{ marginLeft: '8px' }}>{modalResult.data.score.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {modalResult.type === 'prioritization' && (
+                    <div style={{ padding: '16px', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#92400e' }}>Nouvelle Priorité:</strong>
+                        <span style={{
+                          marginLeft: '8px',
+                          padding: '4px 12px',
+                          borderRadius: '16px',
+                          fontSize: '1rem',
+                          fontWeight: 700,
+                          backgroundColor: modalResult.data.priority >= 4 ? '#fecaca' : modalResult.data.priority >= 3 ? '#fed7aa' : '#d1fae5',
+                          color: modalResult.data.priority >= 4 ? '#991b1b' : modalResult.data.priority >= 3 ? '#9a3412' : '#065f46'
+                        }}>
+                          {modalResult.data.priority}/5
+                        </span>
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#92400e' }}>Raison:</strong>
+                        <p style={{ margin: '4px 0', color: '#374151' }}>
+                          {modalResult.data.reason}
+                        </p>
+                      </div>
+                      {modalResult.data.ai_confidence && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <strong style={{ color: '#92400e' }}>Confiance IA:</strong>
+                          <span style={{ marginLeft: '8px' }}>{(modalResult.data.ai_confidence * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {modalResult.data.breach_probability && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <strong style={{ color: '#92400e' }}>Risque SLA:</strong>
+                          <span style={{ marginLeft: '8px' }}>{(modalResult.data.breach_probability * 100).toFixed(1)}%</span>
+                        </div>
+                      )}
+                      {modalResult.data.daysLeft !== undefined && (
+                        <div>
+                          <strong style={{ color: '#92400e' }}>Jours restants:</strong>
+                          <span style={{ marginLeft: '8px' }}>{modalResult.data.daysLeft}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {modalResult.type === 'resource_alert' && (
+                    <div style={{ padding: '16px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #93c5fd' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#1d4ed8' }}>Gestionnaires actuels:</strong>
+                        <span style={{ marginLeft: '8px', fontSize: '1.1rem', fontWeight: 600 }}>
+                          {modalResult.data.current}
+                        </span>
+                      </div>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#1d4ed8' }}>Gestionnaires nécessaires:</strong>
+                        <span style={{ marginLeft: '8px', fontSize: '1.1rem', fontWeight: 600 }}>
+                          {modalResult.data.needed}
+                        </span>
+                      </div>
+                      {modalResult.data.shortage > 0 && (
+                        <div style={{
+                          padding: '12px',
+                          backgroundColor: '#fef2f2',
+                          borderRadius: '6px',
+                          border: '1px solid #fca5a5',
+                          marginTop: '12px'
+                        }}>
+                          <strong style={{ color: '#dc2626' }}>⚠️ Déficit:</strong>
+                          <span style={{ marginLeft: '8px', fontSize: '1.1rem', fontWeight: 600, color: '#dc2626' }}>
+                            {modalResult.data.shortage} gestionnaire(s) manquant(s)
+                          </span>
+                        </div>
+                      )}
+                      {modalResult.data.alert_sent && (
+                        <div style={{ marginTop: '12px', color: '#059669', fontSize: '0.9rem' }}>
+                          ✅ Alerte envoyée aux administrateurs
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{
+                  padding: '16px',
+                  backgroundColor: '#fef2f2',
+                  borderRadius: '8px',
+                  border: '1px solid #fca5a5',
+                  color: '#dc2626'
+                }}>
+                  {modalResult.error}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={() => setShowResultModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                Fermer
+              </button>
+              {modalResult.success && (
+                <button
+                  onClick={() => {
+                    setShowResultModal(false);
+                    loadRecommendations();
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 500
+                  }}
+                >
+                  🔄 Actualiser
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -47,46 +47,30 @@ interface FileStatus {
 const FolderMonitor: React.FC<Props> = ({ onFileProcessed }) => {
   const [monitoringActive, setMonitoringActive] = useState(true);
   const [watchedFolders, setWatchedFolders] = useState([
-    { path: './scan-input', name: 'Dossier d\'entrée', active: true },
-    { path: './scan-processed', name: 'Dossier traité', active: false },
-    { path: './scan-error', name: 'Dossier erreur', active: false }
+    { path: './paperstream-input', name: 'PaperStream Input', active: true },
+    { path: './paperstream-processed', name: 'PaperStream Processed', active: true },
+    { path: './uploads/documents', name: 'Documents Upload', active: true }
   ]);
-  const [recentFiles, setRecentFiles] = useState<FileStatus[]>([
-    {
-      name: 'document_001.pdf',
-      status: 'completed',
-      timestamp: new Date(Date.now() - 300000).toISOString()
-    },
-    {
-      name: 'scan_002.jpg',
-      status: 'processing',
-      timestamp: new Date(Date.now() - 120000).toISOString()
-    },
-    {
-      name: 'bulletin_003.tiff',
-      status: 'pending',
-      timestamp: new Date(Date.now() - 60000).toISOString()
-    }
-  ]);
+  const [recentFiles, setRecentFiles] = useState<FileStatus[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState('');
 
   useEffect(() => {
     if (monitoringActive) {
-      const interval = setInterval(() => {
-        // Simulate file processing updates
-        setRecentFiles(prev => prev.map(file => {
-          if (file.status === 'processing' && Math.random() > 0.7) {
-            onFileProcessed();
-            return { ...file, status: 'completed' };
-          }
-          if (file.status === 'pending' && Math.random() > 0.8) {
-            return { ...file, status: 'processing' };
-          }
-          return file;
-        }));
-      }, 2000);
-
+      // Load real file monitoring data
+      const loadRecentFiles = async () => {
+        try {
+          // This would connect to real file monitoring API
+          // For now, show empty state until real data is available
+          setRecentFiles([]);
+        } catch (error) {
+          console.error('Failed to load recent files:', error);
+          setRecentFiles([]);
+        }
+      };
+      
+      loadRecentFiles();
+      const interval = setInterval(loadRecentFiles, 10000);
       return () => clearInterval(interval);
     }
   }, [monitoringActive, onFileProcessed]);
@@ -150,25 +134,51 @@ const FolderMonitor: React.FC<Props> = ({ onFileProcessed }) => {
   return (
     <Box>
       {/* Monitoring Status */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Box display="flex" alignItems="center" gap={2}>
-          <Typography variant="h6">
+      <Box 
+        display="flex" 
+        flexDirection={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between" 
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        gap={{ xs: 2, sm: 0 }}
+        mb={2}
+      >
+        <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
+          <Typography 
+            variant="h6"
+            sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
+          >
             Surveillance Active
           </Typography>
           <Chip
             label={monitoringActive ? 'Actif' : 'Inactif'}
             color={monitoringActive ? 'success' : 'default'}
             icon={monitoringActive ? <PlayArrow /> : <Pause />}
+            size="small"
           />
         </Box>
-        <Box display="flex" gap={1}>
-          <IconButton onClick={toggleMonitoring} color="primary">
+        <Box 
+          display="flex" 
+          gap={1}
+          width={{ xs: '100%', sm: 'auto' }}
+          justifyContent={{ xs: 'flex-end', sm: 'flex-start' }}
+        >
+          <IconButton 
+            onClick={toggleMonitoring} 
+            color="primary"
+            size="small"
+          >
             {monitoringActive ? <Pause /> : <PlayArrow />}
           </IconButton>
-          <IconButton onClick={() => setSettingsOpen(true)}>
+          <IconButton 
+            onClick={() => setSettingsOpen(true)}
+            size="small"
+          >
             <Settings />
           </IconButton>
-          <IconButton onClick={() => window.location.reload()}>
+          <IconButton 
+            onClick={() => window.location.reload()}
+            size="small"
+          >
             <Refresh />
           </IconButton>
         </Box>
