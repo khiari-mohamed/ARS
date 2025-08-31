@@ -293,30 +293,32 @@ const GECDashboardTab: React.FC = () => {
             </Typography>
             
             {urgentItems.length > 0 ? (
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Sujet</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Priorité</TableCell>
-                    <TableCell>Jours de retard</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {urgentItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.subject}</TableCell>
-                      <TableCell>{item.type}</TableCell>
-                      <TableCell>{getPriorityChip(item.priority, item.daysOverdue)}</TableCell>
-                      <TableCell>
-                        <Typography color="error" sx={{ fontWeight: 600 }}>
-                          {item.daysOverdue} jour(s)
-                        </Typography>
-                      </TableCell>
+              <Box sx={{ overflowX: 'auto', width: '100%' }}>
+                <Table sx={{ minWidth: 600 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Sujet</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Priorité</TableCell>
+                      <TableCell>Jours de retard</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {urgentItems.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.subject}</TableCell>
+                        <TableCell>{item.type}</TableCell>
+                        <TableCell>{getPriorityChip(item.priority, item.daysOverdue)}</TableCell>
+                        <TableCell>
+                          <Typography color="error" sx={{ fontWeight: 600 }}>
+                            {item.daysOverdue} jour(s)
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
             ) : (
               <Alert severity="success">
                 Aucun élément urgent en retard

@@ -14,8 +14,13 @@ const GECMobileView: React.FC<Props> = ({ onTabChange }) => {
     { label: 'Créer Courrier', tab: 1, icon: '✍️', color: '#1976d2' },
     { label: 'Boîte Réception', tab: 2, icon: '📥', color: '#2e7d32' },
     { label: 'Boîte Envoi', tab: 3, icon: '📤', color: '#ed6c02' },
-    { label: 'Recherche', tab: 4, icon: '🔍', color: '#9c27b0' },
-    { label: 'Rapports', tab: 5, icon: '📄', color: '#d32f2f' }
+    { label: 'Relances', tab: 4, icon: '🔄', color: '#f57c00' },
+    { label: 'Outlook/365', tab: 5, icon: '📧', color: '#0078d4' },
+    { label: 'Suivi Emails', tab: 6, icon: '📈', color: '#388e3c' },
+    { label: 'Modèles', tab: 7, icon: '📝', color: '#7b1fa2' },
+    { label: 'Insights IA', tab: 8, icon: '🤖', color: '#e91e63' },
+    { label: 'Recherche', tab: 9, icon: '🔍', color: '#9c27b0' },
+    { label: 'Rapports', tab: 10, icon: '📄', color: '#d32f2f' }
   ];
 
   return (
@@ -45,7 +50,7 @@ const GECMobileView: React.FC<Props> = ({ onTabChange }) => {
           </Typography>
           <Grid container spacing={1}>
             {quickActions.map((action, index) => (
-              <Grid item xs={6} key={index}>
+              <Grid item xs={6} sm={4} md={3} key={index}>
                 <Button
                   variant="outlined"
                   fullWidth
