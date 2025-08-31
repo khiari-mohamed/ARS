@@ -38,11 +38,7 @@ const CreateCorrespondenceTab: React.FC = () => {
           const templatesData = await templatesResponse.json();
           setTemplates(templatesData.map((t: any) => ({ id: t.id, name: t.name, type: t.type })));
         } else {
-          setTemplates([
-            { id: '1', name: 'Courrier de Règlement', type: 'REGLEMENT' },
-            { id: '2', name: 'Courrier de Réclamation', type: 'RECLAMATION' },
-            { id: '3', name: 'Relance Client', type: 'RELANCE' }
-          ]);
+          setTemplates([]);
         }
         
         // Load real clients
@@ -51,10 +47,7 @@ const CreateCorrespondenceTab: React.FC = () => {
           const clientsData = await clientsResponse.json();
           setClients(clientsData.map((c: any) => ({ id: c.id, name: c.name, email: c.email })));
         } else {
-          setClients([
-            { id: '1', name: 'Client A', email: 'clienta@example.com' },
-            { id: '2', name: 'Client B', email: 'clientb@example.com' }
-          ]);
+          setClients([]);
         }
       } catch (error) {
         console.error('Failed to load data:', error);

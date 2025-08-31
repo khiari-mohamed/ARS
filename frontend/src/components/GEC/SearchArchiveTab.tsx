@@ -22,12 +22,15 @@ const SearchArchiveTab: React.FC = () => {
   });
   const [results, setResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [viewDialog, setViewDialog] = useState(false);
+  const [gedDialog, setGedDialog] = useState(false);
   const [selectedCourrier, setSelectedCourrier] = useState<any>(null);
 
   const handleSearch = async () => {
     console.log('🔍 Starting search with filters:', filters);
     setSearching(true);
+    setHasSearched(true);
     try {
       const token = localStorage.getItem('token');
       const queryParams = new URLSearchParams();
@@ -48,21 +51,59 @@ const SearchArchiveTab: React.FC = () => {
       if (response.ok) {
         const courriers = await response.json();
         console.log('🔍 Search results:', courriers.length, 'courriers found');
+        if (courriers.length > 0) {
+          console.log('🔍 Sample courrier data:', {
+            id: courriers[0].id,
+            subject: courriers[0].subject,
+            uploader: courriers[0].uploader,
+            bordereau: courriers[0].bordereau,
+            bodySnippet: courriers[0].body?.substring(0, 100)
+          });
+        }
         
         // Apply client-side filters for fields not supported by backend
         let filteredResults = courriers;
         
-        if (filters.client) {
+        if (filters.client && filters.client.trim()) {
+          const clientFilter = filters.client.toLowerCase().trim();
+          console.log('🔍 Filtering by client:', clientFilter);
+          
+          filteredResults = filteredResults.filter((c: any) => {
+            const matches = [
+              c.bordereau?.client?.name?.toLowerCase().includes(clientFilter),
+              c.uploader?.email?.toLowerCase().includes(clientFilter),
+              c.uploader?.fullName?.toLowerCase().includes(clientFilter),
+              c.body?.toLowerCase().includes(clientFilter),
+              c.subject?.toLowerCase().includes(clientFilter)
+            ];
+            
+            const hasMatch = matches.some(match => match);
+            if (hasMatch) {
+              console.log('✅ Match found in courrier:', c.id, {
+                bordereau: c.bordereau?.client?.name,
+                uploader: c.uploader?.fullName,
+                email: c.uploader?.email,
+                subject: c.subject?.substring(0, 50),
+                bodySnippet: c.body?.substring(0, 100)
+              });
+            }
+            return hasMatch;
+          });
+          
+          console.log('🔍 After client filter:', filteredResults.length, 'results');
+        }
+        
+        if (filters.keywords && filters.keywords.trim()) {
+          const keywordFilter = filters.keywords.toLowerCase().trim();
           filteredResults = filteredResults.filter((c: any) => 
-            c.bordereau?.client?.name?.toLowerCase().includes(filters.client.toLowerCase()) ||
-            c.uploader?.email?.toLowerCase().includes(filters.client.toLowerCase())
+            (c.subject && c.subject.toLowerCase().includes(keywordFilter)) ||
+            (c.body && c.body.toLowerCase().includes(keywordFilter))
           );
         }
         
-        if (filters.keywords) {
+        if (filters.priority && filters.priority.trim()) {
           filteredResults = filteredResults.filter((c: any) => 
-            c.subject?.toLowerCase().includes(filters.keywords.toLowerCase()) ||
-            c.body?.toLowerCase().includes(filters.keywords.toLowerCase())
+            (c.priority || 'NORMAL') === filters.priority
           );
         }
         
@@ -70,11 +111,11 @@ const SearchArchiveTab: React.FC = () => {
         const mappedResults = filteredResults.map((courrier: any) => ({
           id: courrier.id,
           reference: `${courrier.type}/${new Date(courrier.createdAt).getFullYear()}/${courrier.id.substring(0, 8)}`,
-          client: courrier.bordereau?.client?.name || courrier.uploader?.email || 'N/A',
+          client: courrier.bordereau?.client?.name || courrier.uploader?.fullName || courrier.uploader?.email || 'N/A',
           date: courrier.createdAt,
           type: courrier.type,
           status: courrier.status,
-          priority: 'NORMAL', // Mock priority
+          priority: courrier.priority || 'NORMAL',
           subject: courrier.subject,
           body: courrier.body,
           sentAt: courrier.sentAt,
@@ -82,7 +123,12 @@ const SearchArchiveTab: React.FC = () => {
         }));
         
         setResults(mappedResults);
-        console.log('🔍 Filtered results:', mappedResults.length, 'items');
+        console.log('🔍 Final results:', mappedResults.length, 'items');
+        if (mappedResults.length > 0) {
+          console.log('🔍 Sample result:', mappedResults[0]);
+        } else {
+          console.log('❌ No results after filtering');
+        }
       } else {
         console.error('Search failed:', response.status);
         setResults([]);
@@ -106,6 +152,7 @@ const SearchArchiveTab: React.FC = () => {
       keywords: ''
     });
     setResults([]);
+    setHasSearched(false);
   };
 
   const getStatusChip = (status: string) => {
@@ -185,11 +232,8 @@ const SearchArchiveTab: React.FC = () => {
 
   const handleViewInGED = (courrier: any) => {
     console.log('📁 Viewing in GED:', courrier.id);
-    if (courrier.bordereauId) {
-      alert(`Courrier lié au bordereau: ${courrier.bordereauId}\nRedirection vers le GED...`);
-    } else {
-      alert('Ce courrier n\'est pas archivé dans le GED');
-    }
+    setSelectedCourrier(courrier);
+    setGedDialog(true);
   };
 
   return (
@@ -312,73 +356,117 @@ const SearchArchiveTab: React.FC = () => {
 
       {/* Search Results */}
       {results.length > 0 && (
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
+        <Paper elevation={2} sx={{ p: { xs: 1, sm: 3 } }}>
+          <Typography variant="h6" sx={{ mb: 2, px: { xs: 2, sm: 0 } }}>
             Résultats ({results.length})
           </Typography>
           
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Référence</TableCell>
-                <TableCell>Client</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Statut</TableCell>
-                <TableCell>Priorité</TableCell>
-                <TableCell>Sujet</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {results.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.reference}</TableCell>
-                  <TableCell>{item.client}</TableCell>
-                  <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                  <TableCell>{item.type}</TableCell>
-                  <TableCell>{getStatusChip(item.status)}</TableCell>
-                  <TableCell>{getPriorityChip(item.priority)}</TableCell>
-                  <TableCell>{item.subject}</TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={1}>
-                      <Button 
-                        size="small" 
-                        startIcon={<VisibilityIcon />}
-                        onClick={() => handleViewCourrier(item)}
-                      >
-                        Ouvrir
-                      </Button>
-                      <Button 
-                        size="small" 
-                        startIcon={<DownloadIcon />}
-                        onClick={() => handleDownloadCourrier(item)}
-                      >
-                        Télécharger
-                      </Button>
-                      <Button 
-                        size="small" 
-                        startIcon={<FolderIcon />}
-                        onClick={() => handleViewInGED(item)}
-                      >
-                        Voir dans GED
-                      </Button>
-                    </Stack>
-                  </TableCell>
+          <Box sx={{ width: '100%', overflowX: 'auto' }}>
+            <Table sx={{ minWidth: 800 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ minWidth: 120 }}>Référence</TableCell>
+                  <TableCell sx={{ minWidth: 100 }}>Client</TableCell>
+                  <TableCell sx={{ minWidth: 80 }}>Date</TableCell>
+                  <TableCell sx={{ minWidth: 80 }}>Type</TableCell>
+                  <TableCell sx={{ minWidth: 100 }}>Statut</TableCell>
+                  <TableCell sx={{ minWidth: 80, display: { xs: 'none', md: 'table-cell' } }}>Priorité</TableCell>
+                  <TableCell sx={{ minWidth: 200 }}>Sujet</TableCell>
+                  <TableCell sx={{ minWidth: 200 }}>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {results.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                      {item.reference}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                      {item.client}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                      {new Date(item.date).toLocaleDateString('fr-FR', { 
+                        day: '2-digit', 
+                        month: '2-digit',
+                        year: '2-digit'
+                      })}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                      {item.type}
+                    </TableCell>
+                    <TableCell>{getStatusChip(item.status)}</TableCell>
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                      {getPriorityChip(item.priority)}
+                    </TableCell>
+                    <TableCell sx={{ 
+                      fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      maxWidth: 200,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {item.subject}
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                        <Button 
+                          size="small" 
+                          startIcon={<VisibilityIcon />}
+                          onClick={() => handleViewCourrier(item)}
+                          sx={{ fontSize: { xs: '0.7rem', sm: '0.8rem' } }}
+                        >
+                          Ouvrir
+                        </Button>
+                        <Button 
+                          size="small" 
+                          startIcon={<DownloadIcon />}
+                          onClick={() => handleDownloadCourrier(item)}
+                          sx={{ fontSize: { xs: '0.7rem', sm: '0.8rem' } }}
+                        >
+                          <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Télécharger</Box>
+                          <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Téléch.</Box>
+                        </Button>
+                        <Button 
+                          size="small" 
+                          startIcon={<FolderIcon />}
+                          onClick={() => handleViewInGED(item)}
+                          sx={{ fontSize: { xs: '0.7rem', sm: '0.8rem' } }}
+                        >
+                          GED
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       )}
 
-      {results.length === 0 && !searching && (
+      {results.length === 0 && !searching && hasSearched && (
+        <Paper elevation={1} sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
+          <SearchIcon sx={{ fontSize: 64, mb: 2 }} />
+          <Typography variant="h6">Aucun résultat trouvé</Typography>
+          <Typography variant="body2">
+            Essayez de modifier vos critères de recherche
+          </Typography>
+        </Paper>
+      )}
+
+      {results.length === 0 && !searching && !hasSearched && (
         <Paper elevation={1} sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
           <SearchIcon sx={{ fontSize: 64, mb: 2 }} />
           <Typography variant="h6">Utilisez les filtres ci-dessus pour rechercher</Typography>
           <Typography variant="body2">
             Recherchez dans l'archive complète de correspondance
           </Typography>
+        </Paper>
+      )}
+
+      {searching && (
+        <Paper elevation={1} sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h6">Recherche en cours...</Typography>
         </Paper>
       )}
 
@@ -445,6 +533,59 @@ const SearchArchiveTab: React.FC = () => {
           >
             Télécharger
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* GED Dialog */}
+      <Dialog open={gedDialog} onClose={() => setGedDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Voir dans le GED
+        </DialogTitle>
+        <DialogContent>
+          {selectedCourrier && (
+            <Box>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                <strong>Courrier:</strong> {selectedCourrier.reference}
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                <strong>Sujet:</strong> {selectedCourrier.subject}
+              </Typography>
+              
+              {selectedCourrier.bordereauId ? (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Ce courrier est lié au bordereau: <strong>{selectedCourrier.bordereauId}</strong>
+                </Alert>
+              ) : (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  Ce courrier n'est pas archivé dans le GED
+                </Alert>
+              )}
+              
+              <Typography variant="body2" color="text.secondary">
+                {selectedCourrier.bordereauId 
+                  ? 'Vous allez être redirigé vers le module GED pour consulter ce bordereau.'
+                  : 'Ce courrier n\'a pas de bordereau associé et ne peut pas être consulté dans le GED.'
+                }
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGedDialog(false)}>Annuler</Button>
+          {selectedCourrier?.bordereauId && (
+            <Button 
+              variant="contained" 
+              startIcon={<FolderIcon />}
+              onClick={() => {
+                console.log('Redirecting to GED for bordereau:', selectedCourrier.bordereauId);
+                // Here you would implement the actual GED redirection
+                alert('Redirection vers le GED...');
+                setGedDialog(false);
+              }}
+            >
+              Ouvrir dans GED
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

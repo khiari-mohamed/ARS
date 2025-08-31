@@ -38,22 +38,22 @@ const GECDashboardTab: React.FC = () => {
         
         let analytics, slaBreaches, volumeData;
         
-        try {
-          analytics = analyticsResponse.ok ? await analyticsResponse.json() : { totalCourriers: 6, pendingCourriers: 4, successRate: 33, typeDistribution: [{type: 'AUTRE', count: 4}, {type: 'REGLEMENT', count: 2}] };
-        } catch (e) {
-          analytics = { totalCourriers: 6, pendingCourriers: 4, successRate: 33, typeDistribution: [{type: 'AUTRE', count: 4}, {type: 'REGLEMENT', count: 2}] };
+        if (analyticsResponse.ok) {
+          analytics = await analyticsResponse.json();
+        } else {
+          throw new Error(`Analytics API failed: ${analyticsResponse.status}`);
         }
         
-        try {
-          slaBreaches = slaBreachesResponse.ok ? await slaBreachesResponse.json() : [];
-        } catch (e) {
-          slaBreaches = [];
+        if (slaBreachesResponse.ok) {
+          slaBreaches = await slaBreachesResponse.json();
+        } else {
+          throw new Error(`SLA breaches API failed: ${slaBreachesResponse.status}`);
         }
         
-        try {
-          volumeData = volumeResponse.ok ? await volumeResponse.json() : [];
-        } catch (e) {
-          volumeData = [];
+        if (volumeResponse.ok) {
+          volumeData = await volumeResponse.json();
+        } else {
+          throw new Error(`Volume API failed: ${volumeResponse.status}`);
         }
         
         console.log('📊 Analytics data:', analytics);
@@ -67,20 +67,10 @@ const GECDashboardTab: React.FC = () => {
           urgentCount: slaBreaches.length || 0
         });
         
-        // Set volume data from API or fallback to mock
-        if (volumeData.length > 0) {
-          setVolumeData(volumeData);
-        } else {
-          setVolumeData([
-            { date: '2025-01-10', sent: 12, received: 8 },
-            { date: '2025-01-11', sent: 15, received: 10 },
-            { date: '2025-01-12', sent: 18, received: 12 },
-            { date: '2025-01-13', sent: 14, received: 9 },
-            { date: '2025-01-14', sent: 20, received: 15 }
-          ]);
-        }
+        // Set volume data from API only
+        setVolumeData(volumeData || []);
 
-        // Set type distribution from API or fallback to mock
+        // Set type distribution from API only
         if (analytics.typeDistribution && analytics.typeDistribution.length > 0) {
           const total = analytics.typeDistribution.reduce((sum: number, item: any) => sum + item.count, 0);
           const typeColors = {
@@ -98,12 +88,7 @@ const GECDashboardTab: React.FC = () => {
             color: typeColors[item.type as keyof typeof typeColors] || '#388e3c'
           })));
         } else {
-          setTypeData([
-            { name: 'Règlement', value: 45, color: '#1976d2' },
-            { name: 'Réclamation', value: 25, color: '#d32f2f' },
-            { name: 'Relance', value: 20, color: '#ed6c02' },
-            { name: 'Autre', value: 10, color: '#388e3c' }
-          ]);
+          setTypeData([]);
         }
 
         // Map SLA breaches to urgent items
@@ -120,13 +105,16 @@ const GECDashboardTab: React.FC = () => {
         setUrgentItems(urgentItems);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
-        // Set fallback data on error
+        // Set empty data on error - no fallbacks
         setStats({
           totalThisMonth: 0,
           pendingReplies: 0,
           slaCompliance: 0,
           urgentCount: 0
         });
+        setVolumeData([]);
+        setTypeData([]);
+        setUrgentItems([]);
       }
     };
     

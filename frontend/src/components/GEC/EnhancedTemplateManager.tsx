@@ -222,28 +222,20 @@ const EnhancedTemplateManager: React.FC = () => {
   const handleViewVersions = async (template: any) => {
     console.log('📅 Loading versions for template:', template.id);
     try {
-      // Mock versions for now
-      const mockVersions = [
+      // For now, show current version only since version history is not implemented in backend
+      const currentVersion = [
         {
-          id: '1',
-          version: 2,
-          changes: 'Mise à jour du contenu principal',
-          createdBy: 'Admin',
-          createdAt: new Date().toISOString(),
+          id: template.id,
+          version: template.version || 1,
+          changes: 'Version actuelle',
+          createdBy: 'Système',
+          createdAt: template.updatedAt || template.createdAt,
           isActive: true
-        },
-        {
-          id: '2',
-          version: 1,
-          changes: 'Version initiale',
-          createdBy: 'Admin',
-          createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          isActive: false
         }
       ];
       
       setSelectedTemplate(template);
-      setTemplateVersions(mockVersions);
+      setTemplateVersions(currentVersion);
       setVersionDialog(true);
     } catch (error) {
       console.error('Failed to load template versions:', error);
@@ -254,13 +246,6 @@ const EnhancedTemplateManager: React.FC = () => {
     console.log('👁️ Previewing template:', template.id);
     try {
       const token = localStorage.getItem('token');
-      const mockVariables = {
-        clientName: 'M. Dupont',
-        reference: 'REF-2025-001',
-        montant: '1500 TND',
-        dateSoin: new Date().toLocaleDateString('fr-FR'),
-        delaiTraitement: '5 jours'
-      };
       
       const response = await fetch(`http://localhost:5000/api/courriers/templates/${template.id}/render`, {
         method: 'POST',
@@ -268,7 +253,7 @@ const EnhancedTemplateManager: React.FC = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(mockVariables)
+        body: JSON.stringify({})
       });
       
       if (response.ok) {
@@ -278,7 +263,7 @@ const EnhancedTemplateManager: React.FC = () => {
         setPreviewDialog(true);
       } else {
         console.error('Failed to render template:', response.status);
-        // Fallback to basic preview
+        // Show raw template without variables
         setPreviewData({
           subject: template.subject,
           body: template.body
@@ -287,7 +272,7 @@ const EnhancedTemplateManager: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to preview template:', error);
-      // Fallback to basic preview
+      // Show raw template without variables
       setPreviewData({
         subject: template.subject,
         body: template.body
@@ -964,19 +949,19 @@ const EnhancedTemplateManager: React.FC = () => {
                     <Box display="flex" justifyContent="space-between" mb={1}>
                       <Typography variant="body2">Taux d'ouverture:</Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        {selectedABTest.results?.templateA?.openRate || 68.5}%
+                        {selectedABTest.results?.templateA?.openRate || 0}%
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between" mb={1}>
                       <Typography variant="body2">Taux de clic:</Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        {selectedABTest.results?.templateA?.clickRate || 12.3}%
+                        {selectedABTest.results?.templateA?.clickRate || 0}%
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between">
                       <Typography variant="body2">Conversions:</Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        {selectedABTest.results?.templateA?.conversions || 45}
+                        {selectedABTest.results?.templateA?.conversions || 0}
                       </Typography>
                     </Box>
                   </CardContent>
@@ -994,19 +979,19 @@ const EnhancedTemplateManager: React.FC = () => {
                     <Box display="flex" justifyContent="space-between" mb={1}>
                       <Typography variant="body2">Taux d'ouverture:</Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        {selectedABTest.results?.templateB?.openRate || 72.1}%
+                        {selectedABTest.results?.templateB?.openRate || 0}%
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between" mb={1}>
                       <Typography variant="body2">Taux de clic:</Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        {selectedABTest.results?.templateB?.clickRate || 15.7}%
+                        {selectedABTest.results?.templateB?.clickRate || 0}%
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between">
                       <Typography variant="body2">Conversions:</Typography>
                       <Typography variant="body2" fontWeight={600}>
-                        {selectedABTest.results?.templateB?.conversions || 62}
+                        {selectedABTest.results?.templateB?.conversions || 0}
                       </Typography>
                     </Box>
                   </CardContent>
@@ -1015,7 +1000,7 @@ const EnhancedTemplateManager: React.FC = () => {
               <Grid item xs={12}>
                 <Alert severity="success">
                   <Typography variant="body2">
-                    <strong>Gagnant:</strong> Le modèle {selectedABTest.results?.winner || 'B'} performe mieux 
+                    <strong>Gagnant:</strong> {selectedABTest.results?.winner ? `Le modèle ${selectedABTest.results.winner} performe mieux` : 'Données insuffisantes pour déterminer un gagnant'}
                     {selectedABTest.results?.confidence && ` avec ${selectedABTest.results.confidence}% de confiance`}.
                   </Typography>
                 </Alert>

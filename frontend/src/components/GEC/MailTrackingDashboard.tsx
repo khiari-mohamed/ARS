@@ -90,59 +90,17 @@ const MailTrackingDashboard: React.FC = () => {
         setTrackingData(data);
       } else {
         console.error('Failed to load tracking data:', response.status);
-        // Fallback to mock data
-        setTrackingData(getMockTrackingData());
+        setTrackingData(null);
       }
     } catch (error) {
       console.error('Failed to load tracking data:', error);
-      // Fallback to mock data
-      setTrackingData(getMockTrackingData());
+      setTrackingData(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const getMockTrackingData = () => ({
-    summary: {
-      totalMessages: 156,
-      deliveryRate: 94.2,
-      openRate: 68.5,
-      responseRate: 23.1
-    },
-    timeline: [
-      { date: '2025-08-23', sent: 12, delivered: 11, opened: 8, replied: 3 },
-      { date: '2025-08-24', sent: 18, delivered: 17, opened: 12, replied: 4 },
-      { date: '2025-08-25', sent: 25, delivered: 24, opened: 18, replied: 6 },
-      { date: '2025-08-26', sent: 22, delivered: 21, opened: 15, replied: 5 },
-      { date: '2025-08-27', sent: 28, delivered: 26, opened: 19, replied: 7 },
-      { date: '2025-08-28', sent: 31, delivered: 29, opened: 22, replied: 8 },
-      { date: '2025-08-29', sent: 20, delivered: 19, opened: 14, replied: 4 }
-    ],
-    delivery: {
-      'msg_001': { status: 'delivered', sentAt: '2025-08-29T10:00:00Z', deliveredAt: '2025-08-29T10:02:15Z', attempts: 1 },
-      'msg_002': { status: 'delivered', sentAt: '2025-08-29T11:30:00Z', deliveredAt: '2025-08-29T11:31:45Z', attempts: 1 },
-      'msg_003': { status: 'failed', sentAt: '2025-08-29T12:00:00Z', deliveredAt: null, attempts: 3 },
-      'msg_004': { status: 'delivered', sentAt: '2025-08-29T13:15:00Z', deliveredAt: '2025-08-29T13:16:30Z', attempts: 1 },
-      'msg_005': { status: 'bounced', sentAt: '2025-08-29T14:00:00Z', deliveredAt: null, attempts: 2 }
-    },
-    engagement: {
-      topRecipients: [
-        { recipient: 'client.abc@email.com', opens: 12 },
-        { recipient: 'client.xyz@email.com', opens: 8 },
-        { recipient: 'client.def@email.com', opens: 6 }
-      ]
-    },
-    responses: {
-      totalResponses: 36,
-      avgResponseTime: 4.2,
-      autoReplyRate: 15.3,
-      sentimentDistribution: {
-        positive: 18,
-        neutral: 12,
-        negative: 6
-      }
-    }
-  });
+
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -269,7 +227,13 @@ const MailTrackingDashboard: React.FC = () => {
       {/* Main Content */}
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={activeTab} onChange={handleTabChange} aria-label="tracking tabs">
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange} 
+            aria-label="tracking tabs"
+            variant="scrollable"
+            scrollButtons="auto"
+          >
             <Tab label="Vue d'Ensemble" />
             <Tab label="Livraisons" />
             <Tab label="Ouvertures" />
@@ -302,30 +266,39 @@ const MailTrackingDashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Répartition des Statuts
               </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Livrés', value: trackingData.summary.deliveryRate },
-                      { name: 'Ouverts', value: trackingData.summary.openRate },
-                      { name: 'Réponses', value: trackingData.summary.responseRate },
-                      { name: 'Non ouverts', value: 100 - trackingData.summary.openRate }
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {[].map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <Box sx={{ height: { xs: 250, sm: 300 } }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={trackingData.statusDistribution || []}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="count"
+                    >
+                      {(trackingData.statusDistribution || []).map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value, name, props) => [`${value} courriers`, props.payload.status]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+              <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {(trackingData.statusDistribution || []).map((entry: any, index: number) => (
+                  <Chip
+                    key={entry.status}
+                    label={`${entry.status}: ${entry.count}`}
+                    sx={{ 
+                      backgroundColor: COLORS[index % COLORS.length],
+                      color: 'white',
+                      fontSize: '0.75rem'
+                    }}
+                    size="small"
+                  />
+                ))}
+              </Box>
             </Grid>
           </Grid>
         </TabPanel>
@@ -380,10 +353,7 @@ const MailTrackingDashboard: React.FC = () => {
                 Ouvertures par Heure
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={Array.from({ length: 24 }, (_, hour) => ({
-                  hour: `${hour}h`,
-                  opens: Math.floor(Math.random() * 20) + 1
-                }))}>
+                <BarChart data={trackingData.hourlyOpens || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="hour" />
                   <YAxis />
@@ -540,21 +510,23 @@ const MailTrackingDashboard: React.FC = () => {
                   </ListItemIcon>
                   <ListItemText
                     primary={
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Typography variant="subtitle1">
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ mb: 1 }}>
                           {response.subject}
                         </Typography>
-                        <Chip
-                          label={response.sentiment}
-                          color={
-                            response.sentiment === 'positive' ? 'success' :
-                            response.sentiment === 'negative' ? 'error' : 'default'
-                          }
-                          size="small"
-                        />
-                        {response.isAutoReply && (
-                          <Chip label="Auto-réponse" size="small" variant="outlined" />
-                        )}
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                          <Chip
+                            label={response.sentiment}
+                            color={
+                              response.sentiment === 'positive' ? 'success' :
+                              response.sentiment === 'negative' ? 'error' : 'default'
+                            }
+                            size="small"
+                          />
+                          {response.isAutoReply && (
+                            <Chip label="Auto-réponse" size="small" variant="outlined" />
+                          )}
+                        </Box>
                       </Box>
                     }
                     secondary={

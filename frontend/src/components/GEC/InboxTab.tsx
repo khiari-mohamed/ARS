@@ -326,62 +326,63 @@ const InboxTab: React.FC = () => {
       </Box>
 
       {/* Items Table */}
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Référence</TableCell>
-            <TableCell>De</TableCell>
-            <TableCell>Date Reçu</TableCell>
-            <TableCell>Type</TableCell>
-            <TableCell>Lié à</TableCell>
-            <TableCell>Statut</TableCell>
-            <TableCell>SLA</TableCell>
-            <TableCell>Priorité</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {items.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>{item.reference}</TableCell>
-              <TableCell>{item.from}</TableCell>
-              <TableCell>{new Date(item.dateReceived).toLocaleDateString()}</TableCell>
-              <TableCell>{item.type}</TableCell>
-              <TableCell>{item.linkedTo}</TableCell>
-              <TableCell>{getStatusChip(item.status)}</TableCell>
-              <TableCell>{getSLAChip(item.slaStatus)}</TableCell>
-              <TableCell>{getPriorityChip(item.priority)}</TableCell>
-              <TableCell>
-                <Stack direction="row" spacing={1}>
-                  <Button
-                    size="small"
-                    startIcon={<VisibilityIcon />}
-                    onClick={() => handleAction('view', item.id)}
-                  >
-                    Voir
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<ReplyIcon />}
-                    onClick={() => handleAction('reply', item.id)}
-                    disabled={item.status === 'CLOSED'}
-                  >
-                    Répondre
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<ForwardIcon />}
-                    onClick={() => handleAction('forward', item.id)}
-                  >
-                    Transférer
-                  </Button>
-
-                </Stack>
-              </TableCell>
+      <Box sx={{ overflowX: 'auto' }}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Référence</TableCell>
+              <TableCell>De</TableCell>
+              <TableCell>Date Reçu</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Lié à</TableCell>
+              <TableCell>Statut</TableCell>
+              <TableCell>SLA</TableCell>
+              <TableCell>Priorité</TableCell>
+              <TableCell>Actions</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.reference}</TableCell>
+                <TableCell>{item.from}</TableCell>
+                <TableCell>{new Date(item.dateReceived).toLocaleDateString()}</TableCell>
+                <TableCell>{item.type}</TableCell>
+                <TableCell>{item.linkedTo}</TableCell>
+                <TableCell>{getStatusChip(item.status)}</TableCell>
+                <TableCell>{getSLAChip(item.slaStatus)}</TableCell>
+                <TableCell>{getPriorityChip(item.priority)}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      startIcon={<VisibilityIcon />}
+                      onClick={() => handleAction('view', item.id)}
+                    >
+                      Voir
+                    </Button>
+                    <Button
+                      size="small"
+                      startIcon={<ReplyIcon />}
+                      onClick={() => handleAction('reply', item.id)}
+                      disabled={item.status === 'CLOSED'}
+                    >
+                      Répondre
+                    </Button>
+                    <Button
+                      size="small"
+                      startIcon={<ForwardIcon />}
+                      onClick={() => handleAction('forward', item.id)}
+                    >
+                      Transférer
+                    </Button>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
 
       {items.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>

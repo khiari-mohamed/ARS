@@ -753,6 +753,80 @@ async def analyze_temporal_patterns(data: Dict = Body(...), current_user = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Temporal pattern analysis failed: {str(e)}")
 
+# === SENTIMENT ANALYSIS ===
+@app.post("/sentiment_analysis")
+@log_endpoint_call("sentiment_analysis")
+async def analyze_sentiment(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Analyze sentiment of text using spaCy and keyword analysis"""
+    try:
+        text = data.get('text', '')
+        language = data.get('language', 'fr')
+        
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+        
+        # Process text with spaCy
+        doc = nlp(text)
+        
+        # French sentiment keywords
+        positive_words = [
+            'merci', 'excellent', 'parfait', 'satisfait', 'content', 'bien', 'bon', 
+            'réussi', 'super', 'formidable', 'bravo', 'félicitations', 'génial', 
+            'magnifique', 'parfaitement', 'impeccable', 'fantastique', 'remarquable',
+            'très bien', 'très bon', 'très satisfait'
+        ]
+        
+        negative_words = [
+            'problème', 'erreur', 'mauvais', 'insatisfait', 'déçu', 'retard', 'échec', 
+            'difficulté', 'souci', 'plainte', 'réclamation', 'catastrophe', 'horrible', 
+            'nul', 'décevant', 'inacceptable', 'frustrant', 'inadmissible',
+            'très mauvais', 'très déçu', 'très insatisfait'
+        ]
+        
+        # Analyze text
+        text_lower = text.lower()
+        positive_count = sum(1 for word in positive_words if word in text_lower)
+        negative_count = sum(1 for word in negative_words if word in text_lower)
+        
+        # Enhanced scoring with context
+        score = 0
+        if 'très bien' in text_lower or 'très bon' in text_lower: score += 2
+        if 'très mauvais' in text_lower or 'très déçu' in text_lower: score -= 2
+        if '!' in text: score += 1 if positive_count > negative_count else -1
+        if '?' in text: score -= 0.5  # Questions often indicate uncertainty/problems
+        
+        final_score = positive_count - negative_count + score
+        
+        # Determine sentiment
+        if final_score > 0:
+            sentiment = 'positive'
+            confidence = min(0.9, 0.5 + (final_score * 0.1))
+        elif final_score < 0:
+            sentiment = 'negative' 
+            confidence = min(0.9, 0.5 + (abs(final_score) * 0.1))
+        else:
+            sentiment = 'neutral'
+            confidence = 0.6
+        
+        # Extract entities for context
+        entities = [{'text': ent.text, 'label': ent.label_} for ent in doc.ents]
+        
+        return {
+            'sentiment': sentiment,
+            'confidence': float(confidence),
+            'score': float(final_score),
+            'analysis': {
+                'positive_indicators': positive_count,
+                'negative_indicators': negative_count,
+                'text_length': len(text),
+                'entities': entities
+            },
+            'summary': f"Sentiment: {sentiment} (confidence: {confidence:.2f})"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sentiment analysis failed: {str(e)}")
+
 # === INTELLIGENT AUTOMATION ===
 @app.post("/smart_routing/build_profiles")
 @log_endpoint_call("smart_routing_build_profiles")

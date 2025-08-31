@@ -47,6 +47,13 @@ real_users_db = {
         "email": "analyst@company.com",
         "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
         "disabled": False,
+    },
+    "ai_user": {
+        "username": "ai_user",
+        "full_name": "AI Service User",
+        "email": "ai@company.com",
+        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+        "disabled": False,
     }
 }
 

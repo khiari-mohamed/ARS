@@ -15,22 +15,54 @@ export class TemplateService {
 
   async listTemplates(): Promise<any[]> {
     console.log('📄 Loading templates from database...');
-    const templates = await this.prisma.template.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
     
-    // Add mock fields for frontend compatibility
+    // Get both Template and GecTemplate records
+    const [templates, gecTemplates] = await Promise.all([
+      this.prisma.template.findMany({ orderBy: { createdAt: 'desc' } }),
+      this.prisma.gecTemplate.findMany({ 
+        where: { isActive: true },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+    
+    // Convert Template records
     const enhancedTemplates = templates.map(template => ({
       ...template,
-      category: 'NOTIFICATION', // Mock category
-      version: 1, // Mock version
-      isActive: true, // Mock active status
-      tags: [], // Mock tags
+      category: 'NOTIFICATION',
+      version: 1,
+      isActive: true,
+      type: this.getTemplateType(template.subject, template.body),
       updatedAt: template.updatedAt || template.createdAt
     }));
     
-    console.log('📄 Enhanced templates:', enhancedTemplates.length);
-    return enhancedTemplates;
+    // Convert GecTemplate records to match Template format
+    const convertedGecTemplates = gecTemplates.map(gecTemplate => ({
+      id: gecTemplate.id,
+      name: gecTemplate.name,
+      subject: `Template: ${gecTemplate.name}`,
+      body: gecTemplate.content,
+      variables: [],
+      category: gecTemplate.category,
+      version: 1,
+      isActive: gecTemplate.isActive,
+      type: gecTemplate.type,
+      createdAt: gecTemplate.createdAt,
+      updatedAt: gecTemplate.updatedAt
+    }));
+    
+    // Combine both types
+    const allTemplates = [...enhancedTemplates, ...convertedGecTemplates];
+    
+    console.log('📄 Total templates:', allTemplates.length, '(Template:', templates.length, '+ GecTemplate:', gecTemplates.length, ')');
+    return allTemplates;
+  }
+  
+  private getTemplateType(subject: string, body: string): string {
+    const content = (subject + ' ' + body).toLowerCase();
+    if (content.includes('règlement') || content.includes('reglement')) return 'REGLEMENT';
+    if (content.includes('réclamation') || content.includes('reclamation')) return 'RECLAMATION';
+    if (content.includes('relance')) return 'RELANCE';
+    return 'AUTRE';
   }
 
   async getTemplate(id: string): Promise<Template> {
