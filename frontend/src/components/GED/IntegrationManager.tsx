@@ -48,7 +48,7 @@ import {
   Cloud,
   Storage
 } from '@mui/icons-material';
-import { fetchIntegrationConnectors, testConnector, syncConnector, fetchWebhookSubscriptions, getIntegrationStats } from '../../services/gedService';
+// All integration operations now use real API endpoints
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -99,54 +99,45 @@ const IntegrationManager: React.FC = () => {
 
   const loadData = async () => {
     try {
-      // Try real API endpoints first
-      const connectorsResponse = await fetch('/api/documents/integrations/connectors', {
+      // Load from real API endpoints
+      const connectorsResponse = await fetch('http://localhost:5000/api/documents/integrations/connectors', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      const webhooksResponse = await fetch('/api/documents/integrations/webhooks', {
+      const webhooksResponse = await fetch('http://localhost:5000/api/documents/integrations/webhooks', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      const statsResponse = await fetch('/api/documents/integrations/stats', {
+      const statsResponse = await fetch('http://localhost:5000/api/documents/integrations/stats', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
-      let connectorsData, webhooksData, statsData;
       
       if (connectorsResponse.ok && webhooksResponse.ok && statsResponse.ok) {
-        connectorsData = await connectorsResponse.json();
-        webhooksData = await webhooksResponse.json();
-        statsData = await statsResponse.json();
+        const connectorsData = await connectorsResponse.json();
+        const webhooksData = await webhooksResponse.json();
+        const statsData = await statsResponse.json();
+        
+        setConnectors(connectorsData);
+        setWebhooks(webhooksData);
+        setStats(statsData);
       } else {
-        // Fallback to mock services
-        [connectorsData, webhooksData, statsData] = await Promise.all([
-          fetchIntegrationConnectors(),
-          fetchWebhookSubscriptions(),
-          getIntegrationStats()
-        ]);
+        // No fallback - use empty arrays
+        setConnectors([]);
+        setWebhooks([]);
+        setStats({ totalSyncs: 0, successfulSyncs: 0, documentsProcessed: 0 });
       }
-      
-      setConnectors(connectorsData);
-      setWebhooks(webhooksData);
-      setStats(statsData);
     } catch (error) {
       console.error('Failed to load integration data:', error);
-      // Fallback to mock data
-      const [connectorsData, webhooksData, statsData] = await Promise.all([
-        fetchIntegrationConnectors(),
-        fetchWebhookSubscriptions(),
-        getIntegrationStats()
-      ]);
-      setConnectors(connectorsData);
-      setWebhooks(webhooksData);
-      setStats(statsData);
+      // No fallback - use empty arrays
+      setConnectors([]);
+      setWebhooks([]);
+      setStats({ totalSyncs: 0, successfulSyncs: 0, documentsProcessed: 0 });
     }
   };
 
@@ -154,22 +145,19 @@ const IntegrationManager: React.FC = () => {
     setTestingConnector(connectorId);
     try {
       // Try real API first
-      const response = await fetch(`/api/documents/integrations/connectors/${connectorId}/test`, {
+      const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${connectorId}/test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      let result;
       if (response.ok) {
-        result = await response.json();
+        const result = await response.json();
+        alert(result.success ? 'Test réussi!' : `Test échoué: ${result.message}`);
       } else {
-        // Fallback to mock service
-        result = await testConnector(connectorId);
+        throw new (Error as any)(`HTTP ${response.status}`);
       }
-      
-      alert(result.success ? 'Test réussi!' : `Test échoué: ${result.message}`);
     } catch (error) {
       alert('Erreur lors du test');
     } finally {
@@ -181,23 +169,20 @@ const IntegrationManager: React.FC = () => {
     setSyncingConnector(connectorId);
     try {
       // Try real API first
-      const response = await fetch(`/api/documents/integrations/connectors/${connectorId}/sync`, {
+      const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${connectorId}/sync`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      let result;
       if (response.ok) {
-        result = await response.json();
+        const result = await response.json();
+        alert(`Synchronisation terminée: ${result.documentsProcessed} documents traités`);
+        await loadData();
       } else {
-        // Fallback to mock service
-        result = await syncConnector(connectorId);
+        throw new (Error as any)(`HTTP ${response.status}`);
       }
-      
-      alert(`Synchronisation terminée: ${result.documentsProcessed} documents traités`);
-      await loadData();
     } catch (error) {
       alert('Erreur lors de la synchronisation');
     } finally {
@@ -213,7 +198,7 @@ const IntegrationManager: React.FC = () => {
       
       if (isEditing && existingConnector) {
         // Update existing connector
-        const response = await fetch(`/api/documents/integrations/connectors/${existingConnector.id}`, {
+        const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${existingConnector.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -229,7 +214,7 @@ const IntegrationManager: React.FC = () => {
         }
       } else {
         // Create new connector
-        const response = await fetch('/api/documents/integrations/connectors', {
+        const response = await fetch('http://localhost:5000/api/documents/integrations/connectors', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -256,7 +241,7 @@ const IntegrationManager: React.FC = () => {
 
   const handleCreateWebhook = async () => {
     try {
-      const response = await fetch('/api/documents/integrations/webhooks', {
+      const response = await fetch('http://localhost:5000/api/documents/integrations/webhooks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -355,7 +340,7 @@ const IntegrationManager: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce connecteur ?')) {
       try {
         // Call backend DELETE endpoint
-        const response = await fetch(`/api/documents/integrations/connectors/${connectorId}`, {
+        const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${connectorId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -381,7 +366,7 @@ const IntegrationManager: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce webhook ?')) {
       try {
         // Call backend DELETE endpoint
-        const response = await fetch(`/api/documents/integrations/webhooks/${webhookId}`, {
+        const response = await fetch(`http://localhost:5000/api/documents/integrations/webhooks/${webhookId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -486,7 +471,7 @@ const IntegrationManager: React.FC = () => {
                 Taux de Succès
               </Typography>
               <Typography variant="h4" component="div">
-                {stats ? Math.round((stats.successfulSyncs / stats.totalSyncs) * 100) : 0}%
+                {stats && stats.totalSyncs > 0 ? Math.round((stats.successfulSyncs / stats.totalSyncs) * 100) : 0}%
               </Typography>
             </CardContent>
           </Card>
@@ -496,7 +481,13 @@ const IntegrationManager: React.FC = () => {
       {/* Main Content */}
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={activeTab} onChange={handleTabChange} aria-label="integration tabs">
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange} 
+            aria-label="integration tabs"
+            variant="scrollable"
+            scrollButtons="auto"
+          >
             <Tab label="Connecteurs" />
             <Tab label="Webhooks" />
             <Tab label="APIs" />
@@ -505,7 +496,7 @@ const IntegrationManager: React.FC = () => {
 
         <TabPanel value={activeTab} index={0}>
           {/* Connectors Tab */}
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
             <Typography variant="h6">
               Connecteurs Tiers
             </Typography>
@@ -513,13 +504,14 @@ const IntegrationManager: React.FC = () => {
               variant="contained"
               startIcon={<Add />}
               onClick={() => setConnectorDialogOpen(true)}
+              sx={{ flexShrink: 0 }}
             >
               Nouveau Connecteur
             </Button>
           </Box>
 
-          <TableContainer>
-            <Table>
+          <Box sx={{ overflowX: 'auto', width: '100%' }}>
+            <Table sx={{ minWidth: 700 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Nom</TableCell>
@@ -544,7 +536,7 @@ const IntegrationManager: React.FC = () => {
                       <Chip label={connector.type.toUpperCase()} size="small" />
                     </TableCell>
                     <TableCell>
-                      <Box display="flex" alignItems="center" gap={1}>
+                      <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                         {getStatusIcon(connector.status)}
                         <Chip
                           label={connector.status}
@@ -560,7 +552,7 @@ const IntegrationManager: React.FC = () => {
                       }
                     </TableCell>
                     <TableCell>
-                      <Box display="flex" gap={1}>
+                      <Box display="flex" gap={1} flexWrap="wrap">
                         <IconButton
                           size="small"
                           onClick={() => handleTestConnector(connector.id)}
@@ -602,12 +594,12 @@ const IntegrationManager: React.FC = () => {
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </Box>
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
           {/* Webhooks Tab */}
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
             <Typography variant="h6">
               Notifications Webhook
             </Typography>
@@ -615,6 +607,7 @@ const IntegrationManager: React.FC = () => {
               variant="contained"
               startIcon={<Add />}
               onClick={() => setWebhookDialogOpen(true)}
+              sx={{ flexShrink: 0 }}
             >
               Nouveau Webhook
             </Button>
@@ -635,7 +628,17 @@ const IntegrationManager: React.FC = () => {
                   <Webhook color={webhook.active ? 'primary' : 'disabled'} />
                 </ListItemIcon>
                 <ListItemText
-                  primary={webhook.url}
+                  primary={
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        wordBreak: 'break-all',
+                        overflowWrap: 'break-word'
+                      }}
+                    >
+                      {webhook.url}
+                    </Typography>
+                  }
                   secondary={
                     <Box>
                       <Typography variant="body2" color="text.secondary">
@@ -648,7 +651,7 @@ const IntegrationManager: React.FC = () => {
                     </Box>
                   }
                 />
-                <Box display="flex" alignItems="center" gap={1}>
+                <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                   <Chip
                     label={webhook.active ? 'Actif' : 'Inactif'}
                     color={webhook.active ? 'success' : 'default'}
@@ -795,21 +798,21 @@ const IntegrationManager: React.FC = () => {
                     <Button 
                       variant="outlined" 
                       size="small"
-                      onClick={() => handleTestApi('/api/documents/stats')}
+                      onClick={() => handleTestApi('http://localhost:5000/api/documents/stats')}
                     >
                       Test GET /documents/stats
                     </Button>
                     <Button 
                       variant="outlined" 
                       size="small"
-                      onClick={() => handleTestApi('/api/documents/search')}
+                      onClick={() => handleTestApi('http://localhost:5000/api/documents/search')}
                     >
                       Test GET /documents/search
                     </Button>
                     <Button 
                       variant="outlined" 
                       size="small"
-                      onClick={() => handleTestApi('/api/documents/workflows/definitions')}
+                      onClick={() => handleTestApi('http://localhost:5000/api/documents/workflows/definitions')}
                     >
                       Test GET /workflows/definitions
                     </Button>
