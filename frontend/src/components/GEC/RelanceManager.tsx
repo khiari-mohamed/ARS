@@ -64,6 +64,8 @@ const RelanceManager: React.FC = () => {
   const [selectedBordereau, setSelectedBordereau] = useState('');
   const [relanceType, setRelanceType] = useState<'CLIENT' | 'PRESTATAIRE'>('CLIENT');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<RelanceItem | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
   const loadRelanceData = async () => {
     console.log('🔍 Loading relance data...');
@@ -133,7 +135,8 @@ const RelanceManager: React.FC = () => {
   };
 
   const handleViewDetails = (item: RelanceItem) => {
-    alert(`Détails de la relance:\n\nSujet: ${item.subject}\nType: ${item.type}\nClient: ${item.client}\nGestionnaire: ${item.uploader}\nEnvoyé le: ${new Date(item.sentAt).toLocaleString()}\nJours de retard: ${item.daysOverdue}\nStatut: ${item.status}`);
+    setSelectedItem(item);
+    setViewDialogOpen(true);
   };
 
   const createManualRelance = async () => {
@@ -197,32 +200,35 @@ const RelanceManager: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h6" display="flex" alignItems="center">
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h6" display="flex" alignItems="center" sx={{ mb: 2 }}>
           <ScheduleIcon sx={{ mr: 1 }} />
           Gestion des Relances
         </Typography>
-        <Box display="flex" gap={2}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
           <Button
             variant="outlined"
             startIcon={<AddIcon />}
             onClick={() => setCreateDialogOpen(true)}
+            size="small"
           >
-            Créer Relance
+            Créer
           </Button>
           <Button
             variant="contained"
             startIcon={<SendIcon />}
             onClick={triggerAutomaticRelances}
             disabled={loading}
+            size="small"
           >
-            Déclencher Relances Auto
+            Déclencher
           </Button>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
             onClick={loadRelanceData}
             disabled={loading}
+            size="small"
           >
             Actualiser
           </Button>
@@ -308,54 +314,80 @@ const RelanceManager: React.FC = () => {
             </Typography>
           </Box>
         ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Sujet</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Client</TableCell>
-                <TableCell>Gestionnaire</TableCell>
-                <TableCell>Envoyé le</TableCell>
-                <TableCell>Retard</TableCell>
-                <TableCell>Priorité</TableCell>
-                <TableCell>Statut</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {relanceItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ maxWidth: 200 }} noWrap>
-                      {item.subject}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{item.type}</TableCell>
-                  <TableCell>{item.client}</TableCell>
-                  <TableCell>{item.uploader}</TableCell>
-                  <TableCell>
-                    {new Date(item.sentAt).toLocaleDateString('fr-FR')}
-                  </TableCell>
-                  <TableCell>
-                    <Typography color="error" sx={{ fontWeight: 600 }}>
-                      {item.daysOverdue} jour(s)
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{getPriorityChip(item.daysOverdue)}</TableCell>
-                  <TableCell>{getStatusChip(item.status)}</TableCell>
-                  <TableCell>
-                    <Tooltip title="Voir détails">
-                      <IconButton size="small" onClick={() => handleViewDetails(item)}>
-                        <ViewIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Sujet</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Gestionnaire</TableCell>
+                  <TableCell>Envoyé le</TableCell>
+                  <TableCell>Retard</TableCell>
+                  <TableCell>Priorité</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {relanceItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ maxWidth: 200 }} noWrap>
+                        {item.subject}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{item.type}</TableCell>
+                    <TableCell>{item.client}</TableCell>
+                    <TableCell>{item.uploader}</TableCell>
+                    <TableCell>
+                      {new Date(item.sentAt).toLocaleDateString('fr-FR')}
+                    </TableCell>
+                    <TableCell>
+                      <Typography color="error" sx={{ fontWeight: 600 }}>
+                        {item.daysOverdue} jour(s)
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{getPriorityChip(item.daysOverdue)}</TableCell>
+                    <TableCell>{getStatusChip(item.status)}</TableCell>
+                    <TableCell>
+                      <Tooltip title="Voir détails">
+                        <IconButton size="small" onClick={() => handleViewDetails(item)}>
+                          <ViewIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         )}
       </Paper>
+
+      {/* View Details Dialog */}
+      <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Détails de la Relance</DialogTitle>
+        <DialogContent>
+          {selectedItem && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>{selectedItem.subject}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Type: {selectedItem.type}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Client: {selectedItem.client}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Gestionnaire: {selectedItem.uploader}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Envoyé le: {new Date(selectedItem.sentAt).toLocaleString()}</Typography>
+              <Typography variant="body2" color="error" sx={{ mb: 1, fontWeight: 600 }}>Jours de retard: {selectedItem.daysOverdue}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>Statut: {selectedItem.status}</Typography>
+              {selectedItem.bordereauId && (
+                <Typography variant="body2" color="textSecondary">Bordereau ID: {selectedItem.bordereauId}</Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewDialogOpen(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Create Manual Relance Dialog */}
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>

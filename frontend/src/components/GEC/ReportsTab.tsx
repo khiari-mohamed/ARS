@@ -50,45 +50,17 @@ const ReportsTab: React.FC = () => {
         setReportData(data);
       } else {
         console.error('Failed to load report data:', response.status);
-        // Fallback to mock data
-        setReportData(getMockReportData());
+        setReportData(null);
       }
     } catch (error) {
       console.error('Failed to load report data:', error);
-      // Fallback to mock data
-      setReportData(getMockReportData());
+      setReportData(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const getMockReportData = () => ({
-    slaCompliance: [
-      { type: 'Règlement', compliance: 95 },
-      { type: 'Réclamation', compliance: 87 },
-      { type: 'Relance', compliance: 92 },
-      { type: 'Autre', compliance: 89 }
-    ],
-    volumeTrend: [
-      { date: '2025-01-10', sent: 12, received: 8 },
-      { date: '2025-01-11', sent: 15, received: 10 },
-      { date: '2025-01-12', sent: 18, received: 12 },
-      { date: '2025-01-13', sent: 14, received: 9 },
-      { date: '2025-01-14', sent: 20, received: 15 }
-    ],
-    responseTime: [
-      { type: 'Règlement', avgTime: 2.1 },
-      { type: 'Réclamation', avgTime: 4.5 },
-      { type: 'Relance', avgTime: 1.8 },
-      { type: 'Autre', avgTime: 3.2 }
-    ],
-    summary: {
-      totalCourriers: 156,
-      sentCourriers: 142,
-      avgResponseTime: 2.8,
-      slaCompliance: 91.2
-    }
-  });
+
 
   const presetReports = [
     {
@@ -287,20 +259,68 @@ const ReportsTab: React.FC = () => {
         </Stack>
       </Paper>
 
+      {/* Summary Cards */}
+      {reportData?.summary && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>Total Courriers</Typography>
+                <Typography variant="h4">{reportData.summary.totalCourriers}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>Courriers Envoyés</Typography>
+                <Typography variant="h4">{reportData.summary.sentCourriers}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>Temps Réponse Moyen</Typography>
+                <Typography variant="h4">{reportData.summary.avgResponseTime}j</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>Conformité SLA</Typography>
+                <Typography variant="h4">{reportData.summary.slaCompliance}%</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
       <Grid container spacing={3}>
         {/* SLA Compliance Chart */}
         <Grid item xs={12} md={6}>
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Conformité SLA par Type</Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={reportData?.slaCompliance || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="type" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="compliance" fill="#1976d2" />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <Box display="flex" justifyContent="center" alignItems="center" height={300}>
+                <CircularProgress />
+              </Box>
+            ) : reportData?.slaCompliance?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={reportData.slaCompliance}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="type" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="compliance" fill="#1976d2" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height={300} color="text.secondary">
+                <Typography>Aucune donnée disponible</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
 
@@ -308,16 +328,26 @@ const ReportsTab: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Tendances de Volume</Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={reportData?.volumeTrend || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="sent" stroke="#1976d2" strokeWidth={3} name="Envoyés" />
-                <Line type="monotone" dataKey="received" stroke="#d32f2f" strokeWidth={3} name="Reçus" />
-              </LineChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <Box display="flex" justifyContent="center" alignItems="center" height={300}>
+                <CircularProgress />
+              </Box>
+            ) : reportData?.volumeTrend?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={reportData.volumeTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="sent" stroke="#1976d2" strokeWidth={3} name="Envoyés" />
+                  <Line type="monotone" dataKey="received" stroke="#d32f2f" strokeWidth={3} name="Reçus" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height={300} color="text.secondary">
+                <Typography>Aucune donnée disponible</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
 
@@ -325,15 +355,25 @@ const ReportsTab: React.FC = () => {
         <Grid item xs={12}>
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Temps de Réponse Moyen (jours)</Typography>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={reportData?.responseTime || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="type" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="avgTime" fill="#4caf50" />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <Box display="flex" justifyContent="center" alignItems="center" height={250}>
+                <CircularProgress />
+              </Box>
+            ) : reportData?.responseTime?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={reportData.responseTime}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="type" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="avgTime" fill="#4caf50" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <Box display="flex" justifyContent="center" alignItems="center" height={250} color="text.secondary">
+                <Typography>Aucune donnée disponible</Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
 

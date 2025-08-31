@@ -5643,3 +5643,129 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-08-31 08:29:43,430 - monitoring - INFO - Completed sla_prediction in 0.00s
 2025-08-31 08:29:43,546 - monitoring - INFO - Starting priorities endpoint call
 2025-08-31 08:29:43,547 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-31 20:49:08,671 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 20:49:10,188 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:10,292 - monitoring - INFO - Completed sentiment_analysis in 0.10s
+2025-08-31 20:49:11,362 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:11,405 - monitoring - INFO - Completed sentiment_analysis in 0.04s
+2025-08-31 20:49:12,267 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:12,305 - monitoring - INFO - Completed sentiment_analysis in 0.04s
+2025-08-31 20:49:13,229 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:13,264 - monitoring - INFO - Completed sentiment_analysis in 0.04s
+2025-08-31 20:49:14,088 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:14,132 - monitoring - INFO - Completed sentiment_analysis in 0.04s
+2025-08-31 20:49:14,981 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:15,014 - monitoring - INFO - Completed sentiment_analysis in 0.03s
+2025-08-31 20:49:15,897 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:15,926 - monitoring - INFO - Completed sentiment_analysis in 0.03s
+2025-08-31 20:49:16,803 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:16,829 - monitoring - INFO - Completed sentiment_analysis in 0.03s
+2025-08-31 20:49:18,182 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:18,219 - monitoring - INFO - Completed sentiment_analysis in 0.04s
+2025-08-31 20:49:19,263 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:19,285 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 20:49:20,301 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:20,320 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 20:49:20,988 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:21,007 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 20:49:21,512 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:21,523 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 20:49:22,282 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:22,299 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 20:49:22,910 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:22,926 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 20:49:23,427 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:23,440 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 20:49:23,872 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:23,880 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 20:49:24,307 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:24,318 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 20:49:24,796 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:24,811 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 20:49:25,305 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 20:49:25,320 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:03:02,377 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 21:03:02,925 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:03:02,931 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-31 21:03:02,932 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.01s: 
+2025-08-31 21:03:03,357 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:03:03,359 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-31 21:03:03,359 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.00s: 
+2025-08-31 21:06:04,977 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 21:06:05,411 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:05,469 - monitoring - INFO - Completed sentiment_analysis in 0.06s
+2025-08-31 21:06:05,796 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:05,827 - monitoring - INFO - Completed sentiment_analysis in 0.03s
+2025-08-31 21:06:06,217 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:06,229 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:06,640 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:06,656 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 21:06:07,100 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:07,127 - monitoring - INFO - Completed sentiment_analysis in 0.03s
+2025-08-31 21:06:07,879 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:07,895 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 21:06:07,898 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:06:07,930 - pattern_recognition - ERROR - Recurring issue detection failed: Negative values in data passed to precomputed distance matrix.
+2025-08-31 21:06:07,930 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.03s: 
+2025-08-31 21:06:08,665 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:08,680 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:08,683 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:06:08,691 - pattern_recognition - ERROR - Recurring issue detection failed: Negative values in data passed to precomputed distance matrix.
+2025-08-31 21:06:08,692 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.01s: 
+2025-08-31 21:06:09,054 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:09,065 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:09,464 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:09,477 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:09,846 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:09,862 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 21:06:10,249 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:10,258 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:10,678 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:10,692 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:11,069 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:11,075 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:11,458 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:11,470 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:11,885 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:11,901 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 21:06:12,313 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:12,326 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:12,643 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:12,651 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:13,096 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:13,108 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:13,554 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:13,564 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-08-31 21:06:13,983 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-08-31 21:06:13,999 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-08-31 21:06:29,508 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:06:29,517 - pattern_recognition - ERROR - Recurring issue detection failed: Negative values in data passed to precomputed distance matrix.
+2025-08-31 21:06:29,518 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.01s: 
+2025-08-31 21:06:29,922 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:06:29,932 - pattern_recognition - ERROR - Recurring issue detection failed: Negative values in data passed to precomputed distance matrix.
+2025-08-31 21:06:29,932 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.01s: 
+2025-08-31 21:08:40,847 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 21:08:41,717 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:08:41,752 - monitoring - INFO - Completed pattern_recognition_recurring in 0.04s
+2025-08-31 21:08:42,629 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-31 21:08:42,649 - monitoring - INFO - Completed pattern_recognition_recurring in 0.02s

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Chip, Button, Stack, FormControl, InputLabel, 
-  Select, MenuItem, TextField, Box
+  Select, MenuItem, TextField, Box, Dialog, DialogTitle, 
+  DialogContent, DialogActions, Divider
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import SendIcon from '@mui/icons-material/Send';
@@ -30,6 +31,8 @@ const OutboxTab: React.FC = () => {
     dateFrom: '',
     dateTo: ''
   });
+  const [selectedItem, setSelectedItem] = useState<OutboxItem | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     const loadItems = async () => {
@@ -56,7 +59,7 @@ const OutboxTab: React.FC = () => {
           const mappedItems = sentCourriers.map((courrier: any) => ({
             id: courrier.id,
             reference: `OUT/${new Date(courrier.createdAt).getFullYear()}/${courrier.id.substring(0, 3)}`,
-            to: 'client@example.com', // Would come from courrier data in real implementation
+            to: courrier.recipientEmail || 'N/A',
             dateSent: courrier.sentAt || courrier.createdAt,
             type: courrier.type,
             linkedTo: courrier.bordereauId || 'N/A',
@@ -122,7 +125,8 @@ const OutboxTab: React.FC = () => {
     
     switch (action) {
       case 'view':
-        alert(`Détail du courrier:\n\nSujet: ${item.subject}\nDestinataire: ${item.to}\nDate: ${new Date(item.dateSent).toLocaleString()}\nStatut: ${item.status}\n\nContenu:\n${item.body || 'Contenu non disponible'}`);
+        setSelectedItem(item);
+        setDialogOpen(true);
         break;
         
       case 'resend':
@@ -191,8 +195,8 @@ const OutboxTab: React.FC = () => {
 
       {/* Filters */}
       <Box sx={{ mb: 3 }}>
-        <Stack direction="row" spacing={2} flexWrap="wrap">
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+        <Stack direction="row" spacing={2} flexWrap="wrap" gap={2}>
+          <FormControl size="small" sx={{ minWidth: 120, flex: '1 1 120px' }}>
             <InputLabel>Statut</InputLabel>
             <Select
               value={filters.status}
@@ -201,14 +205,13 @@ const OutboxTab: React.FC = () => {
             >
               <MenuItem value="">Tous</MenuItem>
               <MenuItem value="SENT">Envoyé</MenuItem>
-
               <MenuItem value="PENDING_RESPONSE">En attente réponse</MenuItem>
               <MenuItem value="RESPONDED">Répondu</MenuItem>
               <MenuItem value="FAILED">Échec</MenuItem>
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl size="small" sx={{ minWidth: 120, flex: '1 1 120px' }}>
             <InputLabel>Priorité</InputLabel>
             <Select
               value={filters.priority}
@@ -228,6 +231,7 @@ const OutboxTab: React.FC = () => {
             value={filters.dateFrom}
             onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
             size="small"
+            sx={{ flex: '1 1 140px' }}
             InputLabelProps={{ shrink: true }}
           />
 
@@ -237,78 +241,104 @@ const OutboxTab: React.FC = () => {
             value={filters.dateTo}
             onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
             size="small"
+            sx={{ flex: '1 1 140px' }}
             InputLabelProps={{ shrink: true }}
           />
         </Stack>
       </Box>
 
       {/* Items Table */}
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Référence</TableCell>
-            <TableCell>À</TableCell>
-            <TableCell>Date Envoi</TableCell>
-            <TableCell>Type</TableCell>
-            <TableCell>Lié à</TableCell>
-            <TableCell>Statut</TableCell>
-            <TableCell>SLA</TableCell>
-            <TableCell>Priorité</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {items.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>{item.reference}</TableCell>
-              <TableCell>{item.to}</TableCell>
-              <TableCell>{new Date(item.dateSent).toLocaleDateString()}</TableCell>
-              <TableCell>{item.type}</TableCell>
-              <TableCell>{item.linkedTo}</TableCell>
-              <TableCell>{getStatusChip(item.status)}</TableCell>
-              <TableCell>{getSLAChip(item.slaStatus)}</TableCell>
-              <TableCell>{getPriorityChip(item.priority)}</TableCell>
-              <TableCell>
-                <Stack direction="row" spacing={1}>
-                  <Button
-                    size="small"
-                    startIcon={<VisibilityIcon />}
-                    onClick={() => handleAction('view', item.id)}
-                  >
-                    Voir
-                  </Button>
-                  {item.status === 'FAILED' && (
-                    <Button
-                      size="small"
-                      startIcon={<SendIcon />}
-                      onClick={() => handleAction('resend', item.id)}
-                      color="primary"
-                    >
-                      Renvoyer
-                    </Button>
-                  )}
-                  {['SENT'].includes(item.status) && (
-                    <Button
-                      size="small"
-                      startIcon={<CancelIcon />}
-                      onClick={() => handleAction('cancel', item.id)}
-                      color="error"
-                    >
-                      Annuler
-                    </Button>
-                  )}
-                </Stack>
-              </TableCell>
+      <Box sx={{ overflowX: 'auto' }}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Référence</TableCell>
+              <TableCell>À</TableCell>
+              <TableCell>Date Envoi</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Lié à</TableCell>
+              <TableCell>Statut</TableCell>
+              <TableCell>SLA</TableCell>
+              <TableCell>Priorité</TableCell>
+              <TableCell>Actions</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.reference}</TableCell>
+                <TableCell>{item.to}</TableCell>
+                <TableCell>{new Date(item.dateSent).toLocaleDateString()}</TableCell>
+                <TableCell>{item.type}</TableCell>
+                <TableCell>{item.linkedTo}</TableCell>
+                <TableCell>{getStatusChip(item.status)}</TableCell>
+                <TableCell>{getSLAChip(item.slaStatus)}</TableCell>
+                <TableCell>{getPriorityChip(item.priority)}</TableCell>
+                <TableCell>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      startIcon={<VisibilityIcon />}
+                      onClick={() => handleAction('view', item.id)}
+                    >
+                      Voir
+                    </Button>
+                    {item.status === 'FAILED' && (
+                      <Button
+                        size="small"
+                        startIcon={<SendIcon />}
+                        onClick={() => handleAction('resend', item.id)}
+                        color="primary"
+                      >
+                        Renvoyer
+                      </Button>
+                    )}
+                    {['SENT'].includes(item.status) && (
+                      <Button
+                        size="small"
+                        startIcon={<CancelIcon />}
+                        onClick={() => handleAction('cancel', item.id)}
+                        color="error"
+                      >
+                        Annuler
+                      </Button>
+                    )}
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
 
       {items.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
           <Typography>Aucun courrier envoyé</Typography>
         </Box>
       )}
+      
+      {/* View Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Détail du Courrier</DialogTitle>
+        <DialogContent>
+          {selectedItem && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2 }}>{selectedItem.subject}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>À: {selectedItem.to}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Date: {new Date(selectedItem.dateSent).toLocaleString()}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Type: {selectedItem.type}</Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>Statut: {selectedItem.status}</Typography>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="body1">
+                {selectedItem.body || 'Contenu du courrier non disponible'}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };

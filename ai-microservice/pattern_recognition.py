@@ -41,11 +41,25 @@ class RecurringIssueDetector:
             # Extract and preprocess complaint descriptions
             descriptions = [self.preprocess_text(c.get('description', '')) for c in complaints]
             
+            # French stop words list
+            french_stop_words = [
+                'le', 'de', 'et', 'à', 'un', 'il', 'être', 'et', 'en', 'avoir', 'que', 'pour',
+                'dans', 'ce', 'son', 'une', 'sur', 'avec', 'ne', 'se', 'pas', 'tout', 'plus',
+                'par', 'grand', 'en', 'une', 'être', 'et', 'à', 'il', 'avoir', 'ne', 'je', 'son',
+                'que', 'se', 'qui', 'ce', 'dans', 'en', 'du', 'elle', 'au', 'de', 'le', 'un', 'à',
+                'être', 'et', 'en', 'avoir', 'que', 'pour', 'dans', 'ce', 'son', 'une', 'sur',
+                'avec', 'ne', 'se', 'pas', 'tout', 'plus', 'par', 'grand', 'en', 'une', 'être',
+                'et', 'à', 'il', 'avoir', 'ne', 'je', 'son', 'que', 'se', 'qui', 'ce', 'dans',
+                'en', 'du', 'elle', 'au', 'mais', 'ou', 'où', 'donc', 'or', 'ni', 'car', 'les',
+                'des', 'ces', 'ses', 'mes', 'tes', 'nos', 'vos', 'leurs', 'cette', 'celui',
+                'celle', 'ceux', 'celles', 'celui-ci', 'celui-là', 'celle-ci', 'celle-là'
+            ]
+            
             # Vectorize descriptions
             self.vectorizer = TfidfVectorizer(
                 max_features=1000,
                 ngram_range=(1, 3),
-                stop_words='french',
+                stop_words=french_stop_words,
                 min_df=2,
                 max_df=0.8
             )
@@ -59,12 +73,11 @@ class RecurringIssueDetector:
             self.cluster_model = DBSCAN(
                 eps=0.3,
                 min_samples=2,
-                metric='precomputed'
+                metric='cosine'
             )
             
-            # Convert similarity to distance
-            distance_matrix = 1 - similarity_matrix
-            clusters = self.cluster_model.fit_predict(distance_matrix)
+            # Use cosine distance directly
+            clusters = self.cluster_model.fit_predict(tfidf_matrix.toarray())
             
             # Group complaints by clusters
             recurring_groups = defaultdict(list)
