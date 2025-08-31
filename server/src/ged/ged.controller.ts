@@ -97,6 +97,12 @@ async uploadDocument(
     return this.gedService.getUserWorkflowTasks(userId, user);
   }
 
+  @Get('workflows/tasks/current')
+  async getCurrentUserTasks(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.getUserWorkflowTasks(user.id, user);
+  }
+
   @Post('workflows/:instanceId/steps/:stepId/complete')
   async completeWorkflowStep(
     @Param('instanceId') instanceId: string,

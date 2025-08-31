@@ -403,13 +403,20 @@ export class GedService {
   }
 
   async startWorkflow(documentId: string, workflowId: string, user: User) {
-    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR'].includes(user.role)) {
+    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to start workflows');
     }
 
     const document = await this.getDocumentById(documentId, user);
     const instanceId = `instance_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // Update document status to EN_COURS when workflow starts
+    await this.prisma.document.update({
+      where: { id: documentId },
+      data: { status: 'EN_COURS' }
+    });
+
+    // Create audit log
     try {
       await this.prisma.auditLog.create({
         data: {
@@ -432,29 +439,68 @@ export class GedService {
       throw new ForbiddenException('You can only view your own tasks');
     }
 
-    return [
-      {
-        instanceId: 'instance_001',
-        workflowName: 'Approbation Document',
-        documentTitle: 'Contrat Assurance Santé - Client ABC',
-        stepName: 'Approbation',
-        assignedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        timeLimit: 48,
-        priority: 'high',
+    // Get documents that are in workflow (EN_COURS status)
+    const documentsInWorkflow = await this.prisma.document.findMany({
+      where: {
+        status: 'EN_COURS',
+        // For GESTIONNAIRE role, only show documents assigned to them
+        ...(user.role === 'GESTIONNAIRE' && { uploadedById: userId })
+      },
+      include: {
+        uploader: true,
+        bordereau: {
+          include: {
+            client: true
+          }
+        }
+      },
+      orderBy: {
+        uploadedAt: 'desc'
+      },
+      take: 10
+    });
+
+    // Transform documents to workflow tasks
+    return documentsInWorkflow.map((doc, index) => {
+      const workflowName = doc.type === 'BS' ? 'Traitement BS' : 'Approbation Document';
+      const stepName = 'Révision';
+      const timeLimit = doc.type === 'BS' ? 24 : 48;
+      const priority = index < 2 ? 'high' : index < 5 ? 'medium' : 'low';
+      
+      return {
+        instanceId: `instance_${doc.id}`,
+        workflowName,
+        documentTitle: doc.name,
+        stepName,
+        assignedAt: doc.uploadedAt,
+        timeLimit,
+        priority,
         status: 'in_progress',
-        stepId: 'step_approval',
-        documentId: 'doc_001'
-      }
-    ];
+        stepId: 'step_review',
+        documentId: doc.id
+      };
+    });
   }
 
   async completeWorkflowStep(instanceId: string, stepId: string, decision: string, comments: string, user: User) {
+    // Extract document ID from instance ID
+    const documentId = instanceId.replace('instance_', '').split('_')[0];
+    
+    // Update document status based on decision
+    const newStatus = decision === 'approved' ? 'TRAITE' : decision === 'rejected' ? 'REJETE' : 'EN_COURS';
+    
+    await this.prisma.document.update({
+      where: { id: documentId },
+      data: { status: newStatus as any }
+    });
+
+    // Create audit log
     try {
       await this.prisma.auditLog.create({
         data: {
           userId: user.id,
           action: 'COMPLETE_WORKFLOW_STEP',
-          details: { instanceId, stepId, decision, comments },
+          details: { instanceId, stepId, decision, comments, documentId, newStatus },
         },
       });
     } catch (e) {
