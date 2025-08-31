@@ -44,7 +44,26 @@ const GEDModule: React.FC = () => {
 
       {/* Mobile View */}
       {isMobile && (
-        <GEDMobileView onTabChange={setTab} />
+        <>
+          <GEDMobileView onTabChange={setTab} />
+          
+          {/* Mobile Tab Content */}
+          <Paper elevation={2} sx={{ p: 2, mt: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              {tabLabels[tab]}
+            </Typography>
+            <Box>
+              {tab === 0 && <GEDDashboardTab />}
+              {tab === 1 && <DocumentIngestionTab />}
+              {tab === 2 && <CorbeilleTab />}
+              {tab === 3 && <AdvancedSearchInterface />}
+              {tab === 4 && <DocumentWorkflowManager />}
+              {tab === 5 && <IntegrationManager />}
+              {tab === 6 && <PaperStreamDashboard />}
+              {tab === 7 && <ReportsTab />}
+            </Box>
+          </Paper>
+        </>
       )}
 
       {/* Desktop View */}

@@ -178,10 +178,16 @@ const DocumentIngestionTab: React.FC = () => {
             sx={{
               border: '2px dashed #ccc',
               borderRadius: 2,
-              p: 4,
+              p: { xs: 3, sm: 4 },
+              mx: 0,
               textAlign: 'center',
               cursor: 'pointer',
               mb: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 200,
               '&:hover': { borderColor: 'primary.main' }
             }}
             component="label"
@@ -193,13 +199,13 @@ const DocumentIngestionTab: React.FC = () => {
               style={{ display: 'none' }}
             />
             <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-            <Typography variant="h6" color="textSecondary">
+            <Typography variant="h6" color="textSecondary" sx={{ mb: 1 }}>
               Glissez-déposez votre document ici
             </Typography>
-            <Typography variant="body2" color="textSecondary">
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
               ou cliquez pour sélectionner
             </Typography>
-            <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
+            <Typography variant="caption" color="textSecondary">
               Formats supportés: PDF, JPG, PNG, TIFF
             </Typography>
           </Box>

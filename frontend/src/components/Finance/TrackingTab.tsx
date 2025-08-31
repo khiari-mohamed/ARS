@@ -49,21 +49,7 @@ const TrackingTab: React.FC = () => {
       setRecords(data);
     } catch (error) {
       console.error('Failed to load OV tracking:', error);
-      // Fallback to mock data
-      setRecords([
-        {
-          id: '1',
-          reference: 'OV/2025/001',
-          society: 'AON',
-          dateInjected: '2025-01-15',
-          dateExecuted: '2025-01-16',
-          status: 'EXECUTE',
-          delay: 1,
-          observations: 'Traité normalement',
-          donneurOrdre: 'ARS Tunisie',
-          totalAmount: 1250.75
-        }
-      ]);
+      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -259,50 +245,52 @@ const TrackingTab: React.FC = () => {
             <CircularProgress />
           </Box>
         ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Référence OV</TableCell>
-                <TableCell>Société</TableCell>
-                <TableCell>Date Injection</TableCell>
-                <TableCell>Date Exécution</TableCell>
-                <TableCell>Statut & SLA</TableCell>
-                <TableCell>Délai (jours)</TableCell>
-                <TableCell>Montant Total</TableCell>
-                <TableCell>Observations</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredRecords.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell>{record.reference}</TableCell>
-                  <TableCell>{record.society}</TableCell>
-                  <TableCell>{new Date(record.dateInjected).toLocaleDateString('fr-FR')}</TableCell>
-                  <TableCell>
-                    {record.dateExecuted ? new Date(record.dateExecuted).toLocaleDateString('fr-FR') : '-'}
-                  </TableCell>
-                  <TableCell>{getStatusChip(record.status, record.delay)}</TableCell>
-                  <TableCell>{record.delay}</TableCell>
-                  <TableCell>{record.totalAmount.toFixed(2)} DT</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                      {record.observations || '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      startIcon={<EditIcon />}
-                      onClick={() => handleEditClick(record)}
-                    >
-                      Modifier
-                    </Button>
-                  </TableCell>
+          <Box sx={{ overflowX: 'auto', width: '100%' }}>
+            <Table sx={{ minWidth: 800 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence OV</TableCell>
+                  <TableCell>Société</TableCell>
+                  <TableCell>Date Injection</TableCell>
+                  <TableCell>Date Exécution</TableCell>
+                  <TableCell>Statut & SLA</TableCell>
+                  <TableCell>Délai (jours)</TableCell>
+                  <TableCell>Montant Total</TableCell>
+                  <TableCell>Observations</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {filteredRecords.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>{record.reference}</TableCell>
+                    <TableCell>{record.society}</TableCell>
+                    <TableCell>{new Date(record.dateInjected).toLocaleDateString('fr-FR')}</TableCell>
+                    <TableCell>
+                      {record.dateExecuted ? new Date(record.dateExecuted).toLocaleDateString('fr-FR') : '-'}
+                    </TableCell>
+                    <TableCell>{getStatusChip(record.status, record.delay)}</TableCell>
+                    <TableCell>{record.delay}</TableCell>
+                    <TableCell>{record.totalAmount.toFixed(2)} DT</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                        {record.observations || '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={() => handleEditClick(record)}
+                      >
+                        Modifier
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         )}
       </Paper>
 

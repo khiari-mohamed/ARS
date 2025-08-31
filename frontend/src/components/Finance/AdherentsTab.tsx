@@ -3,7 +3,7 @@ import {
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, FormControl, InputLabel, Select, MenuItem, Chip, IconButton,
-  Alert, Stack
+  Alert, Stack, Box
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -49,10 +49,7 @@ const AdherentsTab: React.FC = () => {
         setAdherents(data);
       } catch (error) {
         console.error('Failed to load adherents:', error);
-        // Fallback to mock data
-        setAdherents([
-          { id: '1', matricule: '12345', name: 'John', surname: 'Doe', society: 'AON', rib: '12345678901234567890', status: 'active' }
-        ]);
+        setAdherents([]);
       }
     };
     loadAdherents();
@@ -223,54 +220,56 @@ const AdherentsTab: React.FC = () => {
         </Stack>
       </Paper>
 
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Matricule</TableCell>
-            <TableCell>Nom</TableCell>
-            <TableCell>Prénom</TableCell>
-            <TableCell>Société</TableCell>
-            <TableCell>RIB</TableCell>
-            <TableCell>Statut</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {filteredAdherents.map((adherent) => (
-            <TableRow 
-              key={adherent.id}
-              sx={{ 
-                bgcolor: adherent.duplicateRib ? 'warning.light' : 'inherit',
-                '&:hover': { bgcolor: adherent.duplicateRib ? 'warning.main' : 'action.hover' }
-              }}
-            >
-              <TableCell>
-                <Typography variant="subtitle2">{adherent.matricule}</Typography>
-                {adherent.duplicateRib && (
-                  <Chip label="RIB Dupliqué" color="warning" size="small" />
-                )}
-              </TableCell>
-              <TableCell>{adherent.name}</TableCell>
-              <TableCell>{adherent.surname}</TableCell>
-              <TableCell>{adherent.society}</TableCell>
-              <TableCell>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                  {adherent.rib}
-                </Typography>
-              </TableCell>
-              <TableCell>{getStatusChip(adherent.status)}</TableCell>
-              <TableCell>
-                <IconButton size="small" onClick={() => handleEdit(adherent)}>
-                  <EditIcon />
-                </IconButton>
-                <IconButton size="small" onClick={() => handleDelete(adherent.id)} color="error">
-                  <DeleteIcon />
-                </IconButton>
-              </TableCell>
+      <Box sx={{ overflowX: 'auto', width: '100%' }}>
+        <Table sx={{ minWidth: 800 }}>
+          <TableHead>
+            <TableRow>
+              <TableCell>Matricule</TableCell>
+              <TableCell>Nom</TableCell>
+              <TableCell>Prénom</TableCell>
+              <TableCell>Société</TableCell>
+              <TableCell>RIB</TableCell>
+              <TableCell>Statut</TableCell>
+              <TableCell>Actions</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {filteredAdherents.map((adherent) => (
+              <TableRow 
+                key={adherent.id}
+                sx={{ 
+                  bgcolor: adherent.duplicateRib ? 'warning.light' : 'inherit',
+                  '&:hover': { bgcolor: adherent.duplicateRib ? 'warning.main' : 'action.hover' }
+                }}
+              >
+                <TableCell>
+                  <Typography variant="subtitle2">{adherent.matricule}</Typography>
+                  {adherent.duplicateRib && (
+                    <Chip label="RIB Dupliqué" color="warning" size="small" />
+                  )}
+                </TableCell>
+                <TableCell>{adherent.name}</TableCell>
+                <TableCell>{adherent.surname}</TableCell>
+                <TableCell>{adherent.society}</TableCell>
+                <TableCell>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {adherent.rib}
+                  </Typography>
+                </TableCell>
+                <TableCell>{getStatusChip(adherent.status)}</TableCell>
+                <TableCell>
+                  <IconButton size="small" onClick={() => handleEdit(adherent)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => handleDelete(adherent.id)} color="error">
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialog.open} onClose={() => setDialog({open: false, adherent: null})} maxWidth="sm" fullWidth>

@@ -264,49 +264,51 @@ const PaperStreamDocumentSearch: React.FC = () => {
               Aucun document trouvé avec ces critères.
             </Typography>
           ) : (
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Document</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Bordereau</TableCell>
-                  <TableCell>Statut Ingestion</TableCell>
-                  <TableCell>Date Upload</TableCell>
-                  <TableCell>Métadonnées PaperStream</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {results.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="medium">
-                        {doc.name}
-                      </Typography>
-                      {doc.ocrText && (
-                        <Typography variant="caption" color="textSecondary">
-                          {doc.ocrText.substring(0, 100)}...
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={doc.type} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      {doc.bordereau?.reference || '-'}
-                    </TableCell>
-                    <TableCell>
-                      {getIngestStatusChip(doc.ingestStatus)}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(doc.uploadedAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      {renderPaperStreamMetadata(doc)}
-                    </TableCell>
+            <Box sx={{ overflowX: 'auto', width: '100%' }}>
+              <Table sx={{ minWidth: 900 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Document</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Bordereau</TableCell>
+                    <TableCell>Statut Ingestion</TableCell>
+                    <TableCell>Date Upload</TableCell>
+                    <TableCell>Métadonnées PaperStream</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {results.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="medium">
+                          {doc.name}
+                        </Typography>
+                        {doc.ocrText && (
+                          <Typography variant="caption" color="textSecondary">
+                            {doc.ocrText.substring(0, 100)}...
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={doc.type} size="small" />
+                      </TableCell>
+                      <TableCell>
+                        {doc.bordereau?.reference || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {getIngestStatusChip(doc.ingestStatus)}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(doc.uploadedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {renderPaperStreamMetadata(doc)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
           )}
         </Paper>
       )}

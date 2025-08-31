@@ -53,14 +53,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         setDonneurs(data);
       } catch (error) {
         console.error('Failed to load donneurs:', error);
-        // Fallback to mock data
-        setDonneurs([{
-          id: '1',
-          name: 'ARS Tunisie',
-          bank: 'Banque Centrale',
-          rib: '12345678901234567890',
-          txtFormat: 'SWIFT'
-        }]);
+        setDonneurs([]);
       }
     };
     loadDonneurs();
@@ -106,13 +99,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     } catch (error: any) {
       console.error('File processing failed:', error);
       alert('Erreur lors du traitement du fichier: ' + (error?.message || 'Erreur inconnue'));
-      // Fallback to mock data for demo
-      const mockResults: ValidationResult[] = [
-        { matricule: '12345', name: 'John Doe', society: 'AON', rib: '12345678901234567890', amount: 150.50, status: 'ok', notes: '' },
-        { matricule: '67890', name: 'Jane Smith', society: 'AXA', rib: '', amount: 200.00, status: 'error', notes: 'RIB manquant' }
-      ];
-      setValidationResults(mockResults);
-      setActiveStep(2);
+      setValidationResults([]);
     } finally {
       setProcessing(false);
     }
@@ -155,8 +142,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       }
     } catch (error) {
       console.error('File generation failed:', error);
-      // Mock success for demo
-      if (type === 'txt') setActiveStep(3);
+      alert('Erreur lors de la génération du fichier');
     } finally {
       setProcessing(false);
     }
@@ -175,10 +161,12 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     <Box>
       {/* Progress Stepper */}
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Stepper activeStep={activeStep} alternativeLabel>
+        <Stepper activeStep={activeStep} alternativeLabel sx={{ overflowX: 'auto' }}>
           {steps.map((label) => (
             <Step key={label}>
-              <StepLabel>{label}</StepLabel>
+              <StepLabel sx={{ '& .MuiStepLabel-label': { fontSize: { xs: '0.75rem', sm: '0.875rem' } } }}>
+                {label}
+              </StepLabel>
             </Step>
           ))}
         </Stepper>

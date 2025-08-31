@@ -163,77 +163,64 @@ const AdvancedFilteringDashboard: React.FC = () => {
         }
       }
 
-      // Use real data if available, otherwise generate mock data
-      if (realData.length > 0) {
-        setChartData(realData);
-      } else {
-        setChartData(generateMockChartData());
-      }
+      // Use real data only
+      setChartData(realData);
 
-      // Set drill-down options
+      // Set drill-down options from real data
       if (drillDownData.length > 0 && drillDownPath.length === 0) {
         setDrillDownOptions(drillDownData);
       } else if (drillDownPath.length === 0) {
-        // Fallback drill-down options
-        setDrillDownOptions([
-          { level: 1, dimension: 'statut', value: 'TRAITE', label: 'Traité', count: 245, percentage: 45.2 },
-          { level: 1, dimension: 'statut', value: 'EN_COURS', label: 'En Cours', count: 156, percentage: 28.8 },
-          { level: 1, dimension: 'statut', value: 'NOUVEAU', label: 'Nouveau', count: 89, percentage: 16.4 },
-          { level: 1, dimension: 'statut', value: 'REJETE', label: 'Rejeté', count: 52, percentage: 9.6 }
-        ]);
+        // Load initial drill-down options from backend
+        try {
+          const drillDownResponse = await LocalAPI.get('/analytics/drill-down', {
+            params: {
+              dataSource,
+              filters: JSON.stringify(filters),
+              drillDownLevel: '0'
+            }
+          });
+          setDrillDownOptions(drillDownResponse.data || []);
+        } catch (error) {
+          console.error('Failed to load initial drill-down options:', error);
+          setDrillDownOptions([]);
+        }
       }
 
-      // Set real-time stats
+      // Set real-time stats from real data
       if (statsData) {
         setRealTimeStats(statsData);
-      } else {
-        // Fallback stats
-        const mockData = generateMockChartData();
+      } else if (realData.length > 0) {
         setRealTimeStats({
-          totalElements: mockData.reduce((sum, d) => sum + d.count, 0),
-          avgDaily: mockData.length > 0 ? Math.round(mockData.reduce((sum, d) => sum + d.count, 0) / mockData.length) : 0,
-          maxDaily: mockData.length > 0 ? Math.max(...mockData.map(d => d.count)) : 0,
-          successRate: mockData.length > 0 ? (mockData.reduce((sum, d) => sum + d.success_rate, 0) / mockData.length) : 0
+          totalElements: realData.reduce((sum, d) => sum + d.count, 0),
+          avgDaily: Math.round(realData.reduce((sum, d) => sum + d.count, 0) / realData.length),
+          maxDaily: Math.max(...realData.map(d => d.count)),
+          successRate: realData.reduce((sum, d) => sum + d.success_rate, 0) / realData.length
+        });
+      } else {
+        setRealTimeStats({
+          totalElements: 0,
+          avgDaily: 0,
+          maxDaily: 0,
+          successRate: 0
         });
       }
     } catch (error) {
       console.error('Failed to load chart data:', error);
-      // Set fallback data on error
-      const mockData = generateMockChartData();
-      setChartData(mockData);
-      setDrillDownOptions([
-        { level: 1, dimension: 'statut', value: 'TRAITE', label: 'Traité', count: 245, percentage: 45.2 },
-        { level: 1, dimension: 'statut', value: 'EN_COURS', label: 'En Cours', count: 156, percentage: 28.8 },
-        { level: 1, dimension: 'statut', value: 'NOUVEAU', label: 'Nouveau', count: 89, percentage: 16.4 },
-        { level: 1, dimension: 'statut', value: 'REJETE', label: 'Rejeté', count: 52, percentage: 9.6 }
-      ]);
+      // Set empty data on error
+      setChartData([]);
+      setDrillDownOptions([]);
       setRealTimeStats({
-        totalElements: mockData.reduce((sum, d) => sum + d.count, 0),
-        avgDaily: mockData.length > 0 ? Math.round(mockData.reduce((sum, d) => sum + d.count, 0) / mockData.length) : 0,
-        maxDaily: mockData.length > 0 ? Math.max(...mockData.map(d => d.count)) : 0,
-        successRate: mockData.length > 0 ? (mockData.reduce((sum, d) => sum + d.success_rate, 0) / mockData.length) : 85.5
+        totalElements: 0,
+        avgDaily: 0,
+        maxDaily: 0,
+        successRate: 0
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMockChartData = () => {
-    const data = [];
-    const days = Math.ceil((dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24));
-    
-    for (let i = 0; i < days; i++) {
-      const date = new Date(dateRange.start.getTime() + i * 24 * 60 * 60 * 1000);
-      data.push({
-        date: date.toISOString().split('T')[0],
-        count: Math.floor(Math.random() * 100) + 50,
-        value: Math.floor(Math.random() * 1000) + 500,
-        success_rate: Math.random() * 20 + 80
-      });
-    }
-    
-    return data;
-  };
+
 
   const handleAddFilter = () => {
     if (newFilter.field && newFilter.value) {
@@ -287,33 +274,15 @@ const AdvancedFilteringDashboard: React.FC = () => {
       if (drillDownResponse.data && drillDownResponse.data.length > 0) {
         setDrillDownOptions(drillDownResponse.data);
       } else {
-        // Fallback to mock data if no backend response
-        generateNextLevelOptions(newPath.length);
+        // No more drill-down levels available
+        setDrillDownOptions([]);
       }
     } catch (error) {
       console.error('Failed to load drill-down options:', error);
-      generateNextLevelOptions(newPath.length);
-    }
-  };
-  
-  const generateNextLevelOptions = (level: number) => {
-    if (level === 1) {
-      setDrillDownOptions([
-        { level: 2, dimension: 'priorite', value: 'HIGH', label: 'Haute', count: 89, percentage: 36.3 },
-        { level: 2, dimension: 'priorite', value: 'MEDIUM', label: 'Moyenne', count: 98, percentage: 40.0 },
-        { level: 2, dimension: 'priorite', value: 'LOW', label: 'Basse', count: 58, percentage: 23.7 }
-      ]);
-    } else if (level === 2) {
-      setDrillDownOptions([
-        { level: 3, dimension: 'clientId', value: 'client_1', label: 'Client A', count: 25, percentage: 28.1 },
-        { level: 3, dimension: 'clientId', value: 'client_2', label: 'Client B', count: 22, percentage: 24.7 },
-        { level: 3, dimension: 'clientId', value: 'client_3', label: 'Client C', count: 19, percentage: 21.3 },
-        { level: 3, dimension: 'clientId', value: 'client_4', label: 'Client D', count: 23, percentage: 25.9 }
-      ]);
-    } else {
       setDrillDownOptions([]);
     }
   };
+
 
   const handleBreadcrumbClick = (index: number) => {
     if (index === -1) {

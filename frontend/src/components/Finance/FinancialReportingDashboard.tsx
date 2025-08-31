@@ -42,7 +42,7 @@ import {
   Refresh,
   FilterList
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts';
 
 const FinancialReportingDashboard: React.FC = () => {
   const [period, setPeriod] = useState('30d');
@@ -155,95 +155,12 @@ const FinancialReportingDashboard: React.FC = () => {
         console.log('📊 FinancialReportingDashboard: Total amount:', totalAmount, 'DT');
         console.log('📊 FinancialReportingDashboard: Beneficiaries count:', realBeneficiaries.length);
       } else {
-        console.log('⚠️ FinancialReportingDashboard: No real data found, using fallback');
-        // Fallback to mock data
-      setPaymentAnalytics({
-        period: { start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), end: new Date() },
-        summary: {
-          totalPayments: 1247,
-          totalAmount: 2456789.50,
-          averageAmount: 1970.45,
-          successfulPayments: 1198,
-          failedPayments: 23,
-          pendingPayments: 26,
-          successRate: 96.1
-        },
-        trends: Array.from({ length: 30 }, (_, i) => ({
-          date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          count: Math.floor(Math.random() * 50) + 20,
-          amount: Math.floor(Math.random() * 100000) + 50000,
-          successRate: Math.random() * 10 + 90,
-          averageAmount: Math.floor(Math.random() * 3000) + 1000
-        })),
-        byStatus: {
-          completed: 1198,
-          pending: 26,
-          failed: 23
-        },
-        byAmount: [
-          { range: '0 - 1K', count: 456, percentage: 36.6, totalAmount: 234567 },
-          { range: '1K - 5K', count: 398, percentage: 31.9, totalAmount: 987654 },
-          { range: '5K - 10K', count: 234, percentage: 18.8, totalAmount: 1456789 },
-          { range: '10K - 25K', count: 123, percentage: 9.9, totalAmount: 1876543 },
-          { range: '25K - 50K', count: 28, percentage: 2.2, totalAmount: 987654 },
-          { range: '50K+', count: 8, percentage: 0.6, totalAmount: 567890 }
-        ],
-        byBeneficiary: [
-          { beneficiaryName: 'ACME Corporation', paymentCount: 45, totalAmount: 234567.89, averageAmount: 5212.62, lastPaymentDate: new Date() },
-          { beneficiaryName: 'Tech Solutions Ltd', paymentCount: 32, totalAmount: 156789.45, averageAmount: 4899.67, lastPaymentDate: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-          { beneficiaryName: 'Global Services Inc', paymentCount: 28, totalAmount: 98765.43, averageAmount: 3527.34, lastPaymentDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }
-        ],
-        topPayments: [
-          { id: 'pay_001', beneficiaryName: 'Major Supplier', amount: 125000.00, date: new Date(), status: 'completed', reference: 'REF-2024-001' },
-          { id: 'pay_002', beneficiaryName: 'Equipment Purchase', amount: 89500.00, date: new Date(Date.now() - 24 * 60 * 60 * 1000), status: 'completed', reference: 'REF-2024-002' }
-        ]
-      });
-
-      // Mock cash flow projection
-      setCashFlowProjection({
-        period: { start: new Date(), end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
-        projectionType: 'daily',
-        projections: Array.from({ length: 30 }, (_, i) => ({
-          date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          scheduledOutflows: Math.floor(Math.random() * 50000) + 20000,
-          projectedOutflows: Math.floor(Math.random() * 55000) + 18000,
-          estimatedInflows: Math.floor(Math.random() * 30000) + 10000,
-          netFlow: Math.floor(Math.random() * 40000) - 20000,
-          cumulativeBalance: 100000 + Math.floor(Math.random() * 200000),
-          confidence: Math.random() * 0.3 + 0.7
-        })),
-        summary: {
-          totalInflow: 456789.50,
-          totalOutflow: 1234567.89,
-          netCashFlow: -777778.39,
-          averageDailyOutflow: 41152.26,
-          projectedBalance: 234567.89
-        },
-        assumptions: [
-          { category: 'Payment Volume', description: 'Daily payment volume remains consistent', value: 15000, impact: 'high' },
-          { category: 'Seasonal Variation', description: 'No significant seasonal variations', value: 0.05, impact: 'medium' }
-        ],
-        riskFactors: [
-          { factor: 'Large Payment Concentration', probability: 0.3, impact: 0.8, description: 'Risk of large payments clustering', mitigation: 'Implement payment scheduling' }
-        ]
-      });
-
-      // Mock financial KPIs
-      setFinancialKPIs({
-        paymentVolume: { total: 1247, change: 8.5, trend: 'up' },
-        paymentValue: { total: 2456789.50, change: 12.3, trend: 'up' },
-        successRate: { rate: 96.1, change: 1.2, trend: 'up' },
-        averageAmount: { amount: 1970.45, change: -3.4, trend: 'down' },
-        cashPosition: { current: 234567.89, projected: 189234.56, trend: 'down' },
-        processingTime: { average: 2.3, change: -0.8, trend: 'down' }
-      });
-
-      // Mock report history
-      setReportHistory([
-        { id: 'report_001', type: 'payment_analytics', title: 'Payment Analytics Report', generatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000), status: 'completed' },
-        { id: 'report_002', type: 'cash_flow', title: 'Cash Flow Projection', generatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), status: 'completed' },
-        { id: 'report_003', type: 'reconciliation', title: 'Reconciliation Report', generatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: 'completed' }
-      ]);
+        console.log('⚠️ FinancialReportingDashboard: No real data found');
+        // Set empty data
+        setPaymentAnalytics(null);
+        setCashFlowProjection(null);
+        setFinancialKPIs(null);
+        setReportHistory([]);
       }
     } catch (error) {
       console.error('Failed to load analytics data:', error);
@@ -649,10 +566,8 @@ const FinancialReportingDashboard: React.FC = () => {
                       }))}
                       cx="50%"
                       cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent).toFixed(0)}%`}
+                      innerRadius={40}
                       outerRadius={80}
-                      fill="#8884d8"
                       dataKey="value"
                     >
                       {Object.entries(paymentAnalytics.byStatus).map((entry, index) => (
@@ -660,6 +575,7 @@ const FinancialReportingDashboard: React.FC = () => {
                       ))}
                     </Pie>
                     <Tooltip />
+                    <Legend />
                   </RechartsPieChart>
                 </ResponsiveContainer>
               </CardContent>

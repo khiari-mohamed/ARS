@@ -5563,3 +5563,57 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-08-30 21:00:08,201 - monitoring - INFO - Completed anomaly_detection in 0.00s
 2025-08-30 21:00:08,320 - monitoring - INFO - Starting anomaly_detection endpoint call
 2025-08-30 21:00:08,320 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-30 21:18:15,703 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 21:18:15,758 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 21:18:15,759 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.06s: 
+2025-08-30 21:18:15,774 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 21:18:15,776 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 21:18:16,581 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-08-30 21:18:16,582 - pattern_recognition - ERROR - Recurring issue detection failed: The 'stop_words' parameter of TfidfVectorizer must be a str among {'english'}, an instance of 'list' or None. Got 'french' instead.
+2025-08-30 21:18:16,582 - monitoring - ERROR - Error in pattern_recognition_recurring after 0.00s: 
+2025-08-30 21:18:16,586 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 21:18:16,588 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 21:18:16,966 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 21:18:16,968 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-30 21:18:17,450 - monitoring - INFO - Starting priorities endpoint call
+2025-08-30 21:18:17,452 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-31 03:47:22,294 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 03:47:24,077 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:47:24,078 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:47:24,086 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:47:24,087 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:49:24,826 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:49:24,827 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:49:24,836 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:49:24,837 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:51:19,113 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:51:19,113 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:51:19,117 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:51:19,117 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:52:38,731 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:52:38,732 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:54:39,526 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:54:39,528 - monitoring - INFO - Completed anomaly_detection in 0.00s
+2025-08-31 03:59:48,945 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 03:59:50,614 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:59:50,820 - monitoring - INFO - Completed anomaly_detection in 0.21s
+2025-08-31 03:59:50,823 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 03:59:50,989 - monitoring - INFO - Completed anomaly_detection in 0.17s
+2025-08-31 04:00:57,900 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 04:00:58,019 - monitoring - INFO - Completed anomaly_detection in 0.12s
+2025-08-31 04:00:58,023 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 04:00:58,152 - monitoring - INFO - Completed anomaly_detection in 0.13s
+2025-08-31 04:01:26,570 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 04:01:27,040 - monitoring - INFO - Completed anomaly_detection in 0.47s
+2025-08-31 04:01:27,060 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-08-31 04:01:27,373 - monitoring - INFO - Completed anomaly_detection in 0.31s

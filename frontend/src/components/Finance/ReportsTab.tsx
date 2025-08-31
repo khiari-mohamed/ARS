@@ -107,35 +107,20 @@ const ReportsTab: React.FC = () => {
         setReportData(realData);
         console.log('✅ ReportsTab: Successfully processed real data');
       } else {
-        console.log('⚠️ ReportsTab: No real data found, using fallback');
-        // Fallback to mock data
-        setStatusData([
-          { name: 'Exécuté', value: 65, color: '#4caf50', count: 13 },
-          { name: 'En Cours', value: 20, color: '#2196f3', count: 4 },
-          { name: 'Rejeté', value: 10, color: '#f44336', count: 2 },
-          { name: 'Non Exécuté', value: 5, color: '#ff9800', count: 1 }
-        ]);
-        
-        setSlaData([
-          { society: 'AON', onTime: 85, atRisk: 10, overdue: 5 },
-          { society: 'AXA', onTime: 78, atRisk: 15, overdue: 7 },
-          { society: 'ALLIANZ', onTime: 92, atRisk: 6, overdue: 2 }
-        ]);
-        
-        setTrendData([
-          { date: 'Jan 15', total: 12, executed: 10, amount: 25000 },
-          { date: 'Jan 16', total: 8, executed: 7, amount: 18000 },
-          { date: 'Jan 17', total: 15, executed: 12, amount: 32000 },
-          { date: 'Jan 18', total: 10, executed: 9, amount: 22000 },
-          { date: 'Jan 19', total: 18, executed: 15, amount: 38000 },
-          { date: 'Jan 20', total: 14, executed: 11, amount: 28000 },
-          { date: 'Jan 21', total: 16, executed: 14, amount: 35000 }
-        ]);
+        console.log('⚠️ ReportsTab: No real data found');
+        // Set empty data
+        setStatusData([]);
+        setSlaData([]);
+        setTrendData([]);
+        setReportData(null);
       }
     } catch (error) {
       console.error('❌ ReportsTab: Failed to load report data:', error);
-      // Use fallback data on error
-      console.log('🔄 ReportsTab: Using fallback mock data due to error');
+      // Set empty data on error
+      setStatusData([]);
+      setSlaData([]);
+      setTrendData([]);
+      setReportData(null);
     } finally {
       setLoading(false);
       console.log('🏁 ReportsTab: Data loading completed');

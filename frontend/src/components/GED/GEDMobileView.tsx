@@ -173,7 +173,7 @@ const GEDMobileView: React.FC<GEDMobileViewProps> = ({ onTabChange }) => {
               onClick={() => onTabChange(1)}
             >
               <CloudUpload color="primary" sx={{ mb: 1 }} />
-              <Typography variant="body2">Upload</Typography>
+              <Typography variant="body2">Ingestion</Typography>
             </Box>
             <Box 
               textAlign="center" 
@@ -204,6 +204,66 @@ const GEDMobileView: React.FC<GEDMobileViewProps> = ({ onTabChange }) => {
             >
               <Search color="primary" sx={{ mb: 1 }} />
               <Typography variant="body2">Recherche</Typography>
+            </Box>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(4)}
+            >
+              <Settings color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">Workflows</Typography>
+            </Box>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(5)}
+            >
+              <Settings color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">Intégrations</Typography>
+            </Box>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(6)}
+            >
+              <Description color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">PaperStream</Typography>
+            </Box>
+            <Box 
+              textAlign="center" 
+              p={2} 
+              sx={{ 
+                border: 1, 
+                borderColor: 'divider', 
+                borderRadius: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+              onClick={() => onTabChange(7)}
+            >
+              <BarChart color="primary" sx={{ mb: 1 }} />
+              <Typography variant="body2">Rapports</Typography>
             </Box>
           </Box>
         </CardContent>

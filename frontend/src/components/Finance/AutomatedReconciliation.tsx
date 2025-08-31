@@ -132,110 +132,21 @@ const AutomatedReconciliation: React.FC = () => {
     }
     
     try {
-      // Fallback to mock data
-      setStatements([
-        {
-          id: 'stmt_001',
-          bankCode: 'BNP',
-          accountNumber: 'FR7630001007941234567890185',
-          statementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-          openingBalance: 50000.00,
-          closingBalance: 48500.00,
-          transactionCount: 25,
-          matchedTransactions: 22,
-          status: 'reconciled',
-          reconciliationRate: 88.0,
-          processedAt: new Date(Date.now() - 2 * 60 * 60 * 1000)
-        },
-        {
-          id: 'stmt_002',
-          bankCode: 'SG',
-          accountNumber: 'FR7630003000111234567890189',
-          statementDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-          openingBalance: 75000.00,
-          closingBalance: 72300.00,
-          transactionCount: 18,
-          matchedTransactions: 16,
-          status: 'exception',
-          reconciliationRate: 88.9,
-          processedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
-        },
-        {
-          id: 'stmt_003',
-          bankCode: 'CA',
-          accountNumber: 'FR7630002000121234567890123',
-          statementDate: new Date(),
-          openingBalance: 25000.00,
-          closingBalance: 23800.00,
-          transactionCount: 12,
-          matchedTransactions: 0,
-          status: 'imported',
-          reconciliationRate: 0,
-          processedAt: null
-        }
-      ]);
-
-      setExceptions([
-        {
-          id: 'exc_001',
-          type: 'unmatched_payment',
-          paymentId: 'pay_001',
-          description: 'Payment to ACME Corp not found in bank statement',
-          severity: 'medium',
-          amount: 1500.00,
-          status: 'open',
-          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-          suggestedActions: [
-            'Check if payment is still pending',
-            'Verify payment execution date',
-            'Contact bank for transaction status'
-          ]
-        },
-        {
-          id: 'exc_002',
-          type: 'amount_mismatch',
-          paymentId: 'pay_002',
-          transactionId: 'txn_002',
-          description: 'Amount mismatch: Payment €1,500.00 vs Transaction €1,485.50',
-          severity: 'high',
-          amount: 14.50,
-          status: 'investigating',
-          createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-          suggestedActions: [
-            'Review bank charges and fees',
-            'Check for currency conversion',
-            'Verify payment amount accuracy'
-          ]
-        },
-        {
-          id: 'exc_003',
-          type: 'unmatched_transaction',
-          transactionId: 'txn_003',
-          description: 'Unmatched bank transaction: VIREMENT RECU DE UNKNOWN CLIENT',
-          severity: 'low',
-          amount: 250.00,
-          status: 'open',
-          createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-          suggestedActions: [
-            'Review transaction details',
-            'Check for manual payment entries',
-            'Verify counterparty information'
-          ]
-        }
-      ]);
-
+      // No fallback data - use empty arrays
+      setStatements([]);
+      setExceptions([]);
       setReconciliationStats({
-        totalStatements: 12,
-        processedStatements: 11,
-        totalTransactions: 1456,
-        matchedTransactions: 1289,
-        unmatchedTransactions: 167,
-        totalExceptions: 89,
-        resolvedExceptions: 67,
-        averageReconciliationRate: 88.5,
-        averageProcessingTime: 2.3,
-        matchingAccuracy: 94.2,
-        exceptionResolutionRate: 75.3
+        totalStatements: 0,
+        processedStatements: 0,
+        totalTransactions: 0,
+        matchedTransactions: 0,
+        unmatchedTransactions: 0,
+        totalExceptions: 0,
+        resolvedExceptions: 0,
+        averageReconciliationRate: 0,
+        averageProcessingTime: 0,
+        matchingAccuracy: 0,
+        exceptionResolutionRate: 0
       });
     } catch (error) {
       console.error('Failed to load reconciliation data:', error);
@@ -447,8 +358,8 @@ const AutomatedReconciliation: React.FC = () => {
                 </Button>
               </Box>
 
-              <TableContainer>
-                <Table>
+              <Box sx={{ overflowX: 'auto', width: '100%' }}>
+                <Table sx={{ minWidth: 700 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>Banque</TableCell>
@@ -519,7 +430,7 @@ const AutomatedReconciliation: React.FC = () => {
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

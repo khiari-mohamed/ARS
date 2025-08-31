@@ -39,7 +39,7 @@ import {
   Approval,
   Visibility
 } from '@mui/icons-material';
-import { fetchWorkflowDefinitions, startWorkflow, completeWorkflowStep, getUserWorkflowTasks, getDocumentLifecycle } from '../../services/gedService';
+// All workflow operations now use real API endpoints
 import DocumentSelector from './DocumentSelector';
 
 interface WorkflowTask {
@@ -74,7 +74,7 @@ const DocumentWorkflowManager: React.FC = () => {
   const loadData = async () => {
     try {
       // Load workflow definitions from real API
-      const workflowsResponse = await fetch('/api/documents/workflows/definitions', {
+      const workflowsResponse = await fetch('http://localhost:5000/api/documents/workflows/definitions', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -84,116 +84,61 @@ const DocumentWorkflowManager: React.FC = () => {
       if (workflowsResponse.ok) {
         workflowsData = await workflowsResponse.json();
       } else {
-        // Generate dynamic workflows based on current user role
-        workflowsData = [
-          {
-            id: 'workflow_document_approval',
-            name: 'Approbation Document',
-            description: 'Workflow d\'approbation pour les documents importants',
-            documentTypes: ['CONTRACT', 'COURRIER', 'RECLAMATION'],
-            steps: [
-              {
-                id: 'step_review',
-                name: 'Révision',
-                type: 'review',
-                assigneeType: 'role',
-                assigneeId: 'GESTIONNAIRE',
-                required: true,
-                timeLimit: 24
-              },
-              {
-                id: 'step_approval',
-                name: 'Approbation',
-                type: 'approval',
-                assigneeType: 'role',
-                assigneeId: 'CHEF_EQUIPE',
-                required: true,
-                timeLimit: 48
-              }
-            ],
-            active: true
-          },
-          {
-            id: 'workflow_bs_processing',
-            name: 'Traitement BS',
-            description: 'Workflow de traitement des bulletins de soin',
-            documentTypes: ['BS'],
-            steps: [
-              {
-                id: 'step_scan',
-                name: 'Numérisation',
-                type: 'scan',
-                assigneeType: 'role',
-                assigneeId: 'SCAN_TEAM',
-                required: true,
-                timeLimit: 12
-              },
-              {
-                id: 'step_validation',
-                name: 'Validation',
-                type: 'validation',
-                assigneeType: 'role',
-                assigneeId: 'GESTIONNAIRE',
-                required: true,
-                timeLimit: 24
-              }
-            ],
-            active: true
-          }
-        ];
+        // No fallback data - use empty array
+        workflowsData = [];
       }
       
-      // Load user tasks - generate dynamic tasks based on uploaded documents
-      const documentsResponse = await fetch('/api/documents/search', {
+      // Load user tasks from real API
+      const tasksResponse = await fetch('http://localhost:5000/api/documents/workflows/tasks/current', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
       let tasksData = [];
-      if (documentsResponse.ok) {
-        const documents = await documentsResponse.json();
-        // Generate tasks from recent documents that need workflow processing
-        tasksData = documents
-          .filter((doc: any) => doc.status === 'UPLOADED' || doc.status === 'EN_COURS')
-          .slice(0, 3)
-          .map((doc: any, index: number) => ({
-            instanceId: `instance_${doc.id}`,
-            workflowName: doc.type === 'BS' ? 'Traitement BS' : 'Approbation Document',
-            documentTitle: doc.name,
-            stepName: doc.status === 'UPLOADED' ? 'Révision' : 'Approbation',
-            assignedAt: new Date(Date.now() - (index + 1) * 2 * 60 * 60 * 1000),
-            timeLimit: doc.type === 'BS' ? 24 : 48,
-            priority: index === 0 ? 'high' : index === 1 ? 'medium' : 'low',
-            status: 'in_progress',
-            stepId: doc.status === 'UPLOADED' ? 'step_review' : 'step_approval',
-            documentId: doc.id
-          }));
+      if (tasksResponse.ok) {
+        tasksData = await tasksResponse.json();
+      } else {
+        // Fallback: generate tasks from documents that need workflow processing
+        const documentsResponse = await fetch('http://localhost:5000/api/documents/search', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (documentsResponse.ok) {
+          const documents = await documentsResponse.json();
+          tasksData = documents
+            .filter((doc: any) => doc.status === 'EN_COURS')
+            .slice(0, 5)
+            .map((doc: any, index: number) => ({
+              instanceId: `instance_${doc.id}`,
+              workflowName: doc.type === 'BS' ? 'Traitement BS' : 'Approbation Document',
+              documentTitle: doc.name,
+              stepName: 'Révision',
+              assignedAt: new Date(doc.uploadedAt),
+              timeLimit: doc.type === 'BS' ? 24 : 48,
+              priority: index < 2 ? 'high' : index < 4 ? 'medium' : 'low',
+              status: 'in_progress',
+              stepId: 'step_review',
+              documentId: doc.id
+            }));
+        }
       }
       
       setWorkflows(workflowsData);
       setUserTasks(tasksData);
     } catch (error) {
       console.error('Failed to load workflow data:', error);
-      // Fallback to basic mock data
-      setWorkflows([
-        {
-          id: 'workflow_basic',
-          name: 'Workflow Basique',
-          description: 'Workflow de base pour tous les documents',
-          documentTypes: ['ALL'],
-          steps: [{ id: 'step_1', name: 'Traitement', type: 'process' }],
-          active: true
-        }
-      ]);
+      // No fallback data - use empty arrays
+      setWorkflows([]);
       setUserTasks([]);
     }
   };
 
   const handleStartWorkflow = async (workflowId: string, documentId: string) => {
     try {
-      // Try real API first
-      const response = await fetch('/api/documents/workflows/start', {
+      const response = await fetch('http://localhost:5000/api/documents/workflows/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -202,17 +147,21 @@ const DocumentWorkflowManager: React.FC = () => {
         body: JSON.stringify({ documentId, workflowId })
       });
       
-      if (!response.ok) {
-        // Fallback to mock service
-        await startWorkflow(documentId, workflowId, 'current_user');
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Workflow started:', result);
+        
+        // Status is updated by the backend workflow service
+        
+        await loadData();
+        setWorkflowDialogOpen(false);
+        alert('Workflow démarré avec succès!');
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
-      await loadData();
-      setWorkflowDialogOpen(false);
-      alert('Workflow démarré avec succès!');
     } catch (error) {
       console.error('Failed to start workflow:', error);
-      alert('Erreur lors du démarrage du workflow');
+      alert('Erreur lors du démarrage du workflow: ' + (error as Error).message);
     }
   };
 
@@ -220,8 +169,7 @@ const DocumentWorkflowManager: React.FC = () => {
     if (!selectedTask) return;
 
     try {
-      // Try real API first
-      const response = await fetch(`/api/documents/workflows/${selectedTask.instanceId}/steps/${selectedTask.stepId}/complete`, {
+      const response = await fetch(`http://localhost:5000/api/documents/workflows/${selectedTask.instanceId}/steps/${selectedTask.stepId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -230,53 +178,44 @@ const DocumentWorkflowManager: React.FC = () => {
         body: JSON.stringify({ decision, comments })
       });
       
-      if (!response.ok) {
-        // Fallback to mock service
-        await completeWorkflowStep(
-          selectedTask.instanceId,
-          selectedTask.stepId,
-          decision,
-          comments,
-          'current_user'
-        );
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Task completed:', result);
+        
+        // Status is updated by the backend workflow service
+        
+        await loadData();
+        setTaskDialogOpen(false);
+        setComments('');
+        setDecision('approved');
+        alert('Tâche complétée avec succès!');
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
-      await loadData();
-      setTaskDialogOpen(false);
-      setComments('');
-      setDecision('approved');
-      alert('Tâche complétée avec succès!');
     } catch (error) {
       console.error('Failed to complete task:', error);
-      alert('Erreur lors de la complétion de la tâche');
+      alert('Erreur lors de la complétion de la tâche: ' + (error as Error).message);
     }
   };
 
   const handleViewLifecycle = async (documentId: string) => {
     try {
-      // Try real API first
-      const response = await fetch(`/api/documents/${documentId}/lifecycle`, {
+      const response = await fetch(`http://localhost:5000/api/documents/${documentId}/lifecycle`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      let lifecycle;
       if (response.ok) {
-        lifecycle = await response.json();
+        const lifecycle = await response.json();
+        setDocumentLifecycle(lifecycle);
+        setLifecycleDialogOpen(true);
       } else {
-        // Fallback to mock service
-        lifecycle = await getDocumentLifecycle(documentId);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
-      setDocumentLifecycle(lifecycle);
-      setLifecycleDialogOpen(true);
     } catch (error) {
       console.error('Failed to load document lifecycle:', error);
-      // Fallback to mock data
-      const lifecycle = await getDocumentLifecycle(documentId);
-      setDocumentLifecycle(lifecycle);
-      setLifecycleDialogOpen(true);
+      alert('Erreur lors du chargement de l\'historique du document');
     }
   };
 
@@ -347,40 +286,63 @@ const DocumentWorkflowManager: React.FC = () => {
                         border: 1,
                         borderColor: 'divider',
                         borderRadius: 1,
-                        mb: 1
+                        mb: 1,
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        alignItems: { xs: 'stretch', sm: 'center' },
+                        gap: { xs: 2, sm: 0 }
                       }}
                     >
-                      <ListItemIcon>
-                        <Avatar sx={{ bgcolor: getPriorityColor(task.priority) + '.main' }}>
-                          <Assignment />
-                        </Avatar>
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography variant="subtitle1" fontWeight={600}>
-                              {task.documentTitle}
-                            </Typography>
-                            <Chip
-                              label={task.priority}
-                              color={getPriorityColor(task.priority) as any}
-                              size="small"
-                            />
-                          </Box>
-                        }
-                        secondary={
-                          <Box>
-                            <Typography variant="body2" color="text.secondary">
-                              {task.workflowName} - {task.stepName}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Assigné: {new Date(task.assignedAt).toLocaleString()} | 
-                              Temps restant: {formatTimeRemaining(task.assignedAt, task.timeLimit)}
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                      <Box display="flex" gap={1}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                        <ListItemIcon>
+                          <Avatar sx={{ bgcolor: getPriorityColor(task.priority) + '.main' }}>
+                            <Assignment />
+                          </Avatar>
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Box>
+                              <Typography 
+                                variant="subtitle1" 
+                                fontWeight={600}
+                                sx={{ 
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'break-word',
+                                  mb: 1
+                                }}
+                              >
+                                {task.documentTitle}
+                              </Typography>
+                              <Chip
+                                label={task.priority}
+                                color={getPriorityColor(task.priority) as any}
+                                size="small"
+                              />
+                            </Box>
+                          }
+                          secondary={
+                            <Box sx={{ mt: 1 }}>
+                              <Typography variant="body2" color="text.secondary">
+                                {task.workflowName} - {task.stepName}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                Assigné: {new Date(task.assignedAt).toLocaleString()}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                Temps restant: {formatTimeRemaining(task.assignedAt, task.timeLimit)}
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Box>
+                      <Box 
+                        sx={{ 
+                          display: 'flex', 
+                          gap: 1, 
+                          flexWrap: 'wrap',
+                          justifyContent: { xs: 'stretch', sm: 'flex-end' },
+                          width: { xs: '100%', sm: 'auto' }
+                        }}
+                      >
                         <Button
                           size="small"
                           variant="contained"
@@ -389,6 +351,7 @@ const DocumentWorkflowManager: React.FC = () => {
                             setSelectedTask(task);
                             setTaskDialogOpen(true);
                           }}
+                          sx={{ flex: { xs: 1, sm: 'none' } }}
                         >
                           Traiter
                         </Button>
@@ -397,6 +360,7 @@ const DocumentWorkflowManager: React.FC = () => {
                           variant="outlined"
                           startIcon={<Visibility />}
                           onClick={() => handleViewLifecycle(task.documentId)}
+                          sx={{ flex: { xs: 1, sm: 'none' } }}
                         >
                           Historique
                         </Button>

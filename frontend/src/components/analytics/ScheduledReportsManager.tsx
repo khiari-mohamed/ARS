@@ -147,167 +147,12 @@ const ScheduledReportsManager: React.FC = () => {
         };
       }
 
-      // Use real data if available, otherwise use fallback
-      if (realReports.length > 0) {
-        setReports(realReports);
-      } else {
-        // Fallback data
-        setReports([
-        {
-          id: 'report_001',
-          name: 'Rapport Quotidien des Bordereaux',
-          description: 'Rapport quotidien des bordereaux traités et en cours',
-          reportType: 'dashboard',
-          dataSource: 'bordereaux',
-          schedule: {
-            frequency: 'daily',
-            time: '08:00',
-            timezone: 'Europe/Paris'
-          },
-          recipients: [
-            { type: 'user', identifier: 'manager_001', name: 'Manager Principal', deliveryMethod: 'email' },
-            { type: 'group', identifier: 'supervisors', name: 'Superviseurs', deliveryMethod: 'both' }
-          ],
-          format: 'pdf',
-          active: true,
-          lastRun: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          nextRun: new Date(Date.now() + 8 * 60 * 60 * 1000),
-          status: 'active'
-        },
-        {
-          id: 'report_002',
-          name: 'Rapport Hebdomadaire des Réclamations',
-          description: 'Analyse hebdomadaire des réclamations par catégorie',
-          reportType: 'chart',
-          dataSource: 'reclamations',
-          schedule: {
-            frequency: 'weekly',
-            time: '09:00',
-            timezone: 'Europe/Paris',
-            daysOfWeek: [1]
-          },
-          recipients: [
-            { type: 'email', identifier: 'direction@company.com', name: 'Direction', deliveryMethod: 'email' }
-          ],
-          format: 'excel',
-          active: true,
-          lastRun: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          nextRun: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-          status: 'active'
-        },
-        {
-          id: 'report_003',
-          name: 'Rapport Mensuel Financier',
-          description: 'Rapport mensuel des virements et performance financière',
-          reportType: 'custom',
-          dataSource: 'virements',
-          schedule: {
-            frequency: 'monthly',
-            time: '07:00',
-            timezone: 'Europe/Paris',
-            dayOfMonth: 1
-          },
-          recipients: [
-            { type: 'user', identifier: 'cfo_001', name: 'Directeur Financier', deliveryMethod: 'both' }
-          ],
-          format: 'pdf',
-          active: false,
-          lastRun: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          nextRun: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
-          status: 'paused'
-        }
-        ]);
-      }
-
-      if (realExecutions.length > 0) {
-        setExecutions(realExecutions);
-      } else {
-        // Fallback executions
-        setExecutions([
-        {
-          id: 'exec_001',
-          reportId: 'report_001',
-          startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-          completedAt: new Date(Date.now() - 2 * 60 * 60 * 1000 + 5 * 60 * 1000),
-          status: 'completed',
-          fileSize: 245678,
-          recipients: ['manager_001', 'supervisors'],
-          deliveryStatus: { 'manager_001': 'sent', 'supervisors': 'sent' }
-        },
-        {
-          id: 'exec_002',
-          reportId: 'report_002',
-          startedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          completedAt: new Date(Date.now() - 24 * 60 * 60 * 1000 + 8 * 60 * 1000),
-          status: 'completed',
-          fileSize: 156789,
-          recipients: ['direction@company.com'],
-          deliveryStatus: { 'direction@company.com': 'sent' }
-        },
-        {
-          id: 'exec_003',
-          reportId: 'report_001',
-          startedAt: new Date(Date.now() - 26 * 60 * 60 * 1000),
-          completedAt: new Date(Date.now() - 26 * 60 * 60 * 1000 + 3 * 60 * 1000),
-          status: 'failed',
-          error: 'Database connection timeout',
-          recipients: ['manager_001'],
-          deliveryStatus: { 'manager_001': 'failed' }
-        }
-        ]);
-      }
-
-      if (realStats) {
-        setStatistics(realStats);
-      } else {
-        // Fallback statistics
-        setStatistics({
-        totalReports: 15,
-        activeReports: 12,
-        pausedReports: 2,
-        errorReports: 1,
-        totalExecutions: 456,
-        successfulExecutions: 432,
-        failedExecutions: 24,
-        successRate: 94.7,
-        avgExecutionTime: 3.2,
-        byFrequency: {
-          daily: 8,
-          weekly: 4,
-          monthly: 2,
-          quarterly: 1
-        },
-        byFormat: {
-          pdf: 7,
-          excel: 5,
-          csv: 2,
-          html: 1
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load scheduled reports data:', error);
-      // Set fallback data on error
-      setReports([
-        {
-          id: 'report_001',
-          name: 'Rapport Quotidien des Bordereaux',
-          description: 'Rapport quotidien des bordereaux traités et en cours',
-          reportType: 'dashboard',
-          dataSource: 'bordereaux',
-          schedule: { frequency: 'daily', time: '08:00', timezone: 'Europe/Paris' },
-          recipients: [{ type: 'user', identifier: 'manager_001', name: 'Manager Principal', deliveryMethod: 'email' }],
-          format: 'pdf',
-          active: true,
-          lastRun: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          nextRun: new Date(Date.now() + 8 * 60 * 60 * 1000),
-          status: 'active'
-        }
-      ]);
-      setExecutions([]);
-      setStatistics({
-        totalReports: 1,
-        activeReports: 1,
+      // Use only real data
+      setReports(realReports);
+      setExecutions(realExecutions);
+      setStatistics(realStats || {
+        totalReports: 0,
+        activeReports: 0,
         pausedReports: 0,
         errorReports: 0,
         totalExecutions: 0,
@@ -315,8 +160,26 @@ const ScheduledReportsManager: React.FC = () => {
         failedExecutions: 0,
         successRate: 0,
         avgExecutionTime: 0,
-        byFrequency: { daily: 1 },
-        byFormat: { pdf: 1 }
+        byFrequency: {},
+        byFormat: {}
+      });
+    } catch (error) {
+      console.error('Failed to load scheduled reports data:', error);
+      // Set empty data on error
+      setReports([]);
+      setExecutions([]);
+      setStatistics({
+        totalReports: 0,
+        activeReports: 0,
+        pausedReports: 0,
+        errorReports: 0,
+        totalExecutions: 0,
+        successfulExecutions: 0,
+        failedExecutions: 0,
+        successRate: 0,
+        avgExecutionTime: 0,
+        byFrequency: {},
+        byFormat: {}
       });
     } finally {
       setLoading(false);

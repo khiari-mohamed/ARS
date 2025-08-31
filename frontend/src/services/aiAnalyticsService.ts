@@ -143,13 +143,18 @@ export class AIAnalyticsService {
 
   static async getReassignmentRecommendations(payload: any) {
     try {
-      const token = await this.getAIToken();
-      const response = await this.makeAuthenticatedRequest('/reassignment', payload);
+      const response = await this.makeAuthenticatedRequest('/reassignment_recommendations', payload);
 
-      return response.data.reassignment || [];
+      return {
+        reassignment: response.data.reassignment || [],
+        status: 'success'
+      };
     } catch (error) {
       console.warn('Reassignment recommendations unavailable:', error);
-      return [];
+      return {
+        reassignment: [],
+        status: 'error'
+      };
     }
   }
 
@@ -188,8 +193,7 @@ export class AIAnalyticsService {
 
   static async forecastTrends(historicalData: any[], forecastDays: number = 30) {
     try {
-      const token = await this.getAIToken();
-      const response = await this.makeAuthenticatedRequest('/forecast', {
+      const response = await this.makeAuthenticatedRequest('/forecast_trends', {
         historical_data: historicalData,
         forecast_days: forecastDays
       });
@@ -203,13 +207,12 @@ export class AIAnalyticsService {
 
   static async predictRequiredResources(payload: any) {
     try {
-      const token = await this.getAIToken();
-      const response = await this.makeAuthenticatedRequest('/resource_prediction', payload);
+      const response = await this.makeAuthenticatedRequest('/predict_resources', payload);
 
-      return response.data || { required_resources: 0, confidence: 0 };
+      return response.data || { required_managers: 0, confidence: 0 };
     } catch (error) {
       console.warn('Resource prediction unavailable:', error);
-      return { required_resources: 0, confidence: 0 };
+      return { required_managers: 0, confidence: 0 };
     }
   }
 
@@ -347,10 +350,16 @@ export class AIAnalyticsService {
         method: 'isolation_forest'
       });
 
-      return response.data.anomalies || [];
+      return {
+        anomalies: response.data.anomalies || [],
+        status: 'success'
+      };
     } catch (error) {
       console.warn('Anomaly detection unavailable:', error);
-      return [];
+      return {
+        anomalies: [],
+        status: 'error'
+      };
     }
   }
 
