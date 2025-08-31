@@ -39,27 +39,7 @@ const FinanceAlertsTab: React.FC = () => {
       setAlerts(data);
     } catch (error) {
       console.error('Failed to load alerts:', error);
-      // Fallback to mock data for demo
-      setAlerts([
-        {
-          id: 'pending-1',
-          type: 'PENDING_VIREMENT',
-          level: 'warning',
-          title: 'Bordereau en attente de virement',
-          message: 'BDX/2025/001 (AON) - 26h de retard',
-          data: { bordereauId: '1', delayHours: 26 },
-          createdAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          id: 'overdue-1',
-          type: 'OVERDUE_VIREMENT',
-          level: 'error',
-          title: 'Virement en retard',
-          message: 'BDX/2025/002 (AXA) - 50h de retard',
-          data: { virementId: '2', delayHours: 50 },
-          createdAt: new Date(Date.now() - 50 * 60 * 60 * 1000).toISOString()
-        }
-      ]);
+      setAlerts([]);
     } finally {
       setLoading(false);
     }

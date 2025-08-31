@@ -316,45 +316,47 @@ const GEDDashboardTab: React.FC = () => {
         <Grid item xs={12}>
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Documents Récents</Typography>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nom</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Date Upload</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell>PaperStream</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {recentDocs.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell>{doc.name}</TableCell>
-                    <TableCell>{doc.type}</TableCell>
-                    <TableCell>{new Date(doc.uploadedAt).toLocaleDateString()}</TableCell>
-                    <TableCell>{getStatusChip(doc.status)}</TableCell>
-                    <TableCell>
-                      {doc.batchId ? (
-                        <Box>
-                          <Chip label={`Lot: ${doc.batchId}`} size="small" variant="outlined" sx={{ mb: 0.5 }} />
-                          {doc.operatorId && <Chip label={`Op: ${doc.operatorId}`} size="small" variant="outlined" />}
-                          {doc.ingestStatus && (
-                            <Chip 
-                              label={doc.ingestStatus} 
-                              size="small" 
-                              color={doc.ingestStatus === 'INGESTED' ? 'success' : 'default'}
-                              sx={{ ml: 0.5 }}
-                            />
-                          )}
-                        </Box>
-                      ) : (
-                        <Typography variant="caption" color="textSecondary">-</Typography>
-                      )}
-                    </TableCell>
+            <Box sx={{ overflowX: 'auto', width: '100%' }}>
+              <Table sx={{ minWidth: 700 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nom</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Date Upload</TableCell>
+                    <TableCell>Statut</TableCell>
+                    <TableCell>PaperStream</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {recentDocs.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell>{doc.name}</TableCell>
+                      <TableCell>{doc.type}</TableCell>
+                      <TableCell>{new Date(doc.uploadedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{getStatusChip(doc.status)}</TableCell>
+                      <TableCell>
+                        {doc.batchId ? (
+                          <Box>
+                            <Chip label={`Lot: ${doc.batchId}`} size="small" variant="outlined" sx={{ mb: 0.5 }} />
+                            {doc.operatorId && <Chip label={`Op: ${doc.operatorId}`} size="small" variant="outlined" />}
+                            {doc.ingestStatus && (
+                              <Chip 
+                                label={doc.ingestStatus} 
+                                size="small" 
+                                color={doc.ingestStatus === 'INGESTED' ? 'success' : 'default'}
+                                sx={{ ml: 0.5 }}
+                              />
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="caption" color="textSecondary">-</Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
           </Paper>
         </Grid>
       </Grid>

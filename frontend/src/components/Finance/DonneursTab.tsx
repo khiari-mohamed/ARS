@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, FormControl, InputLabel, Select, MenuItem, Chip, IconButton
+  TextField, FormControl, InputLabel, Select, MenuItem, Chip, IconButton, Box
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -38,10 +38,7 @@ const DonneursTab: React.FC = () => {
         setDonneurs(data);
       } catch (error) {
         console.error('Failed to load donneurs:', error);
-        // Fallback to mock data
-        setDonneurs([
-          { id: '1', name: 'ARS Tunisie', bank: 'Banque Centrale de Tunisie', rib: '12345678901234567890', txtFormat: 'SWIFT', status: 'active' }
-        ]);
+        setDonneurs([]);
       }
     };
     loadDonneurs();
@@ -127,45 +124,47 @@ const DonneursTab: React.FC = () => {
         </Button>
       </Grid>
 
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Nom</TableCell>
-            <TableCell>Banque</TableCell>
-            <TableCell>RIB</TableCell>
-            <TableCell>Format TXT</TableCell>
-            <TableCell>Statut</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {donneurs.map((donneur) => (
-            <TableRow key={donneur.id}>
-              <TableCell>
-                <Typography variant="subtitle2">{donneur.name}</Typography>
-              </TableCell>
-              <TableCell>{donneur.bank}</TableCell>
-              <TableCell>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                  {donneur.rib}
-                </Typography>
-              </TableCell>
-              <TableCell>
-                <Chip label={donneur.txtFormat} variant="outlined" size="small" />
-              </TableCell>
-              <TableCell>{getStatusChip(donneur.status)}</TableCell>
-              <TableCell>
-                <IconButton size="small" onClick={() => handleEdit(donneur)}>
-                  <EditIcon />
-                </IconButton>
-                <IconButton size="small" onClick={() => handleDelete(donneur.id)} color="error">
-                  <DeleteIcon />
-                </IconButton>
-              </TableCell>
+      <Box sx={{ overflowX: 'auto', width: '100%' }}>
+        <Table sx={{ minWidth: 700 }}>
+          <TableHead>
+            <TableRow>
+              <TableCell>Nom</TableCell>
+              <TableCell>Banque</TableCell>
+              <TableCell>RIB</TableCell>
+              <TableCell>Format TXT</TableCell>
+              <TableCell>Statut</TableCell>
+              <TableCell>Actions</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {donneurs.map((donneur) => (
+              <TableRow key={donneur.id}>
+                <TableCell>
+                  <Typography variant="subtitle2">{donneur.name}</Typography>
+                </TableCell>
+                <TableCell>{donneur.bank}</TableCell>
+                <TableCell>
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {donneur.rib}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Chip label={donneur.txtFormat} variant="outlined" size="small" />
+                </TableCell>
+                <TableCell>{getStatusChip(donneur.status)}</TableCell>
+                <TableCell>
+                  <IconButton size="small" onClick={() => handleEdit(donneur)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => handleDelete(donneur.id)} color="error">
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Box>
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialog.open} onClose={() => setDialog({open: false, donneur: null})} maxWidth="sm" fullWidth>

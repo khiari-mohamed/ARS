@@ -50,7 +50,27 @@ const FinanceModule: React.FC = () => {
 
       {/* Mobile View */}
       {isMobile && (
-        <FinanceMobileView onTabChange={setTab} />
+        <>
+          <FinanceMobileView onTabChange={setTab} />
+          
+          {/* Mobile Tab Content */}
+          <Paper elevation={2} sx={{ p: 2, mt: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              {tabLabels[tab]}
+            </Typography>
+            <Box>
+              {tab === 0 && <OVProcessingTab onSwitchToTab={setTab} />}
+              {tab === 1 && <TrackingTab />}
+              {tab === 2 && <DonneursTab />}
+              {tab === 3 && <AdherentsTab />}
+              {tab === 4 && <FinanceAlertsTab />}
+              {tab === 5 && <MultiBankFormatManager />}
+              {tab === 6 && <AutomatedReconciliation />}
+              {tab === 7 && <FinancialReportingDashboard />}
+              {tab === 8 && <ReportsTab />}
+            </Box>
+          </Paper>
+        </>
       )}
 
       {/* Desktop View */}

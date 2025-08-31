@@ -42,7 +42,7 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
         LocalAPI.get('/analytics/reports/stats').catch(() => null)
       ]);
 
-      // Process recent reports
+      // Process recent reports - use only real data
       if (reportsResponse?.data) {
         const reports = reportsResponse.data.map((report: any) => ({
           id: report.id,
@@ -56,15 +56,10 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
         }));
         setRecentReports(reports);
       } else {
-        // Fallback data
-        setRecentReports([
-          { id: '1', name: 'KPI_Summary_2025-01-15.pdf', date: '15/01/2025', size: '2.3 MB', type: 'kpi_summary', format: 'pdf', status: 'completed' },
-          { id: '2', name: 'Performance_Detail_2025-01-10.xlsx', date: '10/01/2025', size: '1.8 MB', type: 'performance_detail', format: 'excel', status: 'completed' },
-          { id: '3', name: 'SLA_Compliance_2025-01-05.pdf', date: '05/01/2025', size: '1.2 MB', type: 'sla_compliance', format: 'pdf', status: 'completed' }
-        ]);
+        setRecentReports([]);
       }
 
-      // Process report statistics
+      // Process report statistics - use only real data
       if (statsResponse?.data) {
         setReportStats({
           totalReports: statsResponse.data.totalReports || 0,
@@ -74,18 +69,16 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
         });
       } else {
         setReportStats({
-          totalReports: 156,
-          reportsThisMonth: 23,
-          avgGenerationTime: 3.2,
+          totalReports: 0,
+          reportsThisMonth: 0,
+          avgGenerationTime: 0,
           mostPopularFormat: 'pdf'
         });
       }
     } catch (error) {
       console.error('Failed to load reports data:', error);
-      // Set fallback data on error
-      setRecentReports([
-        { id: '1', name: 'KPI_Summary_2025-01-15.pdf', date: '15/01/2025', size: '2.3 MB', type: 'kpi_summary', format: 'pdf', status: 'completed' }
-      ]);
+      // Set empty data on error
+      setRecentReports([]);
       setReportStats({ totalReports: 0, reportsThisMonth: 0, avgGenerationTime: 0, mostPopularFormat: 'pdf' });
     } finally {
       setLoading(false);

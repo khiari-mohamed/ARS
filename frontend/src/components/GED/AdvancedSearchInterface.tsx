@@ -435,7 +435,7 @@ const AdvancedSearchInterface: React.FC = () => {
                         >
                           {highlightText(result.title, result.highlights.title)}
                         </Typography>
-                        <Box display="flex" gap={1} mb={1}>
+                        <Box display="flex" gap={1} mb={1} flexWrap="wrap">
                           <Chip label={result.type} size="small" color="primary" />
                           <Chip label={result.category} size="small" variant="outlined" />
                           {result.tags.map((tag) => (
@@ -452,7 +452,7 @@ const AdvancedSearchInterface: React.FC = () => {
                             result.highlights.content
                           )}
                         </Typography>
-                        <Box display="flex" alignItems="center" gap={2} mt={1}>
+                        <Box display="flex" alignItems="center" gap={2} mt={1} flexWrap="wrap">
                           <Box display="flex" alignItems="center" gap={0.5}>
                             <Person fontSize="small" color="action" />
                             <Typography variant="caption">{result.author}</Typography>

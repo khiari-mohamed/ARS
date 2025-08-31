@@ -24,40 +24,47 @@ const CorbeilleTab: React.FC = () => {
   const { user } = useAuth();
 
   useEffect(() => {
-    // Mock data based on role
-    const mockData: Document[] = [
-      {
-        id: '1',
-        reference: 'DOC/2025/001',
-        client: 'Client A',
-        type: 'BS',
-        status: 'TRAITE',
-        assignedTo: 'Gestionnaire 1',
-        slaStatus: 'green',
-        uploadedAt: '2025-01-15'
-      },
-      {
-        id: '2',
-        reference: 'DOC/2025/002',
-        client: 'Client B',
-        type: 'CONTRAT',
-        status: 'EN_COURS',
-        assignedTo: 'Gestionnaire 2',
-        slaStatus: 'orange',
-        uploadedAt: '2025-01-14'
-      },
-      {
-        id: '3',
-        reference: 'DOC/2025/003',
-        client: 'Client C',
-        type: 'RECLAMATION',
-        status: 'NON_AFFECTE',
-        slaStatus: 'red',
-        uploadedAt: '2025-01-13'
+    const loadDocuments = async () => {
+      try {
+        const response = await fetch('/api/documents/search', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setDocuments(data.map((doc: any) => ({
+            id: doc.id,
+            reference: doc.name || `DOC/${doc.id}`,
+            client: doc.bordereau?.client?.name || 'Client inconnu',
+            type: doc.type || 'DOCUMENT',
+            status: doc.status || 'UPLOADED',
+            assignedTo: doc.uploader?.fullName,
+            slaStatus: calculateSlaStatus(doc.uploadedAt),
+            uploadedAt: doc.uploadedAt
+          })));
+        } else {
+          throw new Error('Failed to load documents');
+        }
+      } catch (error) {
+        console.error('Failed to load documents:', error);
+        setDocuments([]);
       }
-    ];
-    setDocuments(mockData);
+    };
+    
+    loadDocuments();
   }, [tab]);
+  
+  const calculateSlaStatus = (uploadedAt: string): 'green' | 'orange' | 'red' => {
+    const now = new Date();
+    const uploaded = new Date(uploadedAt);
+    const hours = (now.getTime() - uploaded.getTime()) / (1000 * 60 * 60);
+    
+    if (hours >= 48) return 'red';    // En retard
+    if (hours >= 36) return 'orange'; // À risque
+    return 'green';                   // À temps
+  };
 
   const getSLAChip = (slaStatus: string) => {
     const config = {
@@ -80,27 +87,88 @@ const CorbeilleTab: React.FC = () => {
     return <Chip label={config.label} color={config.color as any} size="small" />;
   };
 
-  const handleBulkAssign = () => {
+  const handleBulkAssign = async () => {
     if (selectedIds.length === 0) {
       alert('Veuillez sélectionner des documents');
       return;
     }
-    // Mock bulk assignment
-    console.log('Bulk assigning documents:', selectedIds);
-    alert(`${selectedIds.length} documents assignés`);
-    setSelectedIds([]);
+    
+    try {
+      // Bulk assign by updating each document individually
+      const promises = selectedIds.map(docId => 
+        fetch(`/api/documents/${docId}/assign`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({})
+        })
+      );
+      
+      const responses = await Promise.all(promises);
+      const allSuccessful = responses.every(response => response.ok);
+      
+      if (!allSuccessful) {
+        throw new Error('Some assignments failed');
+      }
+      
+      alert(`${selectedIds.length} documents assignés`);
+      setSelectedIds([]);
+      // Reload documents
+      window.location.reload();
+    } catch (error) {
+      console.error('Bulk assignment failed:', error);
+      alert('Erreur lors de l\'assignation');
+    }
   };
 
-  const handleMarkAsProcessed = (docId: string) => {
-    setDocuments(prev => prev.map(doc => 
-      doc.id === docId ? {...doc, status: 'TRAITE'} : doc
-    ));
+  const handleMarkAsProcessed = async (docId: string) => {
+    try {
+      const response = await fetch(`/api/documents/${docId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: 'TRAITE' })
+      });
+      
+      if (response.ok) {
+        setDocuments(prev => prev.map(doc => 
+          doc.id === docId ? {...doc, status: 'TRAITE'} : doc
+        ));
+      } else {
+        throw new Error('Failed to update status');
+      }
+    } catch (error) {
+      console.error('Status update failed:', error);
+      alert('Erreur lors de la mise à jour');
+    }
   };
 
-  const handleReturnToChef = (docId: string) => {
-    setDocuments(prev => prev.map(doc => 
-      doc.id === docId ? {...doc, status: 'RETOURNE'} : doc
-    ));
+  const handleReturnToChef = async (docId: string) => {
+    try {
+      const response = await fetch(`/api/documents/${docId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: 'RETOURNE' })
+      });
+      
+      if (response.ok) {
+        setDocuments(prev => prev.map(doc => 
+          doc.id === docId ? {...doc, status: 'RETOURNE'} : doc
+        ));
+      } else {
+        throw new Error('Failed to return document');
+      }
+    } catch (error) {
+      console.error('Return failed:', error);
+      alert('Erreur lors du retour');
+    }
   };
 
   const getTabsForRole = () => {
@@ -168,89 +236,91 @@ const CorbeilleTab: React.FC = () => {
         )}
 
         {/* Documents table */}
-        <Table>
-          <TableHead>
-            <TableRow>
-              {user?.role === 'CHEF_EQUIPE' && (
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    checked={selectedIds.length === filteredDocs.length && filteredDocs.length > 0}
-                    indeterminate={selectedIds.length > 0 && selectedIds.length < filteredDocs.length}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedIds(filteredDocs.map(doc => doc.id));
-                      } else {
-                        setSelectedIds([]);
-                      }
-                    }}
-                  />
-                </TableCell>
-              )}
-              <TableCell>Référence</TableCell>
-              <TableCell>Client</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Statut</TableCell>
-              <TableCell>SLA</TableCell>
-              {user?.role === 'CHEF_EQUIPE' && <TableCell>Assigné à</TableCell>}
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredDocs.map((doc) => (
-              <TableRow key={doc.id}>
+        <Box sx={{ overflowX: 'auto', width: '100%' }}>
+          <Table sx={{ minWidth: 800 }}>
+            <TableHead>
+              <TableRow>
                 {user?.role === 'CHEF_EQUIPE' && (
                   <TableCell padding="checkbox">
                     <Checkbox
-                      checked={selectedIds.includes(doc.id)}
+                      checked={selectedIds.length === filteredDocs.length && filteredDocs.length > 0}
+                      indeterminate={selectedIds.length > 0 && selectedIds.length < filteredDocs.length}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedIds(prev => [...prev, doc.id]);
+                          setSelectedIds(filteredDocs.map(doc => doc.id));
                         } else {
-                          setSelectedIds(prev => prev.filter(id => id !== doc.id));
+                          setSelectedIds([]);
                         }
                       }}
                     />
                   </TableCell>
                 )}
-                <TableCell>{doc.reference}</TableCell>
-                <TableCell>{doc.client}</TableCell>
-                <TableCell>{doc.type}</TableCell>
-                <TableCell>{getStatusChip(doc.status)}</TableCell>
-                <TableCell>{getSLAChip(doc.slaStatus)}</TableCell>
-                {user?.role === 'CHEF_EQUIPE' && (
-                  <TableCell>{doc.assignedTo || 'Non assigné'}</TableCell>
-                )}
-                <TableCell>
-                  <Stack direction="row" spacing={1}>
-                    {user?.role === 'GESTIONNAIRE' && doc.status === 'EN_COURS' && (
-                      <>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          onClick={() => handleMarkAsProcessed(doc.id)}
-                        >
-                          Marquer traité
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => handleReturnToChef(doc.id)}
-                        >
-                          Retourner
-                        </Button>
-                      </>
-                    )}
-                    {user?.role === 'CHEF_EQUIPE' && (
-                      <Button size="small" variant="outlined">
-                        Assigner
-                      </Button>
-                    )}
-                  </Stack>
-                </TableCell>
+                <TableCell>Référence</TableCell>
+                <TableCell>Client</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Statut</TableCell>
+                <TableCell>SLA</TableCell>
+                {user?.role === 'CHEF_EQUIPE' && <TableCell>Assigné à</TableCell>}
+                <TableCell>Actions</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {filteredDocs.map((doc) => (
+                <TableRow key={doc.id}>
+                  {user?.role === 'CHEF_EQUIPE' && (
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={selectedIds.includes(doc.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(prev => [...prev, doc.id]);
+                          } else {
+                            setSelectedIds(prev => prev.filter(id => id !== doc.id));
+                          }
+                        }}
+                      />
+                    </TableCell>
+                  )}
+                  <TableCell>{doc.reference}</TableCell>
+                  <TableCell>{doc.client}</TableCell>
+                  <TableCell>{doc.type}</TableCell>
+                  <TableCell>{getStatusChip(doc.status)}</TableCell>
+                  <TableCell>{getSLAChip(doc.slaStatus)}</TableCell>
+                  {user?.role === 'CHEF_EQUIPE' && (
+                    <TableCell>{doc.assignedTo || 'Non assigné'}</TableCell>
+                  )}
+                  <TableCell>
+                    <Stack direction="row" spacing={1}>
+                      {user?.role === 'GESTIONNAIRE' && doc.status === 'EN_COURS' && (
+                        <>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => handleMarkAsProcessed(doc.id)}
+                          >
+                            Marquer traité
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleReturnToChef(doc.id)}
+                          >
+                            Retourner
+                          </Button>
+                        </>
+                      )}
+                      {user?.role === 'CHEF_EQUIPE' && (
+                        <Button size="small" variant="outlined">
+                          Assigner
+                        </Button>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
 
         {filteredDocs.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
