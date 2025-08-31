@@ -26,7 +26,7 @@ const ReportsTab: React.FC = () => {
 
   const loadClients = async () => {
     try {
-      const response = await fetch('/api/documents/search', {
+      const response = await fetch('http://localhost:5000/api/documents/search', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -36,17 +36,19 @@ const ReportsTab: React.FC = () => {
         const documents = await response.json();
         const uniqueClients = [...new Set(documents.map((d: any) => d.clientName).filter(Boolean))] as string[];
         setClients(uniqueClients);
+      } else {
+        setClients([]);
       }
     } catch (error) {
       console.error('Failed to load clients:', error);
-      setClients(['Client A', 'Client B', 'Client C']);
+      setClients([]);
     }
   };
 
   const loadReportData = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/documents/analytics?' + new URLSearchParams({
+      const response = await fetch('http://localhost:5000/api/documents/analytics?' + new URLSearchParams({
         period: '30d',
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
@@ -62,37 +64,20 @@ const ReportsTab: React.FC = () => {
         const data = await response.json();
         setReportData(data);
       } else {
-        throw new Error('Failed to load analytics');
+        setReportData(null);
       }
     } catch (error) {
       console.error('Failed to load report data:', error);
-      // Keep existing mock data as fallback
+      setReportData(null);
     } finally {
       setLoading(false);
     }
   };
 
-  // Dynamic data from API or fallback to mock
-  const slaComplianceData = reportData?.slaByClient || [
-    { client: 'Client A', compliance: 92 },
-    { client: 'Client B', compliance: 87 },
-    { client: 'Client C', compliance: 95 },
-    { client: 'Client D', compliance: 83 }
-  ];
-
-  const processingTimeData = reportData?.processingTimeByType || [
-    { type: 'BS', avgTime: 2.3 },
-    { type: 'Contrat', avgTime: 4.1 },
-    { type: 'Courrier', avgTime: 1.8 },
-    { type: 'Réclamation', avgTime: 3.2 }
-  ];
-
-  const volumeData = reportData?.volumeByDepartment || [
-    { name: 'Bureau d\'Ordre', value: 35, color: '#8884d8' },
-    { name: 'Service Scan', value: 25, color: '#82ca9d' },
-    { name: 'Gestionnaires', value: 30, color: '#ffc658' },
-    { name: 'Archivage', value: 10, color: '#ff7300' }
-  ];
+  // Dynamic data from API only
+  const slaComplianceData = reportData?.slaByClient || [];
+  const processingTimeData = reportData?.processingTimeByType || [];
+  const volumeData = reportData?.volumeByDepartment || [];
 
   const presetReports = [
     {
@@ -119,7 +104,7 @@ const ReportsTab: React.FC = () => {
 
   const handleExport = async (format: 'pdf' | 'excel', reportType?: string) => {
     try {
-      const response = await fetch('/api/documents/export', {
+      const response = await fetch('http://localhost:5000/api/documents/export', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -157,46 +142,18 @@ const ReportsTab: React.FC = () => {
       }
     } catch (error) {
       console.error('Export failed:', error);
-      
-      // Generate mock file content for demo
-      const reportContent = generateMockReport(format, reportType);
-      const filename = `ged_report_${reportType || 'custom'}_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-      
-      // Create and download mock file
-      const blob = new Blob([reportContent], { 
-        type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      
-      console.log(`✅ Rapport démo téléchargé: ${filename}`);
+      alert('Erreur lors de la génération du rapport');
     }
   };
   
-  const generateMockReport = (format: 'pdf' | 'excel', reportType?: string) => {
-    const reportTitle = reportType ? presetReports.find(r => r.type === reportType)?.title || 'Rapport GED' : 'Rapport GED Personnalisé';
-    const dateRange = `${filters.dateFrom} au ${filters.dateTo}`;
-    
-    if (format === 'pdf') {
-      return `%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 4 0 R\n>>\nendobj\n\n4 0 obj\n<<\n/Length 100\n>>\nstream\nBT\n/F1 12 Tf\n100 700 Td\n(${reportTitle}) Tj\n0 -20 Td\n(Période: ${dateRange}) Tj\nET\nendstream\nendobj\n\nxref\n0 5\n0000000000 65535 f \n0000000010 00000 n \n0000000053 00000 n \n0000000125 00000 n \n0000000185 00000 n \ntrailer\n<<\n/Size 5\n/Root 1 0 R\n>>\nstartxref\n300\n%%EOF`;
-    } else {
-      // Mock Excel content (simplified)
-      return `${reportTitle}\n\nPériode: ${dateRange}\n\nConformité SLA par Client:\n${slaComplianceData.map((d: any) => `${d.client}: ${d.compliance}%`).join('\n')}\n\nTemps de Traitement:\n${processingTimeData.map((d: any) => `${d.type}: ${d.avgTime}h`).join('\n')}\n\nVolume par Département:\n${volumeData.map((d: any) => `${d.name}: ${d.value}%`).join('\n')}`;
-    }
-  };
+
 
   return (
     <Box>
       {/* Filters */}
       <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>Filtres de Rapport</Typography>
-        <Stack direction="row" spacing={2} flexWrap="wrap">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap" gap={2}>
           <TextField
             label="Date Début"
             type="date"
@@ -338,7 +295,7 @@ const ReportsTab: React.FC = () => {
                       <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                         {report.description}
                       </Typography>
-                      <Stack direction="row" spacing={1}>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} gap={1}>
                         <Button
                           size="small"
                           variant="contained"
@@ -373,7 +330,7 @@ const ReportsTab: React.FC = () => {
             <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
               Générez un rapport personnalisé basé sur les filtres sélectionnés ci-dessus
             </Typography>
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} gap={2}>
               <Button
                 variant="contained"
                 startIcon={<PictureAsPdfIcon />}

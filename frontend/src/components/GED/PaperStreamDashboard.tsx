@@ -258,7 +258,8 @@ const PaperStreamDashboard: React.FC = () => {
   const renderBatchesTab = () => (
     <Paper sx={{ p: 3 }}>
       <Typography variant="h6" mb={2}>Lots Traités Récents</Typography>
-      <Table>
+      <Box sx={{ overflowX: 'auto', width: '100%' }}>
+        <Table sx={{ minWidth: 800 }}>
         <TableHead>
           <TableRow>
             <TableCell>Lot ID</TableCell>
@@ -287,7 +288,8 @@ const PaperStreamDashboard: React.FC = () => {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+        </Table>
+      </Box>
     </Paper>
   );
 
@@ -297,8 +299,9 @@ const PaperStreamDashboard: React.FC = () => {
       {quarantinedBatches.length === 0 ? (
         <Alert severity="success">Aucun lot en quarantaine</Alert>
       ) : (
-        <Table>
-          <TableHead>
+        <Box sx={{ overflowX: 'auto', width: '100%' }}>
+          <Table sx={{ minWidth: 700 }}>
+            <TableHead>
             <TableRow>
               <TableCell>Lot ID</TableCell>
               <TableCell>Type d'Erreur</TableCell>
@@ -307,8 +310,8 @@ const PaperStreamDashboard: React.FC = () => {
               <TableCell>Tentatives</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
-          </TableHead>
-          <TableBody>
+            </TableHead>
+            <TableBody>
             {quarantinedBatches.map((batch) => (
               <TableRow key={batch.id}>
                 <TableCell>{batch.batchId}</TableCell>
@@ -336,8 +339,9 @@ const PaperStreamDashboard: React.FC = () => {
                 </TableCell>
               </TableRow>
             ))}
-          </TableBody>
-        </Table>
+            </TableBody>
+          </Table>
+        </Box>
       )}
     </Paper>
   );
@@ -412,10 +416,10 @@ const PaperStreamDashboard: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
         <Typography variant="h4">PaperStream Integration</Typography>
-        <Box>
-          <FormControl size="small" sx={{ mr: 2, minWidth: 120 }}>
+        <Box display="flex" gap={1} flexWrap="wrap">
+          <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Période</InputLabel>
             <Select
               value={analyticsPeriod}
@@ -429,7 +433,6 @@ const PaperStreamDashboard: React.FC = () => {
             variant="outlined"
             startIcon={<RefreshIcon />}
             onClick={loadData}
-            sx={{ mr: 1 }}
           >
             Actualiser
           </Button>
@@ -445,7 +448,12 @@ const PaperStreamDashboard: React.FC = () => {
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(_, v) => setActiveTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
           <Tab label="Vue d'ensemble" />
           <Tab label="Lots Traités" />
           <Tab label="Quarantaine" />
