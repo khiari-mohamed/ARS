@@ -75,83 +75,91 @@ export class AdvancedFilteringService {
   }
 
   async getDrillDownOptions(dataSource: string, filters: any[], level: number, parentDimension?: string, parentValue?: string) {
-    const where: any = {};
-    
-    // Apply existing filters
-    filters.forEach(filter => {
-      switch (filter.operator) {
-        case 'equals':
-          where[filter.field] = filter.value;
+    try {
+      const where: any = {};
+      
+      // Apply existing filters
+      filters.forEach(filter => {
+        switch (filter.operator) {
+          case 'equals':
+            where[filter.field] = filter.value;
+            break;
+          case 'not_equals':
+            where[filter.field] = { not: filter.value };
+            break;
+          case 'contains':
+            where[filter.field] = { contains: filter.value, mode: 'insensitive' };
+            break;
+          case 'greater_than':
+            where[filter.field] = { gt: parseFloat(filter.value) || filter.value };
+            break;
+          case 'less_than':
+            where[filter.field] = { lt: parseFloat(filter.value) || filter.value };
+            break;
+        }
+      });
+
+      // Determine next dimension based on level and data source
+      let nextDimension = '';
+      switch (dataSource) {
+        case 'bordereaux':
+          if (level === 0 || level === 1) nextDimension = 'statut';
+          else if (level === 2) nextDimension = 'priority';
+          else if (level === 3) nextDimension = 'clientId';
           break;
-        case 'not_equals':
-          where[filter.field] = { not: filter.value };
+        case 'reclamations':
+          if (level === 0 || level === 1) nextDimension = 'type';
+          else if (level === 2) nextDimension = 'severity';
+          else if (level === 3) nextDimension = 'status';
           break;
-        case 'contains':
-          where[filter.field] = { contains: filter.value, mode: 'insensitive' };
+        case 'virements':
+          if (level === 0 || level === 1) nextDimension = 'confirmed';
           break;
       }
-    });
 
-    // Determine next dimension based on level and data source
-    let nextDimension = '';
-    switch (dataSource) {
-      case 'bordereaux':
-        if (level === 1) nextDimension = 'statut';
-        else if (level === 2) nextDimension = 'priorite';
-        else if (level === 3) nextDimension = 'clientId';
-        break;
-      case 'reclamations':
-        if (level === 1) nextDimension = 'type';
-        else if (level === 2) nextDimension = 'severite';
-        else if (level === 3) nextDimension = 'statut';
-        break;
-      case 'virements':
-        if (level === 1) nextDimension = 'statut';
-        else if (level === 2) nextDimension = 'typeVirement';
-        break;
+      if (!nextDimension) return [];
+
+      // Get aggregated data for next dimension
+      let groupBy: any[] = [];
+      
+      switch (dataSource) {
+        case 'bordereaux':
+          groupBy = await this.prisma.bordereau.groupBy({
+            by: [nextDimension],
+            _count: { id: true },
+            where
+          } as any);
+          break;
+        case 'reclamations':
+          groupBy = await this.prisma.reclamation.groupBy({
+            by: [nextDimension],
+            _count: { id: true },
+            where
+          } as any);
+          break;
+        case 'virements':
+          groupBy = await this.prisma.virement.groupBy({
+            by: [nextDimension],
+            _count: { id: true },
+            where
+          } as any);
+          break;
+      }
+
+      const total = groupBy.reduce((sum: number, item: any) => sum + (item._count?.id || 0), 0);
+
+      return groupBy.map((item: any) => ({
+        level: level + 1,
+        dimension: nextDimension,
+        value: item[nextDimension],
+        label: this.formatLabel(nextDimension, item[nextDimension]),
+        count: item._count?.id || 0,
+        percentage: total > 0 ? ((item._count?.id || 0) / total) * 100 : 0
+      })).filter(item => item.count > 0);
+    } catch (error) {
+      console.error('Error getting drill-down options:', error);
+      return [];
     }
-
-    if (!nextDimension) return [];
-
-    // Get aggregated data for next dimension
-    let groupBy: any[];
-    
-    switch (dataSource) {
-      case 'bordereaux':
-        groupBy = await this.prisma.bordereau.groupBy({
-          by: [nextDimension],
-          _count: { id: true },
-          where
-        } as any);
-        break;
-      case 'reclamations':
-        groupBy = await this.prisma.reclamation.groupBy({
-          by: [nextDimension],
-          _count: { id: true },
-          where
-        } as any);
-        break;
-      case 'virements':
-        groupBy = await this.prisma.virement.groupBy({
-          by: [nextDimension],
-          _count: { id: true },
-          where
-        } as any);
-        break;
-      default:
-        groupBy = [];
-    }
-
-    const total = groupBy.reduce((sum: number, item: any) => sum + item._count.id, 0);
-
-    return groupBy.map((item: any) => ({
-      level: level + 1,
-      dimension: nextDimension,
-      value: item[nextDimension],
-      label: this.formatLabel(nextDimension, item[nextDimension]),
-      count: item._count.id,
-      percentage: total > 0 ? (item._count.id / total) * 100 : 0
-    }));
   }
 
   private formatLabel(dimension: string, value: any): string {
