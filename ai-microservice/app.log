@@ -5617,3 +5617,29 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-08-31 04:01:27,040 - monitoring - INFO - Completed anomaly_detection in 0.47s
 2025-08-31 04:01:27,060 - monitoring - INFO - Starting anomaly_detection endpoint call
 2025-08-31 04:01:27,373 - monitoring - INFO - Completed anomaly_detection in 0.31s
+2025-08-31 08:29:36,523 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 08:29:40,001 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-31 08:29:40,005 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-31 08:29:40,011 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-31 08:29:40,015 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-31 08:29:40,112 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-31 08:29:40,113 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-31 08:29:40,125 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-31 08:29:40,175 - monitoring - INFO - Completed automated_decisions in 0.05s
+2025-08-31 08:29:40,240 - monitoring - INFO - Starting priorities endpoint call
+2025-08-31 08:29:40,242 - monitoring - INFO - Completed priorities in 0.00s
+2025-08-31 08:29:43,416 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-31 08:29:43,417 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-31 08:29:43,420 - monitoring - INFO - Starting reassignment endpoint call
+2025-08-31 08:29:43,420 - monitoring - INFO - Completed reassignment in 0.00s
+2025-08-31 08:29:43,426 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-08-31 08:29:43,427 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-08-31 08:29:43,430 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-08-31 08:29:43,430 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-08-31 08:29:43,546 - monitoring - INFO - Starting priorities endpoint call
+2025-08-31 08:29:43,547 - monitoring - INFO - Completed priorities in 0.00s

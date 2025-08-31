@@ -36,6 +36,23 @@ const GECModule: React.FC = () => {
     'Rapports'
   ];
 
+  const renderTabContent = () => {
+    switch (tab) {
+      case 0: return <GECDashboardTab />;
+      case 1: return <CreateCorrespondenceTab />;
+      case 2: return <InboxTab />;
+      case 3: return <OutboxTab />;
+      case 4: return <RelanceManager />;
+      case 5: return <OutlookIntegration />;
+      case 6: return <MailTrackingDashboard />;
+      case 7: return <EnhancedTemplateManager />;
+      case 8: return <GECAIInsights />;
+      case 9: return <SearchArchiveTab />;
+      case 10: return <ReportsTab />;
+      default: return <GECDashboardTab />;
+    }
+  };
+
   return (
     <Box sx={{ p: 2, minHeight: '100vh', bgcolor: '#f5f5f5' }}>
       {/* Header */}
@@ -50,7 +67,12 @@ const GECModule: React.FC = () => {
 
       {/* Mobile View */}
       {isMobile && (
-        <GECMobileView onTabChange={setTab} />
+        <Box>
+          <GECMobileView onTabChange={setTab} />
+          <Paper elevation={2} sx={{ p: 2, mt: 2 }}>
+            {renderTabContent()}
+          </Paper>
+        </Box>
       )}
 
       {/* Desktop View */}
@@ -69,17 +91,7 @@ const GECModule: React.FC = () => {
           </Tabs>
 
           <Box>
-            {tab === 0 && <GECDashboardTab />}
-            {tab === 1 && <CreateCorrespondenceTab />}
-            {tab === 2 && <InboxTab />}
-            {tab === 3 && <OutboxTab />}
-            {tab === 4 && <RelanceManager />}
-            {tab === 5 && <OutlookIntegration />}
-            {tab === 6 && <MailTrackingDashboard />}
-            {tab === 7 && <EnhancedTemplateManager />}
-            {tab === 8 && <GECAIInsights />}
-            {tab === 9 && <SearchArchiveTab />}
-            {tab === 10 && <ReportsTab />}
+            {renderTabContent()}
           </Box>
         </Paper>
       )}
