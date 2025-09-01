@@ -50,7 +50,7 @@ const InboxTab: React.FC = () => {
         if (filters.dateFrom) queryParams.append('createdAfter', filters.dateFrom);
         if (filters.dateTo) queryParams.append('createdBefore', filters.dateTo);
         
-        const response = await fetch(`http://localhost:5000/api/courriers/search?${queryParams}`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/search?${queryParams}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -163,7 +163,7 @@ const InboxTab: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courriers/${selectedItem.id}/respond`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/${selectedItem.id}/respond`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -195,7 +195,7 @@ const InboxTab: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courriers/${selectedItem.id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/${selectedItem.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -226,7 +226,7 @@ const InboxTab: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courriers', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -244,7 +244,7 @@ const InboxTab: React.FC = () => {
         
         // Try to send, but don't fail if email sending fails
         try {
-          await fetch(`http://localhost:5000/api/courriers/${newCourrier.id}/send`, {
+          await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/${newCourrier.id}/send`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,

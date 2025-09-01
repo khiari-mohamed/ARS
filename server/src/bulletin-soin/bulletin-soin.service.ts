@@ -188,7 +188,7 @@ export class BulletinSoinService {
     if (dto.ownerId !== undefined) updateData.ownerId = dto.ownerId ?? undefined;
     
     if (dto.etat && ['VALIDATED', 'REJECTED'].includes(dto.etat)) {
-      updateData.processedById = user.id;
+      updateData.processedById = user?.id;
       updateData.processedAt = new Date();
     }
     if ((dto as any).virementId) {

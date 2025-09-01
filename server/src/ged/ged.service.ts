@@ -757,7 +757,7 @@ export class GedService {
       return [
         {
           id: 'webhook_001',
-          url: 'https://external-system.com/webhooks/documents',
+          url: process.env.EXTERNAL_WEBHOOK_URL || 'https://external-system.com/webhooks/documents',
           events: ['document.created', 'document.updated'],
           secret: 'webhook_secret_***',
           active: true,

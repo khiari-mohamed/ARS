@@ -27,9 +27,9 @@ const GECDashboardTab: React.FC = () => {
         
         console.log('🔍 Loading GEC dashboard data...');
         const [analyticsResponse, slaBreachesResponse, volumeResponse] = await Promise.all([
-          fetch('http://localhost:5000/api/courriers/analytics?period=30d', { headers }),
-          fetch('http://localhost:5000/api/courriers/sla-breaches', { headers }),
-          fetch('http://localhost:5000/api/courriers/volume-stats?period=7d', { headers })
+          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/analytics?period=30d`, { headers }),
+          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/sla-breaches`, { headers }),
+          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/volume-stats?period=7d`, { headers })
         ]);
         
         console.log('📊 Analytics response:', analyticsResponse.status, await analyticsResponse.clone().text());

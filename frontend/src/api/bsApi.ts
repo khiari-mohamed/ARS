@@ -6,7 +6,7 @@ import {
   ExpertiseInfo,
 } from '../types/bs';
 
-const API_BASE = 'http://localhost:5000/api/bulletin-soin';
+const API_BASE = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bulletin-soin`;
 
 export const fetchBSList = async (params: any): Promise<BSListResponse> => {
   try {

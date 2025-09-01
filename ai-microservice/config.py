@@ -12,7 +12,7 @@ class Config:
     # Database Configuration
     DATABASE_URL = os.getenv(
         'DATABASE_URL', 
-        'postgresql://postgres:23044943@localhost:5432/arsdb'
+        os.getenv('DATABASE_URL', 'postgresql://postgres:23044943@localhost:5432/arsdb')
     )
     
     # Redis Configuration (for caching and real-time features)

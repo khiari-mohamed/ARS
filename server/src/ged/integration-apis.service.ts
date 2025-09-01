@@ -48,7 +48,7 @@ export class IntegrationApisService {
           name: 'Microsoft SharePoint',
           type: 'rest',
           config: {
-            baseUrl: 'https://company.sharepoint.com',
+            baseUrl: process.env.SHAREPOINT_URL || 'https://company.sharepoint.com',
             clientId: '***',
             clientSecret: '***',
             tenantId: '***',
@@ -255,7 +255,7 @@ export class IntegrationApisService {
       return [
         {
           id: 'webhook_001',
-          url: 'https://external-system.com/webhooks/documents',
+          url: process.env.EXTERNAL_WEBHOOK_URL || 'https://external-system.com/webhooks/documents',
           events: ['document.created', 'document.updated', 'document.approved'],
           secret: 'webhook_secret_123',
           active: true,
@@ -266,7 +266,7 @@ export class IntegrationApisService {
         },
         {
           id: 'webhook_002',
-          url: 'https://crm-system.com/api/document-notifications',
+          url: process.env.CRM_NOTIFICATION_URL || 'https://crm-system.com/api/document-notifications',
           events: ['document.approved', 'workflow.completed'],
           active: true,
           retryPolicy: {

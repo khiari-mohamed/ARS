@@ -87,7 +87,7 @@ const BSListPage: React.FC = () => {
           type="primary"
           onClick={() => {
             const link = document.createElement('a');
-            link.href = 'http://localhost:5000/api/bulletin-soin/export/excel';
+            link.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bulletin-soin/export/excel`;
             link.download = `BS_Export_${new Date().toISOString().split('T')[0]}.xls`;
             document.body.appendChild(link);
             link.click();

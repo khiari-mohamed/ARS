@@ -44,7 +44,7 @@ const OutboxTab: React.FC = () => {
         if (filters.dateFrom) queryParams.append('createdAfter', filters.dateFrom);
         if (filters.dateTo) queryParams.append('createdBefore', filters.dateTo);
         
-        const response = await fetch(`http://localhost:5000/api/courriers/search?${queryParams}`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/search?${queryParams}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -133,7 +133,7 @@ const OutboxTab: React.FC = () => {
         if (window.confirm('Êtes-vous sûr de vouloir renvoyer ce courrier ?')) {
           try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:5000/api/courriers/${itemId}/send`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/${itemId}/send`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -161,7 +161,7 @@ const OutboxTab: React.FC = () => {
         if (window.confirm('Êtes-vous sûr de vouloir annuler ce courrier ?')) {
           try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:5000/api/courriers/${itemId}/status`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/${itemId}/status`, {
               method: 'PATCH',
               headers: {
                 'Authorization': `Bearer ${token}`,

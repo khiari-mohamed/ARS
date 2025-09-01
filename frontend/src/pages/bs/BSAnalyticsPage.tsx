@@ -11,7 +11,7 @@ const { TabPane } = Tabs;
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 const fetchBSAnalytics = async (endpoint: string, period?: string) => {
-  const { data } = await axios.get(`http://localhost:5000/api/bulletin-soin/analytics/${endpoint}`, {
+  const { data } = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bulletin-soin/analytics/${endpoint}`, {
     params: { period }
   });
   return data;
@@ -48,7 +48,7 @@ const BSAnalyticsPage: React.FC = () => {
 
   const exportAnalytics = () => {
     const link = document.createElement('a');
-    link.href = 'http://localhost:5000/api/bulletin-soin/export/excel';
+    link.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bulletin-soin/export/excel`;
     link.download = `BS_Analytics_${new Date().toISOString().split('T')[0]}.xls`;
     document.body.appendChild(link);
     link.click();

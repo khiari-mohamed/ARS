@@ -644,6 +644,11 @@ export class FinanceService {
     this.checkFinanceRole(user);
     try {
       const donneurs = await this.prisma.donneurDOrdre.findMany({
+        where: {
+          NOT: {
+            name: { startsWith: '[DELETED]' }
+          }
+        },
         include: { society: true }
       });
       return donneurs.map(d => ({
@@ -725,9 +730,35 @@ export class FinanceService {
   async deleteDonneur(id: string, user: User) {
     this.checkFinanceRole(user);
     try {
+      // Check if donneur has related records
+      const donneur = await this.prisma.donneurDOrdre.findUnique({
+        where: { id },
+        include: {
+          WireTransferBatch: true,
+          wireTransfers: true
+        }
+      });
+      
+      if (!donneur) {
+        throw new NotFoundException('Donneur d\'ordre not found');
+      }
+      
+      // If donneur has related records, use soft delete (update status)
+      if (donneur.WireTransferBatch.length > 0 || donneur.wireTransfers.length > 0) {
+        const updatedDonneur = await this.prisma.donneurDOrdre.update({
+          where: { id },
+          data: { 
+            name: `[DELETED] ${donneur.name}`
+          }
+        });
+        await this.logAuditAction('SOFT_DELETE_DONNEUR', { userId: user.id, donneurId: id });
+        return { deleted: true, soft: true };
+      }
+      
+      // If no related records, safe to hard delete
       await this.prisma.donneurDOrdre.delete({ where: { id } });
       await this.logAuditAction('DELETE_DONNEUR', { userId: user.id, donneurId: id });
-      return { deleted: true };
+      return { deleted: true, soft: false };
     } catch (error) {
       console.error('Error deleting donneur:', error);
       throw new BadRequestException('Failed to delete donneur d\'ordre');

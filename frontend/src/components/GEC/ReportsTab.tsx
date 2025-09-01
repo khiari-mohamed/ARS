@@ -37,7 +37,7 @@ const ReportsTab: React.FC = () => {
       if (filters.client) queryParams.append('client', filters.client);
       if (filters.department) queryParams.append('department', filters.department);
       
-      const response = await fetch(`http://localhost:5000/api/courriers/reports/data?${queryParams}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/reports/data?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

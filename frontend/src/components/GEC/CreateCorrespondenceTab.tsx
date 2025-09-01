@@ -33,7 +33,7 @@ const CreateCorrespondenceTab: React.FC = () => {
         const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
         
         // Load real templates
-        const templatesResponse = await fetch('http://localhost:5000/api/courriers/templates', { headers });
+        const templatesResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/templates`, { headers });
         if (templatesResponse.ok) {
           const templatesData = await templatesResponse.json();
           setTemplates(templatesData.map((t: any) => ({ id: t.id, name: t.name, type: t.type })));
@@ -42,7 +42,7 @@ const CreateCorrespondenceTab: React.FC = () => {
         }
         
         // Load real clients
-        const clientsResponse = await fetch('http://localhost:5000/api/clients', { headers });
+        const clientsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/clients`, { headers });
         if (clientsResponse.ok) {
           const clientsData = await clientsResponse.json();
           setClients(clientsData.map((c: any) => ({ id: c.id, name: c.name, email: c.email })));
@@ -62,7 +62,7 @@ const CreateCorrespondenceTab: React.FC = () => {
     if (templateId) {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:5000/api/courriers/templates/${templateId}/render`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/templates/${templateId}/render`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -103,7 +103,7 @@ const CreateCorrespondenceTab: React.FC = () => {
     setSaving(true);
     try {
       // First create the courrier in database
-      const createResponse = await fetch('http://localhost:5000/api/courriers', {
+      const createResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -126,7 +126,7 @@ const CreateCorrespondenceTab: React.FC = () => {
       
       // If sending, call the send endpoint
       if (action === 'send' && formData.recipientEmail) {
-        const sendResponse = await fetch(`http://localhost:5000/api/courriers/${courrier.id}/send`, {
+        const sendResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/${courrier.id}/send`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

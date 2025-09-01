@@ -129,7 +129,7 @@ export class ClientService {
   async findAll(query: SearchClientDto, user?: any) {
     let where: any = {
       name: query.name ? { contains: query.name, mode: 'insensitive' } : undefined,
-      status: query.status && query.status !== 'all' ? query.status : undefined,
+      status: query.status && query.status !== 'all' ? query.status : { not: 'deleted' },
     };
     
     if (query.gestionnaireId) {
@@ -611,7 +611,7 @@ export class ClientService {
 
   async syncWithExternal(id: string) {
     try {
-      const externalUrl = `http://197.14.56.112:8083/api/societes/${id}`;
+      const externalUrl = `${process.env.TUNICLAIM_API_URL || 'http://197.14.56.112:8083/api'}/societes/${id}`;
       const { data } = await axios.get(externalUrl);
       if (!data) throw new NotFoundException('External client not found');
       const updated = await this.prisma.client.update({
@@ -787,6 +787,31 @@ export class ClientService {
   }
 
   async remove(id: string) {
+    // Check if client has related records
+    const client = await this.prisma.client.findUnique({
+      where: { id },
+      include: {
+        contracts: true,
+        bordereaux: true,
+        reclamations: true
+      }
+    });
+    
+    if (!client) {
+      throw new NotFoundException('Client not found');
+    }
+    
+    // If client has related records, use soft delete (update status)
+    if (client.contracts.length > 0 || client.bordereaux.length > 0 || client.reclamations.length > 0) {
+      return this.prisma.client.update({
+        where: { id },
+        data: { 
+          status: 'deleted'
+        }
+      });
+    }
+    
+    // If no related records, safe to hard delete
     return this.prisma.client.delete({ where: { id } });
   }
 
