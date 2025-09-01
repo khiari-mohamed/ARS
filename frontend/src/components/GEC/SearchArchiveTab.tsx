@@ -41,7 +41,7 @@ const SearchArchiveTab: React.FC = () => {
       if (filters.dateFrom) queryParams.append('createdAfter', filters.dateFrom);
       if (filters.dateTo) queryParams.append('createdBefore', filters.dateTo);
       
-      const response = await fetch(`http://localhost:5000/api/courriers/search?${queryParams}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/search?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

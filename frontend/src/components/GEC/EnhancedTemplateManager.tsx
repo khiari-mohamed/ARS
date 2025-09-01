@@ -115,7 +115,7 @@ const EnhancedTemplateManager: React.FC = () => {
       const token = localStorage.getItem('token');
       
       // Load templates
-      const templatesResponse = await fetch('http://localhost:5000/api/courriers/templates', {
+      const templatesResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/templates`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -129,7 +129,7 @@ const EnhancedTemplateManager: React.FC = () => {
       }
       
       // Load A/B tests
-      const abTestsResponse = await fetch('http://localhost:5000/api/courriers/ab-tests', {
+      const abTestsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/ab-tests`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -153,7 +153,7 @@ const EnhancedTemplateManager: React.FC = () => {
     console.log('➕ Creating template:', newTemplate);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courriers/templates', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/templates`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -197,7 +197,7 @@ const EnhancedTemplateManager: React.FC = () => {
     console.log('✏️ Updating template:', editingTemplate.id, newTemplate);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courriers/templates/${editingTemplate.id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/templates/${editingTemplate.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -247,7 +247,7 @@ const EnhancedTemplateManager: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       
-      const response = await fetch(`http://localhost:5000/api/courriers/templates/${template.id}/render`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/templates/${template.id}/render`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -285,7 +285,7 @@ const EnhancedTemplateManager: React.FC = () => {
     console.log('🧪 Creating A/B test:', newABTest);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courriers/ab-tests', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/ab-tests`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -328,7 +328,7 @@ const EnhancedTemplateManager: React.FC = () => {
     console.log('🗑️ Deleting template:', templateId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courriers/templates/${templateId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/templates/${templateId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -353,7 +353,7 @@ const EnhancedTemplateManager: React.FC = () => {
     console.log('📈 Viewing A/B test results:', test.id);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courriers/ab-tests/${test.id}/results`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/ab-tests/${test.id}/results`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -401,7 +401,7 @@ const EnhancedTemplateManager: React.FC = () => {
     console.log('✏️ Updating A/B test:', editingABTest.id);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courriers/ab-tests/${editingABTest.id}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/ab-tests/${editingABTest.id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

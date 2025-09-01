@@ -100,19 +100,19 @@ const IntegrationManager: React.FC = () => {
   const loadData = async () => {
     try {
       // Load from real API endpoints
-      const connectorsResponse = await fetch('http://localhost:5000/api/documents/integrations/connectors', {
+      const connectorsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      const webhooksResponse = await fetch('http://localhost:5000/api/documents/integrations/webhooks', {
+      const webhooksResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/webhooks`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      const statsResponse = await fetch('http://localhost:5000/api/documents/integrations/stats', {
+      const statsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/stats`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -145,7 +145,7 @@ const IntegrationManager: React.FC = () => {
     setTestingConnector(connectorId);
     try {
       // Try real API first
-      const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${connectorId}/test`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${connectorId}/test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -169,7 +169,7 @@ const IntegrationManager: React.FC = () => {
     setSyncingConnector(connectorId);
     try {
       // Try real API first
-      const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${connectorId}/sync`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${connectorId}/sync`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -198,7 +198,7 @@ const IntegrationManager: React.FC = () => {
       
       if (isEditing && existingConnector) {
         // Update existing connector
-        const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${existingConnector.id}`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${existingConnector.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -214,7 +214,7 @@ const IntegrationManager: React.FC = () => {
         }
       } else {
         // Create new connector
-        const response = await fetch('http://localhost:5000/api/documents/integrations/connectors', {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -241,7 +241,7 @@ const IntegrationManager: React.FC = () => {
 
   const handleCreateWebhook = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/documents/integrations/webhooks', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/webhooks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -340,7 +340,7 @@ const IntegrationManager: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce connecteur ?')) {
       try {
         // Call backend DELETE endpoint
-        const response = await fetch(`http://localhost:5000/api/documents/integrations/connectors/${connectorId}`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${connectorId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -366,7 +366,7 @@ const IntegrationManager: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce webhook ?')) {
       try {
         // Call backend DELETE endpoint
-        const response = await fetch(`http://localhost:5000/api/documents/integrations/webhooks/${webhookId}`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/webhooks/${webhookId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -798,21 +798,21 @@ const IntegrationManager: React.FC = () => {
                     <Button 
                       variant="outlined" 
                       size="small"
-                      onClick={() => handleTestApi('http://localhost:5000/api/documents/stats')}
+                      onClick={() => handleTestApi(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/stats`)}
                     >
                       Test GET /documents/stats
                     </Button>
                     <Button 
                       variant="outlined" 
                       size="small"
-                      onClick={() => handleTestApi('http://localhost:5000/api/documents/search')}
+                      onClick={() => handleTestApi(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/search`)}
                     >
                       Test GET /documents/search
                     </Button>
                     <Button 
                       variant="outlined" 
                       size="small"
-                      onClick={() => handleTestApi('http://localhost:5000/api/documents/workflows/definitions')}
+                      onClick={() => handleTestApi(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/workflows/definitions`)}
                     >
                       Test GET /workflows/definitions
                     </Button>

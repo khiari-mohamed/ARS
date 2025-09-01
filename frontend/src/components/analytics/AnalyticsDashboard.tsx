@@ -81,8 +81,8 @@ const AnalyticsDashboard: React.FC = () => {
     try {
       const [clientsResponse, departmentsResponse, teamsResponse] = await Promise.all([
         LocalAPI.get('/clients'),
-        LocalAPI.get('/departments'),
-        LocalAPI.get('/teams')
+        LocalAPI.get('/analytics/filter-options/departments'),
+        LocalAPI.get('/analytics/filter-options/teams')
       ]);
 
       setFilterOptions({

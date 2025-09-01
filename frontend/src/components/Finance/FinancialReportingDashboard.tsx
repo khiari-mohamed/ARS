@@ -214,7 +214,7 @@ const FinancialReportingDashboard: React.FC = () => {
       console.log('📦 FinancialReportingDashboard: Request body:', requestBody);
       
       // Call real backend export endpoint
-      const response = await fetch(`http://localhost:5000/api/virements/export-report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/virements/export-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

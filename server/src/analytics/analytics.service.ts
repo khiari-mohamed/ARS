@@ -840,4 +840,52 @@ export class AnalyticsService {
       appliedFilters: filters
     };
   }
+
+  // Filter options methods
+  async getDepartments() {
+    try {
+      // Get unique departments from users table
+      const departments = await this.prisma.user.groupBy({
+        by: ['department'],
+        where: {
+          department: { not: null },
+          active: true
+        },
+        _count: { department: true }
+      });
+
+      return departments.map(dept => ({
+        id: dept.department,
+        name: dept.department
+      })).filter(dept => dept.id); // Remove null values
+    } catch (error) {
+      console.error('Error getting departments:', error);
+      return [];
+    }
+  }
+
+  async getTeams() {
+    try {
+      // Get teams from users with CHEF_EQUIPE role
+      const teamLeaders = await this.prisma.user.findMany({
+        where: {
+          role: 'CHEF_EQUIPE',
+          active: true
+        },
+        select: {
+          id: true,
+          fullName: true,
+          department: true
+        }
+      });
+
+      return teamLeaders.map(leader => ({
+        id: leader.id,
+        name: `Équipe ${leader.fullName}${leader.department ? ` (${leader.department})` : ''}`
+      }));
+    } catch (error) {
+      console.error('Error getting teams:', error);
+      return [];
+    }
+  }
 }

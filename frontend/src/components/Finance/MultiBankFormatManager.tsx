@@ -13,62 +13,17 @@ import {
   TableHead,
   TableRow,
   Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Switch,
-  FormControlLabel,
-  Alert,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails
+  IconButton
 } from '@mui/material';
 import {
   Add,
   Edit,
-  Delete,
-  Science,
-  CheckCircle,
-  Error,
-  ExpandMore,
-  AccountBalance,
-  Public,
-  Security
+  Delete
 } from '@mui/icons-material';
 
 const MultiBankFormatManager: React.FC = () => {
   const [formats, setFormats] = useState<any[]>([]);
-  const [formatDialog, setFormatDialog] = useState(false);
-  const [testDialog, setTestDialog] = useState(false);
-  const [selectedFormat, setSelectedFormat] = useState<any>(null);
-  const [testData, setTestData] = useState<any>({});
-  const [validationResult, setValidationResult] = useState<any>(null);
   const [statistics, setStatistics] = useState<any>(null);
-  const [newFormat, setNewFormat] = useState<any>({
-    name: '',
-    bankCode: '',
-    country: '',
-    formatType: 'SEPA',
-    active: true,
-    fields: [],
-    validation: {
-      ibanValidation: true,
-      bicValidation: false,
-      amountValidation: true,
-      dateValidation: true
-    }
-  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -78,87 +33,41 @@ const MultiBankFormatManager: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Mock data - in production this would call an API
-      setFormats([
-        {
-          id: 'sepa_credit_transfer',
-          name: 'SEPA Credit Transfer',
-          bankCode: 'SEPA',
-          country: 'EU',
-          formatType: 'SEPA',
-          active: true,
-          fields: [
-            { name: 'messageId', type: 'string', required: true, maxLength: 35, description: 'Message Identification' },
-            { name: 'debtorName', type: 'string', required: true, maxLength: 70, description: 'Debtor Name' },
-            { name: 'debtorIban', type: 'iban', required: true, description: 'Debtor IBAN' },
-            { name: 'creditorName', type: 'string', required: true, maxLength: 70, description: 'Creditor Name' },
-            { name: 'creditorIban', type: 'iban', required: true, description: 'Creditor IBAN' },
-            { name: 'amount', type: 'amount', required: true, description: 'Transaction Amount' },
-            { name: 'currency', type: 'string', required: true, maxLength: 3, description: 'Currency Code' }
-          ],
-          validation: {
-            ibanValidation: true,
-            bicValidation: true,
-            amountValidation: true,
-            dateValidation: true
-          }
-        },
-        {
-          id: 'swift_mt103',
-          name: 'SWIFT MT103',
-          bankCode: 'SWIFT',
-          country: 'INTERNATIONAL',
-          formatType: 'SWIFT',
-          active: true,
-          fields: [
-            { name: 'senderReference', type: 'string', required: true, maxLength: 16, description: 'Sender Reference' },
-            { name: 'valueDate', type: 'date', required: true, description: 'Value Date' },
-            { name: 'currency', type: 'string', required: true, maxLength: 3, description: 'Currency Code' },
-            { name: 'amount', type: 'amount', required: true, description: 'Transaction Amount' },
-            { name: 'orderingCustomer', type: 'string', required: true, maxLength: 140, description: 'Ordering Customer' },
-            { name: 'beneficiaryCustomer', type: 'string', required: true, maxLength: 140, description: 'Beneficiary Customer' }
-          ],
-          validation: {
-            ibanValidation: false,
-            bicValidation: true,
-            amountValidation: true,
-            dateValidation: true
-          }
-        },
-        {
-          id: 'french_domestic',
-          name: 'French Domestic Transfer',
-          bankCode: 'FR_DOM',
-          country: 'FR',
-          formatType: 'DOMESTIC',
-          active: true,
-          fields: [
-            { name: 'numeroOrdre', type: 'string', required: true, maxLength: 20, description: 'Numéro d\'ordre' },
-            { name: 'dateExecution', type: 'date', required: true, description: 'Date d\'exécution' },
-            { name: 'nomDebiteur', type: 'string', required: true, maxLength: 35, description: 'Nom du débiteur' },
-            { name: 'ibanDebiteur', type: 'iban', required: true, description: 'IBAN du débiteur' },
-            { name: 'nomBeneficiaire', type: 'string', required: true, maxLength: 35, description: 'Nom du bénéficiaire' },
-            { name: 'ibanBeneficiaire', type: 'iban', required: true, description: 'IBAN du bénéficiaire' },
-            { name: 'montant', type: 'amount', required: true, description: 'Montant' },
-            { name: 'devise', type: 'string', required: true, maxLength: 3, description: 'Devise' }
-          ],
-          validation: {
-            ibanValidation: true,
-            bicValidation: false,
-            amountValidation: true,
-            dateValidation: true
-          }
+      const { getDonneurs } = await import('../../services/financeService');
+      const donneurs = await getDonneurs();
+      
+      const formatsData = donneurs.map((donneur: any) => ({
+        id: donneur.id,
+        name: donneur.name,
+        bankCode: donneur.bank,
+        country: 'TN',
+        formatType: donneur.txtFormat || 'SWIFT',
+        active: donneur.status === 'active',
+        fields: [
+          { name: 'reference', type: 'string', required: true, maxLength: 35, description: 'Référence' },
+          { name: 'amount', type: 'amount', required: true, description: 'Montant' },
+          { name: 'rib', type: 'string', required: true, maxLength: 20, description: 'RIB' }
+        ],
+        validation: {
+          ibanValidation: true,
+          bicValidation: false,
+          amountValidation: true,
+          dateValidation: true
         }
-      ]);
-
+      }));
+      
+      setFormats(formatsData);
+      
+      const activeCount = formatsData.filter((f: any) => f.active).length;
       setStatistics({
-        totalFormats: 3,
-        activeFormats: 3,
-        byType: { 'SEPA': 1, 'SWIFT': 1, 'DOMESTIC': 1 },
-        byCountry: { 'EU': 1, 'INTERNATIONAL': 1, 'FR': 1 }
+        totalFormats: formatsData.length,
+        activeFormats: activeCount,
+        byType: { 'SWIFT': formatsData.length },
+        byCountry: { 'TN': formatsData.length }
       });
     } catch (error) {
       console.error('Failed to load bank formats:', error);
+      setFormats([]);
     } finally {
       setLoading(false);
     }
@@ -166,51 +75,9 @@ const MultiBankFormatManager: React.FC = () => {
 
   const handleCreateFormat = async () => {
     try {
-      // Validate required fields
-      if (!newFormat.name || !newFormat.bankCode || !newFormat.country) {
-        alert('Veuillez remplir tous les champs requis');
-        return;
-      }
-
-      // Add new format to list
-      const format = {
-        ...newFormat,
-        id: `custom_${Date.now()}`,
-        fields: [
-          { name: 'reference', type: 'string', required: true, maxLength: 35, description: 'Référence' },
-          { name: 'amount', type: 'amount', required: true, description: 'Montant' },
-          { name: 'currency', type: 'string', required: true, maxLength: 3, description: 'Devise' },
-          { name: 'debtorName', type: 'string', required: true, maxLength: 70, description: 'Nom débiteur' },
-          { name: 'creditorName', type: 'string', required: true, maxLength: 70, description: 'Nom créditeur' }
-        ]
-      };
-
-      setFormats(prev => [...prev, format]);
-      setFormatDialog(false);
-      
-      // Reset form
-      setNewFormat({
-        name: '',
-        bankCode: '',
-        country: '',
-        formatType: 'SEPA',
-        active: true,
-        fields: [],
-        validation: {
-          ibanValidation: true,
-          bicValidation: false,
-          amountValidation: true,
-          dateValidation: true
-        }
-      });
-      
-      // Update statistics
-      setStatistics((prev: any) => ({
-        ...prev,
-        totalFormats: prev.totalFormats + 1,
-        activeFormats: format.active ? prev.activeFormats + 1 : prev.activeFormats
-      }));
-      
+      const { createDonneur } = await import('../../services/financeService');
+      await createDonneur({ name: 'Nouveau Format', bank: 'Banque', rib: '12345678901234567890' });
+      await loadData();
       alert('Format créé avec succès!');
     } catch (error) {
       console.error('Failed to create format:', error);
@@ -224,12 +91,9 @@ const MultiBankFormatManager: React.FC = () => {
     }
 
     try {
-      setFormats(prev => prev.filter(f => f.id !== formatId));
-      setStatistics((prev: any) => ({
-        ...prev,
-        totalFormats: prev.totalFormats - 1,
-        activeFormats: prev.activeFormats - 1
-      }));
+      const { deleteDonneur } = await import('../../services/financeService');
+      await deleteDonneur(formatId);
+      await loadData();
       alert('Format supprimé avec succès!');
     } catch (error) {
       console.error('Failed to delete format:', error);
@@ -237,93 +101,8 @@ const MultiBankFormatManager: React.FC = () => {
     }
   };
 
-  const handleToggleFormat = async (formatId: string) => {
-    try {
-      setFormats(prev => prev.map(f => 
-        f.id === formatId ? { ...f, active: !f.active } : f
-      ));
-      alert('Statut du format mis à jour!');
-    } catch (error) {
-      console.error('Failed to toggle format:', error);
-      alert('Erreur lors de la mise à jour du statut');
-    }
-  };
-
-  const handleTestFormat = async (format: any) => {
-    setSelectedFormat(format);
-    setTestData({});
-    setValidationResult(null);
-    setTestDialog(true);
-  };
-
-  const handleValidateTestData = async () => {
-    if (!selectedFormat) return;
-
-    try {
-      // Mock validation
-      const errors: any[] = [];
-      const warnings: any[] = [];
-
-      // Check required fields
-      for (const field of selectedFormat.fields) {
-        if (field.required && (!testData[field.name] || testData[field.name] === '')) {
-          errors.push({
-            field: field.name,
-            message: `${field.description} is required`,
-            value: testData[field.name],
-            rule: 'required'
-          });
-        }
-      }
-
-      // Mock some validation results
-      if (testData.amount && Number(testData.amount) <= 0) {
-        errors.push({
-          field: 'amount',
-          message: 'Amount must be positive',
-          value: testData.amount,
-          rule: 'positive_amount'
-        });
-      }
-
-      if (testData.currency && testData.currency !== 'EUR' && selectedFormat.id === 'sepa_credit_transfer') {
-        errors.push({
-          field: 'currency',
-          message: 'Currency must be EUR for SEPA transfers',
-          value: testData.currency,
-          rule: 'sepa_currency'
-        });
-      }
-
-      setValidationResult({
-        success: errors.length === 0,
-        errors,
-        warnings,
-        data: errors.length === 0 ? testData : undefined
-      });
-    } catch (error) {
-      console.error('Validation failed:', error);
-    }
-  };
-
   const getFormatTypeColor = (type: string) => {
-    switch (type) {
-      case 'SEPA': return 'primary';
-      case 'SWIFT': return 'secondary';
-      case 'DOMESTIC': return 'success';
-      case 'ACH': return 'info';
-      default: return 'default';
-    }
-  };
-
-  const getFieldTypeIcon = (type: string) => {
-    switch (type) {
-      case 'iban': return <AccountBalance />;
-      case 'bic': return <Public />;
-      case 'amount': return '€';
-      case 'date': return '📅';
-      default: return '📝';
-    }
+    return type === 'SWIFT' ? 'secondary' : 'default';
   };
 
   return (
@@ -396,7 +175,7 @@ const MultiBankFormatManager: React.FC = () => {
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => setFormatDialog(true)}
+              onClick={handleCreateFormat}
             >
               Nouveau Format
             </Button>
@@ -459,16 +238,9 @@ const MultiBankFormatManager: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box display="flex" gap={1}>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleTestFormat(format)}
-                        >
-                          <Science />
-                        </IconButton>
                         <IconButton 
                           size="small"
-                          onClick={() => handleToggleFormat(format.id)}
-                          title={format.active ? 'Désactiver' : 'Activer'}
+                          title="Modifier"
                         >
                           <Edit />
                         </IconButton>
@@ -490,296 +262,7 @@ const MultiBankFormatManager: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Format Details */}
-      <Box mt={3}>
-        <Typography variant="h6" gutterBottom>
-          Détails des Formats
-        </Typography>
-        {formats.map((format) => (
-          <Accordion key={format.id}>
-            <AccordionSummary expandIcon={<ExpandMore />}>
-              <Box display="flex" alignItems="center" gap={2}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  {format.name}
-                </Typography>
-                <Chip
-                  label={format.formatType}
-                  color={getFormatTypeColor(format.formatType) as any}
-                  size="small"
-                />
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Informations Générales
-                  </Typography>
-                  <List dense>
-                    <ListItem>
-                      <ListItemText primary="Code Banque" secondary={format.bankCode} />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText primary="Pays" secondary={format.country} />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText primary="Type" secondary={format.formatType} />
-                    </ListItem>
-                  </List>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Champs Requis ({format.fields.length})
-                  </Typography>
-                  <List dense>
-                    {format.fields.slice(0, 5).map((field: any) => (
-                      <ListItem key={field.name}>
-                        <ListItemIcon>
-                          {getFieldTypeIcon(field.type)}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={field.description}
-                          secondary={
-                            <Box>
-                              <Typography variant="caption">
-                                {field.name} ({field.type})
-                                {field.required && ' - Requis'}
-                                {field.maxLength && ` - Max: ${field.maxLength}`}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                    {format.fields.length > 5 && (
-                      <ListItem>
-                        <ListItemText
-                          primary={`... et ${format.fields.length - 5} autres champs`}
-                          sx={{ fontStyle: 'italic' }}
-                        />
-                      </ListItem>
-                    )}
-                  </List>
-                </Grid>
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-        ))}
-      </Box>
 
-      {/* Test Format Dialog */}
-      <Dialog open={testDialog} onClose={() => setTestDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          Test de Format - {selectedFormat?.name}
-        </DialogTitle>
-        <DialogContent>
-          {selectedFormat && (
-            <Box>
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Saisissez les données de test pour valider le format {selectedFormat.name}.
-              </Typography>
-
-              <Grid container spacing={2} sx={{ mt: 1 }}>
-                {selectedFormat.fields.slice(0, 8).map((field: any) => (
-                  <Grid item xs={12} sm={6} key={field.name}>
-                    <TextField
-                      fullWidth
-                      label={field.description}
-                      value={testData[field.name] || ''}
-                      onChange={(e) => setTestData((prev: any) => ({ ...prev, [field.name]: e.target.value }))}
-                      required={field.required}
-                      type={field.type === 'amount' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-                      InputLabelProps={field.type === 'date' ? { shrink: true } : undefined}
-                      helperText={`Type: ${field.type}${field.maxLength ? ` | Max: ${field.maxLength}` : ''}`}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-
-              {validationResult && (
-                <Box sx={{ mt: 3 }}>
-                  <Alert severity={validationResult.success ? 'success' : 'error'}>
-                    {validationResult.success ? 'Validation réussie !' : 'Erreurs de validation détectées'}
-                  </Alert>
-
-                  {validationResult.errors.length > 0 && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" color="error" gutterBottom>
-                        Erreurs:
-                      </Typography>
-                      <List dense>
-                        {validationResult.errors.map((error: any, index: number) => (
-                          <ListItem key={index}>
-                            <ListItemIcon>
-                              <Error color="error" />
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={error.message}
-                              secondary={`Champ: ${error.field} | Valeur: ${error.value || 'vide'}`}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Box>
-                  )}
-
-                  {validationResult.warnings.length > 0 && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" color="warning.main" gutterBottom>
-                        Avertissements:
-                      </Typography>
-                      <List dense>
-                        {validationResult.warnings.map((warning: any, index: number) => (
-                          <ListItem key={index}>
-                            <ListItemIcon>
-                              <Error color="warning" />
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={warning.message}
-                              secondary={`Champ: ${warning.field}`}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Box>
-                  )}
-                </Box>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTestDialog(false)}>Fermer</Button>
-          <Button
-            onClick={handleValidateTestData}
-            variant="contained"
-            disabled={!selectedFormat}
-          >
-            Valider
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* New Format Dialog */}
-      <Dialog open={formatDialog} onClose={() => setFormatDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          Nouveau Format Bancaire
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Nom du Format"
-                  value={newFormat.name}
-                  onChange={(e) => setNewFormat((prev: any) => ({ ...prev, name: e.target.value }))}
-                  required
-                  placeholder="ex: SEPA Credit Transfer"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Code Banque"
-                  value={newFormat.bankCode}
-                  onChange={(e) => setNewFormat((prev: any) => ({ ...prev, bankCode: e.target.value }))}
-                  required
-                  placeholder="ex: SEPA, SWIFT"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Pays"
-                  value={newFormat.country}
-                  onChange={(e) => setNewFormat((prev: any) => ({ ...prev, country: e.target.value }))}
-                  required
-                  placeholder="ex: FR, EU, US"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Type de Format</InputLabel>
-                  <Select
-                    value={newFormat.formatType}
-                    onChange={(e) => setNewFormat((prev: any) => ({ ...prev, formatType: e.target.value }))}
-                    label="Type de Format"
-                  >
-                    <MenuItem value="SEPA">SEPA</MenuItem>
-                    <MenuItem value="SWIFT">SWIFT</MenuItem>
-                    <MenuItem value="DOMESTIC">DOMESTIC</MenuItem>
-                    <MenuItem value="ACH">ACH</MenuItem>
-                    <MenuItem value="WIRE">WIRE</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Options de Validation
-                </Typography>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={newFormat.validation.ibanValidation}
-                      onChange={(e) => setNewFormat((prev: any) => ({
-                        ...prev,
-                        validation: { ...prev.validation, ibanValidation: e.target.checked }
-                      }))}
-                    />
-                  }
-                  label="Validation IBAN"
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={newFormat.validation.bicValidation}
-                      onChange={(e) => setNewFormat((prev: any) => ({
-                        ...prev,
-                        validation: { ...prev.validation, bicValidation: e.target.checked }
-                      }))}
-                    />
-                  }
-                  label="Validation BIC"
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={newFormat.validation.amountValidation}
-                      onChange={(e) => setNewFormat((prev: any) => ({
-                        ...prev,
-                        validation: { ...prev.validation, amountValidation: e.target.checked }
-                      }))}
-                    />
-                  }
-                  label="Validation Montant"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={newFormat.active}
-                      onChange={(e) => setNewFormat((prev: any) => ({ ...prev, active: e.target.checked }))}
-                    />
-                  }
-                  label="Format Actif"
-                />
-              </Grid>
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setFormatDialog(false)}>Annuler</Button>
-          <Button
-            onClick={handleCreateFormat}
-            variant="contained"
-            disabled={!newFormat.name || !newFormat.bankCode || !newFormat.country}
-          >
-            Créer Format
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

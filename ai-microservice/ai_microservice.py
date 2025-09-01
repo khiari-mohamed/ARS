@@ -426,6 +426,12 @@ async def anomaly_detection(data: Dict = Body(...), current_user = Depends(get_c
         raise HTTPException(status_code=500, detail=f"Anomaly detection failed: {str(e)}")
 
 # NEW ENDPOINTS - TREND FORECASTING
+@app.post("/forecast_trends")
+@log_endpoint_call("forecast_trends")
+async def forecast_trends(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Forecast trends using Facebook Prophet - main endpoint"""
+    return await trend_forecast(data, current_user)
+
 @app.post("/trend_forecast")
 @log_endpoint_call("trend_forecast")
 async def trend_forecast(data: Dict = Body(...), current_user = Depends(get_current_active_user)):

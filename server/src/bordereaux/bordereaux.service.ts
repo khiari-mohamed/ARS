@@ -1535,7 +1535,7 @@ async analyzeReclamationsAI(): Promise<any> {
       date: c.createdAt.toISOString()
     }));
 
-    const { data } = await axios.post('http://localhost:8002/analyze', complaintsData, {
+    const { data } = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/analyze`, complaintsData, {
       headers: {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
@@ -1561,7 +1561,7 @@ async getReclamationSuggestions(id: string): Promise<any> {
       throw new Error('Complaint not found');
     }
 
-    const { data } = await axios.post('http://localhost:8002/suggestions', {
+    const { data } = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/suggestions`, {
       complaint: {
         id: complaint.id,
         description: complaint.description,
@@ -1601,7 +1601,7 @@ async getTeamRecommendations(): Promise<any> {
       select: { id: true, fullName: true }
     });
 
-    const { data } = await axios.post('http://localhost:8002/recommendations', { 
+    const { data } = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/recommendations`, { 
       teams, 
       workload 
     }, {
@@ -1987,7 +1987,7 @@ async estimateStaffing(days: number = 7, avgPerStaffPerDay: number = 5): Promise
  */
 async getPredictResourcesAI(payload: any): Promise<any> {
   try {
-    const { data } = await axios.post('http://localhost:8002/predict_resources', payload, {
+    const { data } = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/predict_resources`, payload, {
       headers: {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
@@ -2031,7 +2031,7 @@ async analyzeComplaintsAI(): Promise<{ message: string; analysis?: any }> {
     }));
 
     // Call AI microservice for recurring issue detection
-    const aiResponse = await axios.post('http://localhost:8002/pattern_recognition/recurring_issues', {
+    const aiResponse = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/pattern_recognition/recurring_issues`, {
       complaints: complaintsData
     }, {
       headers: {
@@ -2103,7 +2103,7 @@ async getAIRecommendations(): Promise<{ message: string; recommendations?: any[]
     });
 
     // Call AI microservice for prioritization
-    const aiResponse = await axios.post('http://localhost:8002/priorities', aiPayload, {
+    const aiResponse = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/priorities`, aiPayload, {
       headers: {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
@@ -2165,7 +2165,7 @@ async getAIRecommendations(): Promise<{ message: string; recommendations?: any[]
 
 private async getAIToken(): Promise<string> {
   try {
-    const response = await axios.post('http://localhost:8002/token', 
+    const response = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/token`, 
       new URLSearchParams({
         grant_type: 'password',
         username: 'admin',
@@ -2238,7 +2238,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
 
       try {
         // Call AI SLA prediction service
-        const aiResponse = await axios.post('http://localhost:8002/sla_prediction', slaItems, {
+        const aiResponse = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/sla_prediction`, slaItems, {
           params: { explain: false },
           headers: {
             'Authorization': `Bearer ${await this.getAIToken()}`,
@@ -2384,7 +2384,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         });
 
         // Call AI anomaly detection service
-        const aiResponse = await axios.post('http://localhost:8002/anomaly_detection', {
+        const aiResponse = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/anomaly_detection`, {
           data: anomalyData,
           method: 'isolation_forest',
           contamination: 0.1
@@ -2494,7 +2494,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
 
       try {
         // Call AI smart routing service
-        const aiResponse = await axios.post('http://localhost:8002/smart_routing/suggest_assignment', {
+        const aiResponse = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/smart_routing/suggest_assignment`, {
           task: taskData,
           available_teams: availableTeams
         }, {
@@ -2587,7 +2587,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         };
 
         // Call AI SLA breach prediction
-        const aiResponse = await axios.post('http://localhost:8002/sla_breach_prediction/predict', slaData, {
+        const aiResponse = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/sla_breach_prediction/predict`, slaData, {
           headers: {
             'Authorization': `Bearer ${await this.getAIToken()}`,
             'Content-Type': 'application/json'
@@ -2684,7 +2684,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
           volume: activeBordereaux
         };
 
-        const aiResponse = await axios.post('http://localhost:8002/predict_resources', resourceData, {
+        const aiResponse = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/predict_resources`, resourceData, {
           headers: {
             'Authorization': `Bearer ${await this.getAIToken()}`,
             'Content-Type': 'application/json'

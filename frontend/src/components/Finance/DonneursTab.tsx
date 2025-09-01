@@ -90,11 +90,17 @@ const DonneursTab: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce donneur d\'ordre ?')) {
       try {
-        const { deleteDonneur } = await import('../../services/financeService');
-        await deleteDonneur(id);
-        setDonneurs(prev => prev.filter(d => d.id !== id));
+        console.log('🗑️ Deleting donneur with ID:', id);
+        const { deleteDonneur, getDonneurs } = await import('../../services/financeService');
+        const deleteResult = await deleteDonneur(id);
+        console.log('✅ Delete result:', deleteResult);
+        // Reload data from backend to ensure consistency
+        const data = await getDonneurs();
+        console.log('📊 Reloaded data:', data);
+        setDonneurs(data);
       } catch (error) {
-        console.error('Failed to delete donneur:', error);
+        console.error('❌ Failed to delete donneur:', error);
+        alert('Erreur lors de la suppression: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
       }
     }
   };

@@ -385,7 +385,7 @@ export class OutlookIntegrationService {
       clientId: 'mock-client-id',
       clientSecret: 'mock-client-secret',
       tenantId: 'mock-tenant-id',
-      redirectUri: 'http://localhost:3000/auth/outlook/callback',
+      redirectUri: process.env.FRONTEND_CALLBACK_URL || 'http://localhost:3000/auth/outlook/callback',
       scopes: [
         'https://graph.microsoft.com/Mail.ReadWrite',
         'https://graph.microsoft.com/Mail.Send',

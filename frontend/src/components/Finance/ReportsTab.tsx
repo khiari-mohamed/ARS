@@ -133,7 +133,7 @@ const ReportsTab: React.FC = () => {
       console.log('🔄 ReportsTab: Starting export with format:', format);
       
       // Call real backend export endpoint
-      const response = await fetch(`http://localhost:5000/api/virements/export-report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/virements/export-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,7 +194,7 @@ const ReportsTab: React.FC = () => {
       console.log('📦 ReportsTab: Custom report data:', customData);
       
       // Call backend API
-      const response = await fetch(`http://localhost:5000/api/virements/export-report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/virements/export-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

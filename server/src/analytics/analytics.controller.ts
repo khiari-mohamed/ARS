@@ -273,4 +273,17 @@ export class AnalyticsController {
     return this.analyticsService.getPredictResourcesAI(payload);
   }
 
+  // Filter options endpoints
+  @Get('filter-options/departments')
+  async getDepartments(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getDepartments();
+  }
+
+  @Get('filter-options/teams')
+  async getTeams(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getTeams();
+  }
+
 }

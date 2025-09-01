@@ -68,7 +68,7 @@ const OutlookIntegration: React.FC = () => {
     console.log('📧 Loading SMTP config...');
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courriers/smtp/config', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/smtp/config`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -91,7 +91,7 @@ const OutlookIntegration: React.FC = () => {
     console.log('📊 Loading email stats...');
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courriers/smtp/stats', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/smtp/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -113,7 +113,7 @@ const OutlookIntegration: React.FC = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courriers/smtp/config', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/smtp/config`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -145,7 +145,7 @@ const OutlookIntegration: React.FC = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courriers/smtp/test', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/smtp/test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -26,7 +26,7 @@ const ReportsTab: React.FC = () => {
 
   const loadClients = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/documents/search', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/search`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -48,7 +48,7 @@ const ReportsTab: React.FC = () => {
   const loadReportData = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/documents/analytics?' + new URLSearchParams({
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/analytics?` + new URLSearchParams({
         period: '30d',
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
@@ -104,7 +104,7 @@ const ReportsTab: React.FC = () => {
 
   const handleExport = async (format: 'pdf' | 'excel', reportType?: string) => {
     try {
-      const response = await fetch('http://localhost:5000/api/documents/export', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/export`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

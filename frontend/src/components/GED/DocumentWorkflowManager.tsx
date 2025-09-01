@@ -74,7 +74,7 @@ const DocumentWorkflowManager: React.FC = () => {
   const loadData = async () => {
     try {
       // Load workflow definitions from real API
-      const workflowsResponse = await fetch('http://localhost:5000/api/documents/workflows/definitions', {
+      const workflowsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/workflows/definitions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -89,7 +89,7 @@ const DocumentWorkflowManager: React.FC = () => {
       }
       
       // Load user tasks from real API
-      const tasksResponse = await fetch('http://localhost:5000/api/documents/workflows/tasks/current', {
+      const tasksResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/workflows/tasks/current`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -100,7 +100,7 @@ const DocumentWorkflowManager: React.FC = () => {
         tasksData = await tasksResponse.json();
       } else {
         // Fallback: generate tasks from documents that need workflow processing
-        const documentsResponse = await fetch('http://localhost:5000/api/documents/search', {
+        const documentsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/search`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -138,7 +138,7 @@ const DocumentWorkflowManager: React.FC = () => {
 
   const handleStartWorkflow = async (workflowId: string, documentId: string) => {
     try {
-      const response = await fetch('http://localhost:5000/api/documents/workflows/start', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/workflows/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -169,7 +169,7 @@ const DocumentWorkflowManager: React.FC = () => {
     if (!selectedTask) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/documents/workflows/${selectedTask.instanceId}/steps/${selectedTask.stepId}/complete`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/workflows/${selectedTask.instanceId}/steps/${selectedTask.stepId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,7 +200,7 @@ const DocumentWorkflowManager: React.FC = () => {
 
   const handleViewLifecycle = async (documentId: string) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/documents/${documentId}/lifecycle`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/${documentId}/lifecycle`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
