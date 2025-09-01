@@ -12,7 +12,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField
+  TextField,
+  Grid
 } from '@mui/material';
 import { useResponsive } from '../../hooks/useResponsive';
 import {
@@ -35,6 +36,7 @@ interface AlertCardProps {
 const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
   const [expanded, setExpanded] = useState(false);
   const [commentDialog, setCommentDialog] = useState(false);
+  const [detailsDialog, setDetailsDialog] = useState(false);
   const [comment, setComment] = useState('');
   const { isMobile } = useResponsive();
 
@@ -55,11 +57,12 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
     
     try {
       await commentMutation.mutateAsync({
-        alertId: alert.id || alert.bordereau.id,
+        alertId: alert.bordereau.id,
         comment: comment.trim()
       });
       setComment('');
       setCommentDialog(false);
+      onResolved?.(); // Refresh the data
     } catch (error) {
       console.error('Failed to add comment:', error);
     }
@@ -160,7 +163,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
               <Button
                 size="small"
                 startIcon={<Visibility />}
-                onClick={() => window.open(`/bordereaux/${alert.bordereau.id}`, '_blank')}
+                onClick={() => setDetailsDialog(true)}
                 fullWidth={isMobile}
               >
                 Voir Détails
@@ -218,6 +221,94 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
           </Collapse>
         </CardContent>
       </Card>
+
+      {/* Details Dialog */}
+      <Dialog 
+        open={detailsDialog} 
+        onClose={() => setDetailsDialog(false)} 
+        maxWidth="md" 
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle>
+          Détails du Bordereau #{alert.bordereau.id}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Statut</Typography>
+                <Typography variant="body1" gutterBottom>{alert.bordereau.statut}</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Date de réception</Typography>
+                <Typography variant="body1" gutterBottom>
+                  {alert.bordereau.dateReception 
+                    ? new Date(alert.bordereau.dateReception).toLocaleDateString('fr-FR')
+                    : 'Non définie'
+                  }
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Date de création</Typography>
+                <Typography variant="body1" gutterBottom>
+                  {new Date(alert.bordereau.createdAt).toLocaleDateString('fr-FR')}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">SLA</Typography>
+                <Typography variant="body1" gutterBottom>
+                  {getSLAStatus()} jours écoulés
+                </Typography>
+              </Grid>
+              {alert.bordereau.clientId && (
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">Client ID</Typography>
+                  <Typography variant="body1" gutterBottom>{alert.bordereau.clientId}</Typography>
+                </Grid>
+              )}
+              {alert.bordereau.teamId && (
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">Équipe</Typography>
+                  <Typography variant="body1" gutterBottom>{alert.bordereau.teamId}</Typography>
+                </Grid>
+              )}
+              {alert.bordereau.assignedToUserId && (
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">Gestionnaire</Typography>
+                  <Typography variant="body1" gutterBottom>{alert.bordereau.assignedToUserId}</Typography>
+                </Grid>
+              )}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" color="text.secondary">Niveau d'alerte</Typography>
+                <Chip
+                  label={alertLevelLabel(alert.alertLevel)}
+                  sx={{
+                    backgroundColor: alertLevelColor(alert.alertLevel),
+                    color: '#fff',
+                    mt: 1
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" color="text.secondary">Raison de l'alerte</Typography>
+                <Typography variant="body1" gutterBottom>{alert.reason}</Typography>
+              </Grid>
+              {alert.aiScore && (
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">Score IA</Typography>
+                  <Typography variant="body1" gutterBottom>
+                    {Math.round(alert.aiScore * 100)}% de confiance
+                  </Typography>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailsDialog(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Comment Dialog */}
       <Dialog 

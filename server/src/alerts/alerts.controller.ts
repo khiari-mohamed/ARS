@@ -243,8 +243,7 @@ export class AlertsController {
   @Post('comments')
   async addAlertComment(@Body() body: { alertId: string; comment: string }, @Req() req: any) {
     const user = getUserFromRequest(req);
-    // Add comment logic here
-    return { success: true, message: 'Comment added successfully' };
+    return this.alertsService.addAlertComment(body.alertId, body.comment, user);
   }
 
   @Post('trigger')

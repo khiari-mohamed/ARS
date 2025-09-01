@@ -457,28 +457,42 @@ async def trend_forecast(data: Dict = Body(...), current_user = Depends(get_curr
         future = model.make_future_dataframe(periods=forecast_days)
         forecast = model.predict(future)
         
-        # Extract forecast results
+        # Extract forecast results with NaN handling
         forecast_results = []
         for i, row in forecast.tail(forecast_days).iterrows():
+            # Handle NaN values
+            predicted_value = row['yhat'] if not pd.isna(row['yhat']) else 0
+            lower_bound = row['yhat_lower'] if not pd.isna(row['yhat_lower']) else 0
+            upper_bound = row['yhat_upper'] if not pd.isna(row['yhat_upper']) else 0
+            trend = row['trend'] if not pd.isna(row['trend']) else 0
+            confidence_interval = upper_bound - lower_bound if not pd.isna(upper_bound - lower_bound) else 0
+            
             forecast_results.append({
                 'date': row['ds'].strftime('%Y-%m-%d'),
-                'predicted_value': float(row['yhat']),
-                'lower_bound': float(row['yhat_lower']),
-                'upper_bound': float(row['yhat_upper']),
-                'trend': float(row['trend']),
-                'confidence_interval': float(row['yhat_upper'] - row['yhat_lower'])
+                'predicted_value': float(predicted_value),
+                'lower_bound': float(lower_bound),
+                'upper_bound': float(upper_bound),
+                'trend': float(trend),
+                'confidence_interval': float(confidence_interval)
             })
         
-        # Calculate trend direction
+        # Calculate trend direction with NaN handling
         recent_trend = forecast['trend'].tail(7).mean()
         previous_trend = forecast['trend'].head(7).mean()
-        trend_direction = 'increasing' if recent_trend > previous_trend else 'decreasing'
+        
+        # Handle NaN values
+        if pd.isna(recent_trend) or pd.isna(previous_trend):
+            trend_direction = 'stable'
+            recent_trend = 0
+            previous_trend = 0
+        else:
+            trend_direction = 'increasing' if recent_trend > previous_trend else 'decreasing'
         
         return {
             'forecast': forecast_results,
             'trend_direction': trend_direction,
             'model_performance': {
-                'mape': float(np.mean(np.abs((df['y'] - forecast.head(len(df))['yhat']) / df['y'])) * 100),
+                'mape': float(np.nan_to_num(np.mean(np.abs((df['y'] - forecast.head(len(df))['yhat']) / df['y'])) * 100, nan=0)),
                 'trend_strength': float(abs(recent_trend - previous_trend))
             },
             'summary': f"Generated {forecast_days}-day forecast with {trend_direction} trend"

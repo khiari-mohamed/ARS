@@ -252,9 +252,9 @@ const MultiChannelNotifications: React.FC = () => {
   };
 
   const calculateDeliveryRate = (channel: any) => {
-    if (!deliveryStats?.byChannel[channel.type]) return 0;
+    if (!deliveryStats?.byChannel || !deliveryStats.byChannel[channel.type]) return 0;
     const stats = deliveryStats.byChannel[channel.type];
-    return stats.sent > 0 ? (stats.delivered / stats.sent) * 100 : 0;
+    return stats && stats.sent > 0 ? (stats.delivered / stats.sent) * 100 : 0;
   };
 
   return (
@@ -288,7 +288,7 @@ const MultiChannelNotifications: React.FC = () => {
                   {deliveryStats.delivered}
                 </Typography>
                 <Typography variant="caption" color="success.main">
-                  {((deliveryStats.delivered / deliveryStats.totalSent) * 100).toFixed(1)}%
+                  {deliveryStats.totalSent > 0 ? ((deliveryStats.delivered / deliveryStats.totalSent) * 100).toFixed(1) : '0.0'}%
                 </Typography>
               </CardContent>
             </Card>
@@ -303,7 +303,7 @@ const MultiChannelNotifications: React.FC = () => {
                   {deliveryStats.failed}
                 </Typography>
                 <Typography variant="caption" color="error.main">
-                  {((deliveryStats.failed / deliveryStats.totalSent) * 100).toFixed(1)}%
+                  {deliveryStats.totalSent > 0 ? ((deliveryStats.failed / deliveryStats.totalSent) * 100).toFixed(1) : '0.0'}%
                 </Typography>
               </CardContent>
             </Card>
@@ -318,7 +318,7 @@ const MultiChannelNotifications: React.FC = () => {
                   {deliveryStats.bounced}
                 </Typography>
                 <Typography variant="caption" color="warning.main">
-                  {((deliveryStats.bounced / deliveryStats.totalSent) * 100).toFixed(1)}%
+                  {deliveryStats.totalSent > 0 ? ((deliveryStats.bounced / deliveryStats.totalSent) * 100).toFixed(1) : '0.0'}%
                 </Typography>
               </CardContent>
             </Card>
@@ -375,7 +375,7 @@ const MultiChannelNotifications: React.FC = () => {
                         <TableCell>{channel.priority}</TableCell>
                         <TableCell>
                           <Typography variant="caption">
-                            {channel.rateLimits.maxPerMinute}/min
+                            {channel.rateLimits?.maxPerMinute || 'N/A'}/min
                           </Typography>
                         </TableCell>
                         <TableCell>

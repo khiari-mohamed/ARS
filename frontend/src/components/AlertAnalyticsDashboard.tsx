@@ -65,7 +65,7 @@ const AlertAnalyticsDashboard: React.FC = () => {
     }
   };
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#FF6B6B', '#4ECDC4', '#45B7D1'];
 
   return (
     <Box sx={{ width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
@@ -183,13 +183,16 @@ const AlertAnalyticsDashboard: React.FC = () => {
                 Efficacité des Alertes
               </Typography>
               {loadingEffectiveness ? (
-                <CircularProgress />
-              ) : effectiveness ? (
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
+              ) : effectiveness && effectiveness.length > 0 ? (
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Type</TableCell>
+                        <TableCell>Type d'Alerte</TableCell>
+                        <TableCell>Total</TableCell>
                         <TableCell>Précision</TableCell>
                         <TableCell>Rappel</TableCell>
                         <TableCell>Score F1</TableCell>
@@ -198,12 +201,21 @@ const AlertAnalyticsDashboard: React.FC = () => {
                     <TableBody>
                       {effectiveness.map((item: any) => (
                         <TableRow key={item.alertType}>
-                          <TableCell>{item.alertType}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>
+                              {item.alertType.replace('_', ' ')}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {item.totalAlerts}
+                            </Typography>
+                          </TableCell>
                           <TableCell>
                             <Box display="flex" alignItems="center" gap={1}>
                               <LinearProgress
                                 variant="determinate"
-                                value={item.precision}
+                                value={Math.min(100, item.precision)}
                                 sx={{ width: 60, height: 6 }}
                                 color={getEffectivenessColor(item.precision) as any}
                               />
@@ -216,7 +228,7 @@ const AlertAnalyticsDashboard: React.FC = () => {
                             <Box display="flex" alignItems="center" gap={1}>
                               <LinearProgress
                                 variant="determinate"
-                                value={item.recall}
+                                value={Math.min(100, item.recall)}
                                 sx={{ width: 60, height: 6 }}
                                 color={getEffectivenessColor(item.recall) as any}
                               />
@@ -238,7 +250,7 @@ const AlertAnalyticsDashboard: React.FC = () => {
                   </Table>
                 </TableContainer>
               ) : (
-                <Typography>Aucune donnée disponible</Typography>
+                <Alert severity="info">Aucune donnée d'efficacité disponible pour la période sélectionnée</Alert>
               )}
             </CardContent>
           </Card>
@@ -252,17 +264,19 @@ const AlertAnalyticsDashboard: React.FC = () => {
                 Analyse des Faux Positifs
               </Typography>
               {loadingFP ? (
-                <CircularProgress />
-              ) : falsePositives ? (
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
+              ) : falsePositives && falsePositives.length > 0 ? (
                 <Box>
                   {falsePositives.slice(0, 5).map((fp: any, index: number) => (
-                    <Box key={index} mb={2} p={2} bgcolor="grey.50" borderRadius={1}>
+                    <Box key={fp.alertId || index} mb={2} p={2} bgcolor="grey.50" borderRadius={1}>
                       <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                         <Typography variant="subtitle2" fontWeight={600}>
-                          {fp.alertType}
+                          {fp.alertType.replace('_', ' ')}
                         </Typography>
                         <Chip
-                          label={fp.impact}
+                          label={fp.impact.toUpperCase()}
                           color={fp.impact === 'high' ? 'error' : fp.impact === 'medium' ? 'warning' : 'info'}
                           size="small"
                         />
@@ -270,14 +284,24 @@ const AlertAnalyticsDashboard: React.FC = () => {
                       <Typography variant="body2" color="text.secondary" mb={1}>
                         {fp.reason}
                       </Typography>
-                      <Typography variant="caption" color="success.main">
-                        💡 {fp.suggestedFix}
-                      </Typography>
+                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Typography variant="caption" color="success.main">
+                          💡 {fp.suggestedFix}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(fp.timestamp).toLocaleDateString()}
+                        </Typography>
+                      </Box>
                     </Box>
                   ))}
+                  {falsePositives.length > 5 && (
+                    <Typography variant="caption" color="text.secondary" textAlign="center" display="block" mt={1}>
+                      +{falsePositives.length - 5} autres faux positifs
+                    </Typography>
+                  )}
                 </Box>
               ) : (
-                <Typography>Aucune donnée disponible</Typography>
+                <Alert severity="info">Aucun faux positif détecté pour la période sélectionnée</Alert>
               )}
             </CardContent>
           </Card>
@@ -291,21 +315,47 @@ const AlertAnalyticsDashboard: React.FC = () => {
                 Tendances des Alertes
               </Typography>
               {loadingTrends ? (
-                <CircularProgress />
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
               ) : trends && trends.length > 0 ? (
                 <ResponsiveContainer width="100%" height={isMobile ? 250 : 300}>
                   <LineChart data={trends.slice(-30)}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(value) => new Date(value).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis yAxisId="count" orientation="left" />
+                    <YAxis yAxisId="time" orientation="right" />
+                    <Tooltip 
+                      labelFormatter={(value) => new Date(value).toLocaleDateString('fr-FR')}
+                      formatter={(value: any, name: string) => [
+                        name === 'Temps Résolution (min)' ? `${Math.round(value)} min` : value,
+                        name
+                      ]}
+                    />
                     <Legend />
-                    <Line type="monotone" dataKey="count" stroke="#8884d8" name="Nombre d'Alertes" />
-                    <Line type="monotone" dataKey="avgResolutionTime" stroke="#82ca9d" name="Temps Résolution (min)" />
+                    <Line 
+                      yAxisId="count"
+                      type="monotone" 
+                      dataKey="count" 
+                      stroke="#8884d8" 
+                      name="Nombre d'Alertes"
+                      strokeWidth={2}
+                    />
+                    <Line 
+                      yAxisId="time"
+                      type="monotone" 
+                      dataKey="avgResolutionTime" 
+                      stroke="#82ca9d" 
+                      name="Temps Résolution (min)"
+                      strokeWidth={2}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <Typography>Aucune donnée de tendance disponible</Typography>
+                <Alert severity="info">Aucune donnée de tendance disponible pour la période sélectionnée</Alert>
               )}
             </CardContent>
           </Card>
@@ -319,12 +369,14 @@ const AlertAnalyticsDashboard: React.FC = () => {
                 Recommandations d'Amélioration
               </Typography>
               {loadingRecs ? (
-                <CircularProgress />
-              ) : recommendations ? (
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
+              ) : recommendations && recommendations.length > 0 ? (
                 <Grid container spacing={2}>
                   {recommendations.map((rec: any, index: number) => (
-                    <Grid item xs={12} md={6} key={index}>
-                      <Card variant="outlined">
+                    <Grid item xs={12} md={6} key={`${rec.alertType}-${rec.type}-${index}`}>
+                      <Card variant="outlined" sx={{ height: '100%' }}>
                         <CardContent>
                           <Box display="flex" alignItems="center" gap={1} mb={2}>
                             <Analytics color="primary" />
@@ -332,20 +384,23 @@ const AlertAnalyticsDashboard: React.FC = () => {
                               {rec.type.replace('_', ' ').toUpperCase()}
                             </Typography>
                             <Chip
-                              label={rec.priority}
+                              label={rec.priority.toUpperCase()}
                               color={getPriorityColor(rec.priority) as any}
                               size="small"
                             />
                           </Box>
+                          <Typography variant="body2" color="text.secondary" mb={1}>
+                            <strong>Type:</strong> {rec.alertType.replace('_', ' ')}
+                          </Typography>
                           <Typography variant="body2" mb={2}>
                             {rec.description}
                           </Typography>
-                          <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Box display="flex" flexDirection="column" gap={1}>
                             <Typography variant="caption" color="success.main">
-                              📈 {rec.expectedImpact}
+                              📈 <strong>Impact:</strong> {rec.expectedImpact}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              ⏱️ {rec.estimatedEffort}
+                              ⏱️ <strong>Effort:</strong> {rec.estimatedEffort}
                             </Typography>
                           </Box>
                         </CardContent>
@@ -354,7 +409,7 @@ const AlertAnalyticsDashboard: React.FC = () => {
                   ))}
                 </Grid>
               ) : (
-                <Typography>Aucune recommandation disponible</Typography>
+                <Alert severity="info">Aucune recommandation d'amélioration disponible pour la période sélectionnée</Alert>
               )}
             </CardContent>
           </Card>

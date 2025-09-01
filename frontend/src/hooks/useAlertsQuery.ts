@@ -85,7 +85,10 @@ export const useDelayPredictions = () => {
     queryFn: async () => {
       const response = await axios.get('/api/alerts/delay-predictions');
       return response.data;
-    }
+    },
+    retry: 1,
+    refetchInterval: 300000, // 5 minutes
+    staleTime: 240000 // 4 minutes
   });
 };
 
