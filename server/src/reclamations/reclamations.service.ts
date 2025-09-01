@@ -513,13 +513,27 @@ export class ReclamationsService {
   // Complaint trend analytics (for charting)
   async trend(user: any) {
     this.checkRole(user, 'view');
-    // Group by day
-    const data = await this.prisma.reclamation.groupBy({
-      by: ['createdAt'],
-      _count: { id: true },
-      orderBy: { createdAt: 'asc' },
+    
+    // Get all reclamations with their creation dates
+    const reclamations = await this.prisma.reclamation.findMany({
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' }
     });
-    return data.map(d => ({ date: d.createdAt, count: d._count.id }));
+    
+    // Group by date (YYYY-MM-DD)
+    const dateMap = new Map<string, number>();
+    
+    reclamations.forEach(r => {
+      const dateKey = r.createdAt.toISOString().split('T')[0]; // YYYY-MM-DD
+      dateMap.set(dateKey, (dateMap.get(dateKey) || 0) + 1);
+    });
+    
+    // Convert to array and sort
+    const result = Array.from(dateMap.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    
+    return result;
   }
 
   // Complaint ➜ Task integration (stub)

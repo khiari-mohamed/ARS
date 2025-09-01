@@ -220,48 +220,84 @@ export class CustomerPortalService {
 
   // === CUSTOMER DASHBOARD ===
   async getCustomerPortalStats(clientId: string): Promise<CustomerPortalStats> {
-    const totalClaims = await this.prisma.reclamation.count();
+    // Get client from database
+    const client = await this.prisma.client.findFirst();
+    if (!client) {
+      throw new Error('Client not found');
+    }
+
+    const totalClaims = await this.prisma.reclamation.count({
+      where: { clientId: client.id }
+    });
     const openClaims = await this.prisma.reclamation.count({ 
-      where: { status: { in: ['NOUVEAU', 'EN_COURS'] } }
+      where: { 
+        clientId: client.id,
+        status: { in: ['NOUVEAU', 'EN_COURS', 'ANALYSE'] }
+      }
     });
     const resolvedClaims = await this.prisma.reclamation.count({ 
-      where: { status: { in: ['RESOLU', 'FERME'] } }
+      where: { 
+        clientId: client.id,
+        status: { in: ['RESOLU', 'FERME'] }
+      }
     });
+
+    const avgResolutionTime = await this.calculateAvgResolutionTime(client.id);
+    const satisfactionScore = await this.getCustomerSatisfactionScore(client.id);
+    const recentActivity = await this.getRecentCustomerActivity(client.id);
 
     return {
       totalClaims,
       openClaims,
       resolvedClaims,
-      avgResolutionTime: 5,
-      satisfactionScore: 4.2,
-      recentActivity: [
-        {
-          id: '1',
-          type: 'claim_submitted',
-          date: new Date(),
-          description: 'Nouvelle réclamation soumise'
-        }
-      ]
+      avgResolutionTime,
+      satisfactionScore,
+      recentActivity
     };
   }
 
   private async getRecentCustomerActivity(clientId: string): Promise<CustomerActivity[]> {
-    const activities = await this.prisma.auditLog.findMany({
-      where: {
-        userId: clientId,
-        action: { in: ['CLAIM_SUBMITTED_PORTAL', 'CLAIM_STATUS_UPDATED', 'MESSAGE_RECEIVED', 'CLAIM_RESOLVED'] }
-      },
-      orderBy: { timestamp: 'desc' },
-      take: 10
+    // Get recent reclamations for this client as activity
+    const recentClaims = await this.prisma.reclamation.findMany({
+      where: { clientId },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        type: true
+      }
     });
 
-    return activities.map(activity => ({
-      id: activity.id,
-      type: this.mapActionToActivityType(activity.action),
-      date: activity.timestamp,
-      description: this.generateActivityDescription(activity),
-      claimReference: activity.details?.reference
+    return recentClaims.map((claim, index) => ({
+      id: `activity-${claim.id}`,
+      type: this.getActivityTypeFromStatus(claim.status),
+      date: claim.updatedAt,
+      description: this.generateActivityDescriptionFromClaim(claim),
+      claimReference: claim.id
     }));
+  }
+
+  private getActivityTypeFromStatus(status: string): CustomerActivity['type'] {
+    switch (status) {
+      case 'NOUVEAU': return 'claim_submitted';
+      case 'RESOLU': 
+      case 'FERME': return 'claim_resolved';
+      default: return 'status_updated';
+    }
+  }
+
+  private generateActivityDescriptionFromClaim(claim: any): string {
+    switch (claim.status) {
+      case 'NOUVEAU': return `Nouvelle réclamation ${claim.type} soumise`;
+      case 'EN_COURS': return `Réclamation ${claim.id} en cours de traitement`;
+      case 'ANALYSE': return `Réclamation ${claim.id} en cours d'analyse`;
+      case 'RESOLU': return `Réclamation ${claim.id} résolue`;
+      case 'FERME': return `Réclamation ${claim.id} fermée`;
+      default: return `Mise à jour de la réclamation ${claim.id}`;
+    }
   }
 
   private mapActionToActivityType(action: string): CustomerActivity['type'] {
@@ -309,8 +345,25 @@ export class CustomerPortalService {
   }
 
   private async getCustomerSatisfactionScore(clientId: string): Promise<number> {
-    // Mock satisfaction score - in production would calculate from actual feedback
-    return Math.random() * 2 + 3; // 3-5 range
+    // Calculate satisfaction from resolved claims
+    const resolvedClaims = await this.prisma.reclamation.findMany({
+      where: {
+        clientId,
+        status: { in: ['RESOLU', 'FERME'] }
+      }
+    });
+
+    if (resolvedClaims.length === 0) return 4.0; // Default score
+
+    // Simple satisfaction calculation based on resolution time
+    const avgScore = resolvedClaims.reduce((sum, claim) => {
+      const resolutionDays = Math.floor((claim.updatedAt.getTime() - claim.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      // Better score for faster resolution
+      const score = resolutionDays <= 3 ? 5 : resolutionDays <= 7 ? 4 : resolutionDays <= 14 ? 3.5 : 3;
+      return sum + score;
+    }, 0) / resolvedClaims.length;
+
+    return Math.round(avgScore * 10) / 10;
   }
 
   async addCustomerResponse(claimId: string, clientId: string, message: string, attachments?: any[]): Promise<void> {
@@ -354,7 +407,14 @@ export class CustomerPortalService {
   }
 
   async getCustomerClaims(clientId: string, filters?: any): Promise<any[]> {
+    // Get client from database
+    const client = await this.prisma.client.findFirst();
+    if (!client) {
+      return [];
+    }
+
     const claims = await this.prisma.reclamation.findMany({
+      where: { clientId: client.id },
       select: {
         id: true,
         type: true,
@@ -369,17 +429,35 @@ export class CustomerPortalService {
       take: 50
     });
 
-    return claims.map(claim => ({
-      ...claim,
-      reference: claim.id,
-      subject: claim.description?.substring(0, 50) + '...' || 'Sans objet',
-      category: claim.type,
-      priority: claim.severity?.toLowerCase(),
-      assignedAgent: claim.assignedTo?.fullName,
-      statusLabel: this.getStatusLabel(claim.status),
-      progress: this.calculateProgress(claim.status),
-      canRespond: this.canCustomerRespond(claim.status)
-    }));
+    return claims.map(claim => {
+      const subject = this.extractSubjectFromDescription(claim.description);
+      return {
+        ...claim,
+        reference: claim.id,
+        subject,
+        category: claim.type,
+        priority: claim.severity?.toLowerCase(),
+        assignedAgent: claim.assignedTo?.fullName,
+        statusLabel: this.getStatusLabel(claim.status),
+        progress: this.calculateProgress(claim.status),
+        canRespond: this.canCustomerRespond(claim.status)
+      };
+    });
+  }
+
+  private extractSubjectFromDescription(description: string): string {
+    if (!description) return 'Sans objet';
+    
+    // Try to extract subject from first line or first sentence
+    const lines = description.split('\n');
+    const firstLine = lines[0]?.trim();
+    
+    if (firstLine && firstLine.length <= 100) {
+      return firstLine;
+    }
+    
+    // If first line is too long, take first 50 characters
+    return description.substring(0, 50) + '...';
   }
 
   async getClaimCategories(): Promise<{ value: string; label: string; description: string }[]> {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tabs, Tab, Box } from '@mui/material';
+import { Tabs, Tab, Box, useTheme, useMediaQuery, Paper, Typography } from '@mui/material';
 import ReclamationDashboard from '../../components/reclamations/ReclamationDashboard';
 import ReclamationForm from '../../components/reclamations/ReclamationForm';
 import { ReclamationsList } from '../../components/reclamations/ReclamationsList';
@@ -17,6 +17,8 @@ import { useAuth } from '../../contexts/AuthContext';
 const ReclamationsModule: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const { user } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -78,19 +80,60 @@ const ReclamationsModule: React.FC = () => {
   const tabs = getTabsForRole();
 
   return (
-    <div className="reclamations-module">
+    <Box sx={{ p: 2, minHeight: '100vh', bgcolor: '#f5f5f5' }}>
+      {/* Header */}
+      <Paper elevation={2} sx={{ p: 2, mb: 2, background: 'linear-gradient(135deg, #e91e63 0%, #ad1457 100%)', color: 'white' }}>
+        <Typography variant="h4" sx={{ fontWeight: 600 }}>
+          Gestion des Réclamations
+        </Typography>
+        <Typography variant="body1" sx={{ opacity: 0.9 }}>
+          Système de traitement et suivi des réclamations
+        </Typography>
+      </Paper>
+
       <RealTimeAlerts />
       
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={handleTabChange}>
-          {tabs.map((tab, index) => (
-            <Tab key={index} label={tab.label} />
-          ))}
-        </Tabs>
-      </Box>
+      <Paper elevation={2} sx={{ p: { xs: 1, sm: 3 } }}>
+        <Box sx={{ 
+          borderBottom: 1, 
+          borderColor: 'divider', 
+          mb: 3,
+          width: '100%',
+          overflowX: 'auto'
+        }}>
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange}
+            variant={isMobile ? 'scrollable' : 'standard'}
+            scrollButtons={isMobile ? 'auto' : false}
+            allowScrollButtonsMobile
+            sx={{
+              minHeight: { xs: 48, sm: 48 },
+              '& .MuiTab-root': {
+                minWidth: { xs: 120, sm: 160 },
+                fontSize: { xs: '0.8rem', sm: '0.875rem' },
+                padding: { xs: '8px 12px', sm: '12px 16px' },
+                textTransform: 'none',
+                fontWeight: 500
+              },
+              '& .MuiTabs-scrollButtons': {
+                '&.Mui-disabled': {
+                  opacity: 0.3
+                }
+              }
+            }}
+          >
+            {tabs.map((tab, index) => (
+              <Tab key={index} label={tab.label} />
+            ))}
+          </Tabs>
+        </Box>
 
-      {tabs[activeTab]?.component}
-    </div>
+        <Box sx={{ width: '100%', overflow: 'hidden' }}>
+          {tabs[activeTab]?.component}
+        </Box>
+      </Paper>
+    </Box>
   );
 };
 

@@ -127,10 +127,6 @@ export const ChefCorbeille: React.FC = () => {
       retry: 3,
       retryDelay: 1000,
       staleTime: 10000, // Consider data stale after 10 seconds
-      onSuccess: (data) => {
-        console.log('Corbeille data received:', data);
-        console.log('Traités count:', data?.traites?.length || 0);
-      }
     }
   );
 
@@ -206,17 +202,24 @@ export const ChefCorbeille: React.FC = () => {
   if (error) {
     return (
       <Alert severity="error" sx={{ m: 3 }}>
-        <Typography variant="h6">Erreur lors du chargement</Typography>
+        <Typography variant="h6">Erreur lors du chargement de la corbeille</Typography>
         <Typography variant="body2">
-          {error instanceof Error ? error.message : 'Une erreur est survenue lors du chargement de la corbeille'}
+          {error instanceof Error ? error.message : 'Une erreur est survenue lors du chargement des données'}
         </Typography>
-        <Button 
-          variant="outlined" 
-          onClick={() => window.location.reload()} 
-          sx={{ mt: 2 }}
-        >
-          Réessayer
-        </Button>
+        <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+          <Button 
+            variant="outlined" 
+            onClick={() => refetch()}
+          >
+            Réessayer
+          </Button>
+          <Button 
+            variant="text" 
+            onClick={() => window.location.reload()}
+          >
+            Recharger la page
+          </Button>
+        </Box>
       </Alert>
     );
   }
@@ -500,14 +503,31 @@ export const ChefCorbeille: React.FC = () => {
 
   return (
     <div className="chef-corbeille p-4">
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4">
+      <Box 
+        display="flex" 
+        justifyContent="space-between" 
+        alignItems="center" 
+        mb={2}
+        sx={{ 
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
+          gap: { xs: 1, sm: 0 }
+        }}
+      >
+        <Typography 
+          variant="h4"
+          sx={{ 
+            fontSize: { xs: '1.5rem', sm: '2rem' },
+            minWidth: 0,
+            wordBreak: 'break-word'
+          }}
+        >
           Corbeille Chef d'Équipe
         </Typography>
         <Button 
           variant="outlined" 
           onClick={() => refetch()}
           disabled={isLoading}
+          sx={{ flexShrink: 0 }}
         >
           Actualiser
         </Button>
@@ -549,10 +569,12 @@ export const ChefCorbeille: React.FC = () => {
                   variant="outlined"
                   color="warning"
                   onClick={() => {
-                    // Bulk escalate logic could be added here
-                    console.log('Bulk escalate:', selectedItems);
+                    selectedItems.forEach(id => {
+                      escalateMutation.mutate(id);
+                    });
+                    setSelectedItems([]);
                   }}
-                  disabled={selectedItems.length === 0}
+                  disabled={selectedItems.length === 0 || escalateMutation.isLoading}
                 >
                   Escalader sélection
                 </Button>
@@ -560,10 +582,12 @@ export const ChefCorbeille: React.FC = () => {
                   variant="outlined"
                   color="success"
                   onClick={() => {
-                    // Bulk resolve logic could be added here
-                    console.log('Bulk resolve:', selectedItems);
+                    selectedItems.forEach(id => {
+                      statusMutation.mutate({ id, status: 'RESOLVED' });
+                    });
+                    setSelectedItems([]);
                   }}
-                  disabled={selectedItems.length === 0}
+                  disabled={selectedItems.length === 0 || statusMutation.isLoading}
                 >
                   Résoudre sélection
                 </Button>
@@ -575,7 +599,13 @@ export const ChefCorbeille: React.FC = () => {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(_, newValue) => setActiveTab(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+        >
           <Tab label={`Non Affectés (${nonAffectes.length})`} />
           <Tab label={`En Cours (${enCours.length})`} />
           <Tab label={`Traités (${traites.length})`} />
@@ -743,7 +773,7 @@ export const ChefCorbeille: React.FC = () => {
                             secondary={
                               <SlaCountdown 
                                 createdAt={reclamationDetails.createdAt}
-                                slaDays={7}
+                                slaDays={reclamationDetails.client?.reclamationDelay || reclamationDetails.contract?.delaiReclamation || 7}
                                 status={reclamationDetails.status}
                                 clientName={reclamationDetails.client?.name}
                               />

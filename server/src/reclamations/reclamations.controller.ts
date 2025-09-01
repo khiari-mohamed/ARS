@@ -192,6 +192,12 @@ export class ReclamationsController {
     return this.reclamationsService.searchReclamations(query, user);
   }
 
+  @Get('trend')
+  async trend(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.reclamationsService.trend(user);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get(':id')
   async getReclamation(@Param('id') id: string, @Req() req: any) {
@@ -221,12 +227,6 @@ export class ReclamationsController {
   async analytics(@Req() req: any) {
     const user = getUserFromRequest(req);
     return this.reclamationsService.analytics(user);
-  }
-
-  @Get('trend')
-  async trend(@Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.reclamationsService.trend(user);
   }
 
   @Post(':id/convert-to-task')
@@ -417,6 +417,14 @@ export class ReclamationsController {
     return this.reclamationsService.aiClassificationService.updateClassificationModel(body.feedbackData);
   }
 
+  @Get('classification/recommendations')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getAIRecommendations(@Query('period') period = '30d') {
+    return this.reclamationsService.aiClassificationService.getAIRecommendations(period);
+  }
+
+
+
   // Customer Portal endpoints
   @Post('customer/submit')
   @UseInterceptors(FileInterceptor('attachments', { dest: './uploads/reclamations' }))
@@ -458,7 +466,7 @@ export class ReclamationsController {
     const attachments = files ? [files] : undefined;
     return this.reclamationsService.customerPortalService.addCustomerResponse(
       claimId,
-      body.clientId,
+      body.clientId || 'demo',
       body.message,
       attachments
     );

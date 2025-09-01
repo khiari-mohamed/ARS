@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LocalAPI } from '../../services/axios';
+import { LocalAPI, AIAPI } from '../../services/axios';
 import {
   Card,
   CardContent,
@@ -86,97 +86,37 @@ interface ClassificationStats {
 }
 
 const classifyClaim = async (payload: { text: string; metadata?: any }): Promise<ClassificationResult> => {
-  try {
-    const { data } = await LocalAPI.post('/reclamations/classify', payload);
-    return data;
-  } catch (error) {
-    // Fallback to mock AI response
-    const mockResult: ClassificationResult = {
-      category: payload.text.toLowerCase().includes('retard') ? 'DELAI' : 
-                payload.text.toLowerCase().includes('document') ? 'DOCUMENTATION' :
-                payload.text.toLowerCase().includes('paiement') ? 'PAIEMENT' : 'AUTRE',
-      subcategory: 'Traitement standard',
-      priority: payload.text.toLowerCase().includes('urgent') ? 'urgent' : 'medium',
-      confidence: Math.floor(Math.random() * 30) + 70,
-      estimatedResolutionTime: Math.floor(Math.random() * 48) + 2,
-      requiredSkills: ['Gestion réclamations', 'Service client'],
-      suggestedActions: [
-        'Contacter le client dans les 24h',
-        'Vérifier le dossier client',
-        'Proposer une solution adaptée'
-      ],
-      sentiment: 'neutral',
-      urgencyScore: Math.floor(Math.random() * 10) + 1,
-      keywords: payload.text.split(' ').slice(0, 5)
-    };
-    return mockResult;
-  }
+  // Clear any existing token to force refresh
+  localStorage.removeItem('ai_token');
+  
+  const { data } = await AIAPI.post('/classify', payload);
+  return {
+    category: data.category || 'GENERAL',
+    subcategory: data.subcategory || 'À classifier',
+    priority: data.priority || 'medium',
+    confidence: data.confidence || 0,
+    estimatedResolutionTime: data.estimatedResolutionTime || 24,
+    requiredSkills: data.requiredSkills || [],
+    suggestedActions: data.suggestedActions || [],
+    sentiment: data.sentiment || 'neutral',
+    urgencyScore: data.urgencyScore || 5,
+    keywords: data.keywords || []
+  };
 };
 
 const getClassificationStats = async (period = '30d'): Promise<ClassificationStats> => {
-  try {
-    const { data } = await LocalAPI.get('/reclamations/classification/stats', { params: { period } });
-    return data;
-  } catch (error) {
-    // Mock stats data
-    return {
-      totalClassified: 1247,
-      accuracy: {
-        overall: 87.3,
-        byCategory: {
-          'DELAI': 89.2,
-          'DOCUMENTATION': 85.7,
-          'PAIEMENT': 91.4,
-          'AUTRE': 82.1
-        },
-        byPriority: {
-          'urgent': 94.2,
-          'high': 88.7,
-          'medium': 86.3,
-          'low': 83.9
-        }
-      },
-      byCategory: {
-        'DELAI': 342,
-        'DOCUMENTATION': 298,
-        'PAIEMENT': 387,
-        'AUTRE': 220
-      },
-      byPriority: {
-        'urgent': 89,
-        'high': 234,
-        'medium': 567,
-        'low': 357
-      },
-      trends: {
-        daily: Array.from({ length: 7 }, (_, i) => ({
-          date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          count: Math.floor(Math.random() * 50) + 20,
-          accuracy: Math.floor(Math.random() * 10) + 85
-        })),
-        categories: [
-          { category: 'DELAI', trend: 12.5 },
-          { category: 'PAIEMENT', trend: -5.2 },
-          { category: 'DOCUMENTATION', trend: 8.7 },
-          { category: 'AUTRE', trend: -2.1 }
-        ]
-      },
-      performance: {
-        avgProcessingTime: 0.34,
-        successRate: 98.7,
-        errorRate: 1.3
-      }
-    };
-  }
+  const { data } = await LocalAPI.get('/reclamations/classification/stats', { params: { period } });
+  return data;
 };
 
 const updateClassificationModel = async (feedbackData: any[]) => {
-  try {
-    const { data } = await LocalAPI.post('/reclamations/classification/feedback', { feedbackData });
-    return data;
-  } catch (error) {
-    return { success: true, message: 'Modèle mis à jour avec succès' };
-  }
+  const { data } = await LocalAPI.post('/reclamations/classification/feedback', { feedbackData });
+  return data;
+};
+
+const getAIRecommendations = async (period = '30d') => {
+  const { data } = await LocalAPI.get('/reclamations/classification/recommendations', { params: { period } });
+  return data;
 };
 
 const AIClassificationPanel: React.FC = () => {
@@ -194,6 +134,15 @@ const AIClassificationPanel: React.FC = () => {
     { 
       refetchInterval: 60000,
       staleTime: 30000
+    }
+  );
+
+  const { data: recommendations, isLoading: recommendationsLoading, error: recommendationsError } = useQuery(
+    ['ai-recommendations', selectedPeriod],
+    () => getAIRecommendations(selectedPeriod),
+    { 
+      refetchInterval: 300000, // 5 minutes
+      staleTime: 60000
     }
   );
 
@@ -219,14 +168,23 @@ const AIClassificationPanel: React.FC = () => {
     classifyMutation.mutate({ text: testText });
   };
 
-  const handleTrainModel = () => {
+  const handleTrainModel = async () => {
     setIsTraining(true);
-    // Mock training data
-    const mockFeedback = [
-      { text: 'Retard de paiement', category: 'PAIEMENT', priority: 'high', correct: true },
-      { text: 'Document manquant', category: 'DOCUMENTATION', priority: 'medium', correct: true }
-    ];
-    trainModelMutation.mutate(mockFeedback);
+    try {
+      // Get recent reclamations for training data
+      const { data: recentClaims } = await LocalAPI.get('/reclamations', { params: { take: 50 } });
+      const feedbackData = recentClaims.map((claim: any) => ({
+        claimId: claim.id,
+        text: claim.description,
+        actualCategory: claim.type,
+        actualPriority: claim.severity?.toLowerCase() || 'medium',
+        correct: true
+      }));
+      trainModelMutation.mutate(feedbackData);
+    } catch (error) {
+      console.error('Failed to prepare training data:', error);
+      setIsTraining(false);
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -603,159 +561,176 @@ const AIClassificationPanel: React.FC = () => {
     </Box>
   );
 
-  const renderRecommendations = () => (
-    <Box>
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-        <Insights sx={{ mr: 1, color: 'primary.main' }} />
-        Recommandations d'Amélioration IA
-      </Typography>
-      
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2">
-          Analyse basée sur les performances des {selectedPeriod} derniers et les tendances détectées
+  const renderRecommendations = () => {
+    if (recommendationsLoading) {
+      return (
+        <Box display="flex" justifyContent="center" p={4}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+    if (recommendationsError) {
+      return (
+        <Alert severity="error">Erreur lors du chargement des recommandations IA</Alert>
+      );
+    }
+
+    return (
+      <Box>
+        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+          <Insights sx={{ mr: 1, color: 'primary.main' }} />
+          Recommandations d'Amélioration IA
         </Typography>
-      </Alert>
+        
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <Typography variant="body2">
+            Analyse basée sur les performances des {selectedPeriod} derniers et les tendances détectées
+            {recommendations?.generatedAt && (
+              <> • Généré le {new Date(recommendations.generatedAt).toLocaleString('fr-FR')}</>
+            )}
+          </Typography>
+        </Alert>
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Accordion defaultExpanded>
-            <AccordionSummary expandIcon={<ExpandMore />}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Warning sx={{ mr: 1, color: 'warning.main' }} />
-                <Typography variant="h6">Améliorations Prioritaires</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <List>
-                <ListItem>
-                  <ListItemIcon>
-                    <Error color="error" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Classification DOCUMENTATION"
-                    secondary={`Précision: ${stats?.accuracy.byCategory?.['DOCUMENTATION'] || 85}% - Ajouter plus d'exemples d'entraînement`}
-                  />
-                </ListItem>
-                
-                <ListItem>
-                  <ListItemIcon>
-                    <Warning color="warning" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Détection de priorité URGENT"
-                    secondary="15% des réclamations critiques mal classifiées - Réviser les règles"
-                  />
-                </ListItem>
-                
-                <ListItem>
-                  <ListItemIcon>
-                    <Info color="info" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Analyse de sentiment"
-                    secondary="Améliorer la détection des émotions négatives pour prioriser"
-                  />
-                </ListItem>
-              </List>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Accordion defaultExpanded>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Warning sx={{ mr: 1, color: 'warning.main' }} />
+                  <Typography variant="h6">Améliorations Prioritaires</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <List>
+                  {recommendations?.priorityIssues?.map((issue: any, index: number) => (
+                    <ListItem key={index}>
+                      <ListItemIcon>
+                        {issue.severity === 'urgent' ? (
+                          <Error color="error" />
+                        ) : issue.severity === 'high' ? (
+                          <Warning color="warning" />
+                        ) : (
+                          <Info color="info" />
+                        )}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={issue.title}
+                        secondary={`${issue.description} • Impact: ${issue.impact}`}
+                      />
+                    </ListItem>
+                  )) || (
+                    <ListItem>
+                      <ListItemIcon><CheckCircle color="success" /></ListItemIcon>
+                      <ListItemText
+                        primary="Aucun problème critique détecté"
+                        secondary="Le système fonctionne dans les paramètres optimaux"
+                      />
+                    </ListItem>
+                  )}
+                </List>
+              </AccordionDetails>
+            </Accordion>
+          </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Accordion defaultExpanded>
-            <AccordionSummary expandIcon={<ExpandMore />}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Lightbulb sx={{ mr: 1, color: 'success.main' }} />
-                <Typography variant="h6">Optimisations Suggérées</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <List>
-                <ListItem>
-                  <ListItemIcon>
-                    <CheckCircle color="success" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Enrichir le vocabulaire métier"
-                    secondary="Ajouter des termes spécifiques assurance pour +5% précision"
-                  />
-                </ListItem>
-                
-                <ListItem>
-                  <ListItemIcon>
-                    <TrendingUp color="primary" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Optimiser les temps de traitement"
-                    secondary="Réduire le temps moyen de 0.34s à 0.25s avec optimisation"
-                  />
-                </ListItem>
-                
-                <ListItem>
-                  <ListItemIcon>
-                    <AutoFixHigh color="secondary" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Mise à jour du modèle"
-                    secondary="Réentraîner avec les 500 dernières classifications validées"
-                  />
-                </ListItem>
-              </List>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
+          <Grid item xs={12} md={6}>
+            <Accordion defaultExpanded>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Lightbulb sx={{ mr: 1, color: 'success.main' }} />
+                  <Typography variant="h6">Optimisations Suggérées</Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <List>
+                  {recommendations?.optimizations?.map((opt: any, index: number) => (
+                    <ListItem key={index}>
+                      <ListItemIcon>
+                        {opt.type === 'vocabulary' ? (
+                          <CheckCircle color="success" />
+                        ) : opt.type === 'performance' ? (
+                          <TrendingUp color="primary" />
+                        ) : (
+                          <AutoFixHigh color="secondary" />
+                        )}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={opt.title}
+                        secondary={`${opt.description} • ${opt.estimatedImprovement} • Effort: ${opt.effort}`}
+                      />
+                    </ListItem>
+                  )) || (
+                    <ListItem>
+                      <ListItemIcon><TrendingUp color="primary" /></ListItemIcon>
+                      <ListItemText
+                        primary="Système optimisé"
+                        secondary="Aucune optimisation majeure requise actuellement"
+                      />
+                    </ListItem>
+                  )}
+                </List>
+              </AccordionDetails>
+            </Accordion>
+          </Grid>
 
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Plan d'Action Recommandé</Typography>
-              
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: 'error.50', border: '1px solid', borderColor: 'error.200' }}>
-                    <Typography variant="subtitle1" color="error.main" gutterBottom>
-                      🔴 Urgent (Cette semaine)
-                    </Typography>
-                    <Typography variant="body2">
-                      • Corriger la classification DOCUMENTATION<br/>
-                      • Ajouter 100 exemples d'entraînement<br/>
-                      • Tester et valider les améliorations
-                    </Typography>
-                  </Paper>
-                </Grid>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Plan d'Action Recommandé</Typography>
                 
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.200' }}>
-                    <Typography variant="subtitle1" color="warning.main" gutterBottom>
-                      🟡 Important (Ce mois)
-                    </Typography>
-                    <Typography variant="body2">
-                      • Optimiser la détection de priorité<br/>
-                      • Enrichir le vocabulaire métier<br/>
-                      • Améliorer l'analyse de sentiment
-                    </Typography>
-                  </Paper>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: 'error.50', border: '1px solid', borderColor: 'error.200' }}>
+                      <Typography variant="subtitle1" color="error.main" gutterBottom>
+                        {recommendations?.actionPlan?.urgent?.title || '🔴 Urgent (Cette semaine)'}
+                      </Typography>
+                      <Typography variant="body2" component="div">
+                        {recommendations?.actionPlan?.urgent?.items?.map((item: string, index: number) => (
+                          <div key={index}>{item}</div>
+                        )) || (
+                          <div>• Surveiller les métriques de performance<br/>• Valider les classifications récentes</div>
+                        )}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.200' }}>
+                      <Typography variant="subtitle1" color="warning.main" gutterBottom>
+                        {recommendations?.actionPlan?.important?.title || '🟡 Important (Ce mois)'}
+                      </Typography>
+                      <Typography variant="body2" component="div">
+                        {recommendations?.actionPlan?.important?.items?.map((item: string, index: number) => (
+                          <div key={index}>{item}</div>
+                        )) || (
+                          <div>• Enrichir le vocabulaire métier<br/>• Optimiser les temps de traitement</div>
+                        )}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={4}>
+                    <Paper sx={{ p: 2, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.200' }}>
+                      <Typography variant="subtitle1" color="success.main" gutterBottom>
+                        {recommendations?.actionPlan?.planned?.title || '🟢 Planifié (Trimestre)'}
+                      </Typography>
+                      <Typography variant="body2" component="div">
+                        {recommendations?.actionPlan?.planned?.items?.map((item: string, index: number) => (
+                          <div key={index}>{item}</div>
+                        )) || (
+                          <div>• Développer la classification multi-langue<br/>• Automatiser le réentraînement</div>
+                        )}
+                      </Typography>
+                    </Paper>
+                  </Grid>
                 </Grid>
-                
-                <Grid item xs={12} md={4}>
-                  <Paper sx={{ p: 2, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.200' }}>
-                    <Typography variant="subtitle1" color="success.main" gutterBottom>
-                      🟢 Planifié (Trimestre)
-                    </Typography>
-                    <Typography variant="body2">
-                      • Intégrer de nouvelles sources de données<br/>
-                      • Développer la classification multi-langue<br/>
-                      • Automatiser le réentraînement
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-      </Grid>
-    </Box>
-  );
+      </Box>
+    );
+  };
 
   return (
     <Box sx={{ p: 3 }}>
