@@ -21,6 +21,7 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
+import { useResponsive } from '../hooks/useResponsive';
 import {
   TrendingUp,
   TrendingDown,
@@ -41,6 +42,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 const AlertAnalyticsDashboard: React.FC = () => {
   const [period, setPeriod] = useState('30d');
   const [selectedAlertType, setSelectedAlertType] = useState<string>('');
+  const { isMobile } = useResponsive();
 
   const { data: effectiveness, isLoading: loadingEffectiveness } = useAlertEffectiveness(selectedAlertType, period);
   const { data: falsePositives, isLoading: loadingFP } = useFalsePositiveAnalysis(period);
@@ -66,14 +68,20 @@ const AlertAnalyticsDashboard: React.FC = () => {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
   return (
-    <Box>
-      <Typography variant="h6" gutterBottom>
+    <Box sx={{ width: '100%', maxWidth: '100vw', overflow: 'hidden' }}>
+      <Typography variant={isMobile ? 'h6' : 'h5'} gutterBottom sx={{ px: { xs: 1, sm: 0 } }}>
         Analyses Avancées des Alertes
       </Typography>
 
       {/* Controls */}
-      <Box display="flex" gap={2} mb={3}>
-        <FormControl size="small" sx={{ minWidth: 120 }}>
+      <Box 
+        display="flex" 
+        flexDirection={{ xs: 'column', sm: 'row' }}
+        gap={2} 
+        mb={3}
+        px={{ xs: 1, sm: 0 }}
+      >
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
           <InputLabel>Période</InputLabel>
           <Select
             value={period}
@@ -85,7 +93,7 @@ const AlertAnalyticsDashboard: React.FC = () => {
             <MenuItem value="90d">90 jours</MenuItem>
           </Select>
         </FormControl>
-        <FormControl size="small" sx={{ minWidth: 150 }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
           <InputLabel>Type d'Alerte</InputLabel>
           <Select
             value={selectedAlertType}
@@ -110,8 +118,8 @@ const AlertAnalyticsDashboard: React.FC = () => {
                 <Typography variant="h6" gutterBottom>
                   Vue d'Ensemble des Performances
                 </Typography>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} sm={6} md={2.4}>
+                <Grid container spacing={{ xs: 2, sm: 3 }}>
+                  <Grid item xs={6} sm={6} md={2.4}>
                     <Box textAlign="center">
                       <Typography variant="h4" color="primary">
                         {performanceReport.overview.totalAlerts}
@@ -121,9 +129,9 @@ const AlertAnalyticsDashboard: React.FC = () => {
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} sm={6} md={2.4}>
+                  <Grid item xs={6} sm={6} md={2.4}>
                     <Box textAlign="center">
-                      <Typography variant="h4" color="success.main">
+                      <Typography variant={isMobile ? 'h5' : 'h4'} color="success.main">
                         {performanceReport.overview.resolvedAlerts}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -131,9 +139,9 @@ const AlertAnalyticsDashboard: React.FC = () => {
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} sm={6} md={2.4}>
+                  <Grid item xs={6} sm={6} md={2.4}>
                     <Box textAlign="center">
-                      <Typography variant="h4" color="info.main">
+                      <Typography variant={isMobile ? 'h5' : 'h4'} color="info.main">
                         {performanceReport.overview.avgResolutionTime}min
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -141,9 +149,9 @@ const AlertAnalyticsDashboard: React.FC = () => {
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} sm={6} md={2.4}>
+                  <Grid item xs={6} sm={6} md={2.4}>
                     <Box textAlign="center">
-                      <Typography variant="h4" color="warning.main">
+                      <Typography variant={isMobile ? 'h5' : 'h4'} color="warning.main">
                         {performanceReport.overview.falsePositiveRate}%
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -151,9 +159,9 @@ const AlertAnalyticsDashboard: React.FC = () => {
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} sm={6} md={2.4}>
+                  <Grid item xs={6} sm={6} md={2.4}>
                     <Box textAlign="center">
-                      <Typography variant="h4" color="error.main">
+                      <Typography variant={isMobile ? 'h5' : 'h4'} color="error.main">
                         {performanceReport.overview.escalationRate}%
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -285,7 +293,7 @@ const AlertAnalyticsDashboard: React.FC = () => {
               {loadingTrends ? (
                 <CircularProgress />
               ) : trends && trends.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={isMobile ? 250 : 300}>
                   <LineChart data={trends.slice(-30)}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />

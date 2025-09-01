@@ -573,4 +573,117 @@ export class ReclamationsService {
     // console.log(`[GEC] Generated correspondence for reclamation ${reclamationId}`);
     return true;
   }
+
+  // Get reclamation alerts
+  async getReclamationAlerts(user: any) {
+    this.checkRole(user, 'view');
+    
+    const now = new Date();
+    const alerts: any[] = [];
+    
+    // Get SLA breaches
+    const slaBreaches = await this.getSlaBreaches(user);
+    slaBreaches.forEach(reclamation => {
+      alerts.push({
+        id: `sla-${reclamation.id}`,
+        type: 'SLA_BREACH',
+        level: 'error',
+        title: 'SLA dépassé',
+        message: `La réclamation ${reclamation.id} a dépassé son SLA`,
+        reclamationId: reclamation.id,
+        clientName: reclamation.client?.name,
+        createdAt: now.toISOString(),
+        read: false
+      });
+    });
+    
+    // Get critical reclamations
+    const criticalReclamations = await this.prisma.reclamation.findMany({
+      where: {
+        severity: 'critical',
+        status: { notIn: ['RESOLVED', 'RESOLU', 'FERMEE'] }
+      },
+      include: { client: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+    
+    criticalReclamations.forEach(reclamation => {
+      alerts.push({
+        id: `critical-${reclamation.id}`,
+        type: 'SLA_CRITICAL',
+        level: 'error',
+        title: 'Réclamation critique',
+        message: `Réclamation critique nécessitant une attention immédiate`,
+        reclamationId: reclamation.id,
+        clientName: reclamation.client?.name,
+        createdAt: reclamation.createdAt.toISOString(),
+        read: false
+      });
+    });
+    
+    // Get escalated reclamations
+    const escalatedReclamations = await this.prisma.reclamation.findMany({
+      where: {
+        status: 'ESCALATED'
+      },
+      include: { client: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 5
+    });
+    
+    escalatedReclamations.forEach(reclamation => {
+      alerts.push({
+        id: `escalated-${reclamation.id}`,
+        type: 'ESCALATED',
+        level: 'warning',
+        title: 'Réclamation escaladée',
+        message: `La réclamation a été escaladée et nécessite une intervention`,
+        reclamationId: reclamation.id,
+        clientName: reclamation.client?.name,
+        createdAt: reclamation.updatedAt.toISOString(),
+        read: false
+      });
+    });
+    
+    // Get new unassigned reclamations
+    const unassignedReclamations = await this.prisma.reclamation.findMany({
+      where: {
+        assignedToId: null,
+        status: 'OPEN',
+        createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } // Last 24h
+      },
+      include: { client: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    });
+    
+    unassignedReclamations.forEach(reclamation => {
+      alerts.push({
+        id: `new-${reclamation.id}`,
+        type: 'NEW_RECLAMATION',
+        level: 'info',
+        title: 'Nouvelle réclamation',
+        message: `Nouvelle réclamation non assignée`,
+        reclamationId: reclamation.id,
+        clientName: reclamation.client?.name,
+        createdAt: reclamation.createdAt.toISOString(),
+        read: false
+      });
+    });
+    
+    // Sort by creation date (newest first)
+    alerts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    return alerts;
+  }
+  
+  // Mark alert as read (stub implementation)
+  async markAlertAsRead(alertId: string, user: any) {
+    this.checkRole(user, 'view');
+    
+    // In a real implementation, you would store alert read status in database
+    // For now, just return success
+    return { success: true, alertId, readAt: new Date().toISOString() };
+  }
 }
