@@ -1,8 +1,10 @@
 import React from 'react';
 import { useReclamationStats } from '../../hooks/useReclamationStats';
+import { useReclamationTrend } from '../../hooks/useReclamationTrend';
+import { useReclamationAlerts } from '../../hooks/useReclamationAlerts';
 import { Pie, Bar, Line } from 'react-chartjs-2';
 import { Card, CardContent, Typography, Grid, Box, Alert, CircularProgress, Skeleton } from '@mui/material';
-import { TrendingUp, Warning, CheckCircle, Schedule, Error as ErrorIcon } from '@mui/icons-material';
+import { TrendingUp, Warning, CheckCircle, Schedule, Error as ErrorIcon, AccessTime } from '@mui/icons-material';
 import 'chart.js/auto';
 
 interface KPICardProps {
@@ -56,6 +58,55 @@ const LoadingSkeleton: React.FC = () => (
 
 export const ReclamationDashboard: React.FC = () => {
   const { data: stats, isLoading, error } = useReclamationStats();
+  const { data: trendData, isLoading: trendLoading } = useReclamationTrend();
+  const { data: slaBreaches } = useReclamationAlerts();
+
+  // Always call hooks first
+  const chartTrendData = React.useMemo(() => {
+    console.log('Trend data in useMemo:', trendData); // Debug log
+    
+    if (!trendData || trendData.length === 0) {
+      return {
+        labels: ['Aucune donnée'],
+        datasets: [
+          {
+            label: 'Réclamations reçues',
+            data: [0],
+            fill: false,
+            borderColor: '#36A2EB',
+            backgroundColor: '#36A2EB',
+            tension: 0.1,
+          },
+        ],
+      };
+    }
+
+    const sortedData = [...trendData]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const labels = sortedData.map(d => {
+      const date = new Date(d.date);
+      return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
+    });
+
+    const counts = sortedData.map(d => d.count);
+
+    console.log('Processed trend data:', { labels, counts }); // Debug log
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Réclamations reçues',
+          data: counts,
+          fill: false,
+          borderColor: '#36A2EB',
+          backgroundColor: '#36A2EB',
+          tension: 0.1,
+        },
+      ],
+    };
+  }, [trendData]);
 
   if (isLoading) {
     return (
@@ -83,21 +134,23 @@ export const ReclamationDashboard: React.FC = () => {
 
   if (!stats) {
     return (
-      <Alert severity="info" sx={{ m: 3 }}>
-        <Typography>Aucune donnée disponible</Typography>
-      </Alert>
+      <Box sx={{ p: 3 }}>
+        <Alert severity="info">
+          <Typography>Aucune donnée de réclamation disponible pour le moment.</Typography>
+        </Alert>
+      </Box>
     );
   }
 
-  // Calculate metrics with safe defaults
-  const slaCompliance = stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(1) : '0';
-  const avgResolutionDays = stats.avgResolution ? (stats.avgResolution / (24 * 60 * 60 * 1000)).toFixed(1) : '0';
-  const urgentCount = stats.bySeverity?.find((s: any) => s.severity === 'critical')?._count?.id || 0;
-  const inProgress = stats.total - stats.resolved - stats.open;
+  // Calculate metrics from real data
+  const slaCompliance = stats ? (stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(1) : '0') : '0';
+  const avgResolutionDays = stats?.avgResolution ? (stats.avgResolution / (24 * 60 * 60 * 1000)).toFixed(1) : '0';
+  const urgentCount = stats?.bySeverity?.find((s: any) => s.severity === 'critical')?._count?.id || 0;
+  const inProgress = stats ? Math.max(0, stats.total - stats.resolved - stats.open) : 0;
 
   // Chart data with fallbacks
-  const hasTypeData = stats.byType && stats.byType.length > 0;
-  const hasSeverityData = stats.bySeverity && stats.bySeverity.length > 0;
+  const hasTypeData = stats?.byType && stats.byType.length > 0;
+  const hasSeverityData = stats?.bySeverity && stats.bySeverity.length > 0;
 
   const typeData = hasTypeData ? {
     labels: stats.byType.map((t: any) => t.type || 'Non spécifié'),
@@ -115,16 +168,22 @@ export const ReclamationDashboard: React.FC = () => {
 
   const severityData = hasSeverityData ? {
     labels: stats.bySeverity.map((s: any) => {
-      const severity = s.severity;
-      return severity === 'low' ? 'Faible' : 
-             severity === 'medium' ? 'Moyenne' : 
-             severity === 'critical' ? 'Critique' : severity;
+      const severity = s.severity?.toLowerCase();
+      if (severity === 'low' || severity === 'faible' || severity === 'basse') return 'Faible';
+      if (severity === 'medium' || severity === 'moyenne' || severity === 'moyen') return 'Moyenne';
+      if (severity === 'high' || severity === 'haute' || severity === 'critical' || severity === 'critique') return 'Critique';
+      return s.severity || 'Non spécifié';
     }),
     datasets: [
       {
         label: 'Réclamations par gravité',
         data: stats.bySeverity.map((s: any) => s._count?.id || 0),
-        backgroundColor: ['#4CAF50', '#FF9800', '#F44336'],
+        backgroundColor: [
+          '#4CAF50', // Faible - Vert
+          '#FF9800', // Moyenne - Orange
+          '#F44336', // Critique - Rouge
+          '#9E9E9E'  // Non spécifié - Gris
+        ],
         borderWidth: 1,
       },
     ],
@@ -135,44 +194,9 @@ export const ReclamationDashboard: React.FC = () => {
     datasets: [
       {
         label: 'Statut des réclamations',
-        data: [stats.open || 0, Math.max(0, inProgress), stats.resolved || 0],
+        data: [stats?.open || 0, Math.max(0, inProgress), stats?.resolved || 0],
         backgroundColor: ['#FF9800', '#2196F3', '#4CAF50'],
         borderWidth: 1,
-      },
-    ],
-  };
-
-  // Generate trend data based on current stats
-  const trendData = {
-    labels: ['Il y a 4 sem', 'Il y a 3 sem', 'Il y a 2 sem', 'Sem dernière', 'Cette semaine'],
-    datasets: [
-      {
-        label: 'Réclamations reçues',
-        data: [
-          Math.max(0, stats.total - 20),
-          Math.max(0, stats.total - 15), 
-          Math.max(0, stats.total - 10),
-          Math.max(0, stats.total - 5),
-          stats.total
-        ],
-        fill: false,
-        borderColor: '#36A2EB',
-        backgroundColor: '#36A2EB',
-        tension: 0.1,
-      },
-      {
-        label: 'Réclamations résolues',
-        data: [
-          Math.max(0, stats.resolved - 15),
-          Math.max(0, stats.resolved - 12),
-          Math.max(0, stats.resolved - 8),
-          Math.max(0, stats.resolved - 4),
-          stats.resolved
-        ],
-        fill: false,
-        borderColor: '#4CAF50',
-        backgroundColor: '#4CAF50',
-        tension: 0.1,
       },
     ],
   };
@@ -195,7 +219,7 @@ export const ReclamationDashboard: React.FC = () => {
             title="Conformité SLA"
             value={`${slaCompliance}%`}
             icon={<CheckCircle fontSize="large" />}
-            color={parseFloat(slaCompliance) >= 90 ? 'success' : 'warning'}
+            color={parseFloat(slaCompliance) >= 95 ? 'success' : parseFloat(slaCompliance) >= 80 ? 'warning' : 'error'}
             subtitle="Objectif: 95%"
           />
         </Grid>
@@ -213,22 +237,28 @@ export const ReclamationDashboard: React.FC = () => {
             title="Urgentes"
             value={urgentCount}
             icon={<Warning fontSize="large" />}
-            color={urgentCount > 5 ? 'error' : 'success'}
+            color={urgentCount > 5 ? 'error' : urgentCount > 0 ? 'warning' : 'success'}
             subtitle="Réclamations critiques"
           />
         </Grid>
       </Grid>
 
-      {/* Alerts Widget */}
-      {urgentCount > 5 && (
-        <Alert severity="warning">
-          <strong>Attention:</strong> {urgentCount} réclamations critiques nécessitent une attention immédiate.
+      {/* Dynamic Alerts Widget */}
+      {slaBreaches && slaBreaches.length > 0 && (
+        <Alert severity="error" icon={<AccessTime />}>
+          <strong>SLA dépassé:</strong> {slaBreaches.length} réclamation{slaBreaches.length > 1 ? 's ont' : ' a'} dépassé leur délai de traitement.
+        </Alert>
+      )}
+      
+      {urgentCount > 0 && (
+        <Alert severity={urgentCount > 5 ? "error" : "warning"}>
+          <strong>{urgentCount > 5 ? 'Urgent:' : 'Attention:'}</strong> {urgentCount} réclamation{urgentCount > 1 ? 's' : ''} critique{urgentCount > 1 ? 's' : ''} nécessite{urgentCount > 1 ? 'nt' : ''} une attention immédiate.
         </Alert>
       )}
 
-      {parseFloat(slaCompliance) < 90 && (
-        <Alert severity="error">
-          <strong>SLA en danger:</strong> La conformité SLA est de {slaCompliance}%, en dessous de l'objectif de 95%.
+      {parseFloat(slaCompliance) < 95 && (
+        <Alert severity={parseFloat(slaCompliance) < 80 ? "error" : "warning"}>
+          <strong>SLA {parseFloat(slaCompliance) < 80 ? 'critique' : 'en danger'}:</strong> La conformité SLA est de {slaCompliance}%, {parseFloat(slaCompliance) < 80 ? 'bien en dessous' : 'en dessous'} de l'objectif de 95%.
         </Alert>
       )}
 
@@ -252,8 +282,9 @@ export const ReclamationDashboard: React.FC = () => {
                     }
                   }} />
                 ) : (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                    <Typography color="textSecondary">Aucune donnée disponible</Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <Typography color="textSecondary" variant="body2">Aucune donnée de type disponible</Typography>
+                    <Typography color="textSecondary" variant="caption">Les données apparaîtront après la création de réclamations</Typography>
                   </Box>
                 )}
               </Box>
@@ -279,8 +310,9 @@ export const ReclamationDashboard: React.FC = () => {
                     }
                   }} />
                 ) : (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                    <Typography color="textSecondary">Aucune donnée disponible</Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <Typography color="textSecondary" variant="body2">Aucune donnée de gravité disponible</Typography>
+                    <Typography color="textSecondary" variant="caption">Les données apparaîtront après la création de réclamations</Typography>
                   </Box>
                 )}
               </Box>
@@ -324,15 +356,35 @@ export const ReclamationDashboard: React.FC = () => {
                 Tendance des réclamations
               </Typography>
               <Box sx={{ height: 250, position: 'relative' }}>
-                <Line data={trendData} options={{ 
-                  maintainAspectRatio: true,
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
+                {trendLoading ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <CircularProgress size={24} />
+                    <Typography sx={{ ml: 1 }} color="textSecondary">Chargement des tendances...</Typography>
+                  </Box>
+                ) : trendData && trendData.length > 0 ? (
+                  <Line data={chartTrendData} options={{ 
+                    maintainAspectRatio: true,
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: 'bottom'
+                      }
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          stepSize: 1
+                        }
+                      }
                     }
-                  }
-                }} />
+                  }} />
+                ) : (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <Typography color="textSecondary" variant="body2">Aucune donnée de tendance disponible</Typography>
+                    <Typography color="textSecondary" variant="caption">Vérifiez que le serveur est démarré</Typography>
+                  </Box>
+                )}
               </Box>
             </CardContent>
           </Card>

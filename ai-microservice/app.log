@@ -5769,3 +5769,125 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-08-31 21:08:41,752 - monitoring - INFO - Completed pattern_recognition_recurring in 0.04s
 2025-08-31 21:08:42,629 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
 2025-08-31 21:08:42,649 - monitoring - INFO - Completed pattern_recognition_recurring in 0.02s
+2025-08-31 21:41:25,720 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 21:41:25,732 - monitoring - INFO - Completed performance in 0.01s
+2025-08-31 21:41:25,844 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 21:41:25,845 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 21:43:37,554 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 21:43:37,555 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 21:43:37,561 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 21:43:37,562 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 21:47:24,577 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 21:47:24,578 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 21:47:24,583 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 21:47:24,584 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:40:15,682 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:40:15,696 - monitoring - INFO - Completed performance in 0.01s
+2025-08-31 22:40:15,705 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:40:15,706 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:47:33,343 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:47:33,345 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:47:33,354 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:47:33,355 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:49:17,538 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:49:17,542 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:49:21,931 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:49:21,931 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:49:25,997 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:49:25,999 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:49:30,698 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:49:30,699 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:49:33,939 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:49:33,940 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:49:37,421 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:49:37,424 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:51:28,601 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:51:28,605 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:51:28,612 - monitoring - INFO - Starting performance endpoint call
+2025-08-31 22:51:28,613 - monitoring - INFO - Completed performance in 0.00s
+2025-08-31 22:51:35,522 - monitoring - INFO - Starting correlation endpoint call
+2025-08-31 22:51:35,524 - monitoring - INFO - Completed correlation in 0.00s
+2025-08-31 23:04:45,499 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-08-31 23:04:46,284 - monitoring - INFO - Starting classify endpoint call
+2025-08-31 23:04:46,286 - monitoring - INFO - Completed classify in 0.00s
+2025-08-31 23:05:00,734 - monitoring - INFO - Starting classify endpoint call
+2025-08-31 23:05:00,734 - monitoring - INFO - Completed classify in 0.00s
+2025-09-01 00:20:40,634 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:20:40,635 - monitoring - ERROR - Error in ai_analyze after 0.00s: 
+2025-09-01 00:23:37,197 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:23:37,197 - monitoring - INFO - Completed ai_analyze in 0.00s
+2025-09-01 00:23:49,533 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:23:49,533 - monitoring - INFO - Completed ai_analyze in 0.00s
+2025-09-01 00:24:38,553 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-09-01 00:24:38,984 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:39,030 - monitoring - INFO - Completed sentiment_analysis in 0.05s
+2025-09-01 00:24:39,415 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:39,438 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:39,825 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:39,844 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:40,609 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:40,629 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:40,632 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-09-01 00:24:40,676 - monitoring - INFO - Completed pattern_recognition_recurring in 0.04s
+2025-09-01 00:24:41,589 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:41,606 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:41,608 - monitoring - INFO - Starting pattern_recognition_recurring endpoint call
+2025-09-01 00:24:41,623 - monitoring - INFO - Completed pattern_recognition_recurring in 0.02s
+2025-09-01 00:24:42,064 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:42,077 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:42,440 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:42,453 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:42,803 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:42,815 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:43,262 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:43,275 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:43,725 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:43,733 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:44,119 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:44,133 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:44,585 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:44,598 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:44,969 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:44,980 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:45,534 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:45,548 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:46,195 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:46,212 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:46,814 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:46,829 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:47,553 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:47,571 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:48,253 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:48,267 - monitoring - INFO - Completed sentiment_analysis in 0.01s
+2025-09-01 00:24:48,827 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:48,843 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:24:49,496 - monitoring - INFO - Starting sentiment_analysis endpoint call
+2025-09-01 00:24:49,514 - monitoring - INFO - Completed sentiment_analysis in 0.02s
+2025-09-01 00:26:03,992 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:26:03,993 - monitoring - INFO - Completed ai_analyze in 0.00s
+2025-09-01 00:26:28,289 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:26:28,289 - monitoring - INFO - Completed ai_analyze in 0.00s
+2025-09-01 00:28:21,442 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:28:21,443 - monitoring - INFO - Completed ai_analyze in 0.00s
+2025-09-01 00:28:26,001 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:28:26,002 - monitoring - INFO - Completed ai_analyze in 0.00s
+2025-09-01 00:35:28,172 - monitoring - INFO - Starting ai_analyze endpoint call
+2025-09-01 00:35:28,173 - monitoring - INFO - Completed ai_analyze in 0.00s
+2025-09-01 00:42:42,146 - monitoring - INFO - Starting performance endpoint call
+2025-09-01 00:42:42,148 - monitoring - INFO - Completed performance in 0.00s
+2025-09-01 00:43:26,299 - monitoring - INFO - Starting performance endpoint call
+2025-09-01 00:43:26,300 - monitoring - INFO - Completed performance in 0.00s
+2025-09-01 00:47:41,551 - monitoring - INFO - Starting performance endpoint call
+2025-09-01 00:47:41,553 - monitoring - INFO - Completed performance in 0.00s
+2025-09-01 00:53:58,300 - monitoring - INFO - Starting performance endpoint call
+2025-09-01 00:53:58,301 - monitoring - INFO - Completed performance in 0.00s

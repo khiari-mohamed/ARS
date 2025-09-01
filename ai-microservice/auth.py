@@ -32,27 +32,29 @@ class User(BaseModel):
 class UserInDB(User):
     hashed_password: str
 
-# Real users database
+
+
+# Real users database - password "secret" for all users
 real_users_db = {
     "admin": {
         "username": "admin",
         "full_name": "System Administrator",
         "email": "admin@company.com",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+        "hashed_password": "$2b$12$PgCfrGoqnJht2KkvfdaAVuzzKDIZJ6y/PFbWOoOAsMUKQ.IYnxQOa",  # "secret"
         "disabled": False,
     },
     "analyst": {
         "username": "analyst",
         "full_name": "Data Analyst",
         "email": "analyst@company.com",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+        "hashed_password": "$2b$12$PgCfrGoqnJht2KkvfdaAVuzzKDIZJ6y/PFbWOoOAsMUKQ.IYnxQOa",  # "secret"
         "disabled": False,
     },
     "ai_user": {
         "username": "ai_user",
         "full_name": "AI Service User",
         "email": "ai@company.com",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+        "hashed_password": "$2b$12$PgCfrGoqnJht2KkvfdaAVuzzKDIZJ6y/PFbWOoOAsMUKQ.IYnxQOa",  # "secret"
         "disabled": False,
     }
 }

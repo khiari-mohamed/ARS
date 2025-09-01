@@ -7,7 +7,7 @@ import { Pagination } from './Pagination';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole, Reclamation, ReclamationStatus, ReclamationSeverity } from '../../types/reclamation.d';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LocalAPI } from '../../services/axios';
+import { LocalAPI, AIAPI } from '../../services/axios';
 import PerformanceDashboard from '../analytics/PerformanceDashboard';
 import { Reporting } from './Reporting';
 import { GecTemplates } from './GecTemplates';
@@ -120,13 +120,20 @@ export const ReclamationsList: React.FC = () => {
     error: usersError,
   } = useQuery<User[]>(['users'], fetchUsers);
 
-  const types: string[] = ['retard', 'document manquant', 'erreur traitement', 'autre'];
-
   const { data, isLoading, error } = useReclamations({
     ...filters,
     take: PAGE_SIZE,
     skip: (page - 1) * PAGE_SIZE,
   });
+
+  // Get unique types from current data or use common types as fallback
+  const types: string[] = React.useMemo(() => {
+    if (Array.isArray(data) && data.length > 0) {
+      const uniqueTypes = [...new Set(data.map(r => r.type).filter(Boolean))];
+      return uniqueTypes.length > 0 ? uniqueTypes : ['REMBOURSEMENT', 'SERVICE', 'DELAI_TRAITEMENT', 'Autre'];
+    }
+    return ['REMBOURSEMENT', 'SERVICE', 'DELAI_TRAITEMENT', 'Autre'];
+  }, [data]);
 
   const canAssign =
     user &&
@@ -298,26 +305,22 @@ export const ReclamationsList: React.FC = () => {
         return;
       }
       
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Clear any existing token to force refresh
+      localStorage.removeItem('ai_token');
       
-      const mockResult = {
-        correlations: [
-          {
-            process: 'Processus de remboursement',
-            complaint_ids: validComplaints.slice(0, 2).map(c => c.id),
-            count: Math.min(2, validComplaints.length)
-          },
-          {
-            process: 'Traitement des documents',
-            complaint_ids: validComplaints.slice(2, 4).map(c => c.id),
-            count: Math.min(2, validComplaints.length - 2)
-          }
-        ].filter(c => c.count > 0)
+      const payload = {
+        complaints: validComplaints.map(c => ({
+          id: c.id,
+          type: c.type,
+          description: c.description,
+          severity: c.severity
+        }))
       };
       
-      setCorrelation(mockResult);
+      const response = await AIAPI.post('/correlation', payload);
+      setCorrelation(response.data);
     } catch (e: any) {
-      setCorrelationError(e.message);
+      setCorrelationError(e.response?.data?.message || e.message || 'Erreur lors de l\'analyse IA');
     } finally {
       setCorrelationLoading(false);
     }
@@ -542,7 +545,12 @@ export const ReclamationsList: React.FC = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {rec.bordereauId || '-'}
+                            <Chip 
+                              label={rec.type || 'Non spécifié'} 
+                              size="small" 
+                              color="secondary" 
+                              variant="outlined"
+                            />
                           </TableCell>
                           <TableCell>
                             <Chip label={rec.type} size="small" color="primary" variant="outlined" />
@@ -636,14 +644,16 @@ export const ReclamationsList: React.FC = () => {
                 </Table>
               </TableContainer>
               
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-                <Pagination
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={Array.isArray(data) ? data.length : 0}
-                  onPageChange={setPage}
-                />
-              </Box>
+              {Array.isArray(data) && data.length >= PAGE_SIZE && (
+                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                  <Pagination
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    total={data.length}
+                    onPageChange={setPage}
+                  />
+                </Box>
+              )}
             </>
           )}
         </CardContent>

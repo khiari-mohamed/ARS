@@ -125,6 +125,188 @@ const generateAIReport = async (reportType: string, period: string) => {
   return data;
 };
 
+// Generate Excel report from data
+const generateExcelReport = (reportData: any) => {
+  // Create workbook
+  const wb = {
+    SheetNames: ['Résumé', 'Détails', 'Tendances', 'Recommandations'],
+    Sheets: {} as any
+  };
+
+  // Summary sheet
+  const summaryData = [
+    ['Rapport d\'Analyse Avancée - Réclamations ARS', '', '', ''],
+    ['', '', '', ''],
+    ['Période d\'analyse:', reportData.period, '', ''],
+    ['Date de génération:', new Date(reportData.generatedAt).toLocaleString('fr-FR'), '', ''],
+    ['Devise:', reportData.currency || 'TND', '', ''],
+    ['', '', '', ''],
+    ['RÉSUMÉ EXÉCUTIF', '', '', ''],
+    ['Total réclamations:', reportData.summary?.totalReclamations || 0, '', ''],
+    ['Réclamations résolues:', reportData.summary?.resolvedClaims || 0, '', ''],
+    ['Réclamations en attente:', reportData.summary?.pendingClaims || 0, '', ''],
+    ['Temps moyen de résolution:', `${reportData.summary?.avgResolutionTime || 0} jours`, '', ''],
+    ['', '', '', ''],
+    ['ANALYSE PAR TYPE', '', '', '']
+  ];
+
+  // Add breakdown by type
+  if (reportData.breakdown?.byType) {
+    Object.entries(reportData.breakdown.byType).forEach(([type, count]) => {
+      summaryData.push([type, count as number, '', '']);
+    });
+  }
+
+  summaryData.push(['', '', '', '']);
+  summaryData.push(['ANALYSE PAR SÉVÉRITÉ', '', '', '']);
+  
+  // Add breakdown by severity
+  if (reportData.breakdown?.bySeverity) {
+    Object.entries(reportData.breakdown.bySeverity).forEach(([severity, count]) => {
+      summaryData.push([severity, count as number, '', '']);
+    });
+  }
+
+  wb.Sheets['Résumé'] = {
+    '!ref': `A1:D${summaryData.length}`,
+    ...summaryData.reduce((acc, row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const cellRef = String.fromCharCode(65 + colIndex) + (rowIndex + 1);
+        acc[cellRef] = { v: cell, t: typeof cell === 'number' ? 'n' : 's' };
+      });
+      return acc;
+    }, {} as any)
+  };
+
+  // Trends sheet
+  const trendsData = [
+    ['TENDANCES QUOTIDIENNES', '', '', ''],
+    ['Date', 'Nombre', 'Précision (%)', ''],
+  ];
+
+  if (reportData.trends?.daily) {
+    reportData.trends.daily.forEach((trend: any) => {
+      trendsData.push([
+        new Date(trend.date).toLocaleDateString('fr-FR'),
+        trend.count,
+        Math.round(trend.accuracy),
+        ''
+      ]);
+    });
+  }
+
+  trendsData.push(['', '', '', '']);
+  trendsData.push(['TENDANCES PAR CATÉGORIE', '', '', '']);
+  trendsData.push(['Catégorie', 'Tendance (%)', '', '']);
+
+  if (reportData.trends?.categories) {
+    reportData.trends.categories.forEach((cat: any) => {
+      trendsData.push([cat.category, cat.trend, '', '']);
+    });
+  }
+
+  wb.Sheets['Tendances'] = {
+    '!ref': `A1:D${trendsData.length}`,
+    ...trendsData.reduce((acc, row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const cellRef = String.fromCharCode(65 + colIndex) + (rowIndex + 1);
+        acc[cellRef] = { v: cell, t: typeof cell === 'number' ? 'n' : 's' };
+      });
+      return acc;
+    }, {} as any)
+  };
+
+  // Recommendations sheet
+  const recommendationsData = [
+    ['RECOMMANDATIONS', '', '', ''],
+    ['', '', '', ''],
+  ];
+
+  if (reportData.recommendations) {
+    reportData.recommendations.forEach((rec: string, index: number) => {
+      recommendationsData.push([`${index + 1}.`, rec, '', '']);
+    });
+  }
+
+  wb.Sheets['Recommandations'] = {
+    '!ref': `A1:D${recommendationsData.length}`,
+    ...recommendationsData.reduce((acc, row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const cellRef = String.fromCharCode(65 + colIndex) + (rowIndex + 1);
+        acc[cellRef] = { v: cell, t: typeof cell === 'number' ? 'n' : 's' };
+      });
+      return acc;
+    }, {} as any)
+  };
+
+  // Details sheet
+  const detailsData = [
+    ['DÉTAILS TECHNIQUES', '', '', ''],
+    ['', '', '', ''],
+    ['Source des données:', reportData.source || 'local_analysis', '', ''],
+    ['Période d\'analyse:', reportData.period, '', ''],
+    ['Total réclamations analysées:', reportData.totalClaims || 0, '', ''],
+    ['', '', '', ''],
+    ['MÉTADONNÉES', '', '', ''],
+    ['Type de rapport:', reportData.type, '', ''],
+    ['Version:', '1.0', '', ''],
+    ['Système:', 'ARS - Assurance Réclamations', '', '']
+  ];
+
+  wb.Sheets['Détails'] = {
+    '!ref': `A1:D${detailsData.length}`,
+    ...detailsData.reduce((acc, row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const cellRef = String.fromCharCode(65 + colIndex) + (rowIndex + 1);
+        acc[cellRef] = { v: cell, t: typeof cell === 'number' ? 'n' : 's' };
+      });
+      return acc;
+    }, {} as any)
+  };
+
+  // Convert to Excel and download
+  const wbout = writeExcel(wb);
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Rapport-ARS-${reportData.type}-${reportData.period}-${new Date().toISOString().split('T')[0]}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+// Simple Excel writer (minimal implementation)
+const writeExcel = (workbook: any): ArrayBuffer => {
+  // This is a simplified Excel writer - in production, use a library like xlsx
+  const csvContent = Object.keys(workbook.Sheets).map(sheetName => {
+    const sheet = workbook.Sheets[sheetName];
+    const range = sheet['!ref'];
+    if (!range) return '';
+    
+    const [start, end] = range.split(':');
+    const startCol = start.charCodeAt(0) - 65;
+    const startRow = parseInt(start.slice(1)) - 1;
+    const endCol = end.charCodeAt(0) - 65;
+    const endRow = parseInt(end.slice(1)) - 1;
+    
+    let csv = `Sheet: ${sheetName}\n`;
+    for (let row = startRow; row <= endRow; row++) {
+      const rowData = [];
+      for (let col = startCol; col <= endCol; col++) {
+        const cellRef = String.fromCharCode(65 + col) + (row + 1);
+        const cell = sheet[cellRef];
+        rowData.push(cell ? cell.v : '');
+      }
+      csv += rowData.join('\t') + '\n';
+    }
+    return csv;
+  }).join('\n\n');
+  
+  return new TextEncoder().encode(csvContent).buffer;
+};
+
 const AdvancedAnalyticsDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [period, setPeriod] = useState('30d');
@@ -132,9 +314,14 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
   const [selectedAnalysisType, setSelectedAnalysisType] = useState('');
   const [analysisParameters, setAnalysisParameters] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [threshold, setThreshold] = useState(0.8);
+  const [minFrequency, setMinFrequency] = useState(3);
+  const [horizon, setHorizon] = useState('30d');
   const [impactAnalysisDialog, setImpactAnalysisDialog] = useState(false);
   const [actionPlanDialog, setActionPlanDialog] = useState(false);
   const [selectedRootCause, setSelectedRootCause] = useState<any>(null);
+  const [reportSuccess, setReportSuccess] = useState(false);
 
   const { data: patterns = [], isLoading: patternsLoading, error: patternsError, refetch: refetchPatterns } = useQuery(
     ['claim-patterns', period],
@@ -191,7 +378,21 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
 
   const reportGenerationMutation = useMutation({
     mutationFn: ({ reportType, period }: { reportType: string; period: string }) => 
-      generateAIReport(reportType, period)
+      generateAIReport(reportType, period),
+    onSuccess: (data) => {
+      // Show success message and handle report data
+      console.log('Report generated successfully:', data);
+      setReportSuccess(true);
+      setTimeout(() => setReportSuccess(false), 5000); // Hide after 5 seconds
+      
+      if (data.report) {
+        // Generate Excel report
+        generateExcelReport(data.report);
+      }
+    },
+    onError: (error) => {
+      console.error('Report generation failed:', error);
+    }
   });
 
   const handleRefreshAll = async () => {
@@ -206,10 +407,53 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
   };
 
   const handleAIAnalysis = () => {
-    if (selectedAnalysisType && analysisParameters) {
+    if (selectedAnalysisType) {
+      // Build parameters based on analysis type
+      let parameters = {};
+      
+      switch (selectedAnalysisType) {
+        case 'sentiment_analysis':
+          parameters = {
+            categories: selectedCategories.length > 0 ? selectedCategories : ['REMBOURSEMENT', 'DELAI_TRAITEMENT'],
+            threshold: threshold,
+            period: period
+          };
+          break;
+        case 'pattern_detection':
+          parameters = {
+            threshold: threshold,
+            minFrequency: minFrequency,
+            period: period
+          };
+          break;
+        case 'root_cause_analysis':
+          parameters = {
+            minFrequency: minFrequency,
+            categories: selectedCategories,
+            period: period
+          };
+          break;
+        case 'predictive_analysis':
+          parameters = {
+            horizon: horizon,
+            categories: selectedCategories,
+            period: period
+          };
+          break;
+        case 'cost_impact_analysis':
+          parameters = {
+            currency: 'TND',
+            categories: selectedCategories,
+            period: period
+          };
+          break;
+        default:
+          parameters = { period: period };
+      }
+      
       aiAnalysisMutation.mutate({
         type: selectedAnalysisType,
-        parameters: JSON.parse(analysisParameters || '{}')
+        parameters
       });
     }
   };
@@ -282,29 +526,29 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
         <Grid item xs={12}>
           <Alert severity="error">
             Erreur lors de l'analyse des patterns: {(patternsError as any)?.message || 'Erreur inconnue'}. 
-            Vérifiez que le service IA est disponible et que des données existent pour cette période.
+            Vérifiez que le service backend est disponible et que des données existent pour cette période.
           </Alert>
         </Grid>
       ) : patterns.length === 0 ? (
         <Grid item xs={12}>
-          <Alert severity="warning">
-            Aucune donnée de réclamation disponible pour cette période. 
-            Veuillez vérifier qu'il existe des réclamations dans la base de données.
+          <Alert severity="info">
+            Aucun pattern détecté pour cette période. Cela peut indiquer des données insuffisantes ou des réclamations trop variées.
           </Alert>
         </Grid>
       ) : (
         patterns.map((pattern: any) => (
-          <Grid item xs={12} md={6} key={pattern.id}>
-            <Card elevation={2}>
-              <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                  <Typography variant="h6" gutterBottom>
+          <Grid item xs={12} md={6} lg={4} key={pattern.id}>
+            <Card elevation={2} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                  <Typography variant="h6" gutterBottom sx={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
                     "{pattern.pattern}"
                   </Typography>
                   <Chip
                     label={pattern.impact === 'high' ? 'Impact Élevé' : pattern.impact === 'medium' ? 'Impact Moyen' : 'Impact Faible'}
                     color={pattern.impact === 'high' ? 'error' : pattern.impact === 'medium' ? 'warning' : 'success'}
                     size="small"
+                    sx={{ flexShrink: 0 }}
                   />
                 </Box>
 
@@ -325,20 +569,19 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
                   <Typography variant="body2" gutterBottom>
                     Types de réclamations:
                   </Typography>
-                  <Box>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                     {pattern.categories.map((category: string, index: number) => (
                       <Chip 
                         key={index} 
                         label={category} 
                         size="small" 
                         variant="outlined"
-                        sx={{ mr: 1, mb: 1 }} 
                       />
                     ))}
                   </Box>
                 </Box>
 
-                <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
                   <Chip
                     icon={
                       pattern.trend === 'increasing' ? <TrendingUp /> :
@@ -424,7 +667,7 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
                       </Typography>
                     </Box>
                     
-                    <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                    <Box display="flex" gap={1} mb={2} sx={{ flexWrap: 'wrap' }}>
                       <Chip 
                         label={cause.category} 
                         color="primary" 
@@ -432,12 +675,12 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
                         icon={<Assessment />}
                       />
                       <Chip 
-                        label={`${cause.frequency} réclamations affectées`} 
+                        label={`${cause.frequency} réclamations`} 
                         size="small" 
                         variant="outlined"
                       />
                       <Chip 
-                        label={`Coût prévention: ${formatTND(cause.estimatedCost)}`} 
+                        label={`${formatTND(cause.estimatedCost)}`} 
                         color="warning" 
                         size="small"
                         icon={<MonetizationOn />}
@@ -887,36 +1130,43 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
 
   return (
     <>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
-          Analyses Avancées - Réclamations
-        </Typography>
-        <Box display="flex" gap={2}>
-          <Tooltip title="Actualiser toutes les données">
-            <IconButton 
-              onClick={handleRefreshAll} 
-              disabled={refreshing}
-              color="primary"
+      <Box sx={{ mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
+          <Typography variant="h4" gutterBottom>
+            Analyses Avancées - Réclamations
+          </Typography>
+          <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+            <Tooltip title="Actualiser toutes les données">
+              <IconButton 
+                onClick={handleRefreshAll} 
+                disabled={refreshing}
+                color="primary"
+                size="small"
+              >
+                {refreshing ? <CircularProgress size={20} /> : <Refresh />}
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Psychology />}
+              onClick={() => setAiAnalysisDialog(true)}
+              disabled={aiAnalysisMutation.isPending}
+              sx={{ minWidth: 'auto', px: 1.5 }}
             >
-              {refreshing ? <CircularProgress size={24} /> : <Refresh />}
-            </IconButton>
-          </Tooltip>
-          <Button
-            variant="outlined"
-            startIcon={<Psychology />}
-            onClick={() => setAiAnalysisDialog(true)}
-            disabled={aiAnalysisMutation.isPending}
-          >
-            Analyse IA
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<Download />}
-            onClick={() => reportGenerationMutation.mutate({ reportType: 'advanced', period })}
-            disabled={reportGenerationMutation.isPending}
-          >
-            Générer Rapport
-          </Button>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Analyse </Box>IA
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Download />}
+              onClick={() => reportGenerationMutation.mutate({ reportType: 'advanced', period })}
+              disabled={reportGenerationMutation.isPending}
+              sx={{ minWidth: 'auto', px: 1.5 }}
+            >
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Générer </Box>Rapport
+            </Button>
+          </Box>
         </Box>
       </Box>
 
@@ -925,28 +1175,49 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
           Erreur lors du chargement des données. Veuillez réessayer.
         </Alert>
       )}
+      
+      {reportSuccess && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setReportSuccess(false)}>
+          ✅ Rapport généré avec succès! Le fichier a été téléchargé automatiquement.
+        </Alert>
+      )}
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(_, newValue) => setActiveTab(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{
+            '& .MuiTabs-scrollButtons': {
+              '&.Mui-disabled': { opacity: 0.3 }
+            }
+          }}
+        >
           <Tab 
-            label="Patterns IA" 
-            icon={patternsLoading ? <CircularProgress size={16} /> : <Timeline />}
-            iconPosition="start"
+            label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {patternsLoading ? <CircularProgress size={16} /> : <Timeline />}
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Patterns </Box>IA
+            </Box>}
           />
           <Tab 
-            label="Causes Racines" 
-            icon={rootCausesLoading ? <CircularProgress size={16} /> : <BugReport />}
-            iconPosition="start"
+            label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {rootCausesLoading ? <CircularProgress size={16} /> : <BugReport />}
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Causes </Box>Racines
+            </Box>}
           />
           <Tab 
-            label="Insights IA" 
-            icon={insightsLoading ? <CircularProgress size={16} /> : <Insights />}
-            iconPosition="start"
+            label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {insightsLoading ? <CircularProgress size={16} /> : <Insights />}
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Insights </Box>IA
+            </Box>}
           />
           <Tab 
-            label="Métriques" 
-            icon={metricsLoading ? <CircularProgress size={16} /> : <Assessment />}
-            iconPosition="start"
+            label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {metricsLoading ? <CircularProgress size={16} /> : <Assessment />}
+              Métriques
+            </Box>}
           />
         </Tabs>
       </Box>
@@ -970,7 +1241,14 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
                 <InputLabel>Type d'analyse</InputLabel>
                 <Select
                   value={selectedAnalysisType}
-                  onChange={(e) => setSelectedAnalysisType(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedAnalysisType(e.target.value);
+                    // Reset parameters when type changes
+                    setSelectedCategories([]);
+                    setThreshold(0.8);
+                    setMinFrequency(3);
+                    setHorizon('30d');
+                  }}
                 >
                   <MenuItem value="sentiment_analysis">😊 Analyse de Sentiment Client</MenuItem>
                   <MenuItem value="pattern_detection">🔍 Détection de Patterns ARS</MenuItem>
@@ -980,18 +1258,120 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                label="Paramètres (JSON)"
-                value={analysisParameters}
-                onChange={(e) => setAnalysisParameters(e.target.value)}
-                placeholder='{"categories": ["REMBOURSEMENT"], "threshold": 0.8}'
-                helperText="Spécifiez les paramètres d'analyse au format JSON"
-              />
-            </Grid>
+            
+            {/* Categories Selection */}
+            {(selectedAnalysisType === 'sentiment_analysis' || 
+              selectedAnalysisType === 'root_cause_analysis' || 
+              selectedAnalysisType === 'predictive_analysis' ||
+              selectedAnalysisType === 'cost_impact_analysis') && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Catégories de réclamations</InputLabel>
+                  <Select
+                    multiple
+                    value={selectedCategories}
+                    onChange={(e) => setSelectedCategories(e.target.value as string[])}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {(selected as string[]).map((value) => (
+                          <Chip key={value} label={value} size="small" />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    <MenuItem value="REMBOURSEMENT">💰 Remboursement</MenuItem>
+                    <MenuItem value="DELAI_TRAITEMENT">⏱️ Délai de traitement</MenuItem>
+                    <MenuItem value="QUALITE_SERVICE">⭐ Qualité de service</MenuItem>
+                    <MenuItem value="ERREUR_DOSSIER">📋 Erreur de dossier</MenuItem>
+                    <MenuItem value="TECHNIQUE">🔧 Problème technique</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+            
+            {/* Threshold for Pattern Detection and Sentiment Analysis */}
+            {(selectedAnalysisType === 'pattern_detection' || selectedAnalysisType === 'sentiment_analysis') && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Seuil de confiance"
+                  value={threshold}
+                  onChange={(e) => setThreshold(parseFloat(e.target.value))}
+                  inputProps={{ min: 0.1, max: 1.0, step: 0.1 }}
+                  helperText="Entre 0.1 (moins strict) et 1.0 (très strict)"
+                />
+              </Grid>
+            )}
+            
+            {/* Min Frequency for Pattern Detection and Root Cause Analysis */}
+            {(selectedAnalysisType === 'pattern_detection' || selectedAnalysisType === 'root_cause_analysis') && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Fréquence minimale"
+                  value={minFrequency}
+                  onChange={(e) => setMinFrequency(parseInt(e.target.value))}
+                  inputProps={{ min: 1, max: 50 }}
+                  helperText="Nombre minimum d'occurrences"
+                />
+              </Grid>
+            )}
+            
+            {/* Horizon for Predictive Analysis */}
+            {selectedAnalysisType === 'predictive_analysis' && (
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Horizon de prédiction</InputLabel>
+                  <Select
+                    value={horizon}
+                    onChange={(e) => setHorizon(e.target.value)}
+                  >
+                    <MenuItem value="7d">📅 7 jours</MenuItem>
+                    <MenuItem value="30d">📅 30 jours</MenuItem>
+                    <MenuItem value="90d">📅 3 mois</MenuItem>
+                    <MenuItem value="180d">📅 6 mois</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+            
+            {/* Preview of generated parameters */}
+            {selectedAnalysisType && (
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  <Typography variant="body2" gutterBottom>
+                    <strong>🤖 Paramètres générés automatiquement:</strong>
+                  </Typography>
+                  <Typography variant="body2" component="pre" sx={{ fontSize: '0.8rem', bgcolor: 'grey.100', p: 1, borderRadius: 1 }}>
+                    {JSON.stringify({
+                      ...(selectedAnalysisType === 'sentiment_analysis' && {
+                        categories: selectedCategories.length > 0 ? selectedCategories : ['REMBOURSEMENT', 'DELAI_TRAITEMENT'],
+                        threshold: threshold
+                      }),
+                      ...(selectedAnalysisType === 'pattern_detection' && {
+                        threshold: threshold,
+                        minFrequency: minFrequency
+                      }),
+                      ...(selectedAnalysisType === 'root_cause_analysis' && {
+                        minFrequency: minFrequency,
+                        categories: selectedCategories
+                      }),
+                      ...(selectedAnalysisType === 'predictive_analysis' && {
+                        horizon: horizon,
+                        categories: selectedCategories
+                      }),
+                      ...(selectedAnalysisType === 'cost_impact_analysis' && {
+                        currency: 'TND',
+                        categories: selectedCategories
+                      }),
+                      period: period
+                    }, null, 2)}
+                  </Typography>
+                </Alert>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -1002,7 +1382,7 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
             disabled={!selectedAnalysisType || aiAnalysisMutation.isPending}
             startIcon={aiAnalysisMutation.isPending ? <CircularProgress size={16} /> : <AutoFixHigh />}
           >
-            {aiAnalysisMutation.isPending ? 'Analyse en cours...' : 'Lancer l\'analyse'}
+            {aiAnalysisMutation.isPending ? 'Analyse en cours...' : 'Lancer l\'analyse IA'}
           </Button>
         </DialogActions>
       </Dialog>

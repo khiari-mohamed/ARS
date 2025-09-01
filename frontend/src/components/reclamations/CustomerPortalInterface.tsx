@@ -850,18 +850,20 @@ const CustomerPortalInterface: React.FC = () => {
                 {customerClaims.map((claim: any) => (
                   <Grid item xs={12} key={claim.id}>
                     <Paper sx={{ p: 2 }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                        <Typography variant="h6">{claim.reference}</Typography>
+                      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                        <Typography variant="h6" sx={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>{claim.reference}</Typography>
                         <Chip
                           label={claim.statusLabel || getStatusLabel(claim.status)}
                           color={getStatusColor(claim.status) as any}
                           size="small"
+                          sx={{ flexShrink: 0 }}
                         />
                       </Box>
                       <Typography variant="body1" gutterBottom>{claim.subject}</Typography>
-                      <Typography variant="body2" color="textSecondary" gutterBottom>
-                        Catégorie: {claim.category} | Priorité: {claim.priority}
-                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                        <Chip label={`Catégorie: ${claim.category}`} size="small" variant="outlined" />
+                        <Chip label={`Priorité: ${claim.priority}`} size="small" variant="outlined" color={getPriorityColor(claim.priority) as any} />
+                      </Box>
                       <Typography variant="body2" color="textSecondary">
                         Créée le: {new Date(claim.createdAt).toLocaleDateString('fr-FR')}
                         {claim.assignedAgent && ` | Agent: ${claim.assignedAgent}`}

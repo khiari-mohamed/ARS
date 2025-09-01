@@ -25,7 +25,7 @@ AIAPI.interceptors.request.use(async (config) => {
   let aiToken: string | null = localStorage.getItem('ai_token');
   if (!aiToken) {
     // Get token if not available
-    const formData = new URLSearchParams();
+    const formData = new FormData();
     formData.append('username', 'admin');
     formData.append('password', 'secret');
     
@@ -42,6 +42,8 @@ AIAPI.interceptors.request.use(async (config) => {
       }
     } catch (error) {
       console.error('Failed to get AI token in interceptor:', error);
+      // Clear any invalid token
+      localStorage.removeItem('ai_token');
     }
   }
   
@@ -51,6 +53,45 @@ AIAPI.interceptors.request.use(async (config) => {
   
   return config;
 });
+
+// Add response interceptor to handle 401/403 errors
+AIAPI.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Clear invalid token and retry
+      localStorage.removeItem('ai_token');
+      
+      // Don't retry token requests to avoid infinite loop
+      if (!error.config.url?.includes('/token')) {
+        try {
+          // Get new token
+          const formData = new FormData();
+          formData.append('username', 'admin');
+          formData.append('password', 'secret');
+          
+          const tokenResponse = await axios.post(`${process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localhost:8002'}/token`, formData, {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          });
+          
+          if (tokenResponse.data?.access_token) {
+            const newToken = tokenResponse.data.access_token;
+            localStorage.setItem('ai_token', newToken);
+            
+            // Retry original request with new token
+            error.config.headers.Authorization = `Bearer ${newToken}`;
+            return axios.request(error.config);
+          }
+        } catch (tokenError) {
+          console.error('Failed to refresh AI token:', tokenError);
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Add request interceptor for auth
 LocalAPI.interceptors.request.use((config) => {
