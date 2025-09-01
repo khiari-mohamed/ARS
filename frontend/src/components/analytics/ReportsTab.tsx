@@ -38,21 +38,29 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
       setLoading(true);
       
       const [reportsResponse, statsResponse] = await Promise.all([
-        LocalAPI.get('/analytics/reports/recent').catch(() => null),
-        LocalAPI.get('/analytics/reports/stats').catch(() => null)
+        LocalAPI.get('/analytics/reports/recent').catch((err) => {
+          console.warn('Failed to load recent reports:', err.message);
+          return null;
+        }),
+        LocalAPI.get('/analytics/reports/stats').catch((err) => {
+          console.warn('Failed to load report stats:', err.message);
+          return null;
+        })
       ]);
 
       // Process recent reports - use only real data
-      if (reportsResponse?.data) {
+      if (reportsResponse?.data && Array.isArray(reportsResponse.data)) {
         const reports = reportsResponse.data.map((report: any) => ({
           id: report.id,
           name: report.filename || `Report_${report.id}`,
           date: new Date(report.createdAt).toLocaleDateString('fr-FR'),
+          time: new Date(report.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           size: formatFileSize(report.fileSize || 0),
           type: report.type || 'unknown',
           format: report.format || 'pdf',
           downloadUrl: report.downloadUrl,
-          status: report.status || 'completed'
+          status: report.status || 'completed',
+          completedAt: report.completedAt
         }));
         setRecentReports(reports);
       } else {
@@ -62,9 +70,9 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
       // Process report statistics - use only real data
       if (statsResponse?.data) {
         setReportStats({
-          totalReports: statsResponse.data.totalReports || 0,
-          reportsThisMonth: statsResponse.data.reportsThisMonth || 0,
-          avgGenerationTime: statsResponse.data.avgGenerationTime || 0,
+          totalReports: Number(statsResponse.data.totalReports) || 0,
+          reportsThisMonth: Number(statsResponse.data.reportsThisMonth) || 0,
+          avgGenerationTime: Number(statsResponse.data.avgGenerationTime) || 0,
           mostPopularFormat: statsResponse.data.mostPopularFormat || 'pdf'
         });
       } else {
@@ -103,6 +111,11 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
   ];
 
   const handleGenerateReport = async () => {
+    if (!reportConfig.type) {
+      alert('Veuillez sélectionner un type de rapport');
+      return;
+    }
+
     setGenerating(true);
     try {
       const reportParams = {
@@ -111,54 +124,79 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
         period: reportConfig.period,
         includeCharts: reportConfig.includeCharts,
         includeDetails: reportConfig.includeDetails,
-        filters: filters,
-        dateRange: dateRange
+        filters: filters || {},
+        dateRange: dateRange || {}
       };
 
       const response = await LocalAPI.post('/analytics/reports/generate', reportParams);
       
-      if (response.data) {
+      if (response.data && response.data.id) {
         // Show success message
-        alert(`Rapport "${response.data.filename}" généré avec succès! Il sera disponible dans quelques instants.`);
+        const reportTypeName = reportTypes.find(t => t.value === reportConfig.type)?.label || reportConfig.type;
+        alert(`Rapport "${reportTypeName}" généré avec succès! Il sera disponible dans quelques instants.`);
         
         // Add new report to local state
         const newReport = {
           id: response.data.id,
-          name: response.data.filename,
+          name: response.data.filename || `${reportTypeName}_${Date.now()}.${reportConfig.format}`,
           date: new Date().toLocaleDateString('fr-FR'),
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           size: 'Génération...',
-          type: response.data.type,
-          format: response.data.format,
+          type: response.data.type || reportConfig.type,
+          format: response.data.format || reportConfig.format,
           status: 'generating'
         };
         
         setRecentReports(prev => [newReport, ...prev]);
         
         // Poll for completion
+        let pollCount = 0;
+        const maxPolls = 15; // 30 seconds max
         const pollInterval = setInterval(async () => {
           try {
+            pollCount++;
             const updatedReports = await LocalAPI.get('/analytics/reports/recent');
-            const completedReport = updatedReports.data.find((r: any) => r.id === response.data.id);
             
-            if (completedReport && completedReport.status === 'completed') {
-              clearInterval(pollInterval);
-              setRecentReports(prev => prev.map(r => 
-                r.id === response.data.id 
-                  ? { ...r, status: 'completed', size: formatFileSize(completedReport.fileSize) }
-                  : r
-              ));
+            if (updatedReports.data && Array.isArray(updatedReports.data)) {
+              const completedReport = updatedReports.data.find((r: any) => r.id === response.data.id);
+              
+              if (completedReport && completedReport.status === 'completed') {
+                clearInterval(pollInterval);
+                setRecentReports(prev => prev.map(r => 
+                  r.id === response.data.id 
+                    ? { 
+                        ...r, 
+                        status: 'completed', 
+                        size: formatFileSize(completedReport.fileSize || 0),
+                        completedAt: completedReport.completedAt
+                      }
+                    : r
+                ));
+                // Update stats
+                loadReportsData();
+              } else if (pollCount >= maxPolls) {
+                clearInterval(pollInterval);
+                setRecentReports(prev => prev.map(r => 
+                  r.id === response.data.id 
+                    ? { ...r, status: 'timeout', size: 'Timeout' }
+                    : r
+                ));
+              }
             }
           } catch (error) {
-            clearInterval(pollInterval);
+            console.warn('Polling error:', error);
+            if (pollCount >= maxPolls) {
+              clearInterval(pollInterval);
+            }
           }
         }, 2000);
-        
-        // Clear polling after 30 seconds
-        setTimeout(() => clearInterval(pollInterval), 30000);
+      } else {
+        throw new Error('Invalid response from server');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to generate report:', error);
-      alert('Erreur lors de la génération du rapport');
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur inconnue';
+      alert(`Erreur lors de la génération du rapport: ${errorMessage}`);
     } finally {
       setGenerating(false);
     }
@@ -170,17 +208,22 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
         responseType: 'blob'
       });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
+      if (response.data && response.data.size > 0) {
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        throw new Error('Fichier vide ou non trouvé');
+      }
+    } catch (error: any) {
       console.error('Failed to download report:', error);
-      alert('Erreur lors du téléchargement');
+      const errorMessage = error.response?.status === 404 ? 'Rapport non trouvé' : 'Erreur lors du téléchargement';
+      alert(errorMessage);
     }
   };
 
@@ -282,6 +325,8 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
                 <MenuItem value="last7days">7 derniers jours</MenuItem>
                 <MenuItem value="last30days">30 derniers jours</MenuItem>
                 <MenuItem value="last3months">3 derniers mois</MenuItem>
+                <MenuItem value="last6months">6 derniers mois</MenuItem>
+                <MenuItem value="lastyear">Dernière année</MenuItem>
                 <MenuItem value="custom">Personnalisé</MenuItem>
               </Select>
             </FormControl>
@@ -402,14 +447,14 @@ const ReportsTab: React.FC<Props> = ({ filters, dateRange }) => {
                         <Typography variant="subtitle2" noWrap>{report.name}</Typography>
                       </Box>
                       <Typography variant="caption" color="textSecondary">
-                        {report.date} • {report.size}
+                        {report.date} {report.time && `à ${report.time}`} • {report.size}
                       </Typography>
                       <Box display="flex" gap={1} sx={{ mt: 1 }}>
                         <Chip label={report.format.toUpperCase()} size="small" />
                         <Chip 
-                          label={report.status} 
+                          label={report.status === 'generating' ? 'En cours' : report.status === 'completed' ? 'Terminé' : report.status === 'timeout' ? 'Timeout' : report.status} 
                           size="small" 
-                          color={report.status === 'completed' ? 'success' : 'warning'}
+                          color={report.status === 'completed' ? 'success' : report.status === 'generating' ? 'info' : report.status === 'timeout' ? 'error' : 'warning'}
                         />
                       </Box>
                       <Box sx={{ mt: 2 }}>

@@ -5995,3 +5995,1100 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2025-09-01 12:03:40,489 - monitoring - INFO - Completed priorities in 0.00s
 2025-09-01 12:03:40,592 - monitoring - INFO - Starting recommendations endpoint call
 2025-09-01 12:03:40,593 - monitoring - INFO - Completed recommendations in 0.00s
+2025-09-01 12:51:28,925 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 12:51:28,933 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-09-01 12:51:28,945 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 12:51:28,946 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 12:51:28,955 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 12:51:28,956 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 12:51:28,958 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 12:51:28,970 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-09-01 12:51:29,063 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 12:51:29,064 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:12:40,068 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-09-01 13:12:43,147 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:12:47,148 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:12:47,224 - cmdstanpy - DEBUG - Adding TBB (C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\prophet\stan_model\cmdstan-2.33.1\stan\lib\stan_math\lib\tbb) to PATH
+2025-09-01 13:12:47,455 - monitoring - INFO - Completed trend_forecast in 4.31s
+2025-09-01 13:12:47,491 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:12:47,506 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:12:47,540 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:12:47,685 - monitoring - INFO - Completed trend_forecast in 0.19s
+2025-09-01 13:12:56,642 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:12:56,657 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:12:56,696 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:12:56,836 - monitoring - INFO - Completed trend_forecast in 0.19s
+2025-09-01 13:15:10,311 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-09-01 13:15:11,132 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:15:11,178 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:15:11,207 - cmdstanpy - DEBUG - Adding TBB (C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\prophet\stan_model\cmdstan-2.33.1\stan\lib\stan_math\lib\tbb) to PATH
+2025-09-01 13:15:11,258 - monitoring - INFO - Completed trend_forecast in 0.13s
+2025-09-01 13:15:11,268 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:15:11,269 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:15:25,115 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:15:25,119 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:15:25,143 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:15:25,179 - monitoring - INFO - Completed trend_forecast in 0.06s
+2025-09-01 13:15:25,208 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:15:25,208 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:15:35,381 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:15:35,392 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:15:35,547 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:15:35,706 - monitoring - INFO - Completed trend_forecast in 0.33s
+2025-09-01 13:15:35,728 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:15:35,728 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:15:43,061 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:15:43,081 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:15:43,144 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:15:43,287 - monitoring - INFO - Completed trend_forecast in 0.23s
+2025-09-01 13:15:44,798 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:15:44,813 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:15:44,882 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:15:45,099 - monitoring - INFO - Completed trend_forecast in 0.30s
+2025-09-01 13:15:45,120 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:15:45,121 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:15:45,129 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:15:45,129 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:15:57,979 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:15:57,990 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:15:58,034 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:15:58,167 - monitoring - INFO - Completed trend_forecast in 0.19s
+2025-09-01 13:15:58,237 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:15:58,238 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:19:22,051 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-09-01 13:19:25,689 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:19:25,691 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:19:25,695 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:19:25,696 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:19:25,698 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:19:25,698 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:19:25,829 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:19:25,830 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:19:26,607 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:19:26,609 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:19:26,617 - monitoring - INFO - Starting recommendations endpoint call
+2025-09-01 13:19:26,618 - monitoring - INFO - Completed recommendations in 0.00s
+2025-09-01 13:19:26,824 - monitoring - INFO - Starting recommendations endpoint call
+2025-09-01 13:19:26,825 - monitoring - INFO - Completed recommendations in 0.00s
+2025-09-01 13:19:58,774 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:19:58,774 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:19:58,777 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:19:58,777 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:19:58,786 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:19:58,787 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:19:59,217 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:19:59,217 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:19:59,223 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:19:59,223 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:19:59,610 - monitoring - INFO - Starting recommendations endpoint call
+2025-09-01 13:19:59,611 - monitoring - INFO - Completed recommendations in 0.00s
+2025-09-01 13:20:20,424 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:20:20,554 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:20:20,645 - cmdstanpy - DEBUG - Adding TBB (C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\prophet\stan_model\cmdstan-2.33.1\stan\lib\stan_math\lib\tbb) to PATH
+2025-09-01 13:20:20,831 - monitoring - INFO - Completed trend_forecast in 0.41s
+2025-09-01 13:20:20,841 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:20:20,859 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:20:20,929 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:20:21,076 - monitoring - INFO - Completed trend_forecast in 0.23s
+2025-09-01 13:20:21,093 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:20:21,094 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:20:21,116 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:20:21,119 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:20:32,543 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:20:32,549 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:20:32,592 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:20:32,633 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-09-01 13:20:32,640 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:20:32,640 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:21:15,581 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:21:15,593 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:21:15,690 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:21:15,815 - monitoring - INFO - Completed trend_forecast in 0.23s
+2025-09-01 13:21:15,835 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:21:15,836 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:24:39,964 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-09-01 13:24:41,146 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:24:41,237 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:24:41,281 - cmdstanpy - DEBUG - Adding TBB (C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\prophet\stan_model\cmdstan-2.33.1\stan\lib\stan_math\lib\tbb) to PATH
+2025-09-01 13:24:41,362 - monitoring - INFO - Completed trend_forecast in 0.21s
+2025-09-01 13:24:41,366 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:24:41,366 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:24:41,368 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:24:41,372 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:24:41,403 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:24:41,454 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-09-01 13:24:41,456 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:24:41,456 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:24:41,461 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:24:41,462 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:24:41,473 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:24:41,474 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:25:01,259 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:25:01,261 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:25:01,277 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:25:01,293 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:25:01,393 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:25:01,485 - monitoring - INFO - Completed trend_forecast in 0.21s
+2025-09-01 13:25:01,489 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:25:01,490 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:25:01,499 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:25:01,500 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:25:30,397 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:25:30,403 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:25:30,429 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:25:30,474 - monitoring - INFO - Completed trend_forecast in 0.08s
+2025-09-01 13:25:30,478 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:25:30,478 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:25:30,480 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:25:30,481 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:25:30,484 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:25:30,484 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:29:41,438 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:41,438 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:41,442 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:41,443 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:41,445 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:41,446 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:41,448 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:29:41,449 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:29:41,820 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:29:41,821 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:29:41,826 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:29:41,827 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:29:43,462 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:43,463 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:45,756 - monitoring - INFO - Starting recommendations endpoint call
+2025-09-01 13:29:45,756 - monitoring - INFO - Completed recommendations in 0.00s
+2025-09-01 13:29:46,463 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:46,465 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:46,480 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:29:46,481 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:29:46,490 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:46,491 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:47,700 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:47,701 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:47,707 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:29:47,720 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:29:47,833 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:29:48,012 - monitoring - INFO - Completed trend_forecast in 0.31s
+2025-09-01 13:29:48,030 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:29:48,032 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:29:50,575 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:29:50,576 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:29:50,585 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:29:50,587 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:29:50,589 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:50,590 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:56,044 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:56,046 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:56,057 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:29:56,058 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:29:56,063 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:29:56,080 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:29:56,172 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:29:56,307 - monitoring - INFO - Completed trend_forecast in 0.24s
+2025-09-01 13:29:56,324 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:29:56,325 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:30:27,958 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:27,958 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:30,624 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:30,625 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:30,628 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:30,629 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:30,651 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:30:30,655 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:30:33,811 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:30:33,812 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:30:33,822 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:33,823 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:33,825 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:33,826 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:33,828 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:33,828 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:33,830 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:30:33,831 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:30:33,837 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:30:33,838 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:30:34,445 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:30:34,445 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:30:34,449 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:30:34,450 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:30:37,925 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:37,926 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:39,963 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:39,964 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:39,968 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:39,969 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:39,971 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:30:39,972 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:30:39,974 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:30:39,975 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:30:39,986 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:30:39,994 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:30:40,018 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:30:40,119 - monitoring - INFO - Completed trend_forecast in 0.13s
+2025-09-01 13:30:40,121 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:40,122 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:40,125 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:30:40,126 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:30:40,826 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:30:40,827 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:30:40,834 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:30:40,836 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:31:02,598 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:02,599 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:03,122 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:03,122 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:03,437 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:31:03,441 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:31:03,487 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:31:03,538 - monitoring - INFO - Completed trend_forecast in 0.10s
+2025-09-01 13:31:03,543 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:31:03,544 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:31:25,188 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:25,189 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:25,195 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:25,197 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:25,200 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:31:25,211 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:31:25,269 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:31:25,374 - monitoring - INFO - Completed trend_forecast in 0.17s
+2025-09-01 13:31:25,397 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:31:25,398 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:31:32,069 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:31:32,080 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:31:32,117 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:31:32,249 - monitoring - INFO - Completed trend_forecast in 0.18s
+2025-09-01 13:31:34,130 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:34,131 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:34,137 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:34,138 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:34,140 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:31:34,141 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:31:54,470 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:54,470 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:54,473 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:31:54,473 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:31:54,474 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:31:54,478 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:31:54,508 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:31:54,544 - monitoring - INFO - Completed trend_forecast in 0.07s
+2025-09-01 13:31:54,552 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:31:54,556 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:32:03,576 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:32:03,577 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:32:03,584 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:32:03,594 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:32:03,627 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:32:03,718 - monitoring - INFO - Completed trend_forecast in 0.13s
+2025-09-01 13:32:03,720 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:32:03,721 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:32:03,731 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:32:03,731 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:32:56,162 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:32:56,162 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:32:56,674 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:32:56,678 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:32:56,700 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:32:56,746 - monitoring - INFO - Completed trend_forecast in 0.07s
+2025-09-01 13:32:57,009 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:32:57,011 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:32:57,041 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:32:57,043 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:33:03,747 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:33:03,752 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:33:03,781 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:33:03,839 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-09-01 13:33:03,843 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:03,843 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:03,845 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:03,845 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:03,853 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:33:03,854 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:33:12,875 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:12,876 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:12,880 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:33:12,887 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:33:12,967 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:33:13,010 - monitoring - INFO - Completed trend_forecast in 0.13s
+2025-09-01 13:33:13,012 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:13,012 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:13,020 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:33:13,021 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:33:27,165 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:27,167 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:27,169 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:27,170 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:27,175 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:33:27,184 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:33:27,263 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:33:27,345 - monitoring - INFO - Completed trend_forecast in 0.17s
+2025-09-01 13:33:27,353 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:33:27,355 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:33:33,039 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:33,040 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:33,048 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:33:33,049 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:33:33,052 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:33:33,059 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:33:33,095 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:33:33,228 - monitoring - INFO - Completed trend_forecast in 0.18s
+2025-09-01 13:33:33,245 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:33:33,246 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:37:35,059 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:35,060 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:35,068 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:35,068 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:35,073 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:35,073 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:35,074 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:37:35,074 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:37:35,426 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:37:35,427 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:37:35,432 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:37:35,434 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:37:36,930 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:36,931 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:37,484 - monitoring - INFO - Starting recommendations endpoint call
+2025-09-01 13:37:37,484 - monitoring - INFO - Completed recommendations in 0.00s
+2025-09-01 13:37:38,230 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:38,231 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:38,237 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:38,238 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:38,240 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:37:38,240 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:37:39,510 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:37:39,513 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:37:45,140 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:37:45,168 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:37:45,260 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:37:45,447 - monitoring - INFO - Completed trend_forecast in 0.31s
+2025-09-01 13:37:46,531 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:37:46,532 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:37:46,543 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:37:46,545 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:37:54,373 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:54,373 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:55,165 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:37:55,176 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:37:55,229 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:37:55,338 - monitoring - INFO - Completed trend_forecast in 0.17s
+2025-09-01 13:37:55,345 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:55,345 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:37:55,353 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:37:55,353 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:37:59,109 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:37:59,110 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:00,701 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:00,702 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:00,705 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:38:00,705 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:38:00,708 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:00,709 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:01,705 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:38:01,735 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:38:01,806 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:38:01,958 - monitoring - INFO - Completed trend_forecast in 0.25s
+2025-09-01 13:38:01,962 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:01,964 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:01,984 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:38:01,986 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:38:02,000 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:02,003 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:02,780 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:38:02,781 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:38:02,788 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:38:02,790 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:38:07,290 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:07,291 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:08,846 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:08,847 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:08,849 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:08,850 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:08,851 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:38:08,851 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:38:08,855 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:38:08,856 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:38:08,867 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:08,867 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:08,870 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:38:08,877 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:38:08,914 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:38:08,975 - monitoring - INFO - Completed trend_forecast in 0.11s
+2025-09-01 13:38:08,977 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:08,977 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:09,417 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:38:09,417 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:38:09,421 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:38:09,422 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:38:22,874 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:22,875 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:24,279 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:38:24,279 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:38:24,775 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:38:24,798 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:38:24,934 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:38:25,069 - monitoring - INFO - Completed trend_forecast in 0.29s
+2025-09-01 13:38:25,082 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:38:25,082 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:39:14,714 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:39:14,714 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:39:15,232 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:39:15,233 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:39:15,235 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:39:15,242 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:39:15,265 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:39:15,310 - monitoring - INFO - Completed trend_forecast in 0.07s
+2025-09-01 13:39:15,580 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:39:15,581 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:39:29,127 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:39:29,141 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:39:29,219 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:39:29,279 - monitoring - INFO - Completed trend_forecast in 0.15s
+2025-09-01 13:39:29,283 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:39:29,284 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:39:29,285 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:39:29,285 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:39:29,289 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:39:29,290 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:39:40,175 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:39:40,176 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:39:41,253 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:39:41,263 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:39:41,386 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:39:41,605 - monitoring - INFO - Completed trend_forecast in 0.35s
+2025-09-01 13:39:41,619 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:39:41,637 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:39:41,730 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:39:41,900 - monitoring - INFO - Completed trend_forecast in 0.28s
+2025-09-01 13:39:41,902 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:39:41,903 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:39:41,916 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:39:41,917 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:39:41,927 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:39:41,929 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:40:25,745 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:40:25,746 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:40:26,319 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:40:26,324 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:40:26,347 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:40:26,395 - monitoring - INFO - Completed trend_forecast in 0.08s
+2025-09-01 13:40:26,397 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:40:26,398 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:40:26,815 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:40:26,817 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:41:49,225 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:41:49,225 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:41:49,724 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:41:49,734 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:41:49,917 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:41:49,998 - monitoring - INFO - Completed trend_forecast in 0.27s
+2025-09-01 13:41:50,005 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:41:50,005 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:41:50,018 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:41:50,018 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:42:34,869 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:42:34,870 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:42:35,462 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:42:35,468 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:42:35,494 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:42:35,550 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-09-01 13:42:35,583 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:42:35,604 - monitoring - INFO - Completed sla_prediction in 0.02s
+2025-09-01 13:42:35,608 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:42:35,612 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:42:38,420 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:42:38,421 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:42:38,428 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:42:38,429 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:42:46,351 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:42:46,352 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:42:48,596 - asyncio - ERROR - Exception in callback H11Protocol.timeout_keep_alive_handler()
+handle: <TimerHandle when=2766404.375 H11Protocol.timeout_keep_alive_handler()>
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\asyncio\events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 363, in timeout_keep_alive_handler
+    self.conn.send(event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 538, in send
+    data_list = self.send_with_data_passthrough(event)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 563, in send_with_data_passthrough
+    self._process_event(self.our_role, event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 284, in _process_event
+    self._cstate.process_event(role, type(event), server_switch_event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 291, in process_event
+    self._fire_event_triggered_transitions(role, _event_type)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 309, in _fire_event_triggered_transitions
+    raise LocalProtocolError(
+h11._util.LocalProtocolError: can't handle event type ConnectionClosed when role=SERVER and state=SEND_BODY
+2025-09-01 13:42:51,444 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:42:51,445 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:42:51,447 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:42:51,447 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:42:51,449 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:42:51,449 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:42:51,455 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:42:51,455 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:42:51,573 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:42:51,573 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:43:26,313 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:43:26,322 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:43:26,361 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:43:26,405 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-09-01 13:43:26,409 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:43:26,409 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:43:26,411 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:43:26,411 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:43:26,416 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:43:26,417 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:44:02,849 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:44:02,850 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:44:03,051 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:44:03,052 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:44:03,059 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:44:03,073 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:44:03,119 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:44:03,282 - monitoring - INFO - Completed trend_forecast in 0.22s
+2025-09-01 13:44:03,298 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:44:03,299 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:44:29,726 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:44:29,728 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:44:29,731 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:44:29,745 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:44:29,847 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:44:30,012 - monitoring - INFO - Completed trend_forecast in 0.28s
+2025-09-01 13:44:30,057 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:44:30,058 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:44:31,195 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:44:31,196 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:45:00,315 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:45:00,315 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:45:00,317 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:45:00,325 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:45:00,358 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:45:00,407 - monitoring - INFO - Completed trend_forecast in 0.09s
+2025-09-01 13:45:00,410 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:45:00,410 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:45:00,415 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:45:00,416 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:45:22,551 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:45:22,603 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:45:22,878 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:45:23,399 - monitoring - INFO - Completed trend_forecast in 0.85s
+2025-09-01 13:45:23,465 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:45:23,469 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:45:23,497 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:45:23,500 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:45:23,563 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:45:23,564 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:45:50,558 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:45:50,558 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:45:50,649 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:45:50,662 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:45:53,608 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:45:53,706 - monitoring - INFO - Completed trend_forecast in 3.06s
+2025-09-01 13:45:53,709 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:45:53,709 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:45:53,770 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:45:53,771 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:46:23,577 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:46:23,578 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:46:23,592 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:46:23,605 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:46:23,693 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:46:23,806 - monitoring - INFO - Completed trend_forecast in 0.21s
+2025-09-01 13:46:23,811 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:46:23,819 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:46:23,880 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:46:23,967 - monitoring - INFO - Completed trend_forecast in 0.16s
+2025-09-01 13:46:23,969 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:46:23,970 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:46:23,974 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:46:23,975 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:46:23,982 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:46:23,983 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:47:29,540 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:47:29,541 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:00,806 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:49:00,818 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:49:00,877 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:49:01,035 - monitoring - INFO - Completed trend_forecast in 0.23s
+2025-09-01 13:49:01,041 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:01,042 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:01,044 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:01,045 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:01,203 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:49:01,204 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:49:10,197 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:10,199 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:10,206 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:10,206 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:10,211 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:49:10,220 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:49:10,262 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:49:10,339 - monitoring - INFO - Completed trend_forecast in 0.13s
+2025-09-01 13:49:10,352 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:49:10,352 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:49:19,476 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:49:19,481 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:49:19,520 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:49:19,585 - monitoring - INFO - Completed trend_forecast in 0.11s
+2025-09-01 13:49:19,588 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:19,588 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:19,592 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:19,593 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:19,597 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:49:19,607 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:49:19,651 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:49:19,735 - monitoring - INFO - Completed trend_forecast in 0.14s
+2025-09-01 13:49:19,739 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:49:19,739 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:49:19,746 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:49:19,747 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:49:33,455 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:49:33,462 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:49:33,505 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:49:33,620 - monitoring - INFO - Completed trend_forecast in 0.17s
+2025-09-01 13:49:33,626 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:33,627 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:49:33,631 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:49:33,636 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-09-01 13:49:33,646 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:49:33,647 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:50:24,646 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:50:24,646 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:50:24,651 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:50:24,652 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:50:24,653 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:50:24,657 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:50:24,683 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:50:24,725 - monitoring - INFO - Completed trend_forecast in 0.07s
+2025-09-01 13:50:24,734 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:50:24,734 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:53:05,944 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:53:05,950 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:53:05,982 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:53:06,028 - monitoring - INFO - Completed trend_forecast in 0.08s
+2025-09-01 13:53:06,031 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:53:06,033 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:53:06,035 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:53:06,035 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:53:06,039 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:53:06,040 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:54:08,957 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:54:08,957 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:54:08,961 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:54:08,967 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-09-01 13:54:08,971 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:54:08,978 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:54:09,009 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:54:09,055 - monitoring - INFO - Completed trend_forecast in 0.08s
+2025-09-01 13:54:09,063 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:54:09,064 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:55:59,106 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:55:59,106 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:55:59,118 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:55:59,119 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:55:59,125 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:55:59,125 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:55:59,133 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:55:59,134 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:55:59,605 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:55:59,606 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:56:02,256 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:56:02,261 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:56:07,869 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:56:07,881 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:56:07,933 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:56:08,013 - monitoring - INFO - Completed trend_forecast in 0.14s
+2025-09-01 13:56:09,624 - asyncio - ERROR - Exception in callback H11Protocol.timeout_keep_alive_handler()
+handle: <TimerHandle when=2767205.281 H11Protocol.timeout_keep_alive_handler()>
+Traceback (most recent call last):
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\asyncio\events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 363, in timeout_keep_alive_handler
+    self.conn.send(event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 538, in send
+    data_list = self.send_with_data_passthrough(event)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 563, in send_with_data_passthrough
+    self._process_event(self.our_role, event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_connection.py", line 284, in _process_event
+    self._cstate.process_event(role, type(event), server_switch_event)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 291, in process_event
+    self._fire_event_triggered_transitions(role, _event_type)
+  File "C:\Users\LENOVO\AppData\Local\Programs\Python\Python312\Lib\site-packages\h11\_state.py", line 309, in _fire_event_triggered_transitions
+    raise LocalProtocolError(
+h11._util.LocalProtocolError: can't handle event type ConnectionClosed when role=SERVER and state=SEND_RESPONSE
+2025-09-01 13:56:09,705 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:56:09,706 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:56:09,714 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:56:09,728 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:56:09,806 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:56:10,001 - monitoring - INFO - Completed trend_forecast in 0.29s
+2025-09-01 13:56:12,306 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:56:12,306 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:56:12,314 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:56:12,315 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:56:12,316 - monitoring - INFO - Starting reassignment endpoint call
+2025-09-01 13:56:12,317 - monitoring - INFO - Completed reassignment in 0.00s
+2025-09-01 13:56:12,319 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:56:12,319 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:56:12,321 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:56:12,322 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:56:12,437 - monitoring - INFO - Starting priorities endpoint call
+2025-09-01 13:56:12,438 - monitoring - INFO - Completed priorities in 0.00s
+2025-09-01 13:57:55,873 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:57:55,874 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:57:55,877 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:57:55,886 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:57:55,934 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:57:56,038 - monitoring - INFO - Completed trend_forecast in 0.16s
+2025-09-01 13:57:56,372 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:57:56,383 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-09-01 13:57:56,409 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:57:56,413 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 13:59:03,572 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:59:03,577 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-09-01 13:59:03,587 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 13:59:03,598 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 13:59:03,634 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 13:59:03,696 - monitoring - INFO - Completed trend_forecast in 0.11s
+2025-09-01 13:59:03,698 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 13:59:03,698 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 13:59:03,708 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 13:59:03,709 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:00:41,756 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:00:41,756 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:00:44,902 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:00:44,913 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:00:44,947 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:00:45,041 - monitoring - INFO - Completed trend_forecast in 0.14s
+2025-09-01 14:00:45,048 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:00:45,049 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:00:45,051 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:00:45,061 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:00:45,086 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:00:45,181 - monitoring - INFO - Completed trend_forecast in 0.13s
+2025-09-01 14:00:45,187 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:00:45,189 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:00:45,196 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:00:45,197 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:02:15,623 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:15,624 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:15,630 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:15,631 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:16,921 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:02:16,932 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:02:17,099 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:02:17,293 - monitoring - INFO - Completed trend_forecast in 0.37s
+2025-09-01 14:02:17,357 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:02:17,358 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:02:21,121 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:21,122 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:24,537 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:02:24,551 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:02:24,602 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:02:24,775 - monitoring - INFO - Completed trend_forecast in 0.24s
+2025-09-01 14:02:25,762 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:25,762 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:25,772 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:25,773 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:25,778 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:02:25,778 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:02:30,184 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:02:30,192 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:02:30,224 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:02:30,355 - monitoring - INFO - Completed trend_forecast in 0.17s
+2025-09-01 14:02:30,459 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:30,459 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:30,466 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:30,467 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:30,476 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:02:30,477 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:02:44,465 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:44,467 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:44,471 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:44,472 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:46,547 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:02:46,561 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:02:46,767 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:02:46,936 - monitoring - INFO - Completed trend_forecast in 0.39s
+2025-09-01 14:02:46,951 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:02:46,952 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:02:53,129 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:53,130 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:53,557 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:02:53,559 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:02:53,561 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:02:53,570 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:02:53,608 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:02:53,803 - monitoring - INFO - Completed trend_forecast in 0.24s
+2025-09-01 14:02:53,831 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:02:53,831 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:03:28,782 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:03:28,782 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:03:28,937 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:03:28,938 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:03:28,946 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:03:28,956 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:03:29,031 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:03:29,138 - monitoring - INFO - Completed trend_forecast in 0.19s
+2025-09-01 14:03:29,151 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:03:29,152 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:06:00,143 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:06:00,152 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:06:00,192 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:06:00,272 - monitoring - INFO - Completed trend_forecast in 0.13s
+2025-09-01 14:06:00,282 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:06:00,328 - monitoring - INFO - Completed sla_prediction in 0.05s
+2025-09-01 14:06:00,667 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:06:00,675 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:06:00,725 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:06:00,835 - monitoring - INFO - Completed trend_forecast in 0.17s
+2025-09-01 14:06:00,840 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:06:00,841 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:06:00,843 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:06:00,843 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:06:00,847 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:06:00,848 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:09:21,632 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:09:21,633 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:09:22,277 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:09:22,288 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:09:22,360 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:09:22,636 - monitoring - INFO - Completed trend_forecast in 0.36s
+2025-09-01 14:09:22,646 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:09:22,647 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:09:22,684 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:09:22,685 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:09:29,737 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:09:29,737 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:09:59,323 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:09:59,323 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:10:29,615 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:10:29,615 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:10:33,055 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:10:33,055 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:10:36,331 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:10:36,333 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:11:18,389 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:11:18,391 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:11:26,406 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:11:26,407 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:11:46,637 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:11:46,638 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:12:57,801 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:12:57,812 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-09-01 14:13:28,164 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:13:28,166 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:13:42,295 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:13:42,296 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:13:57,870 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:13:57,871 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:14:11,629 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:14:11,632 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:14:46,483 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:14:46,484 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:15:25,906 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:15:25,940 - monitoring - INFO - Completed sla_prediction in 0.03s
+2025-09-01 14:16:08,371 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:16:08,391 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:16:08,546 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:16:08,754 - monitoring - INFO - Completed trend_forecast in 0.38s
+2025-09-01 14:16:08,769 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:16:08,771 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:16:08,789 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:16:08,803 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:16:08,912 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:16:09,085 - monitoring - INFO - Completed trend_forecast in 0.30s
+2025-09-01 14:16:09,095 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:16:09,096 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:16:09,108 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:16:09,109 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:16:20,246 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:16:20,246 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:16:20,248 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:16:20,249 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:16:20,255 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:16:20,264 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:16:20,289 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:16:20,400 - monitoring - INFO - Completed trend_forecast in 0.15s
+2025-09-01 14:16:20,411 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:16:20,412 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:16:25,428 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:16:25,429 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:16:51,025 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:16:51,025 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:17:11,999 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:17:12,001 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:17:43,441 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:17:43,442 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:18:48,143 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:18:48,144 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:19:52,425 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:19:52,426 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:20:31,276 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:20:31,276 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:20:42,407 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:20:42,421 - monitoring - INFO - Completed sla_prediction in 0.01s
+2025-09-01 14:20:49,863 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:20:49,887 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:20:49,974 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:20:50,222 - monitoring - INFO - Completed trend_forecast in 0.36s
+2025-09-01 14:20:50,257 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:20:50,258 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:21:16,013 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:21:16,014 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:21:37,753 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:21:37,755 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:22:06,279 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:22:06,282 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:22:28,306 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:22:28,308 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:22:45,193 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:22:45,196 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:23:33,034 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:23:33,046 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:23:33,159 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:23:33,282 - monitoring - INFO - Completed trend_forecast in 0.25s
+2025-09-01 14:23:33,289 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:23:33,290 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:23:33,294 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:23:33,295 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:23:33,305 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:23:33,306 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:23:38,881 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:23:38,885 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:23:38,892 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:23:38,893 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:23:38,898 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:23:38,911 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:23:38,973 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:23:39,185 - monitoring - INFO - Completed trend_forecast in 0.29s
+2025-09-01 14:23:39,258 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:23:39,270 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-09-01 14:23:43,869 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:23:43,871 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:23:43,897 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:23:43,906 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:23:43,949 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:23:44,067 - monitoring - INFO - Completed trend_forecast in 0.17s
+2025-09-01 14:23:44,113 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:23:44,163 - monitoring - INFO - Completed sla_prediction in 0.05s
+2025-09-01 14:23:44,196 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:23:44,197 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:24:35,691 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:24:35,693 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:24:35,702 - monitoring - INFO - Starting trend_forecast endpoint call
+2025-09-01 14:24:35,714 - cmdstanpy - DEBUG - cmd: where.exe tbb.dll
+cwd: None
+2025-09-01 14:24:35,853 - cmdstanpy - DEBUG - TBB already found in load path
+2025-09-01 14:24:36,040 - monitoring - INFO - Completed trend_forecast in 0.34s
+2025-09-01 14:24:37,184 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-09-01 14:24:37,185 - monitoring - INFO - Completed automated_decisions in 0.00s
+2025-09-01 14:24:37,194 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:24:37,196 - monitoring - INFO - Completed sla_prediction in 0.00s
+2025-09-01 14:24:55,560 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-09-01 14:24:55,560 - monitoring - INFO - Completed sla_prediction in 0.00s

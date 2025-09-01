@@ -30,6 +30,8 @@ import { useResponsive } from '../../hooks/useResponsive';
 
 const AlertsDashboard: React.FC = () => {
   const [filters, setFilters] = useState<AlertsDashboardQuery>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const alertsPerPage = 4;
   const theme = useTheme();
   const { user } = useAuth();
   const { isMobile } = useResponsive();
@@ -91,6 +93,11 @@ const AlertsDashboard: React.FC = () => {
   // Handler to show notification after alert resolution (passed to AlertCard)
   const handleAlertResolved = () => {
     notify('Alerte marquée comme résolue !', 'success');
+    // Reset to first page if current page becomes empty
+    const totalPages = Math.ceil((filteredAlerts?.length || 0) / alertsPerPage);
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
   };
 
   // Role-based filtering
@@ -188,9 +195,38 @@ const AlertsDashboard: React.FC = () => {
                 </Typography>
               </Box>
             )}
-            {filteredAlerts?.map((alert: any) => (
-              <AlertCard key={alert.bordereau.id} alert={alert} onResolved={handleAlertResolved} />
-            ))}
+            {(() => {
+              const startIndex = (currentPage - 1) * alertsPerPage;
+              const endIndex = startIndex + alertsPerPage;
+              const paginatedAlerts = filteredAlerts?.slice(startIndex, endIndex) || [];
+              
+              return paginatedAlerts.map((alert: any) => (
+                <AlertCard key={alert.bordereau.id} alert={alert} onResolved={handleAlertResolved} />
+              ));
+            })()}
+            
+            {/* Pagination */}
+            {filteredAlerts && filteredAlerts.length > alertsPerPage && (
+              <Box display="flex" justifyContent="center" alignItems="center" mt={2} gap={1}>
+                <Button 
+                  size="small" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Précédent
+                </Button>
+                <Typography variant="body2" sx={{ mx: 2 }}>
+                  Page {currentPage} sur {Math.ceil(filteredAlerts.length / alertsPerPage)}
+                </Typography>
+                <Button 
+                  size="small" 
+                  onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredAlerts.length / alertsPerPage), prev + 1))}
+                  disabled={currentPage >= Math.ceil(filteredAlerts.length / alertsPerPage)}
+                >
+                  Suivant
+                </Button>
+              </Box>
+            )}
           </Grid>
         <Grid item xs={12} md={4}>
           <>

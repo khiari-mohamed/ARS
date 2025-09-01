@@ -67,7 +67,7 @@ const ActiveAlerts: React.FC = () => {
     return () => clearInterval(interval);
   }, [autoRefresh, refetch]);
 
-  const activeAlerts = alerts.filter((a: any) => a.alertLevel === 'red' || a.alertLevel === 'orange');
+  const activeAlerts = alerts.filter((a: any) => a.bordereau.statut !== 'CLOTURE');
 
   const handleResolve = async (alert: any) => {
     try {
@@ -172,6 +172,7 @@ const ActiveAlerts: React.FC = () => {
                     <MenuItem value="">Tous</MenuItem>
                     <MenuItem value="red">Critique</MenuItem>
                     <MenuItem value="orange">Attention</MenuItem>
+                    <MenuItem value="green">Normal</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>

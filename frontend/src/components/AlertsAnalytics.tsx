@@ -10,7 +10,8 @@ import {
   Select,
   MenuItem,
   CircularProgress,
-  Alert
+  Alert,
+  Chip
 } from '@mui/material';
 import {
   useAlertEffectiveness,
@@ -73,23 +74,32 @@ const AlertsAnalytics: React.FC = () => {
                 Efficacité des Alertes
               </Typography>
               {loadingEffectiveness ? (
-                <CircularProgress />
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
               ) : errorEffectiveness ? (
-                <Alert severity="error">Erreur lors du chargement</Alert>
+                <Alert severity="error">Erreur lors du chargement des données d'efficacité</Alert>
               ) : effectiveness && effectiveness.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={effectiveness}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="alertType" />
-                    <YAxis />
-                    <Tooltip />
+                    <XAxis 
+                      dataKey="alertType" 
+                      tickFormatter={(value) => value.replace('_', ' ')}
+                    />
+                    <YAxis domain={[0, 100]} />
+                    <Tooltip 
+                      formatter={(value: any, name: string) => [`${value.toFixed(1)}%`, name]}
+                      labelFormatter={(label) => label.replace('_', ' ')}
+                    />
                     <Legend />
                     <Bar dataKey="precision" fill="#8884d8" name="Précision %" />
                     <Bar dataKey="recall" fill="#82ca9d" name="Rappel %" />
+                    <Bar dataKey="f1Score" fill="#ffc658" name="Score F1 %" />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <Typography>Aucune donnée disponible</Typography>
+                <Alert severity="info">Aucune donnée d'efficacité disponible</Alert>
               )}
             </CardContent>
           </Card>
@@ -103,21 +113,47 @@ const AlertsAnalytics: React.FC = () => {
                 Tendances des Alertes
               </Typography>
               {loadingTrends ? (
-                <CircularProgress />
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
               ) : trends && trends.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={trends.slice(-14)}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(value) => new Date(value).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis yAxisId="count" orientation="left" />
+                    <YAxis yAxisId="time" orientation="right" />
+                    <Tooltip 
+                      labelFormatter={(value) => new Date(value).toLocaleDateString('fr-FR')}
+                      formatter={(value: any, name: string) => [
+                        name.includes('Temps') ? `${Math.round(value)} min` : value,
+                        name
+                      ]}
+                    />
                     <Legend />
-                    <Line type="monotone" dataKey="count" stroke="#8884d8" name="Nombre d'Alertes" />
-                    <Line type="monotone" dataKey="avgResolutionTime" stroke="#82ca9d" name="Temps Résolution (min)" />
+                    <Line 
+                      yAxisId="count"
+                      type="monotone" 
+                      dataKey="count" 
+                      stroke="#8884d8" 
+                      name="Nombre d'Alertes"
+                      strokeWidth={2}
+                    />
+                    <Line 
+                      yAxisId="time"
+                      type="monotone" 
+                      dataKey="avgResolutionTime" 
+                      stroke="#82ca9d" 
+                      name="Temps Résolution (min)"
+                      strokeWidth={2}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <Typography>Aucune donnée de tendance</Typography>
+                <Alert severity="info">Aucune donnée de tendance disponible</Alert>
               )}
             </CardContent>
           </Card>
@@ -131,14 +167,23 @@ const AlertsAnalytics: React.FC = () => {
                 Faux Positifs Récents
               </Typography>
               {loadingFP ? (
-                <CircularProgress />
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
               ) : falsePositives && falsePositives.length > 0 ? (
                 <Box>
                   {falsePositives.slice(0, 3).map((fp: any, index: number) => (
-                    <Box key={index} mb={2} p={2} bgcolor="grey.50" borderRadius={1}>
-                      <Typography variant="subtitle2" fontWeight={600} mb={1}>
-                        {fp.alertType}
-                      </Typography>
+                    <Box key={fp.alertId || index} mb={2} p={2} bgcolor="grey.50" borderRadius={1}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {fp.alertType.replace('_', ' ')}
+                        </Typography>
+                        <Chip
+                          label={fp.impact.toUpperCase()}
+                          color={fp.impact === 'high' ? 'error' : fp.impact === 'medium' ? 'warning' : 'info'}
+                          size="small"
+                        />
+                      </Box>
                       <Typography variant="body2" color="text.secondary" mb={1}>
                         {fp.reason}
                       </Typography>
@@ -147,9 +192,14 @@ const AlertsAnalytics: React.FC = () => {
                       </Typography>
                     </Box>
                   ))}
+                  {falsePositives.length > 3 && (
+                    <Typography variant="caption" color="text.secondary" textAlign="center" display="block" mt={1}>
+                      +{falsePositives.length - 3} autres faux positifs
+                    </Typography>
+                  )}
                 </Box>
               ) : (
-                <Typography>Aucun faux positif récent</Typography>
+                <Alert severity="info">Aucun faux positif récent</Alert>
               )}
             </CardContent>
           </Card>
@@ -163,25 +213,44 @@ const AlertsAnalytics: React.FC = () => {
                 Recommandations
               </Typography>
               {loadingRecs ? (
-                <CircularProgress />
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
               ) : recommendations && recommendations.length > 0 ? (
                 <Box>
                   {recommendations.slice(0, 3).map((rec: any, index: number) => (
-                    <Box key={index} mb={2} p={2} bgcolor="info.light" borderRadius={1}>
-                      <Typography variant="subtitle2" fontWeight={600} mb={1}>
-                        {rec.type.replace('_', ' ').toUpperCase()}
-                      </Typography>
+                    <Box key={`${rec.alertType}-${rec.type}-${index}`} mb={2} p={2} bgcolor="info.light" borderRadius={1}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          {rec.type.replace('_', ' ').toUpperCase()}
+                        </Typography>
+                        <Chip
+                          label={rec.priority.toUpperCase()}
+                          color={rec.priority === 'high' ? 'error' : rec.priority === 'medium' ? 'warning' : 'info'}
+                          size="small"
+                        />
+                      </Box>
                       <Typography variant="body2" mb={1}>
                         {rec.description}
                       </Typography>
-                      <Typography variant="caption" color="success.main">
-                        📈 {rec.expectedImpact}
-                      </Typography>
+                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Typography variant="caption" color="success.main">
+                          📈 {rec.expectedImpact}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          ⏱️ {rec.estimatedEffort}
+                        </Typography>
+                      </Box>
                     </Box>
                   ))}
+                  {recommendations.length > 3 && (
+                    <Typography variant="caption" color="text.secondary" textAlign="center" display="block" mt={1}>
+                      +{recommendations.length - 3} autres recommandations
+                    </Typography>
+                  )}
                 </Box>
               ) : (
-                <Typography>Aucune recommandation disponible</Typography>
+                <Alert severity="info">Aucune recommandation disponible</Alert>
               )}
             </CardContent>
           </Card>
