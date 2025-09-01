@@ -13,6 +13,7 @@ import { BSAssignModal } from '../../components/BS/BSAssignModal';
 import { AssignmentSuggestions } from '../../components/BS/AssignmentSuggestions';
 import { RebalancingSuggestions } from '../../components/BS/RebalancingSuggestions';
 import { BSStatusTag } from '../../components/BS/BSStatusTag';
+import GlobalCorbeille from '../../components/analytics/GlobalCorbeille';
 
 const { TabPane } = Tabs;
 
@@ -345,65 +346,7 @@ const ChefDashboard: React.FC = () => {
         </TabPane>
 
         <TabPane tab="Équipe" key="team">
-          <Row gutter={16}>
-            <Col span={16}>
-              <Card 
-                title="Performance de l'équipe"
-                extra={
-                  <Button 
-                    size="small" 
-                    onClick={() => {
-                      // Refresh team workload data without page reload
-                      queryClient.invalidateQueries({ queryKey: ['team-workload'] });
-                      queryClient.invalidateQueries({ queryKey: ['bs-list'] });
-                      queryClient.invalidateQueries({ queryKey: ['assignment-suggestions'] });
-                    }}
-                    icon={<TeamOutlined />}
-                  >
-                    Actualiser ({teamLoad?.length || 0} gestionnaires)
-                  </Button>
-                }
-              >
-
-                <Table
-                  dataSource={teamLoad || []}
-                  columns={teamColumns}
-                  rowKey="id"
-                  pagination={false}
-                  size="small"
-                  scroll={{ x: 700 }}
-                  loading={!teamLoad}
-                />
-              </Card>
-            </Col>
-            <Col span={8}>
-              <Card title="Répartition des risques">
-                <Row gutter={8}>
-                  <Col span={8}>
-                    <Statistic
-                      title="Faible"
-                      value={teamStats.lowRiskMembers}
-                      valueStyle={{ color: '#3f8600' }}
-                    />
-                  </Col>
-                  <Col span={8}>
-                    <Statistic
-                      title="Moyen"
-                      value={teamStats.mediumRiskMembers}
-                      valueStyle={{ color: '#faad14' }}
-                    />
-                  </Col>
-                  <Col span={8}>
-                    <Statistic
-                      title="Élevé"
-                      value={teamStats.highRiskMembers}
-                      valueStyle={{ color: '#cf1322' }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-          </Row>
+          <GlobalCorbeille />
         </TabPane>
 
         <TabPane tab="Rééquilibrage IA" key="rebalancing">

@@ -118,6 +118,12 @@ export class DashboardController {
     return { success: true, message: 'Feedback received', data: body, timestamp: new Date().toISOString() };
   }
 
+  @Post('bulk-assign')
+  @UseGuards(JwtAuthGuard)
+  async bulkAssignBordereaux(@Body() body: { bordereauIds: string[]; assigneeId: string }, @Req() req) {
+    return this.dashboardService.bulkAssignBordereaux(body.bordereauIds, body.assigneeId, req.user);
+  }
+
   @Get('test')
   async test() {
     return { success: true, message: 'Dashboard test endpoint working' };
@@ -146,5 +152,23 @@ export class DashboardController {
       alerts,
       timestamp: new Date().toISOString()
     };
+  }
+
+  @Get('global-corbeille')
+  @UseGuards(JwtAuthGuard)
+  async getGlobalCorbeille(@Query() query: any, @Req() req) {
+    return this.dashboardService.getGlobalCorbeille(req.user, query);
+  }
+
+  @Get('workforce-estimator')
+  @UseGuards(JwtAuthGuard)
+  async getWorkforceEstimator(@Query() query: any, @Req() req) {
+    return this.dashboardService.getWorkforceEstimator(req.user, query);
+  }
+
+  @Get('claims-advanced')
+  @UseGuards(JwtAuthGuard)
+  async getAdvancedClaimsAnalytics(@Query() query: any, @Req() req) {
+    return this.dashboardService.getAdvancedClaimsAnalytics(req.user, query);
   }
 }

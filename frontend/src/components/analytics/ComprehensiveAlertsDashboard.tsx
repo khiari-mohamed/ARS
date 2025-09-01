@@ -37,7 +37,8 @@ import {
   Settings,
   Psychology,
   Speed,
-  Timeline
+  Timeline,
+  People
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -50,6 +51,9 @@ import AlertsKPICards from './AlertsKPICards';
 import AlertsCharts from './AlertsCharts';
 import PriorityList from './PriorityList';
 import ReclamationAlerts from './ReclamationAlerts';
+import BordereauStatusIndicator from './BordereauStatusIndicator';
+import WorkforceEstimator from './WorkforceEstimator';
+import ClaimsAnalyticsDashboard from './ClaimsAnalyticsDashboard';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -393,6 +397,8 @@ const ComprehensiveAlertsDashboard: React.FC = () => {
           <Tab label="Finance" icon={<Timeline />} iconPosition="start" />
           <Tab label="Escalations" icon={<Settings />} iconPosition="start" />
           <Tab label="Analytics" icon={<Assessment />} iconPosition="start" />
+          <Tab label="Effectifs" icon={<People />} iconPosition="start" />
+          <Tab label="Réclamations" icon={<Psychology />} iconPosition="start" />
         </Tabs>
       </Box>
 
@@ -420,7 +426,10 @@ const ComprehensiveAlertsDashboard: React.FC = () => {
                     }}
                   >
                     {alertsDashboard?.slice(0, 10).map((alert: any, index: number) => (
-                      <AlertCard key={index} alert={alert} onResolved={refetchDashboard} />
+                      <Box key={index} display="flex" alignItems="center" gap={1} mb={1}>
+                        <BordereauStatusIndicator bordereau={alert.bordereau} size="small" />
+                        <AlertCard alert={alert} onResolved={refetchDashboard} />
+                      </Box>
                     ))}
                   </Box>
                 )}
@@ -535,6 +544,14 @@ const ComprehensiveAlertsDashboard: React.FC = () => {
 
       <TabPanel value={tabValue} index={7}>
         <AlertsCharts data={kpiData} loading={kpiLoading} />
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={8}>
+        <WorkforceEstimator />
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={9}>
+        <ClaimsAnalyticsDashboard />
       </TabPanel>
 
       {/* Filter Dialog */}

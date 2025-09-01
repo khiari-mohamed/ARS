@@ -9,6 +9,9 @@ import AIDashboard from './ai/AIDashboard';
 import LineChart from './LineChart';
 import UserPerformance from './UserPerformance';
 import FeedbackForm from './FeedbackForm';
+import BordereauStatusIndicator from './analytics/BordereauStatusIndicator';
+import WorkforceEstimator from './analytics/WorkforceEstimator';
+import GlobalCorbeille from './analytics/GlobalCorbeille';
 
 interface DashboardData {
   kpis: any;
@@ -404,16 +407,38 @@ const EnhancedDashboard: React.FC = () => {
   return (
     <div style={{ padding: '1rem' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-        <div>
-          <h1 style={{ margin: 0, color: '#2c3e50' }}>Tableau de Bord - {user?.role}</h1>
-          <p style={{ margin: '0.5rem 0 0 0', color: '#7f8c8d' }}>
+      <div style={{ 
+        display: 'flex', 
+        flexWrap: 'wrap',
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        gap: '1rem',
+        marginBottom: '2rem', 
+        padding: '1rem', 
+        backgroundColor: '#f8f9fa', 
+        borderRadius: '8px' 
+      }}>
+        <div style={{ flex: '1 1 auto', minWidth: '200px' }}>
+          <h1 style={{ margin: 0, color: '#2c3e50', fontSize: '1.25rem' }}>Tableau de Bord - {user?.role}</h1>
+          <p style={{ margin: '0.5rem 0 0 0', color: '#7f8c8d', fontSize: '0.9rem' }}>
             Dernière mise à jour: {lastUpdated.toLocaleTimeString()}
           </p>
         </div>
         
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap',
+          gap: '0.75rem', 
+          alignItems: 'center',
+          justifyContent: 'flex-end'
+        }}>
+          <label style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem',
+            fontSize: '0.9rem',
+            whiteSpace: 'nowrap'
+          }}>
             <input
               type="checkbox"
               checked={realTimeEnabled}
@@ -426,12 +451,14 @@ const EnhancedDashboard: React.FC = () => {
             onClick={() => exportData('excel')} 
             disabled={!dashboardData}
             style={{ 
-              padding: '0.5rem 1rem', 
+              padding: '0.5rem 0.75rem', 
               backgroundColor: dashboardData ? '#27ae60' : '#95a5a6', 
               color: 'white', 
               border: 'none', 
               borderRadius: '4px', 
-              cursor: dashboardData ? 'pointer' : 'not-allowed' 
+              cursor: dashboardData ? 'pointer' : 'not-allowed',
+              fontSize: '0.85rem',
+              whiteSpace: 'nowrap'
             }}
           >
             📊 Excel
@@ -441,12 +468,14 @@ const EnhancedDashboard: React.FC = () => {
             onClick={() => exportData('pdf')} 
             disabled={!dashboardData}
             style={{ 
-              padding: '0.5rem 1rem', 
+              padding: '0.5rem 0.75rem', 
               backgroundColor: dashboardData ? '#e74c3c' : '#95a5a6', 
               color: 'white', 
               border: 'none', 
               borderRadius: '4px', 
-              cursor: dashboardData ? 'pointer' : 'not-allowed' 
+              cursor: dashboardData ? 'pointer' : 'not-allowed',
+              fontSize: '0.85rem',
+              whiteSpace: 'nowrap'
             }}
           >
             📄 PDF
@@ -653,23 +682,57 @@ const EnhancedDashboard: React.FC = () => {
             <KPIWidgets kpis={dashboardData.kpis} />
           </div>
 
-          {/* Main Grid - 3 columns, 2 rows */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
-            <div>
+          {/* Main Grid - Responsive 3 columns */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
+            gap: '1.5rem', 
+            marginBottom: '2rem',
+            width: '100%',
+            maxWidth: '100%'
+          }}>
+            <div style={{ minWidth: 0 }}>
               <SLAStatusPanel slaStatus={dashboardData.slaStatus} />
             </div>
             
-            <div style={{ padding: '1rem', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: 'white' }}>
-              <h3>Alertes</h3>
-              <AlertsPanel alerts={dashboardData.alerts.alerts || []} />
+            <div style={{ 
+              padding: '1rem', 
+              border: '1px solid #ddd', 
+              borderRadius: '8px', 
+              backgroundColor: 'white',
+              minWidth: 0,
+              overflow: 'hidden'
+            }}>
+              <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Alertes</h3>
+              <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                <AlertsPanel alerts={dashboardData.alerts.alerts || []} />
+              </div>
             </div>
             
-            <div style={{ padding: '1rem', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: 'white' }}>
-              <h3>Performance Équipe</h3>
-              <UserPerformance data={dashboardData.performance.performance || []} />
+            <div style={{ 
+              padding: '1rem', 
+              border: '1px solid #ddd', 
+              borderRadius: '8px', 
+              backgroundColor: 'white',
+              minWidth: 0,
+              overflow: 'hidden'
+            }}>
+              <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Performance Équipe</h3>
+              <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                <UserPerformance data={dashboardData.performance.performance || []} />
+              </div>
             </div>
             
-            <div style={{ gridColumn: 'span 3', padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+            <div style={{ 
+              gridColumn: '1 / -1', 
+              padding: '2rem', 
+              border: '1px solid #e0e7ff', 
+              borderRadius: '12px', 
+              backgroundColor: 'white', 
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              minWidth: 0,
+              overflow: 'hidden'
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
                 <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Tendances & Indicateurs</h3>
@@ -715,6 +778,20 @@ const EnhancedDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Global Corbeille for Super Admin */}
+          {user?.role === 'SUPER_ADMIN' && (
+            <div style={{ marginTop: '2rem' }}>
+              <GlobalCorbeille />
+            </div>
+          )}
+
+          {/* Workforce Estimator for Super Admin */}
+          {user?.role === 'SUPER_ADMIN' && (
+            <div style={{ marginTop: '2rem' }}>
+              <WorkforceEstimator />
+            </div>
+          )}
 
           {/* Role-specific content */}
           {renderRoleSpecificContent()}
