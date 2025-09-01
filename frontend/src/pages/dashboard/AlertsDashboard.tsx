@@ -26,12 +26,13 @@ import { Box, Typography, Grid, Divider, Button, CircularProgress, Alert as MuiA
 import { exportAlertsToCSV } from '../../utils/exportAlerts';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useResponsive } from '../../hooks/useResponsive';
 
 const AlertsDashboard: React.FC = () => {
   const [filters, setFilters] = useState<AlertsDashboardQuery>({});
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
+  const { isMobile } = useResponsive();
   const {
     data: alerts,
     isLoading: loadingAlerts,
@@ -124,11 +125,11 @@ const AlertsDashboard: React.FC = () => {
   return (
     <RoleBasedAlerts>
       <AlertsLayout>
-      <Box sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom>
+      <Box sx={{ p: { xs: 1, sm: 2, md: 3 }, maxWidth: '100vw', overflow: 'hidden' }}>
+        <Typography variant={isMobile ? 'h5' : 'h4'} gutterBottom sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
           Tableau de bord des alertes
           {user?.role !== 'SUPER_ADMIN' && (
-            <Typography variant="subtitle1" color="text.secondary">
+            <Typography variant="subtitle1" color="text.secondary" sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
               Vue {user?.role === 'CHEF_EQUIPE' ? 'Équipe' : 'Personnelle'}
             </Typography>
           )}
@@ -136,18 +137,18 @@ const AlertsDashboard: React.FC = () => {
       </Box>
       
       {/* KPI Cards Section */}
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <AlertsKPICards data={kpiData} loading={loadingKPI} />
       </Box>
       
       {/* Charts Section */}
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <AlertsCharts data={kpiData} loading={loadingKPI} />
       </Box>
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <AlertFilters filters={filters} setFilters={setFilters} />
       </Box>
-      <Box sx={{ px: 3, mb: 2 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 }, mb: 2 }}>
         <>
           <Button
             variant="outlined"
@@ -164,13 +165,13 @@ const AlertsDashboard: React.FC = () => {
           )}
         </>
       </Box>
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <Divider sx={{ my: 2 }} />
       </Box>
-      <Box sx={{ px: 3 }}>
-        <Grid container spacing={2}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+        <Grid container spacing={{ xs: 1, sm: 2 }}>
           <Grid item xs={12} md={8}>
-            <Typography variant="h6">Alertes actives</Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>Alertes actives</Typography>
             {loadingAlerts && <CircularProgress size={24} />}
             {errorAlerts && (
               <MuiAlert severity="error" sx={{ my: 1 }}>
@@ -211,11 +212,11 @@ const AlertsDashboard: React.FC = () => {
         </Grid>
         </Grid>
       </Box>
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <Divider sx={{ my: 2 }} />
       </Box>
-      <Box sx={{ px: 3 }}>
-        <Grid container spacing={2}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+        <Grid container spacing={{ xs: 1, sm: 2 }}>
         <Grid item xs={12} md={6}>
           <>
             {loadingOverload && <CircularProgress size={20} />}
@@ -240,10 +241,10 @@ const AlertsDashboard: React.FC = () => {
         </Grid>
         </Grid>
       </Box>
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <Divider sx={{ my: 2 }} />
       </Box>
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <>
           {loadingPriority && <CircularProgress size={20} />}
           {errorPriority && (
@@ -254,10 +255,10 @@ const AlertsDashboard: React.FC = () => {
           <PriorityList items={priorityList || []} />
         </>
       </Box>
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <Divider sx={{ my: 2 }} />
       </Box>
-      <Box sx={{ px: 3 }}>
+      <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <AlertHistory />
       </Box>
       </AlertsLayout>

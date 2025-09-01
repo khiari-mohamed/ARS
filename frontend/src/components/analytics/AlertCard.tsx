@@ -14,6 +14,7 @@ import {
   DialogActions,
   TextField
 } from '@mui/material';
+import { useResponsive } from '../../hooks/useResponsive';
 import {
   ExpandMore,
   ExpandLess,
@@ -35,6 +36,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
   const [expanded, setExpanded] = useState(false);
   const [commentDialog, setCommentDialog] = useState(false);
   const [comment, setComment] = useState('');
+  const { isMobile } = useResponsive();
 
   const resolveMutation = useResolveAlert();
   const commentMutation = useAddAlertComment();
@@ -74,9 +76,16 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
     <>
       <Card sx={{ mb: 2, border: `2px solid ${alertLevelColor(alert.alertLevel)}` }}>
         <CardContent>
-          <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-            <Box>
-              <Typography variant="h6" gutterBottom>
+          <Box 
+            display="flex" 
+            flexDirection={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between" 
+            alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+            mb={2}
+            gap={{ xs: 1, sm: 0 }}
+          >
+            <Box sx={{ flex: 1 }}>
+              <Typography variant={isMobile ? 'subtitle1' : 'h6'} gutterBottom>
                 Bordereau #{alert.bordereau.id}
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -88,11 +97,17 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
               sx={{
                 backgroundColor: alertLevelColor(alert.alertLevel),
                 color: '#fff',
+                alignSelf: { xs: 'flex-start', sm: 'center' }
               }}
             />
           </Box>
 
-          <Box display="flex" gap={2} mb={2}>
+          <Box 
+            display="flex" 
+            flexWrap="wrap"
+            gap={{ xs: 1, sm: 2 }} 
+            mb={2}
+          >
             <Chip
               label={`Statut: ${alert.bordereau.statut}`}
               color={alert.bordereau.statut === 'CLOTURE' ? 'success' : 'warning'}
@@ -112,14 +127,25 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
             )}
           </Box>
 
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Box display="flex" gap={1}>
+          <Box 
+            display="flex" 
+            flexDirection={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between" 
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+            gap={{ xs: 2, sm: 0 }}
+          >
+            <Box 
+              display="flex" 
+              flexDirection={{ xs: 'column', sm: 'row' }}
+              gap={1}
+            >
               <Button
                 size="small"
                 startIcon={<CheckCircle />}
                 color="success"
                 onClick={handleResolve}
                 disabled={resolveMutation.isLoading}
+                fullWidth={isMobile}
               >
                 Résoudre
               </Button>
@@ -127,6 +153,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
                 size="small"
                 startIcon={<Comment />}
                 onClick={() => setCommentDialog(true)}
+                fullWidth={isMobile}
               >
                 Commenter
               </Button>
@@ -134,6 +161,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
                 size="small"
                 startIcon={<Visibility />}
                 onClick={() => window.open(`/bordereaux/${alert.bordereau.id}`, '_blank')}
+                fullWidth={isMobile}
               >
                 Voir Détails
               </Button>
@@ -141,6 +169,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
             <IconButton
               size="small"
               onClick={() => setExpanded(!expanded)}
+              sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
             >
               {expanded ? <ExpandLess /> : <ExpandMore />}
             </IconButton>
@@ -191,7 +220,13 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
       </Card>
 
       {/* Comment Dialog */}
-      <Dialog open={commentDialog} onClose={() => setCommentDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={commentDialog} 
+        onClose={() => setCommentDialog(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>Ajouter un Commentaire</DialogTitle>
         <DialogContent>
           <TextField

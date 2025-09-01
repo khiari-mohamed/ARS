@@ -43,17 +43,27 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     // Polling for reclamation alerts
     const fetchReclamationAlerts = async () => {
       try {
-        const { data } = await LocalAPI.get('/alerts/reclamations');
+        const { data } = await LocalAPI.get('/reclamations/alerts');
         if (mounted && Array.isArray(data)) {
           setNotifications(prev => {
-            // Merge with other notifications later
-            const recNotifs = data.filter(a => !a.resolved).map(a => ({ message: a.message, read: false }));
+            // Convert reclamation alerts to notification format
+            const recNotifs = data.filter(a => !a.read).map(a => ({
+              id: a.id,
+              message: a.message,
+              title: a.title,
+              read: a.read,
+              _type: 'reclamation',
+              createdAt: a.createdAt,
+              data: { reclamationId: a.reclamationId, clientName: a.clientName, level: a.level }
+            }));
             // Remove old rec alerts, add new
             const others = prev.filter(n => !n._type || n._type !== 'reclamation');
-            return [...others, ...recNotifs.map(n => ({ ...n, _type: 'reclamation' }))];
+            return [...others, ...recNotifs];
           });
         }
-      } catch {}
+      } catch (error) {
+        console.error('Failed to fetch reclamation alerts:', error);
+      }
     };
     fetchReclamationAlerts();
     const interval = setInterval(fetchReclamationAlerts, 30000);
@@ -99,7 +109,11 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     const notification = notifications[index];
     if (notification.id) {
       try {
-        await LocalAPI.patch(`/users/${user?.id}/notifications/${notification.id}/read`);
+        if (notification._type === 'reclamation') {
+          await LocalAPI.patch(`/reclamations/alerts/${notification.id}/read`);
+        } else {
+          await LocalAPI.patch(`/users/${user?.id}/notifications/${notification.id}/read`);
+        }
       } catch (error) {
         console.log('Failed to mark notification as read');
       }
@@ -108,7 +122,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   };
   
   // Get notification icon
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = (type: string, level?: string) => {
     switch (type) {
       case 'NEW_BORDEREAU_SCAN': return '📄';
       case 'BORDEREAU_READY_ASSIGNMENT': return '📋';
@@ -117,6 +131,10 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'ASSIGNMENT_FAILURE': return '❌';
       case 'SLA_BREACH': return '🔴';
       case 'CUSTOM_NOTIFICATION': return '💬';
+      case 'reclamation': 
+        if (level === 'error') return '🚨';
+        if (level === 'warning') return '⚠️';
+        return '📝';
       default: return '🔔';
     }
   };
@@ -150,7 +168,17 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                 <MenuItem 
                   onClick={async () => {
                     try {
+                      // Mark all user notifications as read
                       await LocalAPI.patch(`/users/${user?.id}/notifications/mark-all-read`);
+                      
+                      // Mark all reclamation alerts as read
+                      const reclamationAlerts = notifications.filter(n => n._type === 'reclamation' && !n.read);
+                      await Promise.all(
+                        reclamationAlerts.map(alert => 
+                          LocalAPI.patch(`/reclamations/alerts/${alert.id}/read`)
+                        )
+                      );
+                      
                       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
                     } catch (error) {
                       console.log('Failed to mark all as read');
@@ -177,7 +205,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                 >
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, width: '100%' }}>
                     <span style={{ fontSize: '16px', marginTop: '2px' }}>
-                      {getNotificationIcon(notif._type || 'default')}
+                      {getNotificationIcon(notif._type || 'default', notif.data?.level)}
                     </span>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       {notif.title && (
@@ -208,16 +236,34 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                       >
                         {notif.message}
                       </Typography>
-                      {notif.createdAt && (
-                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                          {new Date(notif.createdAt).toLocaleString('fr-FR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </Typography>
-                      )}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                        {notif.createdAt && (
+                          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                            {new Date(notif.createdAt).toLocaleString('fr-FR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </Typography>
+                        )}
+                        {notif._type === 'reclamation' && notif.data?.reclamationId && (
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              color: 'primary.main', 
+                              cursor: 'pointer',
+                              '&:hover': { textDecoration: 'underline' }
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(`/home/reclamations/${notif.data.reclamationId}`, '_blank');
+                            }}
+                          >
+                            Voir réclamation
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
                   </Box>
                 </MenuItem>

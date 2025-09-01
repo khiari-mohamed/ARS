@@ -1,6 +1,7 @@
 import React from 'react';
 import { Grid, Card, CardContent, Typography, Box, CircularProgress, Chip } from '@mui/material';
 import { TrendingUp, TrendingDown, Warning, CheckCircle, Schedule, Error } from '@mui/icons-material';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface AlertsKPICardsProps {
   data: any;
@@ -8,6 +9,8 @@ interface AlertsKPICardsProps {
 }
 
 const AlertsKPICards: React.FC<AlertsKPICardsProps> = ({ data, loading }) => {
+  const { isMobile } = useResponsive();
+  
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={3}>
@@ -63,11 +66,11 @@ const AlertsKPICards: React.FC<AlertsKPICardsProps> = ({ data, loading }) => {
   ];
 
   return (
-    <Grid container spacing={3} mb={4}>
+    <Grid container spacing={{ xs: 2, sm: 3 }} mb={4}>
       {kpiCards.map((kpi, index) => (
-        <Grid item xs={12} sm={6} md={2.4} key={index}>
-          <Card>
-            <CardContent>
+        <Grid item xs={6} sm={6} md={2.4} key={index}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 } }}>
               <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                 {kpi.icon}
                 {kpi.trend === 'up' ? (
@@ -76,10 +79,10 @@ const AlertsKPICards: React.FC<AlertsKPICardsProps> = ({ data, loading }) => {
                   <TrendingDown color="error" fontSize="small" />
                 )}
               </Box>
-              <Typography variant="h4" component="div" color={`${kpi.color}.main`}>
+              <Typography variant={isMobile ? 'h5' : 'h4'} component="div" color={`${kpi.color}.main`}>
                 {kpi.value}
               </Typography>
-              <Typography color="text.secondary" variant="body2">
+              <Typography color="text.secondary" variant={isMobile ? 'caption' : 'body2'}>
                 {kpi.title}
               </Typography>
             </CardContent>

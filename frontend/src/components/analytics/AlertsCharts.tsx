@@ -1,6 +1,7 @@
 import React from 'react';
 import { Grid, Card, CardContent, Typography, Box, CircularProgress } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface AlertsChartsProps {
   data: any;
@@ -8,6 +9,8 @@ interface AlertsChartsProps {
 }
 
 const AlertsCharts: React.FC<AlertsChartsProps> = ({ data, loading }) => {
+  const { isMobile } = useResponsive();
+  
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={3}>
@@ -27,19 +30,19 @@ const AlertsCharts: React.FC<AlertsChartsProps> = ({ data, loading }) => {
   const COLORS = ['#ff4d4f', '#faad14', '#52c41a', '#1890ff', '#722ed1'];
 
   return (
-    <Grid container spacing={3} mb={4}>
+    <Grid container spacing={{ xs: 2, sm: 3 }} mb={4}>
       {/* Alerts by Day */}
       <Grid item xs={12} md={8}>
         <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
+          <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
+            <Typography variant={isMobile ? 'subtitle1' : 'h6'} gutterBottom>
               Évolution des Alertes (7 derniers jours)
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={isMobile ? 250 : 300}>
               <LineChart data={data.alertsByDay}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <XAxis dataKey="date" fontSize={12} />
+                <YAxis fontSize={12} />
                 <Tooltip />
                 <Legend />
                 <Line type="monotone" dataKey="critical" stroke="#ff4d4f" name="Critiques" strokeWidth={2} />
@@ -54,11 +57,11 @@ const AlertsCharts: React.FC<AlertsChartsProps> = ({ data, loading }) => {
       {/* Alerts by Type */}
       <Grid item xs={12} md={4}>
         <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
+          <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
+            <Typography variant={isMobile ? 'subtitle1' : 'h6'} gutterBottom>
               Répartition par Type
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={isMobile ? 250 : 300}>
               <PieChart>
                 <Pie
                   data={data.alertsByType}
@@ -66,7 +69,7 @@ const AlertsCharts: React.FC<AlertsChartsProps> = ({ data, loading }) => {
                   cy="50%"
                   labelLine={false}
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
+                  outerRadius={isMobile ? 60 : 80}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -84,15 +87,15 @@ const AlertsCharts: React.FC<AlertsChartsProps> = ({ data, loading }) => {
       {/* SLA Compliance Chart */}
       <Grid item xs={12}>
         <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
+          <CardContent sx={{ p: { xs: 1.5, sm: 2 } }}>
+            <Typography variant={isMobile ? 'subtitle1' : 'h6'} gutterBottom>
               Conformité SLA (7 derniers jours)
             </Typography>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={isMobile ? 200 : 250}>
               <BarChart data={data.slaComplianceChart}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis domain={[0, 100]} />
+                <XAxis dataKey="date" fontSize={12} />
+                <YAxis domain={[0, 100]} fontSize={12} />
                 <Tooltip formatter={(value) => [`${value}%`, 'Conformité SLA']} />
                 <Bar dataKey="compliance" fill="#52c41a" />
               </BarChart>

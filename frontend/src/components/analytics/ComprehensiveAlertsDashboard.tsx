@@ -22,7 +22,9 @@ import {
   Alert,
   CircularProgress,
   Badge,
-  Tooltip
+  Tooltip,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
   Refresh,
@@ -65,7 +67,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`alert-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>{children}</Box>}
     </div>
   );
 }
@@ -82,6 +84,8 @@ const ComprehensiveAlertsDashboard: React.FC = () => {
     alertLevel: ''
   });
   const [realTimeEnabled, setRealTimeEnabled] = useState(true);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const queryClient = useQueryClient();
 
@@ -246,13 +250,20 @@ const ComprehensiveAlertsDashboard: React.FC = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', p: 2 }}>
+    <Box sx={{ width: '100%', maxWidth: '100vw', p: { xs: 1, sm: 2 }, overflow: 'hidden' }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
+      <Box 
+        display="flex" 
+        flexDirection={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between" 
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        mb={3}
+        gap={{ xs: 2, sm: 0 }}
+      >
+        <Typography variant={isMobile ? 'h5' : 'h4'} component="h1" sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
           Tableau de Bord des Alertes IA
         </Typography>
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={1} justifyContent={{ xs: 'center', sm: 'flex-end' }} flexWrap="wrap">
           <Tooltip title="Actualiser">
             <IconButton onClick={handleRefresh} color="primary">
               <Refresh />
@@ -350,32 +361,64 @@ const ComprehensiveAlertsDashboard: React.FC = () => {
       </Grid>
 
       {/* Main Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="alert tabs">
-          <Tab label="Vue d'Ensemble" icon={<Assessment />} />
-          <Tab label="Alertes SLA" icon={<Warning />} />
-          <Tab label="Prédictions IA" icon={<Psychology />} />
-          <Tab label="Surcharge Équipes" icon={<TrendingUp />} />
-          <Tab label="Réclamations" icon={<Notifications />} />
-          <Tab label="Finance" icon={<Timeline />} />
-          <Tab label="Escalations" icon={<Settings />} />
-          <Tab label="Analytics" icon={<Assessment />} />
+      <Box sx={{ 
+        borderBottom: 1, 
+        borderColor: 'divider',
+        overflowX: 'auto',
+        '&::-webkit-scrollbar': { height: 4 },
+        '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 2 }
+      }}>
+        <Tabs 
+          value={tabValue} 
+          onChange={handleTabChange} 
+          aria-label="alert tabs"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{
+            '& .MuiTab-root': {
+              minWidth: { xs: 100, sm: 'auto' },
+              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+              '& .MuiSvgIcon-root': {
+                fontSize: { xs: '1rem', sm: '1.25rem' }
+              }
+            }
+          }}
+        >
+          <Tab label="Vue d'Ensemble" icon={<Assessment />} iconPosition="start" />
+          <Tab label="Alertes SLA" icon={<Warning />} iconPosition="start" />
+          <Tab label="Prédictions IA" icon={<Psychology />} iconPosition="start" />
+          <Tab label="Surcharge Équipes" icon={<TrendingUp />} iconPosition="start" />
+          <Tab label="Réclamations" icon={<Notifications />} iconPosition="start" />
+          <Tab label="Finance" icon={<Timeline />} iconPosition="start" />
+          <Tab label="Escalations" icon={<Settings />} iconPosition="start" />
+          <Tab label="Analytics" icon={<Assessment />} iconPosition="start" />
         </Tabs>
       </Box>
 
       {/* Tab Panels */}
       <TabPanel value={tabValue} index={0}>
-        <Grid container spacing={3}>
+        <Grid container spacing={{ xs: 2, sm: 3 }}>
           <Grid item xs={12} lg={8}>
-            <Card>
-              <CardContent>
+            <Card sx={{ height: { xs: 'auto', lg: '500px' }, display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <Typography variant="h6" gutterBottom>
                   Alertes Récentes
                 </Typography>
                 {dashboardLoading ? (
-                  <CircularProgress />
+                  <Box display="flex" justifyContent="center" p={3}>
+                    <CircularProgress />
+                  </Box>
                 ) : (
-                  <Box maxHeight={400} overflow="auto">
+                  <Box 
+                    sx={{ 
+                      flex: 1,
+                      maxHeight: { xs: '300px', lg: '400px' }, 
+                      overflow: 'auto',
+                      '&::-webkit-scrollbar': { width: 6 },
+                      '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 3 }
+                    }}
+                  >
                     {alertsDashboard?.slice(0, 10).map((alert: any, index: number) => (
                       <AlertCard key={index} alert={alert} onResolved={refetchDashboard} />
                     ))}
@@ -495,7 +538,13 @@ const ComprehensiveAlertsDashboard: React.FC = () => {
       </TabPanel>
 
       {/* Filter Dialog */}
-      <Dialog open={filterDialog} onClose={() => setFilterDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={filterDialog} 
+        onClose={() => setFilterDialog(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>Filtres des Alertes</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>

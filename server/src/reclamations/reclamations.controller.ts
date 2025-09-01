@@ -489,19 +489,13 @@ export class ReclamationsController {
   @Get('alerts')
   async getReclamationAlerts(@Req() req: any) {
     const user = getUserFromRequest(req);
-    // Mock alerts for now - in production would fetch from AlertLog
-    return [
-      {
-        id: '1',
-        type: 'SLA_BREACH',
-        level: 'error',
-        title: 'SLA dépassé',
-        message: 'La réclamation REC-001 a dépassé son SLA',
-        reclamationId: 'rec-001',
-        clientName: 'Client Test',
-        createdAt: new Date().toISOString(),
-        read: false
-      }
-    ];
+    return this.reclamationsService.getReclamationAlerts(user);
+  }
+
+  // Mark alert as read
+  @Patch('alerts/:id/read')
+  async markAlertAsRead(@Param('id') id: string, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.reclamationsService.markAlertAsRead(id, user);
   }
 }
