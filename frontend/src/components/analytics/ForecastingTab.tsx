@@ -106,40 +106,9 @@ const ForecastingTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('Failed to load forecast data:', error);
-      // Set comprehensive fallback data
-      setData({
-        forecast: {
-          nextWeek: 287,
-          nextMonth: 1150,
-          recommendedStaff: 12,
-          currentStaff: 10,
-          accuracy: 92.5
-        },
-        plannedVsActual: [
-          { period: 'Sem 1', planned: 250, actual: 245, variance: -2 },
-          { period: 'Sem 2', planned: 280, actual: 267, variance: -5 },
-          { period: 'Sem 3', planned: 300, actual: 298, variance: -1 },
-          { period: 'Sem 4', planned: 320, actual: 287, variance: -10 }
-        ],
-        aiRecommendations: [
-          'Augmenter l\'équipe de 2 gestionnaires pour la semaine prochaine',
-          'Redistribuer 15% de la charge de l\'équipe B vers l\'équipe C',
-          'Prévoir une formation supplémentaire pour réduire les erreurs'
-        ],
-        resourcePlanning: [
-          { resource: 'Gestionnaires', current: 10, needed: 12, gap: 2 },
-          { resource: 'Superviseurs', current: 3, needed: 3, gap: 0 },
-          { resource: 'Support', current: 5, needed: 6, gap: 1 }
-        ],
-        trends: []
-      });
-      setForecastKpis({
-        nextWeekForecast: 287,
-        nextMonthForecast: 1150,
-        recommendedStaff: 12,
-        currentStaff: 10,
-        accuracy: 92.5
-      });
+      // No fallback data - show empty state when database is empty
+      setData(null);
+      setForecastKpis(null);
     } finally {
       setLoading(false);
     }
@@ -158,7 +127,20 @@ const ForecastingTab: React.FC<Props> = ({ filters, dateRange }) => {
     );
   }
 
-  if (!data) return <Typography>Aucune donnée de prévision disponible</Typography>;
+  if (!data) {
+    return (
+      <Box sx={{ p: 3, textAlign: 'center' }}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            Aucune donnée de prévision disponible
+          </Typography>
+          <Typography variant="body2">
+            Les prévisions apparaîtront une fois que des données historiques seront disponibles dans le système.
+          </Typography>
+        </Alert>
+      </Box>
+    );
+  }
 
   const staffingGap = data.forecast.recommendedStaff - data.forecast.currentStaff;
 
