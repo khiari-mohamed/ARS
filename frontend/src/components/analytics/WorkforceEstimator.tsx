@@ -68,24 +68,8 @@ const WorkforceEstimator: React.FC = () => {
       setData(response.data);
     } catch (error) {
       console.error('Failed to load workforce data:', error);
-      // Fallback calculation
-      setData({
-        currentStaff: 12,
-        requiredStaff: 15,
-        currentWorkload: 145,
-        targetWorkload: 120,
-        efficiency: 78.5,
-        recommendations: [
-          'Ajouter 3 gestionnaires pour atteindre l\'objectif',
-          'Redistribuer 25 dossiers de l\'équipe A vers l\'équipe B',
-          'Optimiser les processus pour améliorer l\'efficacité de 15%'
-        ],
-        departmentAnalysis: [
-          { department: 'Santé', currentStaff: 8, requiredStaff: 10, workload: 95, efficiency: 82, status: 'understaffed' },
-          { department: 'Finance', currentStaff: 3, requiredStaff: 3, workload: 30, efficiency: 88, status: 'optimal' },
-          { department: 'SCAN', currentStaff: 2, requiredStaff: 2, workload: 20, efficiency: 92, status: 'optimal' }
-        ]
-      });
+      // No fallback data - show empty state when database is empty
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -134,7 +118,20 @@ const WorkforceEstimator: React.FC = () => {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Estimateur de Main-d'œuvre
+          </Typography>
+          <Alert severity="info">
+            Aucune donnée disponible. Veuillez ajouter des utilisateurs et des données de charge de travail.
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const staffingGap = calculateStaffingGap();
   const workloadStatus = getWorkloadStatus();
