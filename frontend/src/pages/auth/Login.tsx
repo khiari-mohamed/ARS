@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { login as loginService } from '../../services/authService';
 import { useAuthContext } from '../../contexts/AuthContext';
 import logo from '../../assets/ars-logo.png';
@@ -65,8 +65,8 @@ const Login = () => {
           </button>
         </form>
         <div className="login-footer">
-          <span>Forgot password? <a href="/password-reset">Reset</a></span><br />
-          <span>Don't have an account? <a href="/register">Register</a></span><br />
+          <span>Forgot password? <Link to="/password-reset">Reset</Link></span><br />
+          <span>Don't have an account? <Link to="/register">Register</Link></span><br />
           &copy; {new Date().getFullYear()} ARS Tunisie. All rights reserved.
         </div>
       </div>

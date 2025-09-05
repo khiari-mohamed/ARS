@@ -1,6 +1,7 @@
 {
   "name": "ars-finance-frontend",
   "version": "1.0.0",
+  "homepage": "/ARS",
   "private": true,
   "dependencies": {
     "@ant-design/charts": "^2.4.0",
@@ -64,7 +65,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "build:prod": "REACT_APP_API_URL=http://10.34.60.63:8000/api PUBLIC_URL=/ars react-scripts build",
+    "build:prod": "REACT_APP_API_URL=http://10.34.60.63:5000/api PUBLIC_URL=/ars react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "lint": "eslint . --ext .ts,.tsx"
