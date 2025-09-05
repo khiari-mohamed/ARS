@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import { LocalAPI } from '../services/axios';
 
 export const useResolveAlert = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (alertId: string) => {
-      const response = await axios.get(`/api/alerts/resolve?alertId=${alertId}`);
+      const response = await LocalAPI.get(`/alerts/resolve?alertId=${alertId}`);
       return response.data;
     },
     onSuccess: () => {
@@ -20,7 +20,7 @@ export const useAddAlertComment = () => {
   
   return useMutation({
     mutationFn: async ({ alertId, comment }: { alertId: string; comment: string }) => {
-      const response = await axios.post(`/api/alerts/comments`, {
+      const response = await LocalAPI.post(`/alerts/comments`, {
         alertId,
         comment
       });
@@ -37,7 +37,7 @@ export const useTriggerAlert = () => {
   
   return useMutation({
     mutationFn: async (alertData: any) => {
-      const response = await axios.post('/api/alerts/trigger', alertData);
+      const response = await LocalAPI.post('/alerts/trigger', alertData);
       return response.data;
     },
     onSuccess: () => {
@@ -51,7 +51,7 @@ export const useEscalateAlert = () => {
   
   return useMutation({
     mutationFn: async ({ alertId, escalationLevel }: { alertId: string; escalationLevel: string }) => {
-      const response = await axios.post(`/api/alerts/escalate`, {
+      const response = await LocalAPI.post(`/alerts/escalate`, {
         alertId,
         escalationLevel
       });
@@ -73,7 +73,7 @@ export const useAlertsDashboard = (filters?: any) => {
           if (value) params.append(key, value as string);
         });
       }
-      const response = await axios.get(`/api/alerts/dashboard?${params}`);
+      const response = await LocalAPI.get(`/alerts/dashboard?${params}`);
       return response.data;
     }
   });
@@ -83,7 +83,7 @@ export const useDelayPredictions = () => {
   return useQuery({
     queryKey: ['delay-predictions'],
     queryFn: async () => {
-      const response = await axios.get('/api/alerts/delay-predictions');
+      const response = await LocalAPI.get('/alerts/delay-predictions');
       return response.data;
     },
     retry: 1,
@@ -96,7 +96,7 @@ export const useComparativeAnalytics = () => {
   return useQuery({
     queryKey: ['comparative-analytics'],
     queryFn: async () => {
-      const response = await axios.get('/api/alerts/comparative-analytics');
+      const response = await LocalAPI.get('/alerts/comparative-analytics');
       return response.data;
     }
   });
@@ -106,7 +106,7 @@ export const usePriorityList = () => {
   return useQuery({
     queryKey: ['priority-list'],
     queryFn: async () => {
-      const response = await axios.get('/api/alerts/priority-list');
+      const response = await LocalAPI.get('/alerts/priority-list');
       return response.data;
     }
   });
@@ -116,7 +116,7 @@ export const useTeamOverloadAlerts = () => {
   return useQuery({
     queryKey: ['team-overload'],
     queryFn: async () => {
-      const response = await axios.get('/api/alerts/team-overload');
+      const response = await LocalAPI.get('/alerts/team-overload');
       return response.data;
     }
   });
@@ -126,7 +126,7 @@ export const useReclamationAlerts = () => {
   return useQuery({
     queryKey: ['reclamation-alerts'],
     queryFn: async () => {
-      const response = await axios.get('/api/alerts/reclamations');
+      const response = await LocalAPI.get('/alerts/reclamations');
       return response.data;
     }
   });
@@ -142,7 +142,7 @@ export const useAlertHistory = (filters?: any) => {
           if (value) params.append(key, value as string);
         });
       }
-      const response = await axios.get(`/api/alerts/history?${params}`);
+      const response = await LocalAPI.get(`/alerts/history?${params}`);
       return response.data;
     }
   });

@@ -5,7 +5,7 @@ REM Build frontend with production config
 echo Building frontend for production...
 cd C:\ARS\frontend
 call npm install
-set REACT_APP_API_URL=http://10.34.60.63:8000/api
+set REACT_APP_API_URL=http://10.34.60.63:5000/api
 set PUBLIC_URL=/ars
 call npm run build
 cd C:\ARS

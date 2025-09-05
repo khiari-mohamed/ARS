@@ -12,7 +12,7 @@ const queryClient = new QueryClient();
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/ARS">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <NotificationProvider>
