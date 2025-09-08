@@ -8,6 +8,7 @@ import BordereauBatchOperations from './BordereauBatchOperations';
 import AdvancedBordereauFilters from './AdvancedBordereauFilters';
 import BordereauCreateForm from './BordereauCreateForm';
 import BordereauDetailsModal from './BordereauDetailsModal';
+import BordereauEditModal from './BordereauEditModal';
 
 interface TableColumn {
   key: string;
@@ -60,6 +61,8 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
   const [selectedBordereauForNotification, setSelectedBordereauForNotification] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedBordereauForDetails, setSelectedBordereauForDetails] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedBordereauForEdit, setSelectedBordereauForEdit] = useState<string | null>(null);
 
   // Role-based permissions according to workflow specification
   const isBureauOrdre = user?.role === 'BO';
@@ -588,6 +591,22 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
         >
           👁️ Voir
         </button>
+
+        {/* Edit button - available for BO, Chef, Admin, Super Admin */}
+        {(isBureauOrdre || isChefEquipe || isAdministrateur || isSuperAdmin) && (
+          <button
+            className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setSelectedBordereauForEdit(bordereau.id);
+              setShowEditModal(true);
+            }}
+            title="Modifier le bordereau"
+          >
+            ✏️ Modifier
+          </button>
+        )}
 
         {/* Always show Progresser button */}
         <button
@@ -1379,6 +1398,23 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
           onClose={() => {
             setShowDetailsModal(false);
             setSelectedBordereauForDetails(null);
+          }}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedBordereauForEdit && (
+        <BordereauEditModal
+          bordereauxId={selectedBordereauForEdit}
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedBordereauForEdit(null);
+          }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setSelectedBordereauForEdit(null);
+            loadData();
           }}
         />
       )}

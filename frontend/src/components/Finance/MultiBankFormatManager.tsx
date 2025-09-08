@@ -76,7 +76,7 @@ const MultiBankFormatManager: React.FC = () => {
   const handleCreateFormat = async () => {
     try {
       const { createDonneur } = await import('../../services/financeService');
-      await createDonneur({ name: 'Nouveau Format', bank: 'Banque', rib: '12345678901234567890' });
+      await createDonneur({ nom: 'Nouveau Format', banque: 'Banque', rib: '12345678901234567890', structureTxt: 'SWIFT', statut: 'active' });
       await loadData();
       alert('Format créé avec succès!');
     } catch (error) {

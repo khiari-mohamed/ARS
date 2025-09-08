@@ -269,19 +269,123 @@ export class ReclamationsController {
     return this.boIntegrationService.validateReclamationData(dto);
   }
 
-  // Corbeille endpoints
+  // Enhanced Corbeille endpoints with complete workflow visibility
   @Get('corbeille/chef')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
   async getChefCorbeille(@Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.corbeilleService.getChefCorbeille(user.id);
+    try {
+      const [nonAffectes, enCours, traites] = await Promise.all([
+        (this.reclamationsService as any).findMany({
+          where: { assignedToId: null, status: { in: ['OPEN', 'PENDING'] } },
+          include: { client: true, createdBy: true }
+        }),
+        (this.reclamationsService as any).findMany({
+          where: { status: 'IN_PROGRESS' },
+          include: { client: true, assignedTo: true, createdBy: true }
+        }),
+        (this.reclamationsService as any).findMany({
+          where: { status: { in: ['RESOLVED', 'CLOSED'] } },
+          include: { client: true, assignedTo: true, createdBy: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 50
+        })
+      ]);
+
+      const processItems = (items: any[]) => items.map(item => ({
+        id: item.id,
+        type: 'reclamation',
+        reference: `REC-${item.id.slice(-6)}`,
+        clientName: item.client?.name || 'Unknown',
+        subject: item.description?.substring(0, 100) || 'No description',
+        priority: item.severity || 'MOYENNE',
+        status: item.status,
+        createdAt: item.createdAt,
+        assignedTo: item.assignedTo?.fullName,
+        slaStatus: this.calculateSLAStatus(item),
+        remainingTime: this.calculateRemainingTime(item)
+      }));
+
+      const stats = {
+        nonAffectes: nonAffectes.length,
+        enCours: enCours.length,
+        traites: traites.length,
+        enRetard: [...nonAffectes, ...enCours].filter(item => this.calculateSLAStatus(item) === 'OVERDUE').length,
+        critiques: [...nonAffectes, ...enCours].filter(item => item.severity === 'HAUTE').length
+      };
+
+      return {
+        nonAffectes: processItems(nonAffectes),
+        enCours: processItems(enCours),
+        traites: processItems(traites),
+        stats
+      };
+    } catch (error) {
+      return {
+        nonAffectes: [],
+        enCours: [],
+        traites: [],
+        stats: { nonAffectes: 0, enCours: 0, traites: 0, enRetard: 0, critiques: 0 }
+      };
+    }
   }
 
   @Get('corbeille/gestionnaire')
   @Roles(UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
   async getGestionnaireCorbeille(@Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.corbeilleService.getGestionnaireCorbeille(user.id);
+    try {
+      const [enCours, traites, retournes] = await Promise.all([
+        (this.reclamationsService as any).findMany({
+          where: { assignedToId: user.id, status: 'IN_PROGRESS' },
+          include: { client: true, createdBy: true }
+        }),
+        (this.reclamationsService as any).findMany({
+          where: { assignedToId: user.id, status: { in: ['RESOLVED', 'CLOSED'] } },
+          include: { client: true, createdBy: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 20
+        }),
+        (this.reclamationsService as any).findMany({
+          where: { assignedToId: user.id, status: 'ESCALATED' },
+          include: { client: true, createdBy: true }
+        })
+      ]);
+
+      const processItems = (items: any[]) => items.map(item => ({
+        id: item.id,
+        reference: `REC-${item.id.slice(-6)}`,
+        clientName: item.client?.name || 'Unknown',
+        subject: item.description?.substring(0, 100) || 'No description',
+        priority: item.severity || 'MOYENNE',
+        status: item.status,
+        createdAt: item.createdAt,
+        slaStatus: this.calculateSLAStatus(item),
+        remainingTime: this.calculateRemainingTime(item)
+      }));
+
+      const stats = {
+        enCours: enCours.length,
+        traites: traites.length,
+        retournes: retournes.length,
+        enRetard: enCours.filter(item => this.calculateSLAStatus(item) === 'OVERDUE').length,
+        critiques: enCours.filter(item => item.severity === 'HAUTE').length
+      };
+
+      return {
+        enCours: processItems(enCours),
+        traites: processItems(traites),
+        retournes: processItems(retournes),
+        stats
+      };
+    } catch (error) {
+      return {
+        enCours: [],
+        traites: [],
+        retournes: [],
+        stats: { enCours: 0, traites: 0, retournes: 0, enRetard: 0, critiques: 0 }
+      };
+    }
   }
 
   @Post('corbeille/bulk-assign')
@@ -291,7 +395,22 @@ export class ReclamationsController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.corbeilleService.bulkAssign(body.reclamationIds, body.assignedToId, user.id);
+    const results: Array<{ id: string; success: boolean; error?: string }> = [];
+    
+    for (const id of body.reclamationIds) {
+      try {
+        await this.reclamationsService.assignReclamation(id, body.assignedToId, user);
+        results.push({ id, success: true });
+      } catch (error: any) {
+        results.push({ id, success: false, error: error.message });
+      }
+    }
+    
+    return {
+      assigned: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results
+    };
   }
 
   @Post(':id/return')
@@ -302,7 +421,20 @@ export class ReclamationsController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.corbeilleService.returnToChef(id, user.id, body.reason);
+    // Update reclamation status and clear assignment
+    await this.reclamationsService.updateReclamation(id, {
+      status: 'ESCALATED',
+      assignedToId: undefined
+    }, user);
+    
+    // Add history entry
+    await (this.reclamationsService as any).addHistoryEntry(id, {
+      action: 'RETURNED_TO_CHEF',
+      description: `Returned by ${user.fullName}: ${body.reason}`,
+      userId: user.id
+    });
+    
+    return { success: true, message: 'Reclamation returned to chef' };
   }
 
   @Post(':id/auto-assign')
@@ -497,5 +629,35 @@ export class ReclamationsController {
   async markAlertAsRead(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.reclamationsService.markAlertAsRead(id, user);
+  }
+
+  // Helper methods for corbeille functionality
+  private calculateSLAStatus(item: any): 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL' {
+    const now = new Date();
+    const createdAt = new Date(item.createdAt);
+    const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+    const slaHours = this.getSLAHours(item.severity);
+    
+    if (hoursSinceCreation > slaHours) return 'OVERDUE';
+    if (hoursSinceCreation > slaHours * 0.9) return 'CRITICAL';
+    if (hoursSinceCreation > slaHours * 0.7) return 'AT_RISK';
+    return 'ON_TIME';
+  }
+
+  private calculateRemainingTime(item: any): number {
+    const now = new Date();
+    const createdAt = new Date(item.createdAt);
+    const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+    const slaHours = this.getSLAHours(item.severity);
+    return Math.max(0, slaHours - hoursSinceCreation);
+  }
+
+  private getSLAHours(severity: string): number {
+    switch (severity) {
+      case 'HAUTE': return 4;
+      case 'MOYENNE': return 24;
+      case 'BASSE': return 72;
+      default: return 24;
+    }
   }
 }

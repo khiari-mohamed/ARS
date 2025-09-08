@@ -1,106 +1,189 @@
-import { Controller, Get, Post, Body, Query, Param, Put, Delete, UseInterceptors, UploadedFile, Req 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Req,
+  BadRequestException
 } from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
-import { CorbeilleService } from './corbeille.service';
+import { AutomaticWorkflowService } from './automatic-workflow.service';
+import { SuperAdminOverviewService } from './super-admin-overview.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
 import { Request } from 'express';
-import { AssignTaskDto } from './dto/assign-task.dto';
-import { WorkflowKpiDto } from './dto/workflow-kpi.dto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
-@ApiTags('Workflow')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('workflow')
 export class WorkflowController {
   constructor(
     private readonly workflowService: WorkflowService,
-    private readonly corbeilleService: CorbeilleService
+    private readonly automaticWorkflowService: AutomaticWorkflowService,
+    private readonly superAdminOverviewService: SuperAdminOverviewService
   ) {}
 
-
-  @Post('auto-assign')
-  @ApiOperation({ summary: 'Trigger AI-based auto-assignment of tasks (admin/team lead only)' })
-  async autoAssignTasks() {
-    await this.workflowService.autoAssignTasks();
-    return { success: true, message: 'AI-based assignment triggered.' };
-  }
-
-  @Put('priority')
-  @ApiOperation({ summary: 'Manually override the priority of a workflow task (admin only)' })
-  async setTaskPriority(@Body() dto: import('./dto/workflow-priority.dto').WorkflowPriorityDto) {
-    return this.workflowService.setTaskPriority(dto);
-  }
-
-  @Get('assignments/history/:id')
-  @ApiOperation({ summary: 'Get audit history for a workflow assignment' })
-  async getAssignmentHistory(@Param('id') id: string) {
-    return this.workflowService.getAssignmentHistory(id);
-  }
-
-  @Post('assign')
-  @ApiOperation({ summary: 'Assign a task to a user' })
-  async assignTask(@Body() dto: AssignTaskDto) {
-    return this.workflowService.assignTask(dto);
-  }
-
   @Get('priorities')
-  @ApiOperation({ summary: 'Get prioritized tasks for a team' })
-  async getPriorities(@Query('teamId') teamId?: string) {
+  @Get('priorities/:teamId')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getDailyPriorities(
+    @Param('teamId') teamId?: string
+  ) {
     return this.workflowService.getDailyPriorities(teamId);
   }
 
-  @Get('kpis')
-  @ApiOperation({ summary: 'Get workflow KPIs' })
-  async getKpis(@Query() query: WorkflowKpiDto) {
-    return this.workflowService.getWorkflowKpis(query);
+  @Post('assign-task')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async assignTask(
+    @Body() assignTaskDto: {
+      taskId: string;
+      taskType: string;
+      assigneeId: string;
+    }
+  ) {
+    return this.workflowService.assignTask(assignTaskDto);
   }
 
-  @Get('visualize/:id')
-  @ApiOperation({ summary: 'Visualize workflow for a bordereau' })
-  async visualizeWorkflow(@Param('id') bordereauId: string) {
+  @Post('auto-assign')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async autoAssignTasks() {
+    await this.workflowService.autoAssignTasks();
+    return { success: true, message: 'Auto-assignment completed' };
+  }
+
+  @Get('sla-compliance')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async monitorSlaCompliance(@Req() req: Request) {
+    const user = req['user'] as any;
+    await this.workflowService.monitorSlaCompliance();
+    return { success: true, message: 'SLA monitoring completed' };
+  }
+
+  @Get('kpis')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getWorkflowKpis(
+    @Query() query: {
+      teamId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    return this.workflowService.getWorkflowKpis({
+      teamId: query.teamId || '',
+      dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
+      dateTo: query.dateTo ? new Date(query.dateTo) : undefined
+    });
+  }
+
+  @Get('visualization/:bordereauId')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
+  async visualizeWorkflow(@Param('bordereauId') bordereauId: string) {
     return this.workflowService.visualizeWorkflow(bordereauId);
   }
 
-  // --- NEW ENDPOINTS FOR ASSIGNMENTS ---
+  // Automatic Workflow endpoints
+  @Post('force-progression')
+  @Roles(UserRole.SUPER_ADMIN)
+  async forceWorkflowProgression(
+    @Body() data: {
+      bordereauId: string;
+      targetStatus: string;
+    },
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
 
+    if (!data.bordereauId || !data.targetStatus) {
+      throw new BadRequestException('Missing required fields');
+    }
+
+    return this.automaticWorkflowService.forceWorkflowProgression(
+      data.bordereauId,
+      data.targetStatus,
+      userId
+    );
+  }
+
+  @Get('sla-breaches')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getSLABreaches() {
+    return this.automaticWorkflowService.getSLABreaches();
+  }
+
+  @Post('escalate-sla-breaches')
+  @Roles(UserRole.SUPER_ADMIN)
+  async escalateSLABreaches() {
+    return this.automaticWorkflowService.escalateSLABreaches();
+  }
+
+  // Super Admin Overview endpoints
+  @Get('system-overview')
+  @Roles(UserRole.SUPER_ADMIN)
+  async getSystemOverview() {
+    return this.superAdminOverviewService.getCompleteSystemOverview();
+  }
+
+  @Get('team-performance')
+  @Get('team-performance/:teamId')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getTeamPerformance(@Param('teamId') teamId?: string) {
+    return this.superAdminOverviewService.getTeamPerformanceDetails(teamId);
+  }
+
+  // Assignment management
   @Get('assignments')
-  @ApiOperation({ summary: 'List all workflow assignments' })
-  async getAssignments() {
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getAllAssignments() {
     return this.workflowService.getAllAssignments();
   }
 
   @Get('assignments/:id')
-  @ApiOperation({ summary: 'Get a workflow assignment by ID' })
-  async getAssignment(@Param('id') id: string) {
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
+  async getAssignmentById(@Param('id') id: string) {
     return this.workflowService.getAssignmentById(id);
   }
 
-  @Post('assignments')
-  @ApiOperation({ summary: 'Create a workflow assignment (manual override)' })
-  async createAssignment(@Body() dto: AssignTaskDto) {
-    return this.workflowService.assignTask(dto);
+  @Post('assignments/:id')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
+  async updateAssignment(
+    @Param('id') id: string,
+    @Body() data: {
+      status?: string;
+      notes?: string;
+    },
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+
+    return this.workflowService.updateAssignment(id, data, userId);
   }
 
-  @Put('assignments/:id')
-  @ApiOperation({ summary: 'Update a workflow assignment (status, notes, etc.)' })
-  async updateAssignment(@Param('id') id: string, @Body() data: any, @Query('updatedByUserId') updatedByUserId?: string) {
-    return this.workflowService.updateAssignment(id, data, updatedByUserId);
+  @Get('assignments/:id/history')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
+  async getAssignmentHistory(@Param('id') id: string) {
+    return this.workflowService.getAssignmentHistory(id);
   }
 
-  // --- CORBEILLE ENDPOINTS ---
+  @Post('set-priority')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async setTaskPriority(
+    @Body() data: {
+      taskId: string;
+      priority: number;
+    }
+  ) {
+    if (!data.taskId || data.priority === undefined) {
+      throw new BadRequestException('Missing required fields');
+    }
 
-  @Get('corbeille')
-  @ApiOperation({ summary: 'Get user-specific corbeille (inbox)' })
-  async getCorbeille(@Req() req: Request) {
-    const userId = (req as any)?.user?.id || (req as any)?.user?.sub;
-    if (!userId) return { items: [], count: 0, type: 'UNAUTHORIZED' };
-    return this.corbeilleService.getUserCorbeille(userId);
-  }
-
-  @Get('corbeille/stats')
-  @ApiOperation({ summary: 'Get corbeille statistics' })
-  async getCorbeilleStats(@Req() req: Request) {
-    const userId = (req as any)?.user?.id || (req as any)?.user?.sub;
-    if (!userId) return { totalItems: 0, urgentItems: 0, role: 'UNKNOWN' };
-    return this.corbeilleService.getCorbeilleStats(userId);
+    return this.workflowService.setTaskPriority(data);
   }
 }
-

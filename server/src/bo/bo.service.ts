@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { WorkflowNotificationsService } from '../workflow/workflow-notifications.service';
 import { Express } from 'express';
 
 export interface CreateBOEntryDto {
@@ -32,7 +33,10 @@ export interface BOPerformanceDto {
 
 @Injectable()
 export class BOService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private workflowNotifications: WorkflowNotificationsService
+  ) {}
 
   async generateReference(type: string, clientId?: string): Promise<string> {
     const now = new Date();
@@ -175,6 +179,13 @@ export class BOService {
               contract: contractId ? true : false
             }
           });
+          
+          // Auto-notify SCAN service
+          await this.workflowNotifications.notifyWorkflowTransition(
+            bordereau.id, 
+            'CREATED', 
+            'A_SCANNER'
+          );
           
           // Audit logging removed to prevent foreign key constraint errors
           // await this.logBOActivity(userId, 'CREATE_ENTRY', {

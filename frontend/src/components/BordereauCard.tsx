@@ -5,6 +5,7 @@ import MobileBordereauCard from "./MobileBordereauCard";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from '../hooks/useAuth';
 import BordereauAssignModal from "./BordereauAssignModal";
+import BordereauEditModal from "./BordereauEditModal";
 import { markBordereauAsProcessed, returnBordereau, archiveBordereau, restoreBordereau } from "../services/bordereauxService";
 import { MdCheckCircle, MdWarning, MdError, MdAssignmentInd, MdDelete } from 'react-icons/md';
 import { useNotification } from '../contexts/NotificationContext';
@@ -38,6 +39,7 @@ const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeill
 
   // Modal state
   const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [processLoading, setProcessLoading] = useState(false);
   const [processError, setProcessError] = useState<string | null>(null);
@@ -52,6 +54,11 @@ const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeill
   const handleAssign = (e: React.MouseEvent) => {
     e.preventDefault();
     setAssignModalOpen(true);
+  };
+  
+  const handleEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setEditModalOpen(true);
   };
   
   const handleProcess = (e: React.MouseEvent) => {
@@ -226,6 +233,16 @@ const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeill
               Affecter
             </button>
           )}
+          {(canAssign || isAdmin) && (
+            <button 
+              type="button" 
+              className="btn-xs btn-info" 
+              onClick={handleEdit} 
+              disabled={actionLoading}
+            >
+              Modifier
+            </button>
+          )}
           {canProcess && (
             <>
               <button 
@@ -339,6 +356,19 @@ const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeill
         />
       )}
       
+      {/* Edit Modal */}
+      {editModalOpen && (
+        <BordereauEditModal
+          bordereauxId={bordereau.id}
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          onSuccess={() => {
+            setEditModalOpen(false);
+            if (onAssignSuccess) onAssignSuccess();
+          }}
+        />
+      )}
+      
       {/* Process Modal */}
       {processModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -438,6 +468,15 @@ const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeill
         
         .btn-danger:hover {
           background-color: #c82333;
+        }
+        
+        .btn-info {
+          background-color: #0dcaf0;
+          color: #000;
+        }
+        
+        .btn-info:hover {
+          background-color: #31d2f2;
         }
         
         .btn-xs:disabled {

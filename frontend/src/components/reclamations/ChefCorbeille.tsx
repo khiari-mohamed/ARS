@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LocalAPI } from '../../services/axios';
+import corbeilleService, { CorbeilleResponse } from '../../services/corbeilleService';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import SlaCountdown from './SlaCountdown';
@@ -40,7 +41,7 @@ import {
 } from '@mui/material';
 import { Assignment, Warning, CheckCircle, Schedule, TrendingUp, Person, Business, CalendarToday, Description, Close } from '@mui/icons-material';
 
-interface CorbeilleItem {
+interface ReclamationCorbeilleItem {
   id: string;
   type: 'reclamation';
   reference: string;
@@ -62,25 +63,12 @@ interface CorbeilleStats {
   critiques: number;
 }
 
-const fetchChefCorbeille = async () => {
-  const { data } = await LocalAPI.get('/reclamations/corbeille/chef');
-  return data;
+const fetchChefCorbeille = async (): Promise<CorbeilleResponse> => {
+  return await corbeilleService.getReclamationsChefCorbeille();
 };
 
 const fetchUsers = async () => {
-  try {
-    const { data } = await LocalAPI.get('/users');
-    return data.filter((u: any) => {
-      const role = u.role?.toUpperCase();
-      return (
-        (role === 'GESTIONNAIRE' || role === 'CUSTOMER_SERVICE' || role === 'CLIENT_SERVICE') && 
-        u.active !== false
-      );
-    });
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    return [];
-  }
+  return await corbeilleService.getAvailableGestionnaires();
 };
 
 const fetchReclamationDetails = async (id: string) => {
@@ -89,8 +77,7 @@ const fetchReclamationDetails = async (id: string) => {
 };
 
 const bulkAssign = async (payload: { reclamationIds: string[]; assignedToId: string }) => {
-  const { data } = await LocalAPI.post('/reclamations/corbeille/bulk-assign', payload);
-  return data;
+  return await corbeilleService.bulkAssignReclamations(payload.reclamationIds, payload.assignedToId);
 };
 
 const updateReclamationStatus = async (payload: { id: string; status: string; assignedToId?: string }) => {
@@ -226,7 +213,7 @@ export const ChefCorbeille: React.FC = () => {
 
   const { nonAffectes = [], enCours = [], traites = [], stats } = corbeilleData || {};
 
-  const handleSelectAll = (items: CorbeilleItem[]) => {
+  const handleSelectAll = (items: ReclamationCorbeilleItem[]) => {
     const itemIds = items.map(item => item.id);
     if (selectedItems.length === itemIds.length) {
       setSelectedItems([]);
@@ -294,12 +281,7 @@ export const ChefCorbeille: React.FC = () => {
   };
 
   const getSLAColor = (slaStatus: string) => {
-    switch (slaStatus) {
-      case 'OVERDUE': return 'error';
-      case 'CRITICAL': return 'warning';
-      case 'AT_RISK': return 'info';
-      default: return 'success';
-    }
+    return corbeilleService.getSLAColor(slaStatus);
   };
 
   const renderStatsCards = () => (
@@ -396,7 +378,7 @@ export const ChefCorbeille: React.FC = () => {
     </Grid>
   );
 
-  const renderTable = (items: CorbeilleItem[], showAssignee = false, showActions = false) => (
+  const renderTable = (items: ReclamationCorbeilleItem[], showAssignee = false, showActions = false) => (
     <TableContainer component={Paper}>
       <Table>
         <TableHead>
@@ -534,15 +516,15 @@ export const ChefCorbeille: React.FC = () => {
       </Box>
 
       {/* Alerts */}
-      {stats?.enRetard > 0 && (
+      {(stats?.enRetard || 0) > 0 && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          <strong>Attention:</strong> {stats.enRetard} réclamations en retard SLA
+          <strong>Attention:</strong> {stats?.enRetard || 0} réclamations en retard SLA
         </Alert>
       )}
 
-      {stats?.critiques > 0 && (
+      {(stats?.critiques || 0) > 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          <strong>Urgent:</strong> {stats.critiques} réclamations critiques
+          <strong>Urgent:</strong> {stats?.critiques || 0} réclamations critiques
         </Alert>
       )}
 
@@ -614,7 +596,7 @@ export const ChefCorbeille: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 0 && (
-        nonAffectes.length > 0 ? renderTable(nonAffectes) : (
+        nonAffectes.length > 0 ? renderTable(nonAffectes as ReclamationCorbeilleItem[]) : (
           <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" color="textSecondary">
               Aucune réclamation non affectée
@@ -626,7 +608,7 @@ export const ChefCorbeille: React.FC = () => {
         )
       )}
       {activeTab === 1 && (
-        enCours.length > 0 ? renderTable(enCours, true, true) : (
+        enCours.length > 0 ? renderTable(enCours as ReclamationCorbeilleItem[], true, true) : (
           <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" color="textSecondary">
               Aucune réclamation en cours
@@ -635,7 +617,7 @@ export const ChefCorbeille: React.FC = () => {
         )
       )}
       {activeTab === 2 && (
-        traites.length > 0 ? renderTable(traites, true) : (
+        traites.length > 0 ? renderTable(traites as ReclamationCorbeilleItem[], true) : (
           <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" color="textSecondary">
               Aucune réclamation traitée

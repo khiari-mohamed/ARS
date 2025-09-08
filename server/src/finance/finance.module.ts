@@ -1,23 +1,30 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { FinanceController } from './finance.controller';
-import { FinanceApiController } from './finance-api.controller';
-import { FinanceService } from './finance.service';
-import { OVGeneratorService } from './ov-generator.service';
-import { MultiBankFormatService } from './multi-bank-format.service';
-import { AutomatedReconciliationService } from './automated-reconciliation.service';
-import { FinancialReportingService } from './financial-reporting.service';
+import { AdherentService } from './adherent.service';
+import { DonneurOrdreService } from './donneur-ordre.service';
+import { ExcelImportService } from './excel-import.service';
+import { FileGenerationService } from './file-generation.service';
+import { OrdreVirementService } from './ordre-virement.service';
+import { FinanceIntegrationService } from './finance-integration.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { WorkflowModule } from '../workflow/workflow.module';
 
 @Module({
-  imports: [PrismaModule],
-  controllers: [FinanceController, FinanceApiController],
+  imports: [PrismaModule, forwardRef(() => WorkflowModule)],
+  controllers: [FinanceController],
   providers: [
-    FinanceService,
-    OVGeneratorService,
-    MultiBankFormatService,
-    AutomatedReconciliationService,
-    FinancialReportingService
+    AdherentService,
+    DonneurOrdreService,
+    ExcelImportService,
+    FileGenerationService,
+    OrdreVirementService,
+    FinanceIntegrationService
   ],
-  exports: [FinanceService]
+  exports: [
+    AdherentService,
+    DonneurOrdreService,
+    OrdreVirementService,
+    FinanceIntegrationService
+  ]
 })
 export class FinanceModule {}

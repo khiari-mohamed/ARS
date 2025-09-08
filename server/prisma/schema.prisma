@@ -138,6 +138,7 @@ model Bordereau {
   traitementHistory     TraitementHistory[]
   virement              Virement?           @relation("BordereauVirement")
   User                  User[]              @relation("UserBordereaux")
+  ordresVirement        OrdreVirement[]     // Add relation to ordre virement
 }
 
 model Prestataire {
@@ -216,6 +217,7 @@ model Client {
   contracts        Contract[]
   reclamations     Reclamation[]
   gestionnaires    User[]        @relation("ClientGestionnaires")
+  adherents        Adherent[]    // Add relation to adherents
 }
 
 model Contract {
@@ -440,6 +442,95 @@ model BSLog {
   user         User         @relation(fields: [userId], references: [id])
 }
 
+// Enhanced Finance Module Models
+model Adherent {
+  id            String              @id @default(uuid())
+  matricule     String              // Unique per société
+  nom           String
+  prenom        String
+  clientId      String              // Société de rattachement
+  rib           String
+  statut        String              @default("ACTIF") // ACTIF/INACTIF
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  createdById   String?
+  updatedById   String?
+  client        Client              @relation(fields: [clientId], references: [id])
+  virementItems VirementItem[]
+  
+  @@unique([matricule, clientId]) // Matricule unique par société
+  @@index([rib])
+}
+
+model DonneurOrdre {
+  id                String              @id @default(uuid())
+  nom               String
+  rib               String
+  banque            String
+  structureTxt      String              // Structure 1, 2, 3...
+  statut            String              @default("ACTIF")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  ordresVirement    OrdreVirement[]
+}
+
+model OrdreVirement {
+  id                String              @id @default(uuid())
+  reference         String              @unique
+  donneurOrdreId    String
+  bordereauId       String?
+  dateCreation      DateTime            @default(now())
+  dateTraitement    DateTime?
+  utilisateurSante  String              // User who initiated
+  utilisateurFinance String?            // User who processed
+  etatVirement      EtatVirement        @default(NON_EXECUTE)
+  dateEtatFinal     DateTime?
+  commentaire       String?
+  montantTotal      Float
+  nombreAdherents   Int
+  fichierPdf        String?
+  fichierTxt        String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  donneurOrdre      DonneurOrdre        @relation(fields: [donneurOrdreId], references: [id])
+  bordereau         Bordereau?          @relation(fields: [bordereauId], references: [id])
+  items             VirementItem[]
+  historique        VirementHistorique[]
+}
+
+model VirementItem {
+  id              String        @id @default(uuid())
+  ordreVirementId String
+  adherentId      String
+  montant         Float
+  statut          String        @default("VALIDE") // VALIDE/ERREUR
+  erreur          String?
+  createdAt       DateTime      @default(now())
+  ordreVirement   OrdreVirement @relation(fields: [ordreVirementId], references: [id])
+  adherent        Adherent      @relation(fields: [adherentId], references: [id])
+}
+
+model VirementHistorique {
+  id              String        @id @default(uuid())
+  ordreVirementId String
+  action          String
+  ancienEtat      String?
+  nouvelEtat      String?
+  utilisateurId   String?
+  commentaire     String?
+  dateAction      DateTime      @default(now())
+  ordreVirement   OrdreVirement @relation(fields: [ordreVirementId], references: [id])
+}
+
+enum EtatVirement {
+  NON_EXECUTE
+  EN_COURS_EXECUTION
+  EXECUTE_PARTIELLEMENT
+  REJETE
+  EXECUTE
+}
+
+// Keep existing models but enhance them
 model Society {
   id        String              @id @default(uuid())
   name      String              @unique

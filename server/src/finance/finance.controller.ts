@@ -1,227 +1,265 @@
 import {
   Controller,
-  Post,
-  Patch,
   Get,
+  Post,
+  Put,
   Delete,
-  Param,
   Body,
+  Param,
   Query,
+  UseInterceptors,
+  UploadedFile,
   Req,
   Res,
-  UploadedFile,
-  UseInterceptors
+  BadRequestException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { FinanceService } from './finance.service';
-import { CreateVirementDto } from './dto/create-virement.dto';
-import { ConfirmVirementDto } from './dto/confirm-virement.dto';
-import { SearchVirementDto } from './dto/search-virement.dto';
-import { CreateOVDto } from './dto/create-ov.dto';
-import { UpdateOVStatusDto } from './dto/update-ov-status.dto';
 import { Response } from 'express';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { UserRole } from '../auth/user-role.enum';
-import { UseGuards } from '@nestjs/common';
-import { Express } from 'express';
+import { AdherentService, CreateAdherentDto, UpdateAdherentDto } from './adherent.service';
+import { DonneurOrdreService, CreateDonneurOrdreDto, UpdateDonneurOrdreDto } from './donneur-ordre.service';
+import { OrdreVirementService, CreateOrdreVirementDto, UpdateEtatVirementDto } from './ordre-virement.service';
+import { FileGenerationService } from './file-generation.service';
 
-// Extract user from authenticated request
 function getUserFromRequest(req: any) {
-  // In production, this should come from JWT token validation
-  // For now, provide a fallback that works with the existing auth system
-  if (req.user) {
-    return req.user;
-  }
-  
-  // Fallback for development/testing
-  return {
-    id: 'system-user',
-    email: 'system@ars.com',
-    fullName: 'System User',
-    role: 'FINANCE',
-    active: true
-  };
+  return req.user || { id: 'demo-user', role: 'FINANCE', fullName: 'Demo User' };
 }
 
-
-
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('virements')
+@Controller('finance')
 export class FinanceController {
-  constructor(private readonly financeService: FinanceService) {}
+  constructor(
+    private adherentService: AdherentService,
+    private donneurOrdreService: DonneurOrdreService,
+    private ordreVirementService: OrdreVirementService,
+    private fileGenerationService: FileGenerationService
+  ) {}
 
-  @Post()
-  async createVirement(@Body() dto: CreateVirementDto, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    // Validate input
-    if (!dto.bordereauId || typeof dto.montant !== 'number' || !dto.referenceBancaire || !dto.dateDepot || !dto.dateExecution) {
-      throw new Error('All required fields must be provided.');
-    }
-    return this.financeService.createVirement(dto, user);
-  }
-
-  @Patch(':id/confirm')
-  async confirmVirement(@Param('id') id: string, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.confirmVirement(id, user);
-  }
-
-  @Get('search')
-  async searchVirements(@Query() query: SearchVirementDto, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.searchVirements(query, user);
-  }
-
-  @Get('virement/:id')
-  async getVirement(@Param('id') id: string, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.getVirementById(id, user);
-  }
-
-  @Get('export')
-  async exportVirements(
-    @Query('format') format: string,
-    @Query() query: SearchVirementDto,
-    @Req() req: any,
-    @Res() res: Response,
-  ) {
-    const user = getUserFromRequest(req);
-    return this.financeService.exportVirements(format, query, user, res);
-  }
-
-  @Post('auto-confirm')
-  async autoConfirmVirements(@Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.autoConfirmVirements();
-  }
-
-  // OV Processing endpoints
-  @Post('ov/validate-file')
-  @UseInterceptors(FileInterceptor('file'))
-  async validateOVFile(@UploadedFile() file: Express.Multer.File, @Body() body: any, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.validateOVFile(file, body, user);
-  }
-
-  @Post('ov/process')
-  async processOV(@Body() dto: CreateOVDto, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.processOV(dto, user);
-  }
-
-  @Get('ov/tracking')
-  async getOVTracking(@Query() query: any, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.getOVTracking(query, user);
-  }
-
-  @Patch('ov/:id/status')
-  async updateOVStatus(@Param('id') id: string, @Body() dto: UpdateOVStatusDto, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.updateOVStatus(id, dto, user);
-  }
-
-  @Get('ov/:id/pdf')
-  async generateOVPDF(@Param('id') id: string, @Res() res: Response, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.generateOVPDF(id, res, user);
-  }
-
-  @Get('ov/:id/txt')
-  async generateOVTXT(@Param('id') id: string, @Res() res: Response, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.generateOVTXT(id, res, user);
-  }
-
-  // Donneurs d'Ordre endpoints
-  @Get('donneurs')
-  async getDonneurs(@Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.getDonneurs(user);
-  }
-
-  @Post('donneurs')
-  async createDonneur(@Body() data: any, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.createDonneur(data, user);
-  }
-
-  @Patch('donneurs/:id')
-  async updateDonneur(@Param('id') id: string, @Body() data: any, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.updateDonneur(id, data, user);
-  }
-
-  @Delete('donneurs/:id')
-  async deleteDonneur(@Param('id') id: string, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.deleteDonneur(id, user);
-  }
-
-  // Adherents endpoints
-  @Get('adherents')
-  async getAdherents(@Query() query: any, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.getAdherents(query, user);
-  }
-
+  // === ADHERENT ENDPOINTS ===
   @Post('adherents')
-  async createAdherent(@Body() data: any, @Req() req: any) {
+  async createAdherent(@Body() dto: CreateAdherentDto, @Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.financeService.createAdherent(data, user);
+    return this.adherentService.createAdherent(dto, user.id);
   }
 
-  @Patch('adherents/:id')
-  async updateAdherent(@Param('id') id: string, @Body() data: any, @Req() req: any) {
+  @Put('adherents/:id')
+  async updateAdherent(@Param('id') id: string, @Body() dto: UpdateAdherentDto, @Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.financeService.updateAdherent(id, data, user);
+    return this.adherentService.updateAdherent(id, dto, user.id);
+  }
+
+  @Get('adherents')
+  async getAdherents(@Query('clientId') clientId?: string, @Query('search') search?: string) {
+    if (search) {
+      return this.adherentService.searchAdherents(search, clientId);
+    }
+    if (clientId) {
+      return this.adherentService.findAdherentsByClient(clientId);
+    }
+    throw new BadRequestException('clientId or search parameter required');
+  }
+
+  @Get('adherents/:id')
+  async getAdherent(@Param('id') id: string) {
+    return this.adherentService.findAdherentByMatricule(id, ''); // Will be enhanced
   }
 
   @Delete('adherents/:id')
-  async deleteAdherent(@Param('id') id: string, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.deleteAdherent(id, user);
+  async deleteAdherent(@Param('id') id: string) {
+    return this.adherentService.deleteAdherent(id);
   }
 
-  // Notifications endpoint
-  @Post('notify-finance')
-  async notifyFinanceTeam(@Body() data: { bordereauId: string, message?: string }, @Req() req: any) {
+  @Post('adherents/import')
+  @UseInterceptors(FileInterceptor('file'))
+  async importAdherents(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.financeService.notifyFinanceTeam(data.bordereauId, data.message, user);
+    // Implementation for bulk import would go here
+    return { message: 'Import functionality to be implemented' };
   }
 
-  // Alerts endpoint
-  @Get('alerts')
-  async getFinanceAlerts(@Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.getFinanceAlerts(user);
+  @Post('adherents/validate')
+  async validateMatricules(@Body() body: { matricules: string[]; clientId: string }) {
+    return this.adherentService.validateMatricules(body.matricules, body.clientId);
   }
 
-  // Export report endpoint
-  @Post('export-report')
-  async exportReport(@Body() exportData: any, @Res() res: Response, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.financeService.exportReport(exportData, res, user);
+  // === DONNEUR D'ORDRE ENDPOINTS ===
+  @Post('donneurs-ordre')
+  async createDonneurOrdre(@Body() dto: CreateDonneurOrdreDto) {
+    return this.donneurOrdreService.createDonneurOrdre(dto);
   }
 
-  @Post('generate-ov')
-  async generateOV(@Body() generateOVDto: {
-    bordereauIds: string[];
-    donneurOrdre?: string;
-    format: 'PDF' | 'TXT' | 'BOTH';
-    includeDetails: boolean;
-  }, @Req() req: any) {
-    console.log('📡 Finance Controller: Received OV generation request');
-    console.log('📡 Request body:', JSON.stringify(generateOVDto, null, 2));
-    try {
-      const result = await this.financeService.generateOV(generateOVDto);
-      console.log('✅ Finance Controller: OV generated successfully');
-      return result;
-    } catch (error) {
-      console.error('❌ Finance Controller: Error generating OV:', error);
-      throw error;
+  @Put('donneurs-ordre/:id')
+  async updateDonneurOrdre(@Param('id') id: string, @Body() dto: UpdateDonneurOrdreDto) {
+    return this.donneurOrdreService.updateDonneurOrdre(id, dto);
+  }
+
+  @Get('donneurs-ordre')
+  async getDonneursOrdre(@Query('activeOnly') activeOnly?: string) {
+    return this.donneurOrdreService.findAllDonneurs(activeOnly !== 'false');
+  }
+
+  @Get('donneurs-ordre/:id')
+  async getDonneurOrdre(@Param('id') id: string) {
+    return this.donneurOrdreService.findDonneurById(id);
+  }
+
+  @Delete('donneurs-ordre/:id')
+  async deleteDonneurOrdre(@Param('id') id: string) {
+    return this.donneurOrdreService.deleteDonneurOrdre(id);
+  }
+
+  @Put('donneurs-ordre/:id/toggle-status')
+  async toggleDonneurStatus(@Param('id') id: string) {
+    return this.donneurOrdreService.toggleStatus(id);
+  }
+
+  @Get('donneurs-ordre/structures/formats')
+  async getStructureFormats() {
+    return this.donneurOrdreService.getStructureTxtFormats();
+  }
+
+  // === ORDRE VIREMENT ENDPOINTS ===
+  @Post('ordres-virement/import-excel')
+  @UseInterceptors(FileInterceptor('file'))
+  async importExcel(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { clientId: string; donneurOrdreId: string },
+    @Req() req: any
+  ) {
+    if (!file) {
+      throw new BadRequestException('Excel file is required');
     }
+
+    const user = getUserFromRequest(req);
+    return this.ordreVirementService.processExcelImport(
+      file.buffer,
+      body.clientId,
+      body.donneurOrdreId,
+      user.id
+    );
+  }
+
+  @Post('ordres-virement')
+  async createOrdreVirement(@Body() dto: CreateOrdreVirementDto, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    dto.utilisateurSante = user.id;
+    return this.ordreVirementService.createOrdreVirement(dto);
+  }
+
+  @Put('ordres-virement/:id/etat')
+  async updateEtatVirement(
+    @Param('id') id: string,
+    @Body() dto: UpdateEtatVirementDto,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    dto.utilisateurFinance = user.id;
+    return this.ordreVirementService.updateEtatVirement(id, dto);
+  }
+
+  @Get('ordres-virement')
+  async getOrdresVirement(@Query() filters: any) {
+    return this.ordreVirementService.findOrdreVirements(filters);
+  }
+
+  @Get('ordres-virement/:id')
+  async getOrdreVirement(@Param('id') id: string) {
+    return this.ordreVirementService.findOrdreVirementById(id);
+  }
+
+  @Get('ordres-virement/:id/pdf')
+  async downloadPDF(@Param('id') id: string, @Res() res: Response) {
+    const ordreVirement = await this.ordreVirementService.findOrdreVirementById(id);
+    
+    if (!ordreVirement.fichierPdf) {
+      throw new BadRequestException('PDF file not found');
+    }
+
+    const fileContent = await this.fileGenerationService.getFileContent(ordreVirement.fichierPdf);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="virement_${ordreVirement.reference}.pdf"`);
+    res.send(fileContent);
+  }
+
+  @Get('ordres-virement/:id/txt')
+  async downloadTXT(@Param('id') id: string, @Res() res: Response) {
+    const ordreVirement = await this.ordreVirementService.findOrdreVirementById(id);
+    
+    if (!ordreVirement.fichierTxt) {
+      throw new BadRequestException('TXT file not found');
+    }
+
+    const fileContent = await this.fileGenerationService.getFileContent(ordreVirement.fichierTxt);
+    
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="virement_${ordreVirement.reference}.txt"`);
+    res.send(fileContent);
+  }
+
+  // === DASHBOARD ENDPOINTS ===
+  @Get('dashboard')
+  async getFinanceDashboard() {
+    return this.ordreVirementService.getFinanceDashboard();
+  }
+
+  @Get('dashboard/stats')
+  async getFinanceStats(@Query() filters: any) {
+    const ordres = await this.ordreVirementService.findOrdreVirements(filters);
+    
+    const stats = {
+      totalOrdres: ordres.length,
+      montantTotal: ordres.reduce((sum, o) => sum + o.montantTotal, 0),
+      adherentsTotal: ordres.reduce((sum, o) => sum + o.nombreAdherents, 0),
+      parEtat: ordres.reduce((acc, o) => {
+        acc[o.etatVirement] = (acc[o.etatVirement] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    };
+
+    return stats;
+  }
+
+  // === SUIVI ENDPOINTS ===
+  @Get('suivi/bordereaux')
+  async getSuiviBordereaux(@Query() filters: any) {
+    // Get bordereaux with virement tracking
+    return this.ordreVirementService.findOrdreVirements({
+      ...filters,
+      includeBordereau: true
+    });
+  }
+
+  @Get('suivi/notifications')
+  async getSuiviNotifications(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    
+    // Get finance-related notifications
+    const notifications = await this.ordreVirementService['prisma'].notification.findMany({
+      where: {
+        userId: user.id,
+        type: { in: ['NOUVEAU_VIREMENT', 'VIREMENT_UPDATE'] }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+
+    return notifications;
+  }
+
+  // === HISTORIQUE ENDPOINTS ===
+  @Get('historique')
+  async getHistorique(@Query() filters: any) {
+    return this.ordreVirementService.findOrdreVirements({
+      ...filters,
+      includeHistory: true
+    });
+  }
+
+  @Get('historique/:id')
+  async getHistoriqueOrdre(@Param('id') id: string) {
+    const ordreVirement = await this.ordreVirementService.findOrdreVirementById(id);
+    return {
+      ordreVirement,
+      historique: ordreVirement.historique
+    };
   }
 }

@@ -113,7 +113,13 @@ const AdherentsTab: React.FC = () => {
       
       if (dialog.adherent) {
         // Update existing
-        await updateAdherent(dialog.adherent.id, form);
+        const adherentData = {
+          nom: form.name,
+          prenom: form.surname,
+          rib: form.rib,
+          statut: form.status
+        };
+        await updateAdherent(dialog.adherent.id, adherentData);
         setAdherents(prev => prev.map(a => 
           a.id === dialog.adherent?.id 
             ? {...a, ...form, duplicateRib: isDuplicate} 
@@ -121,7 +127,15 @@ const AdherentsTab: React.FC = () => {
         ));
       } else {
         // Add new
-        const newAdherent = await createAdherent(form);
+        const adherentData = {
+          matricule: form.matricule,
+          nom: form.name,
+          prenom: form.surname,
+          clientId: form.society,
+          rib: form.rib,
+          statut: form.status
+        };
+        const newAdherent = await createAdherent(adherentData);
         setAdherents(prev => [...prev, {...newAdherent, duplicateRib: isDuplicate}]);
       }
       

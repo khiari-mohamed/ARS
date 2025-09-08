@@ -72,13 +72,27 @@ const DonneursTab: React.FC = () => {
       
       if (dialog.donneur) {
         // Update existing
-        await updateDonneur(dialog.donneur.id, form);
+        const donneurData = {
+          nom: form.name,
+          banque: form.bank,
+          rib: form.rib,
+          structureTxt: form.txtFormat,
+          statut: form.status
+        };
+        await updateDonneur(dialog.donneur.id, donneurData);
         setDonneurs(prev => prev.map(d => 
           d.id === dialog.donneur?.id ? {...d, ...form} : d
         ));
       } else {
         // Add new
-        const newDonneur = await createDonneur(form);
+        const donneurData = {
+          nom: form.name,
+          banque: form.bank,
+          rib: form.rib,
+          structureTxt: form.txtFormat,
+          statut: form.status
+        };
+        const newDonneur = await createDonneur(donneurData);
         setDonneurs(prev => [...prev, newDonneur]);
       }
       setDialog({open: false, donneur: null});

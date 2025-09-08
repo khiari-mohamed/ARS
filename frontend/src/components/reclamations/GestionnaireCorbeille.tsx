@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LocalAPI } from '../../services/axios';
+import corbeilleService, { CorbeilleResponse } from '../../services/corbeilleService';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { 
@@ -54,9 +55,8 @@ interface CorbeilleItem {
   remainingTime: number;
 }
 
-const fetchGestionnaireCorbeille = async () => {
-  const { data } = await LocalAPI.get('/reclamations/corbeille/gestionnaire');
-  return data;
+const fetchGestionnaireCorbeille = async (): Promise<CorbeilleResponse> => {
+  return await corbeilleService.getReclamationsGestionnaireCorbeille();
 };
 
 const updateReclamationStatus = async (payload: { id: string; status: string; description?: string }) => {
@@ -68,10 +68,7 @@ const updateReclamationStatus = async (payload: { id: string; status: string; de
 };
 
 const returnToChef = async (payload: { id: string; reason: string }) => {
-  const { data } = await LocalAPI.post(`/reclamations/${payload.id}/return`, {
-    reason: payload.reason
-  });
-  return data;
+  return await corbeilleService.returnReclamationToChef(payload.id, payload.reason);
 };
 
 export const GestionnaireCorbeille: React.FC = () => {
@@ -144,12 +141,7 @@ export const GestionnaireCorbeille: React.FC = () => {
   };
 
   const getSLAColor = (slaStatus: string) => {
-    switch (slaStatus) {
-      case 'OVERDUE': return 'error';
-      case 'CRITICAL': return 'warning';
-      case 'AT_RISK': return 'info';
-      default: return 'success';
-    }
+    return corbeilleService.getSLAColor(slaStatus);
   };
 
   const renderStatsCards = () => (
@@ -325,15 +317,15 @@ export const GestionnaireCorbeille: React.FC = () => {
       </Typography>
 
       {/* Personal Alerts */}
-      {stats?.enRetard > 0 && (
+      {(stats?.enRetard || 0) > 0 && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          <strong>Attention:</strong> Vous avez {stats.enRetard} réclamations en retard SLA
+          <strong>Attention:</strong> Vous avez {stats?.enRetard || 0} réclamations en retard SLA
         </Alert>
       )}
 
-      {stats?.critiques > 0 && (
+      {(stats?.critiques || 0) > 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          <strong>Urgent:</strong> {stats.critiques} réclamations critiques vous sont assignées
+          <strong>Urgent:</strong> {stats?.critiques || 0} réclamations critiques vous sont assignées
         </Alert>
       )}
 
