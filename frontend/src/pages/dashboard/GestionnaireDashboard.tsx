@@ -35,6 +35,43 @@ const GestionnaireDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   
+  const handleReturnToChef = async (bordereauId: string) => {
+    const reason = prompt('Raison du retour au chef d\'équipe:');
+    if (!reason) return;
+    
+    try {
+      const response = await fetch('/api/workflow/enhanced-corbeille/return-to-chef', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bordereauId, reason })
+      });
+      
+      if (response.ok) {
+        // Refresh data
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Return to chef failed:', error);
+    }
+  };
+  
+  const handleMarkAsProcessed = async (bordereauId: string) => {
+    try {
+      const response = await fetch('/api/workflow/enhanced-corbeille/mark-processed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bordereauId })
+      });
+      
+      if (response.ok) {
+        // Refresh data
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Mark as processed failed:', error);
+    }
+  };
+  
   // Data hooks
   const { data: bsData } = useBSList({ 
     ownerId: user?.id,
@@ -162,6 +199,19 @@ const GestionnaireDashboard: React.FC = () => {
             onClick={() => navigate(`/bs/${record.id}/processing`)}
           >
             Traiter
+          </Button>
+          <Button 
+            size="small" 
+            onClick={() => handleMarkAsProcessed(record.id)}
+          >
+            Marquer traité
+          </Button>
+          <Button 
+            size="small" 
+            danger
+            onClick={() => handleReturnToChef(record.id)}
+          >
+            Retourner
           </Button>
         </Space>
       ),

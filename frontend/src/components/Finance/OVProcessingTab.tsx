@@ -123,21 +123,9 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       
       // Then generate the file
       if (type === 'pdf') {
-        const blob = await generateOVPDF(ovRecord.id);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `OV_${ovRecord.reference}.pdf`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+        await generateOVPDF(ovRecord.id); // This function handles download internally
       } else {
-        const blob = await generateOVTXT(ovRecord.id);
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `OV_${ovRecord.reference}.txt`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+        await generateOVTXT(ovRecord.id); // This function handles download internally
         setActiveStep(3);
       }
     } catch (error) {

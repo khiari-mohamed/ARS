@@ -30,6 +30,12 @@ from explainable_ai import explainer
 from advanced_ml_models import document_classifier, sla_predictor
 from pattern_recognition import recurring_detector, temporal_analyzer
 from intelligent_automation import smart_router, decision_engine
+# Learning and persistence modules
+from learning_engine import learning_engine
+from model_persistence import model_persistence
+from adaptive_learning import adaptive_learning
+# Generative AI module
+from generative_ai import generative_ai
 
 app = FastAPI(title="Enhanced ML Analytics API", version="2.0.0")
 nlp = spacy.load("fr_core_news_sm")
@@ -213,7 +219,11 @@ async def sla_prediction(items: List[Dict], explain: bool = False, current_user 
             results.append(result)
         except Exception as e:
             results.append({'id': item.get('id'), 'error': str(e)})
-    return {'sla_predictions': results}
+    
+    base_result = {'sla_predictions': results}
+    # Enhance with learning capabilities
+    enhanced_result = adaptive_learning.enhance_sla_prediction(items, base_result)
+    return enhanced_result
 
 # 2. Prioritization (Daily Priority Suggestions)
 @app.post("/priorities")
@@ -1108,7 +1118,7 @@ async def classify_claim(data: Dict = Body(...), current_user = Depends(get_curr
         # Keywords extraction
         keywords = [word for word in text_lower.split() if len(word) > 4][:5]
         
-        return {
+        base_result = {
             'category': category,
             'subcategory': subcategory,
             'priority': priority,
@@ -1120,6 +1130,10 @@ async def classify_claim(data: Dict = Body(...), current_user = Depends(get_curr
             'urgencyScore': urgency_score,
             'keywords': keywords
         }
+        
+        # Enhance with learning capabilities
+        enhanced_result = adaptive_learning.enhance_classification(text, base_result)
+        return enhanced_result
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
@@ -1182,7 +1196,7 @@ async def analyze_sentiment(data: Dict = Body(...), current_user = Depends(get_c
         # Extract entities for context
         entities = [{'text': ent.text, 'label': ent.label_} for ent in doc.ents]
         
-        return {
+        base_result = {
             'sentiment': sentiment,
             'confidence': float(confidence),
             'score': float(final_score),
@@ -1194,6 +1208,10 @@ async def analyze_sentiment(data: Dict = Body(...), current_user = Depends(get_c
             },
             'summary': f"Sentiment: {sentiment} (confidence: {confidence:.2f})"
         }
+        
+        # Enhance with learning capabilities
+        enhanced_result = adaptive_learning.enhance_sentiment_analysis(text, base_result)
+        return enhanced_result
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sentiment analysis failed: {str(e)}")
@@ -1335,17 +1353,30 @@ async def metrics():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    # Get learning stats
+    learning_stats = learning_engine.get_learning_stats()
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "version": "3.0.0",
+        "version": "3.1.0",
         "features": [
             "complaint_analysis", "sla_prediction", "anomaly_detection", 
             "trend_forecasting", "confidence_scoring", "performance_analytics",
             "authentication", "live_data_integration", "explainable_ai",
             "document_classification", "pattern_recognition", "smart_routing",
-            "automated_decisions", "advanced_ml_models"
-        ]
+            "automated_decisions", "advanced_ml_models", "adaptive_learning",
+            "model_persistence", "company_lexicon_learning", "local_generative_ai",
+            "intelligent_text_generation", "contextual_responses", "business_insights_generation"
+        ],
+        "learning_status": {
+            "company_lexicon_size": learning_stats.get('company_lexicon_size', 0),
+            "total_interactions": learning_stats.get('total_interactions', 0),
+            "feedback_received": learning_stats.get('feedback_received', 0),
+            "models_saved": len(model_persistence.list_models()),
+            "learning_active": True
+        },
+        "generative_ai_status": generative_ai.get_learning_stats()
     }
 
 # Test endpoint without authentication
@@ -1366,6 +1397,139 @@ async def test_analyze(data: Dict = Body(...)):
             'error': str(e)
         }
 
+# === GENERATIVE AI ENDPOINTS ===
+@app.post("/generate")
+@log_endpoint_call("generate")
+async def generate_ai_response(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Generate intelligent responses using local AI"""
+    try:
+        prompt = data.get('prompt', '')
+        context = data.get('context', {})
+        
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Prompt is required")
+        
+        result = generative_ai.generate_response(prompt, context)
+        
+        return {
+            'success': True,
+            'generated_response': result['response'],
+            'confidence': result['confidence'],
+            'source': result['source'],
+            'learning_applied': result['learning_applied']
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Response generation failed: {str(e)}")
+
+@app.post("/generate/insight")
+@log_endpoint_call("generate_insight")
+async def generate_business_insight(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Generate business insights from data"""
+    try:
+        business_data = data.get('data', {})
+        insight_type = data.get('type', 'analysis')
+        
+        insight = generative_ai.generate_business_insight(business_data, insight_type)
+        
+        return {
+            'success': True,
+            'insight': insight,
+            'type': insight_type,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Insight generation failed: {str(e)}")
+
+@app.post("/generate/feedback")
+@log_endpoint_call("generate_feedback")
+async def provide_generative_feedback(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Provide feedback on generated responses for learning"""
+    try:
+        conversation_id = data.get('conversation_id', 0)
+        feedback = data.get('feedback', 0)  # 1 for positive, -1 for negative, 0 for neutral
+        
+        generative_ai.provide_feedback(conversation_id, feedback)
+        
+        return {
+            'success': True,
+            'message': 'Feedback recorded for generative AI learning',
+            'conversation_id': conversation_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generative feedback failed: {str(e)}")
+
+# === LEARNING AND FEEDBACK ENDPOINTS ===
+@app.post("/feedback")
+@log_endpoint_call("feedback")
+async def record_feedback(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Record user feedback for learning improvement"""
+    try:
+        prediction_id = data.get('prediction_id', '')
+        endpoint = data.get('endpoint', '')
+        feedback = data.get('feedback', {})
+        
+        adaptive_learning.record_feedback(endpoint, prediction_id, feedback)
+        
+        return {
+            'success': True,
+            'message': 'Feedback recorded successfully',
+            'prediction_id': prediction_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Feedback recording failed: {str(e)}")
+
+@app.get("/learning/insights")
+@log_endpoint_call("learning_insights")
+async def get_learning_insights(current_user = Depends(get_current_active_user)):
+    """Get AI learning insights and statistics"""
+    try:
+        insights = adaptive_learning.get_learning_insights()
+        
+        return {
+            'success': True,
+            'insights': insights,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Getting insights failed: {str(e)}")
+
+@app.get("/learning/models")
+@log_endpoint_call("learning_models")
+async def get_saved_models(current_user = Depends(get_current_active_user)):
+    """Get information about saved models"""
+    try:
+        models = model_persistence.list_models()
+        
+        return {
+            'success': True,
+            'models': models,
+            'total_models': len(models)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Getting models failed: {str(e)}")
+
+@app.post("/learning/optimize")
+@log_endpoint_call("learning_optimize")
+async def optimize_learning(current_user = Depends(get_current_active_user)):
+    """Optimize learning parameters"""
+    try:
+        adaptive_learning.optimize_learning_rate()
+        
+        return {
+            'success': True,
+            'message': 'Learning parameters optimized',
+            'current_learning_rate': adaptive_learning.learning_rate
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Learning optimization failed: {str(e)}")
+
 # Background task scheduler
 def run_scheduler():
     while True:
@@ -1375,15 +1539,26 @@ def run_scheduler():
 # Schedule periodic tasks
 schedule.every(10).minutes.do(lambda: logger.info("AI service health check"))
 schedule.every().hour.do(lambda: logger.info("Hourly AI model refresh"))
+# Learning optimization tasks
+schedule.every(6).hours.do(lambda: adaptive_learning.optimize_learning_rate())
+schedule.every().day.do(lambda: model_persistence.cleanup_old_models())
 
 if __name__ == "__main__":
     import uvicorn
     import os
+    from startup_learning import initialize_learning_system, cleanup_learning_system
+    import atexit
+    
+    # Initialize learning system
+    initialize_learning_system()
+    
+    # Register cleanup on exit
+    atexit.register(cleanup_learning_system)
     
     # Start scheduler in background thread
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
     
     port = int(os.getenv('AI_SERVICE_PORT', 8002))
-    logger.info(f"Starting AI microservice on port {port}")
+    logger.info(f"Starting AI microservice with learning capabilities on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)

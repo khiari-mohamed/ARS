@@ -72,7 +72,7 @@ const FinanceAlertsTab: React.FC = () => {
     if (!notifyDialog.bordereauId) return;
     
     try {
-      await notifyFinanceTeam(notifyDialog.bordereauId, notifyForm.message);
+      await notifyFinanceTeam({ bordereauId: notifyDialog.bordereauId, message: notifyForm.message });
       setNotifyDialog({open: false});
       setNotifyForm({message: ''});
       // Refresh alerts after notification

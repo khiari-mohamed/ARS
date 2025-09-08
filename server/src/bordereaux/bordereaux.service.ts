@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { WorkflowNotificationsService } from '../workflow/workflow-notifications.service';
+import { TeamRoutingService } from '../workflow/team-routing.service';
 import { CreateBordereauDto } from './dto/create-bordereau.dto';
 import { UpdateBordereauDto } from './dto/update-bordereau.dto';
 import { AssignBordereauDto } from './dto/assign-bordereau.dto';
@@ -619,7 +621,9 @@ export class BordereauxService {
   auditLogService: any;
   constructor(
     private readonly prisma: PrismaService, 
-    private readonly alertsService: AlertsService
+    private readonly alertsService: AlertsService,
+    private readonly workflowNotifications: WorkflowNotificationsService,
+    private readonly teamRouting: TeamRoutingService
   ) {}
 
 
@@ -1309,13 +1313,17 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
         dateFinScan: new Date(),
       },
       include: {
-        client: true,
+        client: { include: { gestionnaires: true } },
         contract: true,
       },
     });
     
-    // Auto-progress to next stage
+    // Auto-progress to assignment stage
     await this.progressWorkflow(id, 'SCAN_COMPLETED');
+    
+    // Notify chef d'équipe for assignment
+    await this.notifyChefForAssignment(id, bordereau.reference, bordereau.client.id);
+    
     await this.logAction(id, 'COMPLETE_SCAN');
     return BordereauResponseDto.fromEntity(bordereau);
   }

@@ -80,6 +80,46 @@ const ChefDashboard: React.FC = () => {
     setAssignModalVisible(true);
   };
 
+  const handleAutoAssignByClient = async () => {
+    if (selectedBsIds.length === 0) return;
+    
+    try {
+      const response = await fetch('/api/workflow/enhanced-corbeille/auto-assign-by-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bordereauIds: selectedBsIds })
+      });
+      
+      if (response.ok) {
+        setSelectedBsIds([]);
+        queryClient.invalidateQueries(['bs-list']);
+        queryClient.invalidateQueries(['team-workload']);
+      }
+    } catch (error) {
+      console.error('Auto assignment failed:', error);
+    }
+  };
+
+  const handleAutoAssignByType = async (documentType: string) => {
+    if (selectedBsIds.length === 0) return;
+    
+    try {
+      const response = await fetch('/api/workflow/enhanced-corbeille/auto-assign-by-type', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bordereauIds: selectedBsIds, documentType })
+      });
+      
+      if (response.ok) {
+        setSelectedBsIds([]);
+        queryClient.invalidateQueries(['bs-list']);
+        queryClient.invalidateQueries(['team-workload']);
+      }
+    } catch (error) {
+      console.error('Auto assignment by type failed:', error);
+    }
+  };
+
   const handleAssignSuccess = () => {
     setSelectedBsIds([]);
     setAssignModalVisible(false);
@@ -318,6 +358,20 @@ const ChefDashboard: React.FC = () => {
                       size="small"
                     >
                       Assigner sélectionnés ({selectedBsIds.length})
+                    </Button>
+                    <Button 
+                      onClick={handleAutoAssignByClient}
+                      disabled={selectedBsIds.length === 0}
+                      size="small"
+                    >
+                      Auto-assigner par client
+                    </Button>
+                    <Button 
+                      onClick={() => handleAutoAssignByType('BS')}
+                      disabled={selectedBsIds.length === 0}
+                      size="small"
+                    >
+                      Auto-assigner par type
                     </Button>
                   </Space>
                 }

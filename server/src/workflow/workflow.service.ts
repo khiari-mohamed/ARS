@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NotificationService } from '../ged/notification.service';
+import { WorkflowNotificationsService } from './workflow-notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowTask, WorkflowAssignment } from './interfaces/workflow.interface';
 import { TASK_TYPES, WORKFLOW_PRIORITY, SLA_TIMEFRAMES } from './workflow.constants';
@@ -19,7 +20,8 @@ export class WorkflowService {
     private bordereauxService: BordereauxService,
     private alertsService: AlertsService,
     private analyticsService: AnalyticsService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private workflowNotifications: WorkflowNotificationsService
   ) {}
 
 
@@ -315,6 +317,13 @@ export class WorkflowService {
           bordereauId: dto.taskId,
           assignedToUserId: dto.assigneeId
         });
+        // Notify gestionnaire of assignment
+        await this.workflowNotifications.notifyWorkflowTransition(
+          dto.taskId,
+          'A_AFFECTER',
+          'ASSIGNE',
+          dto.assigneeId
+        );
         break;
       case 'BS_VALIDATION':
         // Implement BS validation assignment logic if needed

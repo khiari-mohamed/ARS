@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { register as registerService, UserRole } from '../../services/authService';
 import logo from '../../assets/ars-logo.png';
 
@@ -88,7 +88,7 @@ const Register = () => {
           </button>
         </form>
         <div className="login-footer">
-          Already have an account? <a href="/login">Login</a>
+          Already have an account? <Link to="/login">Login</Link>
         </div>
       </div>
     </div>

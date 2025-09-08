@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { GedService } from './ged.service';
 import { GedController } from './ged.controller';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,7 +12,7 @@ import { BordereauxModule } from '../bordereaux/bordereaux.module';
 import { AlertsModule } from '../alerts/alerts.module';
 
 @Module({
-  imports: [IntegrationModule, BordereauxModule, AlertsModule],
+  imports: [IntegrationModule, forwardRef(() => BordereauxModule), AlertsModule],
   controllers: [GedController],
   providers: [GedService, PrismaService, NotificationService, PaperStreamIntegrationService, PaperStreamBatchProcessor, PaperStreamWatcherService, AdvancedSearchService],
   exports: [GedService, NotificationService, PaperStreamIntegrationService, PaperStreamBatchProcessor, PaperStreamWatcherService, AdvancedSearchService],

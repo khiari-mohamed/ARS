@@ -22,6 +22,7 @@ import {
   Refresh
 } from '@mui/icons-material';
 import ConsolidatedSystemDashboard from '../components/ConsolidatedSystemDashboard';
+import ComprehensiveSystemDashboard from '../components/ComprehensiveSystemDashboard';
 import SLAConfigurationInterface from '../components/SLAConfigurationInterface';
 import SystemConfigurationPanel from '../components/SystemConfigurationPanel';
 import AdvancedUserManagement from '../components/AdvancedUserManagement';
@@ -240,7 +241,7 @@ const SuperAdminDashboard: React.FC = () => {
         </Box>
 
         <TabPanel value={activeTab} index={0}>
-          <ConsolidatedSystemDashboard />
+          <ComprehensiveSystemDashboard />
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
