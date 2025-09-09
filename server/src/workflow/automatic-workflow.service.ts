@@ -33,6 +33,11 @@ export class AutomaticWorkflowService {
           lte: new Date(Date.now() - 30000) // Older than 30 seconds
         }
       },
+      select: {
+        id: true,
+        reference: true,
+        statut: true
+      },
       take: 10
     });
 
@@ -97,13 +102,40 @@ export class AutomaticWorkflowService {
       }
     });
 
+    // For each team (chef), fetch its workload config from DB
     for (const team of teams) {
       const workload = team.bordereauxTeam.length;
-      const overloadThreshold = 50;
+      const config = await this.prisma.teamWorkloadConfig.findFirst({ where: { teamId: team.id } });
+      // Use config if present, else fallback to defaults
+      const overloadThreshold = config?.maxLoad ?? 50;
+      const autoReassignEnabled = config?.autoReassignEnabled ?? false;
+      const overflowAction = config?.overflowAction ?? 'ROUND_ROBIN';
+      const alertThreshold = config?.alertThreshold;
+
+      // Alert threshold logic (even before overload)
+      if (alertThreshold && workload > alertThreshold) {
+        await this.workflowNotifications.notifyTeamOverload(team.id, workload);
+        this.logger.warn(`Team ${team.fullName} approaches overload at workload ${workload}`);
+      }
 
       if (workload > overloadThreshold) {
         await this.workflowNotifications.notifyTeamOverload(team.id, workload);
         this.logger.warn(`Team ${team.fullName} is overloaded with ${workload} items`);
+        // Now handle auto-reallocation
+        if (autoReassignEnabled) {
+          // Select surplus dossiers (strict oldest first)
+          const surplusCount = workload - overloadThreshold;
+          const surplusDossiers = team.bordereauxTeam
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+            .slice(-surplusCount);
+
+          for (const dossier of surplusDossiers) {
+            // Use round-robin or lowest-load depending on config
+            // We'll use the TeamRoutingService to select another eligible team
+            await this.teamRouting.reassignDossierToOtherTeam(dossier.id, team.id, overflowAction);
+            this.logger.warn(`Auto-reassigned dossier ${dossier.reference} from ${team.fullName}`);
+          }
+        }
       }
     }
   }

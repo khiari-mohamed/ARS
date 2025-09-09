@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { BOService, CreateBOEntryDto } from './bo.service';
+import { BOInterfaceService } from './bo-interface.service';
 import { Request } from 'express';
 import { Express } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,7 +28,8 @@ import { UserRole } from '../auth/user-role.enum';
 export class BOController {
   constructor(
     private readonly boService: BOService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly boInterfaceService: BOInterfaceService
   ) {
     console.log('🔥 BO CONTROLLER INITIALIZED!');
   }
@@ -344,5 +346,65 @@ export class BOController {
     const userId = this.extractUserId(user) || 'system-user';
     
     return await this.boService.progressBordereauWorkflow(bordereauId, data.status, userId);
+  }
+
+  // === NEW BO INTERFACE ENDPOINTS ===
+  
+  // Manual bordereau entry with client pre-filling
+  @Post('bordereau')
+  @UseGuards(JwtAuthGuard)
+  async createBordereauEntry(
+    @Body() data: {
+      typeFichier: string;
+      nombreFichiers: number;
+      referenceBordereau: string;
+      clientId: string;
+      delaiReglement?: number;
+      delaiReclamation?: number;
+      gestionnaire?: string;
+      observations?: string;
+    },
+    @Req() req: Request
+  ) {
+    const user = req?.['user'] as any;
+    const userId = this.extractUserId(user) || 'system-user';
+    return await this.boInterfaceService.createBordereauEntry(data, userId);
+  }
+
+  // Get client pre-fill data
+  @Get('client/:id/prefill')
+  @UseGuards(JwtAuthGuard)
+  async getClientPreFillData(@Param('id') clientId: string) {
+    return await this.boInterfaceService.getClientPreFillData(clientId);
+  }
+
+  // BO Dashboard with new interface
+  @Get('interface-dashboard')
+  @UseGuards(JwtAuthGuard)
+  async getBOInterfaceDashboard(@Req() req: Request) {
+    const user = req?.['user'] as any;
+    const userId = this.extractUserId(user) || 'system-user';
+    return await this.boInterfaceService.getBODashboard(userId);
+  }
+
+  // Get available clients
+  @Get('available-clients')
+  @UseGuards(JwtAuthGuard)
+  async getAvailableClients() {
+    return await this.boInterfaceService.getAvailableClients();
+  }
+
+  // Get available gestionnaires
+  @Get('available-gestionnaires')
+  @UseGuards(JwtAuthGuard)
+  async getAvailableGestionnaires() {
+    return await this.boInterfaceService.getAvailableGestionnaires();
+  }
+
+  // Validate bordereau reference
+  @Post('validate-reference')
+  @UseGuards(JwtAuthGuard)
+  async validateBordereauReference(@Body() data: { reference: string }) {
+    return await this.boInterfaceService.validateBordereauReference(data.reference);
   }
 }

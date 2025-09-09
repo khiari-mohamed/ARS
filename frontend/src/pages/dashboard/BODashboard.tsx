@@ -7,6 +7,7 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons';
 import { useBSList } from '../../hooks/useBS';
+import BOInterfaceForm from '../../components/BOInterfaceForm';
 
 const { Option } = Select;
 
@@ -21,6 +22,7 @@ interface BOFormData {
 const BODashboard: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [showInterfaceForm, setShowInterfaceForm] = useState(false);
   
   const { data: bsData } = useBSList({ limit: 100 });
   const bsList = bsData?.items || [];
@@ -186,8 +188,16 @@ const BODashboard: React.FC = () => {
                   htmlType="submit" 
                   loading={loading}
                   size="large"
+                  style={{ marginRight: 8 }}
                 >
                   Enregistrer Bordereau BS
+                </Button>
+                <Button 
+                  type="default" 
+                  onClick={() => setShowInterfaceForm(true)}
+                  size="large"
+                >
+                  Interface Améliorée
                 </Button>
               </Form.Item>
             </Form>
@@ -216,6 +226,16 @@ const BODashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
+      
+      {/* Enhanced BO Interface Form */}
+      <BOInterfaceForm
+        open={showInterfaceForm}
+        onClose={() => setShowInterfaceForm(false)}
+        onSuccess={() => {
+          message.success('Bordereau créé avec succès et notification envoyée au SCAN');
+          // Refresh data if needed
+        }}
+      />
     </div>
   );
 };

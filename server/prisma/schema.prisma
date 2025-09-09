@@ -16,6 +16,9 @@ model User {
   createdAt                   DateTime             @default(now())
   department                  String?
   active                      Boolean              @default(true)
+  serviceType                 String?
+  capacity                    Int                  @default(20)
+  teamLeaderId                String?
   AlertLog                    AlertLog[]
   AuditLog                    AuditLog[]
   bsLogs                      BSLog[]
@@ -42,6 +45,12 @@ model User {
   bordereaux                  Bordereau[]          @relation("UserBordereaux")
   notifications               Notification[]
   gecTemplatesCreated         GecTemplate[]        @relation("GecTemplateCreator")
+  teamLeader                  User?                @relation("TeamLeader", fields: [teamLeaderId], references: [id])
+  teamMembers                 User[]               @relation("TeamLeader")
+  chargeCompteClients         Client[]             @relation("ChargeCompte")
+  chargeCompteBordereaux      Bordereau[]          @relation("ChargeCompteBordereaux")
+  workflowNotifications       WorkflowNotification[]
+  ledTeamStructures           TeamStructure[]      @relation("TeamStructureLeader")
 }
 
 model Process {
@@ -106,13 +115,18 @@ model Bordereau {
   clientId              String
   contractId            String?
   dateReception         DateTime
+  dateReceptionBO       DateTime?
   dateDebutScan         DateTime?
   dateFinScan           DateTime?
   dateReceptionSante    DateTime?
+  dateReceptionEquipeSante DateTime?
   dateCloture           DateTime?
+  dateReelleCloture     DateTime?
   dateDepotVirement     DateTime?
   dateExecutionVirement DateTime?
   delaiReglement        Int
+  nombreJourTraitement  Int?
+  dateLimiteTraitement  DateTime?
   statut                Statut              @default(EN_ATTENTE)
   nombreBS              Int
   createdAt             DateTime            @default(now())
@@ -121,6 +135,7 @@ model Bordereau {
   teamId                String?
   assignedToUserId      String?
   prestataireId         String?
+  chargeCompteId        String?
   priority              Int                 @default(1)
   archived              Boolean             @default(false)
   ActionLog             ActionLog[]
@@ -138,7 +153,9 @@ model Bordereau {
   traitementHistory     TraitementHistory[]
   virement              Virement?           @relation("BordereauVirement")
   User                  User[]              @relation("UserBordereaux")
-  ordresVirement        OrdreVirement[]     // Add relation to ordre virement
+  ordresVirement        OrdreVirement[]
+  chargeCompte          User?               @relation("ChargeCompteBordereaux", fields: [chargeCompteId], references: [id])
+  workflowNotifications WorkflowNotification[]
 }
 
 model Prestataire {
@@ -213,11 +230,15 @@ model Client {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   slaConfig        Json?
+  chargeCompteId   String?
+  contractDocumentPath String?
   bordereaux       Bordereau[]
   contracts        Contract[]
   reclamations     Reclamation[]
   gestionnaires    User[]        @relation("ClientGestionnaires")
-  adherents        Adherent[]    // Add relation to adherents
+  adherents        Adherent[]
+  chargeCompte     User?         @relation("ChargeCompte", fields: [chargeCompteId], references: [id])
+  slaConfigurations SlaConfiguration[]
 }
 
 model Contract {
@@ -280,6 +301,7 @@ model Document {
   uploader     User            @relation("UserDocuments", fields: [uploadedById], references: [id])
   OCRLog       OCRLog[]
   reclamations Reclamation[]
+  workflowNotifications WorkflowNotification[]
 }
 
 model Courrier {
@@ -468,6 +490,8 @@ model DonneurOrdre {
   rib               String
   banque            String
   structureTxt      String              // Structure 1, 2, 3...
+  formatTxtType     String              @default("STRUCTURE_1")
+  signaturePath     String?
   statut            String              @default("ACTIF")
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -496,6 +520,7 @@ model OrdreVirement {
   bordereau         Bordereau?          @relation(fields: [bordereauId], references: [id])
   items             VirementItem[]
   historique        VirementHistorique[]
+  suiviVirements    SuiviVirement[]
 }
 
 model VirementItem {
@@ -531,6 +556,17 @@ enum EtatVirement {
 }
 
 // Keep existing models but enhance them
+model TeamWorkloadConfig {
+  id           String   @id @default(uuid())
+  teamId       String   // User (CHEF_EQUIPE) or TeamStructure ID
+  maxLoad      Int      // Maximum number of dossiers allowed before overload
+  autoReassignEnabled Boolean @default(true)
+  overflowAction String   @default("ROUND_ROBIN") // ROUND_ROBIN, LOWEST_LOAD, BLOCK, ESCALATE
+  alertThreshold Int?    // If set, generate alert at this workload
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+}
+
 model Society {
   id        String              @id @default(uuid())
   name      String              @unique
@@ -833,4 +869,77 @@ model NotificationTemplate {
 
   @@index([channel])
   @@index([active])
+}
+
+model SuiviVirement {
+  id                String        @id @default(uuid())
+  numeroBordereau   String
+  societe           String
+  dateInjection     DateTime      @default(now())
+  utilisateurSante  String
+  dateTraitement    DateTime?
+  utilisateurFinance String?
+  etatVirement      String        @default("NON_EXECUTE")
+  dateEtatFinal     DateTime?
+  commentaire       String?
+  ordreVirementId   String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  ordreVirement     OrdreVirement? @relation(fields: [ordreVirementId], references: [id])
+
+  @@index([numeroBordereau])
+  @@index([etatVirement])
+}
+
+model WorkflowNotification {
+  id          String     @id @default(uuid())
+  fromService String
+  toService   String
+  bordereauId String?
+  documentId  String?
+  message     String
+  type        String
+  status      String     @default("PENDING")
+  sentAt      DateTime   @default(now())
+  readAt      DateTime?
+  userId      String?
+  createdAt   DateTime   @default(now())
+  bordereau   Bordereau? @relation(fields: [bordereauId], references: [id])
+  document    Document?  @relation(fields: [documentId], references: [id])
+  user        User?      @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([type])
+}
+
+model SlaConfiguration {
+  id         String   @id @default(uuid())
+  clientId   String?
+  moduleType String
+  seuils     Json
+  alertes    Json
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  client     Client?  @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@index([moduleType])
+}
+
+model TeamStructure {
+  id           String         @id @default(uuid())
+  name         String
+  serviceType  String
+  parentTeamId String?
+  leaderId     String?
+  description  String?
+  active       Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  parentTeam   TeamStructure? @relation("TeamHierarchy", fields: [parentTeamId], references: [id])
+  subTeams     TeamStructure[] @relation("TeamHierarchy")
+  leader       User?          @relation("TeamStructureLeader", fields: [leaderId], references: [id])
+
+  @@index([serviceType])
 }

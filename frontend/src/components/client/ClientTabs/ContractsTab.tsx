@@ -7,6 +7,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { exportToExcel, exportToPDF } from '../../../utils/export';
+import DocumentPreview from '../DocumentPreview';
 
 interface Props {
   clientId: string;
@@ -259,7 +260,10 @@ const ContractsTab: React.FC<Props> = ({ clientId }) => {
                 )}
                 <TableCell>
                   {contract.documentPath ? (
-                    <Link href={`/api/clients/contract/${contract.documentPath}/download`} target="_blank" rel="noopener">Download</Link>
+                    <DocumentPreview 
+                      documentId={contract.documentPath} 
+                      documentName={contract.clientName + ' Contract'} 
+                    />
                   ) : '-'}
                 </TableCell>
                 <TableCell>

@@ -19,6 +19,8 @@ import { AdherentService, CreateAdherentDto, UpdateAdherentDto } from './adheren
 import { DonneurOrdreService, CreateDonneurOrdreDto, UpdateDonneurOrdreDto } from './donneur-ordre.service';
 import { OrdreVirementService, CreateOrdreVirementDto, UpdateEtatVirementDto } from './ordre-virement.service';
 import { FileGenerationService } from './file-generation.service';
+import { FinanceService } from './finance.service';
+import { BankFormatConfigService } from './bank-format-config.service';
 
 function getUserFromRequest(req: any) {
   return req.user || { id: 'demo-user', role: 'FINANCE', fullName: 'Demo User' };
@@ -30,7 +32,9 @@ export class FinanceController {
     private adherentService: AdherentService,
     private donneurOrdreService: DonneurOrdreService,
     private ordreVirementService: OrdreVirementService,
-    private fileGenerationService: FileGenerationService
+    private fileGenerationService: FileGenerationService,
+    private financeService: FinanceService,
+    private bankFormatConfig: BankFormatConfigService
   ) {}
 
   // === ADHERENT ENDPOINTS ===
@@ -261,5 +265,88 @@ export class FinanceController {
       ordreVirement,
       historique: ordreVirement.historique
     };
+  }
+
+  // === NEW ENDPOINTS FOR MISSING FEATURES ===
+  
+  // Excel validation endpoint
+  @Post('validate-excel')
+  @UseInterceptors(FileInterceptor('file'))
+  async validateExcelFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return await this.financeService.validateOVFile(file, body, user);
+  }
+
+  // PDF generation endpoint
+  @Get('ordre-virement/:id/generate-pdf')
+  async generateOVPDF(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return await this.financeService.generateOVPDF(id, res, user);
+  }
+
+  // TXT generation endpoint
+  @Get('ordre-virement/:id/generate-txt')
+  async generateOVTXT(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return await this.financeService.generateOVTXT(id, res, user);
+  }
+
+  // Suivi virement endpoints
+  @Get('suivi-virement')
+  async getSuiviVirements(
+    @Query() filters: {
+      etatVirement?: string;
+      societe?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      utilisateurSante?: string;
+      utilisateurFinance?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return await this.financeService.getOVTracking(filters, user);
+  }
+
+  @Get('suivi-virement/:id')
+  async getSuiviVirementById(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return await this.financeService.getVirementById(id, user);
+  }
+
+  // === BANK FORMAT CONFIGURATION ===
+  @Get('bank-formats')
+  async getBankFormats() {
+    return this.bankFormatConfig.getBankFormats();
+  }
+
+  @Get('bank-formats/:formatId')
+  async getBankFormat(@Param('formatId') formatId: string) {
+    return this.bankFormatConfig.getBankFormat(formatId);
+  }
+
+  @Put('bank-formats/:formatId')
+  async updateBankFormat(@Param('formatId') formatId: string, @Body() config: any) {
+    return this.bankFormatConfig.updateBankFormat(formatId, config);
+  }
+
+  @Post('bank-formats/validate')
+  async validateBankFormat(@Body() data: { formatType: string; specifications: any }) {
+    return this.bankFormatConfig.validateFormatSpecification(data.formatType, data.specifications);
   }
 }

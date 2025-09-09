@@ -68,7 +68,11 @@ const updateReclamationStatus = async (payload: { id: string; status: string; de
 };
 
 const returnToChef = async (payload: { id: string; reason: string }) => {
-  return await corbeilleService.returnReclamationToChef(payload.id, payload.reason);
+  const { data } = await LocalAPI.post('/workflow/enhanced-corbeille/return-to-chef', {
+    bordereauId: payload.id,
+    reason: payload.reason
+  });
+  return data;
 };
 
 export const GestionnaireCorbeille: React.FC = () => {

@@ -102,9 +102,9 @@ export class DonneurOrdreService {
 
   async getStructureTxtFormats() {
     return [
-      { id: 'STRUCTURE_1', name: 'Structure 1 - Format Standard' },
-      { id: 'STRUCTURE_2', name: 'Structure 2 - Format Banque Populaire' },
-      { id: 'STRUCTURE_3', name: 'Structure 3 - Format AMEN' }
+      { id: 'STRUCTURE_1', name: 'Structure 1 - AMEN BANK (Format fixe 120 car)', description: 'Format AMEN avec enregistrements H/D/T de 120 caractères' },
+      { id: 'STRUCTURE_2', name: 'Structure 2 - BANQUE POPULAIRE (Format délimité)', description: 'Format BP avec séparateurs pipe et longueur variable' },
+      { id: 'STRUCTURE_3', name: 'Structure 3 - STB (Format CSV)', description: 'Format STB avec délimiteurs point-virgule et en-têtes' }
     ];
   }
 

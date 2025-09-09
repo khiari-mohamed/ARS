@@ -111,6 +111,27 @@ export class FileGenerationService {
     doc.fontSize(14).text(`Total: ${totalAmount.toFixed(2)} TND`, { align: 'right' });
     doc.text(`Nombre d'adhérents: ${ordreVirement.items.length}`, { align: 'right' });
 
+    // Donneur signature/tampon (stamp at footer right)
+    const signaturePath = ordreVirement.donneurOrdre?.signaturePath;
+    if (!signaturePath) {
+      doc.end();
+      throw new Error('Signature/tampon obligatoire pour exporter ce PDF');
+    }
+    const signatureFullPath = path.isAbsolute(signaturePath)
+      ? signaturePath
+      : path.join(process.cwd(), signaturePath.replace(/[\\/]/g, path.sep));
+    if (fs.existsSync(signatureFullPath)) {
+      // Draw signature in bottom right on the last page
+      const footerY = doc.page.height - 60;
+      doc.image(signatureFullPath, doc.page.width - 170, footerY, { width: 120, height: 40 });
+      doc.fontSize(8).text('Signature Donneur d’Ordre', doc.page.width - 160, footerY + 42, {
+        width: 110, align: 'center'
+      });
+    } else {
+      doc.end();
+      throw new Error('Image de signature introuvable : ' + signatureFullPath);
+    }
+
     doc.end();
 
     return filePath;

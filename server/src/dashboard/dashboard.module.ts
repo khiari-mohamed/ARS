@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
+import { EnhancedDashboardService } from './enhanced-dashboard.service';
+import { EnhancedDashboardController } from './enhanced-dashboard.controller';
 import { TraitementService } from '../traitement/traitement.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationModule } from '../integrations/integration.module';
@@ -13,13 +15,14 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [IntegrationModule, ReclamationsModule, BordereauxModule, AnalyticsModule, AlertsModule, PrismaModule], 
-  controllers: [DashboardController],
+  controllers: [DashboardController, EnhancedDashboardController],
   providers: [
     DashboardService,
+    EnhancedDashboardService,
     TraitementService,
     PrismaService,
     NotificationService,
   ],
-  exports: [DashboardService],
+  exports: [DashboardService, EnhancedDashboardService],
 })
 export class DashboardModule {}

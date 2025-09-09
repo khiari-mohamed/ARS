@@ -72,11 +72,18 @@ const GlobalCorbeille: React.FC = () => {
   const loadGlobalCorbeille = async () => {
     try {
       const [bordereauResponse, teamResponse] = await Promise.all([
-        LocalAPI.get('/dashboard/global-corbeille'),
+        LocalAPI.get(`/workflow/enhanced-corbeille/chef/${user?.id}`),
         LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
       ]);
 
-      const bordereauData = bordereauResponse.data.map((b: any) => ({
+      // Transform enhanced corbeille data
+      const allBordereaux = [
+        ...bordereauResponse.data.nonAffectes || [],
+        ...bordereauResponse.data.enCours || [],
+        ...bordereauResponse.data.traites || []
+      ];
+
+      const bordereauData = allBordereaux.map((b: any) => ({
         id: b.id,
         reference: b.reference,
         clientName: b.client?.name || 'N/A',
@@ -111,7 +118,7 @@ const GlobalCorbeille: React.FC = () => {
     if (!selectedAssignee || selectedBordereaux.length === 0) return;
 
     try {
-      await LocalAPI.post('/bordereaux/bulk-assign', {
+      await LocalAPI.post('/workflow/enhanced-corbeille/bulk-assign', {
         bordereauIds: selectedBordereaux,
         assigneeId: selectedAssignee
       });
