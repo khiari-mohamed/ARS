@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import OVProcessingTab from './OVProcessingTab';
 import TrackingTab from './TrackingTab';
+import SuiviVirementTab from './SuiviVirementTab';
 import DonneursTab from './DonneursTab';
 import AdherentsTab from './AdherentsTab';
 import ReportsTab from './ReportsTab';
@@ -24,6 +25,7 @@ const FinanceModule: React.FC = () => {
   const tabLabels = [
     'Ordre de Virement',
     'Suivi & Statut',
+    'Suivi Virement',
     'Donneurs d\'Ordre',
     'Adhérents',
     'Alertes & Retards',
@@ -61,13 +63,14 @@ const FinanceModule: React.FC = () => {
             <Box>
               {tab === 0 && <OVProcessingTab onSwitchToTab={setTab} />}
               {tab === 1 && <TrackingTab />}
-              {tab === 2 && <DonneursTab />}
-              {tab === 3 && <AdherentsTab />}
-              {tab === 4 && <FinanceAlertsTab />}
-              {tab === 5 && <MultiBankFormatManager />}
-              {tab === 6 && <AutomatedReconciliation />}
-              {tab === 7 && <FinancialReportingDashboard />}
-              {tab === 8 && <ReportsTab />}
+              {tab === 2 && <SuiviVirementTab />}
+              {tab === 3 && <DonneursTab />}
+              {tab === 4 && <AdherentsTab />}
+              {tab === 5 && <FinanceAlertsTab />}
+              {tab === 6 && <MultiBankFormatManager />}
+              {tab === 7 && <AutomatedReconciliation />}
+              {tab === 8 && <FinancialReportingDashboard />}
+              {tab === 9 && <ReportsTab />}
             </Box>
           </Paper>
         </>
@@ -91,13 +94,14 @@ const FinanceModule: React.FC = () => {
           <Box>
             {tab === 0 && <OVProcessingTab onSwitchToTab={setTab} />}
             {tab === 1 && <TrackingTab />}
-            {tab === 2 && <DonneursTab />}
-            {tab === 3 && <AdherentsTab />}
-            {tab === 4 && <FinanceAlertsTab />}
-            {tab === 5 && <MultiBankFormatManager />}
-            {tab === 6 && <AutomatedReconciliation />}
-            {tab === 7 && <FinancialReportingDashboard />}
-            {tab === 8 && <ReportsTab />}
+            {tab === 2 && <SuiviVirementTab />}
+            {tab === 3 && <DonneursTab />}
+            {tab === 4 && <AdherentsTab />}
+            {tab === 5 && <FinanceAlertsTab />}
+            {tab === 6 && <MultiBankFormatManager />}
+            {tab === 7 && <AutomatedReconciliation />}
+            {tab === 8 && <FinancialReportingDashboard />}
+            {tab === 9 && <ReportsTab />}
           </Box>
         </Paper>
       )}

@@ -186,14 +186,14 @@ export class AssignmentEngineService {
     return this.prisma.bordereau.count({
       where: {
         currentHandlerId: userId,
-        statut: { in: ['ASSIGNE', 'EN_COURS'] as any }
+        statut: { in: ['ASSIGNE', 'EN_COURS'] }
       }
     });
   }
 
   private async getUserCapacity(userId: string): Promise<number> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    return 20; // Default capacity since capacity field doesn't exist in User model
+    return 20; // Default capacity since capacity field access needs to be handled
   }
 
   private async getUserEfficiency(userId: string): Promise<number> {
@@ -241,7 +241,7 @@ export class AssignmentEngineService {
 
   async rebalanceTeamWorkload(teamId: string): Promise<any> {
     const workloads = await this.getTeamWorkloads(teamId);
-    const rebalanceActions = [];
+    const rebalanceActions: any[] = [];
 
     const avgLoad = workloads.reduce((sum, w) => sum + (w.currentLoad / w.capacity), 0) / workloads.length;
     
@@ -254,7 +254,7 @@ export class AssignmentEngineService {
       const bordereaux = await this.prisma.bordereau.findMany({
         where: {
           currentHandlerId: overloadedUser.userId,
-          statut: { in: ['ASSIGNE', 'EN_COURS'] as any }
+          statut: { in: ['ASSIGNE', 'EN_COURS'] }
         },
         take: excessLoad,
         orderBy: { createdAt: 'desc' }
@@ -263,11 +263,32 @@ export class AssignmentEngineService {
       for (const bordereau of bordereaux) {
         const bestAssignee = underloaded.find(u => u.currentLoad < u.capacity);
         if (bestAssignee) {
-          (rebalanceActions as any[]).push({
+          // Execute the reassignment
+          await this.prisma.bordereau.update({
+            where: { id: bordereau.id },
+            data: { currentHandlerId: bestAssignee.userId }
+          });
+          
+          // Log the reassignment
+          await this.prisma.auditLog.create({
+            data: {
+              userId: 'SYSTEM',
+              action: 'WORKLOAD_REBALANCE',
+              details: {
+                bordereauId: bordereau.id,
+                fromUserId: overloadedUser.userId,
+                toUserId: bestAssignee.userId,
+                reason: 'automatic_workload_rebalancing'
+              }
+            }
+          });
+          
+          rebalanceActions.push({
             bordereauId: bordereau.id,
             fromUserId: overloadedUser.userId,
             toUserId: bestAssignee.userId,
-            reason: 'workload_rebalancing'
+            reason: 'workload_rebalancing',
+            executed: true
           });
           bestAssignee.currentLoad++;
         }
@@ -295,6 +316,52 @@ export class AssignmentEngineService {
   }
 
   async evaluateAssignmentRules(bordereauId: string): Promise<string | null> {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { client: true }
+    });
+
+    if (!bordereau) return null;
+
+    // Affectation selon chargé de compte client
+    if (bordereau.chargeCompteId) {
+      // First try to assign to the charge de compte directly
+      const chargeCompte = await this.prisma.user.findUnique({
+        where: { id: bordereau.chargeCompteId, active: true }
+      });
+      
+      if (chargeCompte) {
+        const workload = await this.getCurrentUserLoad(chargeCompte.id);
+        const capacity = await this.getUserCapacity(chargeCompte.id);
+        
+        if (workload < capacity) {
+          return chargeCompte.id;
+        }
+      }
+      
+      // If charge de compte is overloaded, find chef d'équipe in same service
+      const chefEquipe = await this.prisma.user.findFirst({
+        where: {
+          role: 'CHEF_EQUIPE',
+          active: true
+        }
+      });
+      
+      if (chefEquipe) {
+        const workload = await this.getCurrentUserLoad(chefEquipe.id);
+        const capacity = await this.getUserCapacity(chefEquipe.id);
+        
+        if (workload < capacity) {
+          return chefEquipe.id;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // Enhanced assignment rules evaluation
+  async evaluateAssignmentRulesEnhanced(bordereauId: string): Promise<string | null> {
     const rules = await this.getActiveAssignmentRules();
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
@@ -320,6 +387,18 @@ export class AssignmentEngineService {
 
   private async getActiveAssignmentRules(): Promise<AssignmentRule[]> {
     return [
+      {
+        id: 'rule_charge_compte',
+        name: 'Affectation selon chargé de compte',
+        priority: 150,
+        conditions: [
+          { field: 'client.chargeCompteId', operator: '!=', value: null }
+        ],
+        actions: [
+          { type: 'assign', target: 'chargeCompte', value: 'client.chargeCompteId' }
+        ],
+        active: true
+      },
       {
         id: 'rule_urgent',
         name: 'Urgent Cases',
@@ -378,8 +457,12 @@ export class AssignmentEngineService {
 
   private executeRuleActions(actions: AssignmentAction[], bordereau: any): string | null {
     for (const action of actions) {
-      if (action.type === 'assign' && action.target === 'skill') {
-        return this.findUserWithSkill(action.value);
+      if (action.type === 'assign') {
+        if (action.target === 'chargeCompte') {
+          return this.getFieldValue(bordereau, action.value);
+        } else if (action.target === 'skill') {
+          return this.findUserWithSkill(action.value);
+        }
       }
     }
     return null;
@@ -409,10 +492,13 @@ export class AssignmentEngineService {
     });
   }
 
-  private async getTeamMembers(teamId: string): Promise<any[]> {
+  async getTeamMembers(teamId: string): Promise<any[]> {
     try {
       const members = await this.prisma.user.findMany({
-        where: { department: teamId }, // Use department instead of teamId
+        where: { 
+          department: teamId,
+          active: true
+        },
         select: { id: true, fullName: true, role: true }
       });
       return members;

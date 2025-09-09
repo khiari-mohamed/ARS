@@ -24,6 +24,7 @@ import SearchResultsPanel from "../../components/SearchResultsPanel";
 import { useAuth } from '../../contexts/AuthContext';
 import TeamLeaderDashboard from '../../components/TeamLeaderDashboard';
 import BordereauxDashboard from './BordereauxDashboard';
+import BOWorkflowInterface from '../../components/BOWorkflowInterface';
 
 function BordereauxListPage() {
   const { user, isAuthenticated } = useAuth();
@@ -141,6 +142,10 @@ function BordereauxListPage() {
         </div>
       </div>
     );
+  }
+
+  if (userRole === 'BO') {
+    return <BOWorkflowInterface />;
   }
 
   if (userRole === 'CHEF_EQUIPE') {

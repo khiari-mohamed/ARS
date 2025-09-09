@@ -336,4 +336,9 @@ export class ClientController {
   getClientDocuments(@Param('id') id: string) {
     return this.clientService.getClientDocuments(id);
   }
+
+  @Get('documents/:documentId/preview')
+  getDocumentPreview(@Param('documentId') documentId: string) {
+    return this.clientService.getDocumentPreview(documentId);
+  }
 }

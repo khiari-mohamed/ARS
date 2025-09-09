@@ -75,16 +75,25 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const processFile = async (file: File) => {
     setProcessing(true);
     try {
-      const { validateOVFile } = await import('../../services/financeService');
-      const result = await validateOVFile(file, selectedDonneur?.id || '');
+      const { financeService } = await import('../../services/financeService');
+      
+      // Use new Excel validation service with client ID
+      const clientId = 'default'; // You might want to get this from context or props
+      const result = await financeService.validateExcelFile(file, clientId);
       
       if (result.results && result.results.length > 0) {
         setValidationResults(result.results);
         setActiveStep(2);
         
-        // Show validation summary
+        // Show validation summary with new format
         if (result.summary) {
-          console.log('Validation Summary:', result.summary);
+          console.log('Validation Summary:', {
+            total: result.summary.total,
+            valid: result.summary.valid,
+            warnings: result.summary.warnings,
+            errors: result.summary.errors,
+            totalAmount: result.summary.totalAmount
+          });
         }
         
         // Show errors if any
@@ -93,7 +102,6 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         }
       } else {
         console.error('No results from validation');
-        // Show error to user
         alert('Aucune donnée valide trouvée dans le fichier Excel');
       }
     } catch (error: any) {
@@ -108,7 +116,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const handleGenerateFiles = async (type: 'pdf' | 'txt') => {
     setProcessing(true);
     try {
-      const { processOV, generateOVPDF, generateOVTXT } = await import('../../services/financeService');
+      const { processOV, financeService } = await import('../../services/financeService');
       
       // First process the OV
       const validAdherents = validationResults.filter(r => r.status === 'ok');
@@ -121,11 +129,11 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       
       const ovRecord = await processOV(ovData);
       
-      // Then generate the file
+      // Then generate the file using new services
       if (type === 'pdf') {
-        await generateOVPDF(ovRecord.id); // This function handles download internally
+        await financeService.generateOVPDFNew(ovRecord.id);
       } else {
-        await generateOVTXT(ovRecord.id); // This function handles download internally
+        await financeService.generateOVTXTNew(ovRecord.id);
         setActiveStep(3);
       }
     } catch (error) {

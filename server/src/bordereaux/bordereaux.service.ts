@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, Logger, BadRequestException } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowNotificationsService } from '../workflow/workflow-notifications.service';
 import { TeamRoutingService } from '../workflow/team-routing.service';
+import { AutoNotificationService } from '../workflow/auto-notification.service';
+import { WorkloadAssignmentService } from '../workflow/workload-assignment.service';
 import { CreateBordereauDto } from './dto/create-bordereau.dto';
 import { UpdateBordereauDto } from './dto/update-bordereau.dto';
 import { AssignBordereauDto } from './dto/assign-bordereau.dto';
@@ -623,7 +625,9 @@ export class BordereauxService {
     private readonly prisma: PrismaService, 
     private readonly alertsService: AlertsService,
     private readonly workflowNotifications: WorkflowNotificationsService,
-    private readonly teamRouting: TeamRoutingService
+    private readonly teamRouting: TeamRoutingService,
+    private readonly autoNotificationService: AutoNotificationService,
+    private readonly workloadAssignmentService: WorkloadAssignmentService
   ) {}
 
 
@@ -750,7 +754,7 @@ export class BordereauxService {
       console.log('✅ Bordereau created successfully:', bordereau.reference);
     
       // AUTO-NOTIFICATION: BO → SCAN team notification
-      await this.notifyScanTeam(bordereau.id, bordereau.reference);
+      await this.autoNotificationService.notifyBOToScan(bordereau.id, bordereau.reference);
       
       // Trigger workflow progression
       await this.progressWorkflow(bordereau.id, 'CREATED');
@@ -1321,8 +1325,11 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
     // Auto-progress to assignment stage
     await this.progressWorkflow(id, 'SCAN_COMPLETED');
     
-    // Notify chef d'équipe for assignment
-    await this.notifyChefForAssignment(id, bordereau.reference, bordereau.client.id);
+    // AUTO-NOTIFICATION: SCAN → CHEF for assignment
+    await this.autoNotificationService.notifyScanToChef(id, bordereau.reference, bordereau.client.id);
+    
+    // AUTO-ASSIGNMENT: Trigger automatic assignment based on workload
+    setTimeout(() => this.workloadAssignmentService.autoAssignBordereau(id), 2000);
     
     await this.logAction(id, 'COMPLETE_SCAN');
     return BordereauResponseDto.fromEntity(bordereau);

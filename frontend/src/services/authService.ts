@@ -52,3 +52,26 @@ export const getCurrentUser = async () => {
     throw error;
   }
 };
+
+// === PERMISSION MANAGEMENT ===
+export const getUserPermissions = async (userRole: string) => {
+  const { data } = await LocalAPI.get(`/auth/permissions/${userRole}`);
+  return data;
+};
+
+export const checkPermission = async (userRole: string, module: string, action: string) => {
+  const { data } = await LocalAPI.get(`/auth/permissions/check`, {
+    params: { userRole, module, action }
+  });
+  return data;
+};
+
+export const getAllPermissions = async () => {
+  const { data } = await LocalAPI.get('/auth/permissions');
+  return data;
+};
+
+export const getModulePermissions = async (module: string) => {
+  const { data } = await LocalAPI.get(`/auth/permissions/module/${module}`);
+  return data;
+};

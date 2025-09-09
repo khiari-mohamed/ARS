@@ -242,6 +242,68 @@ class FinanceService {
     return data;
   }
 
+  // === NEW FEATURES ===
+  
+  // Excel validation with new backend service
+  async validateExcelFile(file: File, clientId: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('clientId', clientId);
+
+    const { data } = await LocalAPI.post('/finance/validate-excel', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return data;
+  }
+
+  // Generate PDF with new backend service
+  async generateOVPDFNew(id: string) {
+    const response = await LocalAPI.get(`/finance/ordre-virement/${id}/generate-pdf`, {
+      responseType: 'blob'
+    });
+    
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `OV_${id}.pdf`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  // Generate TXT with new backend service
+  async generateOVTXTNew(id: string) {
+    const response = await LocalAPI.get(`/finance/ordre-virement/${id}/generate-txt`, {
+      responseType: 'blob'
+    });
+    
+    const blob = new Blob([response.data], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `OV_${id}.txt`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  // Suivi virement methods
+  async getSuiviVirements(filters: any = {}) {
+    const params = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) params.append(key, filters[key]);
+    });
+    
+    const { data } = await LocalAPI.get(`/finance/suivi-virement?${params}`);
+    return data;
+  }
+
+  async getSuiviVirementById(id: string) {
+    const { data } = await LocalAPI.get(`/finance/suivi-virement/${id}`);
+    return data;
+  }
+
   // === UTILITY METHODS ===
   getEtatVirementLabel(etat: string): string {
     const labels: Record<string, string> = {
@@ -271,6 +333,30 @@ class FinanceService {
       currency: 'TND',
       minimumFractionDigits: 2
     }).format(montant);
+  }
+
+  // === BANK FORMAT CONFIGURATION ===
+  async getBankFormats() {
+    const { data } = await LocalAPI.get('/finance/bank-formats');
+    return data;
+  }
+
+  async getBankFormat(formatId: string) {
+    const { data } = await LocalAPI.get(`/finance/bank-formats/${formatId}`);
+    return data;
+  }
+
+  async updateBankFormat(formatId: string, config: any) {
+    const { data } = await LocalAPI.put(`/finance/bank-formats/${formatId}`, config);
+    return data;
+  }
+
+  async validateBankFormat(formatType: string, specifications: any) {
+    const { data } = await LocalAPI.post('/finance/bank-formats/validate', {
+      formatType,
+      specifications
+    });
+    return data;
   }
 }
 

@@ -26,6 +26,9 @@ import ComprehensiveSystemDashboard from '../components/ComprehensiveSystemDashb
 import SLAConfigurationInterface from '../components/SLAConfigurationInterface';
 import SystemConfigurationPanel from '../components/SystemConfigurationPanel';
 import AdvancedUserManagement from '../components/AdvancedUserManagement';
+import SuperAdminAlerts from '../components/analytics/SuperAdminAlerts';
+import AssignmentCriteria from '../components/Workflow/AssignmentCriteria';
+import TeamWorkloadConfig from '../components/Workflow/TeamWorkloadConfig';
 import { fetchSystemHealth, fetchSystemStats } from '../services/superAdminService';
 
 interface TabPanelProps {
@@ -233,6 +236,9 @@ const SuperAdminDashboard: React.FC = () => {
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={activeTab} onChange={handleTabChange} aria-label="super admin tabs">
+            <Tab label="Alertes Équipes" />
+            <Tab label="Affectation Avancée" />
+            <Tab label="Config Équipes" />
             <Tab label="Dashboard Système" />
             <Tab label="Configuration SLA" />
             <Tab label="Configuration Système" />
@@ -241,18 +247,30 @@ const SuperAdminDashboard: React.FC = () => {
         </Box>
 
         <TabPanel value={activeTab} index={0}>
-          <ComprehensiveSystemDashboard />
+          <SuperAdminAlerts />
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
-          <SLAConfigurationInterface />
+          <AssignmentCriteria />
         </TabPanel>
 
         <TabPanel value={activeTab} index={2}>
-          <SystemConfigurationPanel />
+          <TeamWorkloadConfig />
         </TabPanel>
 
         <TabPanel value={activeTab} index={3}>
+          <ComprehensiveSystemDashboard />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={3}>
+          <SLAConfigurationInterface />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={4}>
+          <SystemConfigurationPanel />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={5}>
           <AdvancedUserManagement />
         </TabPanel>
       </Paper>

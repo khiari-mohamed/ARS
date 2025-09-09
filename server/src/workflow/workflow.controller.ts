@@ -1,189 +1,122 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Query,
-  UseGuards,
-  Req,
-  BadRequestException
-} from '@nestjs/common';
-import { WorkflowService } from './workflow.service';
-import { AutomaticWorkflowService } from './automatic-workflow.service';
-import { SuperAdminOverviewService } from './super-admin-overview.service';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
-import { Request } from 'express';
+import { AutoNotificationService } from './auto-notification.service';
+import { WorkloadAssignmentService } from './workload-assignment.service';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('workflow')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class WorkflowController {
   constructor(
-    private readonly workflowService: WorkflowService,
-    private readonly automaticWorkflowService: AutomaticWorkflowService,
-    private readonly superAdminOverviewService: SuperAdminOverviewService
+    private autoNotificationService: AutoNotificationService,
+    private workloadAssignmentService: WorkloadAssignmentService
   ) {}
 
-  @Get('priorities')
-  @Get('priorities/:teamId')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async getDailyPriorities(
-    @Param('teamId') teamId?: string
+  /**
+   * Get workflow notifications for current user/service
+   */
+  @Get('notifications')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN, UserRole.BO, UserRole.SCAN_TEAM)
+  async getWorkflowNotifications(
+    @Query('toService') toService?: string,
+    @Query('userId') userId?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string
   ) {
-    return this.workflowService.getDailyPriorities(teamId);
-  }
-
-  @Post('assign-task')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async assignTask(
-    @Body() assignTaskDto: {
-      taskId: string;
-      taskType: string;
-      assigneeId: string;
-    }
-  ) {
-    return this.workflowService.assignTask(assignTaskDto);
-  }
-
-  @Post('auto-assign')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async autoAssignTasks() {
-    await this.workflowService.autoAssignTasks();
-    return { success: true, message: 'Auto-assignment completed' };
-  }
-
-  @Get('sla-compliance')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async monitorSlaCompliance(@Req() req: Request) {
-    const user = req['user'] as any;
-    await this.workflowService.monitorSlaCompliance();
-    return { success: true, message: 'SLA monitoring completed' };
-  }
-
-  @Get('kpis')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async getWorkflowKpis(
-    @Query() query: {
-      teamId?: string;
-      dateFrom?: string;
-      dateTo?: string;
-    },
-    @Req() req: Request
-  ) {
-    const user = req['user'] as any;
-    return this.workflowService.getWorkflowKpis({
-      teamId: query.teamId || '',
-      dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
-      dateTo: query.dateTo ? new Date(query.dateTo) : undefined
+    return this.autoNotificationService.getWorkflowNotifications({
+      toService,
+      userId,
+      status,
+      limit: limit ? parseInt(limit) : undefined
     });
   }
 
-  @Get('visualization/:bordereauId')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
-  async visualizeWorkflow(@Param('bordereauId') bordereauId: string) {
-    return this.workflowService.visualizeWorkflow(bordereauId);
+  /**
+   * Mark workflow notification as read
+   */
+  @Post('notifications/:id/read')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN, UserRole.BO, UserRole.SCAN_TEAM)
+  async markNotificationAsRead(@Param('id') notificationId: string) {
+    await this.autoNotificationService.markWorkflowNotificationAsRead(notificationId);
+    return { success: true };
   }
 
-  // Automatic Workflow endpoints
-  @Post('force-progression')
-  @Roles(UserRole.SUPER_ADMIN)
-  async forceWorkflowProgression(
-    @Body() data: {
-      bordereauId: string;
-      targetStatus: string;
-    },
-    @Req() req: Request
+  /**
+   * Get team workload overview (Chef d'Équipe only)
+   */
+  @Get('workload/overview')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getWorkloadOverview() {
+    return this.workloadAssignmentService.getTeamWorkloadOverview();
+  }
+
+  /**
+   * Get workload alerts
+   */
+  @Get('workload/alerts')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getWorkloadAlerts(): Promise<{
+    overloadedUsers: any[];
+    underutilizedUsers: any[];
+    criticalAlerts: number;
+  }> {
+    return this.workloadAssignmentService.getWorkloadAlerts();
+  }
+
+  /**
+   * Get reassignment suggestions
+   */
+  @Get('workload/suggestions')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getReassignmentSuggestions() {
+    return this.workloadAssignmentService.suggestReassignments();
+  }
+
+  /**
+   * Auto-assign a specific bordereau
+   */
+  @Post('assign/:bordereauId')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async autoAssignBordereau(@Param('bordereauId') bordereauId: string) {
+    return this.workloadAssignmentService.autoAssignBordereau(bordereauId);
+  }
+
+  /**
+   * Update user capacity
+   */
+  @Post('users/:userId/capacity')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async updateUserCapacity(
+    @Param('userId') userId: string,
+    @Body('capacity') capacity: number
   ) {
-    const user = req['user'] as any;
-    const userId = user?.id || user?.userId || user?.sub;
-
-    if (!data.bordereauId || !data.targetStatus) {
-      throw new BadRequestException('Missing required fields');
-    }
-
-    return this.automaticWorkflowService.forceWorkflowProgression(
-      data.bordereauId,
-      data.targetStatus,
-      userId
-    );
+    await this.workloadAssignmentService.updateUserCapacity(userId, capacity);
+    return { success: true };
   }
 
-  @Get('sla-breaches')
+  /**
+   * Check and notify team overload (manual trigger)
+   */
+  @Post('check-overload')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async getSLABreaches() {
-    return this.automaticWorkflowService.getSLABreaches();
+  async checkTeamOverload() {
+    await this.autoNotificationService.checkAndNotifyTeamOverload();
+    return { success: true, message: 'Overload check completed' };
   }
 
-  @Post('escalate-sla-breaches')
+  /**
+   * Trigger SLA breach notification (manual trigger for testing)
+   */
+  @Post('sla-breach/:bordereauId')
   @Roles(UserRole.SUPER_ADMIN)
-  async escalateSLABreaches() {
-    return this.automaticWorkflowService.escalateSLABreaches();
-  }
-
-  // Super Admin Overview endpoints
-  @Get('system-overview')
-  @Roles(UserRole.SUPER_ADMIN)
-  async getSystemOverview() {
-    return this.superAdminOverviewService.getCompleteSystemOverview();
-  }
-
-  @Get('team-performance')
-  @Get('team-performance/:teamId')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async getTeamPerformance(@Param('teamId') teamId?: string) {
-    return this.superAdminOverviewService.getTeamPerformanceDetails(teamId);
-  }
-
-  // Assignment management
-  @Get('assignments')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async getAllAssignments() {
-    return this.workflowService.getAllAssignments();
-  }
-
-  @Get('assignments/:id')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
-  async getAssignmentById(@Param('id') id: string) {
-    return this.workflowService.getAssignmentById(id);
-  }
-
-  @Post('assignments/:id')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
-  async updateAssignment(
-    @Param('id') id: string,
-    @Body() data: {
-      status?: string;
-      notes?: string;
-    },
-    @Req() req: Request
+  async triggerSLABreach(
+    @Param('bordereauId') bordereauId: string,
+    @Body('daysOverdue') daysOverdue: number,
+    @Body('reference') reference: string
   ) {
-    const user = req['user'] as any;
-    const userId = user?.id || user?.userId || user?.sub;
-
-    return this.workflowService.updateAssignment(id, data, userId);
-  }
-
-  @Get('assignments/:id/history')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
-  async getAssignmentHistory(@Param('id') id: string) {
-    return this.workflowService.getAssignmentHistory(id);
-  }
-
-  @Post('set-priority')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
-  async setTaskPriority(
-    @Body() data: {
-      taskId: string;
-      priority: number;
-    }
-  ) {
-    if (!data.taskId || data.priority === undefined) {
-      throw new BadRequestException('Missing required fields');
-    }
-
-    return this.workflowService.setTaskPriority(data);
+    await this.autoNotificationService.notifySLABreach(bordereauId, reference, daysOverdue);
+    return { success: true, message: 'SLA breach notification sent' };
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -11,6 +11,8 @@ import { Express } from 'express';
 
 @Injectable()
 export class ClientService {
+  private readonly logger = new Logger(ClientService.name);
+  
   constructor(private prisma: PrismaService) {}
 
 
@@ -28,33 +30,87 @@ export class ClientService {
   async uploadContract(clientId: string, file: Express.Multer.File, uploadedById: string) {
     if (!file) throw new BadRequestException('No file uploaded');
     
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF, JPEG, PNG, and TIFF files are allowed for contracts');
+    }
+    
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size must be less than 10MB');
+    }
+    
     const fs = require('fs');
     const path = require('path');
+    const crypto = require('crypto');
     
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(process.cwd(), 'uploads', 'contracts');
+    // Create client-specific directory
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'contracts', clientId);
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
     
-    // Generate unique filename
+    // Generate file hash for deduplication
+    const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex');
+    
+    // Check if file already exists
+    const existingDocument = await this.prisma.document.findFirst({
+      where: { hash: fileHash }
+    });
+    
+    if (existingDocument) {
+      // Update client association if needed
+      await this.prisma.client.update({
+        where: { id: clientId },
+        data: { contractDocumentPath: existingDocument.path }
+      });
+      
+      return existingDocument;
+    }
+    
+    // Generate unique filename with client prefix
     const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 1000000000);
+    const randomNum = Math.floor(Math.random() * 1000000000).toString(36);
     const fileExtension = path.extname(file.originalname);
-    const fileName = `${timestamp}-${randomNum}${fileExtension}`;
+    const fileName = `contract-${clientId}-${timestamp}-${randomNum}${fileExtension}`;
     const filePath = path.join(uploadsDir, fileName);
     
     // Write file to disk
     fs.writeFileSync(filePath, file.buffer);
     
-    // Save document metadata
+    // Save document metadata with enhanced fields
     const document = await this.prisma.document.create({
       data: {
         name: file.originalname,
         type: 'contrat',
         path: filePath,
         uploadedById,
+        hash: fileHash,
+        status: 'UPLOADED'
       },
+    });
+    
+    // Update client with contract document path
+    await this.prisma.client.update({
+      where: { id: clientId },
+      data: { contractDocumentPath: filePath }
+    });
+    
+    // Log the upload
+    await this.prisma.auditLog.create({
+      data: {
+        userId: uploadedById,
+        action: 'CONTRACT_DOCUMENT_UPLOADED',
+        details: {
+          clientId,
+          documentId: document.id,
+          fileName: file.originalname,
+          fileSize: file.size,
+          fileType: file.mimetype
+        }
+      }
     });
     
     return document;
@@ -85,6 +141,31 @@ export class ClientService {
     });
     const stream = fs.createReadStream(document.path);
     stream.pipe(res);
+  }
+
+  async getDocumentPreview(documentId: string) {
+    const document = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!document) throw new NotFoundException('Document not found');
+    
+    const fs = require('fs');
+    const path = require('path');
+    
+    if (!fs.existsSync(document.path)) {
+      throw new NotFoundException('File not found on server');
+    }
+    
+    const stats = fs.statSync(document.path);
+    const ext = path.extname(document.path).toLowerCase();
+    
+    return {
+      id: document.id,
+      name: document.name,
+      type: document.type,
+      size: stats.size,
+      extension: ext,
+      canPreview: ['.pdf', '.jpg', '.jpeg', '.png'].includes(ext),
+      uploadedAt: document.uploadedAt
+    };
   }
 
   // --- SLA Config ---

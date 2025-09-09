@@ -1,6 +1,7 @@
 import React from 'react';
 import { Client } from '../../../types/client.d';
-import { Paper, Typography, Grid, Chip } from '@mui/material';
+import { Paper, Typography, Grid, Chip, Box, Divider } from '@mui/material';
+import SLAConfigForm from '../SLAConfigForm';
 
 function getSLAStatus(avgSLA: number, reglementDelay: number) {
   if (avgSLA == null || reglementDelay == null) return { label: 'N/A', color: 'default' };
@@ -20,28 +21,32 @@ const SLATab: React.FC<Props> = ({ client, avgSLA }) => {
     : null;
 
   return (
-    <Paper sx={{ padding: 2 }}>
-      <Typography variant="h6">SLA Parameters</Typography>
-      <Grid container spacing={2}>
-        <Grid item>
-          <Typography><strong>Reglement Delay:</strong> {client.reglementDelay} days</Typography>
-        </Grid>
-        <Grid item>
-          <Typography><strong>Reclamation Delay:</strong> {client.reclamationDelay} days</Typography>
-        </Grid>
-        <Grid item>
-          <Typography><strong>Gestionnaires:</strong> {client.gestionnaires?.map(g => g.fullName).join(', ') || '-'}</Typography>
-        </Grid>
-        {slaStatus && (
+    <Box>
+      <Paper sx={{ padding: 2, mb: 2 }}>
+        <Typography variant="h6">SLA Parameters</Typography>
+        <Grid container spacing={2}>
           <Grid item>
-            <Typography>
-              <strong>SLA Health:</strong>{' '}
-              <Chip label={slaStatus.label} color={slaStatus.color as any} />
-            </Typography>
+            <Typography><strong>Reglement Delay:</strong> {client.reglementDelay} days</Typography>
           </Grid>
-        )}
-      </Grid>
-    </Paper>
+          <Grid item>
+            <Typography><strong>Reclamation Delay:</strong> {client.reclamationDelay} days</Typography>
+          </Grid>
+          <Grid item>
+            <Typography><strong>Gestionnaires:</strong> {client.gestionnaires?.map(g => g.fullName).join(', ') || '-'}</Typography>
+          </Grid>
+          {slaStatus && (
+            <Grid item>
+              <Typography>
+                <strong>SLA Health:</strong>{' '}
+                <Chip label={slaStatus.label} color={slaStatus.color as any} />
+              </Typography>
+            </Grid>
+          )}
+        </Grid>
+      </Paper>
+      
+      <SLAConfigForm clientId={client.id} />
+    </Box>
   );
 };
 

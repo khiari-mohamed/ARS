@@ -187,3 +187,35 @@ export const fetchAvailableGestionnaires = async () => {
   });
   return data;
 };
+
+// --- SLA Configuration API ---
+export const getSLADefaults = async () => {
+  const { data } = await LocalAPI.get('/clients/sla/defaults');
+  return data;
+};
+
+export const getSLADashboard = async () => {
+  const { data } = await LocalAPI.get('/clients/sla/dashboard');
+  return data;
+};
+
+export const createSLAConfig = async (clientId: string, config: any) => {
+  const { data } = await LocalAPI.post(`/clients/sla/${clientId}`, config);
+  return data;
+};
+
+export const updateSLAConfig = async (clientId: string, config: any) => {
+  const { data } = await LocalAPI.put(`/clients/sla/${clientId}`, config);
+  return data;
+};
+
+export const getSLACompliance = async (clientId: string) => {
+  const { data } = await LocalAPI.get(`/clients/sla/${clientId}/compliance`);
+  return data;
+};
+
+// --- Document Preview ---
+export const getDocumentPreview = async (documentId: string) => {
+  const { data } = await LocalAPI.get(`/clients/documents/${documentId}/preview`);
+  return data;
+};

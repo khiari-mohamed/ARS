@@ -10,10 +10,20 @@ import * as ExcelJS from 'exceljs';
 import * as PDFDocument from 'pdfkit';
 import { Response } from 'express';
 import { Express } from 'express';
+import { ExcelValidationService } from './excel-validation.service';
+import { PdfGenerationService } from './pdf-generation.service';
+import { TxtGenerationService } from './txt-generation.service';
+import { WorkflowNotificationService } from '../workflow/workflow-notification.service';
 
 @Injectable()
 export class FinanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private excelValidationService: ExcelValidationService,
+    private pdfGenerationService: PdfGenerationService,
+    private txtGenerationService: TxtGenerationService,
+    private workflowNotificationService: WorkflowNotificationService
+  ) {}
 
   // Simple audit log (extend to DB if needed)
   private async logAuditAction(action: string, details: any) {
@@ -221,98 +231,41 @@ export class FinanceService {
     if (!file) throw new BadRequestException('No file uploaded');
     
     try {
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(file.buffer as any);
-      const worksheet = workbook.getWorksheet(1);
-      
-      if (!worksheet) {
-        throw new BadRequestException('No worksheet found in Excel file');
+      const clientId = body.clientId;
+      if (!clientId) {
+        throw new BadRequestException('Client ID is required');
       }
-      
-      const results: any[] = [];
-      const errors: any[] = [];
-      
-      // Skip header row, start from row 2
-      for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
-        const row = worksheet.getRow(rowNumber);
-        
-        // Skip empty rows
-        if (!row.hasValues) continue;
-        
-        try {
-          const matricule = row.getCell(1).text?.trim();
-          const name = row.getCell(2).text?.trim();
-          const society = row.getCell(3).text?.trim();
-          const amount = parseFloat(row.getCell(4).text?.replace(',', '.') || '0');
-          
-          if (!matricule || !name || !society || isNaN(amount) || amount <= 0) {
-            errors.push({
-              row: rowNumber,
-              error: 'Données manquantes ou invalides (matricule, nom, société, montant requis)'
-            });
-            continue;
-          }
-          
-          // Find member by matricule (CIN)
-          const member = await this.prisma.member.findFirst({
-            where: { cin: matricule },
-            include: { society: true }
-          });
-          
-          let status = 'ok';
-          let notes = '';
-          let rib = '';
-          
-          if (!member) {
-            status = 'error';
-            notes = 'Matricule inconnu dans la base';
-          } else {
-            rib = member.rib;
-            if (!rib) {
-              status = 'error';
-              notes = 'RIB manquant pour cet adhérent';
-            } else if (member.society.name !== society) {
-              status = 'warning';
-              notes = `Société différente: ${member.society.name} vs ${society}`;
-            }
-          }
-          
-          results.push({
-            matricule,
-            name,
-            society,
-            rib,
-            amount,
-            status,
-            notes,
-            memberId: member?.id
-          });
-          
-        } catch (error) {
-          errors.push({
-            row: rowNumber,
-            error: `Erreur de traitement: ${error.message}`
-          });
-        }
-      }
+
+      const validationResult = await this.excelValidationService.validateExcelFile(file.buffer, clientId);
       
       await this.logAuditAction('VALIDATE_OV_FILE', {
         userId: user.id,
         fileName: file.originalname,
-        totalRows: results.length,
-        errorRows: errors.length
+        clientId,
+        totalRows: validationResult.summary.total,
+        validRows: validationResult.summary.valid,
+        errorRows: validationResult.summary.errors,
+        warningRows: validationResult.summary.warnings,
+        totalAmount: validationResult.summary.totalAmount
       });
       
       return {
-        success: errors.length === 0,
-        results,
-        errors,
-        summary: {
-          total: results.length,
-          valid: results.filter(r => r.status === 'ok').length,
-          warnings: results.filter(r => r.status === 'warning').length,
-          errors: results.filter(r => r.status === 'error').length
-        }
+        success: validationResult.valid,
+        results: validationResult.data.map(item => ({
+          matricule: item.matricule,
+          name: `${item.nom} ${item.prenom}`,
+          society: item.societe,
+          rib: item.rib,
+          amount: item.montant,
+          status: item.status.toLowerCase(),
+          notes: item.erreurs.join(', '),
+          memberId: item.adherentId
+        })),
+        errors: validationResult.errors.map(error => ({
+          row: error.row,
+          error: error.message
+        })),
+        summary: validationResult.summary
       };
       
     } catch (error) {
@@ -531,64 +484,16 @@ export class FinanceService {
   async generateOVPDF(id: string, res: Response, user: User) {
     this.checkFinanceRole(user);
     try {
-      const batch = await this.prisma.wireTransferBatch.findUnique({
-        where: { id },
-        include: {
-          society: true,
-          donneur: true,
-          transfers: {
-            include: { member: true }
-          }
-        }
-      });
+      const pdfBuffer = await this.pdfGenerationService.generateOVFromOrderId(id);
       
-      if (!batch) {
-        throw new NotFoundException('OV batch not found');
-      }
-      
-      const doc = new PDFDocument();
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="OV_${id}.pdf"`);
-      doc.pipe(res);
+      res.send(pdfBuffer);
       
-      // Header
-      doc.fontSize(20).text('ORDRE DE VIREMENT', { align: 'center' });
-      doc.moveDown();
-      
-      // Donneur info
-      doc.fontSize(12)
-        .text(`Donneur d'Ordre: ${batch.donneur.name}`)
-        .text(`Société: ${batch.society.name}`)
-        .text(`Date: ${batch.createdAt.toLocaleDateString('fr-FR')}`)
-        .text(`Référence: OV/${batch.createdAt.getFullYear()}/${batch.id.substring(0, 8)}`);
-      
-      doc.moveDown();
-      
-      // Transfers table
-      doc.text('DÉTAIL DES VIREMENTS:', { underline: true });
-      doc.moveDown();
-      
-      let yPosition = doc.y;
-      batch.transfers.forEach((transfer, index) => {
-        if (yPosition > 700) {
-          doc.addPage();
-          yPosition = 50;
-        }
-        
-        doc.fontSize(10)
-          .text(`${index + 1}. ${transfer.member.name}`, 50, yPosition)
-          .text(`RIB: ${transfer.member.rib}`, 300, yPosition)
-          .text(`Montant: ${transfer.amount.toFixed(2)} TND`, 450, yPosition);
-        
-        yPosition += 20;
+      await this.logAuditAction('GENERATE_OV_PDF', {
+        userId: user.id,
+        ordreVirementId: id
       });
-      
-      // Total
-      const totalAmount = batch.transfers.reduce((sum, t) => sum + t.amount, 0);
-      doc.fontSize(14)
-        .text(`TOTAL: ${totalAmount.toFixed(2)} TND`, { align: 'right' });
-      
-      doc.end();
       
     } catch (error) {
       console.error('Error generating OV PDF:', error);
@@ -599,39 +504,16 @@ export class FinanceService {
   async generateOVTXT(id: string, res: Response, user: User) {
     this.checkFinanceRole(user);
     try {
-      const batch = await this.prisma.wireTransferBatch.findUnique({
-        where: { id },
-        include: {
-          donneur: true,
-          transfers: {
-            include: { member: true }
-          }
-        }
-      });
+      const txtContent = await this.txtGenerationService.generateOVTxtFromOrderId(id);
       
-      if (!batch) {
-        throw new NotFoundException('OV batch not found');
-      }
-      
-      // Generate bank-specific TXT format
-      const lines = batch.transfers.map(transfer => {
-        const code = '110104'.padEnd(6, ' ');
-        const ref = transfer.reference.padEnd(14, ' ');
-        const filler1 = ''.padEnd(12, ' ');
-        const amount = Math.round(transfer.amount * 100).toString().padStart(12, '0');
-        const filler2 = ''.padEnd(12, ' ');
-        const rib = transfer.member.rib.padEnd(20, ' ');
-        const filler3 = ''.padEnd(34, ' ');
-        const name = transfer.member.name.substring(0, 30).padEnd(30, ' ');
-        
-        return `${code}${ref}${filler1}${amount}${filler2}${rib}${filler3}${name}`;
-      });
-      
-      const txtContent = lines.join('\n');
-      
-      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="OV_${id}.txt"`);
       res.send(txtContent);
+      
+      await this.logAuditAction('GENERATE_OV_TXT', {
+        userId: user.id,
+        ordreVirementId: id
+      });
       
     } catch (error) {
       console.error('Error generating OV TXT:', error);
