@@ -1,429 +1,436 @@
 import React, { useState, useEffect } from 'react';
-import { updateBordereau, fetchBordereau } from '../services/bordereauxService';
+import { Modal, Button, Upload, Table, Tag, Progress, message, Tabs, Form, Input, Select, InputNumber, Checkbox, Space, Popconfirm } from 'antd';
+import { UploadOutlined, EditOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, ReloadOutlined } from '@ant-design/icons';
+import { updateBordereau, fetchBordereau, fetchBSList, updateBSStatus, bulkUpdateBS, recalculateBordereauProgress } from '../services/bordereauxService';
 import { fetchClients } from '../services/clientService';
 import { fetchContracts } from '../services/contractService';
-import { useNotification } from '../contexts/NotificationContext';
+
+const { TabPane } = Tabs;
+const { Option } = Select;
 
 interface BordereauEditModalProps {
-  bordereauxId: string;
-  isOpen: boolean;
+  bordereauId: string;
+  open: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 const BordereauEditModal: React.FC<BordereauEditModalProps> = ({
-  bordereauxId,
-  isOpen,
+  bordereauId,
+  open,
   onClose,
   onSuccess
 }) => {
-  const { notify } = useNotification();
   const [loading, setLoading] = useState(false);
   const [bordereau, setBordereau] = useState<any>(null);
+  const [bsList, setBsList] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [progressData, setProgressData] = useState<any>(null);
+  const [selectedBSIds, setSelectedBSIds] = useState<string[]>([]);
+  const [editingBS, setEditingBS] = useState<string | null>(null);
+  const [form] = Form.useForm();
+  const [bsForm] = Form.useForm();
   
-  // Form state
-  const [formData, setFormData] = useState({
-    reference: '',
-    clientId: '',
-    contractId: '',
-    nombreBS: 0,
-    delaiReglement: 30,
-    dateReception: '',
-    dateDebutScan: '',
-    dateFinScan: '',
-    dateCloture: '',
-    statut: '',
-    observations: '',
-    montantTotal: 0,
-    priorite: 'NORMALE',
-    typeRemboursement: 'STANDARD',
-    modeTransmission: 'COURRIER',
-    responsableTraitement: '',
-    commentaireInterne: ''
-  });
+  const calculateProgress = (bsData: any[]) => {
+    const total = bsData.length;
+    const traites = bsData.filter(bs => bs.etat === 'VALIDATED').length;
+    const rejetes = bsData.filter(bs => bs.etat === 'REJECTED').length;
+    const enCours = total - traites - rejetes;
+    const completionRate = total > 0 ? Math.round(((traites + rejetes) / total) * 100) : 0;
+    
+    let scanStatus = 'NON_SCANNE';
+    if (completionRate > 0 && completionRate < 100) scanStatus = 'SCAN_EN_COURS';
+    if (completionRate === 100) scanStatus = 'SCAN_FINALISE';
+    
+    return { total, traites, rejetes, enCours, completionRate, scanStatus };
+  };
 
   useEffect(() => {
-    if (isOpen && bordereauxId) {
+    if (open && bordereauId) {
       loadData();
     }
-  }, [isOpen, bordereauxId]);
+  }, [open, bordereauId]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load bordereau details
-      const bordereauxData = await fetchBordereau(bordereauxId);
-      setBordereau(bordereauxData);
-      
-      // Load clients and contracts
-      const [clientsData, contractsData] = await Promise.all([
+      const [bordereauxData, bsData, clientsData, contractsData] = await Promise.all([
+        fetchBordereau(bordereauId),
+        fetchBSList(bordereauId),
         fetchClients(),
         fetchContracts()
       ]);
       
-      setClients(clientsData);
-      setContracts(contractsData);
+      setBordereau(bordereauxData);
+      setBsList(bsData || []);
+      setClients(clientsData || []);
+      setContracts(contractsData || []);
       
-      // Populate form with existing data
-      setFormData({
-        reference: bordereauxData.reference || '',
-        clientId: bordereauxData.clientId || '',
-        contractId: bordereauxData.contractId || '',
-        nombreBS: bordereauxData.nombreBS || 0,
-        delaiReglement: bordereauxData.delaiReglement || 30,
-        dateReception: bordereauxData.dateReception ? bordereauxData.dateReception.split('T')[0] : '',
-        dateDebutScan: bordereauxData.dateDebutScan ? bordereauxData.dateDebutScan.split('T')[0] : '',
-        dateFinScan: bordereauxData.dateFinScan ? bordereauxData.dateFinScan.split('T')[0] : '',
-        dateCloture: bordereauxData.dateCloture ? bordereauxData.dateCloture.split('T')[0] : '',
-        statut: bordereauxData.statut || '',
-        observations: bordereauxData.observations || '',
-        montantTotal: bordereauxData.montantTotal || 0,
-        priorite: bordereauxData.priorite || 'NORMALE',
-        typeRemboursement: bordereauxData.typeRemboursement || 'STANDARD',
-        modeTransmission: bordereauxData.modeTransmission || 'COURRIER',
-        responsableTraitement: bordereauxData.responsableTraitement || '',
-        commentaireInterne: bordereauxData.commentaireInterne || ''
+      // Calculate progress
+      const progress = calculateProgress(bsData || []);
+      setProgressData(progress);
+      
+      // Populate form
+      form.setFieldsValue({
+        reference: bordereauxData.reference,
+        clientId: bordereauxData.clientId,
+        contractId: bordereauxData.contractId,
+        nombreBS: bordereauxData.nombreBS,
+        delaiReglement: bordereauxData.delaiReglement
       });
     } catch (error) {
-      notify('Erreur lors du chargement des données', 'error');
+      message.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleBordereauUpdate = async (values: any) => {
     setLoading(true);
+    try {
+      await updateBordereau(bordereauId, values);
+      message.success('Bordereau modifié avec succès');
+      await loadData();
+      onSuccess();
+    } catch (error) {
+      message.error('Erreur lors de la modification');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMultipleBSUpload = async (fileList: any[]) => {
+    if (fileList.length === 0) return;
+    
+    setUploading(true);
+    try {
+      const files = fileList.map(file => file.originFileObj || file);
+      console.log('📤 Uploading files:', files.length);
+      
+      const formData = new FormData();
+      files.forEach((file, index) => {
+        formData.append('files', file);
+      });
+      
+      const response = await fetch(`/api/bordereaux/${bordereauId}/bs/upload-multiple`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        message.success(`${result.bsCreated} BS uploadés avec succès`);
+        await loadData();
+      } else {
+        message.error(result.error || 'Erreur lors de l\'upload des BS');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      message.error('Erreur lors de l\'upload');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleBSStatusUpdate = async (bsId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/bordereaux/bs/${bsId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ etat: newStatus })
+      });
+      
+      if (response.ok) {
+        message.success('Statut BS mis à jour');
+        await loadData();
+        await recalculateBordereauProgress(bordereauId);
+      } else {
+        message.error('Erreur lors de la mise à jour');
+      }
+    } catch (error) {
+      message.error('Erreur lors de la mise à jour');
+    }
+  };
+
+  const handleBulkBSUpdate = async (status: string) => {
+    if (selectedBSIds.length === 0) {
+      message.warning('Sélectionnez au moins un BS');
+      return;
+    }
     
     try {
-      await updateBordereau(bordereauxId, formData);
-      notify('Bordereau modifié avec succès', 'success');
-      onSuccess();
-      onClose();
+      const updates = selectedBSIds.map(bsId => ({ bsId, data: { etat: status } }));
+      await bulkUpdateBS(bordereauId, updates);
+      message.success(`${selectedBSIds.length} BS mis à jour`);
+      setSelectedBSIds([]);
+      await loadData();
+      await recalculateBordereauProgress(bordereauId);
     } catch (error) {
-      notify('Erreur lors de la modification', 'error');
-    } finally {
-      setLoading(false);
+      message.error('Erreur lors de la mise à jour en lot');
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? parseFloat(value) || 0 : value
-    }));
+  const handleBSEdit = async (bsId: string, values: any) => {
+    try {
+      const response = await fetch(`/api/bordereaux/bs/${bsId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(values)
+      });
+      
+      if (response.ok) {
+        message.success('BS modifié avec succès');
+        setEditingBS(null);
+        await loadData();
+        await recalculateBordereauProgress(bordereauId);
+      } else {
+        message.error('Erreur lors de la modification du BS');
+      }
+    } catch (error) {
+      message.error('Erreur lors de la modification du BS');
+    }
   };
 
-  if (!isOpen) return null;
+  const bsColumns = [
+    {
+      title: 'Sélection',
+      key: 'selection',
+      width: 60,
+      render: (_: any, record: any) => (
+        <Checkbox
+          checked={selectedBSIds.includes(record.id)}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setSelectedBSIds([...selectedBSIds, record.id]);
+            } else {
+              setSelectedBSIds(selectedBSIds.filter(id => id !== record.id));
+            }
+          }}
+        />
+      )
+    },
+    {
+      title: 'Référence',
+      dataIndex: 'numBs',
+      key: 'numBs',
+      render: (text: string, record: any) => record.numBs || `BS-${record.id?.slice(-4)}`
+    },
+    {
+      title: 'Montant',
+      dataIndex: 'montant',
+      key: 'montant',
+      render: (montant: number, record: any) => {
+        if (editingBS === record.id) {
+          return (
+            <InputNumber
+              value={montant || 0}
+              min={0}
+              step={0.01}
+              formatter={(value) => `${value} TND`}
+              parser={(value) => parseFloat(value!.replace(' TND', '')) || 0}
+              onChange={(value) => {
+                // Update the record temporarily for UI
+                const updatedList = bsList.map(bs => 
+                  bs.id === record.id ? { ...bs, montant: value } : bs
+                );
+                setBsList(updatedList);
+              }}
+              onBlur={async () => {
+                // Save to backend when user finishes editing
+                try {
+                  const response = await fetch(`/api/bordereaux/bs/${record.id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ montant: record.montant })
+                  });
+                  
+                  if (response.ok) {
+                    message.success('Montant mis à jour');
+                  }
+                } catch (error) {
+                  message.error('Erreur lors de la mise à jour du montant');
+                }
+              }}
+            />
+          );
+        }
+        return montant ? `${montant.toFixed(2)} TND` : 'N/A';
+      }
+    },
+    {
+      title: 'Statut',
+      dataIndex: 'etat',
+      key: 'etat',
+      render: (etat: string, record: any) => {
+        if (editingBS === record.id) {
+          return (
+            <Select
+              value={etat}
+              style={{ width: 120 }}
+              onChange={(value) => handleBSStatusUpdate(record.id, value)}
+            >
+              <Option value="IN_PROGRESS">En cours</Option>
+              <Option value="VALIDATED">Validé</Option>
+              <Option value="REJECTED">Rejeté</Option>
+            </Select>
+          );
+        }
+        return (
+          <Tag color={etat === 'VALIDATED' ? 'green' : etat === 'REJECTED' ? 'red' : 'blue'}>
+            {etat === 'VALIDATED' ? 'Validé' : etat === 'REJECTED' ? 'Rejeté' : 'En cours'}
+          </Tag>
+        );
+      }
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 120,
+      render: (_: any, record: any) => (
+        <Space>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => setEditingBS(editingBS === record.id ? null : record.id)}
+          />
+          <Popconfirm
+            title="Supprimer ce BS?"
+            onConfirm={() => handleBSStatusUpdate(record.id, 'REJECTED')}
+          >
+            <Button size="small" icon={<DeleteOutlined />} danger />
+          </Popconfirm>
+        </Space>
+      )
+    }
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onClose}></div>
-        
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Modifier le bordereau {bordereau?.reference}
-              </h3>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <span className="sr-only">Fermer</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+    <Modal
+      title={`Modifier le bordereau ${bordereau?.reference || ''}`}
+      open={open}
+      onCancel={onClose}
+      width={1200}
+      footer={[
+        <Button key="cancel" onClick={onClose}>
+          Annuler
+        </Button>,
+        <Button key="save" type="primary" onClick={() => form.submit()} loading={loading}>
+          Sauvegarder
+        </Button>
+      ]}
+    >
+
+      <Tabs defaultActiveKey="1">
+        <TabPane tab="📊 Informations Générales" key="1">
+          <Form form={form} onFinish={handleBordereauUpdate} layout="vertical">
+            <div className="grid grid-cols-2 gap-4">
+              <Form.Item name="reference" label="Référence" rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="clientId" label="Client" rules={[{ required: true }]}>
+                <Select placeholder="Sélectionner un client">
+                  {clients.map(client => (
+                    <Option key={client.id} value={client.id}>{client.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item name="contractId" label="Contrat">
+                <Select placeholder="Sélectionner un contrat">
+                  {contracts.map(contract => (
+                    <Option key={contract.id} value={contract.id}>{contract.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item name="nombreBS" label="Nombre de BS">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="delaiReglement" label="Délai de règlement (jours)">
+                <InputNumber min={1} style={{ width: '100%' }} />
+              </Form.Item>
             </div>
-
-            {loading ? (
-              <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Chargement...</span>
+          </Form>
+        </TabPane>
+        
+        <TabPane tab="📋 Gestion des BS" key="2">
+          {progressData && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="text-lg font-semibold mb-3">📊 Progression</h4>
+              <Progress percent={progressData.completionRate} className="mb-3" />
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{progressData.traites}</div>
+                  <div className="text-sm text-gray-600">Traités</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{progressData.rejetes}</div>
+                  <div className="text-sm text-gray-600">Rejetés</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{progressData.enCours}</div>
+                  <div className="text-sm text-gray-600">En cours</div>
+                </div>
               </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Référence *
-                    </label>
-                    <input
-                      type="text"
-                      name="reference"
-                      value={formData.reference}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Client *
-                    </label>
-                    <select
-                      name="clientId"
-                      value={formData.clientId}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">Sélectionner un client</option>
-                      {clients.map(client => (
-                        <option key={client.id} value={client.id}>
-                          {client.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Contrat
-                    </label>
-                    <select
-                      name="contractId"
-                      value={formData.contractId}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Sélectionner un contrat</option>
-                      {contracts.map(contract => (
-                        <option key={contract.id} value={contract.id}>
-                          {contract.name || contract.nom}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nombre de BS
-                    </label>
-                    <input
-                      type="number"
-                      name="nombreBS"
-                      value={formData.nombreBS}
-                      onChange={handleInputChange}
-                      min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Dates */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date de réception
-                    </label>
-                    <input
-                      type="date"
-                      name="dateReception"
-                      value={formData.dateReception}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date début scan
-                    </label>
-                    <input
-                      type="date"
-                      name="dateDebutScan"
-                      value={formData.dateDebutScan}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date fin scan
-                    </label>
-                    <input
-                      type="date"
-                      name="dateFinScan"
-                      value={formData.dateFinScan}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date de clôture
-                    </label>
-                    <input
-                      type="date"
-                      name="dateCloture"
-                      value={formData.dateCloture}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Additional Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Délai de règlement (jours)
-                    </label>
-                    <input
-                      type="number"
-                      name="delaiReglement"
-                      value={formData.delaiReglement}
-                      onChange={handleInputChange}
-                      min="1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Montant total
-                    </label>
-                    <input
-                      type="number"
-                      name="montantTotal"
-                      value={formData.montantTotal}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Priorité
-                    </label>
-                    <select
-                      name="priorite"
-                      value={formData.priorite}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="BASSE">Basse</option>
-                      <option value="NORMALE">Normale</option>
-                      <option value="HAUTE">Haute</option>
-                      <option value="URGENTE">Urgente</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Type de remboursement
-                    </label>
-                    <select
-                      name="typeRemboursement"
-                      value={formData.typeRemboursement}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="STANDARD">Standard</option>
-                      <option value="URGENT">Urgent</option>
-                      <option value="PARTIEL">Partiel</option>
-                      <option value="TOTAL">Total</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Mode de transmission
-                    </label>
-                    <select
-                      name="modeTransmission"
-                      value={formData.modeTransmission}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="COURRIER">Courrier</option>
-                      <option value="EMAIL">Email</option>
-                      <option value="PORTAIL">Portail web</option>
-                      <option value="FAX">Fax</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Responsable traitement
-                    </label>
-                    <input
-                      type="text"
-                      name="responsableTraitement"
-                      value={formData.responsableTraitement}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Nom du responsable"
-                    />
-                  </div>
-                </div>
-
-                {/* Text Areas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Observations
-                    </label>
-                    <textarea
-                      name="observations"
-                      value={formData.observations}
-                      onChange={handleInputChange}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Observations générales..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Commentaire interne
-                    </label>
-                    <textarea
-                      name="commentaireInterne"
-                      value={formData.commentaireInterne}
-                      onChange={handleInputChange}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Commentaire interne (non visible par le client)..."
-                    />
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {loading ? 'Modification...' : 'Modifier le bordereau'}
-                  </button>
-                </div>
-              </form>
+            </div>
+          )}
+          
+          <div className="mb-4 flex gap-2 flex-wrap">
+            <Upload
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png"
+              beforeUpload={() => false}
+              onChange={({ fileList }) => handleMultipleBSUpload(fileList)}
+              showUploadList={false}
+            >
+              <Button icon={<UploadOutlined />} loading={uploading}>
+                📤 Upload Multiple BS
+              </Button>
+            </Upload>
+            
+            {selectedBSIds.length > 0 && (
+              <>
+                <Button onClick={() => handleBulkBSUpdate('VALIDATED')} type="primary">
+                  ✅ Valider Sélectionnés ({selectedBSIds.length})
+                </Button>
+                <Button onClick={() => handleBulkBSUpdate('REJECTED')} danger>
+                  ❌ Rejeter Sélectionnés ({selectedBSIds.length})
+                </Button>
+                <Button onClick={() => handleBulkBSUpdate('IN_PROGRESS')}>
+                  🔄 Remettre En Cours ({selectedBSIds.length})
+                </Button>
+              </>
             )}
+            
+            <Button icon={<ReloadOutlined />} onClick={loadData}>
+              🔄 Actualiser
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+          
+          <Table
+            columns={bsColumns}
+            dataSource={bsList}
+            rowKey="id"
+            pagination={{ pageSize: 10 }}
+            size="small"
+            scroll={{ x: 800 }}
+          />
+        </TabPane>
+      </Tabs>
+    </Modal>
   );
 };
 

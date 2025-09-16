@@ -96,42 +96,7 @@ const ClaimsAnalyticsDashboard: React.FC = () => {
       setData(response.data);
     } catch (error) {
       console.error('Failed to load claims analytics:', error);
-      // Fallback data
-      setData({
-        summary: {
-          totalClaims: 156,
-          resolvedClaims: 142,
-          avgResolutionTime: 2.3,
-          recurringIssues: 8
-        },
-        performanceRanking: [
-          { department: 'Service Client', personnel: 'Marie Dubois', claimsHandled: 45, avgResolutionTime: 1.8, satisfactionScore: 4.7, rank: 1 },
-          { department: 'Santé', personnel: 'Jean Martin', claimsHandled: 38, avgResolutionTime: 2.1, satisfactionScore: 4.5, rank: 2 },
-          { department: 'Finance', personnel: 'Sophie Laurent', claimsHandled: 32, avgResolutionTime: 2.4, satisfactionScore: 4.3, rank: 3 }
-        ],
-        recurringPatterns: [
-          { issue: 'Délai de traitement trop long', frequency: 23, impact: 'high', trend: 'increasing', recommendation: 'Optimiser le processus de validation' },
-          { issue: 'Documents manquants', frequency: 18, impact: 'medium', trend: 'stable', recommendation: 'Améliorer la communication initiale' },
-          { issue: 'Erreur de calcul remboursement', frequency: 12, impact: 'high', trend: 'decreasing', recommendation: 'Formation équipe finance' }
-        ],
-        correlationAnalysis: [
-          { factor: 'Charge de travail équipe', correlation: 0.78, description: 'Plus la charge est élevée, plus les réclamations augmentent' },
-          { factor: 'Complexité dossier', correlation: 0.65, description: 'Dossiers complexes génèrent plus de réclamations' },
-          { factor: 'Expérience gestionnaire', correlation: -0.52, description: 'Gestionnaires expérimentés génèrent moins de réclamations' }
-        ],
-        aiRecommendations: [
-          { type: 'process_improvement', priority: 'high', description: 'Automatiser la validation des documents standards', expectedImpact: 'Réduction de 30% des réclamations liées aux délais' },
-          { type: 'training', priority: 'medium', description: 'Formation sur la communication client pour les nouveaux gestionnaires', expectedImpact: 'Amélioration de 15% de la satisfaction client' },
-          { type: 'resource_allocation', priority: 'high', description: 'Réaffecter 2 gestionnaires vers les dossiers complexes', expectedImpact: 'Réduction de 25% du temps de traitement' }
-        ],
-        trendsData: [
-          { date: '2025-01-01', claims: 12, resolved: 10, avgTime: 2.5 },
-          { date: '2025-01-02', claims: 15, resolved: 14, avgTime: 2.3 },
-          { date: '2025-01-03', claims: 8, resolved: 8, avgTime: 2.1 },
-          { date: '2025-01-04', claims: 18, resolved: 16, avgTime: 2.4 },
-          { date: '2025-01-05', claims: 11, resolved: 11, avgTime: 2.0 }
-        ]
-      });
+      setData(null);
     } finally {
       setLoading(false);
     }

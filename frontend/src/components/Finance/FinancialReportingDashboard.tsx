@@ -71,25 +71,39 @@ const FinancialReportingDashboard: React.FC = () => {
     console.log('🔍 FinancialReportingDashboard: Filters:', filters);
     console.log('🔍 FinancialReportingDashboard: Period:', period);
     try {
-      // Try to load real data first
-      const { getOVTracking } = await import('../../services/financeService');
-      console.log('📡 FinancialReportingDashboard: Calling getOVTracking API...');
-      const realData = await getOVTracking({ ...filters, period });
-      console.log('📊 FinancialReportingDashboard: Received data:', realData);
+      // Load real financial data from multiple endpoints
+      const [ordresVirement, suiviVirements, bordereaux] = await Promise.all([
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        }).then(res => res.json()),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/suivi-virement/list`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        }).then(res => res.json()),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bordereaux?withVirement=true`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        }).then(res => res.json())
+      ]);
       
+      console.log('📊 FinancialReportingDashboard: Loaded data:', {
+        ordresVirement: ordresVirement.length,
+        suiviVirements: suiviVirements.length,
+        bordereaux: Array.isArray(bordereaux) ? bordereaux.length : bordereaux.items?.length || 0
+      });
+      
+      const realData = ordresVirement;
       if (realData && realData.length > 0) {
         // Process real data for analytics
-        const totalAmount = realData.reduce((sum: number, item: any) => sum + item.totalAmount, 0);
+        const totalAmount = realData.reduce((sum: number, item: any) => sum + (item.montantTotal || 0), 0);
         const avgAmount = totalAmount / realData.length;
         
         // Generate real beneficiaries data
         const beneficiariesMap = realData.reduce((acc: any, item: any) => {
-          const key = item.donneurOrdre;
+          const key = item.donneurOrdre?.nom || item.reference || 'Unknown';
           if (!acc[key]) {
             acc[key] = { name: key, count: 0, total: 0, payments: [] };
           }
           acc[key].count += 1;
-          acc[key].total += item.totalAmount;
+          acc[key].total += (item.montantTotal || 0);
           acc[key].payments.push(item);
           return acc;
         }, {});
@@ -108,10 +122,10 @@ const FinancialReportingDashboard: React.FC = () => {
             totalPayments: realData.length,
             totalAmount: totalAmount,
             averageAmount: avgAmount,
-            successfulPayments: realData.filter((i: any) => i.status === 'EXECUTE').length,
-            failedPayments: realData.filter((i: any) => i.status === 'REJETE').length,
-            pendingPayments: realData.filter((i: any) => i.status === 'EN_COURS').length,
-            successRate: (realData.filter((i: any) => i.status === 'EXECUTE').length / realData.length) * 100
+            successfulPayments: realData.filter((i: any) => i.etatVirement === 'EXECUTE').length,
+            failedPayments: realData.filter((i: any) => i.etatVirement === 'REJETE').length,
+            pendingPayments: realData.filter((i: any) => i.etatVirement === 'NON_EXECUTE' || i.etatVirement === 'EN_COURS_EXECUTION').length,
+            successRate: (realData.filter((i: any) => i.etatVirement === 'EXECUTE').length / realData.length) * 100
           },
           byBeneficiary: realBeneficiaries,
           trends: Array.from({ length: 30 }, (_, i) => ({
@@ -122,9 +136,11 @@ const FinancialReportingDashboard: React.FC = () => {
             averageAmount: Math.floor(Math.random() * 3000) + 1000
           })),
           byStatus: {
-            completed: realData.filter((i: any) => i.status === 'EXECUTE').length,
-            pending: realData.filter((i: any) => i.status === 'EN_COURS').length,
-            failed: realData.filter((i: any) => i.status === 'REJETE').length
+            EXECUTE: realData.filter((i: any) => i.etatVirement === 'EXECUTE').length,
+            NON_EXECUTE: realData.filter((i: any) => i.etatVirement === 'NON_EXECUTE').length,
+            EN_COURS_EXECUTION: realData.filter((i: any) => i.etatVirement === 'EN_COURS_EXECUTION').length,
+            EXECUTE_PARTIELLEMENT: realData.filter((i: any) => i.etatVirement === 'EXECUTE_PARTIELLEMENT').length,
+            REJETE: realData.filter((i: any) => i.etatVirement === 'REJETE').length
           },
           byAmount: [
             { range: '0 - 5K', count: Math.floor(realData.length * 0.4), percentage: 40, totalAmount: totalAmount * 0.1 },
@@ -134,10 +150,10 @@ const FinancialReportingDashboard: React.FC = () => {
           ],
           topPayments: realData.slice(0, 5).map((item: any) => ({
             id: item.id,
-            beneficiaryName: item.donneurOrdre,
-            amount: item.totalAmount,
-            date: new Date(item.dateInjected),
-            status: item.status.toLowerCase(),
+            beneficiaryName: item.donneurOrdre?.nom || 'N/A',
+            amount: item.montantTotal,
+            date: new Date(item.dateCreation),
+            status: item.etatVirement.toLowerCase(),
             reference: item.reference
           }))
         });
@@ -145,7 +161,7 @@ const FinancialReportingDashboard: React.FC = () => {
         setFinancialKPIs({
           paymentVolume: { total: realData.length, change: 8.5, trend: 'up' },
           paymentValue: { total: totalAmount, change: 12.3, trend: 'up' },
-          successRate: { rate: (realData.filter((i: any) => i.status === 'EXECUTE').length / realData.length) * 100, change: 1.2, trend: 'up' },
+          successRate: { rate: (realData.filter((i: any) => i.etatVirement === 'EXECUTE').length / realData.length) * 100, change: 1.2, trend: 'up' },
           averageAmount: { amount: avgAmount, change: -3.4, trend: 'down' },
           cashPosition: { current: totalAmount * 0.3, projected: totalAmount * 0.25, trend: 'down' },
           processingTime: { average: 2.3, change: -0.8, trend: 'down' }
@@ -214,7 +230,7 @@ const FinancialReportingDashboard: React.FC = () => {
       console.log('📦 FinancialReportingDashboard: Request body:', requestBody);
       
       // Call real backend export endpoint
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/virements/export-report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/suivi-virement/export-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

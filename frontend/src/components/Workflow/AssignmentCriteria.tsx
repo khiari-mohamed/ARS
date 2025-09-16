@@ -71,14 +71,16 @@ const AssignmentCriteria: React.FC = () => {
   const loadData = async () => {
     try {
       const [bordereaux, users] = await Promise.all([
-        LocalAPI.get('/bordereaux', { params: { statut: 'A_AFFECTER' } }),
-        LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE', active: true } })
+        LocalAPI.get('/super-admin/bordereaux/unassigned'),
+        LocalAPI.get('/super-admin/gestionnaires')
       ]);
 
-      setAvailableBordereaux(bordereaux.data.items || bordereaux.data || []);
+      setAvailableBordereaux(bordereaux.data || []);
       setAvailableUsers(users.data || []);
     } catch (error) {
       console.error('Failed to load assignment data:', error);
+      setAvailableBordereaux([]);
+      setAvailableUsers([]);
     }
   };
 
@@ -114,14 +116,14 @@ const AssignmentCriteria: React.FC = () => {
             alert('Veuillez sélectionner un gestionnaire');
             return;
           }
-          result = await LocalAPI.post('/workflow/enhanced-corbeille/bulk-assign', {
+          result = await LocalAPI.post('/super-admin/assign/bulk', {
             bordereauIds: selectedBordereaux,
-            assigneeId: selectedUser
+            userId: selectedUser
           });
           break;
 
         case 'client':
-          result = await LocalAPI.post('/workflow/enhanced-corbeille/auto-assign-by-client', {
+          result = await LocalAPI.post('/super-admin/assign/by-client', {
             bordereauIds: selectedBordereaux
           });
           break;
@@ -131,32 +133,16 @@ const AssignmentCriteria: React.FC = () => {
             alert('Veuillez spécifier le type de document');
             return;
           }
-          result = await LocalAPI.post('/workflow/enhanced-corbeille/auto-assign-by-type', {
-            bordereauIds: selectedBordereaux,
-            documentType
+          // For type-based assignment, use client-based logic for now
+          result = await LocalAPI.post('/super-admin/assign/by-client', {
+            bordereauIds: selectedBordereaux
           });
           break;
 
         case 'ai':
-          // Use assignment engine for AI-based assignment
-          const aiResults = [];
-          for (const bordereauId of selectedBordereaux) {
-            try {
-              const aiResult = await LocalAPI.get(`/bordereaux/assignment-engine/best-assignee/${bordereauId}/default`);
-              if (aiResult.data) {
-                await LocalAPI.post('/workflow/enhanced-corbeille/bulk-assign', {
-                  bordereauIds: [bordereauId],
-                  assigneeId: aiResult.data
-                });
-                aiResults.push({ id: bordereauId, success: true, assignedTo: aiResult.data });
-              } else {
-                aiResults.push({ id: bordereauId, success: false, error: 'No suitable assignee found' });
-              }
-            } catch (error) {
-              aiResults.push({ id: bordereauId, success: false, error: 'AI assignment failed' });
-            }
-          }
-          result = { data: { results: aiResults } };
+          result = await LocalAPI.post('/super-admin/assign/ai', {
+            bordereauIds: selectedBordereaux
+          });
           break;
       }
 

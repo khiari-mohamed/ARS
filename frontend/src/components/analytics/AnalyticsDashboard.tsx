@@ -32,8 +32,8 @@ interface AnalyticsFilters {
 }
 
 interface FilterOptions {
-  clients: { id: string; name: string }[];
-  departments: { id: string; name: string }[];
+  clients: { id: string; name: string; companyName?: string }[];
+  departments: { id: string; name: string; code?: string }[];
   teams: { id: string; name: string }[];
 }
 
@@ -92,11 +92,7 @@ const AnalyticsDashboard: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to load filter options:', error);
-      setFilterOptions({
-        clients: [],
-        departments: [],
-        teams: []
-      });
+      throw error;
     }
   };
 
@@ -216,7 +212,9 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const applyFilters = () => {
+    console.log('Applying filters:', filters);
     loadAnalyticsData();
+    updateAppliedFilters();
   };
 
   const getDateRange = () => {
@@ -323,10 +321,10 @@ const AnalyticsDashboard: React.FC = () => {
                   size="small"
                   sx={{ minWidth: 150 }}
                   options={filterOptions.clients}
-                  getOptionLabel={(option) => option.name}
+                  getOptionLabel={(option) => option.name || option.companyName || 'Client'}
                   value={filterOptions.clients.find(c => c.id === filters.clientId) || null}
                   onChange={(_, value) => handleFilterChange('clientId', value?.id)}
-                  renderInput={(params) => <TextField {...params} label="Client" />}
+                  renderInput={(params) => <TextField {...params} label="Client" placeholder="Sélectionner un client" />}
                 />
 
                 <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -336,9 +334,9 @@ const AnalyticsDashboard: React.FC = () => {
                     onChange={(e) => handleFilterChange('departmentId', e.target.value)}
                     label="Département"
                   >
-                    <MenuItem value="">Tous</MenuItem>
+                    <MenuItem value="">Tous les départements</MenuItem>
                     {filterOptions.departments.map((dept) => (
-                      <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
+                      <MenuItem key={dept.id || dept.code} value={dept.id || dept.code}>{dept.name}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -350,7 +348,7 @@ const AnalyticsDashboard: React.FC = () => {
                     onChange={(e) => handleFilterChange('slaStatus', e.target.value)}
                     label="Status SLA"
                   >
-                    <MenuItem value="">Tous</MenuItem>
+                    <MenuItem value="">Tous les départements</MenuItem>
                     <MenuItem value="ontime">À temps</MenuItem>
                     <MenuItem value="atrisk">À risque</MenuItem>
                     <MenuItem value="overdue">En retard</MenuItem>

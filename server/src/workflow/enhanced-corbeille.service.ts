@@ -17,11 +17,10 @@ export class EnhancedCorbeilleService {
     try {
       // Get all bordereaux for this chef's team
       const [nonAffectes, enCours, traites] = await Promise.all([
-        // Non-assigned items ready for assignment
+        // Non-assigned items ready for assignment (scanned documents)
         this.prisma.bordereau.findMany({
           where: {
-            statut: 'A_AFFECTER',
-            teamId: userId,
+            statut: { in: ['SCANNE', 'A_AFFECTER'] },
             assignedToUserId: null
           },
           include: {
@@ -34,9 +33,7 @@ export class EnhancedCorbeilleService {
         // Items currently being processed by team members
         this.prisma.bordereau.findMany({
           where: {
-            statut: { in: ['ASSIGNE', 'EN_COURS'] },
-            teamId: userId,
-            assignedToUserId: { not: null }
+            statut: { in: ['ASSIGNE', 'EN_COURS'] }
           },
           include: {
             client: true,
@@ -49,18 +46,15 @@ export class EnhancedCorbeilleService {
         // Completed items
         this.prisma.bordereau.findMany({
           where: {
-            statut: { in: ['TRAITE', 'CLOTURE'] },
-            teamId: userId,
-            updatedAt: {
-              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
-            }
+            statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] }
           },
           include: {
             client: true,
             contract: true,
             currentHandler: true
           },
-          orderBy: { updatedAt: 'desc' }
+          orderBy: { updatedAt: 'desc' },
+          take: 50
         })
       ]);
 
@@ -567,6 +561,113 @@ export class EnhancedCorbeilleService {
       };
     } catch (error) {
       this.logger.error(`Return to chef failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async rejectBordereau(bordereauId: string, chefId: string, reason: string) {
+    try {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+
+      if (!bordereau) {
+        throw new Error('Bordereau not found');
+      }
+
+      // Update bordereau status to rejected
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: {
+          statut: 'REJETE',
+          assignedToUserId: null,
+          updatedAt: new Date()
+        }
+      });
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          userId: chefId,
+          action: 'BORDEREAU_REJECTED',
+          details: {
+            bordereauId,
+            reference: bordereau.reference,
+            reason,
+            rejectedAt: new Date().toISOString()
+          }
+        }
+      });
+
+      // Notify workflow transition
+      await this.workflowNotifications.notifyWorkflowTransition(
+        bordereauId,
+        'A_AFFECTER',
+        'REJETE'
+      );
+
+      this.logger.log(`Bordereau ${bordereau.reference} rejected by chef ${chefId}: ${reason}`);
+      
+      return {
+        success: true,
+        message: 'Bordereau rejected successfully'
+      };
+    } catch (error) {
+      this.logger.error(`Reject bordereau failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async treatBordereauPersonally(bordereauId: string, chefId: string) {
+    try {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+
+      if (!bordereau) {
+        throw new Error('Bordereau not found');
+      }
+
+      // Assign to chef personally
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: {
+          assignedToUserId: chefId,
+          statut: 'EN_COURS',
+          updatedAt: new Date()
+        }
+      });
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          userId: chefId,
+          action: 'BORDEREAU_SELF_ASSIGNED',
+          details: {
+            bordereauId,
+            reference: bordereau.reference,
+            selfAssignedAt: new Date().toISOString()
+          }
+        }
+      });
+
+      // Notify workflow transition
+      await this.workflowNotifications.notifyWorkflowTransition(
+        bordereauId,
+        'A_AFFECTER',
+        'EN_COURS_CHEF'
+      );
+
+      this.logger.log(`Bordereau ${bordereau.reference} self-assigned by chef ${chefId}`);
+      
+      return {
+        success: true,
+        message: 'Bordereau assigned to chef successfully'
+      };
+    } catch (error) {
+      this.logger.error(`Self-assign bordereau failed: ${error.message}`);
       throw error;
     }
   }

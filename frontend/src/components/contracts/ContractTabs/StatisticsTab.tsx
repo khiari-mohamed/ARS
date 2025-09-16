@@ -17,34 +17,28 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 const ContractStatisticsTab: React.FC<Props> = ({ contractId }) => {
   const [period, setPeriod] = useState('month');
   const [loading, setLoading] = useState(false);
+  const [statistics, setStatistics] = useState<any>(null);
 
-  // Mock data - replace with actual API calls
-  const kpiData = {
-    totalBordereaux: 156,
-    slaCompliance: 87.5,
-    avgProcessingTime: 3.2,
-    totalClaims: 8,
-    resolvedClaims: 6
-  };
+  useEffect(() => {
+    const loadStatistics = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/contracts/${contractId}/statistics?period=${period}`);
+        if (!response.ok) throw new Error('Failed to fetch statistics');
+        const data = await response.json();
+        setStatistics(data);
+      } catch (error) {
+        console.error('Failed to load statistics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadStatistics();
+  }, [contractId, period]);
 
-  const monthlyData = [
-    { month: 'Jan', bordereaux: 45, claims: 2, avgSLA: 3.1 },
-    { month: 'Fév', bordereaux: 52, claims: 1, avgSLA: 2.8 },
-    { month: 'Mar', bordereaux: 38, claims: 3, avgSLA: 3.5 },
-    { month: 'Avr', bordereaux: 41, claims: 2, avgSLA: 3.0 }
-  ];
+  if (!statistics) return null;
 
-  const slaDistribution = [
-    { name: 'À temps', value: 87.5, color: '#4caf50' },
-    { name: 'En retard', value: 12.5, color: '#f44336' }
-  ];
-
-  const processingTimeData = [
-    { range: '0-2j', count: 45 },
-    { range: '3-5j', count: 78 },
-    { range: '6-10j', count: 28 },
-    { range: '>10j', count: 5 }
-  ];
+  const { kpiData, monthlyData, slaDistribution, processingTimeData } = statistics;
 
   return (
     <Paper sx={{ p: 2 }}>
@@ -189,7 +183,7 @@ const ContractStatisticsTab: React.FC<Props> = ({ contractId }) => {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {slaDistribution.map((entry, index) => (
+                  {slaDistribution.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -197,7 +191,7 @@ const ContractStatisticsTab: React.FC<Props> = ({ contractId }) => {
               </PieChart>
             </ResponsiveContainer>
             <Box sx={{ mt: 2 }}>
-              {slaDistribution.map((item, index) => (
+              {slaDistribution.map((item: any, index: number) => (
                 <Box key={index} display="flex" alignItems="center" sx={{ mb: 1 }}>
                   <Box 
                     sx={{ 

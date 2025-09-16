@@ -15,6 +15,7 @@ import { RebalancingSuggestions } from '../../components/BS/RebalancingSuggestio
 import { BSStatusTag } from '../../components/BS/BSStatusTag';
 import GlobalCorbeille from '../../components/analytics/GlobalCorbeille';
 import AssignmentCriteria from '../../components/Workflow/AssignmentCriteria';
+import { BordereauCorbeille } from '../../components/Workflow/BordereauCorbeille';
 
 const { TabPane } = Tabs;
 
@@ -402,6 +403,10 @@ const ChefDashboard: React.FC = () => {
 
         <TabPane tab="Corbeille Globale" key="team">
           <GlobalCorbeille />
+        </TabPane>
+
+        <TabPane tab="Corbeille Enhanced" key="enhanced">
+          <BordereauCorbeille />
         </TabPane>
 
         <TabPane tab="Affectation Avancée" key="assignment">

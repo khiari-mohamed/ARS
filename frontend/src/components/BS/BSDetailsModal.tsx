@@ -38,17 +38,58 @@ export const BSDetailsModal: React.FC<BSDetailsModalProps> = ({ bsId, mode, open
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
+      const startTime = Date.now();
+      
       await updateMutation.mutateAsync({
         id: bsId!,
         ...values,
         dateCreation: values.dateCreation?.toDate(),
         dueDate: values.dueDate?.toDate()
       });
-      message.success('BS mis à jour avec succès');
+      
+      // Track processing time for performance metrics
+      const processingTime = Date.now() - startTime;
+      
+      // Trigger automatic bordereau progress recalculation
+      if ((bs as any)?.bordereauId) {
+        try {
+          const { LocalAPI } = await import('../../services/axios');
+          await LocalAPI.post(`/bordereaux/${(bs as any).bordereauId}/recalculate-progress`);
+        } catch (error) {
+          console.warn('Failed to recalculate bordereau progress:', error);
+        }
+      }
+      
+      message.success('BS mis à jour avec succès - Progression du bordereau recalculée');
       setEditMode(false);
       onClose();
     } catch (error) {
       message.error('Erreur lors de la mise à jour');
+    }
+  };
+
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!bsId) return;
+    
+    try {
+      const startTime = Date.now();
+      const { LocalAPI } = await import('../../services/axios');
+      
+      await LocalAPI.put(`/bordereaux/bs/${bsId}`, {
+        etat: newStatus
+      });
+      
+      const processingTime = Date.now() - startTime;
+      message.success(`Statut mis à jour: ${newStatus}`);
+      
+      // Trigger automatic bordereau progress recalculation
+      if ((bs as any)?.bordereauId) {
+        await LocalAPI.post(`/bordereaux/${(bs as any).bordereauId}/recalculate-progress`);
+      }
+      
+      onClose();
+    } catch (error) {
+      message.error('Erreur lors de la mise à jour du statut');
     }
   };
 
@@ -96,8 +137,44 @@ export const BSDetailsModal: React.FC<BSDetailsModalProps> = ({ bsId, mode, open
       </Form.Item>
       
       <Form.Item label="Statut" name="etat" rules={[{ required: true }]}>
-        <Select options={statusOptions} />
+        <Select 
+          options={statusOptions}
+          onChange={(value) => {
+            // Immediate status update for real-time feedback
+            if (value !== bs?.etat) {
+              handleStatusUpdate(value);
+            }
+          }}
+        />
       </Form.Item>
+      
+      {/* Quick Status Update Buttons */}
+      <div style={{ marginBottom: 16 }}>
+        <span style={{ marginRight: 8 }}>Actions rapides:</span>
+        <Button 
+          size="small" 
+          type={bs?.etat === 'VALIDATED' ? 'primary' : 'default'}
+          onClick={() => handleStatusUpdate('VALIDATED')}
+          style={{ marginRight: 8 }}
+        >
+          ✓ Traité
+        </Button>
+        <Button 
+          size="small" 
+          type={bs?.etat === 'REJECTED' ? 'primary' : 'default'}
+          onClick={() => handleStatusUpdate('REJECTED')}
+          style={{ marginRight: 8 }}
+        >
+          ✗ Rejeté
+        </Button>
+        <Button 
+          size="small" 
+          type={bs?.etat === 'IN_PROGRESS' ? 'primary' : 'default'}
+          onClick={() => handleStatusUpdate('IN_PROGRESS')}
+        >
+          ⏳ En cours
+        </Button>
+      </div>
 
       <div style={{ display: 'flex', gap: 16 }}>
         <Form.Item label="Assuré" name="nomAssure" style={{ flex: 1 }}>

@@ -40,66 +40,114 @@ const ReportsTab: React.FC = () => {
     setLoading(true);
     console.log('🔄 ReportsTab: Loading report data with filters:', filters);
     try {
-      // Try to load real data first
-      const { getOVTracking } = await import('../../services/financeService');
-      console.log('📡 ReportsTab: Calling getOVTracking API...');
-      const realData = await getOVTracking(filters);
-      console.log('📊 ReportsTab: Received data:', realData);
+      // Build query parameters from filters
+      const queryParams = new URLSearchParams();
+      if (filters.dateFrom) queryParams.append('dateFrom', filters.dateFrom);
+      if (filters.dateTo) queryParams.append('dateTo', filters.dateTo);
+      if (filters.society) queryParams.append('societe', filters.society);
+      if (filters.donneurOrdre) queryParams.append('donneurOrdre', filters.donneurOrdre);
       
+      // Load real data from multiple backend endpoints with filters
+      const [ordresVirement, suiviVirements, clients] = await Promise.all([
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement?${queryParams}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        }).then(res => res.json()),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/suivi-virement/list?${queryParams}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        }).then(res => res.json()),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/clients`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        }).then(res => res.json()).catch(() => [])
+      ]);
+      
+      // Apply client-side filtering for additional precision
+      let filteredData = ordresVirement;
+      if (filters.dateFrom || filters.dateTo) {
+        filteredData = filteredData.filter((item: any) => {
+          const itemDate = new Date(item.dateCreation);
+          const fromDate = filters.dateFrom ? new Date(filters.dateFrom) : null;
+          const toDate = filters.dateTo ? new Date(filters.dateTo) : null;
+          
+          if (fromDate && itemDate < fromDate) return false;
+          if (toDate && itemDate > toDate) return false;
+          return true;
+        });
+      }
+      
+      if (filters.society) {
+        filteredData = filteredData.filter((item: any) => 
+          item.donneurOrdre?.nom?.toLowerCase().includes(filters.society.toLowerCase())
+        );
+      }
+      
+      if (filters.donneurOrdre) {
+        filteredData = filteredData.filter((item: any) => 
+          item.donneurOrdre?.nom?.toLowerCase().includes(filters.donneurOrdre.toLowerCase())
+        );
+      }
+      
+      console.log('📊 ReportsTab: Loaded data:', {
+        ordresVirement: ordresVirement.length,
+        suiviVirements: suiviVirements.length,
+        clients: clients.length
+      });
+      
+      const realData = filteredData;
       if (realData && realData.length > 0) {
-        // Process real data for charts
+        // Process filtered data for charts using correct field names
         const statusCounts = realData.reduce((acc: any, item: any) => {
-          acc[item.status] = (acc[item.status] || 0) + 1;
+          acc[item.etatVirement] = (acc[item.etatVirement] || 0) + 1;
           return acc;
         }, {});
         
         const total = realData.length;
         const realStatusData = [
           { name: 'Exécuté', value: Math.round((statusCounts['EXECUTE'] || 0) / total * 100), color: '#4caf50', count: statusCounts['EXECUTE'] || 0 },
-          { name: 'En Cours', value: Math.round((statusCounts['EN_COURS'] || 0) / total * 100), color: '#2196f3', count: statusCounts['EN_COURS'] || 0 },
+          { name: 'En Cours', value: Math.round((statusCounts['EN_COURS_EXECUTION'] || 0) / total * 100), color: '#2196f3', count: statusCounts['EN_COURS_EXECUTION'] || 0 },
           { name: 'Rejeté', value: Math.round((statusCounts['REJETE'] || 0) / total * 100), color: '#f44336', count: statusCounts['REJETE'] || 0 },
           { name: 'Non Exécuté', value: Math.round((statusCounts['NON_EXECUTE'] || 0) / total * 100), color: '#ff9800', count: statusCounts['NON_EXECUTE'] || 0 }
         ];
         
         setStatusData(realStatusData);
         
-        // Process SLA data by society
-        const societyGroups = realData.reduce((acc: any, item: any) => {
-          if (!acc[item.society]) acc[item.society] = [];
-          acc[item.society].push(item);
+        // Process SLA data by donneur d'ordre (since we don't have society field)
+        const donneurGroups = realData.reduce((acc: any, item: any) => {
+          const key = item.donneurOrdre?.nom || 'Unknown';
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(item);
           return acc;
         }, {});
         
-        const realSlaData = Object.keys(societyGroups).map(society => {
-          const items = societyGroups[society];
-          const onTime = items.filter((i: any) => i.delay <= 1).length;
-          const atRisk = items.filter((i: any) => i.delay > 1 && i.delay <= 3).length;
-          const overdue = items.filter((i: any) => i.delay > 3).length;
+        const realSlaData = Object.keys(donneurGroups).slice(0, 5).map(society => {
+          const items = donneurGroups[society];
+          const executed = items.filter((i: any) => i.etatVirement === 'EXECUTE').length;
+          const inProgress = items.filter((i: any) => i.etatVirement === 'EN_COURS_EXECUTION').length;
+          const failed = items.filter((i: any) => i.etatVirement === 'REJETE').length;
           const total = items.length;
           
           return {
             society,
-            onTime: Math.round(onTime / total * 100),
-            atRisk: Math.round(atRisk / total * 100),
-            overdue: Math.round(overdue / total * 100)
+            onTime: Math.round(executed / total * 100),
+            atRisk: Math.round(inProgress / total * 100),
+            overdue: Math.round(failed / total * 100)
           };
         });
         
         setSlaData(realSlaData);
         
-        // Generate trend data (last 7 days)
+        // Generate trend data (last 7 days) using dateCreation
         const trendDays = [];
         for (let i = 6; i >= 0; i--) {
           const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
           const dayData = realData.filter((item: any) => 
-            new Date(item.dateInjected).toDateString() === date.toDateString()
+            new Date(item.dateCreation).toDateString() === date.toDateString()
           );
           
           trendDays.push({
             date: date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' }),
             total: dayData.length,
-            executed: dayData.filter((i: any) => i.status === 'EXECUTE').length,
-            amount: dayData.reduce((sum: number, i: any) => sum + i.totalAmount, 0)
+            executed: dayData.filter((i: any) => i.etatVirement === 'EXECUTE').length,
+            amount: dayData.reduce((sum: number, i: any) => sum + (i.montantTotal || 0), 0)
           });
         }
         
@@ -133,7 +181,7 @@ const ReportsTab: React.FC = () => {
       console.log('🔄 ReportsTab: Starting export with format:', format);
       
       // Call real backend export endpoint
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/virements/export-report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/suivi-virement/export-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,7 +242,7 @@ const ReportsTab: React.FC = () => {
       console.log('📦 ReportsTab: Custom report data:', customData);
       
       // Call backend API
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/virements/export-report`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/suivi-virement/export-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -377,8 +425,8 @@ const ReportsTab: React.FC = () => {
                       return [value, name];
                     }}
                   />
-                  <Bar yAxisId="left" dataKey="total" fill="#2196f3" name="Total" />
-                  <Bar yAxisId="left" dataKey="executed" fill="#4caf50" name="Exécutés" />
+                  <Line yAxisId="left" type="monotone" dataKey="total" stroke="#2196f3" strokeWidth={2} name="Total" />
+                  <Line yAxisId="left" type="monotone" dataKey="executed" stroke="#4caf50" strokeWidth={2} name="Exécutés" />
                   <Line yAxisId="right" type="monotone" dataKey="amount" stroke="#ff9800" strokeWidth={3} name="Montant" />
                 </LineChart>
               </ResponsiveContainer>
@@ -390,7 +438,7 @@ const ReportsTab: React.FC = () => {
           <Paper elevation={2} sx={{ p: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Options d'Export</Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={6}>
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="h6" color="primary">Rapport PDF</Typography>
@@ -402,14 +450,15 @@ const ReportsTab: React.FC = () => {
                       startIcon={<PictureAsPdfIcon />}
                       onClick={() => handleExport('pdf')}
                       fullWidth
+                      disabled={loading}
                     >
-                      Générer PDF
+                      Exporter PDF
                     </Button>
                   </CardContent>
                 </Card>
               </Grid>
               
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={6}>
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="h6" color="primary">Export Excel</Typography>
@@ -421,8 +470,9 @@ const ReportsTab: React.FC = () => {
                       startIcon={<TableViewIcon />}
                       onClick={() => handleExport('excel')}
                       fullWidth
+                      disabled={loading}
                     >
-                      Générer Excel
+                      Exporter Excel
                     </Button>
                   </CardContent>
                 </Card>

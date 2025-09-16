@@ -56,6 +56,14 @@ export class CreateBSDto {
 
   @IsString()
   observationGlobal: string;
+
+  @IsOptional()
+  @IsString()
+  fileName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  fileSize?: number;
 }
 
 export class UpdateBSDto {

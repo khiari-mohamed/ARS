@@ -15,25 +15,42 @@ import GroupIcon from '@mui/icons-material/Group';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import InputIcon from '@mui/icons-material/Input';
 import ScannerIcon from '@mui/icons-material/Scanner';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 
 const sidebarLinks = [
-  { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE'] },
-  { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'BO', 'CUSTOMER_SERVICE', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'SCAN_TEAM'] },
-  { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/contracts", label: "Contracts", icon: <DescriptionIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'FINANCE'] },
-  { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
-  { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
-  { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN'] },
-
-  { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'FINANCE'] },
-  { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['ADMINISTRATEUR', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'SCAN_TEAM'] },
+  // SUPER_ADMIN: Full access to everything
+  { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+  { to: "/home/super-admin", label: "Interface Super Admin", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN'] },
+  
+  // ADMINISTRATEUR: All modules + system parameters
+  { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
+  { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
+  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'FINANCE'] },
+  
+  // RESPONSABLE_DEPARTEMENT: Department dashboards and team data only
+  { to: "/home/contracts", label: "Contrats", icon: <DescriptionIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
+  
+  // CHEF_EQUIPE: Team management, global inbox, team dashboard
+  { to: "/home/chef-equipe", label: "Chef d'Équipe", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN', 'CHEF_EQUIPE'] },
+  { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+  { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+  { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
+  
+  // GESTIONNAIRE: Only assigned files and personal treatment
+  { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
+  
+  // Specialized services
+  { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'BO', 'BUREAU_ORDRE'] },
+  { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
+  { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+  { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'CLIENT_SERVICE'] },
+  { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'FINANCE'] },
+  
+  // Common access
+  { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
+  { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'BUREAU_ORDRE', 'SCAN_TEAM'] },
 ];
 
 interface SidebarProps {

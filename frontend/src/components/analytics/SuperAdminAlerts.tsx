@@ -30,7 +30,8 @@ import {
   Refresh,
   Info
 } from '@mui/icons-material';
-import { LocalAPI } from '../../services/axios';
+import { fetchTeamWorkload, fetchSuperAdminAlerts, acknowledgeAlert } from '../../services/superAdminTeamService';
+import { getWorkloadPredictions } from '../../services/superAdminService';
 
 interface OverloadAlert {
   team: {
@@ -57,6 +58,7 @@ const SuperAdminAlerts: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedAlert, setSelectedAlert] = useState<OverloadAlert | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [teamWorkload, setTeamWorkload] = useState<any[]>([]);
 
   useEffect(() => {
     loadAlerts();
@@ -66,13 +68,43 @@ const SuperAdminAlerts: React.FC = () => {
 
   const loadAlerts = async () => {
     try {
-      const [overloadResponse, predictionsResponse] = await Promise.all([
-        LocalAPI.get('/alerts/team-overload'),
-        LocalAPI.get('/alerts/delay-predictions')
+      const [teamWorkloadData, alertsData] = await Promise.all([
+        fetchTeamWorkload(),
+        fetchSuperAdminAlerts()
       ]);
 
-      setOverloadAlerts(overloadResponse.data || []);
-      setDelayPredictions(predictionsResponse.data || null);
+      setTeamWorkload(teamWorkloadData);
+
+      // Transform team workload data to overload alerts format
+      const overloadData = teamWorkloadData
+        .filter((member: any) => member.level === 'Critique' || member.level === 'Élevé')
+        .map((member: any) => ({
+          team: {
+            id: member.id,
+            fullName: member.name,
+            role: member.role
+          },
+          count: parseInt(member.workload.split(' ')[0]),
+          alert: member.level === 'Critique' ? 'red' : 'orange',
+          reason: `Charge de travail élevée: ${member.workload}`
+        }));
+
+      setOverloadAlerts(overloadData);
+      
+      // Get real workload predictions from API
+      try {
+        const predictions = await getWorkloadPredictions();
+        setDelayPredictions({
+          forecast: predictions.forecast || [],
+          trend_direction: predictions.trend || 'stable',
+          recommendations: predictions.recommendations || [],
+          ai_confidence: predictions.confidence || 0,
+          next_week_prediction: predictions.nextWeek || 0
+        });
+      } catch (error) {
+        console.error('Failed to load predictions:', error);
+        setDelayPredictions(null);
+      }
     } catch (error) {
       console.error('Failed to load super admin alerts:', error);
     } finally {
@@ -125,7 +157,7 @@ const SuperAdminAlerts: React.FC = () => {
           <Grid item xs={4}>
             <Box textAlign="center">
               <Typography variant="h3" color="success.main">
-                {Math.max(0, 10 - overloadAlerts.length)}
+                {Math.max(0, (teamWorkload?.length || 0) - overloadAlerts.length)}
               </Typography>
               <Typography variant="body2" color="textSecondary">
                 Disponibles

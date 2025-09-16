@@ -692,7 +692,7 @@ export class ClientService {
 
   async syncWithExternal(id: string) {
     try {
-      const externalUrl = `${process.env.TUNICLAIM_API_URL || 'http://197.14.56.112:8083/api'}/societes/${id}`;
+      const externalUrl = `${process.env.TUNICLAIM_API_URL || ' https://ars.dh-ss.com/login'}/societes/${id}`;
       const { data } = await axios.get(externalUrl);
       if (!data) throw new NotFoundException('External client not found');
       const updated = await this.prisma.client.update({

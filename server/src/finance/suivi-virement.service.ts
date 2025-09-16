@@ -514,4 +514,101 @@ export class SuiviVirementService {
     // Excel export would be implemented here
     return Buffer.from('Excel export not implemented yet');
   }
+
+  async generateFinancialReport(data: {
+    format: string;
+    filters: any;
+    data: any;
+    cashFlowProjection: any;
+    financialKPIs: any;
+  }): Promise<Buffer> {
+    console.log('📊 Generating financial report:', data.format);
+    
+    try {
+      // Get real financial data from database
+      const [ordresVirement, suiviVirements, bordereaux] = await Promise.all([
+        this.prisma.ordreVirement.findMany({
+          include: {
+            donneurOrdre: true,
+            items: { include: { adherent: true } }
+          },
+          take: 100,
+          orderBy: { dateCreation: 'desc' }
+        }),
+        this.prisma.suiviVirement.findMany({
+          take: 100,
+          orderBy: { dateInjection: 'desc' }
+        }),
+        this.prisma.bordereau.findMany({
+          include: { client: true, virement: true },
+          take: 100,
+          orderBy: { dateReception: 'desc' }
+        })
+      ]);
+      
+      if (data.format === 'csv') {
+        const headers = [
+          'Type',
+          'Référence',
+          'Date',
+          'Montant',
+          'Statut',
+          'Client/Société',
+          'Utilisateur'
+        ];
+        
+        const csvContent = [headers.join(',')];
+        
+        // Add ordre virement data
+        ordresVirement.forEach(ov => {
+          csvContent.push([
+            'Ordre Virement',
+            ov.reference,
+            ov.dateCreation.toISOString().split('T')[0],
+            ov.montantTotal.toString(),
+            ov.etatVirement,
+            ov.donneurOrdre?.nom || 'N/A',
+            ov.utilisateurSante || 'N/A'
+          ].join(','));
+        });
+        
+        // Add bordereau data
+        bordereaux.forEach(b => {
+          csvContent.push([
+            'Bordereau',
+            b.reference,
+            b.dateReception.toISOString().split('T')[0],
+            (b.nombreBS * 100).toString(),
+            b.statut,
+            b.client?.name || 'N/A',
+            'N/A'
+          ].join(','));
+        });
+        
+        return Buffer.from(csvContent.join('\n'), 'utf-8');
+      }
+      
+      if (data.format === 'pdf') {
+        const reportContent = `RAPPORT FINANCIER\n================\n\nGénéré le: ${new Date().toLocaleString('fr-FR')}\n\nRÉSUMÉ EXÉCUTIF\n---------------\nTotal Ordres de Virement: ${ordresVirement.length}\nTotal Bordereaux: ${bordereaux.length}\nMontant Total OV: ${ordresVirement.reduce((sum, ov) => sum + ov.montantTotal, 0).toLocaleString('fr-FR')} DT\n\nDERNIERS ORDRES DE VIREMENT\n---------------------------\n${ordresVirement.slice(0, 10).map(ov => `${ov.reference} - ${ov.montantTotal.toLocaleString('fr-FR')} DT - ${ov.etatVirement}`).join('\n')}\n\n---\nRapport généré automatiquement par le système ARS`;
+        
+        return Buffer.from(reportContent, 'utf-8');
+      }
+      
+      // Default to Excel format
+      const excelContent = `Référence\tType\tDate\tMontant\tStatut\tClient\n${[
+        ...ordresVirement.map(ov => 
+          `${ov.reference}\tOrdre Virement\t${ov.dateCreation.toISOString().split('T')[0]}\t${ov.montantTotal}\t${ov.etatVirement}\t${ov.donneurOrdre?.nom || 'N/A'}`
+        ),
+        ...bordereaux.map(b => 
+          `${b.reference}\tBordereau\t${b.dateReception.toISOString().split('T')[0]}\t${b.nombreBS * 100}\t${b.statut}\t${b.client?.name || 'N/A'}`
+        )
+      ].join('\n')}`;
+      
+      return Buffer.from(excelContent, 'utf-8');
+      
+    } catch (error) {
+      console.error('Failed to generate financial report:', error);
+      throw new Error('Report generation failed: ' + error.message);
+    }
+  }
 }

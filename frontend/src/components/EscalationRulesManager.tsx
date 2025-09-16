@@ -179,7 +179,7 @@ const EscalationRulesManager: React.FC = () => {
       name: rule.name,
       alertType: rule.alertType,
       severity: rule.severity,
-      escalationPath: rule.escalationPath || [],
+      escalationPath: Array.isArray(rule.escalationPath) ? rule.escalationPath : [],
       active: rule.active
     });
     setEditDialog(true);
@@ -224,7 +224,7 @@ const EscalationRulesManager: React.FC = () => {
         ...prev.escalationPath,
         {
           level: prev.escalationPath.length + 1,
-          delayMinutes: 15,
+          delayMinutes: 30,
           recipients: [],
           stopOnAcknowledge: false
         }
@@ -346,7 +346,7 @@ const EscalationRulesManager: React.FC = () => {
                             size="small"
                           />
                         </TableCell>
-                        <TableCell>{rule.escalationPath.length} niveaux</TableCell>
+                        <TableCell>{Array.isArray(rule.escalationPath) ? rule.escalationPath.length : 0} niveaux</TableCell>
                         <TableCell>
                           <Chip
                             label={rule.active ? 'Actif' : 'Inactif'}

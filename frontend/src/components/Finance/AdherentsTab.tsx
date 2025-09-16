@@ -42,18 +42,79 @@ const AdherentsTab: React.FC = () => {
   });
 
   useEffect(() => {
-    const loadAdherents = async () => {
-      try {
-        const { getAdherents } = await import('../../services/financeService');
-        const data = await getAdherents();
-        setAdherents(data);
-      } catch (error) {
-        console.error('Failed to load adherents:', error);
-        setAdherents([]);
-      }
-    };
     loadAdherents();
   }, []);
+
+  const loadAdherents = async () => {
+    try {
+      // Try multiple data sources to get all members
+      let data = [];
+      
+      try {
+        // First try with empty search to get all members
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          data = await response.json();
+          console.log('Loaded from adherents endpoint:', data.length, 'items');
+        }
+      } catch (error) {
+        console.log('Adherents endpoint failed, trying alternative');
+      }
+      
+      // If no data from adherents endpoint, try direct database query
+      if (data.length === 0) {
+        try {
+          // Try different endpoint variations
+          const altResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents?clientId=`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          if (altResponse.ok) {
+            data = await altResponse.json();
+            console.log('Loaded from alternative endpoint:', data.length, 'items');
+          }
+        } catch (error) {
+          console.log('Alternative endpoint also failed');
+        }
+      }
+      
+      // Transform backend data to frontend format
+      const transformedData = data.map((member: any, index: number) => ({
+        id: member.id || `member-${index + 1}`,
+        matricule: member.matricule || member.cin || `M${String(index + 1).padStart(3, '0')}`,
+        name: member.nom || member.name?.split(' ')[0] || `Membre ${index + 1}`,
+        surname: member.prenom || member.name?.split(' ').slice(1).join(' ') || 'Test',
+        society: member.client?.name || member.society?.name || 'ARS TUNISIE',
+        rib: member.rib || `RIB${String(index + 1).padStart(17, '0')}`,
+        status: member.statut === 'ACTIF' || member.status === 'active' ? 'active' : 'inactive',
+        duplicateRib: false
+      }));
+      
+      console.log('Transformed data:', transformedData.length, 'adherents');
+      
+      // Check for duplicate RIBs
+      const ribCounts = new Map();
+      transformedData.forEach((adherent: Adherent) => {
+        ribCounts.set(adherent.rib, (ribCounts.get(adherent.rib) || 0) + 1);
+      });
+      
+      transformedData.forEach((adherent: Adherent) => {
+        adherent.duplicateRib = ribCounts.get(adherent.rib) > 1;
+      });
+      
+      setAdherents(transformedData);
+    } catch (error) {
+      console.error('Failed to load adherents:', error);
+      setAdherents([]);
+    }
+  };
 
   useEffect(() => {
     // Apply filters
@@ -108,51 +169,76 @@ const AdherentsTab: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      const { createAdherent, updateAdherent } = await import('../../services/financeService');
-      const isDuplicate = checkDuplicateRib(form.rib, dialog.adherent?.id);
+      const adherentData = {
+        matricule: form.matricule,
+        nom: form.name,
+        prenom: form.surname,
+        clientId: form.society,
+        rib: form.rib,
+        statut: form.status === 'active' ? 'ACTIF' : 'INACTIF'
+      };
       
       if (dialog.adherent) {
         // Update existing
-        const adherentData = {
-          nom: form.name,
-          prenom: form.surname,
-          rib: form.rib,
-          statut: form.status
-        };
-        await updateAdherent(dialog.adherent.id, adherentData);
-        setAdherents(prev => prev.map(a => 
-          a.id === dialog.adherent?.id 
-            ? {...a, ...form, duplicateRib: isDuplicate} 
-            : a
-        ));
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/${dialog.adherent.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(adherentData)
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update adherent');
+        }
       } else {
         // Add new
-        const adherentData = {
-          matricule: form.matricule,
-          nom: form.name,
-          prenom: form.surname,
-          clientId: form.society,
-          rib: form.rib,
-          statut: form.status
-        };
-        const newAdherent = await createAdherent(adherentData);
-        setAdherents(prev => [...prev, {...newAdherent, duplicateRib: isDuplicate}]);
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(adherentData)
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create adherent');
+        }
       }
       
       setDialog({open: false, adherent: null});
+      // Reload data from backend
+      await loadAdherents();
     } catch (error) {
       console.error('Failed to save adherent:', error);
+      alert('Erreur lors de la sauvegarde: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     }
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cet adhérent ?')) {
       try {
-        const { deleteAdherent } = await import('../../services/financeService');
-        await deleteAdherent(id);
-        setAdherents(prev => prev.filter(a => a.id !== id));
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to delete adherent');
+        }
+        
+        // Reload data from backend
+        await loadAdherents();
       } catch (error) {
         console.error('Failed to delete adherent:', error);
+        alert('Erreur lors de la suppression: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
       }
     }
   };
@@ -299,6 +385,8 @@ const AdherentsTab: React.FC = () => {
                 onChange={(e) => setForm({...form, matricule: e.target.value})}
                 fullWidth
                 required
+                disabled={!!dialog.adherent}
+                helperText={dialog.adherent ? "Matricule cannot be changed" : ""}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

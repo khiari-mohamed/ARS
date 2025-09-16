@@ -524,27 +524,22 @@ export class FinanceService {
   // Donneurs d'Ordre methods
   async getDonneurs(user: User) {
     this.checkFinanceRole(user);
-    try {
-      const donneurs = await this.prisma.donneurDOrdre.findMany({
-        where: {
-          NOT: {
-            name: { startsWith: '[DELETED]' }
-          }
-        },
-        include: { society: true }
-      });
-      return donneurs.map(d => ({
-        id: d.id,
-        name: d.name,
-        bank: d.society.name,
-        rib: d.rib,
-        txtFormat: 'SWIFT',
-        status: 'active'
-      }));
-    } catch (error) {
-      console.error('Error fetching donneurs:', error);
-      return [{ id: '1', name: 'ARS Tunisie', bank: 'Banque Centrale', rib: '12345678901234567890', txtFormat: 'SWIFT', status: 'active' }];
-    }
+    const donneurs = await this.prisma.donneurDOrdre.findMany({
+      where: {
+        NOT: {
+          name: { startsWith: '[DELETED]' }
+        }
+      },
+      include: { society: true }
+    });
+    return donneurs.map(d => ({
+      id: d.id,
+      name: d.name,
+      bank: d.society.name,
+      rib: d.rib,
+      txtFormat: 'SWIFT',
+      status: 'active'
+    }));
   }
 
   async createDonneur(data: any, user: User) {
@@ -650,38 +645,33 @@ export class FinanceService {
   // Adherents methods (using Member model)
   async getAdherents(query: any, user: User) {
     this.checkFinanceRole(user);
-    try {
-      const where: any = {};
-      if (query.society) {
-        where.society = { name: { contains: query.society, mode: 'insensitive' } };
-      }
-      
-      const members = await this.prisma.member.findMany({
-        where,
-        include: { society: true },
-        orderBy: { name: 'asc' }
-      });
-      
-      // Check for duplicate RIBs
-      const ribCounts = new Map();
-      members.forEach(m => {
-        ribCounts.set(m.rib, (ribCounts.get(m.rib) || 0) + 1);
-      });
-      
-      return members.map(m => ({
-        id: m.id,
-        matricule: m.cin || m.id.substring(0, 8),
-        name: m.name.split(' ')[0] || m.name,
-        surname: m.name.split(' ').slice(1).join(' ') || '',
-        society: m.society.name,
-        rib: m.rib,
-        status: 'active',
-        duplicateRib: ribCounts.get(m.rib) > 1
-      }));
-    } catch (error) {
-      console.error('Error fetching adherents:', error);
-      return [{ id: '1', matricule: '12345', name: 'John', surname: 'Doe', society: 'AON', rib: '12345678901234567890', status: 'active' }];
+    const where: any = {};
+    if (query.society) {
+      where.society = { name: { contains: query.society, mode: 'insensitive' } };
     }
+    
+    const members = await this.prisma.member.findMany({
+      where,
+      include: { society: true },
+      orderBy: { name: 'asc' }
+    });
+    
+    // Check for duplicate RIBs
+    const ribCounts = new Map();
+    members.forEach(m => {
+      ribCounts.set(m.rib, (ribCounts.get(m.rib) || 0) + 1);
+    });
+    
+    return members.map(m => ({
+      id: m.id,
+      matricule: m.cin || m.id.substring(0, 8),
+      name: m.name.split(' ')[0] || m.name,
+      surname: m.name.split(' ').slice(1).join(' ') || '',
+      society: m.society.name,
+      rib: m.rib,
+      status: 'active',
+      duplicateRib: ribCounts.get(m.rib) > 1
+    }));
   }
 
   async createAdherent(data: any, user: User) {

@@ -114,8 +114,14 @@ export class FileGenerationService {
     // Donneur signature/tampon (stamp at footer right)
     const signaturePath = ordreVirement.donneurOrdre?.signaturePath;
     if (!signaturePath) {
+      // Add placeholder text if no signature
+      const footerY = doc.page.height - 60;
+      doc.fontSize(10).text('Signature Donneur d\'Ordre', doc.page.width - 160, footerY, {
+        width: 110, align: 'center'
+      });
+      doc.rect(doc.page.width - 170, footerY + 15, 120, 40).stroke();
       doc.end();
-      throw new Error('Signature/tampon obligatoire pour exporter ce PDF');
+      return filePath;
     }
     const signatureFullPath = path.isAbsolute(signaturePath)
       ? signaturePath
@@ -128,8 +134,12 @@ export class FileGenerationService {
         width: 110, align: 'center'
       });
     } else {
-      doc.end();
-      throw new Error('Image de signature introuvable : ' + signatureFullPath);
+      // Add placeholder if signature file not found
+      const footerY = doc.page.height - 60;
+      doc.fontSize(10).text('Signature Donneur d\'Ordre', doc.page.width - 160, footerY, {
+        width: 110, align: 'center'
+      });
+      doc.rect(doc.page.width - 170, footerY + 15, 120, 40).stroke();
     }
 
     doc.end();

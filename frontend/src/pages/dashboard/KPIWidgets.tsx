@@ -7,12 +7,30 @@ interface KPIWidgetsProps {
 
 const KPIWidgets: React.FC<KPIWidgetsProps> = ({ kpis }) => (
   <div className="kpi-widgets kpi-widgets-grid">
-    <KPIBox label="Bordereaux reçus" value={kpis.totalBordereaux} />
-    <KPIBox label="BS traités" value={kpis.bsProcessed} />
-    <KPIBox label="BS rejetés" value={kpis.bsRejected} />
-    <KPIBox label="Réclamations ouvertes" value={kpis.pendingReclamations} />
-    <KPIBox label="SLA Breaches" value={kpis.slaBreaches} />
-    <KPIBox label="Virements en cours" value={kpis.overdueVirements} />
+    <KPIBox 
+      label="Bordereaux ARS Reçus" 
+      value={kpis.totalBordereaux || 0} 
+    />
+    <KPIBox 
+      label="Bulletins de Soins Traités" 
+      value={kpis.bsProcessed || 0} 
+    />
+    <KPIBox 
+      label="Dossiers en Difficulté" 
+      value={kpis.bsRejected || 0} 
+    />
+    <KPIBox 
+      label="Réclamations ARS Ouvertes" 
+      value={kpis.pendingReclamations || 0} 
+    />
+    <KPIBox 
+      label="Dépassements SLA ARS" 
+      value={kpis.slaBreaches || 0} 
+    />
+    <KPIBox 
+      label="Virements ARS en Attente" 
+      value={kpis.overdueVirements || 0} 
+    />
   </div>
 );
 

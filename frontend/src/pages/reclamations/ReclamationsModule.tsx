@@ -7,7 +7,7 @@ import ReclamationSearch from '../../components/reclamations/ReclamationSearch';
 import { Reporting } from '../../components/reclamations/Reporting';
 import AIClassificationPanel from '../../components/reclamations/AIClassificationPanel';
 import CustomerPortalInterface from '../../components/reclamations/CustomerPortalInterface';
-import AdvancedAnalyticsDashboard from '../../components/reclamations/AdvancedAnalyticsDashboard';
+import AdvancedAnalyticsPanel from '../../components/reclamations/AdvancedAnalyticsPanel';
 import ChefCorbeille from '../../components/reclamations/ChefCorbeille';
 import GestionnaireCorbeille from '../../components/reclamations/GestionnaireCorbeille';
 import BOReclamationForm from '../../components/reclamations/BOReclamationForm';
@@ -32,15 +32,15 @@ const ReclamationsModule: React.FC = () => {
           { label: 'Corbeille Chef', component: <ChefCorbeille /> },
           { label: 'Dashboard', component: <ReclamationDashboard /> },
           { label: 'Liste Complète', component: <ReclamationsList /> },
-          { label: 'Analyses Avancées', component: <AdvancedAnalyticsDashboard /> },
+          { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },
           { label: 'Rapports', component: <Reporting /> }
         ];
       
       case 'GESTIONNAIRE':
         return [
-          { label: 'Ma Corbeille', component: <GestionnaireCorbeille /> },
-          { label: 'Nouvelle Réclamation', component: <ReclamationForm onSuccess={() => setActiveTab(0)} /> },
-          { label: 'Recherche', component: <ReclamationSearch /> }
+          { label: 'Ma Corbeille', component: <GestionnaireCorbeille /> }
+          // { label: 'Nouvelle Réclamation', component: <ReclamationForm onSuccess={() => setActiveTab(0)} /> },
+          // { label: 'Recherche', component: <ReclamationSearch /> }
         ];
       
       case 'BUREAU_ORDRE':
@@ -65,7 +65,7 @@ const ReclamationsModule: React.FC = () => {
           { label: 'Liste Complète', component: <ReclamationsList /> },
           { label: 'Classification IA', component: <AIClassificationPanel /> },
           { label: 'Portail Client', component: <CustomerPortalInterface /> },
-          { label: 'Analyses Avancées', component: <AdvancedAnalyticsDashboard /> },
+          { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },
           { label: 'Rapports', component: <Reporting /> }
         ];
       
@@ -92,6 +92,15 @@ const ReclamationsModule: React.FC = () => {
       </Paper>
 
       <RealTimeAlerts />
+      
+      {/* Role-based access warning for Gestionnaire */}
+      {user?.role === 'GESTIONNAIRE' && (
+        <Paper elevation={1} sx={{ p: 2, mb: 2, bgcolor: 'warning.light' }}>
+          <Typography variant="body2" color="warning.dark">
+            ⚠️ Accès Gestionnaire: Vous ne pouvez voir que les réclamations qui vous sont assignées
+          </Typography>
+        </Paper>
+      )}
       
       <Paper elevation={2} sx={{ p: { xs: 1, sm: 3 } }}>
         <Box sx={{ 

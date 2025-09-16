@@ -1395,6 +1395,7 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
       {showDetailsModal && selectedBordereauForDetails && (
         <BordereauDetailsModal
           bordereauId={selectedBordereauForDetails}
+          open={showDetailsModal}
           onClose={() => {
             setShowDetailsModal(false);
             setSelectedBordereauForDetails(null);
@@ -1405,8 +1406,8 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
       {/* Edit Modal */}
       {showEditModal && selectedBordereauForEdit && (
         <BordereauEditModal
-          bordereauxId={selectedBordereauForEdit}
-          isOpen={showEditModal}
+          bordereauId={selectedBordereauForEdit}
+          open={showEditModal}
           onClose={() => {
             setShowEditModal(false);
             setSelectedBordereauForEdit(null);

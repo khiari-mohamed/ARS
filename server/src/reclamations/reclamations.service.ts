@@ -7,23 +7,25 @@ import { NotificationService } from './notification.service';
 import { AdvancedAnalyticsService } from './advanced-analytics.service';
 import { AIClassificationService } from './ai-classification.service';
 import { CustomerPortalService } from './customer-portal.service';
+import { AICoreService } from './ai-core.service';
 import axios from 'axios';
 
 const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
 
+import { Logger } from '@nestjs/common';
+
 @Injectable()
 export class ReclamationsService {
+  private readonly logger = new Logger(ReclamationsService.name);
+
   constructor(
     private prisma: PrismaService,
     public notificationService: NotificationService,
     public advancedAnalyticsService: AdvancedAnalyticsService,
     public aiClassificationService: AIClassificationService,
     public customerPortalService: CustomerPortalService,
+    private aiCore: AICoreService,
   ) {}
-
-
-
-
 
    public async bulkUpdate(ids: string[], data: any, user: any) {
     this.checkRole(user, 'update');
@@ -118,17 +120,20 @@ export class ReclamationsService {
     }
   }
 
-  // AI/ML prediction (production logic, mock call)
+  // Real AI/ML prediction using trained models
   public async aiPredict(text: string, user: any) {
     this.checkRole(user, 'view');
-    // Example: call external ML service (replace with real endpoint)
-    // const response = await fetch('http://ml-service/predict', { method: 'POST', body: JSON.stringify({ text }) });
-    // const result = await response.json();
-    // return result;
-    // For now, use a simple keyword-based mock
-    if (text.toLowerCase().includes('retard')) return { prediction: 'delay' };
-    if (text.toLowerCase().includes('paiement')) return { prediction: 'payment issue' };
-    return { prediction: 'other' };
+    try {
+      const result = await this.aiCore.classifyText(text);
+      return {
+        prediction: result.category,
+        priority: result.priority,
+        confidence: result.confidence
+      };
+    } catch (error) {
+      this.logger.error('AI prediction failed:', error);
+      return { prediction: 'unknown', priority: 'medium', confidence: 0 };
+    }
   }
   private checkRole(user: any, action: 'view'|'create'|'update'|'assign'|'escalate'|'delete' = 'view') {
     if (user.role === 'SUPER_ADMIN') return;

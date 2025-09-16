@@ -48,7 +48,7 @@ import {
   Cloud,
   Storage
 } from '@mui/icons-material';
-// All integration operations now use real API endpoints
+import { LocalAPI } from '../../services/axios';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -99,42 +99,18 @@ const IntegrationManager: React.FC = () => {
 
   const loadData = async () => {
     try {
-      // Load from real API endpoints
-      const connectorsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const [connectorsResponse, webhooksResponse, statsResponse] = await Promise.all([
+        LocalAPI.get('/documents/integrations/connectors'),
+        LocalAPI.get('/documents/integrations/webhooks'),
+        LocalAPI.get('/documents/integrations/stats')
+      ]);
       
-      const webhooksResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/webhooks`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      const statsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/stats`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (connectorsResponse.ok && webhooksResponse.ok && statsResponse.ok) {
-        const connectorsData = await connectorsResponse.json();
-        const webhooksData = await webhooksResponse.json();
-        const statsData = await statsResponse.json();
-        
-        setConnectors(connectorsData);
-        setWebhooks(webhooksData);
-        setStats(statsData);
-      } else {
-        // No fallback - use empty arrays
-        setConnectors([]);
-        setWebhooks([]);
-        setStats({ totalSyncs: 0, successfulSyncs: 0, documentsProcessed: 0 });
-      }
+      setConnectors(connectorsResponse.data || []);
+      setWebhooks(webhooksResponse.data || []);
+      setStats(statsResponse.data || { totalSyncs: 0, successfulSyncs: 0, documentsProcessed: 0 });
     } catch (error) {
       console.error('Failed to load integration data:', error);
-      // No fallback - use empty arrays
+      // Use empty data when API fails
       setConnectors([]);
       setWebhooks([]);
       setStats({ totalSyncs: 0, successfulSyncs: 0, documentsProcessed: 0 });
@@ -144,22 +120,11 @@ const IntegrationManager: React.FC = () => {
   const handleTestConnector = async (connectorId: string) => {
     setTestingConnector(connectorId);
     try {
-      // Try real API first
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${connectorId}/test`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        alert(result.success ? 'Test réussi!' : `Test échoué: ${result.message}`);
-      } else {
-        throw new (Error as any)(`HTTP ${response.status}`);
-      }
-    } catch (error) {
-      alert('Erreur lors du test');
+      const result = await LocalAPI.post(`/documents/integrations/connectors/${connectorId}/test`);
+      alert(result.data.success ? 'Test réussi!' : `Test échoué: ${result.data.message}`);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || error.message || 'Erreur lors du test';
+      alert(`Test échoué: ${errorMsg}`);
     } finally {
       setTestingConnector(null);
     }
@@ -168,23 +133,12 @@ const IntegrationManager: React.FC = () => {
   const handleSyncConnector = async (connectorId: string) => {
     setSyncingConnector(connectorId);
     try {
-      // Try real API first
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${connectorId}/sync`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        alert(`Synchronisation terminée: ${result.documentsProcessed} documents traités`);
-        await loadData();
-      } else {
-        throw new (Error as any)(`HTTP ${response.status}`);
-      }
-    } catch (error) {
-      alert('Erreur lors de la synchronisation');
+      const result = await LocalAPI.post(`/documents/integrations/connectors/${connectorId}/sync`);
+      alert(`Synchronisation terminée: ${result.data.documentsProcessed || 0} documents traités`);
+      await loadData();
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || error.message || 'Erreur lors de la synchronisation';
+      alert(`Synchronisation échouée: ${errorMsg}`);
     } finally {
       setSyncingConnector(null);
     }
@@ -198,36 +152,14 @@ const IntegrationManager: React.FC = () => {
       
       if (isEditing && existingConnector) {
         // Update existing connector
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${existingConnector.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify(newConnector)
-        });
+        const response = await LocalAPI.patch(`/documents/integrations/connectors/${existingConnector.id}`, newConnector);
         
-        if (response.ok) {
-          alert('Connecteur mis à jour avec succès!');
-        } else {
-          throw new (Error as any)('Failed to update connector');
-        }
+        alert('Connecteur mis à jour avec succès!');
       } else {
         // Create new connector
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify(newConnector)
-        });
+        const response = await LocalAPI.post('/documents/integrations/connectors', newConnector);
         
-        if (response.ok) {
-          alert('Connecteur créé avec succès!');
-        } else {
-          throw new (Error as any)('Failed to create connector');
-        }
+        alert('Connecteur créé avec succès!');
       }
       
       setConnectorDialogOpen(false);
@@ -241,24 +173,11 @@ const IntegrationManager: React.FC = () => {
 
   const handleCreateWebhook = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/webhooks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(newWebhook)
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        alert('Webhook créé avec succès!');
-        setWebhookDialogOpen(false);
-        setNewWebhook({ url: '', events: [], secret: '', active: true });
-        await loadData();
-      } else {
-        throw new (Error as any)('Failed to create webhook');
-      }
+      const result = await LocalAPI.post('/documents/integrations/webhooks', newWebhook);
+      alert('Webhook créé avec succès!');
+      setWebhookDialogOpen(false);
+      setNewWebhook({ url: '', events: [], secret: '', active: true });
+      await loadData();
     } catch (error) {
       console.error('Failed to create webhook:', error);
       alert('Erreur lors de la création du webhook');
@@ -294,15 +213,10 @@ const IntegrationManager: React.FC = () => {
 
   const handleTestApi = async (endpoint: string) => {
     try {
-      const response = await fetch(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      const result = await response.json();
-      const status = response.ok ? 'Succès' : 'Erreur';
-      const statusCode = response.status;
+      const response = await LocalAPI.get(endpoint.replace(process.env.REACT_APP_API_URL || 'http://localhost:5000/api', ''));
+      const result = response.data;
+      const status = 'Succès';
+      const statusCode = response.status || 200;
       
       alert(`Test API ${endpoint}:\n\nStatut: ${status} (${statusCode})\nRéponse: ${JSON.stringify(result, null, 2).substring(0, 200)}...`);
     } catch (error) {
@@ -340,21 +254,9 @@ const IntegrationManager: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce connecteur ?')) {
       try {
         // Call backend DELETE endpoint
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/connectors/${connectorId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          alert('Connecteur supprimé avec succès!');
-          // Reload data to reflect changes from database
-          await loadData();
-        } else {
-          throw new (Error as any)('Failed to delete connector from server');
-        }
+        const result = await LocalAPI.delete(`/documents/integrations/connectors/${connectorId}`);
+        alert('Connecteur supprimé avec succès!');
+        await loadData();
       } catch (error) {
         console.error('Failed to delete connector:', error);
         alert('Erreur lors de la suppression du connecteur');
@@ -366,21 +268,9 @@ const IntegrationManager: React.FC = () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce webhook ?')) {
       try {
         // Call backend DELETE endpoint
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/integrations/webhooks/${webhookId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          alert('Webhook supprimé avec succès!');
-          // Reload data to reflect changes from database
-          await loadData();
-        } else {
-          throw new (Error as any)('Failed to delete webhook from server');
-        }
+        const result = await LocalAPI.delete(`/documents/integrations/webhooks/${webhookId}`);
+        alert('Webhook supprimé avec succès!');
+        await loadData();
       } catch (error) {
         console.error('Failed to delete webhook:', error);
         alert('Erreur lors de la suppression du webhook');

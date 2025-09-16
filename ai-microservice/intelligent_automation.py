@@ -176,123 +176,302 @@ class SmartRoutingEngine:
             logger.error(f"Routing model training failed: {e}")
             raise
     
-    def suggest_optimal_assignment(self, task: Dict, available_teams: List[str] = None) -> Dict[str, Any]:
-        """Suggest optimal task assignment"""
+    async def suggest_optimal_assignment(self, bordereau_data: Dict, db_manager, available_agents: List[str] = None) -> Dict[str, Any]:
+        """Suggest optimal bordereau assignment using real ARS data"""
         try:
-            if self.routing_model is None:
-                return {'error': 'Routing model not trained'}
+            # Get real agent performance data
+            agents = await db_manager.get_agent_performance_metrics()
+            if not agents:
+                return {
+                    'bordereau_id': bordereau_data.get('id', 'unknown'),
+                    'recommended_assignment': None,
+                    'message': 'Aucun gestionnaire trouvé dans la base de données',
+                    'assignment_reasoning': ['Aucun agent GESTIONNAIRE ou CHEF_EQUIPE trouvé dans le système']
+                }
             
-            # Prepare task features
-            task_features = [
-                task.get('priority', 1),
-                task.get('complexity', 1),
-                task.get('estimated_time', 1),
-                task.get('client_importance', 1),
-                task.get('sla_urgency', 1),
-                task.get('document_count', 1),
-                task.get('requires_expertise', 0),
-                task.get('is_recurring', 0)
-            ]
+            # Filter only GESTIONNAIRE and CHEF_EQUIPE roles
+            agents = [a for a in agents if a.get('role') in ['GESTIONNAIRE', 'CHEF_EQUIPE']]
             
-            # Add temporal features
-            now = datetime.now()
-            task_features.extend([now.hour, now.weekday(), now.day])
+            if not agents:
+                return {
+                    'bordereau_id': bordereau_data.get('id', 'unknown'),
+                    'recommended_assignment': None,
+                    'message': 'Aucun gestionnaire disponible',
+                    'assignment_reasoning': ['Aucun agent GESTIONNAIRE ou CHEF_EQUIPE trouvé dans le système']
+                }
             
-            # Scale features
-            X = self.scaler.transform([task_features])
-            
-            # Get predictions and probabilities
-            predictions = self.routing_model.predict(X)
-            probabilities = self.routing_model.predict_proba(X)[0]
-            
-            # Get all possible assignments with scores
-            all_assignees = self.label_encoder.classes_
+            # Calculate assignment scores based on real ARS factors
             assignment_scores = []
             
-            for i, assignee in enumerate(all_assignees):
-                if available_teams and assignee not in available_teams:
+            for agent in agents:
+                if available_agents and agent['username'] not in available_agents:
                     continue
                 
-                base_score = probabilities[i]
+                # Real ARS scoring factors
+                rendement_score = self._calculate_rendement_score(agent)
+                disponibilite_score = self._calculate_disponibilite_score(agent)
+                complexite_match = self._calculate_complexite_match(agent, bordereau_data)
+                sla_urgency = self._calculate_sla_urgency(bordereau_data)
                 
-                # Adjust score based on team profile
-                if assignee in self.team_profiles:
-                    profile = self.team_profiles[assignee]
-                    
-                    # Specialization bonus
-                    task_type = task.get('type', 'general')
-                    specialization_bonus = profile['specializations'].get(task_type, 0) * 0.2
-                    
-                    # Workload penalty
-                    workload_penalty = min(profile['workload_capacity'] / 10, 0.3)
-                    
-                    # Efficiency bonus
-                    efficiency_bonus = profile['efficiency_score'] * 0.1
-                    
-                    adjusted_score = base_score + specialization_bonus + efficiency_bonus - workload_penalty
-                else:
-                    adjusted_score = base_score
+                # Combined ARS assignment score
+                total_score = (
+                    rendement_score * 0.3 +
+                    disponibilite_score * 0.3 +
+                    complexite_match * 0.25 +
+                    sla_urgency * 0.15
+                )
+                
+                # Predict completion time
+                estimated_hours = self._estimate_completion_time(agent, bordereau_data)
                 
                 assignment_scores.append({
-                    'assignee': assignee,
-                    'base_score': float(base_score),
-                    'adjusted_score': float(max(0, adjusted_score)),
-                    'confidence': 'high' if adjusted_score > 0.7 else 'medium' if adjusted_score > 0.4 else 'low'
+                    'agent_id': agent['id'],
+                    'agent_name': f"{agent.get('firstName', 'Agent')} {agent.get('lastName', 'ARS')}",
+                    'username': agent.get('username', 'agent@ars.com'),
+                    'role': agent.get('role', 'GESTIONNAIRE'),
+                    'total_score': float(total_score),
+                    'rendement_score': float(rendement_score),
+                    'disponibilite_score': float(disponibilite_score),
+                    'complexite_match': float(complexite_match),
+                    'estimated_completion_hours': float(estimated_hours),
+                    'confidence': 'high' if total_score > 0.8 else 'medium' if total_score > 0.6 else 'low',
+                    'reason_codes': self._generate_ars_reason_codes(agent, bordereau_data, total_score)
                 })
             
-            # Sort by adjusted score
-            assignment_scores.sort(key=lambda x: x['adjusted_score'], reverse=True)
+            # Sort by total score
+            assignment_scores.sort(key=lambda x: x['total_score'], reverse=True)
             
-            # Get top recommendation
             top_recommendation = assignment_scores[0] if assignment_scores else None
             
             return {
-                'recommended_assignee': top_recommendation['assignee'] if top_recommendation else None,
-                'confidence': top_recommendation['confidence'] if top_recommendation else 'low',
-                'score': top_recommendation['adjusted_score'] if top_recommendation else 0,
-                'all_options': assignment_scores[:5],  # Top 5 options
-                'reasoning': self._generate_assignment_reasoning(task, top_recommendation)
+                'bordereau_id': bordereau_data.get('id'),
+                'recommended_assignment': top_recommendation,
+                'all_options': assignment_scores[:3],
+                'assignment_reasoning': self._generate_ars_assignment_reasoning(bordereau_data, top_recommendation)
             }
             
         except Exception as e:
-            logger.error(f"Assignment suggestion failed: {e}")
-            raise
+            logger.error(f"ARS assignment suggestion failed: {e}")
+            return {
+                'bordereau_id': bordereau_data.get('id', 'unknown'),
+                'recommended_assignment': None,
+                'message': f'Erreur lors de l\'assignation: {str(e)}',
+                'assignment_reasoning': ['Erreur système - Impossible de générer une assignation']
+            }
     
-    def _generate_assignment_reasoning(self, task: Dict, recommendation: Dict) -> List[str]:
-        """Generate reasoning for assignment recommendation"""
+    def _calculate_rendement_score(self, agent: Dict) -> float:
+        """Calculate agent throughput score based on real performance"""
+        total_bordereaux = agent.get('total_bordereaux', 0)
+        avg_hours = agent.get('avg_hours', 24)  # Default 24h if no data
+        
+        if total_bordereaux == 0:
+            return 0.5  # New agent baseline
+        
+        # ARS business logic: Good gestionnaire processes 3-5 bordereaux/week
+        weekly_throughput = total_bordereaux / max(1, avg_hours / 168)  # 168 hours per week
+        
+        # Score based on ARS standards
+        if weekly_throughput >= 5:
+            return 1.0  # Excellent
+        elif weekly_throughput >= 3:
+            return 0.8  # Good
+        elif weekly_throughput >= 2:
+            return 0.6  # Average
+        else:
+            return 0.4  # Below average
+    
+    def _calculate_disponibilite_score(self, agent: Dict) -> float:
+        """Calculate agent availability score"""
+        last_activity = agent.get('last_activity')
+        if not last_activity:
+            return 0.5
+        
+        # Recent activity = higher availability
+        hours_since_activity = (datetime.now() - last_activity).total_seconds() / 3600
+        if hours_since_activity < 2:
+            return 1.0
+        elif hours_since_activity < 8:
+            return 0.8
+        elif hours_since_activity < 24:
+            return 0.6
+        else:
+            return 0.3
+    
+    def _calculate_complexite_match(self, agent: Dict, bordereau: Dict) -> float:
+        """Match agent capability with bordereau complexity"""
+        agent_role = agent.get('role', 'GESTIONNAIRE')
+        bordereau_bs_count = bordereau.get('nombreBS', 1)
+        agent_experience = agent.get('total_bordereaux', 0)
+        
+        # Role-based complexity handling
+        if agent_role == 'CHEF_EQUIPE':
+            base_score = 0.95  # Chef can handle anything
+        elif agent_experience > 30:
+            base_score = 0.85  # Experienced gestionnaire
+        elif agent_experience > 10:
+            base_score = 0.75  # Average gestionnaire
+        else:
+            base_score = 0.65  # New gestionnaire
+        
+        # ARS complexity rules
+        if bordereau_bs_count > 30:  # Very complex
+            if agent_role == 'CHEF_EQUIPE' or agent_experience > 25:
+                complexity_factor = 1.0
+            else:
+                complexity_factor = 0.6  # Too complex for junior
+        elif bordereau_bs_count > 15:  # Medium complexity
+            complexity_factor = 0.9
+        else:  # Simple bordereau
+            complexity_factor = 1.0
+        
+        return base_score * complexity_factor
+    
+    def _calculate_sla_urgency(self, bordereau: Dict) -> float:
+        """Calculate SLA urgency factor"""
+        days_remaining = bordereau.get('days_remaining', 30)
+        sla_days = bordereau.get('delaiReglement', 30)
+        
+        if days_remaining <= 0:
+            return 1.0  # Critical
+        elif days_remaining <= sla_days * 0.2:
+            return 0.9  # High urgency
+        elif days_remaining <= sla_days * 0.5:
+            return 0.7  # Medium urgency
+        else:
+            return 0.5  # Normal
+    
+    def _estimate_completion_time(self, agent: Dict, bordereau: Dict) -> float:
+        """Estimate completion time in hours"""
+        avg_hours = agent.get('avg_hours', 24)
+        bs_count = bordereau.get('nombreBS', 1)
+        
+        # Base time per BS
+        base_time_per_bs = avg_hours / max(agent.get('total_bordereaux', 1), 1)
+        
+        # Adjust for current bordereau size
+        estimated_hours = base_time_per_bs * bs_count
+        
+        return max(1.0, min(48.0, estimated_hours))  # Between 1-48 hours
+    
+    async def _calculate_team_capacity_gap(self, db_manager, bordereau: Dict) -> Dict:
+        """Calculate if team has capacity for new work"""
+        try:
+            # Get current workload
+            workload = await db_manager.get_live_workload()
+            active_agents = len([w for w in workload if w.get('_count', {}).get('id', 0) > 0])
+            
+            # Estimate required agents for current + new work
+            total_work_hours = sum([w.get('_count', {}).get('id', 0) * 8 for w in workload])  # Assume 8h per bordereau
+            new_work_hours = bordereau.get('nombreBS', 1) * 8
+            
+            total_required_hours = total_work_hours + new_work_hours
+            required_agents = max(1, int(total_required_hours / (8 * 5)))  # 8h/day, 5 days/week
+            
+            return {
+                'current_active_agents': active_agents,
+                'required_agents': required_agents,
+                'capacity_gap': max(0, required_agents - active_agents),
+                'utilization_rate': min(1.0, total_required_hours / (active_agents * 40)) if active_agents > 0 else 1.0
+            }
+        except Exception as e:
+            logger.error(f"Capacity gap calculation failed: {e}")
+            return {'error': 'Could not calculate capacity gap'}
+    
+    def _generate_ars_reason_codes(self, agent: Dict, bordereau: Dict, score: float) -> List[str]:
+        """Generate ARS-specific reason codes"""
+        reasons = []
+        
+        # Performance-based reasons
+        if score > 0.8:
+            reasons.append('EXCELLENT_MATCH')
+        elif score > 0.6:
+            reasons.append('GOOD_MATCH')
+        
+        # Experience-based reasons
+        experience = agent.get('total_bordereaux', 0)
+        if experience > 30:
+            reasons.append('EXPERIENCED_GESTIONNAIRE')
+        elif experience > 10:
+            reasons.append('COMPETENT_GESTIONNAIRE')
+        
+        # Role-based reasons
+        if agent.get('role') == 'CHEF_EQUIPE':
+            reasons.append('CHEF_EQUIPE_EXPERTISE')
+            if bordereau.get('nombreBS', 1) > 20:
+                reasons.append('COMPLEX_CASE_SPECIALIST')
+        
+        # SLA compliance
+        sla_rate = agent.get('sla_compliant', 0) / max(agent.get('total_bordereaux', 1), 1)
+        if sla_rate > 0.9:
+            reasons.append('HIGH_SLA_COMPLIANCE')
+        
+        # Availability
+        if agent.get('last_activity'):
+            reasons.append('RECENTLY_ACTIVE')
+        
+        # Quality
+        reject_rate = agent.get('rejected_count', 0) / max(agent.get('total_bordereaux', 1), 1)
+        if reject_rate < 0.1:
+            reasons.append('LOW_REJECTION_RATE')
+        
+        return reasons or ['AVAILABLE_GESTIONNAIRE']
+    
+    def _generate_ars_assignment_reasoning(self, bordereau: Dict, recommendation: Dict) -> List[str]:
+        """Generate human-readable reasoning for ARS assignment"""
         if not recommendation:
-            return ["No suitable assignee found"]
+            return ['Aucun gestionnaire disponible pour cette affectation']
         
         reasoning = []
-        assignee = recommendation['assignee']
+        agent_name = recommendation.get('agent_name', 'Agent')
+        role = recommendation.get('role', 'GESTIONNAIRE')
+        confidence = recommendation.get('confidence', 'medium')
         
-        # Check team profile
-        if assignee in self.team_profiles:
-            profile = self.team_profiles[assignee]
-            
-            # Specialization reasoning
-            task_type = task.get('type', 'general')
-            if task_type in profile['specializations'] and profile['specializations'][task_type] > 0.3:
-                reasoning.append(f"High specialization in {task_type} tasks ({profile['specializations'][task_type]:.1%})")
-            
-            # Efficiency reasoning
-            if profile['efficiency_score'] > 0.7:
-                reasoning.append(f"High efficiency score ({profile['efficiency_score']:.2f})")
-            
-            # Workload reasoning
-            if profile['workload_capacity'] < 5:
-                reasoning.append("Low current workload")
-            elif profile['workload_capacity'] > 8:
-                reasoning.append("High current workload - consider redistribution")
+        # Main recommendation
+        if confidence == 'high':
+            reasoning.append(f"✅ {agent_name} ({role}) - Assignation optimale")
+        else:
+            reasoning.append(f"✅ {agent_name} ({role}) - Assignation recommandée")
         
-        # Task-specific reasoning
-        if task.get('priority', 1) > 3:
-            reasoning.append("High priority task requires experienced handler")
+        # Reason codes explanation
+        reason_codes = recommendation.get('reason_codes', [])
         
-        if task.get('sla_urgency', 1) > 3:
-            reasoning.append("SLA urgency requires fast processing")
+        if 'CHEF_EQUIPE_EXPERTISE' in reason_codes:
+            reasoning.append('🎯 Chef d\'équipe - Expertise pour cas complexes')
+        elif 'EXPERIENCED_GESTIONNAIRE' in reason_codes:
+            reasoning.append('🎯 Gestionnaire expérimenté - Plus de 30 dossiers traités')
+        elif 'COMPETENT_GESTIONNAIRE' in reason_codes:
+            reasoning.append('🎯 Gestionnaire compétent - Expérience confirmée')
         
-        return reasoning if reasoning else ["Best match based on historical performance"]
+        if 'HIGH_SLA_COMPLIANCE' in reason_codes:
+            reasoning.append('⏱️ Excellent respect des délais SLA')
+        
+        if 'LOW_REJECTION_RATE' in reason_codes:
+            reasoning.append('✅ Faible taux de rejet - Qualité de traitement')
+        
+        if 'COMPLEX_CASE_SPECIALIST' in reason_codes:
+            reasoning.append('🔧 Spécialiste des dossiers complexes')
+        
+        # Time estimation
+        eta_hours = recommendation.get('estimated_completion_hours', 24)
+        if eta_hours <= 8:
+            reasoning.append(f'⚡ Traitement rapide estimé: {eta_hours:.0f}h')
+        elif eta_hours <= 24:
+            reasoning.append(f'📅 Traitement standard estimé: {eta_hours:.0f}h')
+        else:
+            reasoning.append(f'📅 Traitement estimé: {eta_hours:.0f}h')
+        
+        # Bordereau complexity note
+        bs_count = bordereau.get('nombreBS', 1)
+        if bs_count > 20:
+            reasoning.append(f'📋 Dossier complexe: {bs_count} bulletins de soins')
+        elif bs_count > 10:
+            reasoning.append(f'📋 Dossier moyen: {bs_count} bulletins de soins')
+        else:
+            reasoning.append(f'📋 Dossier simple: {bs_count} bulletins de soins')
+        
+        return reasoning
+    
+
 
 class AutomatedDecisionEngine:
     def __init__(self):

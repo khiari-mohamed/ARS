@@ -27,19 +27,10 @@ const ContractClaimsTab: React.FC<Props> = ({ contractId }) => {
     setLoading(true);
     setError(null);
     try {
-      // Mock data - replace with actual API call
-      const mockData: Claim[] = [
-        {
-          id: '1',
-          type: 'Délai de traitement',
-          severity: 'medium',
-          status: 'open',
-          description: 'Retard dans le traitement du dossier',
-          createdAt: '2025-01-10',
-          dueDate: '2025-01-20'
-        }
-      ];
-      setClaims(mockData);
+      const response = await fetch(`/api/contracts/${contractId}/claims`);
+      if (!response.ok) throw new Error('Failed to fetch claims');
+      const data = await response.json();
+      setClaims(data);
     } catch (e: any) {
       setError(e?.message || 'Erreur lors du chargement');
     } finally {

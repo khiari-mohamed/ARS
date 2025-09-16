@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Bordereau } from '../types/bordereaux';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { markBordereauAsProcessed, returnBordereau } from '../services/bordereauxService';
 

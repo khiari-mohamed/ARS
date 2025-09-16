@@ -18,10 +18,11 @@ export const useWorkflowConfig = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await LocalAPI.get('/workflow/team-configs');
+      const response = await LocalAPI.get('/super-admin/team-configs');
       setConfigs(response.data);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch team configurations');
+      setConfigs([]);
     } finally {
       setLoading(false);
     }
@@ -29,7 +30,7 @@ export const useWorkflowConfig = () => {
 
   const updateConfig = async (teamId: string, config: Partial<TeamConfig>) => {
     try {
-      await LocalAPI.put(`/workflow/team-configs/${teamId}`, config);
+      await LocalAPI.put(`/super-admin/team-configs/${teamId}`, config);
       await fetchConfigs();
       return true;
     } catch (err: any) {
@@ -40,7 +41,7 @@ export const useWorkflowConfig = () => {
 
   const getTeamStatus = async (teamId: string) => {
     try {
-      const response = await LocalAPI.get(`/workflow/team-status/${teamId}`);
+      const response = await LocalAPI.get(`/super-admin/team-status/${teamId}`);
       return response.data;
     } catch (err: any) {
       setError(err.message || 'Failed to get team status');

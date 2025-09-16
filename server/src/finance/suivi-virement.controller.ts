@@ -119,4 +119,47 @@ export class SuiviVirementController {
       res.send(exportData);
     }
   }
+
+  @Post('export-report')
+  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async exportFinancialReport(
+    @Body() body: {
+      format: string;
+      filters: any;
+      data: any;
+      cashFlowProjection: any;
+      financialKPIs: any;
+    },
+    @Res() res: Response
+  ) {
+    console.log('📊 Financial Report Export requested:', body.format);
+    
+    try {
+      const reportData = await this.suiviService.generateFinancialReport(body);
+      
+      const filename = `rapport_financier_${new Date().toISOString().split('T')[0]}`;
+      
+      if (body.format === 'pdf') {
+        res.set({
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${filename}.pdf"`
+        });
+      } else if (body.format === 'xlsx') {
+        res.set({
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="${filename}.xlsx"`
+        });
+      } else {
+        res.set({
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="${filename}.csv"`
+        });
+      }
+      
+      res.send(reportData);
+    } catch (error) {
+      console.error('Export failed:', error);
+      res.status(500).json({ error: 'Export failed: ' + error.message });
+    }
+  }
 }

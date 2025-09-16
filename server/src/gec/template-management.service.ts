@@ -551,6 +551,55 @@ export class TemplateManagementService {
     }
   }
 
+  async renderTemplateWithAI(templateId: string, context: any): Promise<{ 
+    subject: string; 
+    body: string; 
+    confidence: number; 
+    usedVariables: Record<string, string> 
+  }> {
+    try {
+      const template = await this.getTemplate(templateId);
+      if (!template) {
+        throw new Error('Template not found');
+      }
+
+      // This would integrate with the AI auto-fill service
+      // For now, return enhanced template rendering
+      const variables = this.extractContextVariables(context);
+      
+      let renderedSubject = template.subject;
+      let renderedBody = template.body;
+
+      Object.entries(variables).forEach(([key, value]) => {
+        const regex = new RegExp(`{{${key}}}`, 'g');
+        renderedSubject = renderedSubject.replace(regex, String(value));
+        renderedBody = renderedBody.replace(regex, String(value));
+      });
+
+      return {
+        subject: renderedSubject,
+        body: renderedBody,
+        confidence: 0.9,
+        usedVariables: variables
+      };
+    } catch (error) {
+      this.logger.error('Failed to render template with AI:', error);
+      throw error;
+    }
+  }
+
+  private extractContextVariables(context: any): Record<string, string> {
+    const variables: Record<string, string> = {};
+    
+    if (context.clientName) variables.clientName = context.clientName;
+    if (context.bordereauRef) variables.bordereauRef = context.bordereauRef;
+    if (context.reference) variables.reference = context.reference;
+    variables.date = new Date().toLocaleDateString('fr-FR');
+    variables.delaiTraitement = '5';
+    
+    return variables;
+  }
+
   private renderHandlebarsLoops(body: string, variables: { [key: string]: any }): string {
     // Simple implementation for {{#each array}} loops
     const eachRegex = /{{#each (\w+)}}(.*?){{\/each}}/gs;

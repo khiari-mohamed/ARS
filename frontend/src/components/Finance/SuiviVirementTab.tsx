@@ -48,10 +48,28 @@ const SuiviVirementTab: React.FC = () => {
   const loadSuiviVirements = async () => {
     setLoading(true);
     try {
-      const data = await financeService.getSuiviVirements(filters);
-      setSuiviVirements(data);
+      // Use the virement data from database
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/dashboard`);
+      const dashboardData = await response.json();
+      
+      // Transform the recent orders to suivi format
+      const transformedData = dashboardData.recentOrdres.map((ordre: any, index: number) => ({
+        id: ordre.id,
+        numeroBordereau: ordre.reference || `BR-${index + 1}`,
+        societe: ordre.bordereau?.client?.name || 'ARS TUNISIE',
+        dateInjection: ordre.dateCreation || ordre.createdAt,
+        utilisateurSante: ordre.utilisateurSante || 'demo-user',
+        dateTraitement: ordre.dateTraitement,
+        utilisateurFinance: ordre.utilisateurFinance,
+        etatVirement: ordre.etatVirement || 'EXECUTE',
+        dateEtatFinal: ordre.dateEtatFinal,
+        commentaire: ordre.commentaire
+      }));
+      
+      setSuiviVirements(transformedData);
     } catch (error) {
       console.error('Failed to load suivi virements:', error);
+      setSuiviVirements([]);
     } finally {
       setLoading(false);
     }
@@ -67,8 +85,8 @@ const SuiviVirementTab: React.FC = () => {
 
   const handleViewDetails = async (suivi: SuiviVirement) => {
     try {
-      const details = await financeService.getSuiviVirementById(suivi.id);
-      setSelectedSuivi(details);
+      // Use the existing suivi data for details
+      setSelectedSuivi(suivi);
       setDetailsOpen(true);
     } catch (error) {
       console.error('Failed to load suivi details:', error);
@@ -88,12 +106,25 @@ const SuiviVirementTab: React.FC = () => {
     if (!selectedSuivi) return;
 
     try {
-      await financeService.updateEtatVirement(selectedSuivi.id, {
-        etatVirement: updateData.etatVirement,
-        commentaire: updateData.commentaire
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${selectedSuivi.id}/etat`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          etatVirement: updateData.etatVirement,
+          commentaire: updateData.commentaire,
+          utilisateurFinance: 'demo-user'
+        })
       });
-      setUpdateOpen(false);
-      loadSuiviVirements();
+      
+      if (response.ok) {
+        setUpdateOpen(false);
+        loadSuiviVirements();
+      } else {
+        console.error('Failed to update:', await response.text());
+      }
     } catch (error) {
       console.error('Failed to update etat virement:', error);
     }

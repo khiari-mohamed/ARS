@@ -79,7 +79,7 @@ export const GestionnaireCorbeille: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CorbeilleItem | null>(null);
-  const [actionType, setActionType] = useState<'treat' | 'hold' | 'reject' | 'return'>('treat');
+  const [actionType, setActionType] = useState<'treat' | 'hold' | 'reject'>('treat');
   const [comment, setComment] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -92,20 +92,40 @@ export const GestionnaireCorbeille: React.FC = () => {
   );
 
   const updateMutation = useMutation(updateReclamationStatus, {
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries(['gestionnaire-corbeille']);
       setActionModalOpen(false);
       setComment('');
       setSelectedItem(null);
+      // Show success message
+      if (data?.message) {
+        alert(data.message);
+      } else {
+        alert('Réclamation mise à jour avec succès');
+      }
+    },
+    onError: (error: any) => {
+      console.error('Update error:', error);
+      alert('Erreur lors de la mise à jour: ' + (error.response?.data?.message || error.message));
     }
   });
 
   const returnMutation = useMutation(returnToChef, {
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries(['gestionnaire-corbeille']);
       setActionModalOpen(false);
       setComment('');
       setSelectedItem(null);
+      // Show success message
+      if (data?.message) {
+        alert(data.message);
+      } else {
+        alert('Réclamation retournée au chef avec succès');
+      }
+    },
+    onError: (error: any) => {
+      console.error('Return error:', error);
+      alert('Erreur lors du retour: ' + (error.response?.data?.message || error.message));
     }
   });
 
@@ -124,24 +144,17 @@ export const GestionnaireCorbeille: React.FC = () => {
   const handleSubmitAction = () => {
     if (!selectedItem) return;
 
-    if (actionType === 'return') {
-      returnMutation.mutate({
-        id: selectedItem.id,
-        reason: comment
-      });
-    } else {
-      const statusMap = {
-        treat: 'RESOLVED',
-        hold: 'PENDING_CLIENT_REPLY',
-        reject: 'CLOSED'
-      };
+    const statusMap = {
+      treat: 'RESOLVED',
+      hold: 'PENDING_CLIENT_REPLY',
+      reject: 'CLOSED'
+    };
 
-      updateMutation.mutate({
-        id: selectedItem.id,
-        status: statusMap[actionType],
-        description: comment
-      });
-    }
+    updateMutation.mutate({
+      id: selectedItem.id,
+      status: statusMap[actionType],
+      description: comment
+    });
   };
 
   const getSLAColor = (slaStatus: string) => {
@@ -271,7 +284,10 @@ export const GestionnaireCorbeille: React.FC = () => {
                     <Button
                       size="small"
                       variant="outlined"
-                      onClick={() => window.open(`/reclamations/${item.id}`, '_blank')}
+                      onClick={() => {
+                        // Navigate to reclamation detail page within the app
+                        window.location.href = `/reclamations/detail/${item.id}`;
+                      }}
                     >
                       Voir
                     </Button>
@@ -299,7 +315,7 @@ export const GestionnaireCorbeille: React.FC = () => {
       case 'treat': return 'Traiter la réclamation';
       case 'hold': return 'Mettre en attente';
       case 'reject': return 'Rejeter la réclamation';
-      case 'return': return 'Retourner au chef';
+
       default: return 'Action';
     }
   };
@@ -309,7 +325,7 @@ export const GestionnaireCorbeille: React.FC = () => {
       case 'treat': return 'success';
       case 'hold': return 'warning';
       case 'reject': return 'error';
-      case 'return': return 'info';
+
       default: return 'primary';
     }
   };
@@ -368,10 +384,7 @@ export const GestionnaireCorbeille: React.FC = () => {
           <Block sx={{ mr: 1 }} color="error" />
           Rejeter
         </MenuItem>
-        <MenuItem onClick={() => handleAction(selectedItem!, 'return')}>
-          <Reply sx={{ mr: 1 }} color="info" />
-          Retourner au chef
-        </MenuItem>
+
       </Menu>
 
       {/* Action Modal */}
@@ -381,7 +394,7 @@ export const GestionnaireCorbeille: React.FC = () => {
             {actionType === 'treat' && <CheckCircle color="success" />}
             {actionType === 'hold' && <Pause color="warning" />}
             {actionType === 'reject' && <Block color="error" />}
-            {actionType === 'return' && <Reply color="info" />}
+
             {getActionTitle()}
           </Box>
         </DialogTitle>
@@ -401,22 +414,16 @@ export const GestionnaireCorbeille: React.FC = () => {
             fullWidth
             multiline
             rows={4}
-            label={
-              actionType === 'return' 
-                ? 'Raison du retour (obligatoire)' 
-                : 'Commentaire (optionnel)'
-            }
+            label="Commentaire (optionnel)"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            required={actionType === 'return'}
+            required={false}
             placeholder={
               actionType === 'treat' 
                 ? 'Décrivez la solution apportée...'
                 : actionType === 'hold'
                 ? 'Raison de la mise en attente...'
-                : actionType === 'reject'
-                ? 'Raison du rejet...'
-                : 'Raison du retour...'
+                : 'Raison du rejet...'
             }
           />
         </DialogContent>
@@ -428,11 +435,7 @@ export const GestionnaireCorbeille: React.FC = () => {
             onClick={handleSubmitAction}
             variant="contained"
             color={getActionColor() as any}
-            disabled={
-              (actionType === 'return' && !comment.trim()) ||
-              updateMutation.isLoading ||
-              returnMutation.isLoading
-            }
+            disabled={updateMutation.isLoading}
             startIcon={<Send />}
           >
             {updateMutation.isLoading || returnMutation.isLoading 

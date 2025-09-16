@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Box, Paper, Tabs, Tab, useTheme, useMediaQuery, Typography
+  Box, Paper, Tabs, Tab, useTheme, useMediaQuery, Typography, Badge
 } from '@mui/material';
 import OVProcessingTab from './OVProcessingTab';
 import TrackingTab from './TrackingTab';
@@ -14,16 +14,48 @@ import FinancialReportingDashboard from './FinancialReportingDashboard';
 import FinanceMobileView from './FinanceMobileView';
 import FinanceTestPanel from './FinanceTestPanel';
 import FinanceAlertsTab from './FinanceAlertsTab';
+import FinanceDashboard from './FinanceDashboard';
+import FinanceModuleOverview from './FinanceModuleOverview';
+import VirementTable from './VirementTable';
+import VirementFilters from './VirementFilters';
+import VirementFormModal from './VirementFormModal';
+import VirementHistory from './VirementHistory';
+import VirementReconciliationPanel from './VirementReconciliationPanel';
+import VirementStatusTag from './VirementStatusTag';
+
 import { useAuth } from '../../contexts/AuthContext';
+import { financeService } from '../../services/financeService';
+
+// Mock useQuery for now since @tanstack/react-query might not be installed
+const useQuery = (key: any, fn: any, options?: any) => {
+  const [data, setData] = React.useState<any[]>([]);
+  React.useEffect(() => {
+    fn().then(setData).catch(() => setData([]));
+  }, []);
+  return { data };
+};
 
 const FinanceModule: React.FC = () => {
   const [tab, setTab] = useState(0);
+  const [selectedVirement, setSelectedVirement] = useState<string | null>(null);
+  const [showVirementModal, setShowVirementModal] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
 
+  // Get alerts count for badge
+  const { data: alerts } = useQuery(
+    ['finance-alerts'],
+    () => financeService.getSuiviNotifications(),
+    { refetchInterval: 60000 }
+  );
+
+  const alertsCount = Array.isArray(alerts) ? alerts.filter((a: any) => a.type === 'FINANCE_NOTIFICATION').length : 0;
+
   const tabLabels = [
-    'Ordre de Virement',
+    'Vue d\'Ensemble',
+    'Tableau de Bord',
+    'Ordre de Virement', 
     'Suivi & Statut',
     'Suivi Virement',
     'Donneurs d\'Ordre',
@@ -32,8 +64,23 @@ const FinanceModule: React.FC = () => {
     'Formats Bancaires',
     'Rapprochement Auto',
     'Rapports Financiers',
-    'Rapports'
+    'Rapports & Export'
   ];
+
+  const handleVirementSelect = (id: string) => {
+    setSelectedVirement(id);
+    setShowVirementModal(true);
+  };
+
+  const handleVirementEdit = (id: string) => {
+    setSelectedVirement(id);
+    setShowVirementModal(true);
+  };
+
+  const closeVirementModal = () => {
+    setSelectedVirement(null);
+    setShowVirementModal(false);
+  };
 
   return (
     <Box sx={{ p: 2, minHeight: '100vh', bgcolor: '#f5f5f5' }}>
@@ -61,16 +108,22 @@ const FinanceModule: React.FC = () => {
               {tabLabels[tab]}
             </Typography>
             <Box>
-              {tab === 0 && <OVProcessingTab onSwitchToTab={setTab} />}
-              {tab === 1 && <TrackingTab />}
-              {tab === 2 && <SuiviVirementTab />}
-              {tab === 3 && <DonneursTab />}
-              {tab === 4 && <AdherentsTab />}
-              {tab === 5 && <FinanceAlertsTab />}
-              {tab === 6 && <MultiBankFormatManager />}
-              {tab === 7 && <AutomatedReconciliation />}
-              {tab === 8 && <FinancialReportingDashboard />}
-              {tab === 9 && <ReportsTab />}
+              {tab === 0 && <FinanceModuleOverview />}
+              {tab === 1 && <FinanceDashboard />}
+              {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
+              {tab === 3 && <TrackingTab />}
+              {tab === 4 && <SuiviVirementTab />}
+              {tab === 5 && <DonneursTab />}
+              {tab === 6 && <AdherentsTab />}
+              {tab === 7 && (
+                <Badge badgeContent={alertsCount} color="error">
+                  <FinanceAlertsTab />
+                </Badge>
+              )}
+              {tab === 8 && <MultiBankFormatManager />}
+              {tab === 9 && <AutomatedReconciliation />}
+              {tab === 10 && <FinancialReportingDashboard />}
+              {tab === 11 && <ReportsTab />}
             </Box>
           </Paper>
         </>
@@ -87,23 +140,42 @@ const FinanceModule: React.FC = () => {
             scrollButtons="auto"
           >
             {tabLabels.map((label, index) => (
-              <Tab key={index} label={label} />
+              <Tab 
+                key={index} 
+                label={
+                  index === 7 && alertsCount > 0 ? (
+                    <Badge badgeContent={alertsCount} color="error">
+                      {label}
+                    </Badge>
+                  ) : label
+                }
+              />
             ))}
           </Tabs>
 
           <Box>
-            {tab === 0 && <OVProcessingTab onSwitchToTab={setTab} />}
-            {tab === 1 && <TrackingTab />}
-            {tab === 2 && <SuiviVirementTab />}
-            {tab === 3 && <DonneursTab />}
-            {tab === 4 && <AdherentsTab />}
-            {tab === 5 && <FinanceAlertsTab />}
-            {tab === 6 && <MultiBankFormatManager />}
-            {tab === 7 && <AutomatedReconciliation />}
-            {tab === 8 && <FinancialReportingDashboard />}
-            {tab === 9 && <ReportsTab />}
+            {tab === 0 && <FinanceModuleOverview />}
+            {tab === 1 && <FinanceDashboard />}
+            {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
+            {tab === 3 && <TrackingTab />}
+            {tab === 4 && <SuiviVirementTab />}
+            {tab === 5 && <DonneursTab />}
+            {tab === 6 && <AdherentsTab />}
+            {tab === 7 && <FinanceAlertsTab />}
+            {tab === 8 && <MultiBankFormatManager />}
+            {tab === 9 && <AutomatedReconciliation />}
+            {tab === 10 && <FinancialReportingDashboard />}
+            {tab === 11 && <ReportsTab />}
           </Box>
         </Paper>
+      )}
+
+      {/* Enhanced Virement Modal */}
+      {showVirementModal && selectedVirement && (
+        <VirementFormModal
+          virementId={selectedVirement}
+          onClose={closeVirementModal}
+        />
       )}
     </Box>
   );

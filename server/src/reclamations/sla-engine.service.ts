@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AICoreService } from './ai-core.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 export interface SLAConfig {
@@ -23,7 +24,10 @@ export interface SLAStatus {
 export class SLAEngineService {
   private readonly logger = new Logger(SLAEngineService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private aiCore: AICoreService
+  ) {}
 
   // Calculate SLA deadline for a reclamation
   async calculateSLADeadline(reclamationId: string): Promise<Date | null> {
@@ -129,11 +133,11 @@ export class SLAEngineService {
     }
   }
 
-  // Automated SLA monitoring (runs every hour)
+  // Automated SLA monitoring with AI-powered dynamic thresholds
   @Cron(CronExpression.EVERY_HOUR)
   async monitorSLAs() {
     try {
-      this.logger.log('Starting SLA monitoring...');
+      this.logger.log('Starting AI-powered SLA monitoring...');
       
       const openReclamations = await this.prisma.reclamation.findMany({
         where: {
@@ -145,6 +149,11 @@ export class SLAEngineService {
         }
       });
 
+      // Update dynamic thresholds based on recent data
+      const recentResolutionTimes = await this.getRecentResolutionTimes();
+      this.aiCore.updateDynamicThreshold('sla_resolution_time', recentResolutionTimes);
+      const dynamicThreshold = this.aiCore.getDynamicThreshold('sla_resolution_time');
+
       let alertsCreated = 0;
 
       for (const reclamation of openReclamations) {
@@ -152,20 +161,16 @@ export class SLAEngineService {
         
         if (!slaStatus) continue;
 
-        // Create alerts based on SLA status
-        if (slaStatus.status === 'OVERDUE') {
-          await this.createSLAAlert(reclamation, 'SLA_BREACH', 'critical');
-          alertsCreated++;
-        } else if (slaStatus.status === 'CRITICAL') {
-          await this.createSLAAlert(reclamation, 'SLA_CRITICAL', 'warning');
-          alertsCreated++;
-        } else if (slaStatus.status === 'AT_RISK') {
-          await this.createSLAAlert(reclamation, 'SLA_AT_RISK', 'info');
+        // AI-enhanced alert creation with dynamic thresholds
+        const shouldAlert = await this.shouldCreateAlert(reclamation, slaStatus, dynamicThreshold);
+        
+        if (shouldAlert.create) {
+          await this.createSLAAlert(reclamation, shouldAlert.type, shouldAlert.level);
           alertsCreated++;
         }
       }
 
-      this.logger.log(`SLA monitoring completed. Created ${alertsCreated} alerts.`);
+      this.logger.log(`AI-powered SLA monitoring completed. Created ${alertsCreated} alerts.`);
     } catch (error) {
       this.logger.error('SLA monitoring failed:', error);
     }
@@ -304,5 +309,41 @@ export class SLAEngineService {
     }
 
     return count;
+  }
+
+  private async getRecentResolutionTimes(): Promise<number[]> {
+    const resolvedClaims = await this.prisma.reclamation.findMany({
+      where: {
+        status: { in: ['RESOLVED', 'CLOSED'] },
+        updatedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      },
+      select: { createdAt: true, updatedAt: true },
+      take: 100
+    });
+
+    return resolvedClaims.map(claim => 
+      (claim.updatedAt.getTime() - claim.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+    );
+  }
+
+  private async shouldCreateAlert(reclamation: any, slaStatus: SLAStatus, dynamicThreshold: number): Promise<{ create: boolean; type: string; level: string }> {
+    // AI-enhanced decision making for alerts
+    if (slaStatus.status === 'OVERDUE') {
+      return { create: true, type: 'SLA_BREACH', level: 'critical' };
+    }
+    
+    if (slaStatus.status === 'CRITICAL') {
+      // Use dynamic threshold to determine if alert is needed
+      const timeElapsed = (Date.now() - new Date(reclamation.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (timeElapsed > dynamicThreshold * 0.8) {
+        return { create: true, type: 'SLA_CRITICAL', level: 'warning' };
+      }
+    }
+    
+    if (slaStatus.status === 'AT_RISK' && slaStatus.percentageUsed > 80) {
+      return { create: true, type: 'SLA_AT_RISK', level: 'info' };
+    }
+
+    return { create: false, type: '', level: '' };
   }
 }

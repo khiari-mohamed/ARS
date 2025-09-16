@@ -29,34 +29,35 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
       const kpiData = kpiResponse.data;
       const alertData = alertsResponse.data;
 
-      // Calculate KPIs
+      // Calculate KPIs from real data
       const totalBordereaux = kpiData.totalCount || 0;
       const processedCount = kpiData.processedCount || 0;
       const avgProcessingTime = kpiData.avgDelay || 0;
-      const slaCompliant = alertData.ok?.length || 0;
-      const slaAtRisk = alertData.warning?.length || 0;
-      const slaOverdue = alertData.critical?.length || 0;
+      const processingRate = totalBordereaux > 0 ? Math.round((processedCount / totalBordereaux) * 100) : 0;
 
       setKpis({
         totalBordereaux,
         processedCount,
         avgProcessingTime,
-        processingRate: totalBordereaux > 0 ? Math.round((processedCount / totalBordereaux) * 100) : 0
+        processingRate
       });
 
-      // Process volume trend data
+      // Process volume trend data from bsPerDay
       const volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
         date: new Date(day.createdAt).toLocaleDateString('fr-FR'),
         volume: day._count?.id || 0
       })) || [];
 
-      // Calculate SLA distribution
-      const totalSLA = slaCompliant + slaAtRisk + slaOverdue;
-      const slaDistribution = totalSLA > 0 ? [
+      // Calculate SLA distribution from alert data
+      const slaCompliant = alertData.ok?.length || 0;
+      const slaAtRisk = alertData.warning?.length || 0;
+      const slaOverdue = alertData.critical?.length || 0;
+      
+      const slaDistribution = [
         { name: 'À temps', value: slaCompliant, color: '#4caf50' },
         { name: 'À risque', value: slaAtRisk, color: '#ff9800' },
         { name: 'En retard', value: slaOverdue, color: '#f44336' }
-      ] : [];
+      ];
 
       setData({
         volumeTrend,
@@ -64,16 +65,7 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('Failed to load overview data:', error);
-      setData({
-        volumeTrend: [],
-        slaDistribution: []
-      });
-      setKpis({
-        totalBordereaux: 0,
-        processedCount: 0,
-        avgProcessingTime: 0,
-        processingRate: 0
-      });
+      throw error;
     } finally {
       setLoading(false);
     }

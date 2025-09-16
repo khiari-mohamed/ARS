@@ -1,17 +1,21 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
 import { AutoNotificationService } from './auto-notification.service';
 import { WorkloadAssignmentService } from './workload-assignment.service';
+import { BOWorkflowService } from './bo-workflow.service';
+import { ScanWorkflowService } from './scan-workflow.service';
 
 @Controller('workflow')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class WorkflowController {
   constructor(
     private autoNotificationService: AutoNotificationService,
-    private workloadAssignmentService: WorkloadAssignmentService
+    private workloadAssignmentService: WorkloadAssignmentService,
+    private boWorkflowService: BOWorkflowService,
+    private scanWorkflowService: ScanWorkflowService
   ) {}
 
   /**
@@ -118,5 +122,59 @@ export class WorkflowController {
   ) {
     await this.autoNotificationService.notifySLABreach(bordereauId, reference, daysOverdue);
     return { success: true, message: 'SLA breach notification sent' };
+  }
+
+  /**
+   * Get BO corbeille - documents waiting for processing
+   */
+  @Get('corbeille/bo')
+  @Roles(UserRole.BO, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getBOCorbeille(@Request() req: any) {
+    return this.boWorkflowService.getBOCorbeille(req.user.id);
+  }
+
+  /**
+   * Process bordereau from BO to SCAN
+   */
+  @Post('bo/process-for-scan/:bordereauId')
+  @Roles(UserRole.BO, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async processBordereauForScan(
+    @Param('bordereauId') bordereauId: string,
+    @Request() req: any
+  ) {
+    return this.boWorkflowService.processBordereauForScan(bordereauId, req.user.id);
+  }
+
+  /**
+   * Get SCAN corbeille - documents ready for scanning
+   */
+  @Get('corbeille/scan')
+  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getScanCorbeille(@Request() req: any) {
+    return this.scanWorkflowService.getScanCorbeille(req.user.id);
+  }
+
+  /**
+   * Start scanning a bordereau
+   */
+  @Post('scan/start/:bordereauId')
+  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async startScan(
+    @Param('bordereauId') bordereauId: string,
+    @Request() req: any
+  ) {
+    return this.scanWorkflowService.startScan(bordereauId, req.user.id);
+  }
+
+  /**
+   * Complete scanning a bordereau
+   */
+  @Post('scan/complete/:bordereauId')
+  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async completeScan(
+    @Param('bordereauId') bordereauId: string,
+    @Request() req: any
+  ) {
+    return this.scanWorkflowService.completeScan(bordereauId, req.user.id);
   }
 }

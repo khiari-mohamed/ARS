@@ -279,6 +279,180 @@ export class BordereauxService {
       throw error;
     }
   }
+
+  async processManualScan(bordereauId: string, files: Express.Multer.File[], data: any) {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { client: true, contract: true }
+    });
+
+    if (!bordereau) {
+      throw new Error('Bordereau not found');
+    }
+
+    // Update status to scanning
+    await this.prisma.bordereau.update({
+      where: { id: bordereauId },
+      data: { 
+        statut: 'SCAN_EN_COURS',
+        dateDebutScan: new Date()
+      }
+    });
+
+    // Send start notifications
+    await this.notifyScanStarted(bordereau);
+
+    // Process uploaded files
+    const uploadedDocs: any[] = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const doc = await this.prisma.document.create({
+          data: {
+            name: file.originalname,
+            type: this.getDocumentType(file.originalname),
+            path: file.path,
+            bordereauId,
+            uploadedById: data.userId || 'system',
+            status: 'UPLOADED'
+          }
+        });
+        uploadedDocs.push(doc);
+      }
+    }
+
+    return {
+      success: true,
+      documentsUploaded: uploadedDocs.length,
+      bordereau: bordereau.reference
+    };
+  }
+
+  async finalizeScanProcess(bordereauId: string) {
+    const bordereau = await this.prisma.bordereau.update({
+      where: { id: bordereauId },
+      data: {
+        statut: 'SCANNE',
+        dateFinScan: new Date()
+      },
+      include: { client: true, contract: true }
+    });
+
+    // Send completion notifications
+    await this.notifyScanCompleted(bordereau);
+
+    return {
+      success: true,
+      bordereau: bordereau.reference,
+      status: 'SCANNE'
+    };
+  }
+
+  private async notifyScanStarted(bordereau: any) {
+    // Notify team leaders and gestionnaires
+    const teamMembers = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE'] },
+        active: true
+      }
+    });
+
+    for (const member of teamMembers) {
+      await this.prisma.notification.create({
+        data: {
+          userId: member.id,
+          type: 'SCAN_STARTED',
+          title: 'Scan démarré',
+          message: `Le scan du bordereau ${bordereau.reference} a commencé`,
+          data: { bordereauId: bordereau.id }
+        }
+      });
+    }
+  }
+
+  private async notifyScanCompleted(bordereau: any) {
+    // Notify team leaders and gestionnaires
+    const teamMembers = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE'] },
+        active: true
+      }
+    });
+
+    for (const member of teamMembers) {
+      await this.prisma.notification.create({
+        data: {
+          userId: member.id,
+          type: 'SCAN_COMPLETED',
+          title: 'Scan terminé',
+          message: `Le scan du bordereau ${bordereau.reference} est terminé et prêt pour affectation`,
+          data: { bordereauId: bordereau.id }
+        }
+      });
+    }
+  }
+
+  async getBordereauReadyForScan() {
+    console.log('🔍 DEBUG: getBordereauReadyForScan called');
+    
+    // First, let's see all bordereaux with A_SCANNER status
+    const allAScannerBordereaux = await this.prisma.bordereau.findMany({
+      where: {
+        statut: 'A_SCANNER',
+        archived: false
+      },
+      include: {
+        client: true,
+        contract: true,
+        documents: true,
+        _count: {
+          select: { documents: true }
+        }
+      }
+    });
+    
+    console.log(`📊 Found ${allAScannerBordereaux.length} bordereaux with A_SCANNER status`);
+    allAScannerBordereaux.forEach(b => {
+      console.log(`- ${b.reference}: ${b.documents.length} documents, client: ${b.client?.name}`);
+    });
+    
+    // Get bordereaux created by BO that don't have documents yet
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: {
+        statut: 'A_SCANNER', // Created by BO, ready for scan
+        documents: {
+          none: {} // No documents attached yet
+        },
+        archived: false
+      },
+      include: {
+        client: true,
+        contract: true,
+        _count: {
+          select: { documents: true }
+        }
+      },
+      orderBy: { dateReception: 'asc' }
+    });
+
+    console.log(`✅ Filtered to ${bordereaux.length} bordereaux ready for scan (no documents)`);
+    
+    const result = bordereaux.map(b => ({
+      ...BordereauResponseDto.fromEntity(b),
+      documentCount: b._count.documents
+    }));
+    
+    console.log('📤 Returning result:', JSON.stringify(result, null, 2));
+    return result;
+  }
+
+  private getDocumentType(filename: string): string {
+    const ext = filename.toLowerCase();
+    if (ext.includes('bs') || ext.includes('bulletin')) return 'BS';
+    if (ext.includes('salaire') || ext.includes('declaration')) return 'DECLARATION_SALAIRE';
+    if (ext.includes('adhesion') || ext.includes('fiche')) return 'FICHE_ADHESION';
+    if (ext.includes('contrat')) return 'CONTRAT';
+    return 'AUTRE';
+  }
   
   // --- Seed complaints for AI demo ---
   async seedComplaints(): Promise<any> {
@@ -288,33 +462,9 @@ export class BordereauxService {
     if (!client || !user) {
       throw new Error('No client or user found. Seed clients and users first.');
     }
-    const complaints = [
-      { description: "Problème de remboursement pour la facture 12345" },
-      { description: "Erreur de montant sur la facture 67890" },
-      { description: "Délai de traitement trop long pour la réclamation 54321" },
-      { description: "Problème de communication avec le service client" },
-      { description: "Erreur de saisie sur mon nom" }
-    ];
-    const results = [];
-    for (const c of complaints) {
-      const data: Prisma.ReclamationCreateInput = {
-        description: c.description,
-        type: 'SERVICE',
-        severity: 'MOYENNE',
-        status: 'OUVERTE',
-        client: { connect: { id: client.id } },
-        createdBy: { connect: { id: user.id } },
-      };
-      // Debug: log the data being sent to Prisma
-      console.log('Creating reclamation with data:', data);
-      try {
-        const result = await this.prisma.reclamation.create({ data });
-        results.push();
-      } catch (error) {
-        console.error('Error creating reclamation:', error);
-      }
-    }
-    return results;
+    
+    // Return empty array - no hardcoded complaints
+    return [];
   }
 
   // AUTO-NOTIFICATION METHODS
@@ -501,123 +651,8 @@ export class BordereauxService {
   
   // --- Seed test data for development/demo ---
   async seedTestData(): Promise<any> {
-    // 1. Ensure test users exist
-    let user1 = await this.prisma.user.findUnique({ where: { id: 'manager1' } });
-    if (!user1) {
-      user1 = await this.prisma.user.create({
-        data: {
-          id: 'manager1',
-          email: 'manager1@example.com',
-          password: 'password123',
-          fullName: 'Manager 1',
-          role: 'MANAGER',
-        }
-      });
-    }
-    let user2 = await this.prisma.user.findUnique({ where: { id: 'manager2' } });
-    if (!user2) {
-      user2 = await this.prisma.user.create({
-        data: {
-          id: 'manager2',
-          email: 'manager2@example.com',
-          password: 'password123',
-          fullName: 'Manager 2',
-          role: 'MANAGER',
-        }
-      });
-    }
-
-    // 2. Create test clients
-    let client1 = await this.prisma.client.findUnique({ where: { name: 'Test Client 1' } });
-    if (!client1) {
-    client1 = await this.prisma.client.create({
-    data: {
-    name: 'Test Client 1',
-    reglementDelay: 30,
-    reclamationDelay: 15,
-    gestionnaires: { connect: [{ id: 'manager1' }] }
-    }
-    });
-    }
-    let client2 = await this.prisma.client.findUnique({ where: { name: 'Test Client 2' } });
-    if (!client2) {
-    client2 = await this.prisma.client.create({
-    data: {
-    name: 'Test Client 2',
-    reglementDelay: 45,
-    reclamationDelay: 20,
-    gestionnaires: { connect: [{ id: 'manager2' }] }
-    }
-    });
-    }
-
-    // 2. Create test contracts
-    const contract1 = await this.prisma.contract.create({
-      data: {
-        clientId: client1.id,
-        clientName: client1.name,
-        startDate: new Date('2023-01-01').toISOString(),
-        endDate: new Date('2024-12-31').toISOString(),
-        delaiReglement: 30,
-        delaiReclamation: 15,
-        documentPath: '/tmp/doc1.pdf',
-        assignedManagerId: 'manager1'
-      }
-    });
-    const contract2 = await this.prisma.contract.create({
-      data: {
-        clientId: client2.id,
-        clientName: client2.name,
-        startDate: new Date('2023-01-01').toISOString(),
-        endDate: new Date('2024-12-31').toISOString(),
-        delaiReglement: 45,
-        delaiReclamation: 20,
-        documentPath: '/tmp/doc2.pdf',
-        assignedManagerId: 'manager2'
-      }
-    });
-
-    // 3. Create test bordereaux
-    const testBordereaux = [
-      {
-        reference: 'BORD-2023-001',
-        dateReception: new Date('2023-01-15').toISOString(),
-        clientId: client1.id,
-        contractId: contract1.id,
-        delaiReglement: 30,
-        nombreBS: 10
-      },
-      {
-        reference: 'BORD-2023-002',
-        dateReception: new Date('2023-02-01').toISOString(),
-        clientId: client2.id,
-        contractId: contract2.id,
-        delaiReglement: 45,
-        nombreBS: 15
-      }
-    ];
-    const results: any[] = [];
-    for (const tb of testBordereaux) {
-      const existing = await this.prisma.bordereau.findUnique({ where: { reference: tb.reference } });
-      if (existing) {
-        results.push({ message: 'Already exists', data: tb });
-        continue;
-      }
-      const data: CreateBordereauDto = {
-        reference: tb.reference,
-        dateReception: tb.dateReception,
-        clientId: tb.clientId,
-        contractId: tb.contractId,
-        delaiReglement: tb.delaiReglement,
-        nombreBS: tb.nombreBS
-      };
-      try {
-        results.push(await this.create(data));
-      } catch (e) {
-        results.push({ error: e.message, data });
-      }
-    }
-    return results;
+    // Return empty array - no hardcoded test data
+    return [];
   }
   private readonly logger = new Logger(BordereauxService.name);
   auditLogService: any;
@@ -714,19 +749,9 @@ export class BordereauxService {
     // DYNAMIC STATUS: Start with A_SCANNER (ready for scan) instead of EN_ATTENTE
     const initialStatus = statut || Statut.A_SCANNER;
 
-    // Helper function to safely convert date strings to Date objects
-    const parseDate = (dateStr: string): Date => {
-      if (!dateStr) throw new BadRequestException('Date is required');
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) {
-        throw new BadRequestException(`Invalid date format: ${dateStr}`);
-      }
-      return date;
-    };
-
     const data: any = {
       reference,
-      dateReception: parseDate(dateReception),
+      dateReception: new Date(dateReception),
       clientId,
       contractId,
       delaiReglement,
@@ -734,12 +759,12 @@ export class BordereauxService {
       statut: initialStatus,
     };
     // Note: createdBy is not a field in the schema, skip it
-    if (dateDebutScan) data.dateDebutScan = parseDate(dateDebutScan);
-    if (dateFinScan) data.dateFinScan = parseDate(dateFinScan);
-    if (dateReceptionSante) data.dateReceptionSante = parseDate(dateReceptionSante);
-    if (dateCloture) data.dateCloture = parseDate(dateCloture);
-    if (dateDepotVirement) data.dateDepotVirement = parseDate(dateDepotVirement);
-    if (dateExecutionVirement) data.dateExecutionVirement = parseDate(dateExecutionVirement);
+    if (dateDebutScan) data.dateDebutScan = new Date(dateDebutScan);
+    if (dateFinScan) data.dateFinScan = new Date(dateFinScan);
+    if (dateReceptionSante) data.dateReceptionSante = new Date(dateReceptionSante);
+    if (dateCloture) data.dateCloture = new Date(dateCloture);
+    if (dateDepotVirement) data.dateDepotVirement = new Date(dateDepotVirement);
+    if (dateExecutionVirement) data.dateExecutionVirement = new Date(dateExecutionVirement);
     
     console.log('💾 Creating bordereau with data:', JSON.stringify(data, null, 2));
 
@@ -838,15 +863,24 @@ export class BordereauxService {
       orderBy.dateReception = 'desc'; // Default sort
     }
     
+    // Build include clause - CRITICAL: Include virement data when requested
+    const include: any = {
+      client: true,
+      contract: true,
+    };
+    
+    // FIXED: Include virement data when withVirement filter is present
+    if (filters.withVirement === 'true' || filters.withVirement === true) {
+      include.virement = true;
+      console.log('🔗 Backend: Including virement data in query');
+    }
+    
     // If pagination is requested, return paginated results
     if (filters.page || filters.pageSize) {
       const [bordereaux, total] = await Promise.all([
         this.prisma.bordereau.findMany({
           where,
-          include: {
-            client: true,
-            contract: true,
-          },
+          include,
           orderBy,
           skip,
           take: pageSize,
@@ -864,14 +898,11 @@ export class BordereauxService {
     console.log('📡 Backend: Final where clause:', JSON.stringify(where, null, 2));
     const bordereaux = await this.prisma.bordereau.findMany({
       where,
-      include: {
-        client: true,
-        contract: true,
-      },
+      include,
       orderBy,
     });
     console.log('📊 Backend: Found', bordereaux.length, 'bordereaux');
-    console.log('📊 Backend: Sample results:', bordereaux.slice(0, 2).map(b => `${b.reference}: ${b.statut} (archived: ${b.archived})`));
+    console.log('📊 Backend: Sample results:', bordereaux.slice(0, 2).map(b => `${b.reference}: ${b.statut} (archived: ${b.archived}) (virement: ${b.virement ? 'YES' : 'NO'})`));
     return bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
   }
 
@@ -975,27 +1006,18 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       statut,
       nombreBS,
     } = updateBordereauDto;
-    // Helper function to safely convert date strings to Date objects
-    const parseDate = (dateStr: string): Date => {
-      if (!dateStr) throw new BadRequestException('Date is required');
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) {
-        throw new BadRequestException(`Invalid date format: ${dateStr}`);
-      }
-      return date;
-    };
 
     const data: any = {};
     if (reference !== undefined) data.reference = reference;
-    if (dateReception !== undefined) data.dateReception = parseDate(dateReception);
+    if (dateReception !== undefined && dateReception) data.dateReception = new Date(dateReception);
     if (clientId !== undefined) data.clientId = clientId;
     if (contractId !== undefined) data.contractId = contractId;
-    if (dateDebutScan !== undefined) data.dateDebutScan = parseDate(dateDebutScan);
-    if (dateFinScan !== undefined) data.dateFinScan = parseDate(dateFinScan);
-    if (dateReceptionSante !== undefined) data.dateReceptionSante = parseDate(dateReceptionSante);
-    if (dateCloture !== undefined) data.dateCloture = parseDate(dateCloture);
-    if (dateDepotVirement !== undefined) data.dateDepotVirement = parseDate(dateDepotVirement);
-    if (dateExecutionVirement !== undefined) data.dateExecutionVirement = parseDate(dateExecutionVirement);
+    if (dateDebutScan !== undefined && dateDebutScan) data.dateDebutScan = new Date(dateDebutScan);
+    if (dateFinScan !== undefined && dateFinScan) data.dateFinScan = new Date(dateFinScan);
+    if (dateReceptionSante !== undefined && dateReceptionSante) data.dateReceptionSante = new Date(dateReceptionSante);
+    if (dateCloture !== undefined && dateCloture) data.dateCloture = new Date(dateCloture);
+    if (dateDepotVirement !== undefined && dateDepotVirement) data.dateDepotVirement = new Date(dateDepotVirement);
+    if (dateExecutionVirement !== undefined && dateExecutionVirement) data.dateExecutionVirement = new Date(dateExecutionVirement);
     if (delaiReglement !== undefined) data.delaiReglement = delaiReglement;
     if (statut !== undefined) data.statut = statut;
     if (nombreBS !== undefined) data.nombreBS = nombreBS;
@@ -1063,15 +1085,94 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
   }
   
   /**
-   * Auto-assign a bordereau based on workload and availability
+   * Auto-assign a bordereau using AI microservice
    */
-  private async autoAssignBordereau(bordereauId: string): Promise<void> {
+  async autoAssignBordereauAI(bordereauId: string): Promise<any> {
     try {
-      // Don't auto-assign immediately - let it go through scan first
-      this.logger.log(`Bordereau ${bordereauId} created, will be assigned after scan`);
+      console.log('🤖 AUTO-ASSIGN: Starting AI-powered assignment for bordereau:', bordereauId);
+      
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: { include: { gestionnaires: true } }, contract: true }
+      });
+      
+      if (!bordereau) {
+        throw new Error('Bordereau not found');
+      }
+      
+      console.log('🔍 Found bordereau:', bordereau.reference, 'Status:', bordereau.statut);
+      
+      // Get available gestionnaires with workload
+      const gestionnaires = await this.prisma.user.findMany({
+        where: { role: 'GESTIONNAIRE', active: true },
+        include: {
+          bordereaux: {
+            where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
+          }
+        }
+      });
+      
+      if (gestionnaires.length === 0) {
+        console.log('❌ No available gestionnaires found');
+        await this.notifySuperAdminAssignmentFailure(bordereauId, bordereau.reference);
+        return { success: false, error: 'No available gestionnaires' };
+      }
+      
+      console.log('👥 Found', gestionnaires.length, 'available gestionnaires');
+      
+      // Find gestionnaire with lowest workload (fallback logic)
+      const optimalGestionnaire = gestionnaires.reduce((best, current) => 
+        current.bordereaux.length < best.bordereaux.length ? current : best
+      );
+      
+      console.log('🎯 Selected gestionnaire:', optimalGestionnaire.fullName, 'with', optimalGestionnaire.bordereaux.length, 'active bordereaux');
+      
+      try {
+        // Try AI microservice for assignment
+        const { data } = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/smart_routing/suggest_assignment`, {
+          bordereau_data: { id: bordereauId },
+          available_agents: gestionnaires.map(g => ({ id: g.id, name: g.fullName, workload: g.bordereaux.length }))
+        }, {
+          headers: { 'Authorization': `Bearer ${await this.getAITokenForAssignment()}` },
+          timeout: 5000
+        });
+        
+        const recommendedAgent = gestionnaires.find(g => g.id === data.recommended_assignment?.agent_id);
+        
+        if (recommendedAgent) {
+          await this.assignBordereau({
+            bordereauId,
+            assignedToUserId: recommendedAgent.id,
+            notes: 'AI auto-assigned'
+          });
+          
+          return { success: true, assignedTo: recommendedAgent.fullName, method: 'AI' };
+        }
+      } catch (aiError) {
+        console.log('⚠️ AI assignment failed, using fallback:', aiError.message);
+      }
+      
+      // Fallback: assign to gestionnaire with lowest workload
+      await this.assignBordereau({
+        bordereauId,
+        assignedToUserId: optimalGestionnaire.id,
+        notes: 'Auto-assigned (workload-based)'
+      });
+      
+      return { success: true, assignedTo: optimalGestionnaire.fullName, method: 'Workload-based' };
+      
     } catch (error) {
-      this.logger.error(`Error in auto-assignment logic for bordereau ${bordereauId}: ${error.message}`);
+      this.logger.error(`Auto-assignment failed for bordereau ${bordereauId}: ${error.message}`);
+      return { success: false, error: error.message };
     }
+  }
+
+  private async getAITokenForAssignment(): Promise<string> {
+    const response = await axios.post(`${process.env.AI_MICROSERVICE_URL || 'http://localhost:8002'}/token`, 
+      new URLSearchParams({ grant_type: 'password', username: 'admin', password: 'secret' }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    return response.data.access_token;
   }
   
   /**
@@ -1329,7 +1430,7 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
     await this.autoNotificationService.notifyScanToChef(id, bordereau.reference, bordereau.client.id);
     
     // AUTO-ASSIGNMENT: Trigger automatic assignment based on workload
-    setTimeout(() => this.workloadAssignmentService.autoAssignBordereau(id), 2000);
+    setTimeout(() => this.autoAssignBordereauAI(id), 2000);
     
     await this.logAction(id, 'COMPLETE_SCAN');
     return BordereauResponseDto.fromEntity(bordereau);
@@ -1450,6 +1551,55 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
 }
 
   // Calculate BS progress and update Bordereau status
+  async recalculateBordereauProgress(bordereauId: string) {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { BulletinSoin: true }
+    });
+
+    if (!bordereau) throw new NotFoundException('Bordereau not found');
+
+    const total = bordereau.BulletinSoin.length;
+    const traites = bordereau.BulletinSoin.filter(bs => bs.etat === 'VALIDATED').length;
+    const rejetes = bordereau.BulletinSoin.filter(bs => bs.etat === 'REJECTED').length;
+    const enCours = total - traites - rejetes;
+    
+    const completionRate = total > 0 ? Math.round(((traites + rejetes) / total) * 100) : 0;
+    
+    let scanStatus = 'NON_SCANNE';
+    if (completionRate > 0 && completionRate < 100) scanStatus = 'SCAN_EN_COURS';
+    if (completionRate === 100) scanStatus = 'SCAN_FINALISE';
+    
+    await this.prisma.bordereau.update({
+      where: { id: bordereauId },
+      data: { 
+        scanStatus,
+        completionRate
+      }
+    });
+
+    return { completionRate, scanStatus, traites, rejetes, enCours, total };
+  }
+
+  async addBSToBordereau(bordereauId: string, bsData: any[]) {
+    const createdBS = await this.prisma.bulletinSoin.createMany({
+      data: bsData.map(bs => ({ ...bs, bordereauId }))
+    });
+    
+    await this.recalculateBordereauProgress(bordereauId);
+    return createdBS;
+  }
+
+  async updateScanStatus(bordereauId: string, scanStatus: string, user: any) {
+    const bordereau = await this.prisma.bordereau.update({
+      where: { id: bordereauId },
+      data: { scanStatus },
+      include: { BulletinSoin: true }
+    });
+    
+    return bordereau;
+  }
+
   async updateBordereauStatusFromBS(bordereauId: string) {
     const bsList = await this.prisma.bulletinSoin.findMany({ where: { bordereauId } });
     const total = bsList.length;
@@ -1837,6 +1987,36 @@ async findByUser(userId: string): Promise<BordereauResponseDto[]> {
     include: { client: true, contract: true },
   });
   return bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
+}
+
+async count(filters: any = {}): Promise<number> {
+  const where: any = {};
+  
+  if (filters.statut) {
+    if (Array.isArray(filters.statut)) {
+      where.statut = { in: filters.statut };
+    } else {
+      where.statut = filters.statut;
+    }
+  }
+  
+  if (filters.assignedToUserId !== undefined) {
+    where.assignedToUserId = filters.assignedToUserId;
+  }
+  
+  if (filters.type) {
+    where.type = filters.type;
+  }
+  
+  if (filters.clientId) {
+    where.clientId = filters.clientId;
+  }
+  
+  if (typeof filters.archived === 'boolean') {
+    where.archived = filters.archived;
+  }
+  
+  return this.prisma.bordereau.count({ where });
 }
 
 async returnBordereau(id: string, reason: string) {

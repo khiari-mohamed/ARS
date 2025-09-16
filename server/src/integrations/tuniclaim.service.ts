@@ -7,7 +7,7 @@ import { OutlookService } from './outlook.service';
 @Injectable()
 export class TuniclaimService {
   private readonly logger = new Logger(TuniclaimService.name);
-  private readonly baseUrl = process.env.TUNICLAIM_API_URL || 'http://197.14.56.112:8083/api';
+  private readonly baseUrl = process.env.TUNICLAIM_API_URL || ' https://ars.dh-ss.com/login';
   private readonly timeout = 15000; // 15 seconds timeout
   
   public lastSync: string | null = null;

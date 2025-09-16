@@ -20,3 +20,4 @@ torch==2.1.0
 transformers==4.35.0
 asyncopg==0.29.0
 psycopg2-binary==2.9.7
+watchdog==3.0.0

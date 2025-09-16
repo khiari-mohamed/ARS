@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { LocalAPI } from '../../services/axios';
+import * as newAiService from '../../services/newAiService';
 import {
   Card,
   CardContent,
@@ -110,19 +111,11 @@ const fetchAdvancedMetrics = async (period: string) => {
 };
 
 const triggerAIAnalysis = async (analysisType: string, parameters: any) => {
-  const { data } = await LocalAPI.post('/reclamations/ai/analyze', {
-    type: analysisType,
-    parameters
-  });
-  return data;
+  return newAiService.performAIAnalysis(analysisType, parameters);
 };
 
 const generateAIReport = async (reportType: string, period: string) => {
-  const { data } = await LocalAPI.post('/reclamations/ai/generate-report', {
-    reportType,
-    period
-  });
-  return data;
+  return newAiService.generateAIReport(reportType, period);
 };
 
 // Generate Excel report from data

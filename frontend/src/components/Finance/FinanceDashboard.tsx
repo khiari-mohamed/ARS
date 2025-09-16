@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import financeService from '../../services/financeService';
 import {
   Card,
@@ -28,42 +27,98 @@ import {
   Error
 } from '@mui/icons-material';
 
-export const FinanceDashboard: React.FC = () => {
-  const { data: dashboard, isLoading, error, refetch } = useQuery(
-    ['finance-dashboard'],
-    () => financeService.getFinanceDashboard(),
-    { 
-      refetchInterval: 30000,
-      retry: 3 
+interface DashboardStats {
+  totalOrdres: number;
+  ordresEnCours: number;
+  ordresExecutes: number;
+  ordresRejetes: number;
+  montantTotal: number;
+}
+
+interface RecentOrdre {
+  id: string;
+  reference: string;
+  etatVirement: string;
+  montantTotal: number;
+  dateCreation: string;
+  bordereau?: {
+    client?: {
+      name: string;
+    };
+  };
+  donneurOrdre?: {
+    nom: string;
+  };
+}
+
+const FinanceDashboard: React.FC = () => {
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDashboard = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await financeService.getFinanceDashboard();
+      setDashboard(data);
+    } catch (err: any) {
+      setError(err?.message || 'Erreur lors du chargement');
+      // Set default data to prevent crashes
+      setDashboard({
+        stats: {
+          totalOrdres: 0,
+          ordresEnCours: 0,
+          ordresExecutes: 0,
+          ordresRejetes: 0,
+          montantTotal: 0
+        },
+        recentOrdres: []
+      });
+    } finally {
+      setIsLoading(false);
     }
-  );
+  };
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
 
   if (isLoading) {
     return (
-      <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+      <Box sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ ml: 2 }}>Chargement du tableau de bord...</Typography>
       </Box>
     );
   }
 
-  if (error) {
+  if (error && !dashboard) {
     return (
       <Alert severity="error" sx={{ m: 3 }}>
         <Typography variant="h6">Erreur lors du chargement</Typography>
-        <Button variant="outlined" onClick={() => refetch()} sx={{ mt: 1 }}>
+        <Typography variant="body2">{error}</Typography>
+        <Button variant="outlined" onClick={loadDashboard} sx={{ mt: 1 }}>
           Réessayer
         </Button>
       </Alert>
     );
   }
 
-  const { stats, recentOrdres } = dashboard || {};
+  const stats: DashboardStats = dashboard?.stats || {
+    totalOrdres: 0,
+    ordresEnCours: 0,
+    ordresExecutes: 0,
+    ordresRejetes: 0,
+    montantTotal: 0
+  };
+  
+  const recentOrdres: RecentOrdre[] = dashboard?.recentOrdres || [];
 
   const renderStatsCards = () => (
     <Grid container spacing={3} sx={{ mb: 3 }}>
       <Grid item xs={12} sm={6} md={3}>
-        <Card>
+        <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
               <Box>
@@ -71,17 +126,17 @@ export const FinanceDashboard: React.FC = () => {
                   Total Ordres
                 </Typography>
                 <Typography variant="h4" color="primary">
-                  {stats?.totalOrdres || 0}
+                  {stats.totalOrdres}
                 </Typography>
               </Box>
-              <Assignment color="primary" />
+              <Assignment color="primary" fontSize="large" />
             </Box>
           </CardContent>
         </Card>
       </Grid>
 
       <Grid item xs={12} sm={6} md={3}>
-        <Card>
+        <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
               <Box>
@@ -89,17 +144,17 @@ export const FinanceDashboard: React.FC = () => {
                   En Cours
                 </Typography>
                 <Typography variant="h4" color="info.main">
-                  {stats?.ordresEnCours || 0}
+                  {stats.ordresEnCours}
                 </Typography>
               </Box>
-              <TrendingUp color="info" />
+              <TrendingUp color="info" fontSize="large" />
             </Box>
           </CardContent>
         </Card>
       </Grid>
 
       <Grid item xs={12} sm={6} md={3}>
-        <Card>
+        <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
               <Box>
@@ -107,17 +162,17 @@ export const FinanceDashboard: React.FC = () => {
                   Exécutés
                 </Typography>
                 <Typography variant="h4" color="success.main">
-                  {stats?.ordresExecutes || 0}
+                  {stats.ordresExecutes}
                 </Typography>
               </Box>
-              <CheckCircle color="success" />
+              <CheckCircle color="success" fontSize="large" />
             </Box>
           </CardContent>
         </Card>
       </Grid>
 
       <Grid item xs={12} sm={6} md={3}>
-        <Card>
+        <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
               <Box>
@@ -125,10 +180,10 @@ export const FinanceDashboard: React.FC = () => {
                   Montant Total
                 </Typography>
                 <Typography variant="h4" color="secondary.main">
-                  {financeService.formatMontant(stats?.montantTotal || 0)}
+                  {(stats.montantTotal || 0).toLocaleString('fr-TN')} TND
                 </Typography>
               </Box>
-              <AccountBalance color="secondary" />
+              <AccountBalance color="secondary" fontSize="large" />
             </Box>
           </CardContent>
         </Card>
@@ -137,67 +192,61 @@ export const FinanceDashboard: React.FC = () => {
   );
 
   const renderRecentOrdres = () => (
-    <Card>
+    <Card elevation={2}>
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6">Ordres de Virement Récents</Typography>
           <Button 
             variant="outlined" 
-            onClick={() => window.location.href = '/finance/ordres-virement'}
+            size="small"
+            onClick={loadDashboard}
           >
-            Voir Tout
+            Actualiser
           </Button>
         </Box>
 
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Référence</TableCell>
-                <TableCell>Client</TableCell>
-                <TableCell>Donneur d'Ordre</TableCell>
-                <TableCell>Montant</TableCell>
-                <TableCell>État</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {recentOrdres?.map((ordre: any) => (
-                <TableRow key={ordre.id} hover>
-                  <TableCell>{ordre.reference}</TableCell>
-                  <TableCell>{ordre.bordereau?.client?.name || '-'}</TableCell>
-                  <TableCell>{ordre.donneurOrdre?.nom}</TableCell>
-                  <TableCell>{financeService.formatMontant(ordre.montantTotal)}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={financeService.getEtatVirementLabel(ordre.etatVirement)}
-                      color={financeService.getEtatVirementColor(ordre.etatVirement)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {new Date(ordre.dateCreation).toLocaleDateString('fr-FR')}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => window.location.href = `/finance/ordres-virement/${ordre.id}`}
-                    >
-                      Voir
-                    </Button>
-                  </TableCell>
+        {recentOrdres.length > 0 ? (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Donneur d'Ordre</TableCell>
+                  <TableCell>Montant</TableCell>
+                  <TableCell>État</TableCell>
+                  <TableCell>Date</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        {(!recentOrdres || recentOrdres.length === 0) && (
+              </TableHead>
+              <TableBody>
+                {recentOrdres.slice(0, 5).map((ordre: any, index: number) => (
+                  <TableRow key={ordre.id || index} hover>
+                    <TableCell>{ordre.reference}</TableCell>
+                    <TableCell>{ordre.bordereau?.client?.name || ordre.client}</TableCell>
+                    <TableCell>{ordre.donneurOrdre?.nom}</TableCell>
+                    <TableCell>{ordre.montantTotal.toLocaleString('fr-TN')} TND</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={ordre.etatVirement}
+                        color={ordre.etatVirement === 'EXECUTE' ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {new Date(ordre.dateCreation).toLocaleDateString('fr-FR')}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body1" color="textSecondary">
               Aucun ordre de virement récent
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              Les ordres de virement apparaîtront ici une fois créés
             </Typography>
           </Box>
         )}
@@ -206,27 +255,32 @@ export const FinanceDashboard: React.FC = () => {
   );
 
   return (
-    <div className="finance-dashboard p-4">
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">
+        <Typography variant="h4" sx={{ fontWeight: 600 }}>
           Tableau de Bord Finance
         </Typography>
         <Box>
           <Button 
             variant="contained" 
             sx={{ mr: 2 }}
-            onClick={() => window.location.href = '/finance/ordres-virement/nouveau'}
+            onClick={loadDashboard}
           >
-            Nouvel Ordre
-          </Button>
-          <Button variant="outlined" onClick={() => refetch()}>
             Actualiser
           </Button>
         </Box>
       </Box>
 
-      {/* Alerts */}
-      {stats?.ordresRejetes > 0 && (
+      {/* Error Alert */}
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <strong>Attention:</strong> {error}
+        </Alert>
+      )}
+
+      {/* Rejected Orders Alert */}
+      {stats.ordresRejetes > 0 && (
         <Alert severity="error" sx={{ mb: 2 }}>
           <strong>Attention:</strong> {stats.ordresRejetes} ordre(s) de virement rejeté(s)
         </Alert>
@@ -237,7 +291,7 @@ export const FinanceDashboard: React.FC = () => {
 
       {/* Recent Orders */}
       {renderRecentOrdres()}
-    </div>
+    </Box>
   );
 };
 

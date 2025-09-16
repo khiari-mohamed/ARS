@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Grid, Paper, Typography, TextField, FormControl, InputLabel, 
   Select, MenuItem, Button, Table, TableHead, TableRow, TableCell, 
@@ -9,6 +9,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import DownloadIcon from '@mui/icons-material/Download';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import FolderIcon from '@mui/icons-material/Folder';
+import { LocalAPI } from '../../services/axios';
 
 const SearchArchiveTab: React.FC = () => {
   const [filters, setFilters] = useState({
@@ -23,6 +24,11 @@ const SearchArchiveTab: React.FC = () => {
   const [results, setResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  
+  // Load all courriers on component mount
+  useEffect(() => {
+    handleSearch();
+  }, []);
   const [viewDialog, setViewDialog] = useState(false);
   const [gedDialog, setGedDialog] = useState(false);
   const [selectedCourrier, setSelectedCourrier] = useState<any>(null);
@@ -32,24 +38,21 @@ const SearchArchiveTab: React.FC = () => {
     setSearching(true);
     setHasSearched(true);
     try {
-      const token = localStorage.getItem('token');
       const queryParams = new URLSearchParams();
       
       // Build query parameters from filters
-      if (filters.type) queryParams.append('type', filters.type);
-      if (filters.status) queryParams.append('status', filters.status);
-      if (filters.dateFrom) queryParams.append('createdAfter', filters.dateFrom);
-      if (filters.dateTo) queryParams.append('createdBefore', filters.dateTo);
+      if (filters.type && filters.type.trim()) queryParams.append('type', filters.type);
+      if (filters.status && filters.status.trim()) queryParams.append('status', filters.status);
+      if (filters.dateFrom && filters.dateFrom.trim()) queryParams.append('createdAfter', filters.dateFrom);
+      if (filters.dateTo && filters.dateTo.trim()) queryParams.append('createdBefore', filters.dateTo);
       
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/search?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      console.log('🔍 Query params:', queryParams.toString());
       
-      if (response.ok) {
-        const courriers = await response.json();
+      const searchUrl = `/courriers/search${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      console.log('🔍 Search URL:', searchUrl);
+      
+      const response = await LocalAPI.get(searchUrl);
+      const courriers = response.data;
         console.log('🔍 Search results:', courriers.length, 'courriers found');
         if (courriers.length > 0) {
           console.log('🔍 Sample courrier data:', {
@@ -129,12 +132,10 @@ const SearchArchiveTab: React.FC = () => {
         } else {
           console.log('❌ No results after filtering');
         }
-      } else {
-        console.error('Search failed:', response.status);
-        setResults([]);
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Search failed:', error);
+      const errorMsg = error.response?.data?.message || error.message || 'Erreur de recherche';
+      console.error('Search error details:', errorMsg);
       setResults([]);
     } finally {
       setSearching(false);
@@ -347,6 +348,26 @@ const SearchArchiveTab: React.FC = () => {
             disabled={searching}
           >
             {searching ? 'Recherche...' : 'Rechercher'}
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={() => {
+              // Load all courriers without filters
+              setFilters({
+                client: '',
+                type: '',
+                status: '',
+                priority: '',
+                dateFrom: '',
+                dateTo: '',
+                keywords: ''
+              });
+              // Trigger search with empty filters
+              setTimeout(handleSearch, 100);
+            }}
+            disabled={searching}
+          >
+            Tout afficher
           </Button>
           <Button variant="outlined" onClick={handleReset}>
             Réinitialiser

@@ -35,8 +35,64 @@ const FinanceAlertsTab: React.FC = () => {
   const loadAlerts = async () => {
     setLoading(true);
     try {
-      const data = await getFinanceAlerts();
-      setAlerts(data);
+      // Get real alerts from new alerts endpoint
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/alerts`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load alerts data');
+      }
+      
+      const alertsData = await response.json();
+      console.log('Loaded alerts data:', alertsData);
+      
+      // Transform real data into alerts
+      const alerts: FinanceAlert[] = [];
+      
+      // Add delayed bordereaux alerts
+      if (alertsData.delayedBordereaux) {
+        alertsData.delayedBordereaux.forEach((bordereau: any) => {
+          const delayHours = Math.floor((Date.now() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60));
+          alerts.push({
+            id: `delayed-${bordereau.id}`,
+            type: 'BORDEREAU_DELAY',
+            level: delayHours > 72 ? 'error' : 'warning',
+            title: `Bordereau en retard: ${bordereau.reference}`,
+            message: `Le bordereau ${bordereau.reference} de ${bordereau.client?.name || 'Client'} est en retard de ${Math.floor(delayHours / 24)} jours`,
+            data: {
+              bordereauId: bordereau.id,
+              delayHours: delayHours,
+              client: bordereau.client?.name
+            },
+            createdAt: bordereau.dateReception
+          });
+        });
+      }
+      
+      // Add overdue virements alerts
+      if (alertsData.overdueVirements) {
+        alertsData.overdueVirements.forEach((virement: any) => {
+          alerts.push({
+            id: `overdue-${virement.id}`,
+            type: 'VIREMENT_OVERDUE',
+            level: 'error',
+            title: `Virement non exécuté: ${virement.reference}`,
+            message: `L'ordre de virement ${virement.reference} n'a pas été exécuté`,
+            data: {
+              virementId: virement.id,
+              montant: virement.montantTotal
+            },
+            createdAt: virement.createdAt
+          });
+        });
+      }
+      
+
+      
+      setAlerts(alerts);
     } catch (error) {
       console.error('Failed to load alerts:', error);
       setAlerts([]);
@@ -72,12 +128,32 @@ const FinanceAlertsTab: React.FC = () => {
     if (!notifyDialog.bordereauId) return;
     
     try {
-      await notifyFinanceTeam({ bordereauId: notifyDialog.bordereauId, message: notifyForm.message });
-      setNotifyDialog({open: false});
-      setNotifyForm({message: ''});
-      // Refresh alerts after notification
-      await loadAlerts();
-      alert('Notification envoyée avec succès!');
+      // Send notification to backend
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/notifications`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          type: 'FINANCE_ALERT',
+          title: 'Alerte Finance',
+          message: notifyForm.message || 'Alerte générée depuis le module Finance',
+          data: {
+            bordereauId: notifyDialog.bordereauId,
+            timestamp: new Date().toISOString()
+          }
+        })
+      });
+      
+      if (response.ok) {
+        setNotifyDialog({open: false});
+        setNotifyForm({message: ''});
+        await loadAlerts();
+        alert('Notification envoyée avec succès!');
+      } else {
+        throw new Error('Failed to send notification');
+      }
     } catch (error) {
       console.error('Failed to notify team:', error);
       alert('Erreur lors de l\'envoi de la notification');

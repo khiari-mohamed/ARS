@@ -9,6 +9,7 @@ import { WorkflowNotificationService } from './workflow-notification.service';
 import { TeamRoutingService } from './team-routing.service';
 import { EnhancedCorbeilleService } from './enhanced-corbeille.service';
 import { EnhancedCorbeilleController } from './enhanced-corbeille.controller';
+import { WorkflowCorbeilleController } from './workflow-corbeille.controller';
 import { AutomaticWorkflowService } from './automatic-workflow.service';
 import { SuperAdminOverviewService } from './super-admin-overview.service';
 import { BOWorkflowService } from './bo-workflow.service';
@@ -19,6 +20,10 @@ import { TeamManagementController } from './team-management.controller';
 import { TeamWorkloadConfigService } from './team-workload-config.service';
 import { WorkflowOrchestrationService } from './workflow-orchestration.service';
 import { ComprehensiveNotificationService } from './comprehensive-notification.service';
+import { ChefEquipeActionsService } from './chef-equipe-actions.service';
+import { ChefEquipeActionsController } from './chef-equipe-actions.controller';
+import { GestionnaireActionsService } from './gestionnaire-actions.service';
+import { GestionnaireActionsController } from './gestionnaire-actions.controller';
 import { PrismaService } from '../prisma/prisma.service';
 import { BordereauxModule } from '../bordereaux/bordereaux.module';
 import { AlertsModule } from '../alerts/alerts.module';
@@ -34,8 +39,8 @@ import { GedModule } from '../ged/ged.module';
     AnalyticsModule,
     GedModule
   ],
-  controllers: [WorkflowController, EnhancedCorbeilleController, TeamManagementController],
-  providers: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, TeamWorkloadConfigService, WorkflowOrchestrationService, ComprehensiveNotificationService, AutoNotificationService, WorkloadAssignmentService, PrismaService],
-  exports: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, AutoNotificationService, WorkloadAssignmentService]
+  controllers: [WorkflowController, EnhancedCorbeilleController, WorkflowCorbeilleController, TeamManagementController, ChefEquipeActionsController, GestionnaireActionsController],
+  providers: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, TeamWorkloadConfigService, WorkflowOrchestrationService, ComprehensiveNotificationService, AutoNotificationService, WorkloadAssignmentService, ChefEquipeActionsService, GestionnaireActionsService, PrismaService],
+  exports: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, AutoNotificationService, WorkloadAssignmentService, ChefEquipeActionsService, GestionnaireActionsService]
 })
 export class WorkflowModule {}

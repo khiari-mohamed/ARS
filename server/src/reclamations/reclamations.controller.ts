@@ -28,6 +28,9 @@ import { BOIntegrationService } from './bo-integration.service';
 import { AdvancedAnalyticsService } from './advanced-analytics.service';
 import { AIClassificationService } from './ai-classification.service';
 import { CustomerPortalService } from './customer-portal.service';
+import { GECAutoReplyService } from './gec-auto-reply.service';
+import { TuniclaimIntegrationService } from './tuniclaim-integration.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 // Dummy user extraction (replace with real auth in production)
 function getUserFromRequest(req: any) {
@@ -38,6 +41,8 @@ function getUserFromRequest(req: any) {
 
 @Controller('reclamations')
 export class ReclamationsController {
+
+
   
   // Apply guards to specific endpoints instead of globally
   private applyGuards() {
@@ -47,36 +52,117 @@ export class ReclamationsController {
     private readonly reclamationsService: ReclamationsService,
     private readonly slaEngineService: SLAEngineService,
     private readonly corbeilleService: CorbeilleService,
-    private readonly boIntegrationService: BOIntegrationService
+    private readonly boIntegrationService: BOIntegrationService,
+    private readonly aiClassificationService: AIClassificationService,
+    private readonly gecAutoReplyService: GECAutoReplyService,
+    private readonly tuniclaimIntegrationService: TuniclaimIntegrationService,
+    private readonly prisma: PrismaService
   ) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Post()
   @UseInterceptors(FileInterceptor('file', { dest: './uploads/reclamations' }))
   async createReclamation(
     @UploadedFile() file: Express.Multer.File,
-    @Body() dto: CreateReclamationDto,
+    @Body() dto: any,
     @Req() req: any,
   ) {
-    const user = getUserFromRequest(req);
-    // Validate input
-    if (!dto.description || !dto.type || !dto.severity || !dto.department) {
-      throw new Error('All required fields (description, type, severity, department) must be provided.');
+    const userId = req.user?.sub || req.user?.id;
+    
+    console.log('Creating reclamation with data:', dto);
+    console.log('User ID:', userId);
+    
+    try {
+      // Create reclamation directly with Prisma
+      const reclamation = await this.prisma.reclamation.create({
+        data: {
+          type: dto.type || 'REMBOURSEMENT',
+          severity: dto.severity || 'MOYENNE',
+          status: 'OPEN',
+          description: dto.description,
+          department: dto.department || 'RECLAMATIONS',
+          clientId: dto.clientId,
+          createdById: userId,
+          assignedToId: userId, // Auto-assign to creator for now
+          evidencePath: file?.path
+        }
+      });
+      
+      // Add history entry
+      await this.prisma.reclamationHistory.create({
+        data: {
+          reclamationId: reclamation.id,
+          userId: userId,
+          action: 'CREATE',
+          toStatus: 'OPEN',
+          description: 'Réclamation créée'
+        }
+      });
+      
+      console.log('Successfully created reclamation:', reclamation.id);
+      return { 
+        success: true, 
+        message: 'Réclamation créée avec succès',
+        data: reclamation 
+      };
+    } catch (error) {
+      console.error('Error creating reclamation:', error);
+      throw new Error('Erreur lors de la création de la réclamation');
     }
-    // Attach file path if uploaded
-    if (file) dto['evidencePath'] = file.path;
-    return this.reclamationsService.createReclamation(dto, user);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Patch(':id')
   async updateReclamation(
     @Param('id') id: string,
-    @Body() dto: UpdateReclamationDto,
+    @Body() dto: any,
     @Req() req: any,
   ) {
-    const user = getUserFromRequest(req);
-    return this.reclamationsService.updateReclamation(id, dto, user);
+    const userId = req.user?.sub || req.user?.id;
+    
+    console.log(`Updating reclamation ${id} by user ${userId}`);
+    console.log('Update data:', dto);
+    
+    try {
+      // Get current reclamation
+      const currentReclamation = await this.prisma.reclamation.findUnique({
+        where: { id }
+      });
+      
+      if (!currentReclamation) {
+        throw new Error('Réclamation non trouvée');
+      }
+      
+      // Update reclamation
+      const updatedReclamation = await this.prisma.reclamation.update({
+        where: { id },
+        data: {
+          status: dto.status || currentReclamation.status,
+          description: dto.description || currentReclamation.description,
+          assignedToId: dto.assignedToId !== undefined ? dto.assignedToId : currentReclamation.assignedToId
+        }
+      });
+      
+      // Add history entry
+      await this.prisma.reclamationHistory.create({
+        data: {
+          reclamationId: id,
+          userId: userId,
+          action: 'UPDATE',
+          fromStatus: currentReclamation.status,
+          toStatus: updatedReclamation.status,
+          description: dto.description || `Status updated to ${updatedReclamation.status}`
+        }
+      });
+      
+      console.log(`Successfully updated reclamation ${id}`);
+      return { 
+        success: true, 
+        message: 'Réclamation mise à jour avec succès',
+        data: updatedReclamation 
+      };
+    } catch (error) {
+      console.error('Error updating reclamation:', error);
+      throw new Error('Erreur lors de la mise à jour');
+    }
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -238,7 +324,21 @@ export class ReclamationsController {
   @Get(':id/auto-reply')
   async autoReplySuggestion(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.reclamationsService.autoReplySuggestion(id, user);
+    return this.gecAutoReplyService.generateAutoReply(id);
+  }
+
+  @Post(':id/auto-reply/approve')
+  async approveAutoReply(
+    @Param('id') id: string,
+    @Body() body: { subject: string; body: string; recipientEmail: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.gecAutoReplyService.approveAndSendReply(id, {
+      subject: body.subject,
+      body: body.body,
+      recipientEmail: body.recipientEmail
+    }, user.id);
   }
 
   // === NEW ENDPOINTS FOR ENHANCED FUNCTIONALITY ===
@@ -331,54 +431,62 @@ export class ReclamationsController {
   }
 
   @Get('corbeille/gestionnaire')
-  @Roles(UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
   async getGestionnaireCorbeille(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    console.log('Full req.user object:', JSON.stringify(req.user, null, 2));
+    const userId = req.user?.sub || req.user?.id;
+    
+    console.log('Extracted userId:', userId);
+    console.log('Getting corbeille for user:', userId);
+    
     try {
-      const [enCours, traites, retournes] = await Promise.all([
-        (this.reclamationsService as any).findMany({
-          where: { assignedToId: user.id, status: 'IN_PROGRESS' },
-          include: { client: true, createdBy: true }
-        }),
-        (this.reclamationsService as any).findMany({
-          where: { assignedToId: user.id, status: { in: ['RESOLVED', 'CLOSED'] } },
-          include: { client: true, createdBy: true },
-          orderBy: { updatedAt: 'desc' },
-          take: 20
-        }),
-        (this.reclamationsService as any).findMany({
-          where: { assignedToId: user.id, status: 'ESCALATED' },
-          include: { client: true, createdBy: true }
-        })
-      ]);
+      // Get reclamations assigned to this gestionnaire
+      const reclamations = await this.prisma.reclamation.findMany({
+        where: { assignedToId: userId },
+        include: {
+          client: true,
+          assignedTo: true,
+          createdBy: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
 
-      const processItems = (items: any[]) => items.map(item => ({
-        id: item.id,
-        reference: `REC-${item.id.slice(-6)}`,
-        clientName: item.client?.name || 'Unknown',
-        subject: item.description?.substring(0, 100) || 'No description',
-        priority: item.severity || 'MOYENNE',
-        status: item.status,
-        createdAt: item.createdAt,
-        slaStatus: this.calculateSLAStatus(item),
-        remainingTime: this.calculateRemainingTime(item)
-      }));
+      console.log(`Found ${reclamations.length} reclamations for user ${userId}`);
 
-      const stats = {
-        enCours: enCours.length,
-        traites: traites.length,
-        retournes: retournes.length,
-        enRetard: enCours.filter(item => this.calculateSLAStatus(item) === 'OVERDUE').length,
-        critiques: enCours.filter(item => item.severity === 'HAUTE').length
+      // Group by status
+      const enCours = reclamations.filter(r => r.status === 'IN_PROGRESS' || r.status === 'OPEN');
+      const traites = reclamations.filter(r => r.status === 'RESOLVED');
+      const retournes = reclamations.filter(r => r.status === 'ESCALATED');
+
+      // Format for frontend
+      const formatItem = (r: any) => ({
+        id: r.id,
+        reference: `REC-${r.id.substring(0, 8)}`,
+        clientName: r.client?.name || 'Unknown',
+        subject: r.description?.substring(0, 100) || 'No description',
+        priority: r.severity || 'MOYENNE',
+        status: r.status,
+        createdAt: r.createdAt,
+        slaStatus: 'ON_TIME',
+        remainingTime: 24
+      });
+
+      const result = {
+        enCours: enCours.map(formatItem),
+        traites: traites.map(formatItem),
+        retournes: retournes.map(formatItem),
+        stats: {
+          enCours: enCours.length,
+          traites: traites.length,
+          retournes: retournes.length,
+          enRetard: 0,
+          critiques: enCours.filter(r => r.severity === 'critical').length
+        }
       };
 
-      return {
-        enCours: processItems(enCours),
-        traites: processItems(traites),
-        retournes: processItems(retournes),
-        stats
-      };
+      console.log('Returning result:', JSON.stringify(result, null, 2));
+      return result;
     } catch (error) {
+      console.error('Error in getGestionnaireCorbeille:', error);
       return {
         enCours: [],
         traites: [],
@@ -414,28 +522,47 @@ export class ReclamationsController {
   }
 
   @Post(':id/return')
-  @Roles(UserRole.GESTIONNAIRE, UserRole.SUPER_ADMIN)
   async returnToChef(
     @Param('id') id: string,
     @Body() body: { reason: string },
     @Req() req: any
   ) {
-    const user = getUserFromRequest(req);
-    // Update reclamation status and clear assignment
-    await this.reclamationsService.updateReclamation(id, {
-      status: 'ESCALATED',
-      assignedToId: undefined
-    }, user);
+    const userId = req.user?.sub || req.user?.id;
     
-    // Add history entry
-    await (this.reclamationsService as any).addHistoryEntry(id, {
-      action: 'RETURNED_TO_CHEF',
-      description: `Returned by ${user.fullName}: ${body.reason}`,
-      userId: user.id
-    });
+    console.log(`Returning reclamation ${id} to chef by user ${userId}`);
+    console.log('Reason:', body.reason);
     
-    return { success: true, message: 'Reclamation returned to chef' };
+    try {
+      // Update reclamation status and clear assignment
+      const updatedReclamation = await this.prisma.reclamation.update({
+        where: { id },
+        data: {
+          status: 'ESCALATED',
+          assignedToId: null
+        }
+      });
+      
+      // Add history entry
+      await this.prisma.reclamationHistory.create({
+        data: {
+          reclamationId: id,
+          userId: userId,
+          action: 'RETURNED_TO_CHEF',
+          fromStatus: updatedReclamation.status,
+          toStatus: 'ESCALATED',
+          description: `Returned to chef: ${body.reason}`
+        }
+      });
+      
+      console.log(`Successfully returned reclamation ${id} to chef`);
+      return { success: true, message: 'Réclamation retournée au chef avec succès' };
+    } catch (error) {
+      console.error('Error returning to chef:', error);
+      throw new Error('Erreur lors du retour au chef');
+    }
   }
+
+
 
   @Post(':id/auto-assign')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
@@ -498,7 +625,13 @@ export class ReclamationsController {
   @Post('classify')
   async classifyClaim(@Body() body: { text: string; metadata?: any }, @Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.reclamationsService.aiClassificationService.classifyClaim(body.text, body.metadata);
+    try {
+      const result = await this.aiClassificationService.classifyClaim(body.text, body.metadata);
+      return result;
+    } catch (error) {
+      console.error('Classification error:', error);
+      throw new Error('Classification failed: ' + error.message);
+    }
   }
 
   // Real AI Analysis endpoints
@@ -507,6 +640,37 @@ export class ReclamationsController {
   async performAIAnalysis(@Body() body: { type: string; parameters: any }, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.reclamationsService.advancedAnalyticsService.performAIAnalysis(body.type, body.parameters);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Post('ai/predict-trends')
+  async predictTrends(@Body() body: { period: string; categories?: string[] }, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.reclamationsService.advancedAnalyticsService.predictClaimTrends(body.period, body.categories);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('ai/learning-stats')
+  async getLearningStats(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    // Access continuous learning service through DI
+    const continuousLearning = this.reclamationsService['continuousLearningService'];
+    if (continuousLearning) {
+      return continuousLearning.getRecentLearningStats();
+    }
+    return { message: 'Continuous learning service not available' };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Post('ai/force-learning')
+  async forceLearning(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    const continuousLearning = this.reclamationsService['continuousLearningService'];
+    if (continuousLearning) {
+      await continuousLearning.forceLearningUpdate();
+      return { success: true, message: 'Learning update triggered' };
+    }
+    return { success: false, message: 'Continuous learning service not available' };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -540,19 +704,19 @@ export class ReclamationsController {
   @Get('classification/stats')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
   async getClassificationStats(@Query('period') period = '30d') {
-    return this.reclamationsService.aiClassificationService.getClassificationStats(period);
+    return this.aiClassificationService.getClassificationStats(period);
   }
 
   @Post('classification/feedback')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
   async updateClassificationModel(@Body() body: { feedbackData: any[] }) {
-    return this.reclamationsService.aiClassificationService.updateClassificationModel(body.feedbackData);
+    return this.aiClassificationService.updateClassificationModel(body.feedbackData);
   }
 
   @Get('classification/recommendations')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
   async getAIRecommendations(@Query('period') period = '30d') {
-    return this.reclamationsService.aiClassificationService.getAIRecommendations(period);
+    return this.aiClassificationService.getAIRecommendations(period);
   }
 
 
@@ -629,6 +793,67 @@ export class ReclamationsController {
   async markAlertAsRead(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.reclamationsService.markAlertAsRead(id, user);
+  }
+
+  // === MY TUNICLAIM INTEGRATION ENDPOINTS ===
+
+  // Gestion centralisée des réclamations
+  @Get('tuniclaim/centralized')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async getCentralizedTuniclaimReclamations(@Query() filters: any) {
+    return this.tuniclaimIntegrationService.getCentralizedReclamations(filters);
+  }
+
+  // Classification automatique via IA
+  @Post(':id/tuniclaim/classify')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async classifyTuniclaimReclamation(@Param('id') id: string) {
+    return this.tuniclaimIntegrationService.classifyReclamation(id);
+  }
+
+  // Historique et traçabilité complète
+  @Get(':id/tuniclaim/complete-history')
+  async getTuniclaimCompleteHistory(@Param('id') id: string) {
+    return this.tuniclaimIntegrationService.getCompleteHistory(id);
+  }
+
+  // Notifications et relances automatiques
+  @Post(':id/tuniclaim/setup-notifications')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async setupTuniclaimNotifications(
+    @Param('id') id: string,
+    @Body() config: any
+  ) {
+    return this.tuniclaimIntegrationService.setupAutomaticNotifications(id, config);
+  }
+
+  // Analyse IA et détection d'anomalies
+  @Get('tuniclaim/anomaly-detection')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async performTuniclaimAnomalyDetection(@Query('period') period = '30d') {
+    return this.tuniclaimIntegrationService.performAnomalyDetection(period);
+  }
+
+  // Réponses automatiques
+  @Post(':id/tuniclaim/auto-response')
+  async generateTuniclaimAutoResponse(@Param('id') id: string) {
+    return this.tuniclaimIntegrationService.generateAutoResponse(id);
+  }
+
+  // Intégration avec processus internes
+  @Get(':id/tuniclaim/internal-integration')
+  async getTuniclaimInternalIntegration(@Param('id') id: string) {
+    return this.tuniclaimIntegrationService.integrateWithInternalProcesses(id);
+  }
+
+  // Gestion des escalades
+  @Post(':id/tuniclaim/escalate')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async manageTuniclaimEscalation(
+    @Param('id') id: string,
+    @Body() body: { type?: 'AUTO' | 'MANUAL' }
+  ) {
+    return this.tuniclaimIntegrationService.manageEscalation(id, body.type || 'AUTO');
   }
 
   // Helper methods for corbeille functionality

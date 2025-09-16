@@ -29,15 +29,35 @@ const GlobalKPIHeader: React.FC = () => {
 
       const kpiData = kpiResponse.data;
       const alertData = alertsResponse.data;
+      
+      console.log('🔍 Raw KPI Data:', kpiData);
+      console.log('🔍 Raw Alert Data:', alertData);
 
-      // Calculate real KPIs from backend data
+      // Extract real data from API response
       const totalBordereaux = kpiData.totalCount || 0;
       const processedCount = kpiData.processedCount || 0;
-      const slaCompliant = alertData.ok?.length || 0;
       const avgProcessingTime = kpiData.avgDelay || 0;
-      const activeAlerts = (alertData.critical?.length || 0) + (alertData.warning?.length || 0);
-      const rejectionRate = totalBordereaux > 0 ? Math.round(((totalBordereaux - processedCount) / totalBordereaux) * 100) : 0;
-      const slaCompliance = totalBordereaux > 0 ? Math.round((slaCompliant / totalBordereaux) * 100) : 0;
+      
+      // Calculate SLA compliance from processed vs total
+      const slaCompliance = totalBordereaux > 0 ? Math.round((processedCount / totalBordereaux) * 100) : 0;
+      
+      // Calculate rejection rate
+      const rejectedCount = totalBordereaux - processedCount;
+      const rejectionRate = totalBordereaux > 0 ? Math.round((rejectedCount / totalBordereaux) * 100) : 0;
+      
+      // Count active alerts from all alert types
+      const criticalAlerts = Array.isArray(alertData.critical) ? alertData.critical.length : 0;
+      const warningAlerts = Array.isArray(alertData.warning) ? alertData.warning.length : 0;
+      const activeAlerts = criticalAlerts + warningAlerts;
+      
+      console.log('📊 Calculated KPIs:', {
+        totalBordereaux,
+        processedCount,
+        slaCompliance,
+        rejectionRate,
+        avgProcessingTime,
+        activeAlerts
+      });
 
       setKpis({
         slaCompliance,
@@ -49,14 +69,7 @@ const GlobalKPIHeader: React.FC = () => {
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Failed to load KPI data:', error);
-      // Set fallback data
-      setKpis({
-        slaCompliance: 0,
-        totalBordereaux: 0,
-        avgProcessingTime: 0,
-        rejectionRate: 0,
-        activeAlerts: 0
-      });
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -94,28 +107,28 @@ const GlobalKPIHeader: React.FC = () => {
       icon: <TrendingUpIcon />,
       color: getSLAColor(kpis.slaCompliance),
       progress: kpis.slaCompliance,
-      trend: '+2.3%'
+
     },
     {
       title: 'Bordereaux Traités',
       value: kpis.totalBordereaux.toLocaleString(),
       icon: <AssignmentIcon />,
       color: 'primary',
-      trend: '+156'
+
     },
     {
       title: 'Temps Moyen',
-      value: `${kpis.avgProcessingTime}j`,
+      value: `${Math.round(kpis.avgProcessingTime)}j`,
       icon: <AccessTimeIcon />,
       color: kpis.avgProcessingTime <= 3 ? 'success' : 'warning',
-      trend: '-0.2j'
+
     },
     {
       title: 'Taux de Rejet',
       value: `${kpis.rejectionRate}%`,
       icon: <ErrorIcon />,
       color: kpis.rejectionRate <= 3 ? 'success' : 'error',
-      trend: '-0.5%'
+
     },
     {
       title: 'Alertes Actives',
@@ -141,13 +154,7 @@ const GlobalKPIHeader: React.FC = () => {
                   <Box sx={{ color: `${kpi.color}.main` }}>
                     {kpi.icon}
                   </Box>
-                  {kpi.trend && (
-                    <Chip 
-                      label={kpi.trend} 
-                      size="small" 
-                      color={kpi.trend.startsWith('+') || kpi.trend.startsWith('-0') ? 'success' : 'default'}
-                    />
-                  )}
+
                 </Box>
                 
                 <Typography color="textSecondary" variant="body2" sx={{ mb: 1 }}>

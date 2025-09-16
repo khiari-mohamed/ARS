@@ -1,69 +1,19 @@
 import { LocalAPI } from './axios';
 
-// AI Classification
+// Real AI Classification - no more fallback mock data
 export const classifyClaim = async (text: string, metadata?: any) => {
-  try {
-    const { data } = await LocalAPI.post('/reclamations/classify', { text, metadata });
-    return data;
-  } catch (error) {
-    return {
-      category: 'REMBOURSEMENT',
-      subcategory: 'Remboursement partiel',
-      priority: 'medium',
-      confidence: 85.2,
-      suggestedActions: [
-        'Vérifier le dossier de remboursement',
-        'Contacter le service comptabilité',
-        'Préparer la justification du montant'
-      ],
-      estimatedResolutionTime: 48,
-      requiredSkills: ['Comptabilité', 'Analyse financière']
-    };
-  }
+  const { data } = await LocalAPI.post('/reclamations/classify', { text, metadata });
+  return data;
 };
 
 export const getClassificationStats = async (period = '30d') => {
-  try {
-    const { data } = await LocalAPI.get('/reclamations/classification/stats', { params: { period } });
-    return data;
-  } catch (error) {
-    return {
-      totalClassified: 1247,
-      byCategory: {
-        'REMBOURSEMENT': 456,
-        'DELAI_TRAITEMENT': 298,
-        'QUALITE_SERVICE': 234,
-        'ERREUR_DOSSIER': 189,
-        'TECHNIQUE': 70
-      },
-      byPriority: {
-        'urgent': 45,
-        'high': 234,
-        'medium': 789,
-        'low': 179
-      },
-      accuracy: {
-        overall: 87.5,
-        byCategory: {
-          'REMBOURSEMENT': 92.1,
-          'DELAI_TRAITEMENT': 85.3,
-          'QUALITE_SERVICE': 89.7,
-          'ERREUR_DOSSIER': 83.2,
-          'TECHNIQUE': 91.8
-        }
-      },
-      period
-    };
-  }
+  const { data } = await LocalAPI.get('/reclamations/classification/stats', { params: { period } });
+  return data;
 };
 
 export const updateClassificationModel = async (feedbackData: any[]) => {
-  try {
-    const { data } = await LocalAPI.post('/reclamations/classification/feedback', { feedbackData });
-    return data;
-  } catch (error) {
-    return { success: true };
-  }
+  const { data } = await LocalAPI.post('/reclamations/classification/feedback', { feedbackData });
+  return data;
 };
 
 // Customer Portal
@@ -176,176 +126,25 @@ export const addCustomerResponse = async (claimId: string, clientId: string, mes
   }
 };
 
-// Advanced Analytics
+// Real AI Analytics - no more mock patterns
 export const getClaimPatterns = async (period = '90d') => {
-  try {
-    const { data } = await LocalAPI.get('/reclamations/analytics/patterns', { params: { period } });
-    return data;
-  } catch (error) {
-    return [
-      {
-        id: 'pattern_delai_trop_long',
-        pattern: 'délai trop long',
-        frequency: 45,
-        categories: ['DELAI_TRAITEMENT', 'REMBOURSEMENT'],
-        avgResolutionTime: 7.2,
-        impact: 'high',
-        trend: 'increasing'
-      },
-      {
-        id: 'pattern_erreur_montant',
-        pattern: 'erreur de montant',
-        frequency: 32,
-        categories: ['ERREUR_DOSSIER', 'REMBOURSEMENT'],
-        avgResolutionTime: 4.8,
-        impact: 'medium',
-        trend: 'stable'
-      },
-      {
-        id: 'pattern_service_client',
-        pattern: 'service client',
-        frequency: 28,
-        categories: ['QUALITE_SERVICE'],
-        avgResolutionTime: 6.1,
-        impact: 'medium',
-        trend: 'decreasing'
-      },
-      {
-        id: 'pattern_site_fonctionne_pas',
-        pattern: 'site ne fonctionne pas',
-        frequency: 19,
-        categories: ['TECHNIQUE'],
-        avgResolutionTime: 2.3,
-        impact: 'high',
-        trend: 'increasing'
-      }
-    ];
-  }
+  const { data } = await LocalAPI.get('/reclamations/analytics/patterns', { params: { period } });
+  return data;
 };
 
 export const getRootCauses = async (period = '90d') => {
-  try {
-    const { data } = await LocalAPI.get('/reclamations/analytics/root-causes', { params: { period } });
-    return data;
-  } catch (error) {
-    return [
-      {
-        id: 'cause_processus_inefficace',
-        cause: 'Processus de traitement inefficace',
-        category: 'DELAI_TRAITEMENT',
-        frequency: 45,
-        relatedClaims: [],
-        preventionActions: [
-          'Optimiser le workflow de traitement',
-          'Augmenter les ressources de traitement',
-          'Automatiser les étapes répétitives'
-        ],
-        estimatedCost: 15000
-      },
-      {
-        id: 'cause_erreurs_saisie',
-        cause: 'Erreurs de saisie ou calcul automatique défaillant',
-        category: 'ERREUR_DOSSIER',
-        frequency: 32,
-        relatedClaims: [],
-        preventionActions: [
-          'Améliorer la validation des données',
-          'Former le personnel sur la saisie',
-          'Mettre à jour les règles de calcul'
-        ],
-        estimatedCost: 8000
-      },
-      {
-        id: 'cause_formation_personnel',
-        cause: 'Formation insuffisante du personnel',
-        category: 'QUALITE_SERVICE',
-        frequency: 28,
-        relatedClaims: [],
-        preventionActions: [
-          'Programme de formation continue',
-          'Améliorer les scripts de réponse',
-          'Mettre en place un système de feedback'
-        ],
-        estimatedCost: 12000
-      }
-    ];
-  }
+  const { data } = await LocalAPI.get('/reclamations/analytics/root-causes', { params: { period } });
+  return data;
 };
 
 export const getAnalyticsInsights = async (period = '90d') => {
-  try {
-    const { data } = await LocalAPI.get('/reclamations/analytics/insights', { params: { period } });
-    return data;
-  } catch (error) {
-    return [
-      {
-        type: 'pattern',
-        title: 'Patterns à fort impact détectés',
-        description: '3 patterns de réclamations à fort impact identifiés',
-        severity: 'warning',
-        data: { patterns: [] },
-        actionable: true,
-        suggestedActions: [
-          'Analyser les causes racines de ces patterns',
-          'Mettre en place des actions préventives',
-          'Former les équipes sur ces problématiques'
-        ]
-      },
-      {
-        type: 'trend',
-        title: 'Augmentation du volume de réclamations',
-        description: 'Le nombre de réclamations est en forte augmentation',
-        severity: 'warning',
-        data: {},
-        actionable: true,
-        suggestedActions: [
-          'Analyser les causes de l\'augmentation',
-          'Renforcer les équipes de traitement',
-          'Mettre en place des mesures préventives'
-        ]
-      },
-      {
-        type: 'recommendation',
-        title: 'Recommandation: Processus de traitement inefficace',
-        description: 'Actions suggérées pour réduire 45 réclamations',
-        severity: 'info',
-        data: { estimatedCost: 15000 },
-        actionable: true,
-        suggestedActions: [
-          'Optimiser le workflow de traitement',
-          'Augmenter les ressources de traitement',
-          'Automatiser les étapes répétitives'
-        ]
-      }
-    ];
-  }
+  const { data } = await LocalAPI.get('/reclamations/analytics/insights', { params: { period } });
+  return data;
 };
 
 export const getAdvancedMetrics = async (period = '30d') => {
-  try {
-    const { data } = await LocalAPI.get('/reclamations/analytics/metrics', { params: { period } });
-    return data;
-  } catch (error) {
-    return {
-      overview: {
-        totalClaims: 1247,
-        resolvedClaims: 1089,
-        resolutionRate: 87.3,
-        avgResolutionTime: 5.2,
-        satisfactionScore: 4.1
-      },
-      patterns: {
-        total: 12,
-        highImpact: 3,
-        increasing: 5
-      },
-      rootCauses: {
-        total: 8,
-        preventionCost: 45000
-      },
-      period
-    };
-  }
+  const { data } = await LocalAPI.get('/reclamations/analytics/metrics', { params: { period } });
+  return data;
 };
 
 // General Claims Services

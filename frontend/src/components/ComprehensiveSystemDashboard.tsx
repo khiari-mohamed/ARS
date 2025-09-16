@@ -29,6 +29,7 @@ import {
   Assignment,
   Refresh
 } from '@mui/icons-material';
+import { LocalAPI } from '../services/axios';
 
 interface SystemOverview {
   bo: {
@@ -105,9 +106,7 @@ const ComprehensiveSystemDashboard: React.FC = () => {
   const loadSystemData = async () => {
     try {
       setError(null);
-      const response = await fetch('/api/workflow/system-overview');
-      if (!response.ok) throw new globalThis.Error('Failed to load system data');
-      const data = await response.json();
+      const { data } = await LocalAPI.get('/super-admin/system-overview');
       setSystemData(data);
     } catch (error: any) {
       setError(error.message);
@@ -200,10 +199,10 @@ const ComprehensiveSystemDashboard: React.FC = () => {
                     Bureau d'Ordre
                   </Typography>
                   <Typography variant="h4" component="div">
-                    {systemData.bo.todayEntries}
+                    {systemData.bo.pendingEntries}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    entrées aujourd'hui
+                    en attente (Total: {systemData.bo.totalEntries})
                   </Typography>
                   <Box mt={1}>
                     <Chip
@@ -228,10 +227,10 @@ const ComprehensiveSystemDashboard: React.FC = () => {
                     Service SCAN
                   </Typography>
                   <Typography variant="h4" component="div">
-                    {systemData.scan.totalQueue}
+                    {systemData.scan.pendingScan}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    en file d'attente
+                    à scanner (Erreurs: {systemData.scan.errorCount})
                   </Typography>
                   <Box mt={1}>
                     <Chip
@@ -259,7 +258,7 @@ const ComprehensiveSystemDashboard: React.FC = () => {
                     {systemData.sla.complianceRate}%
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    taux de conformité
+                    taux de conformité (À risque: {systemData.sla.atRisk})
                   </Typography>
                   <Box mt={1}>
                     <Chip
@@ -348,7 +347,7 @@ const ComprehensiveSystemDashboard: React.FC = () => {
                   {systemData.teams.teams.map((team) => (
                     <TableRow key={team.id}>
                       <TableCell>{team.name}</TableCell>
-                      <TableCell>{team.totalWorkload}</TableCell>
+                      <TableCell>{team.totalWorkload || 0}</TableCell>
                       <TableCell>
                         <Chip
                           label={team.status}
@@ -469,16 +468,26 @@ const ComprehensiveSystemDashboard: React.FC = () => {
                     <Typography variant="h6" gutterBottom>
                       Goulots d'Étranglement
                     </Typography>
-                    {systemData.workflow.bottlenecks.length > 0 ? (
-                      systemData.workflow.bottlenecks.map((bottleneck) => (
-                        <Alert key={bottleneck} severity="warning" sx={{ mb: 1 }}>
-                          {bottleneck}
+                    {systemData.workflow.bottlenecks && systemData.workflow.bottlenecks.length > 0 ? (
+                      systemData.workflow.bottlenecks.map((bottleneck, index) => (
+                        <Alert key={index} severity="warning" sx={{ mb: 1 }}>
+                          {bottleneck === 'SCAN_QUEUE' ? 'Service SCAN - File d\'attente importante' :
+                           bottleneck === 'CHEF_ASSIGNMENT' ? 'Affectation Chef - Retard d\'assignation' :
+                           bottleneck === 'GESTIONNAIRE_PROCESSING' ? 'Gestionnaires - Surcharge de traitement' :
+                           bottleneck === 'FINANCE_PROCESSING' ? 'Finance - Retard de virement' :
+                           bottleneck}
                         </Alert>
                       ))
                     ) : (
-                      <Alert severity="success">
-                        Aucun goulot d'étranglement détecté
-                      </Alert>
+                      systemData.scan.errorCount > 5 ? (
+                        <Alert severity="warning" sx={{ mb: 1 }}>
+                          Service SCAN - Erreurs multiples ({systemData.scan.errorCount} erreurs)
+                        </Alert>
+                      ) : (
+                        <Alert severity="success">
+                          Aucun goulot d'étranglement détecté
+                        </Alert>
+                      )
                     )}
                   </CardContent>
                 </Card>

@@ -16,16 +16,10 @@ export class BOWorkflowService {
    */
   async getBOCorbeille(userId: string) {
     try {
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (user?.role !== 'BUREAU_ORDRE') {
-        return { items: [], stats: { total: 0, pending: 0 } };
-      }
-
       // Get bordereaux that need BO processing
       const items = await this.prisma.bordereau.findMany({
         where: { 
-          statut: 'EN_ATTENTE',
-          archived: false
+          statut: 'EN_ATTENTE'
         },
         include: { 
           client: true, 
@@ -50,13 +44,12 @@ export class BOWorkflowService {
       return {
         items: processedItems,
         stats: {
-          total: items.length,
           pending: items.length
         }
       };
     } catch (error) {
       this.logger.error(`Error getting BO corbeille: ${error.message}`);
-      return { items: [], stats: { total: 0, pending: 0 } };
+      return { items: [], stats: { pending: 0 } };
     }
   }
 
@@ -93,7 +86,7 @@ export class BOWorkflowService {
   private async notifyScanTeam(bordereauId: string, reference: string) {
     try {
       const scanUsers = await this.prisma.user.findMany({
-        where: { role: 'SCAN_TEAM', active: true }
+        where: { role: 'SCAN', active: true }
       });
 
       for (const user of scanUsers) {
@@ -109,7 +102,7 @@ export class BOWorkflowService {
         }).catch(() => this.logger.warn('Failed to create SCAN notification'));
       }
 
-      this.logger.log(`Notified ${scanUsers.length} SCAN team members about bordereau ${reference}`);
+      this.logger.log(`Notified ${scanUsers.length} SCAN users about bordereau ${reference}`);
     } catch (error) {
       this.logger.error(`Error notifying SCAN team: ${error.message}`);
     }

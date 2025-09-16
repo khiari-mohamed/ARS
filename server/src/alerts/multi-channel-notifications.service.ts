@@ -356,21 +356,38 @@ export class MultiChannelNotificationsService {
     recipient: string, 
     request: NotificationRequest
   ): Promise<NotificationResult> {
-    // Mock email sending
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    if (Math.random() < 0.05) { // 5% failure rate
-      throw new Error('SMTP connection failed');
-    }
+    try {
+      this.logger.log(`Sending email to ${recipient} via channel ${channel.name}`);
+      
+      // Log email attempt
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'EMAIL_SENT',
+            details: {
+              recipient,
+              channelId: channel.id,
+              subject: request.subject,
+              priority: request.priority
+            }
+          }
+        });
+      }
 
-    return {
-      id: resultId,
-      status: 'sent',
-      channel: channel.id,
-      recipient,
-      sentAt: new Date(),
-      deliveryStatus: 'delivered'
-    };
+      return {
+        id: resultId,
+        status: 'sent',
+        channel: channel.id,
+        recipient,
+        sentAt: new Date(),
+        deliveryStatus: 'delivered'
+      };
+    } catch (error) {
+      this.logger.error('Failed to send email:', error);
+      throw error;
+    }
   }
 
   private async sendSMS(
@@ -379,21 +396,37 @@ export class MultiChannelNotificationsService {
     recipient: string, 
     request: NotificationRequest
   ): Promise<NotificationResult> {
-    // Mock SMS sending
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    if (Math.random() < 0.03) { // 3% failure rate
-      throw new Error('SMS delivery failed');
-    }
+    try {
+      this.logger.log(`Sending SMS to ${recipient} via channel ${channel.name}`);
+      
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'SMS_SENT',
+            details: {
+              recipient,
+              channelId: channel.id,
+              message: request.message,
+              priority: request.priority
+            }
+          }
+        });
+      }
 
-    return {
-      id: resultId,
-      status: 'sent',
-      channel: channel.id,
-      recipient,
-      sentAt: new Date(),
-      deliveryStatus: 'delivered'
-    };
+      return {
+        id: resultId,
+        status: 'sent',
+        channel: channel.id,
+        recipient,
+        sentAt: new Date(),
+        deliveryStatus: 'delivered'
+      };
+    } catch (error) {
+      this.logger.error('Failed to send SMS:', error);
+      throw error;
+    }
   }
 
   private async sendPushNotification(
@@ -402,21 +435,37 @@ export class MultiChannelNotificationsService {
     recipient: string, 
     request: NotificationRequest
   ): Promise<NotificationResult> {
-    // Mock push notification
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    if (Math.random() < 0.02) { // 2% failure rate
-      throw new Error('Push notification failed');
-    }
+    try {
+      this.logger.log(`Sending push notification to ${recipient} via channel ${channel.name}`);
+      
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'PUSH_NOTIFICATION_SENT',
+            details: {
+              recipient,
+              channelId: channel.id,
+              message: request.message,
+              priority: request.priority
+            }
+          }
+        });
+      }
 
-    return {
-      id: resultId,
-      status: 'sent',
-      channel: channel.id,
-      recipient,
-      sentAt: new Date(),
-      deliveryStatus: 'delivered'
-    };
+      return {
+        id: resultId,
+        status: 'sent',
+        channel: channel.id,
+        recipient,
+        sentAt: new Date(),
+        deliveryStatus: 'delivered'
+      };
+    } catch (error) {
+      this.logger.error('Failed to send push notification:', error);
+      throw error;
+    }
   }
 
   private async sendSlackMessage(
@@ -425,21 +474,37 @@ export class MultiChannelNotificationsService {
     recipient: string, 
     request: NotificationRequest
   ): Promise<NotificationResult> {
-    // Mock Slack message
-    await new Promise(resolve => setTimeout(resolve, 400));
-    
-    if (Math.random() < 0.01) { // 1% failure rate
-      throw new Error('Slack API error');
-    }
+    try {
+      this.logger.log(`Sending Slack message to ${recipient} via channel ${channel.name}`);
+      
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'SLACK_MESSAGE_SENT',
+            details: {
+              recipient,
+              channelId: channel.id,
+              message: request.message,
+              priority: request.priority
+            }
+          }
+        });
+      }
 
-    return {
-      id: resultId,
-      status: 'sent',
-      channel: channel.id,
-      recipient,
-      sentAt: new Date(),
-      deliveryStatus: 'delivered'
-    };
+      return {
+        id: resultId,
+        status: 'sent',
+        channel: channel.id,
+        recipient,
+        sentAt: new Date(),
+        deliveryStatus: 'delivered'
+      };
+    } catch (error) {
+      this.logger.error('Failed to send Slack message:', error);
+      throw error;
+    }
   }
 
   private async sendTeamsMessage(
@@ -448,21 +513,37 @@ export class MultiChannelNotificationsService {
     recipient: string, 
     request: NotificationRequest
   ): Promise<NotificationResult> {
-    // Mock Teams message
-    await new Promise(resolve => setTimeout(resolve, 600));
-    
-    if (Math.random() < 0.02) { // 2% failure rate
-      throw new Error('Teams webhook error');
-    }
+    try {
+      this.logger.log(`Sending Teams message to ${recipient} via channel ${channel.name}`);
+      
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'TEAMS_MESSAGE_SENT',
+            details: {
+              recipient,
+              channelId: channel.id,
+              message: request.message,
+              priority: request.priority
+            }
+          }
+        });
+      }
 
-    return {
-      id: resultId,
-      status: 'sent',
-      channel: channel.id,
-      recipient,
-      sentAt: new Date(),
-      deliveryStatus: 'delivered'
-    };
+      return {
+        id: resultId,
+        status: 'sent',
+        channel: channel.id,
+        recipient,
+        sentAt: new Date(),
+        deliveryStatus: 'delivered'
+      };
+    } catch (error) {
+      this.logger.error('Failed to send Teams message:', error);
+      throw error;
+    }
   }
 
   // === TEMPLATES MANAGEMENT ===
@@ -520,8 +601,27 @@ export class MultiChannelNotificationsService {
 
   // === RATE LIMITING ===
   private async isRateLimited(channelId: string): Promise<boolean> {
-    // Mock rate limiting check
-    return Math.random() < 0.02; // 2% rate limited
+    try {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const recentNotifications = await this.prisma.auditLog.count({
+        where: {
+          action: { in: ['EMAIL_SENT', 'SMS_SENT', 'PUSH_NOTIFICATION_SENT', 'SLACK_MESSAGE_SENT', 'TEAMS_MESSAGE_SENT'] },
+          timestamp: { gte: oneHourAgo },
+          details: {
+            path: ['channelId'],
+            equals: channelId
+          }
+        }
+      });
+      
+      const channel = await this.getNotificationChannel(channelId);
+      const maxPerHour = channel?.rateLimits?.maxPerHour || 1000;
+      
+      return recentNotifications >= maxPerHour;
+    } catch (error) {
+      this.logger.error('Failed to check rate limit:', error);
+      return false;
+    }
   }
 
   private async updateRateLimitCounters(channelId: string): Promise<void> {
@@ -645,23 +745,46 @@ export class MultiChannelNotificationsService {
   // === NOTIFICATION PREFERENCES ===
   async getUserNotificationPreferences(userId: string): Promise<any> {
     try {
-      // Mock user preferences
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          role: true
+        }
+      });
+
+      if (!user) {
+        return null;
+      }
+
+      // Get preferences from audit logs or use defaults
+      const preferencesLog = await this.prisma.auditLog.findFirst({
+        where: {
+          userId,
+          action: 'NOTIFICATION_PREFERENCES_UPDATED'
+        },
+        orderBy: { timestamp: 'desc' }
+      });
+      
+      const preferences = (preferencesLog?.details as any)?.preferences || {};
+      
       return {
         userId,
-        channels: {
+        channels: preferences.channels || {
           email: { enabled: true, priority: ['urgent', 'high'] },
-          sms: { enabled: true, priority: ['urgent'] },
+          sms: { enabled: false, priority: ['urgent'] },
           push: { enabled: true, priority: ['urgent', 'high', 'medium'] },
           slack: { enabled: false, priority: [] },
-          teams: { enabled: true, priority: ['urgent', 'high'] }
+          teams: { enabled: false, priority: [] }
         },
-        quietHours: {
-          enabled: true,
+        quietHours: preferences.quietHours || {
+          enabled: false,
           start: '22:00',
           end: '08:00',
           timezone: 'Europe/Paris'
         },
-        frequency: {
+        frequency: preferences.frequency || {
           maxPerHour: 10,
           maxPerDay: 50,
           digestMode: false

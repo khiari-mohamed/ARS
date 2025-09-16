@@ -393,4 +393,82 @@ export class WorkloadAssignmentService {
       };
     }
   }
+
+  /**
+   * Get BO corbeille - documents waiting for processing
+   */
+  async getBOCorbeille(): Promise<{
+    items: any[];
+    stats: {
+      pending: number;
+      processed: number;
+      total: number;
+    };
+  }> {
+    try {
+      // Get bordereaux that are waiting for scan or processing
+      const pendingBordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          statut: { in: ['EN_ATTENTE', 'A_SCANNER'] },
+          archived: false
+        },
+        include: {
+          client: {
+            select: { name: true }
+          }
+        },
+        orderBy: { dateReception: 'desc' },
+        take: 50
+      });
+
+      // Get stats
+      const [pending, processed, total] = await Promise.all([
+        this.prisma.bordereau.count({
+          where: {
+            statut: { in: ['EN_ATTENTE', 'A_SCANNER'] },
+            archived: false
+          }
+        }),
+        this.prisma.bordereau.count({
+          where: {
+            statut: { in: ['SCANNE', 'TRAITE', 'CLOTURE'] },
+            archived: false
+          }
+        }),
+        this.prisma.bordereau.count({
+          where: { archived: false }
+        })
+      ]);
+
+      // Format items for BO corbeille
+      const items = pendingBordereaux.map(bordereau => ({
+        id: bordereau.id,
+        reference: bordereau.reference,
+        clientName: bordereau.client?.name || 'Client inconnu',
+        subject: `${bordereau.nombreBS} BS`,
+        createdAt: bordereau.dateReception,
+        statut: bordereau.statut
+      }));
+
+      return {
+        items,
+        stats: {
+          pending,
+          processed,
+          total
+        }
+      };
+
+    } catch (error) {
+      this.logger.error(`Error getting BO corbeille: ${error.message}`);
+      return {
+        items: [],
+        stats: {
+          pending: 0,
+          processed: 0,
+          total: 0
+        }
+      };
+    }
+  }
 }

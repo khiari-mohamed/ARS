@@ -6,6 +6,8 @@ import {
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FolderIcon from '@mui/icons-material/Folder';
 import PreviewIcon from '@mui/icons-material/Preview';
+import { LocalAPI } from '../../services/axios';
+import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 
 const DocumentIngestionTab: React.FC = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -20,43 +22,41 @@ const DocumentIngestionTab: React.FC = () => {
   const [gestionnaires, setGestionnaires] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogData, setDialogData] = useState<any>(null);
+  const [dialogResolve, setDialogResolve] = useState<any>(null);
+  
+  const showCustomDialog = (data: any): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setDialogData(data);
+      setDialogResolve(() => resolve);
+      setDialogOpen(true);
+    });
+  };
+  
+  const handleDialogClose = (confirmed: boolean) => {
+    setDialogOpen(false);
+    if (dialogResolve) {
+      dialogResolve(confirmed);
+      setDialogResolve(null);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load real clients
-        const clientsResponse = await fetch('/api/clients', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (clientsResponse.ok) {
-          const clientsData = await clientsResponse.json();
-          setClients(clientsData.map((c: any) => ({ id: c.id, name: c.name })));
-        } else {
-          throw new Error('Failed to load clients');
-        }
+        // Load real clients and gestionnaires using LocalAPI
+        const [clientsResponse, usersResponse] = await Promise.all([
+          LocalAPI.get('/clients'),
+          LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
+        ]);
         
-        // Load real gestionnaires
-        const usersResponse = await fetch('/api/users?role=GESTIONNAIRE', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (usersResponse.ok) {
-          const usersData = await usersResponse.json();
-          setGestionnaires(usersData.map((u: any) => ({ id: u.id, name: u.fullName })));
-        } else {
-          throw new Error('Failed to load gestionnaires');
-        }
+        setClients(clientsResponse.data.map((c: any) => ({ id: c.id, name: c.name })));
+        setGestionnaires(usersResponse.data.filter((u: any) => u.active).map((u: any) => ({ id: u.id, name: u.fullName })));
       } catch (error) {
         console.error('Failed to load data:', error);
-        // Fallback to mock data
-        setClients([
-          { id: '1', name: 'Client A' },
-          { id: '2', name: 'Client B' },
-          { id: '3', name: 'Client C' }
-        ]);
-        setGestionnaires([
-          { id: '1', name: 'Gestionnaire 1' },
-          { id: '2', name: 'Gestionnaire 2' }
-        ]);
+        setClients([]);
+        setGestionnaires([]);
       }
     };
     loadData();
@@ -80,37 +80,41 @@ const DocumentIngestionTab: React.FC = () => {
 
   const handleScannerImport = async () => {
     try {
-      const response = await fetch('/api/documents/paperstream/status', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      // Check PaperStream status first
+      const statusResponse = await LocalAPI.get('/documents/paperstream/status');
+      const status = statusResponse.data;
+      
+      const message = `📊 Statut PaperStream:\n\n` +
+        `📁 Dossier surveillé: ${status.inputFolder || './paperstream-input'}\n` +
+        `📄 Fichiers en attente: ${status.pendingBatches || 0}\n` +
+        `✅ Lots traités: ${status.totalProcessed || 0}\n` +
+        `⚠️ En quarantaine: ${status.totalQuarantined || 0}\n` +
+        `📈 Taux de succès: ${status.successRate || 0}%\n\n` +
+        `🔄 Statut: ${status.watcherActive ? 'Actif' : 'Inactif'}`;
+      
+      const shouldImport = await showCustomDialog({
+        title: '📄 Statut PaperStream',
+        message,
+        confirmText: 'Déclencher Import',
+        cancelText: 'Annuler'
       });
       
-      if (response.ok) {
-        const status = await response.json();
-        const message = `Scanner Status:\n- ${status.pendingFiles} fichiers en attente\n- ${status.processedFiles} fichiers traités\n- Statut: ${status.status}`;
-        alert(message);
+      if (shouldImport) {
+        const importResponse = await LocalAPI.post('/scan/paperstream-import');
+        const result = importResponse.data;
         
-        // Trigger actual import if there are pending files
-        if (status.pendingFiles > 0) {
-          const importResponse = await fetch('/api/documents/paperstream/import', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          
-          if (importResponse.ok) {
-            const importResult = await importResponse.json();
-            alert(`Import réussi: ${importResult.imported} documents importés`);
-          }
+        if (result.importedCount > 0) {
+          alert(`✅ Import réussi!\n\n📊 Résultats:\n• ${result.importedCount} fichier(s) importé(s)\n• ${result.files?.length || 0} fichier(s) traité(s)\n\n🔄 Actualisation...`);
+          // Refresh the page to show new documents
+          window.location.reload();
+        } else {
+          alert(`ℹ️ Import terminé\n\n📊 Résultats:\n• Aucun nouveau fichier détecté\n• Dossier d'entrée vide\n\n💡 Placez des fichiers dans le dossier PaperStream pour les traiter`);
         }
-      } else {
-        alert('Erreur lors de la vérification du scanner');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Scanner import failed:', error);
-      alert('Erreur de connexion au scanner');
+      const errorMsg = error.response?.data?.message || error.message || 'Erreur inconnue';
+      alert(`❌ Erreur PaperStream\n\n🔍 Détails: ${errorMsg}\n\n💡 Vérifiez que le service PaperStream est configuré`);
     }
   };
 
@@ -131,19 +135,11 @@ const DocumentIngestionTab: React.FC = () => {
         formData.append('bordereauId', metadata.bordereauRef.trim());
       }
 
-      const response = await fetch('/api/documents/upload', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await LocalAPI.post('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
-
-      const result = await response.json();
+      const result = response.data;
       alert('Document enregistré avec succès!');
       
       // Reset form
@@ -363,6 +359,30 @@ const DocumentIngestionTab: React.FC = () => {
           )}
         </Paper>
       </Grid>
+      
+      {/* Custom PaperStream Status Dialog */}
+      <Dialog open={dialogOpen} onClose={() => handleDialogClose(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <FolderIcon color="primary" />
+          {dialogData?.title}
+        </DialogTitle>
+        <DialogContent>
+          <Typography component="pre" sx={{ whiteSpace: 'pre-line', fontFamily: 'monospace', fontSize: '0.9rem', mb: 2 }}>
+            {dialogData?.message}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Voulez-vous déclencher un import manuel des fichiers PaperStream?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => handleDialogClose(false)} color="inherit">
+            {dialogData?.cancelText || 'Annuler'}
+          </Button>
+          <Button onClick={() => handleDialogClose(true)} variant="contained" startIcon={<FolderIcon />}>
+            {dialogData?.confirmText || 'Confirmer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Grid>
   );
 };
