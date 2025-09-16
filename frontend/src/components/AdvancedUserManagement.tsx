@@ -40,6 +40,7 @@ import {
   Group
 } from '@mui/icons-material';
 import { fetchAllUsers, bulkCreateUsers, bulkUpdateUsers, bulkDeleteUsers, getRoleTemplates, createUserFromTemplate } from '../services/superAdminService';
+import { LocalAPI } from '../services/axios';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -66,6 +67,7 @@ const AdvancedUserManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [users, setUsers] = useState<any[]>([]);
   const [roleTemplates, setRoleTemplates] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
@@ -84,12 +86,14 @@ const AdvancedUserManagement: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [usersData, templatesData] = await Promise.all([
+      const [usersData, templatesData, departmentsData] = await Promise.all([
         fetchAllUsers(),
-        getRoleTemplates()
+        getRoleTemplates(),
+LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() => [])
       ]);
       setUsers(usersData);
       setRoleTemplates(templatesData);
+      setDepartments(departmentsData);
     } catch (error) {
       console.error('Failed to load user management data:', error);
     } finally {
@@ -327,7 +331,7 @@ const AdvancedUserManagement: React.FC = () => {
                   <TableCell>Utilisateur</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Rôle</TableCell>
-                  <TableCell>Équipe</TableCell>
+                  <TableCell>Département</TableCell>
                   <TableCell>Statut</TableCell>
                   <TableCell>Dernière Connexion</TableCell>
                   <TableCell>Actions</TableCell>
@@ -359,7 +363,7 @@ const AdvancedUserManagement: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {user.team?.name || 'Aucune équipe'}
+                      {user.department || 'Aucun département'}
                     </TableCell>
                     <TableCell>
                       <Chip

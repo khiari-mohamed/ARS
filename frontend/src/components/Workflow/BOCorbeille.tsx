@@ -44,7 +44,8 @@ export const BOCorbeille: React.FC = () => {
   );
 
   const processMutation = useMutation(processBordereauForScan, {
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Bordereau envoyé au SCAN avec succès:', data);
       queryClient.invalidateQueries(['bo-corbeille']);
     },
     onError: (error) => {

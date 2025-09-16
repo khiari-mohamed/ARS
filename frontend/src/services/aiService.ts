@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { LocalAPI } from './axios';
 
 const AI_BASE_URL = process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localhost:8002';
 
@@ -492,6 +493,47 @@ class AIService {
         features: []
       };
     }
+  }
+
+  // NEW REAL AI ENDPOINTS - Using LocalAPI for real backend
+  async performAIAnalysis(type: string, parameters: any) {
+    const { data } = await LocalAPI.post('/reclamations/ai/analyze', { type, parameters });
+    return data;
+  }
+
+  async predictTrends(period: string, categories?: string[]) {
+    const { data } = await LocalAPI.post('/reclamations/ai/predict-trends', { period, categories });
+    return data;
+  }
+
+  async getLearningStats() {
+    const { data } = await LocalAPI.get('/reclamations/ai/learning-stats');
+    return data;
+  }
+
+  async forceLearningUpdate() {
+    const { data } = await LocalAPI.post('/reclamations/ai/force-learning');
+    return data;
+  }
+
+  async generateAIReport(reportType: string, period: string) {
+    const { data } = await LocalAPI.post('/reclamations/ai/generate-report', { reportType, period });
+    return data;
+  }
+
+  async performCostAnalysis(period: string, currency = 'TND') {
+    const { data } = await LocalAPI.post('/reclamations/ai/cost-analysis', { period, currency });
+    return data;
+  }
+
+  async generateActionPlan(rootCause: any, period: string, currency = 'TND') {
+    const { data } = await LocalAPI.post('/reclamations/ai/generate-action-plan', { rootCause, period, currency });
+    return data;
+  }
+
+  async getAIRecommendations(period = '30d') {
+    const { data } = await LocalAPI.get('/reclamations/classification/recommendations', { params: { period } });
+    return data;
   }
 }
 

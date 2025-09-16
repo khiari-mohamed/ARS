@@ -31,18 +31,34 @@ const DonneursTab: React.FC = () => {
   });
 
   useEffect(() => {
-    const loadDonneurs = async () => {
-      try {
-        const { getDonneurs } = await import('../../services/financeService');
-        const data = await getDonneurs();
-        setDonneurs(data);
-      } catch (error) {
-        console.error('Failed to load donneurs:', error);
-        setDonneurs([]);
-      }
-    };
     loadDonneurs();
   }, []);
+
+  const loadDonneurs = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/donneurs-ordre`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await response.json();
+      
+      // Transform backend data to frontend format
+      const transformedData = data.map((donneur: any) => ({
+        id: donneur.id,
+        name: donneur.nom || 'ARS Compte Principal',
+        bank: donneur.banque || 'ARS TUNISIE',
+        rib: donneur.rib || '08001000123456789012',
+        txtFormat: donneur.structureTxt || 'SWIFT',
+        status: donneur.statut === 'ACTIF' ? 'active' : 'inactive'
+      }));
+      
+      setDonneurs(transformedData);
+    } catch (error) {
+      console.error('Failed to load donneurs:', error);
+      setDonneurs([]);
+    }
+  };
 
   const handleAdd = () => {
     setForm({
@@ -68,52 +84,73 @@ const DonneursTab: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      const { createDonneur, updateDonneur } = await import('../../services/financeService');
+      const donneurData = {
+        nom: form.name,
+        banque: form.bank,
+        rib: form.rib,
+        structureTxt: form.txtFormat,
+        statut: form.status === 'active' ? 'ACTIF' : 'INACTIF'
+      };
       
       if (dialog.donneur) {
         // Update existing
-        const donneurData = {
-          nom: form.name,
-          banque: form.bank,
-          rib: form.rib,
-          structureTxt: form.txtFormat,
-          statut: form.status
-        };
-        await updateDonneur(dialog.donneur.id, donneurData);
-        setDonneurs(prev => prev.map(d => 
-          d.id === dialog.donneur?.id ? {...d, ...form} : d
-        ));
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/donneurs-ordre/${dialog.donneur.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(donneurData)
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update donneur');
+        }
       } else {
         // Add new
-        const donneurData = {
-          nom: form.name,
-          banque: form.bank,
-          rib: form.rib,
-          structureTxt: form.txtFormat,
-          statut: form.status
-        };
-        const newDonneur = await createDonneur(donneurData);
-        setDonneurs(prev => [...prev, newDonneur]);
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/donneurs-ordre`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(donneurData)
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create donneur');
+        }
       }
+      
       setDialog({open: false, donneur: null});
+      // Reload data from backend
+      await loadDonneurs();
     } catch (error) {
       console.error('Failed to save donneur:', error);
+      alert('Erreur lors de la sauvegarde: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     }
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce donneur d\'ordre ?')) {
       try {
-        console.log('🗑️ Deleting donneur with ID:', id);
-        const { deleteDonneur, getDonneurs } = await import('../../services/financeService');
-        const deleteResult = await deleteDonneur(id);
-        console.log('✅ Delete result:', deleteResult);
-        // Reload data from backend to ensure consistency
-        const data = await getDonneurs();
-        console.log('📊 Reloaded data:', data);
-        setDonneurs(data);
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/donneurs-ordre/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete donneur');
+        }
+        
+        // Reload data from backend
+        await loadDonneurs();
       } catch (error) {
-        console.error('❌ Failed to delete donneur:', error);
+        console.error('Failed to delete donneur:', error);
         alert('Erreur lors de la suppression: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
       }
     }

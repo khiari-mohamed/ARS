@@ -146,14 +146,5 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   BO: 'Bureau d\'Ordre'
 };
 
-// Department options
-export const DEPARTMENTS = [
-  'Traitement',
-  'Finance', 
-  'Service Client',
-  'Scan',
-  'Bureau d\'Ordre',
-  'Direction',
-  'IT',
-  'RH'
-];
+// Department options - now loaded dynamically from database
+export const DEPARTMENTS: string[] = [];

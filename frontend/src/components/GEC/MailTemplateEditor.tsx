@@ -123,7 +123,7 @@ const MailTemplateEditor: React.FC = () => {
           value={body}
           onChange={e => setBody(e.target.value)}
           rows={8}
-          placeholder="Body (use {{variable}} for placeholders)"
+          placeholder="Utilisez {{clientName}}, {{reference}}, {{date}}, {{montant}}, {{delaiTraitement}} pour l'auto-remplissage IA"
         />
         <input
           value={variables.join(',')}

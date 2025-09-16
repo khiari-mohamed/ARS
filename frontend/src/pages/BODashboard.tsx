@@ -35,7 +35,7 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import BOEntryForm from '../components/BOEntryForm';
-
+import { BOCorbeille } from '../components/Workflow/BOCorbeille';
 import BOPerformanceMetrics from '../components/BOPerformanceMetrics';
 import DocumentUploadPortal from '../components/DocumentUploadPortal';
 import { fetchBODashboard } from '../services/boService';
@@ -156,6 +156,11 @@ const BODashboard: React.FC = () => {
             </Button>
           </Box>
         </Box>
+      </Box>
+
+      {/* NEW ENHANCED BO CORBEILLE COMPONENT */}
+      <Box sx={{ mb: 4 }}>
+        <BOCorbeille />
       </Box>
 
       <Grid container spacing={3} mb={4}>

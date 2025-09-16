@@ -37,8 +37,7 @@ class AdaptiveLearning:
     def enhance_sla_prediction(self, items: List[Dict], base_result: Dict) -> Dict:
         """Enhance SLA prediction with historical learning"""
         try:
-            # Get adaptive prediction from learning engine
-            enhanced_result = learning_engine.get_adaptive_sla_prediction(base_result, items[0] if items else {})
+            enhanced_result = base_result.copy()
             
             # Apply pattern-based improvements
             enhanced_result = self._apply_sla_adaptations(items, enhanced_result)

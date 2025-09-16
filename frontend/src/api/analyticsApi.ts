@@ -63,6 +63,21 @@ export const getTraceability = async (bordereauId: string) => {
   return data;
 };
 
+export const getAdvancedClustering = async () => {
+  const { data } = await LocalAPI.post<any>('/analytics/ai/advanced-clustering', {});
+  return data;
+};
+
+export const getSophisticatedAnomalyDetection = async () => {
+  const { data } = await LocalAPI.post<any>('/analytics/ai/sophisticated-anomaly-detection', {});
+  return data;
+};
+
+export const generateExecutiveReport = async (params: any = {}) => {
+  const { data } = await LocalAPI.post<any>('/analytics/ai/executive-report', params);
+  return data;
+};
+
 // --- New Advanced Analytics Endpoints ---
 export const getSlaComplianceByUser = async (params: any) => {
   const { data } = await LocalAPI.get<any[]>('/analytics/sla-compliance-by-user', { params });
@@ -110,4 +125,28 @@ export const getAlertEscalationFlag = async () => {
 export const getEnhancedRecommendations = async () => {
   const { data } = await LocalAPI.get<any>('/analytics/recommendations/enhanced');
   return data;
+};
+
+export const getExecutiveDashboard = async (params: any = {}) => {
+  const { data } = await LocalAPI.post<any>('/analytics/ai/executive-report', {
+    report_type: 'executive_dashboard',
+    time_period: '30d',
+    include_forecasts: true,
+    ...params
+  });
+  return data;
+};
+
+export const getAdvancedAnalyticsDashboard = async () => {
+  const [clustering, anomalies, report] = await Promise.all([
+    LocalAPI.post<any>('/analytics/ai/advanced-clustering', {}),
+    LocalAPI.post<any>('/analytics/ai/sophisticated-anomaly-detection', {}),
+    LocalAPI.post<any>('/analytics/ai/executive-report', { report_type: 'comprehensive' })
+  ]);
+  
+  return {
+    clustering: clustering.data,
+    anomalies: anomalies.data,
+    executive_report: report.data
+  };
 };

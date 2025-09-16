@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import GetAppIcon from '@mui/icons-material/GetApp';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import TableViewIcon from '@mui/icons-material/TableView';
+import { LocalAPI } from '../../services/axios';
 
 const ReportsTab: React.FC = () => {
   const [filters, setFilters] = useState({
@@ -26,19 +27,10 @@ const ReportsTab: React.FC = () => {
 
   const loadClients = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/search`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (response.ok) {
-        const documents = await response.json();
-        const uniqueClients = [...new Set(documents.map((d: any) => d.clientName).filter(Boolean))] as string[];
-        setClients(uniqueClients);
-      } else {
-        setClients([]);
-      }
+      const response = await LocalAPI.get('/documents/search');
+      const documents = response.data;
+      const uniqueClients = [...new Set(documents.map((d: any) => d.bordereau?.client?.name).filter(Boolean))] as string[];
+      setClients(uniqueClients);
     } catch (error) {
       console.error('Failed to load clients:', error);
       setClients([]);
@@ -48,24 +40,16 @@ const ReportsTab: React.FC = () => {
   const loadReportData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/analytics?` + new URLSearchParams({
-        period: '30d',
-        dateFrom: filters.dateFrom,
-        dateTo: filters.dateTo,
-        client: filters.client,
-        type: filters.type
-      }), {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      const response = await LocalAPI.get('/documents/analytics', {
+        params: {
+          period: '30d',
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
+          client: filters.client,
+          type: filters.type
         }
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setReportData(data);
-      } else {
-        setReportData(null);
-      }
+      setReportData(response.data);
     } catch (error) {
       console.error('Failed to load report data:', error);
       setReportData(null);
@@ -104,45 +88,37 @@ const ReportsTab: React.FC = () => {
 
   const handleExport = async (format: 'pdf' | 'excel', reportType?: string) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/documents/export`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          type: reportType || 'custom',
-          format: format === 'pdf' ? 'pdf' : 'xlsx',
-          filters,
-          reportData: {
-            slaCompliance: slaComplianceData,
-            processingTime: processingTimeData,
-            volume: volumeData
-          }
-        })
+      const response = await LocalAPI.post('/documents/export', {
+        type: reportType || 'custom',
+        format: format === 'pdf' ? 'pdf' : 'xlsx',
+        filters,
+        reportData: {
+          slaCompliance: slaComplianceData,
+          processingTime: processingTimeData,
+          volume: volumeData
+        }
+      }, {
+        responseType: 'blob'
       });
       
-      if (response.ok) {
-        const blob = await response.blob();
-        const filename = `ged_report_${reportType || 'custom'}_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-        
-        // Create download link
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        
-        console.log(`✅ Rapport téléchargé: ${filename}`);
-      } else {
-        throw new Error('Failed to generate report');
-      }
-    } catch (error) {
+      const blob = new Blob([response.data]);
+      const filename = `ged_report_${reportType || 'custom'}_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      console.log(`✅ Rapport téléchargé: ${filename}`);
+    } catch (error: any) {
       console.error('Export failed:', error);
-      alert('Erreur lors de la génération du rapport');
+      const errorMsg = error.response?.data?.message || error.message || 'Erreur lors de la génération du rapport';
+      alert(`Export échoué: ${errorMsg}`);
     }
   };
   

@@ -105,6 +105,29 @@ class CorbeilleService {
     return data;
   }
 
+  // Single assignment for bordereau
+  async assignSingleBordereau(bordereauId: string, assigneeId: string) {
+    const { data } = await LocalAPI.post('/workflow/corbeille/bulk-assign', {
+      bordereauIds: [bordereauId],
+      assigneeId
+    });
+    return data;
+  }
+
+  // Reject bordereau
+  async rejectBordereau(bordereauId: string, reason: string) {
+    const { data } = await LocalAPI.post(`/workflow/bordereau/${bordereauId}/reject`, {
+      reason
+    });
+    return data;
+  }
+
+  // Treat bordereau personally (assign to chef)
+  async treatBordereauPersonally(bordereauId: string) {
+    const { data } = await LocalAPI.post(`/workflow/bordereau/${bordereauId}/treat-personally`);
+    return data;
+  }
+
   // Bulk assignment for reclamations
   async bulkAssignReclamations(reclamationIds: string[], assigneeId: string) {
     const { data } = await LocalAPI.post('/reclamations/corbeille/bulk-assign', {

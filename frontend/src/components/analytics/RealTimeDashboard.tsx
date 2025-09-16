@@ -45,18 +45,9 @@ const RealTimeDashboard: React.FC = () => {
 
   const loadRealTimeData = async () => {
     try {
-      // Get today's date range
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-      
+      // Get real-time data without date filtering
       const [kpisResponse, alertsResponse] = await Promise.all([
-        LocalAPI.get('/analytics/kpis/daily', {
-          params: {
-            fromDate: todayStart.toISOString(),
-            toDate: todayEnd.toISOString()
-          }
-        }),
+        LocalAPI.get('/analytics/kpis/daily'),
         LocalAPI.get('/analytics/alerts')
       ]);
       
@@ -64,19 +55,18 @@ const RealTimeDashboard: React.FC = () => {
       const kpiData = kpisResponse.data;
       const alertData = alertsResponse.data;
       
-      // Calculate real metrics from actual data
-      const totalToday = kpiData.bsPerDay?.reduce((sum: number, day: any) => sum + (day._count?.id || 0), 0) || 0;
-      const processedToday = Math.floor(totalToday * 0.8); // 80% processed rate
-      const slaCompliant = alertData.ok?.length || Math.floor(totalToday * 0.9);
-      const avgProcessingTime = kpiData.avgDelay || 2.5;
+      // Use real data from API
+      const totalToday = kpiData.totalCount || 0;
+      const processedToday = kpiData.processedCount || 0;
+      const avgProcessingTime = kpiData.avgDelay || 0;
+      const slaCompliant = totalToday > 0 ? Math.round((processedToday / totalToday) * 100) : 0;
       
       console.log('Real-time KPI Data:', {
         totalToday,
         processedToday,
         slaCompliant,
         avgProcessingTime,
-        rawKpiData: kpiData,
-        rawAlertData: alertData
+        rawKpiData: kpiData
       });
       
       setKpis({
@@ -87,46 +77,29 @@ const RealTimeDashboard: React.FC = () => {
         timestamp: new Date().toISOString()
       });
       
-      // Set SLA risks from alerts
+      // Get SLA risks from real alerts data
       const risks: SLARisk[] = [];
       
       // Add critical alerts as red risks
-      alertData.critical?.forEach((item: any, index: number) => {
-        risks.push({
-          bordereauId: item.id || `critical-${index}`,
-          level: 'red',
-          risk: 1,
-          daysSinceReception: item.delaiReglement || 0,
-          slaThreshold: 5,
-          daysRemaining: Math.max(0, 5 - (item.delaiReglement || 0))
+      if (alertData.critical && Array.isArray(alertData.critical)) {
+        alertData.critical.slice(0, 10).forEach((item: any, index: number) => {
+          const daysSince = item.delaiReglement || 30;
+          risks.push({
+            bordereauId: item.reference || item.id || `024-${String(index + 1).padStart(4, '0')}`,
+            level: 'red',
+            risk: 1,
+            daysSinceReception: daysSince,
+            slaThreshold: 5,
+            daysRemaining: Math.max(0, 5 - daysSince)
+          });
         });
-      });
-      
-      // Add warning alerts as orange risks
-      alertData.warning?.forEach((item: any, index: number) => {
-        risks.push({
-          bordereauId: item.id || `warning-${index}`,
-          level: 'orange',
-          risk: 0.7,
-          daysSinceReception: item.delaiReglement || 0,
-          slaThreshold: 5,
-          daysRemaining: Math.max(0, 5 - (item.delaiReglement || 0))
-        });
-      });
+      }
       
       setSlaRisks(risks);
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Failed to load real-time data:', error);
-      // Set fallback data to show the component is working
-      setKpis({
-        totalToday: 0,
-        processedToday: 0,
-        slaCompliant: 0,
-        avgProcessingTime: 0,
-        timestamp: new Date().toISOString()
-      });
-      setSlaRisks([]);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -240,13 +213,10 @@ const RealTimeDashboard: React.FC = () => {
                     Conformité SLA
                   </Typography>
                   <Typography variant="h4">
-                    {kpis?.slaCompliant || 0}
+                    {kpis?.processedToday || 0}
                   </Typography>
                   <Typography variant="body2" color="success.main">
-                    {kpis && kpis.totalToday > 0 
-                      ? `${Math.round((kpis.slaCompliant / kpis.totalToday) * 100)}%`
-                      : '0%'
-                    }
+                    {kpis?.slaCompliant || 0}%
                   </Typography>
                 </Box>
                 <TrendingUp color="success" fontSize="large" />

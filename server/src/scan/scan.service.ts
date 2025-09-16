@@ -309,7 +309,7 @@ export class ScanService {
     // Get real scan activity from audit logs
     const auditLogs = await this.prisma.auditLog.findMany({
       where: {
-        action: { in: ['SCAN_STARTED', 'SCAN_VALIDATED', 'OCR_COMPLETED'] },
+        action: { in: ['SCAN_STARTED', 'SCAN_COMPLETED', 'MANUAL_SCAN_STARTED', 'MANUAL_SCAN_COMPLETED', 'OCR_COMPLETED'] },
         timestamp: {
           gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
         }
@@ -339,7 +339,7 @@ export class ScanService {
     // Get scan activities grouped by hour
     const activities = await this.prisma.auditLog.findMany({
       where: {
-        action: { in: ['SCAN_STARTED', 'SCAN_VALIDATED', 'OCR_COMPLETED'] },
+        action: { in: ['SCAN_STARTED', 'SCAN_COMPLETED', 'MANUAL_SCAN_STARTED', 'MANUAL_SCAN_COMPLETED', 'OCR_COMPLETED'] },
         timestamp: { gte: last24Hours }
       },
       orderBy: { timestamp: 'asc' }

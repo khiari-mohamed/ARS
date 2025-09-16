@@ -10,20 +10,95 @@ export class RealTimeAnalyticsService {
   ) {}
 
   async processRealTimeEvent(eventType: string, data: any) {
-    switch (eventType) {
-      case 'bordereau.created':
-        await this.handleBordereauCreated(data);
-        break;
-      case 'bordereau.updated':
-        await this.handleBordereauUpdated(data);
-        break;
-      case 'sla.breach':
-        await this.handleSLABreach(data);
-        break;
-      case 'ov.created':
-        await this.handleOVCreated(data);
-        break;
+    try {
+      // Process event with AI monitoring
+      await this.processEventWithAI(eventType, data);
+      
+      switch (eventType) {
+        case 'bordereau.created':
+          await this.handleBordereauCreated(data);
+          break;
+        case 'bordereau.updated':
+          await this.handleBordereauUpdated(data);
+          break;
+        case 'sla.breach':
+          await this.handleSLABreach(data);
+          break;
+        case 'ov.created':
+          await this.handleOVCreated(data);
+          break;
+        case 'performance.anomaly':
+          await this.handlePerformanceAnomaly(data);
+          break;
+        case 'process.bottleneck':
+          await this.handleProcessBottleneck(data);
+          break;
+      }
+    } catch (error) {
+      console.error('Real-time event processing failed:', error);
     }
+  }
+  
+  private async processEventWithAI(eventType: string, data: any) {
+    try {
+      // Send event to AI microservice for pattern analysis
+      const response = await fetch('http://localhost:8002/pattern_recognition/process_anomalies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          process_data: [{
+            event_type: eventType,
+            timestamp: new Date().toISOString(),
+            data: data,
+            processing_time: data.processing_time || 0
+          }],
+          detection_type: 'real_time_monitoring'
+        })
+      });
+      
+      if (response.ok) {
+        const aiResult = await response.json();
+        if (aiResult.anomalies?.length > 0) {
+          await this.handleAIDetectedAnomalies(aiResult.anomalies);
+        }
+      }
+    } catch (error) {
+      console.error('AI event processing failed:', error);
+    }
+  }
+  
+  private async handlePerformanceAnomaly(data: any) {
+    console.log('Performance anomaly detected:', data);
+    // Trigger optimization recommendations
+    await this.triggerOptimizationRecommendations(data);
+  }
+  
+  private async handleProcessBottleneck(data: any) {
+    console.log('Process bottleneck detected:', data);
+    // Trigger resource reallocation
+    await this.triggerResourceReallocation(data);
+  }
+  
+  private async handleAIDetectedAnomalies(anomalies: any[]) {
+    for (const anomaly of anomalies) {
+      if (anomaly.severity === 'high') {
+        await this.createHighPriorityAlert(anomaly);
+      }
+    }
+  }
+  
+  private async triggerOptimizationRecommendations(data: any) {
+    // Implementation for optimization recommendations
+    console.log('Triggering optimization recommendations for:', data);
+  }
+  
+  private async triggerResourceReallocation(data: any) {
+    // Implementation for resource reallocation
+    console.log('Triggering resource reallocation for:', data);
+  }
+  
+  private async createHighPriorityAlert(anomaly: any) {
+    console.log('Creating high priority alert:', anomaly);
   }
 
   private async handleBordereauCreated(data: any) {

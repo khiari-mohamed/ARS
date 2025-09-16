@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import React from "react";
+import GestionnaireBordereaux from './GestionnaireBordereaux';
+import ChefEquipeBordereaux from './ChefEquipeBordereaux';
 import {
   fetchBordereaux,
   fetchKPIs,
@@ -149,60 +152,158 @@ function BordereauxListPage() {
   }
 
   if (userRole === 'CHEF_EQUIPE') {
-    return <TeamLeaderDashboard />;
+    return <ChefEquipeBordereaux />;
   }
 
   if (userRole === 'GESTIONNAIRE') {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Mes Bordereaux</h1>
-            <p className="text-gray-600">Bordereaux qui me sont assignés</p>
-          </div>
-          
-          {userBordereaux.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-              <div className="text-gray-400 text-6xl mb-4">📋</div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun bordereau assigné</h3>
-              <p className="text-gray-500">Vous n'avez actuellement aucun bordereau à traiter.</p>
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {userBordereaux.map(b => (
-                <BordereauCard 
-                  key={b.id} 
-                  bordereau={b} 
-                  onAssignSuccess={() => fetchUserBordereaux(userId).then(setUserBordereaux)} 
-                />
-              ))}
-            </div>
-          )}
+    return <GestionnaireBordereaux />;
+  }
 
-          {/* Personal Performance */}
-          {summary && (
-            <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-semibold mb-4">Ma Performance</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{summary.daysElapsed}</div>
-                  <div className="text-sm text-gray-600">Total traités</div>
+  if (false && userRole === 'GESTIONNAIRE_OLD') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Enhanced Header with restriction notice */}
+          <div className="mb-6">
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-4 border border-blue-100">
+              <div className="flex items-center mb-4">
+                <div className="bg-blue-100 p-3 rounded-full mr-4">
+                  <span className="text-2xl">📋</span>
                 </div>
-                <div className="text-center p-4 bg-red-50 rounded-lg">
-                  <div className="text-2xl font-bold text-red-600">{summary.daysRemaining}</div>
-                  <div className="text-sm text-gray-600">En retard</div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900 mb-1">Mes Bordereaux</h1>
+                  <p className="text-gray-600">Interface personnalisée pour gestionnaire</p>
                 </div>
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{summary.scanDuration ?? "-"}</div>
-                  <div className="text-sm text-gray-600">Durée scan moy. (j)</div>
-                </div>
-                <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600">{summary.totalDuration ?? "-"}</div>
-                  <div className="text-sm text-gray-600">Durée traitement moy. (j)</div>
+              </div>
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center">
+                  <span className="text-amber-600 mr-3 text-lg">⚠️</span>
+                  <div>
+                    <span className="text-amber-800 font-semibold block">Accès Gestionnaire</span>
+                    <span className="text-amber-700 text-sm">Vous ne voyez que les bordereaux qui vous sont personnellement assignés</span>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+          
+          {userBordereaux.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-lg p-12 text-center border border-gray-100">
+              <div className="bg-gray-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
+                <span className="text-4xl">📋</span>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Aucun bordereau assigné</h3>
+              <p className="text-gray-600 mb-6 text-lg">Vous n'avez actuellement aucun bordereau à traiter.</p>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 max-w-lg mx-auto border border-blue-200">
+                <div className="flex items-center justify-center mb-3">
+                  <span className="text-2xl mr-2">👨‍💼</span>
+                  <span className="text-blue-800 font-semibold">Information</span>
+                </div>
+                <p className="text-blue-700">
+                  Les bordereaux vous seront assignés par votre chef d'équipe selon la charge de travail et vos compétences.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Enhanced Quick Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-100 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center">
+                    <div className="bg-blue-100 p-3 rounded-full mr-4">
+                      <span className="text-xl">📊</span>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-blue-600">{userBordereaux.length}</div>
+                      <div className="text-sm text-gray-600 font-medium">Total assignés</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-lg p-6 border border-orange-100 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center">
+                    <div className="bg-orange-100 p-3 rounded-full mr-4">
+                      <span className="text-xl">⏳</span>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-orange-600">
+                        {userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
+                      </div>
+                      <div className="text-sm text-gray-600 font-medium">À traiter</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-lg p-6 border border-green-100 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center">
+                    <div className="bg-green-100 p-3 rounded-full mr-4">
+                      <span className="text-xl">✅</span>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-green-600">
+                        {userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                      </div>
+                      <div className="text-sm text-gray-600 font-medium">Traités</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-lg p-6 border border-red-100 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center">
+                    <div className="bg-red-100 p-3 rounded-full mr-4">
+                      <span className="text-xl">⚠️</span>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-red-600">
+                        {userBordereaux.filter(b => b.statut === 'EN_DIFFICULTE').length}
+                      </div>
+                      <div className="text-sm text-gray-600 font-medium">En difficulté</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Enhanced Bordereaux Grid */}
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {userBordereaux.map(b => (
+                  <div key={b.id} className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100 hover:border-blue-200">
+                    <BordereauCard 
+                      bordereau={b} 
+                      onAssignSuccess={() => fetchUserBordereaux(userId).then(setUserBordereaux)} 
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
           )}
+
+          {/* Enhanced Personal Performance */}
+          <div className="mt-8 bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+            <div className="flex items-center mb-6">
+              <div className="bg-purple-100 p-3 rounded-full mr-4">
+                <span className="text-2xl">📈</span>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Ma Performance Personnelle</h2>
+                <p className="text-gray-600">Statistiques de votre activité</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 hover:shadow-md transition-shadow">
+                <div className="text-4xl font-bold text-green-600 mb-2">{summary?.daysElapsed || userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}</div>
+                <div className="text-sm text-green-700 font-semibold">Total traités</div>
+              </div>
+              <div className="text-center p-6 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200 hover:shadow-md transition-shadow">
+                <div className="text-4xl font-bold text-red-600 mb-2">{summary?.daysRemaining || userBordereaux.filter(b => b.statut === 'EN_DIFFICULTE').length}</div>
+                <div className="text-sm text-red-700 font-semibold">En difficulté</div>
+              </div>
+              <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200 hover:shadow-md transition-shadow">
+                <div className="text-4xl font-bold text-blue-600 mb-2">{summary?.scanDuration ?? userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}</div>
+                <div className="text-sm text-blue-700 font-semibold">En cours</div>
+              </div>
+              <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200 hover:shadow-md transition-shadow">
+                <div className="text-4xl font-bold text-purple-600 mb-2">{userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%</div>
+                <div className="text-sm text-purple-700 font-semibold">Taux de réussite</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

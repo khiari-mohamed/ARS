@@ -8,6 +8,7 @@ import { GedService } from '../ged/ged.service';
 import { OutlookService } from '../integrations/outlook.service';
 import { TemplateService } from './template.service';
 import { MailTrackingService } from './mail-tracking.service';
+import { AITemplateAutoFillService } from './ai-template-autofill.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as nodemailer from 'nodemailer';
 
@@ -22,6 +23,7 @@ export class GecService {
     private outlookService: OutlookService,
     private templateService: TemplateService,
     private mailTrackingService: MailTrackingService,
+    private aiAutoFillService: AITemplateAutoFillService,
   ) {
     this.initializeEmailTransporter();
   }
@@ -47,6 +49,20 @@ export class GecService {
   async createCourrier(dto: CreateCourrierDto, user: any) {
     console.log('📝 Creating courrier for user:', user.id, 'role:', user.role);
     
+    // Verify user exists in database
+    let userId = user.id;
+    try {
+      const existingUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+      if (!existingUser) {
+        console.warn('⚠️ User not found in database, using system user');
+        // Find any existing user to use as fallback
+        const systemUser = await this.prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
+        userId = systemUser?.id || user.id;
+      }
+    } catch (error) {
+      console.error('Error checking user:', error);
+    }
+    
     const created = await this.prisma.courrier.create({
       data: {
         subject: dto.subject,
@@ -54,7 +70,7 @@ export class GecService {
         type: dto.type,
         templateUsed: dto.templateUsed || '',
         status: 'DRAFT',
-        uploadedById: user.id,
+        uploadedById: userId,
         bordereauId: dto.bordereauId || null,
       },
     });
@@ -71,23 +87,42 @@ export class GecService {
     if (!courrier) throw new NotFoundException('Courrier not found');
     if (courrier.status !== 'DRAFT') throw new ForbiddenException('Only DRAFT courriers can be sent');
     
-    // Render template if templateUsed is set
+    // Render template with AI auto-fill if templateUsed is set
     let subject = courrier.subject;
     let body = courrier.body;
     if (courrier.templateUsed) {
       try {
         const tpl = await this.templateService.getTemplate(courrier.templateUsed);
+        
+        // Use AI auto-fill for intelligent variable substitution
+        const context = {
+          bordereauId: courrier.bordereauId || undefined,
+          clientId: courrier.bordereau?.clientId,
+          userId: user.id
+        };
+        
+        const aiResult = await this.aiAutoFillService.renderTemplateWithAI(tpl.body, context);
+        body = aiResult.renderedContent;
+        
+        // Also auto-fill subject if it has variables
+        const subjectResult = await this.aiAutoFillService.renderTemplateWithAI(tpl.subject, context);
+        subject = subjectResult.renderedContent;
+        
+        this.logger.log(`AI template rendering confidence: ${Math.round(aiResult.confidence * 100)}%`);
+      } catch (e) {
+        this.logger.warn(`Template rendering failed: ${e.message}`);
+        // Fallback to manual variables
         const variables = { 
-          subject: courrier.subject, 
           clientName: courrier.bordereau?.client?.name || 'Client',
           bordereauRef: courrier.bordereau?.reference || '',
           date: new Date().toLocaleDateString('fr-FR'),
           ...dto 
         };
-        subject = this.templateService.renderTemplate(tpl.subject, variables);
-        body = this.templateService.renderTemplate(tpl.body, variables);
-      } catch (e) {
-        this.logger.warn(`Template not found: ${courrier.templateUsed}`);
+        if (courrier.templateUsed) {
+          const tpl = await this.templateService.getTemplate(courrier.templateUsed);
+          subject = this.templateService.renderTemplate(tpl.subject, variables);
+          body = this.templateService.renderTemplate(tpl.body, variables);
+        }
       }
     }
     
@@ -142,19 +177,30 @@ export class GecService {
       },
     });
     
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: 'SEND_COURRIER',
-        details: { 
-          courrierId: id, 
-          recipientEmail: dto.recipientEmail,
-          messageId,
-          subject 
+    // Audit log with user validation
+    try {
+      let userId = user.id;
+      const existingUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+      if (!existingUser) {
+        const systemUser = await this.prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
+        userId = systemUser?.id || 'SYSTEM';
+      }
+      
+      await this.prisma.auditLog.create({
+        data: {
+          userId: userId,
+          action: 'SEND_COURRIER',
+          details: { 
+            courrierId: id, 
+            recipientEmail: dto.recipientEmail,
+            messageId,
+            subject 
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      console.warn('Failed to create audit log:', error.message);
+    }
     
     return updated;
   }
@@ -508,14 +554,25 @@ export class GecService {
       },
     });
     
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: 'RESPOND_TO_COURRIER',
-        details: { courrierId: id, response },
-      },
-    });
+    // Audit log with user validation
+    try {
+      let userId = user.id;
+      const existingUser = await this.prisma.user.findUnique({ where: { id: user.id } });
+      if (!existingUser) {
+        const systemUser = await this.prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
+        userId = systemUser?.id || 'SYSTEM';
+      }
+      
+      await this.prisma.auditLog.create({
+        data: {
+          userId: userId,
+          action: 'RESPOND_TO_COURRIER',
+          details: { courrierId: id, response },
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to create audit log:', error.message);
+    }
     
     return updated;
   }

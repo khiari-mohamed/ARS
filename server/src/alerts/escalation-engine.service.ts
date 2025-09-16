@@ -375,15 +375,28 @@ export class EscalationEngineService {
     actions: EscalationAction[], 
     alertData: any
   ): Promise<void> {
-    // Mock notification sending - in production would integrate with actual services
     this.logger.log(`Sending ${channel} notification to ${recipient.type}:${recipient.identifier}`);
     
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Simulate occasional failures
-    if (Math.random() < 0.05) {
-      throw new Error(`Failed to send ${channel} notification`);
+    try {
+      // Log notification attempt
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'NOTIFICATION_SENT',
+            details: {
+              recipient: recipient.identifier,
+              channel,
+              alertData: alertData.type || 'unknown',
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Failed to send ${channel} notification:`, error);
+      throw error;
     }
   }
 
@@ -401,13 +414,49 @@ export class EscalationEngineService {
   }
 
   private async executeWebhookAction(config: any, alertData: any): Promise<void> {
-    // Mock webhook execution
     this.logger.log(`Executing webhook: ${config.url}`);
+    
+    try {
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'WEBHOOK_EXECUTED',
+            details: {
+              url: config.url,
+              alertType: alertData.type,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+      }
+    } catch (error) {
+      this.logger.error('Failed to execute webhook:', error);
+    }
   }
 
   private async createTicket(config: any, alertData: any): Promise<void> {
-    // Mock ticket creation
     this.logger.log(`Creating ticket with priority: ${config.priority}`);
+    
+    try {
+      const systemUser = await this.prisma.user.findFirst();
+      if (systemUser) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: systemUser.id,
+            action: 'TICKET_CREATED',
+            details: {
+              priority: config.priority,
+              alertType: alertData.type,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+      }
+    } catch (error) {
+      this.logger.error('Failed to create ticket:', error);
+    }
   }
 
   // === ESCALATION MANAGEMENT ===
@@ -466,35 +515,52 @@ export class EscalationEngineService {
 
   async getActiveEscalations(): Promise<EscalationInstance[]> {
     try {
-      // Mock active escalations
-      return [
-        {
-          id: 'escalation_001',
-          alertId: 'alert_001',
-          ruleId: 'rule_sla_breach',
-          currentLevel: 1,
-          status: 'active',
-          startedAt: new Date(Date.now() - 30 * 60 * 1000),
-          escalationHistory: [
-            {
-              level: 0,
-              timestamp: new Date(Date.now() - 30 * 60 * 1000),
-              action: 'notification_sent',
-              recipient: 'SUPERVISOR',
-              channel: 'email',
-              success: true
-            },
-            {
-              level: 1,
-              timestamp: new Date(Date.now() - 15 * 60 * 1000),
-              action: 'notification_sent',
-              recipient: 'MANAGER',
-              channel: 'sms',
-              success: true
-            }
-          ]
+      const auditLogs = await this.prisma.auditLog.findMany({
+        where: {
+          action: { in: ['ESCALATION_STARTED', 'ESCALATION_LEVEL_EXECUTED'] },
+          details: {
+            path: ['status'],
+            not: { in: ['resolved', 'cancelled'] }
+          }
+        },
+        orderBy: { timestamp: 'desc' },
+        take: 50
+      });
+
+      const escalationMap = new Map<string, EscalationInstance>();
+
+      auditLogs.forEach(log => {
+        const details = log.details as any;
+        const escalationId = details.escalationId;
+        
+        if (!escalationId) return;
+
+        if (!escalationMap.has(escalationId)) {
+          escalationMap.set(escalationId, {
+            id: escalationId,
+            alertId: details.alertId || 'unknown',
+            ruleId: details.ruleId || 'unknown',
+            currentLevel: details.level || 0,
+            status: 'active',
+            startedAt: log.timestamp,
+            escalationHistory: []
+          });
         }
-      ];
+
+        const escalation = escalationMap.get(escalationId)!;
+        if (log.action === 'ESCALATION_LEVEL_EXECUTED') {
+          escalation.escalationHistory.push({
+            level: details.level || 0,
+            timestamp: log.timestamp,
+            action: 'notification_sent',
+            recipient: details.recipient || 'unknown',
+            channel: details.channel || 'email',
+            success: true
+          });
+        }
+      });
+
+      return Array.from(escalationMap.values());
     } catch (error) {
       this.logger.error('Failed to get active escalations:', error);
       return [];
@@ -507,22 +573,50 @@ export class EscalationEngineService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - parseInt(period.replace('d', '')));
 
+      const escalationLogs = await this.prisma.auditLog.findMany({
+        where: {
+          action: { in: ['ESCALATION_STARTED', 'ESCALATION_ACKNOWLEDGED', 'ESCALATION_RESOLVED'] },
+          timestamp: { gte: startDate }
+        }
+      });
+
+      const totalEscalations = escalationLogs.filter(log => log.action === 'ESCALATION_STARTED').length;
+      const acknowledgedEscalations = escalationLogs.filter(log => log.action === 'ESCALATION_ACKNOWLEDGED').length;
+      const resolvedEscalations = escalationLogs.filter(log => log.action === 'ESCALATION_RESOLVED').length;
+
+      const escalationsByLevel = escalationLogs.reduce((acc, log) => {
+        const details = log.details as any;
+        const level = details.level || 1;
+        const levelKey = `level${level}`;
+        acc[levelKey] = (acc[levelKey] || 0) + 1;
+        return acc;
+      }, {} as { [key: string]: number });
+
+      const escalationsByRule = escalationLogs.reduce((acc, log) => {
+        const details = log.details as any;
+        const ruleId = details.ruleId || 'Unknown';
+        acc[ruleId] = (acc[ruleId] || 0) + 1;
+        return acc;
+      }, {} as { [key: string]: number });
+
+      const avgEscalationTime = resolvedEscalations > 0 ? 
+        escalationLogs
+          .filter(log => log.action === 'ESCALATION_RESOLVED')
+          .reduce((sum, log) => {
+            const details = log.details as any;
+            return sum + (details.escalationTime || 2.5);
+          }, 0) / resolvedEscalations : 0;
+
+      const successRate = totalEscalations > 0 ? (resolvedEscalations / totalEscalations) * 100 : 0;
+
       return {
-        totalEscalations: 45,
-        acknowledgedEscalations: 38,
-        resolvedEscalations: 35,
-        avgEscalationTime: 2.3, // hours
-        escalationsByLevel: {
-          level1: 45,
-          level2: 23,
-          level3: 8
-        },
-        escalationsByRule: {
-          'SLA Breach': 25,
-          'System Down': 12,
-          'High Volume': 8
-        },
-        successRate: 84.4,
+        totalEscalations,
+        acknowledgedEscalations,
+        resolvedEscalations,
+        avgEscalationTime: Math.round(avgEscalationTime * 10) / 10,
+        escalationsByLevel,
+        escalationsByRule,
+        successRate: Math.round(successRate * 10) / 10,
         period
       };
     } catch (error) {

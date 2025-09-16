@@ -363,7 +363,7 @@ class FinanceService {
 export const financeService = new FinanceService();
 
 // Export individual methods for named imports
-export const getAdherents = () => financeService.getAdherentsByClient('');
+export const getAdherents = (search?: string) => financeService.searchAdherents(search || 'all');
 export const createAdherent = (adherent: Omit<Adherent, 'id'>) => financeService.createAdherent(adherent);
 export const updateAdherent = (id: string, adherent: Partial<Adherent>) => financeService.updateAdherent(id, adherent);
 export const deleteAdherent = (id: string) => financeService.deleteAdherent(id);

@@ -26,7 +26,8 @@ function getUserFromRequest(req: any) {
   if (req.user && req.user.sub) {
     return { id: req.user.sub, role: req.user.role || 'SUPER_ADMIN', email: req.user.email };
   }
-  return { id: 'c5a75e94-14ff-4cc9-8c36-ab3f59dd6be7', role: 'SUPER_ADMIN', email: 'newuser@gmail.com' };
+  // Use the actual user ID from JWT instead of hardcoded fallback
+  return { id: req.user?.sub || req.user?.id || 'system', role: 'SUPER_ADMIN', email: 'system@ars.com' };
 }
 
 @Controller('courriers')
@@ -242,12 +243,34 @@ export class GecController {
   }
 
   @Post('templates/:id/render')
-  async renderTemplate(@Param('id') id: string, @Body() variables: Record<string, string>) {
+  async renderTemplate(
+    @Param('id') id: string, 
+    @Body() body: { variables?: Record<string, string>; context?: any },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
     const tpl = await this.templateService.getTemplate(id);
-    return {
-      subject: this.templateService.renderTemplate(tpl.subject, variables),
-      body: this.templateService.renderTemplate(tpl.body, variables),
-    };
+    
+    // Use AI auto-fill if context provided, otherwise manual variables
+    if (body.context) {
+      const aiResult = await this.gecService['aiAutoFillService'].renderTemplateWithAI(tpl.body, body.context);
+      const subjectResult = await this.gecService['aiAutoFillService'].renderTemplateWithAI(tpl.subject, body.context);
+      
+      return {
+        subject: subjectResult.renderedContent,
+        body: aiResult.renderedContent,
+        confidence: aiResult.confidence,
+        usedVariables: aiResult.usedVariables
+      };
+    } else {
+      const variables = body.variables || {};
+      return {
+        subject: this.templateService.renderTemplate(tpl.subject, variables),
+        body: this.templateService.renderTemplate(tpl.body, variables),
+        confidence: 1.0,
+        usedVariables: variables
+      };
+    }
   }
 
   @Post()

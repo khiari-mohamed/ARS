@@ -138,6 +138,76 @@ const AIRecommendations: React.FC = () => {
     }
   };
 
+  const handleOCRProcess = async () => {
+    try {
+      // Get a sample bordereau ID for OCR processing
+      const response = await fetch('/api/bordereaux?pageSize=1', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const bordereaux = Array.isArray(data) ? data : data.items || [];
+        
+        if (bordereaux.length > 0) {
+          const bordereauId = bordereaux[0].id;
+          
+          const ocrResponse = await fetch(`/api/bordereaux/${bordereauId}/ocr/process`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          if (ocrResponse.ok) {
+            const result = await ocrResponse.json();
+            setModalResult({
+              type: 'ocr_process',
+              success: true,
+              title: '🔍 Traitement OCR',
+              data: result
+            });
+            setShowResultModal(true);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('OCR process error:', error);
+      setModalResult({
+        type: 'ocr_process',
+        success: false,
+        title: '❌ Erreur OCR',
+        error: 'Erreur lors du traitement OCR'
+      });
+      setShowResultModal(true);
+    }
+  };
+
+  const handleAIForecast = async () => {
+    try {
+      const response = await fetch('/api/bordereaux/ai/load-forecast', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setModalResult({
+          type: 'ai_forecast',
+          success: true,
+          title: '📊 Prévision IA',
+          data: result
+        });
+        setShowResultModal(true);
+      }
+    } catch (error) {
+      console.error('AI forecast error:', error);
+    }
+  };
+
   const handleResourceAlert = async () => {
     try {
       const response = await fetch('/api/bordereaux/ai/resource-alert', {
@@ -198,20 +268,50 @@ const AIRecommendations: React.FC = () => {
             <p className="bordereau-kpi-value" style={{fontSize: '1.5rem', margin: 0}}>
               {recommendations?.recommendations?.length || 0}
             </p>
-            <button
-              onClick={handleResourceAlert}
-              style={{
-                fontSize: '0.7rem',
-                padding: '2px 6px',
-                background: '#f59e0b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              👥 Alerte Ressources
-            </button>
+            <div style={{display: 'flex', gap: '4px', flexWrap: 'wrap'}}>
+              <button
+                onClick={handleResourceAlert}
+                style={{
+                  fontSize: '0.6rem',
+                  padding: '2px 4px',
+                  background: '#f59e0b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                👥 Ressources
+              </button>
+              <button
+                onClick={handleAIForecast}
+                style={{
+                  fontSize: '0.6rem',
+                  padding: '2px 4px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                📊 Prévision
+              </button>
+              <button
+                onClick={handleOCRProcess}
+                style={{
+                  fontSize: '0.6rem',
+                  padding: '2px 4px',
+                  background: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                🔍 OCR
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -263,17 +363,17 @@ const AIRecommendations: React.FC = () => {
                   </div>
                 </div>
                 
-                <div style={{display: 'flex', gap: '4px'}}>
+                <div style={{display: 'flex', gap: '3px'}}>
                   <button
                     className="bordereau-btn bordereau-btn-primary"
-                    style={{fontSize: '0.7rem', padding: '3px 6px', flex: 1}}
+                    style={{fontSize: '0.65rem', padding: '2px 4px', flex: 1}}
                     onClick={() => handleBordereauClick(rec.id || rec.reference)}
                   >
-                    🤖 Assigner Auto
+                    🤖 Assigner
                   </button>
                   <button
                     className="bordereau-btn bordereau-btn-secondary"
-                    style={{fontSize: '0.7rem', padding: '3px 6px', flex: 1}}
+                    style={{fontSize: '0.65rem', padding: '2px 4px', flex: 1}}
                     onClick={() => handlePrioritize(rec.id || rec.reference)}
                   >
                     ⚡ Prioriser
@@ -283,13 +383,43 @@ const AIRecommendations: React.FC = () => {
             ))}
             
             <div style={{textAlign: 'center', marginTop: '16px', padding: '8px'}}>
-              <button
-                className="bordereau-btn bordereau-btn-primary"
-                style={{fontSize: '0.75rem', padding: '6px 12px'}}
-                onClick={loadAIData}
-              >
-                🔄 Actualiser
-              </button>
+              <div style={{display: 'flex', gap: '8px', justifyContent: 'center'}}>
+                <button
+                  className="bordereau-btn bordereau-btn-primary"
+                  style={{fontSize: '0.7rem', padding: '4px 8px'}}
+                  onClick={loadAIData}
+                >
+                  🔄 Actualiser
+                </button>
+                <button
+                  className="bordereau-btn"
+                  style={{
+                    fontSize: '0.7rem', 
+                    padding: '4px 8px',
+                    background: '#6366f1',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px'
+                  }}
+                  onClick={handleAIForecast}
+                >
+                  📊 Prévisions
+                </button>
+                <button
+                  className="bordereau-btn"
+                  style={{
+                    fontSize: '0.7rem', 
+                    padding: '4px 8px',
+                    background: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px'
+                  }}
+                  onClick={handleOCRProcess}
+                >
+                  🔍 OCR
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -480,6 +610,72 @@ const AIRecommendations: React.FC = () => {
                           ✅ Alerte envoyée aux administrateurs
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {modalResult.type === 'ai_forecast' && (
+                    <div style={{ padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #7dd3fc' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#0369a1' }}>Prévision 7 jours:</strong>
+                        <span style={{ marginLeft: '8px', fontSize: '1.1rem', fontWeight: 600 }}>
+                          {modalResult.data.forecast?.length || 0} bordereaux attendus
+                        </span>
+                      </div>
+                      {modalResult.data.staffing_recommendations?.length > 0 && (
+                        <div style={{ marginTop: '12px' }}>
+                          <strong style={{ color: '#0369a1' }}>Recommandations:</strong>
+                          <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+                            {modalResult.data.staffing_recommendations.slice(0, 3).map((rec: any, i: number) => (
+                              <li key={i} style={{ fontSize: '0.9rem', marginBottom: '4px' }}>
+                                {rec.recommendation || rec.description}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {modalResult.data.ai_powered && (
+                        <div style={{ marginTop: '12px', color: '#0369a1', fontSize: '0.8rem' }}>
+                          🤖 Analyse IA avancée
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {modalResult.type === 'ocr_process' && (
+                    <div style={{ padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #86efac' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <strong style={{ color: '#166534' }}>Documents traités:</strong>
+                        <span style={{ marginLeft: '8px', fontSize: '1.1rem', fontWeight: 600 }}>
+                          {modalResult.data.processed || 0}/{modalResult.data.total_documents || 0}
+                        </span>
+                      </div>
+                      {modalResult.data.results?.length > 0 && (
+                        <div style={{ marginTop: '12px' }}>
+                          <strong style={{ color: '#166534' }}>Résultats OCR:</strong>
+                          <div style={{ marginTop: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+                            {modalResult.data.results.slice(0, 3).map((result: any, i: number) => (
+                              <div key={i} style={{ 
+                                fontSize: '0.9rem', 
+                                marginBottom: '6px',
+                                padding: '6px',
+                                backgroundColor: result.success ? '#dcfce7' : '#fef2f2',
+                                borderRadius: '4px'
+                              }}>
+                                {result.success ? '✅' : '❌'} Document {i + 1}: 
+                                {result.extracted_data?.reference || 'Données extraites'}
+                                {result.confidence && (
+                                  <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#6b7280' }}>
+                                    ({Math.round(result.confidence * 100)}% confiance)
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ marginTop: '12px', color: '#166534', fontSize: '0.8rem' }}>
+                        🔍 OCR + IA pour extraction automatique
+                      </div>
                     </div>
                   )}
                 </div>

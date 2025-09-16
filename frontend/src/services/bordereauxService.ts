@@ -45,18 +45,63 @@ export const fetchKPIs = async () => {
 };
 
 export const fetchUnassignedBordereaux = async () => {
-  const response = await LocalAPI.get('/bordereaux/unassigned');
-  return response.data;
+  try {
+    const response = await LocalAPI.get('/bordereaux/unassigned');
+    return response.data || [];
+  } catch (error) {
+    console.error('Failed to fetch unassigned bordereaux:', error);
+    return [];
+  }
 };
 
 export const fetchTeamBordereaux = async (teamId: string) => {
-  const response = await LocalAPI.get(`/bordereaux/team/${teamId}`);
-  return response.data;
+  try {
+    const response = await LocalAPI.get(`/bordereaux/team/${teamId}`);
+    return response.data || [];
+  } catch (error) {
+    console.error('Failed to fetch team bordereaux:', error);
+    return [];
+  }
+};
+
+export const fetchChefEquipeCorbeille = async () => {
+  try {
+    const response = await LocalAPI.get('/bordereaux/chef-equipe/corbeille');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch chef equipe corbeille:', error);
+    return {
+      nonAffectes: [],
+      enCours: [],
+      traites: [],
+      stats: { nonAffectes: 0, enCours: 0, traites: 0 }
+    };
+  }
+};
+
+export const fetchGestionnaireCorbeille = async () => {
+  try {
+    const response = await LocalAPI.get('/workflow/gestionnaire/corbeille');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch gestionnaire corbeille:', error);
+    return {
+      assignedItems: [],
+      processedItems: [],
+      returnedItems: [],
+      stats: { assigned: 0, processed: 0, returned: 0 }
+    };
+  }
 };
 
 export const fetchUserBordereaux = async (userId: string) => {
-  const response = await LocalAPI.get(`/bordereaux/user/${userId}`);
-  return response.data;
+  try {
+    const response = await LocalAPI.get(`/bordereaux/inbox/user/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch user bordereaux:', error);
+    return [];
+  }
 };
 
 export const assignBordereau = async (bordereauId: string, userId?: string) => {
@@ -70,7 +115,7 @@ export const createBordereau = async (data: any) => {
 };
 
 export const updateBordereau = async (id: string, data: any) => {
-  const response = await LocalAPI.put(`/bordereaux/${id}`, data);
+  const response = await LocalAPI.patch(`/bordereaux/${id}`, data);
   return response.data;
 };
 
@@ -140,6 +185,15 @@ export const assignBordereau2 = async (bordereauId: string, userId: string) => {
 export const fetchBSList = async (bordereauId: string) => {
   const response = await LocalAPI.get(`/bordereaux/${bordereauId}/bs`);
   return response.data;
+};
+
+export const fetchBSDetails = async (bsId: string) => {
+  try {
+    const response = await LocalAPI.get(`/bs/${bsId}`);
+    return response.data;
+  } catch (error) {
+    return null;
+  }
 };
 
 export const fetchDocuments = async (bordereauId: string) => {
@@ -526,5 +580,99 @@ export const getOfflineCapableData = async (bordereauId: string) => {
       bordereau: await fetchBordereau(bordereauId),
       bsList: await fetchBSList(bordereauId)
     };
+  }
+};
+
+// BS Management Functions
+export const createBS = async (bordereauId: string, bsData: any) => {
+  try {
+    const { data } = await LocalAPI.post(`/bordereaux/${bordereauId}/bs`, bsData);
+    return data;
+  } catch (error) {
+    return { success: false, error: 'Failed to create BS' };
+  }
+};
+
+export const updateBSStatus = async (bsId: string, status: string, data?: any) => {
+  try {
+    const { data: result } = await LocalAPI.patch(`/bs/${bsId}`, { etat: status, ...data });
+    return result;
+  } catch (error) {
+    return { success: false, error: 'Failed to update BS' };
+  }
+};
+
+
+
+export const recalculateBordereauProgress = async (bordereauId: string) => {
+  try {
+    const { data } = await LocalAPI.post(`/bordereaux/${bordereauId}/recalculate-progress`);
+    return data;
+  } catch (error) {
+    return { success: false, error: 'Failed to recalculate progress' };
+  }
+};
+
+export const bulkUpdateBS = async (bordereauId: string, updates: { bsId: string; data: any }[]) => {
+  try {
+    const { data } = await LocalAPI.post(`/bordereaux/${bordereauId}/bs/bulk-update`, { updates });
+    return data;
+  } catch (error) {
+    return { success: false, error: 'Failed to bulk update BS' };
+  }
+};
+
+// New Gestionnaire-specific functions
+export const fetchGestionnaireGlobalBasket = async () => {
+  try {
+    const response = await LocalAPI.get('/workflow/gestionnaire/global-basket');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch global basket:', error);
+    return {
+      totalDossiers: 0,
+      typeBreakdown: { prestation: 0, reclamation: 0, complement: 0 },
+      recentDossiers: []
+    };
+  }
+};
+
+export const searchGestionnaireDossiers = async (query: string, filters?: { societe?: string }) => {
+  try {
+    const params = { q: query, ...filters };
+    console.log('🔗 API call to /workflow/gestionnaire/search with params:', params);
+    
+    const response = await LocalAPI.get('/workflow/gestionnaire/search', { params });
+    console.log('✅ API response:', response.data);
+    
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Failed to search dossiers:', error);
+    console.error('Error details:', error.response?.data || error.message);
+    return [];
+  }
+};
+
+export const fetchGestionnaireExtendedCorbeille = async () => {
+  try {
+    const response = await LocalAPI.get('/workflow/gestionnaire/corbeille');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch extended corbeille:', error);
+    return {
+      assignedItems: [],
+      recentlyProcessed: [],
+      stats: { assigned: 0, inProgress: 0, overdue: 0 }
+    };
+  }
+};
+
+export const fetchGestionnaireAIPriorities = async () => {
+  try {
+    const response = await LocalAPI.get('/workflow/gestionnaire/ai-priorities');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to fetch AI priorities:', error);
+    return [];
   }
 };

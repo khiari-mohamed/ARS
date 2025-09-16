@@ -1,59 +1,153 @@
 import React, { useState, useEffect } from 'react';
+import { Modal, Descriptions, Progress, Card, Row, Col, Tag, Table, Button, message } from 'antd';
 import { fetchBordereau } from '../services/bordereauxService';
 
 interface BordereauDetailsModalProps {
   bordereauId: string;
+  open: boolean;
   onClose: () => void;
 }
 
-const BordereauDetailsModal: React.FC<BordereauDetailsModalProps> = ({ bordereauId, onClose }) => {
+const BordereauDetailsModal: React.FC<BordereauDetailsModalProps> = ({ bordereauId, open, onClose }) => {
   const [bordereau, setBordereau] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [progressData, setProgressData] = useState<any>(null);
 
   useEffect(() => {
+    if (!open || !bordereauId) return;
+    
     const loadBordereau = async () => {
       try {
         const data = await fetchBordereau(bordereauId);
         setBordereau(data);
+        
+        // Calculate progress data
+        if (data.BulletinSoin) {
+          const total = data.BulletinSoin.length;
+          const traites = data.BulletinSoin.filter((bs: any) => bs.etat === 'VALIDATED').length;
+          const rejetes = data.BulletinSoin.filter((bs: any) => bs.etat === 'REJECTED').length;
+          const enCours = total - traites - rejetes;
+          const completionRate = total > 0 ? Math.round(((traites + rejetes) / total) * 100) : 0;
+          
+          let scanStatus = 'NON_SCANNE';
+          if (completionRate > 0 && completionRate < 100) scanStatus = 'SCAN_EN_COURS';
+          if (completionRate === 100) scanStatus = 'SCAN_FINALISE';
+          
+          setProgressData({ total, traites, rejetes, enCours, completionRate, scanStatus });
+        } else {
+          // Default progress data when no BS available
+          const completionRate = data?.statut === 'CLOTURE' ? 100 : 
+                                data?.statut === 'TRAITE' ? 80 : 
+                                data?.statut === 'EN_COURS' ? 50 : 0;
+          let scanStatus = 'NON_SCANNE';
+          if (data?.statut === 'SCAN_EN_COURS') scanStatus = 'SCAN_EN_COURS';
+          if (data?.statut === 'SCANNE' || completionRate > 0) scanStatus = 'SCAN_FINALISE';
+          
+          setProgressData({ 
+            total: data.nombreBS || 0, 
+            traites: 0, 
+            rejetes: 0, 
+            enCours: data.nombreBS || 0, 
+            completionRate, 
+            scanStatus 
+          });
+        }
       } catch (error) {
         console.error('Error loading bordereau:', error);
+        message.error('Erreur lors du chargement du bordereau');
       } finally {
         setLoading(false);
       }
     };
 
     loadBordereau();
-  }, [bordereauId]);
+  }, [bordereauId, open]);
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-        <div className="bg-white rounded-lg p-6">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-center">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
+  const getScanStatusColor = (status: string) => {
+    switch (status) {
+      case 'NON_SCANNE': return 'orange';
+      case 'SCAN_EN_COURS': return 'blue';
+      case 'SCAN_FINALISE': return 'green';
+      default: return 'default';
+    }
+  };
+
+  const getScanStatusText = (status: string) => {
+    switch (status) {
+      case 'NON_SCANNE': return 'Non scanné';
+      case 'SCAN_EN_COURS': return 'Scan en cours';
+      case 'SCAN_FINALISE': return 'Scan finalisé';
+      default: return status;
+    }
+  };
+
+  const getProgressColor = (percentage: number) => {
+    if (percentage >= 100) return '#52c41a';
+    if (percentage >= 75) return '#1890ff';
+    if (percentage >= 50) return '#faad14';
+    return '#ff4d4f';
+  };
 
   return (
-    <div className="bordereau-details-modal">
-      <div className="bordereau-details-content">
-        <div className="bordereau-details-header">
-          <h2 className="bordereau-details-title">📄 Détails du Bordereau</h2>
-          <button
-            onClick={onClose}
-            className="bordereau-details-close"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <Modal
+      title={`Bordereau ${bordereau?.reference || ''} - Détails et Progression`}
+      open={open}
+      onCancel={onClose}
+      width={1000}
+      footer={[
+        <Button key="close" onClick={onClose}>
+          Fermer
+        </Button>
+      ]}
+    >
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40 }}>Chargement...</div>
+      ) : bordereau ? (
+        <div>
 
         <div className="bordereau-details-body">
           {bordereau ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Enhanced Progression Section */}
+              {progressData && (
+                <div className="md:col-span-2 bordereau-details-section">
+                  <h3>📊 Progression du Bordereau</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <Tag color={getScanStatusColor(progressData.scanStatus)} className="text-sm px-3 py-1">
+                          🏷️ {getScanStatusText(progressData.scanStatus)}
+                        </Tag>
+                        <span className="text-lg font-semibold">
+                          📈 {progressData.completionRate}% complété
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <Progress 
+                      percent={progressData.completionRate} 
+                      strokeColor={getProgressColor(progressData.completionRate)}
+                      showInfo={false}
+                    />
+                    
+                    <div className="grid grid-cols-3 gap-4 mt-4">
+                      <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="text-2xl font-bold text-green-600">{progressData.traites}</div>
+                        <div className="text-sm text-green-700">📊 Traités</div>
+                      </div>
+                      <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
+                        <div className="text-2xl font-bold text-red-600">{progressData.rejetes}</div>
+                        <div className="text-sm text-red-700">📊 Rejetés</div>
+                      </div>
+                      <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-2xl font-bold text-blue-600">{progressData.enCours}</div>
+                        <div className="text-sm text-blue-700">📊 En cours</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="bordereau-details-section">
                 <h3>📊 Informations générales</h3>
                 <div className="space-y-4">
@@ -128,6 +222,7 @@ const BordereauDetailsModal: React.FC<BordereauDetailsModalProps> = ({ bordereau
                           <th>Référence</th>
                           <th>Montant</th>
                           <th>Statut</th>
+                          <th>🏷️ Scan Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -136,9 +231,14 @@ const BordereauDetailsModal: React.FC<BordereauDetailsModalProps> = ({ bordereau
                             <td>{bs.reference || `BS-${index + 1}`}</td>
                             <td>{bs.montant ? `${bs.montant.toFixed(2)} €` : 'N/A'}</td>
                             <td>
-                              <span className="bordereau-status-badge">
-                                {bs.statut || 'En cours'}
-                              </span>
+                              <Tag color={bs.etat === 'VALIDATED' ? 'green' : bs.etat === 'REJECTED' ? 'red' : 'blue'}>
+                                {bs.etat === 'VALIDATED' ? 'Validé' : bs.etat === 'REJECTED' ? 'Rejeté' : 'En cours'}
+                              </Tag>
+                            </td>
+                            <td>
+                              <Tag color={bs.etat === 'VALIDATED' ? 'green' : bs.etat === 'REJECTED' ? 'orange' : 'blue'}>
+                                {bs.etat === 'VALIDATED' ? 'Scan finalisé' : bs.etat === 'REJECTED' ? 'Scan en cours' : 'Non scanné'}
+                              </Tag>
                             </td>
                           </tr>
                         ))}
@@ -155,16 +255,13 @@ const BordereauDetailsModal: React.FC<BordereauDetailsModalProps> = ({ bordereau
           )}
         </div>
 
-        <div className="bordereau-details-footer">
-          <button
-            onClick={onClose}
-            className="bordereau-btn-close"
-          >
-            ✖ Fermer
-          </button>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <p>Bordereau non trouvé</p>
+        </div>
+      )}
+    </Modal>
   );
 };
 

@@ -9,19 +9,18 @@ const SLAStatusPanel: React.FC<Props> = ({ items }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mock SLA prediction function
+  // Real SLA prediction function
   const getSlaPredictionAI = async (items: SlaPrediction[]) => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Generate mock predictions based on input items
-    const sla_predictions = items.map(item => ({
-      ...item,
-      risk: item.score > 70 ? 'HIGH' : item.score > 40 ? 'MEDIUM' : 'LOW',
-      days_left: Math.max(0, item.days_left - Math.floor(Math.random() * 5))
-    }));
-    
-    return { sla_predictions };
+    try {
+      const response = await fetch('/api/analytics/sla/predictions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error('Failed to get SLA predictions');
+    }
   };
 
   useEffect(() => {

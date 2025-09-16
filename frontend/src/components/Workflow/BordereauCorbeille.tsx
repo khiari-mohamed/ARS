@@ -28,7 +28,8 @@ import {
   MenuItem,
   Alert,
   Chip,
-  CircularProgress
+  CircularProgress,
+  TextField
 } from '@mui/material';
 import { Assignment, Warning, CheckCircle, Schedule, TrendingUp } from '@mui/icons-material';
 
@@ -37,6 +38,11 @@ export const BordereauCorbeille: React.FC = () => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState('');
+  const [singleAssignModalOpen, setSingleAssignModalOpen] = useState(false);
+  const [selectedItemForAssign, setSelectedItemForAssign] = useState<string | null>(null);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedItemForReject, setSelectedItemForReject] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -65,6 +71,41 @@ export const BordereauCorbeille: React.FC = () => {
         setSelectedItems([]);
         setAssignModalOpen(false);
         setSelectedAssignee('');
+      }
+    }
+  );
+
+  const singleAssignMutation = useMutation(
+    ({ bordereauId, assigneeId }: { bordereauId: string; assigneeId: string }) =>
+      corbeilleService.assignSingleBordereau(bordereauId, assigneeId),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['bordereau-chef-corbeille']);
+        setSingleAssignModalOpen(false);
+        setSelectedItemForAssign(null);
+        setSelectedAssignee('');
+      }
+    }
+  );
+
+  const rejectMutation = useMutation(
+    ({ bordereauId, reason }: { bordereauId: string; reason: string }) =>
+      corbeilleService.rejectBordereau(bordereauId, reason),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['bordereau-chef-corbeille']);
+        setRejectModalOpen(false);
+        setSelectedItemForReject(null);
+        setRejectReason('');
+      }
+    }
+  );
+
+  const treatPersonallyMutation = useMutation(
+    (bordereauId: string) => corbeilleService.treatBordereauPersonally(bordereauId),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['bordereau-chef-corbeille']);
       }
     }
   );
@@ -113,6 +154,36 @@ export const BordereauCorbeille: React.FC = () => {
     assignMutation.mutate({
       bordereauIds: selectedItems,
       assigneeId: selectedAssignee
+    });
+  };
+
+  const handleRejectItem = (itemId: string) => {
+    setSelectedItemForReject(itemId);
+    setRejectModalOpen(true);
+  };
+
+  const handleAssignToGestionnaire = (itemId: string) => {
+    setSelectedItemForAssign(itemId);
+    setSingleAssignModalOpen(true);
+  };
+
+  const handleTreatPersonally = (itemId: string) => {
+    treatPersonallyMutation.mutate(itemId);
+  };
+
+  const handleSingleAssign = () => {
+    if (!selectedItemForAssign || !selectedAssignee) return;
+    singleAssignMutation.mutate({
+      bordereauId: selectedItemForAssign,
+      assigneeId: selectedAssignee
+    });
+  };
+
+  const handleReject = () => {
+    if (!selectedItemForReject || !rejectReason.trim()) return;
+    rejectMutation.mutate({
+      bordereauId: selectedItemForReject,
+      reason: rejectReason
     });
   };
 
@@ -277,13 +348,43 @@ export const BordereauCorbeille: React.FC = () => {
                 <TableCell>{item.assignedTo || '-'}</TableCell>
               )}
               <TableCell>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => window.open(`/bordereaux/${item.id}`, '_blank')}
-                >
-                  Voir
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => window.open(`/bordereaux/${item.id}`, '_blank')}
+                  >
+                    Voir
+                  </Button>
+                  {activeTab === 0 && ( // Only show actions for non-assigned items
+                    <>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="error"
+                        onClick={() => handleRejectItem(item.id)}
+                      >
+                        ❌ Rejeter
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="primary"
+                        onClick={() => handleAssignToGestionnaire(item.id)}
+                      >
+                        👤 Assigner
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => handleTreatPersonally(item.id)}
+                      >
+                        ✍️ Traiter
+                      </Button>
+                    </>
+                  )}
+                </Box>
               </TableCell>
             </TableRow>
           ))}
@@ -373,7 +474,7 @@ export const BordereauCorbeille: React.FC = () => {
         )
       )}
 
-      {/* Assignment Modal */}
+      {/* Bulk Assignment Modal */}
       <Dialog open={assignModalOpen} onClose={() => setAssignModalOpen(false)}>
         <DialogTitle>Assigner en lot</DialogTitle>
         <DialogContent>
@@ -403,6 +504,69 @@ export const BordereauCorbeille: React.FC = () => {
             disabled={!selectedAssignee || assignMutation.isLoading}
           >
             {assignMutation.isLoading ? 'Attribution...' : 'Assigner'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Single Assignment Modal */}
+      <Dialog open={singleAssignModalOpen} onClose={() => setSingleAssignModalOpen(false)}>
+        <DialogTitle>Assigner à un Gestionnaire</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Assigner ce bordereau à :
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel>Gestionnaire</InputLabel>
+            <Select
+              value={selectedAssignee}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
+              disabled={usersLoading}
+            >
+              {users.map((user: any) => (
+                <MenuItem key={user.id} value={user.id}>
+                  {user.fullName}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSingleAssignModalOpen(false)}>Annuler</Button>
+          <Button
+            onClick={handleSingleAssign}
+            variant="contained"
+            disabled={!selectedAssignee || singleAssignMutation.isLoading}
+          >
+            {singleAssignMutation.isLoading ? 'Attribution...' : 'Assigner'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reject Modal */}
+      <Dialog open={rejectModalOpen} onClose={() => setRejectModalOpen(false)}>
+        <DialogTitle>Rejeter le Bordereau</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Motif de rejet :
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Veuillez indiquer la raison du rejet..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRejectModalOpen(false)}>Annuler</Button>
+          <Button
+            onClick={handleReject}
+            variant="contained"
+            color="error"
+            disabled={!rejectReason.trim() || rejectMutation.isLoading}
+          >
+            {rejectMutation.isLoading ? 'Rejet...' : 'Rejeter'}
           </Button>
         </DialogActions>
       </Dialog>

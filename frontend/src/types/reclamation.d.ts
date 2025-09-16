@@ -61,6 +61,7 @@ export interface CreateReclamationDTO {
   type: string;
   severity: ReclamationSeverity;
   description: string;
+  department?: string;
   assignedToId?: string;
   file?: File;
 }

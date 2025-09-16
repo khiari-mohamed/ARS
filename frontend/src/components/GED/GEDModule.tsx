@@ -19,16 +19,23 @@ const GEDModule: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
 
-  const tabLabels = [
-    'Dashboard',
-    'Ingestion',
-    'Corbeille',
-    'Recherche',
-    'Workflows',
-    'Intégrations',
-    'PaperStream',
-    'Rapports'
+  // Role-based tab filtering for Gestionnaire
+  const allTabs = [
+    { label: 'Dashboard', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+    { label: 'Ingestion', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
+    { label: 'Corbeille', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+    { label: 'Recherche', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+    { label: 'Workflows', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] },
+    { label: 'Intégrations', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
+    { label: 'PaperStream', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
+    { label: 'Rapports', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] }
   ];
+
+  const availableTabs = allTabs.filter(tab => 
+    !user?.role || tab.roles.includes(user.role)
+  );
+  
+  const tabLabels = availableTabs.map(tab => tab.label);
 
   return (
     <Box sx={{ p: 2, minHeight: '100vh', bgcolor: '#f5f5f5' }}>
@@ -69,6 +76,15 @@ const GEDModule: React.FC = () => {
       {/* Desktop View */}
       {!isMobile && (
         <Paper elevation={2} sx={{ p: 3 }}>
+          {/* Role-based access warning for Gestionnaire */}
+          {user?.role === 'GESTIONNAIRE' && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+              <Typography variant="body2" color="warning.dark">
+                ⚠️ Accès GED limité: Vous ne pouvez consulter que les documents liés à vos dossiers assignés
+              </Typography>
+            </Box>
+          )}
+
           <Tabs
             value={tab}
             onChange={(_, v) => setTab(v)}
@@ -82,14 +98,14 @@ const GEDModule: React.FC = () => {
           </Tabs>
 
           <Box>
-            {tab === 0 && <GEDDashboardTab />}
-            {tab === 1 && <DocumentIngestionTab />}
-            {tab === 2 && <CorbeilleTab />}
-            {tab === 3 && <AdvancedSearchInterface />}
-            {tab === 4 && <DocumentWorkflowManager />}
-            {tab === 5 && <IntegrationManager />}
-            {tab === 6 && <PaperStreamDashboard />}
-            {tab === 7 && <ReportsTab />}
+            {availableTabs[tab]?.label === 'Dashboard' && <GEDDashboardTab />}
+            {availableTabs[tab]?.label === 'Ingestion' && <DocumentIngestionTab />}
+            {availableTabs[tab]?.label === 'Corbeille' && <CorbeilleTab />}
+            {availableTabs[tab]?.label === 'Recherche' && <AdvancedSearchInterface />}
+            {availableTabs[tab]?.label === 'Workflows' && <DocumentWorkflowManager />}
+            {availableTabs[tab]?.label === 'Intégrations' && <IntegrationManager />}
+            {availableTabs[tab]?.label === 'PaperStream' && <PaperStreamDashboard />}
+            {availableTabs[tab]?.label === 'Rapports' && <ReportsTab />}
           </Box>
         </Paper>
       )}

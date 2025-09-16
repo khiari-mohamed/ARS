@@ -63,7 +63,8 @@ const WorkforceEstimator: React.FC = () => {
   const loadWorkforceData = async () => {
     try {
       const response = await LocalAPI.get('/analytics/workforce-estimator', {
-        params: { period }
+        params: { period },
+        timeout: 15000
       });
       setData(response.data);
     } catch (error) {
@@ -286,7 +287,7 @@ const WorkforceEstimator: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data.departmentAnalysis.map((dept) => (
+                {data.departmentAnalysis?.map((dept) => (
                   <TableRow key={dept.department}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>
@@ -336,7 +337,15 @@ const WorkforceEstimator: React.FC = () => {
                       </Tooltip>
                     </TableCell>
                   </TableRow>
-                ))}
+                )) || (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center">
+                      <Typography variant="body2" color="text.secondary">
+                        Aucune donnée de département disponible
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -350,11 +359,15 @@ const WorkforceEstimator: React.FC = () => {
             🤖 Recommandations IA
           </Typography>
           <Box>
-            {data.recommendations.map((recommendation, index) => (
+            {data.recommendations?.map((recommendation, index) => (
               <Alert key={index} severity="info" sx={{ mb: 1 }}>
                 {recommendation}
               </Alert>
-            ))}
+            )) || (
+              <Alert severity="info">
+                Aucune recommandation disponible
+              </Alert>
+            )}
           </Box>
         </CardContent>
       </Card>

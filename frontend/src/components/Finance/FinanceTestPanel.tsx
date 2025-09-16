@@ -20,9 +20,9 @@ const FinanceTestPanel: React.FC = () => {
     }
 
     try {
-      // Test Adherents endpoint
+      // Test Adherents endpoint with empty search to get all
       const { getAdherents } = await import('../../services/financeService');
-      const adherents = await getAdherents();
+      const adherents = await getAdherents('');
       results.push(`✅ Adherents loaded: ${adherents.length} items`);
     } catch (error) {
       results.push(`❌ Adherents failed: ${error}`);

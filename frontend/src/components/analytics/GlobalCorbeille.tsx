@@ -72,32 +72,49 @@ const GlobalCorbeille: React.FC = () => {
   const loadGlobalCorbeille = async () => {
     try {
       const [bordereauResponse, teamResponse] = await Promise.all([
-        LocalAPI.get(`/workflow/enhanced-corbeille/chef/${user?.id}`),
+        LocalAPI.get('/bordereaux', { 
+          params: { 
+            include: 'client,currentHandler',
+            limit: 200 
+          } 
+        }),
         LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
       ]);
 
-      // Transform enhanced corbeille data
-      const allBordereaux = [
-        ...bordereauResponse.data.nonAffectes || [],
-        ...bordereauResponse.data.enCours || [],
-        ...bordereauResponse.data.traites || []
-      ];
+      // Use direct bordereau data instead of enhanced corbeille
+      const allBordereaux = bordereauResponse.data || [];
 
-      const bordereauData = allBordereaux.map((b: any) => ({
-        id: b.id,
-        reference: b.reference,
-        clientName: b.client?.name || 'N/A',
-        dateReception: b.dateReception,
-        statut: b.statut,
-        assignedToUserId: b.assignedToUserId,
-        assignedUserName: b.assignedUser?.fullName,
-        delaiReglement: b.delaiReglement || 5,
-        daysSinceReception: Math.floor((Date.now() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)),
-        slaStatus: calculateSlaStatus(b)
-      }));
+      const bordereauData = allBordereaux.map((b: any) => {
+        const receptionDate = new Date(b.dateReception);
+        const daysSince = Math.floor((Date.now() - receptionDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        return {
+          id: b.id,
+          reference: b.reference,
+          clientName: b.client?.name || 'Client non spécifié',
+          dateReception: b.dateReception,
+          statut: b.statut,
+          assignedToUserId: b.assignedToUserId || b.currentHandlerId,
+          assignedUserName: b.currentHandler?.fullName || 'Non assigné',
+          delaiReglement: b.delaiReglement || 30,
+          daysSinceReception: isNaN(daysSince) ? 0 : daysSince,
+          slaStatus: calculateSlaStatus(b)
+        };
+      });
+      
+      console.log('📊 Processed bordereau data:', bordereauData.length);
+      console.log('📊 Sample data:', bordereauData.slice(0, 3));
 
       setBordereaux(bordereauData);
       setTeamMembers(teamResponse.data || []);
+      
+      console.log('📊 Final bordereaux count:', bordereauData.length);
+      console.log('📊 Status distribution:', {
+        ASSIGNE: bordereauData.filter((b: any) => b.statut === 'ASSIGNE').length,
+        EN_COURS: bordereauData.filter((b: any) => b.statut === 'EN_COURS').length,
+        TRAITE: bordereauData.filter((b: any) => b.statut === 'TRAITE').length,
+        CLOTURE: bordereauData.filter((b: any) => b.statut === 'CLOTURE').length
+      });
     } catch (error) {
       console.error('Failed to load global corbeille:', error);
     } finally {
@@ -141,9 +158,16 @@ const GlobalCorbeille: React.FC = () => {
     }
   };
 
-  const getStatusBucket = (statut: string) => {
-    if (['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(statut)) return 'traites';
-    if (['EN_COURS', 'ASSIGNE'].includes(statut)) return 'en_cours';
+  const getStatusBucket = (statut: string, assignedToUserId?: string) => {
+    // Traités: completed statuses
+    if (['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(statut)) {
+      return 'traites';
+    }
+    // En Cours: assigned and in progress statuses
+    if (['EN_COURS', 'ASSIGNE'].includes(statut)) {
+      return 'en_cours';
+    }
+    // Non Affectés: everything else
     return 'non_affectes';
   };
 
@@ -216,7 +240,7 @@ const GlobalCorbeille: React.FC = () => {
                   <TableCell>
                     <Chip
                       size="small"
-                      label={`${bordereau.daysSinceReception}j`}
+                      label={`${bordereau.daysSinceReception || 0}j`}
                       color={getSlaColor(bordereau.slaStatus) as any}
                     />
                   </TableCell>

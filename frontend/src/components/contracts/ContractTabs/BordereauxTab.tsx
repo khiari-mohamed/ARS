@@ -26,18 +26,10 @@ const ContractBordereauxTab: React.FC<Props> = ({ contractId }) => {
     setLoading(true);
     setError(null);
     try {
-      // Mock data - replace with actual API call
-      const mockData: Bordereau[] = [
-        {
-          id: '1',
-          reference: 'BDX/2025/001',
-          dateReception: '2025-01-15',
-          statut: 'EN_COURS',
-          nombreBS: 25,
-          delaiReglement: 3
-        }
-      ];
-      setBordereaux(mockData);
+      const response = await fetch(`/api/contracts/${contractId}/bordereaux`);
+      if (!response.ok) throw new Error('Failed to fetch bordereaux');
+      const data = await response.json();
+      setBordereaux(data);
     } catch (e: any) {
       setError(e?.message || 'Erreur lors du chargement');
     } finally {

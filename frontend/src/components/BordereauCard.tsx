@@ -3,7 +3,7 @@ import { Bordereau } from "../types/bordereaux";
 import BordereauStatusBadge from "./BordereauStatusBadge";
 import MobileBordereauCard from "./MobileBordereauCard";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../contexts/AuthContext';
 import BordereauAssignModal from "./BordereauAssignModal";
 import BordereauEditModal from "./BordereauEditModal";
 import { markBordereauAsProcessed, returnBordereau, archiveBordereau, restoreBordereau } from "../services/bordereauxService";
@@ -14,9 +14,12 @@ interface Props {
   bordereau: Bordereau;
   onAssignSuccess?: () => void;
   isCorbeille?: boolean;
+  showSelect?: boolean;
+  selected?: boolean;
+  onSelect?: (id: string) => void;
 }
 
-const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeille }) => {
+const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeille, showSelect, selected, onSelect }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [actionLoading, setActionLoading] = useState(false);
@@ -141,7 +144,17 @@ const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeill
   }
 
   return (
-    <div className={`bordereau-card ${bgColor} border rounded-lg shadow-sm hover:shadow-md transition-all duration-200 mb-4 overflow-hidden`}>
+    <div className={`bordereau-card ${bgColor} border rounded-lg shadow-sm hover:shadow-md transition-all duration-200 mb-4 overflow-hidden ${selected ? 'ring-2 ring-purple-500' : ''}`}>
+      {showSelect && (
+        <div className="absolute top-4 right-4 z-10">
+          <input
+            type="checkbox"
+            checked={selected || false}
+            onChange={() => onSelect?.(bordereau.id)}
+            className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+          />
+        </div>
+      )}
       {/* Card Header - Exact specification layout */}
       <Link
         to={`/bordereaux/${bordereau.id}`}
@@ -359,8 +372,8 @@ const BordereauCard: React.FC<Props> = ({ bordereau, onAssignSuccess, isCorbeill
       {/* Edit Modal */}
       {editModalOpen && (
         <BordereauEditModal
-          bordereauxId={bordereau.id}
-          isOpen={editModalOpen}
+          bordereauId={bordereau.id}
+          open={editModalOpen}
           onClose={() => setEditModalOpen(false)}
           onSuccess={() => {
             setEditModalOpen(false);

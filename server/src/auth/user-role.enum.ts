@@ -12,6 +12,7 @@ export enum UserRole {
   FINANCE = 'FINANCE',
   SCAN_TEAM = 'SCAN_TEAM',
   BO = 'BO',
+  BUREAU_ORDRE = 'BUREAU_ORDRE', // Alternative name for BO
 }
 
 /**

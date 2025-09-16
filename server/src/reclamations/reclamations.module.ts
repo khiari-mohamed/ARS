@@ -10,11 +10,20 @@ import { BOIntegrationService } from './bo-integration.service';
 import { AdvancedAnalyticsService } from './advanced-analytics.service';
 import { AIClassificationService } from './ai-classification.service';
 import { CustomerPortalService } from './customer-portal.service';
+import { AICoreService } from './ai-core.service';
+import { PredictiveModelsService } from './predictive-models.service';
+import { ContinuousLearningService } from './continuous-learning.service';
+import { GECAutoReplyService } from './gec-auto-reply.service';
+import { TuniclaimIntegrationService } from './tuniclaim-integration.service';
+import { GecModule } from '../gec/gec.module';
 
 @Module({
-  imports: [IntegrationModule],
-  controllers: [ReclamationsController],
+  imports: [IntegrationModule, GecModule],
+  controllers: [ReclamationsController,],
   providers: [
+    AICoreService,
+    PredictiveModelsService,
+    ContinuousLearningService,
     ReclamationsService,
     PrismaService,
     NotificationService,
@@ -23,7 +32,9 @@ import { CustomerPortalService } from './customer-portal.service';
     BOIntegrationService,
     AdvancedAnalyticsService,
     AIClassificationService,
-    CustomerPortalService
+    CustomerPortalService,
+    GECAutoReplyService,
+    TuniclaimIntegrationService
   ],
   exports: [
     ReclamationsService,

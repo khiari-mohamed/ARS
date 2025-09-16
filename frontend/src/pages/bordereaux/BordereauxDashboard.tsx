@@ -25,6 +25,7 @@ import BordereauProgressModal from '../../components/BordereauProgressModal';
 import BordereauAssignModal from '../../components/BordereauAssignModal';
 import BordereauCorbeilleModal from '../../components/BordereauCorbeilleModal';
 import BordereauReassignModal from '../../components/BordereauReassignModal';
+import BordereauEditModal from '../../components/BordereauEditModal';
 
 const BordereauxDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -55,6 +56,8 @@ const BordereauxDashboard: React.FC = () => {
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [selectedBordereauForAlerts, setSelectedBordereauForAlerts] = useState<any>(null);
   const [alertsData, setAlertsData] = useState<any[]>([]);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedBordereauForEdit, setSelectedBordereauForEdit] = useState<string | null>(null);
   
   // Role-based permissions
   const isBureauOrdre = user?.role === 'BO';
@@ -727,6 +730,23 @@ const BordereauxDashboard: React.FC = () => {
                             >
                               👁️ Voir
                             </button>
+
+                            {/* Edit button - available for BO, Chef, Admin, Super Admin */}
+                            {(isBureauOrdre || isChefEquipe || isAdministrateur || isSuperAdmin) && (
+                              <button
+                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setSelectedBordereauForEdit(bordereau.id);
+                                  setShowEditModal(true);
+                                }}
+                                title="Modifier le bordereau"
+                              >
+                                ✏️ Modifier
+                              </button>
+                            )}
+
                             <button
                               className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
                               onClick={(e) => {
@@ -1107,6 +1127,7 @@ const BordereauxDashboard: React.FC = () => {
       {showDetailsModal && selectedBordereauForDetails && (
         <BordereauDetailsModal
           bordereauId={selectedBordereauForDetails}
+          open={showDetailsModal}
           onClose={() => {
             setShowDetailsModal(false);
             setSelectedBordereauForDetails(null);
@@ -1117,12 +1138,11 @@ const BordereauxDashboard: React.FC = () => {
       {/* Progress Modal */}
       {showProgressModal && selectedBordereauForProgress && (
         <BordereauProgressModal
-          bordereau={selectedBordereauForProgress}
+          bordereauId={selectedBordereauForProgress.id}
+          open={showProgressModal}
           onClose={() => {
             setShowProgressModal(false);
             setSelectedBordereauForProgress(null);
-          }}
-          onSuccess={() => {
             loadData();
           }}
         />
@@ -1301,6 +1321,23 @@ const BordereauxDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedBordereauForEdit && (
+        <BordereauEditModal
+          bordereauId={selectedBordereauForEdit}
+          open={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedBordereauForEdit(null);
+          }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setSelectedBordereauForEdit(null);
+            loadData();
+          }}
+        />
       )}
     </div>
   );

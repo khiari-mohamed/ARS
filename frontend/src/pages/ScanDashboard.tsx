@@ -41,7 +41,10 @@ import ScannerControl from '../components/ScannerControl';
 import QualityValidator from '../components/QualityValidator';
 import OCRCorrectionInterface from '../components/OCRCorrectionInterface';
 import FolderMonitor from '../components/FolderMonitor';
+import { ScanCorbeille } from '../components/Workflow/ScanCorbeille';
+import ManualScanInterface from '../components/Workflow/ManualScanInterface';
 import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
+import { getBordereauForManualScan, uploadManualDocuments, finalizeScanProcess } from '../services/manualScanService';
 
 const ScanDashboard: React.FC = () => {
   const [scanStatus, setScanStatus] = useState<any>(null);
@@ -54,6 +57,10 @@ const ScanDashboard: React.FC = () => {
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [initializingScanner, setInitializingScanner] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [manualScanBordereaux, setManualScanBordereaux] = useState<any[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [autoAssigning, setAutoAssigning] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -63,18 +70,24 @@ const ScanDashboard: React.FC = () => {
 
   const loadDashboard = async () => {
     try {
-      const [statusData, activityData, queueData, overloadData, chartData] = await Promise.all([
+      const [statusData, activityData, queueData, overloadData, chartData, manualScanData, allBordereaux] = await Promise.all([
         fetchScanStatus(),
         fetchScanActivity(),
         getScanQueue(),
         checkScanOverload(),
-        getScanActivityChart()
+        getScanActivityChart(),
+        getBordereauForManualScan(),
+        // Get all bordereaux for progression cards
+        import('../services/axios').then(({ LocalAPI }) => 
+          LocalAPI.get('/bordereaux').then(res => res.data)
+        )
       ]);
       setScanStatus(statusData);
       setScanActivity(activityData);
-      setScanQueue(queueData);
+      setScanQueue([...queueData, ...allBordereaux.filter((b: any) => ['SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'].includes(b.statut))]);
       setOverloadStatus(overloadData);
       setChartData(chartData);
+      setManualScanBordereaux(manualScanData);
     } catch (error) {
       console.error('Failed to load scan dashboard:', error);
     } finally {
@@ -185,9 +198,15 @@ const ScanDashboard: React.FC = () => {
 
   const getActivityIcon = (action: string) => {
     switch (action) {
-      case 'SCAN_JOB_STARTED': return <PlayArrow color="primary" />;
+      case 'SCAN_STARTED':
+      case 'MANUAL_SCAN_STARTED':
+      case 'SCAN_IN_PROGRESS': return <PlayArrow color="primary" />;
+      case 'SCAN_COMPLETED':
+      case 'MANUAL_SCAN_COMPLETED':
       case 'DOCUMENT_READY': return <CheckCircle color="success" />;
       case 'SCAN_ERROR': return <Error color="error" />;
+      case 'OCR_PROCESSED':
+      case 'OCR_COMPLETED': return <TextFields color="info" />;
       default: return <Scanner />;
     }
   };
@@ -302,6 +321,19 @@ const ScanDashboard: React.FC = () => {
               Import
             </Button>
             <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<Scanner />}
+              onClick={() => setActiveDialog('manual-scan')}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 140 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              📄 Scan Manuel
+            </Button>
+            <Button
               variant="outlined"
               color="secondary"
               onClick={async () => {
@@ -343,6 +375,76 @@ const ScanDashboard: React.FC = () => {
           {scanStatus.errorCount} document(s) en erreur nécessitent une attention
         </Alert>
       )}
+
+      {/* NEW ENHANCED SCAN CORBEILLE COMPONENT */}
+      <Box sx={{ mb: 4 }}>
+        <ScanCorbeille />
+      </Box>
+
+      {/* NEW BORDEREAU PROGRESS MANAGEMENT SECTION */}
+      <Box sx={{ mb: 4 }}>
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            📊 Gestion Progression Bordereaux
+            <Chip label="NOUVEAU" color="primary" size="small" />
+          </Typography>
+          
+          {/* Progress KPIs */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={3}>
+              <Card sx={{ bgcolor: 'orange.50', border: '1px solid', borderColor: 'orange.200' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <Typography variant="h4" color="orange.main" fontWeight="bold">
+                    {scanQueue.filter(b => b.statut === 'A_SCANNER').length}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Non scannés
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <Card sx={{ bgcolor: 'blue.50', border: '1px solid', borderColor: 'blue.200' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <Typography variant="h4" color="blue.main" fontWeight="bold">
+                    {scanQueue.filter(b => b.statut === 'SCAN_EN_COURS').length}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Scan en cours
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <Card sx={{ bgcolor: 'green.50', border: '1px solid', borderColor: 'green.200' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <Typography variant="h4" color="green.main" fontWeight="bold">
+                    {scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER'].includes(b.statut)).length}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Scan finalisés
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <Card sx={{ bgcolor: 'purple.50', border: '1px solid', borderColor: 'purple.200' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <Typography variant="h4" color="purple.main" fontWeight="bold">
+                    {scanQueue.length > 0 ? Math.round(
+                      (scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER'].includes(b.statut)).length / 
+                       scanQueue.filter((b: any) => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'].includes(b.statut)).length) * 100
+                    ) : 0}%
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Progression moyenne
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Paper>
+      </Box>
 
       {/* KPI Cards */}
       <Grid container spacing={{ xs: 2, sm: 3 }} mb={4} sx={{ mx: { xs: -2, sm: 0 }, width: { xs: 'calc(100% + 16px)', sm: '100%' } }}>
@@ -622,7 +724,7 @@ const ScanDashboard: React.FC = () => {
                               variant="contained"
                               startIcon={<PlayArrow />}
                               onClick={() => handleStartScanning(bordereau.id)}
-                              disabled={processing === bordereau.id}
+                              disabled={processing === bordereau.id || autoAssigning === bordereau.id}
                               sx={{ 
                                 fontSize: { xs: '0.65rem', sm: '0.75rem' },
                                 minWidth: { xs: 'auto', sm: 'auto' },
@@ -644,6 +746,92 @@ const ScanDashboard: React.FC = () => {
                             >
                               Voir
                             </Button>
+                            {/* NEW PROGRESS MANAGEMENT BUTTONS */}
+                            {(!bordereau.scanStatus || bordereau.scanStatus === 'NON_SCANNE') && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="warning"
+                                onClick={async () => {
+                                  try {
+                                    const { LocalAPI } = await import('../services/axios');
+                                    await LocalAPI.put(`/bordereaux/${bordereau.id}/scan-status`, {
+                                      scanStatus: 'SCAN_EN_COURS'
+                                    });
+                                    await loadDashboard();
+                                  } catch (error) {
+                                    console.error('Failed to start scan:', error);
+                                  }
+                                }}
+                                sx={{ 
+                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                  minWidth: { xs: 'auto', sm: 'auto' },
+                                  px: { xs: 1, sm: 2 }
+                                }}
+                              >
+                                🖨️ Démarrer
+                              </Button>
+                            )}
+                            {bordereau.scanStatus === 'SCAN_EN_COURS' && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="success"
+                                onClick={async () => {
+                                  try {
+                                    const { LocalAPI } = await import('../services/axios');
+                                    await LocalAPI.put(`/bordereaux/${bordereau.id}/scan-status`, {
+                                      scanStatus: 'SCAN_FINALISE'
+                                    });
+                                    await loadDashboard();
+                                  } catch (error) {
+                                    console.error('Failed to finalize scan:', error);
+                                  }
+                                }}
+                                sx={{ 
+                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                  minWidth: { xs: 'auto', sm: 'auto' },
+                                  px: { xs: 1, sm: 2 }
+                                }}
+                              >
+                                ✅ Finaliser
+                              </Button>
+                            )}
+                            {bordereau.scanStatus === 'SCAN_FINALISE' && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                disabled={autoAssigning === bordereau.id}
+                                onClick={async () => {
+                                  setAutoAssigning(bordereau.id);
+                                  try {
+                                    const { LocalAPI } = await import('../services/axios');
+                                    const response = await LocalAPI.post(`/bordereaux/${bordereau.id}/auto-assign`);
+                                    
+                                    if (response.data.success) {
+                                      alert(`✅ Bordereau auto-assigné avec succès!\n\n👤 Assigné à: ${response.data.assignedTo}\n🔧 Méthode: ${response.data.method || 'AI'}\n\n🔄 Actualisation du tableau...`);
+                                      await loadDashboard();
+                                    } else {
+                                      alert(`❌ Échec de l'auto-assignation\n\n🔍 Erreur: ${response.data.error || 'Erreur inconnue'}\n\n💡 Veuillez réessayer ou assigner manuellement`);
+                                    }
+                                  } catch (error: any) {
+                                    console.error('Auto-assign failed:', error);
+                                    const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de l\'auto-assignation';
+                                    alert(`❌ Erreur d'auto-assignation\n\n🔍 Détails: ${errorMessage}\n\n💡 Vérifiez qu'il y a des gestionnaires disponibles`);
+                                  } finally {
+                                    setAutoAssigning(null);
+                                  }
+                                }}
+                                sx={{ 
+                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                  minWidth: { xs: 'auto', sm: 'auto' },
+                                  px: { xs: 1, sm: 2 }
+                                }}
+                              >
+                                {autoAssigning === bordereau.id ? '⏳ Assignation...' : '🤖 Auto-assigner'}
+                              </Button>
+                            )}
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -700,7 +888,7 @@ const ScanDashboard: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {activity.details?.reference || activity.details?.fileName || '--'}
+                          {activity.details?.reference || activity.details?.bordereauId || activity.details?.fileName || '--'}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -761,6 +949,25 @@ const ScanDashboard: React.FC = () => {
         <DialogTitle>Interface de Correction OCR</DialogTitle>
         <DialogContent>
           <OCRCorrectionInterface />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manual Scan Dialog */}
+      <Dialog 
+        open={activeDialog === 'manual-scan'} 
+        onClose={() => setActiveDialog(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { height: '90vh' } }}
+      >
+        <DialogTitle>
+          🖨️ Numérisation Manuelle
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <ManualScanInterface />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setActiveDialog(null)}>Fermer</Button>

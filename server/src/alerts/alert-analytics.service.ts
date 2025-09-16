@@ -70,29 +70,45 @@ export class AlertAnalyticsService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - parseInt(period.replace('d', '')));
 
-      // Mock effectiveness calculation - in production would analyze actual alert data
-      const alertTypes = alertType ? [alertType] : [
-        'SLA_BREACH',
-        'SYSTEM_DOWN',
-        'HIGH_VOLUME',
-        'PROCESSING_DELAY',
-        'ERROR_RATE_HIGH',
-        'DISK_SPACE_LOW'
-      ];
+      const whereClause: any = {
+        createdAt: { gte: startDate }
+      };
+      if (alertType) {
+        whereClause.alertType = alertType;
+      }
+
+      const alertLogs = await this.prisma.alertLog.findMany({
+        where: whereClause,
+        select: {
+          alertType: true,
+          resolved: true,
+          alertLevel: true
+        }
+      });
+
+      const alertTypeGroups = alertLogs.reduce((acc, log) => {
+        if (!acc[log.alertType]) {
+          acc[log.alertType] = { total: 0, resolved: 0, critical: 0 };
+        }
+        acc[log.alertType].total++;
+        if (log.resolved) acc[log.alertType].resolved++;
+        if (log.alertLevel === 'CRITICAL' || log.alertLevel === 'red') acc[log.alertType].critical++;
+        return acc;
+      }, {} as { [key: string]: { total: number; resolved: number; critical: number } });
 
       const metrics: AlertEffectivenessMetrics[] = [];
-
-      for (const type of alertTypes) {
-        const totalAlerts = Math.floor(Math.random() * 100) + 50;
-        const truePositives = Math.floor(totalAlerts * (0.7 + Math.random() * 0.2)); // 70-90%
+      
+      Object.entries(alertTypeGroups).forEach(([type, data]) => {
+        const totalAlerts = data.total;
+        const truePositives = data.resolved;
         const falsePositives = totalAlerts - truePositives;
-        const trueNegatives = Math.floor(Math.random() * 200) + 100;
-        const falseNegatives = Math.floor(Math.random() * 10) + 2;
+        const trueNegatives = Math.max(0, totalAlerts - data.critical);
+        const falseNegatives = Math.max(0, data.critical - truePositives);
 
-        const precision = truePositives / (truePositives + falsePositives);
-        const recall = truePositives / (truePositives + falseNegatives);
-        const f1Score = 2 * (precision * recall) / (precision + recall);
-        const accuracy = (truePositives + trueNegatives) / (truePositives + trueNegatives + falsePositives + falseNegatives);
+        const precision = truePositives > 0 ? truePositives / (truePositives + falsePositives) : 0;
+        const recall = (truePositives + falseNegatives) > 0 ? truePositives / (truePositives + falseNegatives) : 0;
+        const f1Score = (precision + recall) > 0 ? 2 * (precision * recall) / (precision + recall) : 0;
+        const accuracy = totalAlerts > 0 ? (truePositives + trueNegatives) / totalAlerts : 0;
 
         metrics.push({
           alertType: type,
@@ -101,12 +117,12 @@ export class AlertAnalyticsService {
           falsePositives,
           trueNegatives,
           falseNegatives,
-          precision: Math.round(precision * 1000) / 10, // Convert to percentage with 1 decimal
+          precision: Math.round(precision * 1000) / 10,
           recall: Math.round(recall * 1000) / 10,
           f1Score: Math.round(f1Score * 1000) / 10,
           accuracy: Math.round(accuracy * 1000) / 10
         });
-      }
+      });
 
       return metrics.sort((a, b) => b.f1Score - a.f1Score);
     } catch (error) {
@@ -155,41 +171,27 @@ export class AlertAnalyticsService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - parseInt(period.replace('d', '')));
 
-      // Mock false positive data
-      const falsePositives: FalsePositiveAnalysis[] = [
-        {
-          alertId: 'alert_001',
-          alertType: 'SLA_BREACH',
-          timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-          reason: 'Threshold set too low for weekend processing',
-          category: 'threshold_too_low',
-          impact: 'medium',
-          preventable: true,
-          suggestedFix: 'Adjust threshold to 48 hours for weekends'
+      const auditLogs = await this.prisma.auditLog.findMany({
+        where: {
+          action: 'FALSE_POSITIVE_TRACKED',
+          timestamp: { gte: startDate }
         },
-        {
-          alertId: 'alert_002',
-          alertType: 'SYSTEM_DOWN',
-          timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-          reason: 'Scheduled maintenance not excluded from monitoring',
-          category: 'system_maintenance',
-          impact: 'high',
-          preventable: true,
-          suggestedFix: 'Add maintenance window exclusion rule'
-        },
-        {
-          alertId: 'alert_003',
-          alertType: 'HIGH_VOLUME',
-          timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          reason: 'Data spike due to batch processing',
-          category: 'data_anomaly',
-          impact: 'low',
-          preventable: false,
-          suggestedFix: 'Implement batch processing detection logic'
-        }
-      ];
+        orderBy: { timestamp: 'desc' }
+      });
 
-      return falsePositives.filter(fp => fp.timestamp >= startDate);
+      return auditLogs.map(log => {
+        const details = log.details as any;
+        return {
+          alertId: details.alertId || log.id,
+          alertType: details.alertType || 'UNKNOWN',
+          timestamp: log.timestamp,
+          reason: details.reason || 'No reason provided',
+          category: details.category || 'other',
+          impact: details.impact || 'medium',
+          preventable: details.preventable || false,
+          suggestedFix: details.suggestedFix || 'Review alert configuration'
+        };
+      });
     } catch (error) {
       this.logger.error('Failed to get false positive analysis:', error);
       return [];
@@ -245,33 +247,50 @@ export class AlertAnalyticsService {
   async getAlertTrends(period = '30d'): Promise<AlertTrend[]> {
     try {
       const days = parseInt(period.replace('d', ''));
-      const trends: AlertTrend[] = [];
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
 
-      const alertTypes = ['SLA_BREACH', 'SYSTEM_DOWN', 'HIGH_VOLUME', 'PROCESSING_DELAY'];
-      const severities = ['low', 'medium', 'high', 'critical'];
+      const alertLogs = await this.prisma.alertLog.findMany({
+        where: {
+          createdAt: { gte: startDate }
+        },
+        select: {
+          alertType: true,
+          alertLevel: true,
+          createdAt: true,
+          resolvedAt: true,
+          resolved: true
+        },
+        orderBy: { createdAt: 'asc' }
+      });
 
-      for (let i = 0; i < days; i++) {
-        const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-        const dateStr = date.toISOString().split('T')[0];
+      const trendMap = new Map<string, AlertTrend>();
 
-        for (const alertType of alertTypes) {
-          const severity = severities[Math.floor(Math.random() * severities.length)];
-          const count = Math.floor(Math.random() * 20) + 1;
-          const avgResolutionTime = Math.random() * 120 + 30; // 30-150 minutes
-          const falsePositiveRate = Math.random() * 15; // 0-15%
-
-          trends.push({
+      alertLogs.forEach(log => {
+        const dateStr = log.createdAt.toISOString().split('T')[0];
+        const key = `${dateStr}_${log.alertType}`;
+        
+        if (!trendMap.has(key)) {
+          trendMap.set(key, {
             date: dateStr,
-            alertType,
-            count,
-            severity,
-            avgResolutionTime,
-            falsePositiveRate
+            alertType: log.alertType,
+            count: 0,
+            severity: log.alertLevel,
+            avgResolutionTime: 0,
+            falsePositiveRate: 0
           });
         }
-      }
+        
+        const trend = trendMap.get(key)!;
+        trend.count++;
+        
+        if (log.resolved && log.resolvedAt) {
+          const resolutionTime = (log.resolvedAt.getTime() - log.createdAt.getTime()) / (1000 * 60);
+          trend.avgResolutionTime = (trend.avgResolutionTime + resolutionTime) / 2;
+        }
+      });
 
-      return trends.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      return Array.from(trendMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     } catch (error) {
       this.logger.error('Failed to get alert trends:', error);
       return [];
@@ -582,13 +601,12 @@ export class AlertAnalyticsService {
         return { alertType, roi: 0, details: 'No data available' };
       }
 
-      // Mock ROI calculation
-      const avgIncidentCost = 5000; // €5000 per incident
-      const avgAlertProcessingCost = 50; // €50 per alert
+      const avgIncidentCost = 5000;
+      const avgAlertProcessingCost = 50;
       const preventedIncidents = alertMetrics.truePositives;
       const totalAlertCost = alertMetrics.totalAlerts * avgAlertProcessingCost;
       const preventedCosts = preventedIncidents * avgIncidentCost;
-      const roi = ((preventedCosts - totalAlertCost) / totalAlertCost) * 100;
+      const roi = totalAlertCost > 0 ? ((preventedCosts - totalAlertCost) / totalAlertCost) * 100 : 0;
 
       return {
         alertType,

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Alert, Statistic, Row, Col, Timeline, message, Badge, Tooltip, Space, Typography } from 'antd';
-import { SyncOutlined, CloudDownloadOutlined, CheckCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined, WarningOutlined } from '@ant-design/icons';
+import { Card, Button, Alert, Statistic, Row, Col, Timeline, message, Badge, Tooltip, Space, Typography, Tabs } from 'antd';
+import { SyncOutlined, CloudDownloadOutlined, CheckCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined, WarningOutlined, SettingOutlined } from '@ant-design/icons';
 import { LocalAPI } from '../../services/axios';
+import TuniclaimReclamationsPanel from '../reclamations/TuniclaimReclamationsPanel';
 
 const { Text } = Typography;
+const { TabPane } = Tabs;
 
 interface SyncStatus {
   lastSync: string | null;
@@ -30,6 +32,7 @@ export const TuniclaimSync: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('sync');
 
   const fetchStatus = async () => {
     try {
@@ -118,7 +121,9 @@ export const TuniclaimSync: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-      <Card 
+      <Tabs activeKey={activeTab} onChange={setActiveTab} type="card">
+        <TabPane tab={<span><SyncOutlined />Synchronisation</span>} key="sync">
+          <Card 
         title={
           <Space>
             <CloudDownloadOutlined />
@@ -273,6 +278,11 @@ export const TuniclaimSync: React.FC = () => {
           </div>
         </div>
       </Card>
+        </TabPane>
+        <TabPane tab={<span><SettingOutlined />Gestion Réclamations</span>} key="reclamations">
+          <TuniclaimReclamationsPanel />
+        </TabPane>
+      </Tabs>
     </div>
   );
 };

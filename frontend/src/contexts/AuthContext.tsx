@@ -27,6 +27,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('token', token);
     if (userData) {
       setUser(userData);
+    } else {
+      // If no user data provided, fetch it
+      import('../services/authService').then(({ getCurrentUser }) => {
+        getCurrentUser()
+          .then((user) => {
+            if (user) {
+              setUser(user);
+            }
+          })
+          .catch(() => {
+            localStorage.removeItem('token');
+            setUser(null);
+          });
+      });
     }
   };
 

@@ -8,49 +8,53 @@ datasource db {
 }
 
 model User {
-  id                          String               @id @default(uuid())
-  email                       String               @unique
+  id                          String                 @id @default(uuid())
+  email                       String                 @unique
   password                    String
   fullName                    String
   role                        String
-  createdAt                   DateTime             @default(now())
+  createdAt                   DateTime               @default(now())
   department                  String?
-  active                      Boolean              @default(true)
+  active                      Boolean                @default(true)
+  capacity                    Int                    @default(20)
+  departmentId                String?
   serviceType                 String?
-  capacity                    Int                  @default(20)
   teamLeaderId                String?
   AlertLog                    AlertLog[]
   AuditLog                    AuditLog[]
   bsLogs                      BSLog[]
-  bordereauxCurrentHandler    Bordereau[]          @relation("CurrentHandlerBordereaux")
-  bordereauxTeam              Bordereau[]          @relation("TeamBordereaux")
-  ownerBulletinSoins          BulletinSoin[]       @relation("OwnerBulletinSoins")
-  processedBulletinSoins      BulletinSoin[]       @relation("ProcessedByBulletinSoins")
-  Contract                    Contract[]           @relation("ManagerContracts")
+  chargeCompteBordereaux      Bordereau[]            @relation("ChargeCompteBordereaux")
+  bordereauxCurrentHandler    Bordereau[]            @relation("CurrentHandlerBordereaux")
+  bordereauxTeam              Bordereau[]            @relation("TeamBordereaux")
+  ownerBulletinSoins          BulletinSoin[]         @relation("OwnerBulletinSoins")
+  processedBulletinSoins      BulletinSoin[]         @relation("ProcessedByBulletinSoins")
+  chargeCompteClients         Client[]               @relation("ChargeCompte")
+  Contract                    Contract[]             @relation("ManagerContracts")
   ContractHistory             ContractHistory[]
-  courriers                   Courrier[]           @relation("UserCourriers")
-  documents                   Document[]           @relation("UserDocuments")
+  courriers                   Courrier[]             @relation("UserCourriers")
+  documents                   Document[]             @relation("UserDocuments")
   Feedback                    Feedback[]
+  gecTemplatesCreated         GecTemplate[]          @relation("GecTemplateCreator")
+  notifications               Notification[]
   OCRLog                      OCRLog[]
   PasswordResetToken          PasswordResetToken[]
-  reclamations                Reclamation[]        @relation("HandlerReclamations")
-  reclamationsCreated         Reclamation[]        @relation("CreatorReclamations")
-  reclamationHistories        ReclamationHistory[] @relation("UserReclamationHistories")
-  assignedTraitementHistories TraitementHistory[]  @relation("AssignedTraitementHistories")
-  traitementHistory           TraitementHistory[]  @relation("UserTraitementHistory")
-  virements                   Virement[]           @relation("UserVirements")
+  reclamations                Reclamation[]          @relation("HandlerReclamations")
+  reclamationsCreated         Reclamation[]          @relation("CreatorReclamations")
+  reclamationHistories        ReclamationHistory[]   @relation("UserReclamationHistories")
+  ledTeamStructures           TeamStructure[]        @relation("TeamStructureLeader")
+  assignedTraitementHistories TraitementHistory[]    @relation("AssignedTraitementHistories")
+  traitementHistory           TraitementHistory[]    @relation("UserTraitementHistory")
+  departmentRef               Department?            @relation("UserDepartment", fields: [departmentId], references: [id])
+  teamLeader                  User?                  @relation("TeamLeader", fields: [teamLeaderId], references: [id])
+  teamMembers                 User[]                 @relation("TeamLeader")
+  virements                   Virement[]             @relation("UserVirements")
   WorkflowAssignment          WorkflowAssignment[]
-  clientsManaged              Client[]             @relation("ClientGestionnaires")
-  clientReclamations          Reclamation[]        @relation("ClientReclamations")
-  bordereaux                  Bordereau[]          @relation("UserBordereaux")
-  notifications               Notification[]
-  gecTemplatesCreated         GecTemplate[]        @relation("GecTemplateCreator")
-  teamLeader                  User?                @relation("TeamLeader", fields: [teamLeaderId], references: [id])
-  teamMembers                 User[]               @relation("TeamLeader")
-  chargeCompteClients         Client[]             @relation("ChargeCompte")
-  chargeCompteBordereaux      Bordereau[]          @relation("ChargeCompteBordereaux")
   workflowNotifications       WorkflowNotification[]
-  ledTeamStructures           TeamStructure[]      @relation("TeamStructureLeader")
+  clientsManaged              Client[]               @relation("ClientGestionnaires")
+  clientReclamations          Reclamation[]          @relation("ClientReclamations")
+  bordereaux                  Bordereau[]            @relation("UserBordereaux")
+  aiLearning                  AILearning[]           @relation("UserAILearning")
+  performanceAnalyses         PerformanceAnalysis[]  @relation("UserPerformanceAnalysis")
 }
 
 model Process {
@@ -67,6 +71,53 @@ model AuditLog {
   details   Json?
   timestamp DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model AiOutput {
+  id         String   @id @default(uuid())
+  endpoint   String
+  inputData  Json
+  result     Json
+  userId     String
+  confidence Decimal? @db.Decimal(5, 4)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([endpoint])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([confidence])
+  @@index([endpoint, confidence])
+}
+
+model AILearning {
+  id             String   @id @default(uuid())
+  analysisType   String
+  inputPattern   String
+  expectedOutput String
+  actualOutput   String
+  accuracy       Float
+  feedback       Int?
+  userId         String
+  createdAt      DateTime @default(now())
+  user           User     @relation("UserAILearning", fields: [userId], references: [id])
+
+  @@index([analysisType, createdAt])
+}
+
+model PerformanceAnalysis {
+  id              String   @id @default(uuid())
+  userId          String
+  analysisDate    DateTime @default(now())
+  rootCauses      String?
+  bottlenecks     String?
+  trainingNeeds   String?
+  recommendations String?
+  confidence      Float
+  aiGenerated     Boolean  @default(true)
+  user            User     @relation("UserPerformanceAnalysis", fields: [userId], references: [id])
+
+  @@index([userId, analysisDate])
 }
 
 model Feedback {
@@ -110,52 +161,54 @@ model TraitementHistory {
 }
 
 model Bordereau {
-  id                    String              @id @default(uuid())
-  reference             String              @unique
-  clientId              String
-  contractId            String?
-  dateReception         DateTime
-  dateReceptionBO       DateTime?
-  dateDebutScan         DateTime?
-  dateFinScan           DateTime?
-  dateReceptionSante    DateTime?
+  id                       String                 @id @default(uuid())
+  reference                String                 @unique
+  clientId                 String
+  contractId               String?
+  dateReception            DateTime
+  dateDebutScan            DateTime?
+  dateFinScan              DateTime?
+  dateReceptionSante       DateTime?
+  dateCloture              DateTime?
+  dateDepotVirement        DateTime?
+  dateExecutionVirement    DateTime?
+  delaiReglement           Int
+  statut                   Statut                 @default(EN_ATTENTE)
+  nombreBS                 Int
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  currentHandlerId         String?
+  teamId                   String?
+  assignedToUserId         String?
+  prestataireId            String?
+  priority                 Int                    @default(1)
+  archived                 Boolean                @default(false)
+  chargeCompteId           String?
+  dateLimiteTraitement     DateTime?
+  dateReceptionBO          DateTime?
   dateReceptionEquipeSante DateTime?
-  dateCloture           DateTime?
-  dateReelleCloture     DateTime?
-  dateDepotVirement     DateTime?
-  dateExecutionVirement DateTime?
-  delaiReglement        Int
-  nombreJourTraitement  Int?
-  dateLimiteTraitement  DateTime?
-  statut                Statut              @default(EN_ATTENTE)
-  nombreBS              Int
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  currentHandlerId      String?
-  teamId                String?
-  assignedToUserId      String?
-  prestataireId         String?
-  chargeCompteId        String?
-  priority              Int                 @default(1)
-  archived              Boolean             @default(false)
-  ActionLog             ActionLog[]
-  AlertLog              AlertLog[]
-  client                Client              @relation(fields: [clientId], references: [id])
-  contract              Contract?           @relation("ContractBordereaux", fields: [contractId], references: [id])
-  currentHandler        User?               @relation("CurrentHandlerBordereaux", fields: [currentHandlerId], references: [id])
-  prestataire           Prestataire?        @relation("BordereauPrestataire", fields: [prestataireId], references: [id])
-  team                  User?               @relation("TeamBordereaux", fields: [teamId], references: [id])
-  BordereauAuditLog     BordereauAuditLog[]
-  BulletinSoin          BulletinSoin[]
-  courriers             Courrier[]          @relation("BordereauCourriers")
-  documents             Document[]          @relation("BordereauDocuments")
-  reclamations          Reclamation[]
-  traitementHistory     TraitementHistory[]
-  virement              Virement?           @relation("BordereauVirement")
-  User                  User[]              @relation("UserBordereaux")
-  ordresVirement        OrdreVirement[]
-  chargeCompte          User?               @relation("ChargeCompteBordereaux", fields: [chargeCompteId], references: [id])
-  workflowNotifications WorkflowNotification[]
+  dateReelleCloture        DateTime?
+  nombreJourTraitement     Int?
+  scanStatus               String                 @default("NON_SCANNE")
+  completionRate           Int                    @default(0)
+  ActionLog                ActionLog[]
+  AlertLog                 AlertLog[]
+  chargeCompte             User?                  @relation("ChargeCompteBordereaux", fields: [chargeCompteId], references: [id])
+  client                   Client                 @relation(fields: [clientId], references: [id])
+  contract                 Contract?              @relation("ContractBordereaux", fields: [contractId], references: [id])
+  currentHandler           User?                  @relation("CurrentHandlerBordereaux", fields: [currentHandlerId], references: [id])
+  prestataire              Prestataire?           @relation("BordereauPrestataire", fields: [prestataireId], references: [id])
+  team                     User?                  @relation("TeamBordereaux", fields: [teamId], references: [id])
+  BordereauAuditLog        BordereauAuditLog[]
+  BulletinSoin             BulletinSoin[]
+  courriers                Courrier[]             @relation("BordereauCourriers")
+  documents                Document[]             @relation("BordereauDocuments")
+  ordresVirement           OrdreVirement[]
+  reclamations             Reclamation[]
+  traitementHistory        TraitementHistory[]
+  virement                 Virement?              @relation("BordereauVirement")
+  workflowNotifications    WorkflowNotification[]
+  User                     User[]                 @relation("UserBordereaux")
 }
 
 model Prestataire {
@@ -219,26 +272,26 @@ model ReclamationHistory {
 }
 
 model Client {
-  id               String        @id @default(uuid())
-  name             String        @unique
-  email            String?
-  phone            String?
-  address          String?
-  status           String        @default("active")
-  reglementDelay   Int
-  reclamationDelay Int
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  slaConfig        Json?
-  chargeCompteId   String?
+  id                   String             @id @default(uuid())
+  name                 String             @unique
+  reglementDelay       Int
+  reclamationDelay     Int
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  slaConfig            Json?
+  address              String?
+  email                String?
+  phone                String?
+  status               String             @default("active")
+  chargeCompteId       String?
   contractDocumentPath String?
-  bordereaux       Bordereau[]
-  contracts        Contract[]
-  reclamations     Reclamation[]
-  gestionnaires    User[]        @relation("ClientGestionnaires")
-  adherents        Adherent[]
-  chargeCompte     User?         @relation("ChargeCompte", fields: [chargeCompteId], references: [id])
-  slaConfigurations SlaConfiguration[]
+  adherents            Adherent[]
+  bordereaux           Bordereau[]
+  chargeCompte         User?              @relation("ChargeCompte", fields: [chargeCompteId], references: [id])
+  contracts            Contract[]
+  reclamations         Reclamation[]
+  slaConfigurations    SlaConfiguration[]
+  gestionnaires        User[]             @relation("ClientGestionnaires")
 }
 
 model Contract {
@@ -275,32 +328,32 @@ model ContractHistory {
 }
 
 model Document {
-  id           String          @id @default(uuid())
-  name         String
-  type         String
-  path         String
-  uploadedAt   DateTime        @default(now())
-  uploadedById String
-  bordereauId  String?
-  ocrResult    Json?
-  ocrText      String?
-  status       DocumentStatus?
-  hash         String?         @unique
-  batchId      String?
-  barcodeValues String[]
-  pageCount    Int?
-  resolution   Int?
-  colorMode    String?
-  operatorId   String?
-  scannerModel String?
-  imprinterIds String[]
-  ingestStatus String?
-  ingestTimestamp DateTime?
-  AlertLog     AlertLog[]
-  bordereau    Bordereau?      @relation("BordereauDocuments", fields: [bordereauId], references: [id])
-  uploader     User            @relation("UserDocuments", fields: [uploadedById], references: [id])
-  OCRLog       OCRLog[]
-  reclamations Reclamation[]
+  id                    String                 @id @default(uuid())
+  name                  String
+  type                  String
+  path                  String
+  uploadedAt            DateTime               @default(now())
+  uploadedById          String
+  bordereauId           String?
+  ocrResult             Json?
+  ocrText               String?
+  status                DocumentStatus?
+  hash                  String?                @unique
+  barcodeValues         String[]
+  batchId               String?
+  colorMode             String?
+  imprinterIds          String[]
+  ingestStatus          String?
+  ingestTimestamp       DateTime?
+  operatorId            String?
+  pageCount             Int?
+  resolution            Int?
+  scannerModel          String?
+  AlertLog              AlertLog[]
+  bordereau             Bordereau?             @relation("BordereauDocuments", fields: [bordereauId], references: [id])
+  uploader              User                   @relation("UserDocuments", fields: [uploadedById], references: [id])
+  OCRLog                OCRLog[]
+  reclamations          Reclamation[]
   workflowNotifications WorkflowNotification[]
 }
 
@@ -464,63 +517,62 @@ model BSLog {
   user         User         @relation(fields: [userId], references: [id])
 }
 
-// Enhanced Finance Module Models
 model Adherent {
-  id            String              @id @default(uuid())
-  matricule     String              // Unique per société
+  id            String         @id @default(uuid())
+  matricule     String
   nom           String
   prenom        String
-  clientId      String              // Société de rattachement
+  clientId      String
   rib           String
-  statut        String              @default("ACTIF") // ACTIF/INACTIF
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  statut        String         @default("ACTIF")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   createdById   String?
   updatedById   String?
-  client        Client              @relation(fields: [clientId], references: [id])
+  client        Client         @relation(fields: [clientId], references: [id])
   virementItems VirementItem[]
-  
-  @@unique([matricule, clientId]) // Matricule unique par société
+
+  @@unique([matricule, clientId])
   @@index([rib])
 }
 
 model DonneurOrdre {
-  id                String              @id @default(uuid())
-  nom               String
-  rib               String
-  banque            String
-  structureTxt      String              // Structure 1, 2, 3...
-  formatTxtType     String              @default("STRUCTURE_1")
-  signaturePath     String?
-  statut            String              @default("ACTIF")
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  ordresVirement    OrdreVirement[]
+  id             String          @id @default(uuid())
+  nom            String
+  rib            String
+  banque         String
+  structureTxt   String
+  formatTxtType  String          @default("STRUCTURE_1")
+  signaturePath  String?
+  statut         String          @default("ACTIF")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  ordresVirement OrdreVirement[]
 }
 
 model OrdreVirement {
-  id                String              @id @default(uuid())
-  reference         String              @unique
-  donneurOrdreId    String
-  bordereauId       String?
-  dateCreation      DateTime            @default(now())
-  dateTraitement    DateTime?
-  utilisateurSante  String              // User who initiated
-  utilisateurFinance String?            // User who processed
-  etatVirement      EtatVirement        @default(NON_EXECUTE)
-  dateEtatFinal     DateTime?
-  commentaire       String?
-  montantTotal      Float
-  nombreAdherents   Int
-  fichierPdf        String?
-  fichierTxt        String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  donneurOrdre      DonneurOrdre        @relation(fields: [donneurOrdreId], references: [id])
-  bordereau         Bordereau?          @relation(fields: [bordereauId], references: [id])
-  items             VirementItem[]
-  historique        VirementHistorique[]
-  suiviVirements    SuiviVirement[]
+  id                 String               @id @default(uuid())
+  reference          String               @unique
+  donneurOrdreId     String
+  bordereauId        String?
+  dateCreation       DateTime             @default(now())
+  dateTraitement     DateTime?
+  utilisateurSante   String
+  utilisateurFinance String?
+  etatVirement       EtatVirement         @default(NON_EXECUTE)
+  dateEtatFinal      DateTime?
+  commentaire        String?
+  montantTotal       Float
+  nombreAdherents    Int
+  fichierPdf         String?
+  fichierTxt         String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  bordereau          Bordereau?           @relation(fields: [bordereauId], references: [id])
+  donneurOrdre       DonneurOrdre         @relation(fields: [donneurOrdreId], references: [id])
+  suiviVirements     SuiviVirement[]
+  historique         VirementHistorique[]
+  items              VirementItem[]
 }
 
 model VirementItem {
@@ -528,11 +580,11 @@ model VirementItem {
   ordreVirementId String
   adherentId      String
   montant         Float
-  statut          String        @default("VALIDE") // VALIDE/ERREUR
+  statut          String        @default("VALIDE")
   erreur          String?
   createdAt       DateTime      @default(now())
-  ordreVirement   OrdreVirement @relation(fields: [ordreVirementId], references: [id])
   adherent        Adherent      @relation(fields: [adherentId], references: [id])
+  ordreVirement   OrdreVirement @relation(fields: [ordreVirementId], references: [id])
 }
 
 model VirementHistorique {
@@ -547,24 +599,15 @@ model VirementHistorique {
   ordreVirement   OrdreVirement @relation(fields: [ordreVirementId], references: [id])
 }
 
-enum EtatVirement {
-  NON_EXECUTE
-  EN_COURS_EXECUTION
-  EXECUTE_PARTIELLEMENT
-  REJETE
-  EXECUTE
-}
-
-// Keep existing models but enhance them
 model TeamWorkloadConfig {
-  id           String   @id @default(uuid())
-  teamId       String   // User (CHEF_EQUIPE) or TeamStructure ID
-  maxLoad      Int      // Maximum number of dossiers allowed before overload
-  autoReassignEnabled Boolean @default(true)
-  overflowAction String   @default("ROUND_ROBIN") // ROUND_ROBIN, LOWEST_LOAD, BLOCK, ESCALATE
-  alertThreshold Int?    // If set, generate alert at this workload
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now())
+  id                  String   @id @default(uuid())
+  teamId              String
+  maxLoad             Int
+  autoReassignEnabled Boolean  @default(true)
+  overflowAction      String   @default("ROUND_ROBIN")
+  alertThreshold      Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now())
 }
 
 model Society {
@@ -775,6 +818,159 @@ model ReportGeneration {
   completedAt DateTime?
 }
 
+model EscalationRule {
+  id             String   @id @default(uuid())
+  name           String
+  alertType      String
+  severity       String
+  conditions     Json?
+  escalationPath Json
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([alertType])
+  @@index([active])
+}
+
+model NotificationChannel {
+  id         String   @id @default(uuid())
+  name       String
+  type       String
+  config     Json
+  active     Boolean  @default(true)
+  priority   Int      @default(1)
+  rateLimits Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([type])
+  @@index([active])
+}
+
+model NotificationTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  channel   String
+  subject   String?
+  body      String
+  variables Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([channel])
+  @@index([active])
+}
+
+model SuiviVirement {
+  id                 String         @id @default(uuid())
+  numeroBordereau    String
+  societe            String
+  dateInjection      DateTime       @default(now())
+  utilisateurSante   String
+  dateTraitement     DateTime?
+  utilisateurFinance String?
+  etatVirement       String         @default("NON_EXECUTE")
+  dateEtatFinal      DateTime?
+  commentaire        String?
+  ordreVirementId    String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  ordreVirement      OrdreVirement? @relation(fields: [ordreVirementId], references: [id])
+
+  @@index([numeroBordereau])
+  @@index([etatVirement])
+}
+
+model WorkflowNotification {
+  id          String     @id @default(uuid())
+  fromService String
+  toService   String
+  bordereauId String?
+  documentId  String?
+  message     String
+  type        String
+  status      String     @default("PENDING")
+  sentAt      DateTime   @default(now())
+  readAt      DateTime?
+  userId      String?
+  createdAt   DateTime   @default(now())
+  bordereau   Bordereau? @relation(fields: [bordereauId], references: [id])
+  document    Document?  @relation(fields: [documentId], references: [id])
+  user        User?      @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([type])
+}
+
+model SlaConfiguration {
+  id         String   @id @default(uuid())
+  clientId   String?
+  moduleType String
+  seuils     Json
+  alertes    Json
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  client     Client?  @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@index([moduleType])
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique
+  serviceType String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]   @relation("UserDepartment")
+
+  @@index([serviceType])
+  @@index([active])
+}
+
+model TeamStructure {
+  id           String          @id @default(uuid())
+  name         String
+  serviceType  String
+  parentTeamId String?
+  leaderId     String?
+  description  String?
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  leader       User?           @relation("TeamStructureLeader", fields: [leaderId], references: [id])
+  parentTeam   TeamStructure?  @relation("TeamHierarchy", fields: [parentTeamId], references: [id])
+  subTeams     TeamStructure[] @relation("TeamHierarchy")
+
+  @@index([serviceType])
+}
+
+model SystemConfiguration {
+  id            String   @id @default(uuid())
+  configKey     String   @unique
+  configValue   Json
+  description   String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([configKey])
+}
+
+enum EtatVirement {
+  NON_EXECUTE
+  EN_COURS_EXECUTION
+  EXECUTE_PARTIELLEMENT
+  REJETE
+  EXECUTE
+}
+
 enum DocumentStatus {
   UPLOADED
   EN_COURS
@@ -824,122 +1020,4 @@ enum WireTransferBatchStatus {
   REJECTED
   ARCHIVED
   PROCESSED
-}
-
-model EscalationRule {
-  id             String   @id @default(uuid())
-  name           String
-  alertType      String
-  severity       String
-  conditions     Json?
-  escalationPath Json
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([alertType])
-  @@index([active])
-}
-
-model NotificationChannel {
-  id         String   @id @default(uuid())
-  name       String
-  type       String
-  config     Json
-  active     Boolean  @default(true)
-  priority   Int      @default(1)
-  rateLimits Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([type])
-  @@index([active])
-}
-
-model NotificationTemplate {
-  id        String   @id @default(uuid())
-  name      String
-  channel   String
-  subject   String?
-  body      String
-  variables Json
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([channel])
-  @@index([active])
-}
-
-model SuiviVirement {
-  id                String        @id @default(uuid())
-  numeroBordereau   String
-  societe           String
-  dateInjection     DateTime      @default(now())
-  utilisateurSante  String
-  dateTraitement    DateTime?
-  utilisateurFinance String?
-  etatVirement      String        @default("NON_EXECUTE")
-  dateEtatFinal     DateTime?
-  commentaire       String?
-  ordreVirementId   String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  ordreVirement     OrdreVirement? @relation(fields: [ordreVirementId], references: [id])
-
-  @@index([numeroBordereau])
-  @@index([etatVirement])
-}
-
-model WorkflowNotification {
-  id          String     @id @default(uuid())
-  fromService String
-  toService   String
-  bordereauId String?
-  documentId  String?
-  message     String
-  type        String
-  status      String     @default("PENDING")
-  sentAt      DateTime   @default(now())
-  readAt      DateTime?
-  userId      String?
-  createdAt   DateTime   @default(now())
-  bordereau   Bordereau? @relation(fields: [bordereauId], references: [id])
-  document    Document?  @relation(fields: [documentId], references: [id])
-  user        User?      @relation(fields: [userId], references: [id])
-
-  @@index([status])
-  @@index([type])
-}
-
-model SlaConfiguration {
-  id         String   @id @default(uuid())
-  clientId   String?
-  moduleType String
-  seuils     Json
-  alertes    Json
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  client     Client?  @relation(fields: [clientId], references: [id])
-
-  @@index([clientId])
-  @@index([moduleType])
-}
-
-model TeamStructure {
-  id           String         @id @default(uuid())
-  name         String
-  serviceType  String
-  parentTeamId String?
-  leaderId     String?
-  description  String?
-  active       Boolean        @default(true)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  parentTeam   TeamStructure? @relation("TeamHierarchy", fields: [parentTeamId], references: [id])
-  subTeams     TeamStructure[] @relation("TeamHierarchy")
-  leader       User?          @relation("TeamStructureLeader", fields: [leaderId], references: [id])
-
-  @@index([serviceType])
 }

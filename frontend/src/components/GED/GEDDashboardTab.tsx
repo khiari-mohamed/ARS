@@ -22,47 +22,65 @@ const GEDDashboardTab: React.FC = () => {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Load PaperStream status
-        const psStatus = await getPaperStreamStatus();
-        setPaperStreamStatus(psStatus);
+        // Load real document statistics
+        const [statsResponse, docsResponse, paperStreamResponse] = await Promise.all([
+          LocalAPI.get('/documents/stats'),
+          LocalAPI.get('/documents/search'),
+          LocalAPI.get('/documents/paperstream/status')
+        ]);
         
-        // Try to load real analytics data
-        const analyticsResponse = await LocalAPI.get('/documents/analytics');
-        const analytics = analyticsResponse.data;
+        const docStats = statsResponse.data;
+        const docs = docsResponse.data;
+        const psStatus = paperStreamResponse.data;
         
-        const totalDocs = analytics.totalDocuments || 0;
-        const slaCompliance = analytics.slaCompliance || { onTime: 0, atRisk: 0, overdue: 0 };
-        const inProgress = totalDocs - slaCompliance.onTime - slaCompliance.overdue;
+        // Calculate SLA compliance from real data
+        const now = new Date();
+        const slaThreshold = 48; // hours
+        let onTime = 0, atRisk = 0, overdue = 0;
+        
+        docs.forEach((doc: any) => {
+          const hours = (now.getTime() - new Date(doc.uploadedAt).getTime()) / (1000 * 60 * 60);
+          if (doc.status === 'TRAITE') {
+            onTime++;
+          } else if (hours > slaThreshold) {
+            overdue++;
+          } else if (hours > 36) {
+            atRisk++;
+          } else {
+            onTime++;
+          }
+        });
+        
+        const totalDocs = docStats.total || docs.length;
+        const inProgress = docs.filter((d: any) => d.status === 'EN_COURS').length;
+        const slaCompliancePercent = totalDocs > 0 ? ((onTime / totalDocs) * 100) : 0;
         
         setStats({
           totalDocs,
-          inProgress: Math.max(0, inProgress),
-          overdue: slaCompliance.overdue,
-          slaCompliance: totalDocs > 0 ? ((slaCompliance.onTime / totalDocs) * 100).toFixed(1) : '0'
+          inProgress,
+          overdue,
+          slaCompliance: slaCompliancePercent.toFixed(1)
         });
         
         setSlaData([
           { 
             name: 'À temps', 
-            value: totalDocs > 0 ? Math.round((slaCompliance.onTime / totalDocs) * 100) : 0, 
+            value: totalDocs > 0 ? Math.round((onTime / totalDocs) * 100) : 0, 
             color: '#4caf50' 
           },
           { 
             name: 'À risque', 
-            value: totalDocs > 0 ? Math.round((slaCompliance.atRisk / totalDocs) * 100) : 0, 
+            value: totalDocs > 0 ? Math.round((atRisk / totalDocs) * 100) : 0, 
             color: '#ff9800' 
           },
           { 
             name: 'En retard', 
-            value: totalDocs > 0 ? Math.round((slaCompliance.overdue / totalDocs) * 100) : 0, 
+            value: totalDocs > 0 ? Math.round((overdue / totalDocs) * 100) : 0, 
             color: '#f44336' 
           }
         ]);
         
-        // Load recent documents
-        const docsResponse = await LocalAPI.get('/documents/search');
-        const docs = docsResponse.data;
-        
+        // Set recent documents
         setRecentDocs(docs.slice(0, 5).map((doc: any) => ({
           id: doc.id,
           name: doc.name,
@@ -73,34 +91,27 @@ const GEDDashboardTab: React.FC = () => {
           operatorId: doc.operatorId,
           ingestStatus: doc.ingestStatus
         })));
+        
+        // Set PaperStream status
+        setPaperStreamStatus(psStatus);
+        
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
-        // Fallback to mock data
+        // Show error state instead of fallback data
         setStats({
-          totalDocs: 1245,
-          inProgress: 89,
-          overdue: 12,
-          slaCompliance: 87.5
+          totalDocs: 0,
+          inProgress: 0,
+          overdue: 0,
+          slaCompliance: '0'
         });
-
-        setSlaData([
-          { name: 'À temps', value: 75, color: '#4caf50' },
-          { name: 'À risque', value: 15, color: '#ff9800' },
-          { name: 'En retard', value: 10, color: '#f44336' }
-        ]);
-
-        setRecentDocs([
-          { id: '1', name: 'BS_Client_A_001.pdf', type: 'BS', uploadedAt: '2025-01-15', status: 'SCANNE', batchId: 'BATCH_001', operatorId: 'OP001', ingestStatus: 'INGESTED' },
-          { id: '2', name: 'Contrat_Client_B.pdf', type: 'CONTRAT', uploadedAt: '2025-01-15', status: 'EN_COURS' },
-          { id: '3', name: 'Justificatif_001.pdf', type: 'JUSTIFICATIF', uploadedAt: '2025-01-14', status: 'TRAITE' }
-        ]);
-        
+        setSlaData([]);
+        setRecentDocs([]);
         setPaperStreamStatus({
-          status: 'active',
-          watcherActive: true,
-          totalProcessed: 156,
-          totalQuarantined: 8,
-          successRate: 95.1
+          status: 'inactive',
+          watcherActive: false,
+          totalProcessed: 0,
+          totalQuarantined: 0,
+          successRate: 0
         });
       }
     };
@@ -164,7 +175,11 @@ const GEDDashboardTab: React.FC = () => {
     );
   };
 
-  if (!stats) return <Typography>Chargement...</Typography>;
+  if (!stats) return (
+    <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+      <Typography>Chargement des données GED...</Typography>
+    </Box>
+  );
 
   return (
     <Box>

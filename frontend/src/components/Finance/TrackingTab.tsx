@@ -271,7 +271,7 @@ const TrackingTab: React.FC = () => {
                     </TableCell>
                     <TableCell>{getStatusChip(record.status, record.delay)}</TableCell>
                     <TableCell>{record.delay}</TableCell>
-                    <TableCell>{record.totalAmount.toFixed(2)} DT</TableCell>
+                    <TableCell>{(record.totalAmount || 0).toFixed(2)} DT</TableCell>
                     <TableCell>
                       <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
                         {record.observations || '-'}

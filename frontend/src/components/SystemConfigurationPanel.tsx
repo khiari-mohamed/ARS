@@ -75,6 +75,27 @@ const SystemConfigurationPanel: React.FC = () => {
       setConfig(data);
     } catch (error) {
       console.error('Failed to load system configuration:', error);
+      // Set default configuration on error
+      setConfig({
+        email: {
+          smtp: {
+            host: '',
+            port: 587,
+            secure: false,
+            auth: {
+              user: '',
+              pass: ''
+            }
+          },
+          templates: {}
+        },
+        sms: {
+          provider: '',
+          apiKey: '',
+          sender: ''
+        },
+        integrations: {}
+      });
     } finally {
       setLoading(false);
     }
@@ -96,7 +117,7 @@ const SystemConfigurationPanel: React.FC = () => {
   const handleTestEmail = async () => {
     setTesting(prev => ({ ...prev, email: true }));
     try {
-      const result = await testEmailConfiguration(config.email);
+      const result = await testEmailConfiguration(config?.email);
       setTestResultDialog({
         open: true,
         type: 'Email',
@@ -118,7 +139,7 @@ const SystemConfigurationPanel: React.FC = () => {
   const handleTestSMS = async () => {
     setTesting(prev => ({ ...prev, sms: true }));
     try {
-      const result = await testSMSConfiguration(config.sms);
+      const result = await testSMSConfiguration(config?.sms);
       setTestResultDialog({
         open: true,
         type: 'SMS',
@@ -141,9 +162,9 @@ const SystemConfigurationPanel: React.FC = () => {
     setConfig((prev: any) => ({
       ...prev,
       email: {
-        ...prev.email,
+        ...prev?.email,
         smtp: {
-          ...prev.email.smtp,
+          ...prev?.email?.smtp,
           [field]: value
         }
       }
@@ -154,11 +175,11 @@ const SystemConfigurationPanel: React.FC = () => {
     setConfig((prev: any) => ({
       ...prev,
       email: {
-        ...prev.email,
+        ...prev?.email,
         smtp: {
-          ...prev.email.smtp,
+          ...prev?.email?.smtp,
           auth: {
-            ...prev.email.smtp.auth,
+            ...prev?.email?.smtp?.auth,
             [field]: value
           }
         }
@@ -170,7 +191,7 @@ const SystemConfigurationPanel: React.FC = () => {
     setConfig((prev: any) => ({
       ...prev,
       sms: {
-        ...prev.sms,
+        ...prev?.sms,
         [field]: value
       }
     }));
@@ -180,9 +201,9 @@ const SystemConfigurationPanel: React.FC = () => {
     setConfig((prev: any) => ({
       ...prev,
       integrations: {
-        ...prev.integrations,
+        ...prev?.integrations,
         [integration]: {
-          ...prev.integrations[integration],
+          ...prev?.integrations?.[integration],
           [field]: value
         }
       }
@@ -193,11 +214,11 @@ const SystemConfigurationPanel: React.FC = () => {
     setConfig((prev: any) => ({
       ...prev,
       email: {
-        ...prev.email,
+        ...prev?.email,
         templates: {
-          ...prev.email.templates,
+          ...prev?.email?.templates,
           [templateId]: {
-            ...prev.email.templates[templateId],
+            ...prev?.email?.templates?.[templateId],
             [field]: value
           }
         }
@@ -262,7 +283,7 @@ const SystemConfigurationPanel: React.FC = () => {
               <TextField
                 fullWidth
                 label="Serveur SMTP"
-                value={config.email.smtp.host}
+                value={config?.email?.smtp?.host || ''}
                 onChange={(e) => updateEmailConfig('host', e.target.value)}
               />
             </Grid>
@@ -272,7 +293,7 @@ const SystemConfigurationPanel: React.FC = () => {
                 fullWidth
                 label="Port"
                 type="number"
-                value={config.email.smtp.port}
+                value={config?.email?.smtp?.port || 587}
                 onChange={(e) => updateEmailConfig('port', parseInt(e.target.value))}
               />
             </Grid>
@@ -281,7 +302,7 @@ const SystemConfigurationPanel: React.FC = () => {
               <TextField
                 fullWidth
                 label="Nom d'utilisateur"
-                value={config.email.smtp.auth.user}
+                value={config?.email?.smtp?.auth?.user || ''}
                 onChange={(e) => updateEmailAuth('user', e.target.value)}
               />
             </Grid>
@@ -291,7 +312,7 @@ const SystemConfigurationPanel: React.FC = () => {
                 fullWidth
                 label="Mot de passe"
                 type={showPasswords ? 'text' : 'password'}
-                value={config.email.smtp.auth.pass}
+                value={config?.email?.smtp?.auth?.pass || ''}
                 onChange={(e) => updateEmailAuth('pass', e.target.value)}
                 InputProps={{
                   endAdornment: (
@@ -307,7 +328,7 @@ const SystemConfigurationPanel: React.FC = () => {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={config.email.smtp.secure}
+                    checked={config?.email?.smtp?.secure || false}
                     onChange={(e) => updateEmailConfig('secure', e.target.checked)}
                   />
                 }
@@ -331,7 +352,7 @@ const SystemConfigurationPanel: React.FC = () => {
               <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
                 Modèles d'Email
               </Typography>
-              {Object.entries(config.email.templates).map(([templateId, template]: [string, any]) => (
+              {Object.entries(config?.email?.templates || {}).map(([templateId, template]: [string, any]) => (
                 <Accordion key={templateId}>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     <Typography>{templateId.replace('_', ' ').toUpperCase()}</Typography>
@@ -378,7 +399,7 @@ const SystemConfigurationPanel: React.FC = () => {
               <TextField
                 fullWidth
                 label="Fournisseur SMS"
-                value={config.sms.provider}
+                value={config?.sms?.provider || ''}
                 onChange={(e) => updateSMSConfig('provider', e.target.value)}
                 helperText="Ex: twilio, nexmo, etc."
               />
@@ -389,7 +410,7 @@ const SystemConfigurationPanel: React.FC = () => {
                 fullWidth
                 label="Clé API"
                 type={showPasswords ? 'text' : 'password'}
-                value={config.sms.apiKey}
+                value={config?.sms?.apiKey || ''}
                 onChange={(e) => updateSMSConfig('apiKey', e.target.value)}
                 InputProps={{
                   endAdornment: (
@@ -405,7 +426,7 @@ const SystemConfigurationPanel: React.FC = () => {
               <TextField
                 fullWidth
                 label="Numéro expéditeur"
-                value={config.sms.sender}
+                value={config?.sms?.sender || ''}
                 onChange={(e) => updateSMSConfig('sender', e.target.value)}
                 helperText="Format international: +33123456789"
               />
@@ -433,7 +454,7 @@ const SystemConfigurationPanel: React.FC = () => {
               </Typography>
             </Grid>
 
-            {Object.entries(config.integrations).map(([integrationId, integration]: [string, any]) => (
+            {Object.entries(config?.integrations || {}).map(([integrationId, integration]: [string, any]) => (
               <Grid item xs={12} key={integrationId}>
                 <Card variant="outlined">
                   <CardContent>
@@ -461,14 +482,14 @@ const SystemConfigurationPanel: React.FC = () => {
 
                     {integration.enabled && (
                       <Grid container spacing={2}>
-                        {Object.entries(integration.config).map(([configKey, configValue]: [string, any]) => (
+                        {Object.entries(integration?.config || {}).map(([configKey, configValue]: [string, any]) => (
                           <Grid item xs={12} sm={6} key={configKey}>
                             <TextField
                               fullWidth
                               label={configKey.replace('_', ' ').toUpperCase()}
                               value={configValue}
                               onChange={(e) => {
-                                const newConfig = { ...integration.config, [configKey]: e.target.value };
+                                const newConfig = { ...integration?.config, [configKey]: e.target.value };
                                 updateIntegrationConfig(integrationId, 'config', newConfig);
                               }}
                               size="small"

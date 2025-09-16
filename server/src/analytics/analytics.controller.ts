@@ -273,6 +273,11 @@ export class AnalyticsController {
     return this.analyticsService.getPredictResourcesAI(payload);
   }
 
+  @Post('ai/forecast-trends')
+  async getForecastTrendsAI(@Body() historicalData: any[]) {
+    return this.analyticsService.getForecastTrendsAI(historicalData);
+  }
+
   // Filter options endpoints
   @Get('filter-options/departments')
   async getDepartments(@Req() req: any) {
@@ -284,6 +289,80 @@ export class AnalyticsController {
   async getTeams(@Req() req: any) {
     const user = getUserFromRequest(req);
     return this.analyticsService.getTeams();
+  }
+
+  @Get('workforce-estimator')
+  async getWorkforceEstimator(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getWorkforceEstimator(query, user);
+  }
+
+  // === NEW AI-POWERED ANALYTICS ENDPOINTS ===
+  
+  @Post('ai/root-cause-analysis')
+  async getRootCauseAnalysis(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.performRootCauseAnalysis(user);
+  }
+  
+  @Post('ai/optimization-recommendations')
+  async getOptimizationRecommendations(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getAIOptimizationRecommendations(user);
+  }
+  
+  @Post('ai/bottleneck-detection')
+  async getBottleneckDetection(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.detectProcessBottlenecks(user);
+  }
+  
+  @Post('ai/training-needs')
+  async getTrainingNeeds(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.identifyTrainingNeeds(user);
+  }
+
+  @Post('ai/advanced-clustering')
+  async getAdvancedClustering(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getAdvancedProcessClustering(user);
+  }
+
+  @Post('ai/sophisticated-anomaly-detection')
+  async getSophisticatedAnomalyDetection(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getSophisticatedAnomalyAnalysis(user);
+  }
+
+  @Post('ai/executive-report')
+  async generateExecutiveReport(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.generateComprehensiveExecutiveReport(user, payload);
+  }
+
+  @Get('current-staff')
+  async getCurrentStaff(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getCurrentStaff(user);
+  }
+
+  @Get('planned-vs-actual')
+  async getPlannedVsActual(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getPlannedVsActual(user, query);
+  }
+
+  @Get('ai-recommendations')
+  async getAIRecommendations(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getAIRecommendations(user);
+  }
+
+  @Get('resource-planning')
+  async getResourcePlanning(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getResourcePlanning(user);
   }
 
 }

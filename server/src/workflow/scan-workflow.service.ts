@@ -16,11 +16,6 @@ export class ScanWorkflowService {
    */
   async getScanCorbeille(userId: string) {
     try {
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (user?.role !== 'SCAN_TEAM') {
-        return { items: [], stats: { toScan: 0, scanning: 0, completed: 0 } };
-      }
-
       const [toScan, scanning, completed] = await Promise.all([
         // Ready to scan
         this.prisma.bordereau.findMany({
@@ -105,6 +100,19 @@ export class ScanWorkflowService {
         include: { client: true }
       });
 
+      // Log activity for chart
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'SCAN_STARTED',
+          details: {
+            bordereauId,
+            reference: bordereau.reference,
+            client: bordereau.client?.name
+          }
+        }
+      });
+
       this.logger.log(`Started scanning bordereau ${bordereau.reference}`);
       return { success: true, bordereau };
     } catch (error) {
@@ -125,6 +133,19 @@ export class ScanWorkflowService {
           dateFinScan: new Date()
         },
         include: { client: { include: { gestionnaires: true } } }
+      });
+
+      // Log activity for chart
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'SCAN_COMPLETED',
+          details: {
+            bordereauId,
+            reference: bordereau.reference,
+            client: bordereau.client?.name
+          }
+        }
       });
 
       // Auto-progress to A_AFFECTER and notify chef

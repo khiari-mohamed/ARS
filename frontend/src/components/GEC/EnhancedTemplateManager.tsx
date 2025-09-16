@@ -253,13 +253,23 @@ const EnhancedTemplateManager: React.FC = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({})
+        body: JSON.stringify({
+          context: {
+            clientName: 'Client Exemple',
+            bordereauRef: 'REF/2025/001',
+            date: new Date().toLocaleDateString('fr-FR')
+          }
+        })
       });
       
       if (response.ok) {
         const rendered = await response.json();
-        console.log('✅ Template rendered successfully');
-        setPreviewData(rendered);
+        console.log('✅ Template rendered with AI confidence:', rendered.confidence);
+        setPreviewData({
+          ...rendered,
+          aiConfidence: rendered.confidence,
+          usedVariables: rendered.usedVariables
+        });
         setPreviewDialog(true);
       } else {
         console.error('Failed to render template:', response.status);
@@ -736,7 +746,8 @@ const EnhancedTemplateManager: React.FC = () => {
                 label="Corps du message"
                 value={newTemplate.body}
                 onChange={(e) => setNewTemplate(prev => ({ ...prev, body: e.target.value }))}
-                placeholder="Contenu HTML du modèle..."
+                placeholder="Utilisez {{variable}} pour l'auto-remplissage IA (ex: {{clientName}}, {{reference}}, {{date}}, {{montant}}, {{delaiTraitement}})"
+                helperText="Variables IA disponibles: clientName, reference, date, montant, delaiTraitement, bordereauRef"
               />
             </Grid>
 
@@ -908,6 +919,16 @@ const EnhancedTemplateManager: React.FC = () => {
         <DialogContent>
           {previewData && (
             <Box>
+              {previewData.aiConfidence && (
+                <Alert severity={previewData.aiConfidence > 0.8 ? 'success' : 'warning'} sx={{ mb: 2 }}>
+                  IA Auto-remplissage: {Math.round(previewData.aiConfidence * 100)}% de confiance
+                  {previewData.usedVariables && Object.keys(previewData.usedVariables).length > 0 && (
+                    <Typography variant="caption" display="block">
+                      Variables utilisées: {Object.keys(previewData.usedVariables).join(', ')}
+                    </Typography>
+                  )}
+                </Alert>
+              )}
               <Typography variant="h6" gutterBottom>
                 Objet: {previewData.subject}
               </Typography>

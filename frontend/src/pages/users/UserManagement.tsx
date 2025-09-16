@@ -2,7 +2,8 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUsers, useUserDashboardStats } from '../../hooks/useUsers';
 import { canUserManageRole, validatePassword, generateTempPassword } from '../../api/usersApi';
-import { User, UserRole, UserFilters, ROLE_LABELS, DEPARTMENTS } from '../../types/user.d';
+import { User, UserRole, UserFilters, ROLE_LABELS } from '../../types/user.d';
+import { LocalAPI } from '../../services/axios';
 import UserDashboard from '../../components/user/UserDashboard';
 import BulkUserActions from '../../components/user/BulkUserActions';
 import {
@@ -70,6 +71,7 @@ export default function UserManagement() {
   const [filters, setFilters] = useState<UserFilters>({});
   const [searchInput, setSearchInput] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [newUser, setNewUser] = useState({
     fullName: '',
     email: '',
@@ -98,6 +100,20 @@ export default function UserManagement() {
     }, 300);
     return () => clearTimeout(timeoutId);
   }, [searchInput]);
+
+  // Load departments
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const response = await LocalAPI.get('/super-admin/departments');
+        setDepartments(response.data);
+      } catch (error) {
+        console.error('Failed to load departments:', error);
+        setDepartments([]);
+      }
+    };
+    loadDepartments();
+  }, []);
 
   // Hooks
   const { users, loading, error, reload, addUser, editUser, deactivateUser, activateUser, resetPassword, bulkAction, exportUserData } = useUsers(filters);
@@ -364,8 +380,8 @@ export default function UserManagement() {
                 displayEmpty
               >
                 <MenuItem value="">Tous les départements</MenuItem>
-                {DEPARTMENTS.map(dept => (
-                  <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+                {departments.map(dept => (
+                  <MenuItem key={dept.id || dept.code} value={dept.code || dept.id}>{dept.name}</MenuItem>
                 ))}
               </Select>
             </Box>

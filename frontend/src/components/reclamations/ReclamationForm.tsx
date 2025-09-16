@@ -34,6 +34,7 @@ export const ReclamationForm: React.FC<Props> = ({ initial = {}, onSuccess }) =>
     type: initial.type || '',
     severity: (initial.severity as any) || 'medium',
     description: initial.description || '',
+    department: 'RECLAMATIONS',
     documentId: initial.documentId,
     bordereauId: initial.bordereauId,
     assignedToId: initial.assignedToId,
@@ -177,12 +178,13 @@ export const ReclamationForm: React.FC<Props> = ({ initial = {}, onSuccess }) =>
                   value={form.type}
                   onChange={(e) => handleChange('type', e.target.value)}
                 >
-                  <MenuItem value="retard">Retard de traitement</MenuItem>
-                  <MenuItem value="document manquant">Document manquant</MenuItem>
-                  <MenuItem value="erreur traitement">Erreur de traitement</MenuItem>
-                  <MenuItem value="qualité service">Qualité de service</MenuItem>
-                  <MenuItem value="facturation">Problème de facturation</MenuItem>
-                  <MenuItem value="autre">Autre</MenuItem>
+                  <MenuItem value="REMBOURSEMENT">Remboursement</MenuItem>
+                  <MenuItem value="RETARD">Retard de traitement</MenuItem>
+                  <MenuItem value="DOCUMENT_MANQUANT">Document manquant</MenuItem>
+                  <MenuItem value="ERREUR_TRAITEMENT">Erreur de traitement</MenuItem>
+                  <MenuItem value="QUALITE_SERVICE">Qualité de service</MenuItem>
+                  <MenuItem value="FACTURATION">Problème de facturation</MenuItem>
+                  <MenuItem value="AUTRE">Autre</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -194,8 +196,9 @@ export const ReclamationForm: React.FC<Props> = ({ initial = {}, onSuccess }) =>
                   value={form.severity}
                   onChange={(e) => handleChange('severity', e.target.value)}
                 >
-                  <MenuItem value="low">Normale</MenuItem>
-                  <MenuItem value="medium">Urgente</MenuItem>
+                  <MenuItem value="low">Basse</MenuItem>
+                  <MenuItem value="medium">Moyenne</MenuItem>
+                  <MenuItem value="high">Haute</MenuItem>
                   <MenuItem value="critical">Critique</MenuItem>
                 </Select>
               </FormControl>

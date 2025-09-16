@@ -66,73 +66,103 @@ const AutomatedReconciliation: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Try to load real data first
-      const { getOVTracking } = await import('../../services/financeService');
-      const realData = await getOVTracking({});
+      // Get real reconciliation data from API
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/dashboard`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       
-      if (realData && realData.length > 0) {
-        // Convert real OV data to reconciliation format
-        const realStatements = realData.map((ov: any) => ({
-          id: ov.id,
-          bankCode: ov.donneurOrdre.substring(0, 3).toUpperCase(),
-          accountNumber: `TN59${Math.random().toString().substring(2, 20)}`,
-          statementDate: new Date(ov.dateInjected),
-          openingBalance: ov.totalAmount + Math.random() * 10000,
-          closingBalance: ov.totalAmount,
-          transactionCount: Math.floor(Math.random() * 30) + 10,
-          matchedTransactions: Math.floor(Math.random() * 25) + 8,
-          status: ov.status === 'EXECUTE' ? 'reconciled' : ov.status === 'EN_COURS' ? 'processing' : 'imported',
-          reconciliationRate: Math.random() * 30 + 70,
-          processedAt: ov.dateExecuted ? new Date(ov.dateExecuted) : null
-        }));
-        
-        setStatements(realStatements);
-        
-        // Generate real exceptions based on data
-        const realExceptions = realStatements.filter((s: any) => s.status !== 'reconciled').map((s: any, i: number) => ({
-          id: `exc_${s.id}_${i}`,
-          type: ['unmatched_payment', 'amount_mismatch', 'unmatched_transaction'][i % 3],
-          paymentId: `pay_${s.id}`,
-          description: `Exception pour ${s.bankCode}: ${['Paiement non trouvé', 'Différence de montant', 'Transaction non rapprochée'][i % 3]}`,
-          severity: ['high', 'medium', 'low'][i % 3],
-          amount: Math.random() * 1000 + 100,
-          status: ['open', 'investigating', 'resolved'][i % 3],
-          createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
-          suggestedActions: [
-            'Vérifier les détails du paiement',
-            'Contacter la banque',
-            'Réviser les montants'
-          ]
-        }));
-        
-        setExceptions(realExceptions);
-        
-        // Calculate real statistics
-        const totalTransactions = realStatements.reduce((sum: number, s: any) => sum + s.transactionCount, 0);
-        const matchedTransactions = realStatements.reduce((sum: number, s: any) => sum + s.matchedTransactions, 0);
-        
-        setReconciliationStats({
-          totalStatements: realStatements.length,
-          processedStatements: realStatements.filter((s: any) => s.status === 'reconciled').length,
-          totalTransactions,
-          matchedTransactions,
-          unmatchedTransactions: totalTransactions - matchedTransactions,
-          totalExceptions: realExceptions.length,
-          resolvedExceptions: realExceptions.filter((e: any) => e.status === 'resolved').length,
-          averageReconciliationRate: realStatements.reduce((sum: number, s: any) => sum + s.reconciliationRate, 0) / realStatements.length,
-          averageProcessingTime: 2.3,
-          matchingAccuracy: (matchedTransactions / totalTransactions) * 100,
-          exceptionResolutionRate: (realExceptions.filter((e: any) => e.status === 'resolved').length / realExceptions.length) * 100
-        });
-        
-        return;
+      if (!response.ok) {
+        throw new (globalThis.Error)('Failed to load dashboard data');
       }
+      
+      const dashboardData = await response.json();
+      console.log('Loaded dashboard data for reconciliation:', dashboardData);
+      
+      // Get bordereaux with virements (reconciled data) - force fresh data
+      const reconciledResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bordereaux?withVirement=true&_t=${Date.now()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let reconciledBordereaux = [];
+      if (reconciledResponse.ok) {
+        reconciledBordereaux = await reconciledResponse.json();
+        console.log('Loaded bordereaux with virement info:', reconciledBordereaux.length);
+        console.log('Bordereaux with virements:', reconciledBordereaux.filter((b: any) => b.virement).length);
+      }
+      
+      // Transform real data to reconciliation format
+      const realStatements = reconciledBordereaux.map((bordereau: any, index: number) => ({
+        id: bordereau.id,
+        bankCode: bordereau.client?.name?.substring(0, 3).toUpperCase() || 'ARS',
+        accountNumber: `TN59${bordereau.reference?.slice(-16) || '1234567890123456'}`,
+        statementDate: new Date(bordereau.dateReception),
+        openingBalance: bordereau.virement?.montant || 0,
+        closingBalance: bordereau.virement?.montant || 0,
+        transactionCount: bordereau.nombreBS || 1,
+        matchedTransactions: bordereau.virement ? bordereau.nombreBS || 1 : 0,
+        status: bordereau.virement ? 'reconciled' : 'imported',
+        reconciliationRate: bordereau.virement ? 100 : 0,
+        processedAt: bordereau.virement ? new Date(bordereau.dateCloture || bordereau.dateReception) : null
+      }));
+      
+      setStatements(realStatements);
+      
+      // Generate exceptions for unreconciled bordereaux (only those not processed)
+      // Filter out bordereaux that have been processed (status TRAITE) or have virements
+      const unreconciled = realStatements.filter((s: any) => {
+        // Exclude if status is 'reconciled' or if it has a processedAt date or if it has a virement
+        return s.status !== 'reconciled' && !s.processedAt && !s.virement;
+      });
+      console.log('Unreconciled statements for exceptions:', unreconciled.length);
+      console.log('Total statements:', realStatements.length);
+      console.log('Statements with virements:', realStatements.filter((s: any) => s.virement).length);
+      
+      const realExceptions = unreconciled.map((statement: any, i: number) => ({
+        id: `exc_${statement.id}`,
+        type: ['unmatched_payment', 'amount_mismatch', 'unmatched_transaction'][i % 3],
+        paymentId: statement.id,
+        description: `Exception pour ${statement.bankCode}: Bordereau non rapproché`,
+        severity: ['high', 'medium', 'low'][i % 3],
+        amount: statement.closingBalance,
+        status: 'open',
+        createdAt: statement.statementDate,
+        suggestedActions: [
+          'Vérifier les détails du bordereau',
+          'Confirmer le virement associé',
+          'Vérifier les montants'
+        ]
+      }));
+      
+      console.log('Generated exceptions:', realExceptions.length);
+      
+      setExceptions(realExceptions);
+      
+      // Calculate real statistics from database data
+      const totalTransactions = realStatements.reduce((sum: number, s: any) => sum + s.transactionCount, 0);
+      const matchedTransactions = realStatements.reduce((sum: number, s: any) => sum + s.matchedTransactions, 0);
+      const reconciledCount = realStatements.filter((s: any) => s.status === 'reconciled').length;
+      
+      setReconciliationStats({
+        totalStatements: realStatements.length,
+        processedStatements: reconciledCount,
+        totalTransactions,
+        matchedTransactions,
+        unmatchedTransactions: totalTransactions - matchedTransactions,
+        totalExceptions: realExceptions.length,
+        resolvedExceptions: 0,
+        averageReconciliationRate: realStatements.length > 0 ? (reconciledCount / realStatements.length) * 100 : 0,
+        averageProcessingTime: 2.5,
+        matchingAccuracy: totalTransactions > 0 ? (matchedTransactions / totalTransactions) * 100 : 0,
+        exceptionResolutionRate: 0
+      });
+      
     } catch (error) {
-      console.error('Failed to load real data, using fallback:', error);
-    }
-    
-    try {
-      // No fallback data - use empty arrays
+      console.error('Failed to load reconciliation data:', error);
+      // Set empty state on error
       setStatements([]);
       setExceptions([]);
       setReconciliationStats({
@@ -148,8 +178,6 @@ const AutomatedReconciliation: React.FC = () => {
         matchingAccuracy: 0,
         exceptionResolutionRate: 0
       });
-    } catch (error) {
-      console.error('Failed to load reconciliation data:', error);
     } finally {
       setLoading(false);
     }
@@ -169,40 +197,110 @@ const AutomatedReconciliation: React.FC = () => {
     }
 
     try {
-      // Simulate file processing
+      const formData = new FormData();
+      formData.append('file', uploadForm.file);
+      formData.append('bankCode', uploadForm.bankCode);
+      formData.append('accountNumber', uploadForm.accountNumber);
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/upload-statement`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new (globalThis.Error)(errorData.message || 'Failed to upload statement');
+      }
+      
+      const result = await response.json();
+      console.log('Upload successful:', result);
+      
+      setUploadDialog(false);
+      setUploadForm({ bankCode: '', accountNumber: '', file: null });
+      
+      // Add the new statement to the UI immediately and update stats
       const newStatement = {
-        id: `stmt_${Date.now()}`,
+        id: result.bordereauId || `stmt_${Date.now()}`,
         bankCode: uploadForm.bankCode,
         accountNumber: uploadForm.accountNumber,
         statementDate: new Date(),
-        openingBalance: Math.random() * 50000 + 10000,
-        closingBalance: Math.random() * 45000 + 8000,
-        transactionCount: Math.floor(Math.random() * 20) + 5,
+        openingBalance: 0,
+        closingBalance: 0,
+        transactionCount: 1,
         matchedTransactions: 0,
         status: 'imported',
         reconciliationRate: 0,
         processedAt: null
       };
-
+      
+      // Update statements list
       setStatements(prev => [newStatement, ...prev]);
-      setUploadDialog(false);
-      setUploadForm({ bankCode: '', accountNumber: '', file: null });
+      
+      // Update statistics immediately
+      setReconciliationStats((prev: any) => prev ? {
+        ...prev,
+        totalStatements: prev.totalStatements + 1,
+        totalTransactions: prev.totalTransactions + 1,
+        unmatchedTransactions: prev.unmatchedTransactions + 1
+      } : prev);
+      
+      console.log('Added new statement to UI:', newStatement);
+      
+      // Delay the data reload to let the UI update stick
+      setTimeout(() => {
+        console.log('Reloading data after upload...');
+        loadData();
+      }, 2000);
       alert('Relevé importé avec succès!');
     } catch (error) {
       console.error('Failed to upload statement:', error);
-      alert('Erreur lors de l\'importation du relevé');
+      alert('Erreur lors de l\'importation du relevé: ' + (error && typeof error === 'object' && 'message' in error ? (error as any).message : 'Erreur inconnue'));
     }
   };
 
   const handleResolveException = async (exceptionId: string) => {
     try {
-      setExceptions(prev => prev.map(e => 
-        e.id === exceptionId ? { ...e, status: 'resolved' } : e
-      ));
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/exceptions/${exceptionId}/resolve`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: 'resolved' })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new (globalThis.Error)(errorData.message || 'Failed to resolve exception');
+      }
+      
+      // Remove the resolved exception from the list immediately
+      setExceptions(prev => {
+        const filtered = prev.filter(e => e.id !== exceptionId);
+        console.log('Removed resolved exception, remaining:', filtered.length);
+        return filtered;
+      });
+      
+      // Update reconciliation stats immediately
+      setReconciliationStats((prev: any) => prev ? {
+        ...prev,
+        totalExceptions: prev.totalExceptions - 1,
+        resolvedExceptions: prev.resolvedExceptions + 1
+      } : prev);
+      
+      // Force reload data after a short delay to get updated virement info
+      setTimeout(() => {
+        console.log('Reloading data after exception resolution to get fresh virement info...');
+        loadData();
+      }, 1000);
+      
       alert('Exception résolue avec succès!');
     } catch (error) {
       console.error('Failed to resolve exception:', error);
-      alert('Erreur lors de la résolution de l\'exception');
+      alert('Erreur lors de la résolution de l\'exception: ' + (error && typeof error === 'object' && 'message' in error ? (error as any).message : 'Erreur inconnue'));
     }
   };
 
@@ -211,30 +309,45 @@ const AutomatedReconciliation: React.FC = () => {
     setProcessingStep(0);
     setProcessingDialog(true);
 
-    // Simulate processing steps
-    const steps = [
-      'Analyse du relevé bancaire',
-      'Recherche des paiements correspondants',
-      'Rapprochement automatique',
-      'Identification des exceptions',
-      'Génération du rapport'
-    ];
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/statements/${statement.id}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ statementId: statement.id })
+      });
+      
+      // Simulate processing steps for UI
+      const steps = [
+        'Analyse du relevé bancaire',
+        'Recherche des paiements correspondants',
+        'Rapprochement automatique',
+        'Identification des exceptions',
+        'Génération du rapport'
+      ];
 
-    for (let i = 0; i < steps.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      setProcessingStep(i + 1);
-    }
-
-    // Update statement status
-    statement.status = 'reconciled';
-    statement.matchedTransactions = Math.floor(statement.transactionCount * 0.9);
-    statement.reconciliationRate = (statement.matchedTransactions / statement.transactionCount) * 100;
-    statement.processedAt = new Date();
-
-    setTimeout(() => {
+      for (let i = 0; i < steps.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setProcessingStep(i + 1);
+      }
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Exception resolution result:', result);
+      }
+      
+      setTimeout(() => {
+        setProcessingDialog(false);
+        loadData(); // Reload data from backend
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Failed to process statement:', error);
       setProcessingDialog(false);
-      loadData();
-    }, 1000);
+      alert('Erreur lors du traitement: ' + (error && typeof error === 'object' && 'message' in error ? (error as any).message : 'Erreur inconnue'));
+    }
   };
 
   const getStatusColor = (status: string) => {

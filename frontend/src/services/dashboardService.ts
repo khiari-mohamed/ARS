@@ -5,12 +5,8 @@ export const getKPIs = async (filters?: any) => {
     const { data } = await LocalAPI.get('/dashboard/kpis', { params: filters });
     return data;
   } catch (error) {
-    return {
-      totalBordereaux: 1245,
-      processed: 1180,
-      pending: 65,
-      slaCompliance: 94.2
-    };
+    console.error('KPIs fetch failed:', error);
+    throw new Error('Impossible de récupérer les indicateurs ARS - Vérifiez votre connexion');
   }
 };
 
@@ -19,11 +15,8 @@ export const getPerformance = async (filters?: any) => {
     const { data } = await LocalAPI.get('/dashboard/performance', { params: filters });
     return data;
   } catch (error) {
-    return {
-      avgProcessingTime: 2.3,
-      throughput: 45,
-      efficiency: 87.5
-    };
+    console.error('Performance fetch failed:', error);
+    throw new Error('Impossible de récupérer les données de performance ARS');
   }
 };
 
@@ -32,11 +25,8 @@ export const getSLAStatus = async (filters?: any) => {
     const { data } = await LocalAPI.get('/dashboard/sla-status', { params: filters });
     return data;
   } catch (error) {
-    return [
-      { status: 'on-time', count: 1180, percentage: 94.8 },
-      { status: 'at-risk', count: 45, percentage: 3.6 },
-      { status: 'overdue', count: 20, percentage: 1.6 }
-    ];
+    console.error('SLA status fetch failed:', error);
+    throw new Error('Impossible de récupérer le statut SLA ARS');
   }
 };
 
@@ -45,10 +35,8 @@ export const getAlerts = async (filters?: any) => {
     const { data } = await LocalAPI.get('/dashboard/alerts', { params: filters });
     return data;
   } catch (error) {
-    return [
-      { id: '1', type: 'sla-breach', message: '5 bordereaux en retard SLA', severity: 'high' },
-      { id: '2', type: 'workload', message: 'Équipe surchargée', severity: 'medium' }
-    ];
+    console.error('Alerts fetch failed:', error);
+    throw new Error('Impossible de récupérer les alertes ARS');
   }
 };
 
@@ -57,13 +45,8 @@ export const getCharts = async (filters?: any) => {
     const { data } = await LocalAPI.get('/dashboard/charts', { params: filters });
     return data;
   } catch (error) {
-    return {
-      volumeData: [
-        { date: '2025-01-10', volume: 45 },
-        { date: '2025-01-11', volume: 52 },
-        { date: '2025-01-12', volume: 48 }
-      ]
-    };
+    console.error('Charts fetch failed:', error);
+    throw new Error('Impossible de récupérer les graphiques ARS');
   }
 };
 
@@ -72,9 +55,15 @@ export const getDepartments = async () => {
     const { data } = await LocalAPI.get('/dashboard/departments');
     return data;
   } catch (error) {
+    console.error('Departments fetch failed:', error);
+    // Return real ARS departments as fallback
     return [
-      { id: '1', name: 'Gestion', workload: 75 },
-      { id: '2', name: 'Finance', workload: 60 }
+      { id: 'bureau-ordre', name: "Bureau d'Ordre", details: "Réception et enregistrement des dossiers" },
+      { id: 'scan', name: "Service SCAN", details: "Numérisation et indexation des documents" },
+      { id: 'sante', name: "Équipe Santé", details: "Traitement des bordereaux et bulletins de soins" },
+      { id: 'production', name: "Équipe Production", details: "Partie de l'équipe Santé" },
+      { id: 'finance', name: "Finance", details: "Suivi et exécution des virements" },
+      { id: 'client', name: "Service Client", details: "Gestion des réclamations et interaction client" }
     ];
   }
 };

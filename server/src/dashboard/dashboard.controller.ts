@@ -2,6 +2,7 @@ import { Controller, Get, Post, Query, Req, UseGuards, Res, Body } from '@nestjs
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/public.decorator';
+import { hasDashboardAccess } from './dashboard-roles.constants';
 import { Response } from 'express';
 
 @Controller('dashboard')
@@ -129,9 +130,20 @@ export class DashboardController {
     return { success: true, message: 'Dashboard test endpoint working' };
   }
 
+  @Get('document-training-data')
+  @UseGuards(JwtAuthGuard)
+  async getDocumentTrainingData(@Req() req) {
+    return this.dashboardService.getDocumentTrainingData(req.user);
+  }
+
   @Get('role-based')
   @UseGuards(JwtAuthGuard)
   async getRoleBasedDashboard(@Query() query: any, @Req() req) {
+    // Validate user has dashboard access
+    if (!hasDashboardAccess(req.user?.role)) {
+      throw new Error(`Unauthorized dashboard access for role: ${req.user?.role}`);
+    }
+    
     return this.dashboardService.getRoleBasedDashboard(req.user, query);
   }
 

@@ -4,11 +4,12 @@ import { useNotification } from '../contexts/NotificationContext';
 import { 
   fetchUnassignedBordereaux, 
   fetchTeamBordereaux, 
+  fetchChefEquipeCorbeille,
   assignBordereau,
   reassignBordereau 
 } from '../services/bordereauxService';
 import { fetchUsers } from '../services/bordereauxService';
-import BordereauCard from './BordereauCard';
+import '../styles/ChefEquipe.css';
 
 interface ChefEquipeGlobalBasketProps {
   onAssignmentSuccess?: () => void;
@@ -36,22 +37,35 @@ const ChefEquipeGlobalBasket: React.FC<ChefEquipeGlobalBasketProps> = ({ onAssig
   const loadData = async () => {
     setLoading(true);
     try {
-      const [unassigned, team] = await Promise.all([
-        fetchUnassignedBordereaux(),
-        fetchTeamBordereaux(user?.id || '')
-      ]);
-
-      setUnassignedBordereaux(unassigned);
+      // Use the dedicated Chef d'équipe corbeille endpoint
+      const corbeilleData = await fetchChefEquipeCorbeille();
       
-      // Separate team bordereaux by status
-      const teamData = team || [];
-      setTeamBordereaux(teamData.filter((b: any) => !['TRAITE', 'CLOTURE'].includes(b.statut)));
-      setProcessedBordereaux(teamData.filter((b: any) => ['TRAITE', 'CLOTURE'].includes(b.statut)));
+      setUnassignedBordereaux(corbeilleData.nonAffectes || []);
+      setTeamBordereaux(corbeilleData.enCours || []);
+      setProcessedBordereaux(corbeilleData.traites || []);
       
       // Calculate workload stats
       await calculateWorkloadStats();
     } catch (error) {
+      console.error('Data loading error:', error);
       notify('Erreur lors du chargement des données', 'error');
+      
+      // Fallback to individual API calls
+      try {
+        const [unassigned, team] = await Promise.all([
+          fetchUnassignedBordereaux(),
+          fetchTeamBordereaux(user?.id || '')
+        ]);
+
+        setUnassignedBordereaux(unassigned || []);
+        
+        // Separate team bordereaux by status
+        const teamData = team || [];
+        setTeamBordereaux(teamData.filter((b: any) => !['TRAITE', 'CLOTURE'].includes(b.statut)));
+        setProcessedBordereaux(teamData.filter((b: any) => ['TRAITE', 'CLOTURE'].includes(b.statut)));
+      } catch (fallbackError) {
+        console.error('Fallback data loading also failed:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }
@@ -60,8 +74,9 @@ const ChefEquipeGlobalBasket: React.FC<ChefEquipeGlobalBasketProps> = ({ onAssig
   const loadGestionnaires = async () => {
     try {
       const users = await fetchUsers({ role: 'GESTIONNAIRE', active: true });
-      setGestionnaires(users);
+      setGestionnaires(users || []);
     } catch (error) {
+      console.error('Gestionnaires loading error:', error);
       notify('Erreur lors du chargement des gestionnaires', 'error');
     }
   };
@@ -127,6 +142,76 @@ const ChefEquipeGlobalBasket: React.FC<ChefEquipeGlobalBasketProps> = ({ onAssig
     }
   };
 
+  // Chef d'équipe specific actions
+  const handleRejectBordereau = async (bordereauId: string) => {
+    const reason = prompt('Raison du rejet (optionnel):');
+    if (reason !== null) {
+      try {
+        const response = await fetch('/api/workflow/chef-equipe/reject', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ bordereauId, reason })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to reject bordereau');
+        }
+        
+        notify('Bordereau rejeté avec succès', 'success');
+        loadData();
+        onAssignmentSuccess?.();
+      } catch (error) {
+        notify('Erreur lors du rejet', 'error');
+      }
+    }
+  };
+
+  const handleSelfAssign = async (bordereauId: string) => {
+    if (confirm('Voulez-vous traiter ce bordereau personnellement ?')) {
+      try {
+        await assignBordereau(bordereauId, user?.id || '');
+        notify('Bordereau pris en charge personnellement', 'success');
+        loadData();
+        onAssignmentSuccess?.();
+      } catch (error) {
+        notify('Erreur lors de la prise en charge', 'error');
+      }
+    }
+  };
+
+  const handleViewDetails = (bordereauId: string) => {
+    window.open(`/home/bordereaux/${bordereauId}`, '_blank');
+  };
+
+  const handleRecuperBordereau = async (bordereauId: string) => {
+    const reason = prompt('Raison de la récupération (optionnel):');
+    if (reason !== null) {
+      try {
+        const response = await fetch('/api/workflow/chef-equipe/recuperer', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ bordereauId, reason })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to recuperer bordereau');
+        }
+        
+        notify('Bordereau récupéré avec succès', 'success');
+        loadData();
+        onAssignmentSuccess?.();
+      } catch (error) {
+        notify('Erreur lors de la récupération', 'error');
+      }
+    }
+  };
+
   const toggleBordereauSelection = (bordereauId: string) => {
     setSelectedBordereaux(prev =>
       prev.includes(bordereauId)
@@ -159,73 +244,76 @@ const ChefEquipeGlobalBasket: React.FC<ChefEquipeGlobalBasketProps> = ({ onAssig
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2 text-gray-600">Chargement de la corbeille globale...</span>
+      <div className="chef-equipe-container">
+        <div className="chef-equipe-content">
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <h3 className="loading-title">Chargement de la corbeille globale</h3>
+            <p className="loading-subtitle">Veuillez patienter...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Stats */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center">
-            <span className="mr-2">📋</span>
-            Corbeille Globale - Chef d'Équipe
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Vision complète de tous les dossiers et gestion des affectations
-          </p>
-        </div>
+    <div className="chef-equipe-container">
+      <div className="chef-equipe-content">
+        {/* Header with Stats */}
+        <div className="chef-header">
+          <div className="chef-header-content">
+            <h1 className="chef-title">
+              <span>👨💼</span>
+              Corbeille Globale - Chef d'Équipe
+            </h1>
+            <p className="chef-subtitle">
+              Vision complète de tous les dossiers et gestion des affectations d'équipe
+            </p>
+          </div>
 
-        {/* Quick Stats */}
-        <div className="px-6 py-4 bg-gray-50">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center p-3 bg-orange-50 rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">{unassignedBordereaux.length}</div>
-              <div className="text-sm text-gray-600">Non affectés</div>
+          {/* Quick Stats */}
+          <div className="stats-grid">
+            <div className="stat-card stat-orange">
+              <div className="stat-number">{unassignedBordereaux.length}</div>
+              <div className="stat-label">Non affectés</div>
             </div>
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{teamBordereaux.length}</div>
-              <div className="text-sm text-gray-600">En cours</div>
+            <div className="stat-card stat-blue">
+              <div className="stat-number">{teamBordereaux.length}</div>
+              <div className="stat-label">En cours</div>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{processedBordereaux.length}</div>
-              <div className="text-sm text-gray-600">Traités</div>
+            <div className="stat-card stat-green">
+              <div className="stat-number">{processedBordereaux.length}</div>
+              <div className="stat-label">Traités</div>
             </div>
-            <div className="text-center p-3 bg-red-50 rounded-lg">
-              <div className="text-2xl font-bold text-red-600">{getOverloadedGestionnaires().length}</div>
-              <div className="text-sm text-gray-600">Équipes surchargées</div>
+            <div className="stat-card stat-red">
+              <div className="stat-number">{getOverloadedGestionnaires().length}</div>
+              <div className="stat-label">Équipes surchargées</div>
             </div>
           </div>
         </div>
 
         {/* Overload Alerts */}
         {getOverloadedGestionnaires().length > 0 && (
-          <div className="px-6 py-4 bg-red-50 border-t border-red-200">
-            <div className="flex items-start">
-              <span className="text-red-500 mr-2">⚠️</span>
-              <div className="text-sm text-red-700">
-                <p className="font-medium mb-1">Alertes de surcharge détectées :</p>
-                <ul className="list-disc list-inside space-y-1">
-                  {getOverloadedGestionnaires().map((stat: any, index) => (
-                    <li key={index}>
-                      {stat.name}: {stat.active}/{stat.capacity} dossiers actifs
-                    </li>
-                  ))}
-                </ul>
-              </div>
+          <div className="overload-alert">
+            <div className="alert-title">
+              <span>⚠️</span>
+              Alertes de surcharge détectées
+            </div>
+            <div className="alert-content">
+              <ul>
+                {getOverloadedGestionnaires().map((stat: any, index) => (
+                  <li key={index}>
+                    {stat.name}: {stat.active}/{stat.capacity} dossiers actifs
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
+        {/* Tabs */}
+        <div className="tabs-container">
+          <div className="tabs-nav">
             {[
               { key: 'unassigned', label: 'Non affectés', icon: '📥' },
               { key: 'team', label: 'En cours', icon: '🔄' },
@@ -233,37 +321,30 @@ const ChefEquipeGlobalBasket: React.FC<ChefEquipeGlobalBasketProps> = ({ onAssig
             ].map((tab) => (
               <button
                 key={tab.key}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === tab.key
-                    ? 'border-blue-600 text-blue-700'
-                    : 'border-transparent text-gray-500 hover:text-blue-600 hover:border-gray-300'
-                }`}
+                className={`tab-button ${activeTab === tab.key ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.key as any)}
               >
-                <span className="mr-2">{tab.icon}</span>
-                {tab.label} ({getTabCount(tab.key)})
+                <span className="tab-icon">{tab.icon}</span>
+                <span>{tab.label}</span>
+                <span className="tab-badge">{getTabCount(tab.key)}</span>
               </button>
             ))}
-          </nav>
-        </div>
+          </div>
 
-        {/* Tab Content */}
-        <div className="p-6">
-          {/* Bulk Actions for Unassigned */}
-          {activeTab === 'unassigned' && unassignedBordereaux.length > 0 && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm font-medium text-blue-700">
-                    Actions groupées ({selectedBordereaux.length} sélectionné(s))
-                  </span>
+          {/* Tab Content */}
+          <div className="tab-content">
+            {/* Bulk Actions for Unassigned */}
+            {activeTab === 'unassigned' && unassignedBordereaux.length > 0 && (
+              <div className="bulk-actions">
+                <div className="bulk-actions-info">
+                  <span>Actions groupées ({selectedBordereaux.length} sélectionné(s))</span>
                   <button
                     onClick={() => setSelectedBordereaux(
                       selectedBordereaux.length === unassignedBordereaux.length 
                         ? [] 
                         : unassignedBordereaux.map(b => b.id)
                     )}
-                    className="text-sm text-blue-600 hover:text-blue-800"
+                    className="bulk-select-all"
                   >
                     {selectedBordereaux.length === unassignedBordereaux.length ? 'Tout désélectionner' : 'Tout sélectionner'}
                   </button>
@@ -271,139 +352,193 @@ const ChefEquipeGlobalBasket: React.FC<ChefEquipeGlobalBasketProps> = ({ onAssig
                 <button
                   onClick={() => setShowAssignModal(true)}
                   disabled={selectedBordereaux.length === 0}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bulk-assign-btn"
                 >
                   👤 Affecter la sélection
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Bordereaux Grid */}
-          {getCurrentBordereaux().length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-gray-400 text-6xl mb-4">
-                {activeTab === 'unassigned' ? '📥' : activeTab === 'team' ? '🔄' : '✅'}
+            {/* Bordereaux Grid */}
+            {getCurrentBordereaux().length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">
+                  {activeTab === 'unassigned' ? '📥' : activeTab === 'team' ? '🔄' : '✅'}
+                </div>
+                <h3 className="empty-title">
+                  {activeTab === 'unassigned' ? 'Aucun bordereau non affecté' : 
+                   activeTab === 'team' ? 'Aucun bordereau en cours' : 
+                   'Aucun bordereau traité'}
+                </h3>
+                <p className="empty-description">
+                  {activeTab === 'unassigned' ? 'Tous les bordereaux sont affectés' : 
+                   activeTab === 'team' ? 'Aucun bordereau en cours de traitement' : 
+                   'Aucun bordereau traité récemment'}
+                </p>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {activeTab === 'unassigned' ? 'Aucun bordereau non affecté' : 
-                 activeTab === 'team' ? 'Aucun bordereau en cours' : 
-                 'Aucun bordereau traité'}
-              </h3>
-              <p className="text-gray-500">
-                {activeTab === 'unassigned' ? 'Tous les bordereaux sont affectés' : 
-                 activeTab === 'team' ? 'Aucun bordereau en cours de traitement' : 
-                 'Aucun bordereau traité récemment'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {getCurrentBordereaux().map(bordereau => (
-                <div key={bordereau.id} className="relative">
-                  {activeTab === 'unassigned' && (
-                    <div className="absolute top-2 left-2 z-10">
+            ) : (
+              <div className="bordereaux-grid">
+                {getCurrentBordereaux().map(bordereau => (
+                  <div key={bordereau.id} className="bordereau-card">
+                    {activeTab === 'unassigned' && (
                       <input
                         type="checkbox"
                         checked={selectedBordereaux.includes(bordereau.id)}
                         onChange={() => toggleBordereauSelection(bordereau.id)}
-                        className="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500"
+                        className="bordereau-checkbox"
                       />
-                    </div>
-                  )}
-                  <BordereauCard
-                    bordereau={bordereau}
-                    onAssignSuccess={() => {
-                      loadData();
-                      onAssignmentSuccess?.();
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Assignment Modal */}
-      {showAssignModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowAssignModal(false)}></div>
-            
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900">
-                    Affecter {selectedBordereaux.length} bordereau(x)
-                  </h3>
-                  <button
-                    onClick={() => setShowAssignModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <span className="sr-only">Fermer</span>
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Gestionnaire
-                    </label>
-                    <select
-                      value={assignmentTarget}
-                      onChange={(e) => setAssignmentTarget(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Sélectionner un gestionnaire...</option>
-                      {gestionnaires.map(gestionnaire => {
-                        const stats = workloadStats[gestionnaire.id];
-                        return (
-                          <option key={gestionnaire.id} value={gestionnaire.id}>
-                            {gestionnaire.fullName} 
-                            {stats && ` (${stats.active}/${stats.capacity})`}
-                            {stats?.overloaded && ' ⚠️ SURCHARGÉ'}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  {assignmentTarget && workloadStats[assignmentTarget]?.overloaded && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                      <div className="flex">
-                        <span className="text-red-400 mr-2">⚠️</span>
-                        <div className="text-sm text-red-700">
-                          <p className="font-medium">Attention : Gestionnaire surchargé</p>
-                          <p>Ce gestionnaire a déjà {workloadStats[assignmentTarget].active} dossiers actifs.</p>
+                    )}
+                    
+                    <div className="bordereau-content">
+                      <div className="bordereau-header">
+                        <div className="bordereau-info">
+                          <h3>{bordereau.reference}</h3>
+                          <p>{bordereau.clientName}</p>
+                          <p>{new Date(bordereau.createdAt).toLocaleDateString()} • {bordereau.subject}</p>
+                        </div>
+                        <div className="bordereau-status">
+                          <span className={`sla-badge sla-${bordereau.slaStatus?.toLowerCase().replace('_', '-') || 'on-time'}`}>
+                            {bordereau.slaStatus}
+                          </span>
+                          {bordereau.assignedTo && (
+                            <span className="assigned-to">👤 {bordereau.assignedTo}</span>
+                          )}
                         </div>
                       </div>
+                      
+                      {/* CHEF D'ÉQUIPE ACTION BUTTONS */}
+                      {activeTab === 'unassigned' && (
+                        <div className="action-buttons">
+                          <button
+                            onClick={() => {
+                              setSelectedBordereaux([bordereau.id]);
+                              setShowAssignModal(true);
+                            }}
+                            className="action-btn btn-assign"
+                          >
+                            👤 Affecter
+                          </button>
+                          <button
+                            onClick={() => handleRejectBordereau(bordereau.id)}
+                            className="action-btn btn-reject"
+                          >
+                            ❌ Rejeter
+                          </button>
+                          <button
+                            onClick={() => handleSelfAssign(bordereau.id)}
+                            className="action-btn btn-self-assign"
+                          >
+                            ✋ Traiter
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Actions for En Cours tab */}
+                      {activeTab === 'team' && (
+                        <div className="action-buttons">
+                          <button
+                            onClick={() => handleViewDetails(bordereau.id)}
+                            className="action-btn btn-view"
+                          >
+                            👁️ Voir Détails
+                          </button>
+                          <button
+                            onClick={() => handleRecuperBordereau(bordereau.id)}
+                            className="action-btn btn-recuperer"
+                          >
+                            🔄 Récupérer
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedBordereaux([bordereau.id]);
+                              setShowAssignModal(true);
+                            }}
+                            className="action-btn btn-reassign"
+                          >
+                            🔄 Réaffecter
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Assignment Modal */}
+        {showAssignModal && (
+          <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">
+                  Affecter {selectedBordereaux.length} bordereau(x)
+                </h3>
+                <button
+                  onClick={() => setShowAssignModal(false)}
+                  className="modal-close"
+                >
+                  ✕
+                </button>
               </div>
 
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">
+                    Gestionnaire
+                  </label>
+                  <select
+                    value={assignmentTarget}
+                    onChange={(e) => setAssignmentTarget(e.target.value)}
+                    className="form-select"
+                  >
+                    <option value="">Sélectionner un gestionnaire...</option>
+                    {gestionnaires.map(gestionnaire => {
+                      const stats = workloadStats[gestionnaire.id];
+                      return (
+                        <option key={gestionnaire.id} value={gestionnaire.id}>
+                          {gestionnaire.fullName} 
+                          {stats && ` (${stats.active}/${stats.capacity})`}
+                          {stats?.overloaded && ' ⚠️ SURCHARGÉ'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {assignmentTarget && workloadStats[assignmentTarget]?.overloaded && (
+                  <div className="overload-alert">
+                    <div className="alert-title">
+                      <span>⚠️</span>
+                      Attention : Gestionnaire surchargé
+                    </div>
+                    <div className="alert-content">
+                      Ce gestionnaire a déjà {workloadStats[assignmentTarget].active} dossiers actifs.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer">
                 <button
                   onClick={handleBulkAssign}
                   disabled={!assignmentTarget}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="action-btn btn-assign"
                 >
                   Affecter
                 </button>
                 <button
                   onClick={() => setShowAssignModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="action-btn btn-view"
                 >
                   Annuler
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

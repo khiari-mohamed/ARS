@@ -32,6 +32,7 @@ import { IntegrationModule } from './integrations/integration.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { PrismaService } from './prisma/prisma.service';
 import { SeedController } from './seed.controller';
+import { SuperAdminController } from './super-admin.controller';
 
 
 @Module({
@@ -45,7 +46,7 @@ import { SeedController } from './seed.controller';
     ScanModule,
     BulletinSoinModule
   ],
-  controllers: [AppController,SeedController],
+  controllers: [AppController, SeedController, SuperAdminController],
   providers: [AppService, PrismaService],
 })
 export class AppModule {}
