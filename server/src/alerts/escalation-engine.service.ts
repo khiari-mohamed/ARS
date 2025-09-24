@@ -215,7 +215,7 @@ export class EscalationEngineService {
   }
 
   private evaluateConditions(conditions: EscalationCondition[], alertData: any): boolean {
-    if (conditions.length === 0) return true;
+    if (!conditions || !Array.isArray(conditions) || conditions.length === 0) return true;
 
     let result = true;
     let currentLogicalOp = 'AND';
@@ -312,39 +312,45 @@ export class EscalationEngineService {
 
     instance.currentLevel = level;
 
-    for (const recipient of step.recipients) {
-      for (const channel of recipient.channels) {
-        try {
-          await this.sendNotification(recipient, channel, step.actions, alertData);
-          
-          instance.escalationHistory.push({
-            level,
-            timestamp: new Date(),
-            action: 'notification_sent',
-            recipient: recipient.identifier,
-            channel,
-            success: true
-          });
-        } catch (error) {
-          instance.escalationHistory.push({
-            level,
-            timestamp: new Date(),
-            action: 'notification_failed',
-            recipient: recipient.identifier,
-            channel,
-            success: false,
-            error: error.message
-          });
+    if (step.recipients && Array.isArray(step.recipients)) {
+      for (const recipient of step.recipients) {
+        if (recipient.channels && Array.isArray(recipient.channels)) {
+          for (const channel of recipient.channels) {
+            try {
+              await this.sendNotification(recipient, channel, step.actions || [], alertData);
+              
+              instance.escalationHistory.push({
+                level,
+                timestamp: new Date(),
+                action: 'notification_sent',
+                recipient: recipient.identifier,
+                channel,
+                success: true
+              });
+            } catch (error) {
+              instance.escalationHistory.push({
+                level,
+                timestamp: new Date(),
+                action: 'notification_failed',
+                recipient: recipient.identifier,
+                channel,
+                success: false,
+                error: error.message
+              });
+            }
+          }
         }
       }
     }
 
     // Execute additional actions
-    for (const action of step.actions) {
-      try {
-        await this.executeAction(action, alertData);
-      } catch (error) {
-        this.logger.error(`Failed to execute action ${action.type}:`, error);
+    if (step.actions && Array.isArray(step.actions)) {
+      for (const action of step.actions) {
+        try {
+          await this.executeAction(action, alertData);
+        } catch (error) {
+          this.logger.error(`Failed to execute action ${action.type}:`, error);
+        }
       }
     }
 

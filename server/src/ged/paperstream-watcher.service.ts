@@ -189,7 +189,7 @@ export class PaperStreamWatcherService {
       const document = await this.prisma.document.create({
         data: {
           name: filename,
-          type: this.getDocumentType(filename),
+          type: this.mapToDocumentType(this.getDocumentType(filename)),
           path: permanentPath,
           hash,
           status: 'UPLOADED',
@@ -283,5 +283,47 @@ export class PaperStreamWatcherService {
       // Fallback to console if audit log fails
       this.logger.error(`Import error: ${filename} - ${errorType}: ${details}`);
     });
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): any {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, string> = {
+      'BS': 'BULLETIN_SOIN',
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'CONTRAT': 'CONTRAT_AVENANT',
+      'RECU': 'COMPLEMENT_INFORMATION',
+      'AUTRE': 'BULLETIN_SOIN'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
+  }
+
+  async triggerBatchProcessing(): Promise<any> {
+    try {
+      const batchFolders = fs.readdirSync(this.watchFolder, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => path.join(this.watchFolder, dirent.name));
+      
+      let processedCount = 0;
+      for (const batchFolder of batchFolders) {
+        if (this.isBatchFolder(batchFolder)) {
+          await this.processBatchFolder(batchFolder);
+          processedCount++;
+        }
+      }
+      
+      return {
+        success: true,
+        message: `Processed ${processedCount} batch folders`,
+        processedCount
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 }

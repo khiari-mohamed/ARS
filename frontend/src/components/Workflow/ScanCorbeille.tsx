@@ -266,10 +266,101 @@ export const ScanCorbeille: React.FC = () => {
         )
       )}
       {activeTab === 2 && (
-        completed.length > 0 ? renderTable(completed, false) : (
+        completed.length > 0 ? (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Documents</TableCell>
+                  <TableCell>Date Terminé</TableCell>
+                  <TableCell>Assigné à</TableCell>
+                  <TableCell>Statut Workflow</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {completed.map((item: any) => (
+                  <TableRow key={item.id} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="bold">
+                        {item.reference}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{item.clientName}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={`${item.documentsCount || 0} docs`}
+                        color="success"
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {item.dateFinScan ? new Date(item.dateFinScan).toLocaleDateString() : 'N/A'}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {item.processingTime || 'Durée inconnue'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {item.assignedChef || 'Non assigné'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={item.workflowStatus === 'SENT_TO_CHEF' ? 'Envoyé au Chef' : 
+                              item.workflowStatus === 'ASSIGNED' ? 'Assigné' : 'Terminé'}
+                        color={item.workflowStatus === 'SENT_TO_CHEF' ? 'info' : 
+                              item.workflowStatus === 'ASSIGNED' ? 'success' : 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box display="flex" gap={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            alert(`Détails du scan:\n\nRéférence: ${item.reference}\nDocuments: ${item.documentsCount || 0}\nStatut: Terminé\nAssigné à: ${item.assignedChef || 'Non assigné'}`);
+                          }}
+                        >
+                          👁️ Détails
+                        </Button>
+                        {item.workflowStatus !== 'ASSIGNED' && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="primary"
+                            onClick={async () => {
+                              try {
+                                await LocalAPI.post(`/workflow/scan/send-to-chef/${item.id}`);
+                                alert('✅ Bordereau envoyé au Chef d\'équipe pour affectation');
+                                refetch();
+                              } catch (error) {
+                                alert('❌ Erreur lors de l\'envoi au Chef d\'équipe');
+                              }
+                            }}
+                          >
+                            📤 Envoyer au Chef
+                          </Button>
+                        )}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
           <Paper sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" color="textSecondary">
               Aucun scan terminé récemment
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              Les scans terminés apparaîtront ici avec leurs détails de completion
             </Typography>
           </Paper>
         )

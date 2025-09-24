@@ -68,8 +68,9 @@ export class ManualScanService {
       throw new BadRequestException('Bordereau not found');
     }
 
-    if (bordereau.statut !== 'A_SCANNER') {
-      throw new BadRequestException(`Bordereau status is ${bordereau.statut}, expected A_SCANNER`);
+    // Allow multiple scans for SCAN_EN_COURS status
+    if (bordereau.statut !== 'A_SCANNER' && bordereau.statut !== 'SCAN_EN_COURS') {
+      throw new BadRequestException(`Bordereau status is ${bordereau.statut}, expected A_SCANNER or SCAN_EN_COURS`);
     }
 
     // Update status to scanning
@@ -114,8 +115,21 @@ export class ManualScanService {
       throw new BadRequestException('Bordereau not found');
     }
 
-    if (bordereau.statut !== 'SCAN_EN_COURS') {
-      throw new BadRequestException(`Cannot upload documents. Bordereau status is ${bordereau.statut}`);
+    // Allow uploads for both A_SCANNER and SCAN_EN_COURS statuses
+    if (bordereau.statut !== 'A_SCANNER' && bordereau.statut !== 'SCAN_EN_COURS') {
+      throw new BadRequestException(`Cannot upload documents. Bordereau status is ${bordereau.statut}, expected A_SCANNER or SCAN_EN_COURS`);
+    }
+
+    // Auto-transition A_SCANNER to SCAN_EN_COURS when uploading
+    if (bordereau.statut === 'A_SCANNER') {
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: {
+          statut: 'SCAN_EN_COURS',
+          dateDebutScan: new Date(),
+          currentHandlerId: userId
+        }
+      });
     }
 
     const uploadedDocuments: Array<{id: string; name: string; type: string; size: number}> = [];
@@ -141,7 +155,7 @@ export class ManualScanService {
         const document = await this.prisma.document.create({
           data: {
             name: file.originalname,
-            type: this.getDocumentType(file.originalname),
+            type: this.mapToDocumentType(this.getDocumentType(file.originalname)),
             path: filePath,
             uploadedById: userId,
             bordereauId,
@@ -185,6 +199,93 @@ export class ManualScanService {
       uploadedDocuments,
       errors,
       message: `${uploadedDocuments.length} documents uploaded successfully${errors.length > 0 ? `, ${errors.length} failed` : ''}`
+    };
+  }
+
+  async uploadAdditionalDocuments(dto: ManualScanDto) {
+    const { bordereauId, files, userId, notes } = dto;
+
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { client: true }
+    });
+
+    if (!bordereau) {
+      throw new BadRequestException('Bordereau not found');
+    }
+
+    if (bordereau.statut !== 'SCAN_EN_COURS') {
+      throw new BadRequestException(`Cannot upload additional documents. Bordereau status is ${bordereau.statut}, expected SCAN_EN_COURS`);
+    }
+
+    const uploadedDocuments: Array<{id: string; name: string; type: string; size: number}> = [];
+    const errors: Array<{fileName: string; error: string}> = [];
+
+    // Process each file
+    for (const file of files) {
+      try {
+        // Validate file
+        const validation = this.validateFile(file);
+        if (!validation.valid) {
+          errors.push({
+            fileName: file.originalname,
+            error: validation.error || 'Unknown validation error'
+          });
+          continue;
+        }
+
+        // Save file to disk
+        const filePath = await this.saveFile(file, bordereauId);
+
+        // Create document record
+        const document = await this.prisma.document.create({
+          data: {
+            name: file.originalname,
+            type: this.mapToDocumentType(this.getDocumentType(file.originalname)),
+            path: filePath,
+            uploadedById: userId,
+            bordereauId,
+            status: 'UPLOADED',
+            hash: this.generateFileHash(file.buffer)
+          }
+        });
+
+        uploadedDocuments.push({
+          id: document.id,
+          name: document.name,
+          type: document.type,
+          size: file.size
+        });
+
+      } catch (error: any) {
+        errors.push({
+          fileName: file.originalname,
+          error: error.message
+        });
+      }
+    }
+
+    // Log additional upload action
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'MANUAL_SCAN_ADDITIONAL_UPLOAD',
+        details: {
+          bordereauId,
+          reference: bordereau.reference,
+          uploadedCount: uploadedDocuments.length,
+          errorCount: errors.length,
+          notes,
+          additionalScan: true
+        }
+      }
+    });
+
+    return {
+      success: uploadedDocuments.length > 0,
+      uploadedDocuments,
+      errors,
+      message: `${uploadedDocuments.length} additional documents uploaded successfully${errors.length > 0 ? `, ${errors.length} failed` : ''}`
     };
   }
 
@@ -435,5 +536,75 @@ export class ManualScanService {
       userScansToday,
       efficiency: userScansToday > 0 ? Math.round((userScansToday / (userScansToday + inProgressCount)) * 100) : 0
     };
+  }
+
+  // NEW: Validate multiple scan capability
+  async validateMultipleScanCapability(bordereauId: string) {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: {
+        documents: true
+      }
+    });
+
+    if (!bordereau) {
+      return {
+        canScanMultiple: false,
+        currentScanCount: 0,
+        maxScansAllowed: 5,
+        isValid: false,
+        message: 'Bordereau not found'
+      };
+    }
+
+    // Count scan operations from audit logs
+    const scanLogs = await this.prisma.auditLog.count({
+      where: {
+        details: {
+          path: ['bordereauId'],
+          equals: bordereauId
+        },
+        action: { in: ['MANUAL_SCAN_UPLOAD', 'MANUAL_SCAN_ADDITIONAL_UPLOAD'] }
+      }
+    });
+
+    const currentScanCount = scanLogs;
+    const maxScansAllowed = 5; // Business rule: max 5 scans per bordereau
+    const canScanMultiple = bordereau.statut === 'SCAN_EN_COURS' && currentScanCount < maxScansAllowed;
+    const isValid = ['A_SCANNER', 'SCAN_EN_COURS'].includes(bordereau.statut);
+
+    let message = 'Scan autorisé';
+    if (!isValid) {
+      message = `Statut invalide: ${bordereau.statut}`;
+    } else if (currentScanCount >= maxScansAllowed) {
+      message = 'Limite de scans atteinte';
+    } else if (bordereau.statut === 'SCAN_EN_COURS') {
+      message = `Scan supplémentaire #${currentScanCount + 1} autorisé`;
+    }
+
+    return {
+      canScanMultiple,
+      currentScanCount,
+      maxScansAllowed,
+      isValid,
+      message,
+      documentsCount: bordereau.documents.length
+    };
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): any {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, string> = {
+      'BS': 'BULLETIN_SOIN',
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'FACTURE': 'COMPLEMENT_INFORMATION',
+      'CONTRAT': 'CONTRAT_AVENANT',
+      'RECLAMATION': 'RECLAMATION',
+      'DOCUMENT': 'BULLETIN_SOIN'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 }

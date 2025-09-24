@@ -183,4 +183,16 @@ export class DashboardController {
   async getAdvancedClaimsAnalytics(@Query() query: any, @Req() req) {
     return this.dashboardService.getAdvancedClaimsAnalytics(req.user, query);
   }
+
+  @Get('documents/status-breakdown')
+  @UseGuards(JwtAuthGuard)
+  async getDocumentStatusBreakdown(@Query() query: any, @Req() req) {
+    return this.dashboardService.getDocumentStatusBreakdown(req.user, query);
+  }
+
+  @Get('documents/all-types')
+  @UseGuards(JwtAuthGuard)
+  async getAllDocumentTypes(@Query() query: any, @Req() req) {
+    return this.dashboardService.getAllDocumentTypes(req.user, query);
+  }
 }

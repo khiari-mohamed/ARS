@@ -8,9 +8,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { UserRole, Reclamation, ReclamationStatus, ReclamationSeverity } from '../../types/reclamation.d';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LocalAPI, AIAPI } from '../../services/axios';
-import PerformanceDashboard from '../analytics/PerformanceDashboard';
-import { Reporting } from './Reporting';
-import { GecTemplates } from './GecTemplates';
+// COMMENTED OUT: Extra components not in core requirements
+// import PerformanceDashboard from '../analytics/PerformanceDashboard';
+// import { Reporting } from './Reporting';
+// import { GecTemplates } from './GecTemplates';
 import { ExportButtons } from './ExportButtons';
 import { ReclamationAlerts } from './ReclamationAlerts';
 import { SkeletonTable } from './SkeletonTable';
@@ -385,8 +386,9 @@ export const ReclamationsList: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Performance Dashboard */}
-      <Card sx={{ mb: 3 }}>
+      {/* COMMENTED OUT: Extra sections not in core requirements */}
+      {/* Performance Dashboard - Advanced analytics beyond basic requirements */}
+      {/* <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
             <TrendingUp sx={{ mr: 1, color: 'info.main' }} />
@@ -394,10 +396,10 @@ export const ReclamationsList: React.FC = () => {
           </Typography>
           <PerformanceDashboard />
         </CardContent>
-      </Card>
+      </Card> */}
 
-      {/* Reporting Section */}
-      <Card sx={{ mb: 3 }}>
+      {/* Reporting Section - Advanced reporting beyond basic export */}
+      {/* <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
             <Assessment sx={{ mr: 1, color: 'success.main' }} />
@@ -405,10 +407,10 @@ export const ReclamationsList: React.FC = () => {
           </Typography>
           <Reporting />
         </CardContent>
-      </Card>
+      </Card> */}
 
-      {/* GEC Templates */}
-      <Card sx={{ mb: 3 }}>
+      {/* GEC Templates - Advanced template management beyond basic GEC */}
+      {/* <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
             <Description sx={{ mr: 1, color: 'secondary.main' }} />
@@ -416,10 +418,10 @@ export const ReclamationsList: React.FC = () => {
           </Typography>
           <GecTemplates />
         </CardContent>
-      </Card>
+      </Card> */}
 
-      {/* AI Correlation Analysis */}
-      <Card sx={{ mb: 3 }}>
+      {/* AI Correlation Analysis - Advanced AI features beyond basic classification */}
+      {/* <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
             <SmartToy sx={{ mr: 1, color: 'primary.main' }} />
@@ -461,7 +463,7 @@ export const ReclamationsList: React.FC = () => {
             </Alert>
           )}
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Filters and Export */}
       <Card sx={{ mb: 3 }}>

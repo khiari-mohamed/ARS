@@ -20,17 +20,24 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Autocomplete
 } from '@mui/material';
 import {
   Add,
   Upload,
-
   Speed,
   Error,
   CheckCircle,
   Visibility,
   FileUpload,
+  FilterList,
+  Refresh
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
@@ -49,25 +56,92 @@ const BODashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    clientId: '',
+    chefEquipeId: '',
+    dateFrom: '',
+    dateTo: '',
+    statut: ''
+  });
+  const [clients, setClients] = useState<any[]>([]);
+  const [chefEquipes, setChefEquipes] = useState<any[]>([]);
+  const [filteredEntries, setFilteredEntries] = useState<any[]>([]);
 
   useEffect(() => {
     loadDashboard();
-    const interval = setInterval(loadDashboard, 30000);
-    return () => clearInterval(interval);
+    loadFilterData();
+    // Disable auto-refresh to prevent infinite loops during development
+    // const interval = setInterval(() => loadDashboard(), 30000);
+    // return () => clearInterval(interval);
   }, []);
+  
+  useEffect(() => {
+    if (dashboardData) {
+      applyFilters();
+    }
+  }, [filters]);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (filterParams?: any) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchBODashboard();
+      const data = await fetchBODashboard(filterParams);
       setDashboardData(data);
+      setFilteredEntries(data?.recentEntries || []);
     } catch (error: any) {
       console.error('Failed to load BO dashboard:', error);
       setError('Erreur lors du chargement du tableau de bord');
     } finally {
       setLoading(false);
     }
+  };
+  
+  const loadFilterData = async () => {
+    try {
+      const { LocalAPI } = await import('../services/axios');
+      const [clientsRes, chefsRes] = await Promise.all([
+        LocalAPI.get('/clients'),
+        LocalAPI.get('/users?role=CHEF_EQUIPE')
+      ]);
+      setClients(clientsRes.data || []);
+      setChefEquipes(chefsRes.data || []);
+    } catch (error) {
+      console.error('Failed to load filter data:', error);
+    }
+  };
+  
+  const applyFilters = () => {
+    // Apply filters via API call for better performance
+    const activeFilters = {
+      ...(filters.clientId && { clientId: filters.clientId }),
+      ...(filters.chefEquipeId && { chefEquipeId: filters.chefEquipeId }),
+      ...(filters.dateFrom && { dateFrom: filters.dateFrom }),
+      ...(filters.dateTo && { dateTo: filters.dateTo }),
+      ...(filters.statut && { statut: filters.statut })
+    };
+    
+    // Only make API call if filters have actually changed
+    const hasActiveFilters = Object.keys(activeFilters).length > 0;
+    if (hasActiveFilters) {
+      loadDashboard(activeFilters);
+    } else if (dashboardData && !filteredEntries.length) {
+      // Only reload if we don't have data
+      loadDashboard();
+    }
+  };
+  
+  const resetFilters = () => {
+    setFilters({
+      clientId: '',
+      chefEquipeId: '',
+      dateFrom: '',
+      dateTo: '',
+      statut: ''
+    });
+    // Reload dashboard without filters
+    loadDashboard();
   };
 
 
@@ -124,43 +198,13 @@ const BODashboard: React.FC = () => {
           >
             Bureau d'Ordre Dashboard
           </Typography>
-          <Box 
-            display="flex" 
-            flexDirection={{ xs: 'column', sm: 'row' }}
-            gap={{ xs: 1, sm: 2 }}
-            width={{ xs: '100%', sm: 'auto' }}
-          >
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => setActiveDialog('entry')}
-              sx={{ 
-                minWidth: { xs: 'auto', sm: 140 },
-                fontSize: '0.875rem',
-                width: { xs: '100%', sm: 'auto' }
-              }}
-            >
-              Nouvelle Entrée
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<FileUpload />}
-              onClick={() => setActiveDialog('upload')}
-              sx={{ 
-                minWidth: { xs: 'auto', sm: 140 },
-                fontSize: '0.875rem',
-                width: { xs: '100%', sm: 'auto' }
-              }}
-            >
-              Upload Documents
-            </Button>
-          </Box>
+          {/* Buttons moved to BOCorbeille section for better organization */}
         </Box>
       </Box>
 
       {/* NEW ENHANCED BO CORBEILLE COMPONENT */}
       <Box sx={{ mb: 4 }}>
-        <BOCorbeille />
+        <BOCorbeille onOpenEntryDialog={() => setActiveDialog('entry')} />
       </Box>
 
       <Grid container spacing={3} mb={4}>
@@ -182,7 +226,8 @@ const BODashboard: React.FC = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        {/* vi. Statut "En attente" - Commented out pending clarification */}
+        {/* <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -198,9 +243,10 @@ const BODashboard: React.FC = () => {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Grid> */}
 
-        <Grid item xs={12} sm={6} md={3}>
+        {/* vii. Vitesse moyenne - Commented out pending clarification */}
+        {/* <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -219,9 +265,10 @@ const BODashboard: React.FC = () => {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Grid> */}
 
-        <Grid item xs={12} sm={6} md={3}>
+        {/* viii. Taux d'erreur - Commented out pending clarification */}
+        {/* <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -237,16 +284,16 @@ const BODashboard: React.FC = () => {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Grid> */}
       </Grid>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Distribution par Statut (7 derniers jours)
             </Typography>
-            <Box sx={{ height: { xs: 250, sm: 350 } }}>
+            <Box sx={{ height: { xs: 350, sm: 450 } }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -287,20 +334,89 @@ const BODashboard: React.FC = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} md={6}>
+        {/* ix. Performance Metrics - Commented out pending clarification */}
+        {/* <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Performance Metrics
             </Typography>
             <BOPerformanceMetrics userId={user?.id} />
           </Paper>
-        </Grid>
+        </Grid> */}
 
         <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Entrées Récentes
-            </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">
+                Activité avec Filtres
+              </Typography>
+              <Box display="flex" gap={1}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterList />}
+                  onClick={() => setActiveDialog('filters')}
+                  size="small"
+                >
+                  Filtres
+                </Button>
+                {/* Actualiser button - Commented out for interface cleanup */}
+                {/* <Button
+                  variant="outlined"
+                  startIcon={<Refresh />}
+                  onClick={() => loadDashboard()}
+                  size="small"
+                >
+                  Actualiser
+                </Button> */}
+              </Box>
+            </Box>
+            
+            {/* Filter Summary */}
+            {(filters.clientId || filters.chefEquipeId || filters.dateFrom || filters.dateTo || filters.statut) && (
+              <Box mb={2}>
+                <Typography variant="body2" color="text.secondary">
+                  Filtres actifs: {filteredEntries.length} résultat(s) sur {dashboardData?.recentEntries?.length || 0}
+                </Typography>
+                <Box display="flex" gap={1} mt={1} flexWrap="wrap">
+                  {filters.clientId && (
+                    <Chip
+                      label={`Client: ${clients.find(c => c.id === filters.clientId)?.name || 'Inconnu'}`}
+                      size="small"
+                      onDelete={() => setFilters(prev => ({ ...prev, clientId: '' }))}
+                    />
+                  )}
+                  {filters.chefEquipeId && (
+                    <Chip
+                      label={`Chef: ${chefEquipes.find(c => c.id === filters.chefEquipeId)?.fullName || 'Inconnu'}`}
+                      size="small"
+                      onDelete={() => setFilters(prev => ({ ...prev, chefEquipeId: '' }))}
+                    />
+                  )}
+                  {filters.dateFrom && (
+                    <Chip
+                      label={`Depuis: ${filters.dateFrom}`}
+                      size="small"
+                      onDelete={() => setFilters(prev => ({ ...prev, dateFrom: '' }))}
+                    />
+                  )}
+                  {filters.dateTo && (
+                    <Chip
+                      label={`Jusqu'à: ${filters.dateTo}`}
+                      size="small"
+                      onDelete={() => setFilters(prev => ({ ...prev, dateTo: '' }))}
+                    />
+                  )}
+                  {filters.statut && (
+                    <Chip
+                      label={`Statut: ${filters.statut}`}
+                      size="small"
+                      onDelete={() => setFilters(prev => ({ ...prev, statut: '' }))}
+                    />
+                  )}
+                  <Button size="small" onClick={resetFilters}>Réinitialiser</Button>
+                </Box>
+              </Box>
+            )}
             <TableContainer sx={{ overflowX: 'auto' }}>
               <Table sx={{ minWidth: { xs: 650, sm: 'auto' } }}>
                 <TableHead>
@@ -314,7 +430,7 @@ const BODashboard: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(dashboardData?.recentEntries || []).map((entry: any) => (
+                  {filteredEntries.map((entry: any) => (
                     <TableRow key={entry.id}>
                       <TableCell>
                         <Typography variant="body2" fontWeight={500}>
@@ -345,11 +461,14 @@ const BODashboard: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {(!dashboardData?.recentEntries || dashboardData.recentEntries.length === 0) && (
+                  {filteredEntries.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} align="center">
                         <Typography color="text.secondary">
-                          Aucune entrée récente
+                          {(filters.clientId || filters.chefEquipeId || filters.dateFrom || filters.dateTo || filters.statut) 
+                            ? 'Aucun résultat pour les filtres sélectionnés'
+                            : 'Aucune entrée récente'
+                          }
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -382,6 +501,88 @@ const BODashboard: React.FC = () => {
         }}
       />
 
+      {/* Filters Dialog */}
+      <Dialog open={activeDialog === 'filters'} onClose={() => setActiveDialog(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Filtres d'Activité</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <Autocomplete
+                options={clients}
+                getOptionLabel={(option) => option.name}
+                value={clients.find(c => c.id === filters.clientId) || null}
+                onChange={(_, newValue) => {
+                  setFilters(prev => ({ ...prev, clientId: newValue?.id || '' }));
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Client" fullWidth />
+                )}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Autocomplete
+                options={chefEquipes}
+                getOptionLabel={(option) => option.fullName}
+                value={chefEquipes.find(c => c.id === filters.chefEquipeId) || null}
+                onChange={(_, newValue) => {
+                  setFilters(prev => ({ ...prev, chefEquipeId: newValue?.id || '' }));
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Chef d'Équipe" fullWidth />
+                )}
+              />
+            </Grid>
+            
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Date de début"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                type="date"
+                label="Date de fin"
+                value={filters.dateTo}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Statut</InputLabel>
+                <Select
+                  value={filters.statut}
+                  label="Statut"
+                  onChange={(e) => setFilters(prev => ({ ...prev, statut: e.target.value }))}
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  <MenuItem value="EN_ATTENTE">En Attente</MenuItem>
+                  <MenuItem value="A_SCANNER">À Scanner</MenuItem>
+                  <MenuItem value="SCAN_EN_COURS">Scan en Cours</MenuItem>
+                  <MenuItem value="ASSIGNE">Assigné</MenuItem>
+                  <MenuItem value="EN_COURS">En Cours</MenuItem>
+                  <MenuItem value="TRAITE">Traité</MenuItem>
+                  <MenuItem value="CLOTURE">Clôturé</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={resetFilters}>Réinitialiser</Button>
+          <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+      
       {/* Entry Details Dialog */}
       <Dialog open={!!selectedEntry} onClose={() => setSelectedEntry(null)} maxWidth="md" fullWidth>
         <DialogTitle>Détails de l'Entrée</DialogTitle>

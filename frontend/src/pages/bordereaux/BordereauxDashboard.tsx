@@ -476,13 +476,14 @@ const BordereauxDashboard: React.FC = () => {
               
               {(isSuperAdmin || isAdministrateur) && (
                 <>
-                  <button
+                  {/* COMMENTED OUT: Multiple bordereau creation point - Use BO module instead */}
+                  {/* <button
                     onClick={() => setShowCreateModal(true)}
                     className="bordereau-btn bordereau-btn-primary"
                   >
                     <span>+</span>
                     Nouveau Bordereau
-                  </button>
+                  </button> */}
                   <button
                     onClick={handleGenerateOV}
                     className="bordereau-btn bordereau-btn-warning"
@@ -560,7 +561,8 @@ const BordereauxDashboard: React.FC = () => {
                       🔄 Changer Statut ▼
                     </button>
                     <div className="absolute top-full left-0 mt-1 bg-white shadow-lg rounded-md py-1 z-10 hidden group-hover:block min-w-40">
-                      <button 
+                      {/* COMMENTED OUT: Redundant scan status changes - Use SCAN Dashboard instead */}
+                      {/* <button 
                         className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
                         onClick={() => handleBulkAction('status', 'A_SCANNER')}
                       >
@@ -571,7 +573,7 @@ const BordereauxDashboard: React.FC = () => {
                         onClick={() => handleBulkAction('status', 'EN_COURS')}
                       >
                         En cours
-                      </button>
+                      </button> */}
                       <button 
                         className="block w-full text-left px-3 py-1 text-sm hover:bg-gray-50"
                         onClick={() => handleBulkAction('status', 'TRAITE')}
@@ -653,19 +655,31 @@ const BordereauxDashboard: React.FC = () => {
                       />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Référence
+                      Référence Bordereau
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Client
+                      Client / Prestataire
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date réception BO
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date début Scannérisation
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Bulletin de soins
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date fin de Scannérisation
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Délais contractuels de règlement
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date réception équipe Santé
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Statut
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      SLA
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      BS
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -695,25 +709,42 @@ const BordereauxDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{bordereau.reference}</div>
-                          <div className="text-sm text-gray-500">
-                            {new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}
-                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{bordereau.client?.name}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(bordereau.statut)}`}>
-                            {bordereau.statut}
-                          </span>
+                          <div className="text-sm text-gray-500">
+                            {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`text-sm font-medium ${sla.color}`}>
-                            {sla.days < 0 ? `+${Math.abs(sla.days)}j` : `${sla.days}j`}
-                          </span>
+                          <div className="text-sm text-gray-500">
+                            {bordereau.dateDebutScan ? new Date(bordereau.dateDebutScan).toLocaleDateString('fr-FR') : '-'}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {bordereau.nombreBS}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
+                            {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
+                            {bordereau.delaiReglement || '-'} jours
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">
+                            {bordereau.dateReceptionSante ? new Date(bordereau.dateReceptionSante).toLocaleDateString('fr-FR') : '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(bordereau.statut)}`}>
+                            {bordereau.statut}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex items-center gap-1 min-w-[300px]">
@@ -759,8 +790,9 @@ const BordereauxDashboard: React.FC = () => {
                               ➡️ Progresser
                             </button>
 
+                            {/* COMMENTED OUT: Redundant scan status entry points - Use SCAN Dashboard instead */}
                             {/* Bureau d'Ordre specific */}
-                            {isBureauOrdre && bordereau.statut === 'EN_ATTENTE' && (
+                            {/* {isBureauOrdre && bordereau.statut === 'EN_ATTENTE' && (
                               <button
                                 className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded transition-colors"
                                 onClick={() => batchUpdateStatus([bordereau.id], 'A_SCANNER').then(() => loadData())}
@@ -768,10 +800,10 @@ const BordereauxDashboard: React.FC = () => {
                               >
                                 📤 Scan
                               </button>
-                            )}
+                            )} */}
 
                             {/* SCAN Team specific */}
-                            {isScanTeam && (
+                            {/* {isScanTeam && (
                               <>
                                 {bordereau.statut === 'A_SCANNER' && (
                                   <button
@@ -792,7 +824,7 @@ const BordereauxDashboard: React.FC = () => {
                                   </button>
                                 )}
                               </>
-                            )}
+                            )} */}
 
                             {/* Chef d'Équipe specific */}
                             {isChefEquipe && (

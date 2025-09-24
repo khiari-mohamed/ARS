@@ -17,13 +17,20 @@ async function checkChefEquipeData() {
 
     console.log(`👨‍💼 Chef d'Équipe: ${chefEquipe.fullName} (${chefEquipe.email})`);
 
-    // Get team members
-    const gestionnaires = await prisma.user.findMany({
+    // Get team members (all gestionnaires if no team structure)
+    let gestionnaires = await prisma.user.findMany({
       where: { 
         role: 'GESTIONNAIRE',
         teamLeaderId: chefEquipe.id
       }
     });
+    
+    if (gestionnaires.length === 0) {
+      gestionnaires = await prisma.user.findMany({
+        where: { role: 'GESTIONNAIRE' }
+      });
+      console.log('⚠️ No team structure found, using all gestionnaires');
+    }
 
     console.log(`👥 Team Members: ${gestionnaires.length}`);
     gestionnaires.forEach(g => {
@@ -150,14 +157,39 @@ async function checkChefEquipeData() {
       console.log(`   - ${log.action}: ${JSON.stringify(log.details)}`);
     });
 
+    // Check dashboard data
+    console.log('\n📊 DASHBOARD DATA:');
+    const [clients, documents, reclamations] = await Promise.all([
+      prisma.client.findMany({ select: { id: true, name: true } }),
+      prisma.document.findMany({
+        include: { bordereau: { include: { client: true } } },
+        where: { bordereau: { archived: false } }
+      }),
+      prisma.reclamation.findMany({
+        include: { client: true },
+        where: { status: { in: ['OPEN', 'IN_PROGRESS'] } }
+      })
+    ]);
+
+    console.log(`📋 Clients: ${clients.length}`);
+    clients.forEach(c => console.log(`   - ${c.name}`));
+    
+    console.log(`📄 Documents: ${documents.length}`);
+    const docTypes = {};
+    documents.forEach(doc => {
+      docTypes[doc.type] = (docTypes[doc.type] || 0) + 1;
+    });
+    Object.entries(docTypes).forEach(([type, count]) => {
+      console.log(`   - ${type}: ${count}`);
+    });
+    
+    console.log(`📞 Reclamations: ${reclamations.length}`);
+
     // API endpoints to test
     console.log('\n🔗 API ENDPOINTS TO TEST:');
-    console.log('GET /api/workflow/chef-equipe/corbeille');
-    console.log('POST /api/workflow/chef-equipe/assign');
-    console.log('POST /api/workflow/chef-equipe/reject');
-    console.log('POST /api/workflow/chef-equipe/handle-personally');
-    console.log('PUT /api/workflow/chef-equipe/reassign');
-    console.log('GET /api/workflow/chef-equipe/dashboard-stats');
+    console.log('GET /api/bordereaux/chef-equipe/dashboard-stats');
+    console.log('GET /api/bordereaux/chef-equipe/dashboard-dossiers');
+    console.log('GET /api/bordereaux/chef-equipe/corbeille');
 
     console.log('\n✅ Data check completed successfully!');
 

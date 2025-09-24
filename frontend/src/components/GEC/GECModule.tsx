@@ -29,9 +29,10 @@ const GECModule: React.FC = () => {
     'Boîte d\'Envoi',
     'Relances',
     'Outlook/365',
-    'Suivi Emails',
-    'Modèles Avancés',
-    'Insights IA',
+    // COMMENTED OUT: Extra tabs not in core requirements
+    // 'Suivi Emails',
+    // 'Modèles Avancés',
+    // 'Insights IA',
     'Recherche & Archive',
     'Rapports'
   ];
@@ -44,11 +45,12 @@ const GECModule: React.FC = () => {
       case 3: return <OutboxTab />;
       case 4: return <RelanceManager />;
       case 5: return <OutlookIntegration />;
-      case 6: return <MailTrackingDashboard />;
-      case 7: return <EnhancedTemplateManager />;
-      case 8: return <GECAIInsights />;
-      case 9: return <SearchArchiveTab />;
-      case 10: return <ReportsTab />;
+      // COMMENTED OUT: Extra tabs not in core requirements
+      // case 6: return <MailTrackingDashboard />;
+      // case 7: return <EnhancedTemplateManager />;
+      // case 8: return <GECAIInsights />;
+      case 6: return <SearchArchiveTab />;
+      case 7: return <ReportsTab />;
       default: return <GECDashboardTab />;
     }
   };

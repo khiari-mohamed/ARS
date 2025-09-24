@@ -36,6 +36,8 @@ export class BordereauResponseDto {
   // Relations
   client?: User;
   contract?: Contract;
+  bulletinSoins?: any[];
+  assignedToUser?: { id: string; fullName: string };
 
   constructor(partial: Partial<BordereauResponseDto>) {
     Object.assign(this, partial);
@@ -58,6 +60,8 @@ export class BordereauResponseDto {
       // Include relations if they exist
       client: bordereau.client,
       contract: bordereau.contract,
+      bulletinSoins: bordereau.BulletinSoin || [],
+      assignedToUser: bordereau.assignedToUser,
     });
     
     if (includeKPIs) {

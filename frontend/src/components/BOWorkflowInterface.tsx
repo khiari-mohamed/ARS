@@ -344,6 +344,7 @@ const BOWorkflowInterface: React.FC = () => {
                 📁 Upload Documents
               </button>
               
+              {/* COMMENTED OUT: Redundant scan workflow trigger - Use SCAN Dashboard instead */}
               <button
                 type="submit"
                 disabled={loading || !formData.reference || !formData.clientId}
@@ -355,7 +356,7 @@ const BOWorkflowInterface: React.FC = () => {
                     Création...
                   </>
                 ) : (
-                  '✅ Créer et envoyer au SCAN'
+                  '✅ Créer le bordereau'
                 )}
               </button>
             </div>

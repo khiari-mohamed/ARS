@@ -63,9 +63,10 @@ const AlertsModule: React.FC = () => {
           />
           <Tab label={isMobile ? 'Résolues' : 'Alertes Résolues'} />
           <Tab label={isMobile ? 'Escalade' : 'Règles d\'Escalade'} />
-          <Tab label={isMobile ? 'Notifications' : 'Notifications Multi-Canaux'} />
-          <Tab label={isMobile ? 'Analyses' : 'Analyses Avancées'} />
-          <Tab label={isMobile ? 'Analytics' : 'Analytics & Rapports'} />
+          {/* COMMENTED OUT: Extra tabs not in core requirements */}
+          {/* <Tab label={isMobile ? 'Notifications' : 'Notifications Multi-Canaux'} /> */}
+          {/* <Tab label={isMobile ? 'Analyses' : 'Analyses Avancées'} /> */}
+          {/* <Tab label={isMobile ? 'Analytics' : 'Analytics & Rapports'} /> */}
         </Tabs>
       </Box>
 
@@ -74,9 +75,10 @@ const AlertsModule: React.FC = () => {
         {activeTab === 1 && <ActiveAlerts />}
         {activeTab === 2 && <ResolvedAlerts />}
         {activeTab === 3 && <EscalationRulesManager />}
-        {activeTab === 4 && <MultiChannelNotifications />}
-        {activeTab === 5 && <AlertAnalyticsDashboard />}
-        {activeTab === 6 && <AlertsAnalytics />}
+        {/* COMMENTED OUT: Extra tabs not in core requirements */}
+        {/* {activeTab === 4 && <MultiChannelNotifications />} */}
+        {/* {activeTab === 5 && <AlertAnalyticsDashboard />} */}
+        {/* {activeTab === 6 && <AlertsAnalytics />} */}
       </Box>
     </Box>
   );

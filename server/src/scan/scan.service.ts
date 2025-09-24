@@ -721,7 +721,7 @@ export class ScanService {
       const document = await this.prisma.document.create({
         data: {
           name: fileName,
-          type: this.getDocumentType(fileName),
+          type: this.mapToDocumentType(this.getDocumentType(fileName)),
           path: processedPath,
           uploadedById: user.id,
           bordereauId: bordereau.id,
@@ -1195,7 +1195,7 @@ export class ScanService {
       await this.prisma.document.create({
         data: {
           name: `test-document-${Date.now()}.pdf`,
-          type: 'BS',
+          type: 'BULLETIN_SOIN',
           path: `/test/documents/test-document-${Date.now()}.pdf`,
           uploadedById: user.id, // Use valid user ID
           bordereauId: bordereau.id,
@@ -1246,5 +1246,20 @@ export class ScanService {
     } catch (error) {
       throw new BadRequestException(`Failed to update bordereau: ${error.message}`);
     }
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): any {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, string> = {
+      'BS': 'BULLETIN_SOIN',
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'FACTURE': 'COMPLEMENT_INFORMATION',
+      'CONTRAT': 'CONTRAT_AVENANT',
+      'DOCUMENT': 'BULLETIN_SOIN'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 }

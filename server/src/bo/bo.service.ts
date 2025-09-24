@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowNotificationsService } from '../workflow/workflow-notifications.service';
+import { DocumentType } from '@prisma/client';
 import { Express } from 'express';
 
 export interface CreateBOEntryDto {
@@ -374,7 +375,13 @@ export class BOService {
     };
   }
 
-  async getBODashboard(userId: string) {
+  async getBODashboard(userId: string, filters?: {
+    clientId?: string;
+    chefEquipeId?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+    statut?: string;
+  }) {
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const startOfHour = new Date(today.getFullYear(), today.getMonth(), today.getDate(), today.getHours());
@@ -391,10 +398,25 @@ export class BOService {
       }),
       
       this.prisma.bordereau.findMany({
-        take: 10,
+        take: 50, // Increased for filtering
         orderBy: { createdAt: 'desc' },
+        where: {
+          ...(filters?.clientId && { clientId: filters.clientId }),
+          ...(filters?.chefEquipeId && { assignedToUserId: filters.chefEquipeId }),
+          ...(filters?.statut && { statut: filters.statut as any }),
+          ...(filters?.dateFrom && filters?.dateTo ? {
+            dateReception: {
+              gte: filters.dateFrom,
+              lte: filters.dateTo
+            }
+          } : filters?.dateFrom ? {
+            dateReception: { gte: filters.dateFrom }
+          } : filters?.dateTo ? {
+            dateReception: { lte: filters.dateTo }
+          } : {})
+        },
         include: {
-          client: { select: { name: true } },
+          client: { select: { name: true, id: true } },
           contract: { select: { clientName: true } }
         }
       }),
@@ -592,7 +614,7 @@ export class BOService {
           const document = await this.prisma.document.create({
             data: {
               name: file.originalname,
-              type: entry.documentType || 'AUTRE',
+              type: this.mapToDocumentType(entry.documentType) || 'BULLETIN_SOIN',
               path: `/uploads/${file.originalname}`, // In production, use proper file storage
               uploadedById: userId,
               bordereauId: bordereau.id,
@@ -707,5 +729,29 @@ export class BOService {
     }
     
     return { progressedCount: bordereauxToProgress.length };
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): DocumentType {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, DocumentType> = {
+      'BS': 'BULLETIN_SOIN',
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'COMPLEMENT_DOSSIER': 'COMPLEMENT_INFORMATION',
+      'COMPLEMENT_INFORMATION': 'COMPLEMENT_INFORMATION',
+      'ADHESION': 'ADHESION',
+      'RECLAMATION': 'RECLAMATION',
+      'CONTRAT': 'CONTRAT_AVENANT',
+      'CONTRAT_AVENANT': 'CONTRAT_AVENANT',
+      'AVENANT': 'CONTRAT_AVENANT',
+      'RESILIATION': 'DEMANDE_RESILIATION',
+      'DEMANDE_RESILIATION': 'DEMANDE_RESILIATION',
+      'CONVENTION': 'CONVENTION_TIERS_PAYANT',
+      'CONVENTION_TIERS_PAYANT': 'CONVENTION_TIERS_PAYANT',
+      'TIERS_PAYANT': 'CONVENTION_TIERS_PAYANT'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 }

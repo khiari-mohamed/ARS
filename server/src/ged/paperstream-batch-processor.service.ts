@@ -328,7 +328,7 @@ export class PaperStreamBatchProcessor {
       await this.prisma.document.create({
         data: {
           name: file.fileName,
-          type: this.getDocumentTypeFromFile(file.fileName),
+          type: this.mapToDocumentType(this.getDocumentTypeFromFile(file.fileName)),
           path: permanentPath,
           uploadedById: systemUser.id,
           bordereauId,
@@ -502,5 +502,21 @@ export class PaperStreamBatchProcessor {
     if (name.includes('contrat')) return 'CONTRAT';
     if (name.includes('recu')) return 'RECU';
     return 'DOCUMENT';
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): any {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, string> = {
+      'BS': 'BULLETIN_SOIN',
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'FACTURE': 'COMPLEMENT_INFORMATION',
+      'CONTRAT': 'CONTRAT_AVENANT',
+      'RECU': 'COMPLEMENT_INFORMATION',
+      'DOCUMENT': 'BULLETIN_SOIN'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 }

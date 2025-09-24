@@ -11,11 +11,13 @@ import ClaimsTab from './ClaimsTab';
 import SLARiskTab from './SLARiskTab';
 import ForecastingTab from './ForecastingTab';
 import ReportsTab from './ReportsTab';
-import AdvancedFilteringDashboard from './AdvancedFilteringDashboard';
-import ScheduledReportsManager from './ScheduledReportsManager';
+// COMMENTED OUT: Extra components not in core requirements
+// import AdvancedFilteringDashboard from './AdvancedFilteringDashboard';
+// import ScheduledReportsManager from './ScheduledReportsManager';
 import PredictiveAnalyticsDashboard from './PredictiveAnalyticsDashboard';
-import RealTimeDashboard from './RealTimeDashboard';
-import OVAnalyticsDashboard from './OVAnalyticsDashboard';
+// import RealTimeDashboard from './RealTimeDashboard';
+// import OVAnalyticsDashboard from './OVAnalyticsDashboard';
+import DocumentTypesTab from './DocumentTypesTab';
 import AnalyticsMobileView from './AnalyticsMobileView';
 import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
@@ -108,16 +110,38 @@ const AnalyticsDashboard: React.FC = () => {
         slaStatus: filters.slaStatus
       };
 
-      const kpisResponse = await LocalAPI.get('/analytics/kpis/daily', {
-        params: filterParams
-      });
+      // NEW: Load analytics for all document types with SLA exclusions
+      const [kpisResponse, documentStatsResponse] = await Promise.all([
+        LocalAPI.get('/analytics/kpis/daily', { params: filterParams }),
+        LocalAPI.get('/analytics/documents/all-types', { params: filterParams })
+      ]);
 
       setGlobalKPIs({
         slaCompliance: kpisResponse.data.slaCompliance || 0,
         totalBordereaux: kpisResponse.data.totalCount || 0,
         avgProcessingTime: kpisResponse.data.avgDelay || 0,
         rejectionRate: kpisResponse.data.rejectionRate || 0,
-        activeAlerts: kpisResponse.data.activeAlerts || 0
+        activeAlerts: kpisResponse.data.activeAlerts || 0,
+        // NEW: Document type statistics
+        documentStats: {
+          bulletinSoin: documentStatsResponse.data?.BULLETIN_SOIN || 0,
+          complementInfo: documentStatsResponse.data?.COMPLEMENT_INFORMATION || 0,
+          adhesions: documentStatsResponse.data?.ADHESION || 0,
+          reclamations: documentStatsResponse.data?.RECLAMATION || 0,
+          contrats: documentStatsResponse.data?.CONTRAT_AVENANT || 0,
+          resiliations: documentStatsResponse.data?.DEMANDE_RESILIATION || 0,
+          conventions: documentStatsResponse.data?.CONVENTION_TIERS_PAYANT || 0
+        },
+        // NEW: SLA-applicable vs non-SLA document counts
+        slaStats: {
+          applicable: (documentStatsResponse.data?.BULLETIN_SOIN || 0) + 
+                     (documentStatsResponse.data?.COMPLEMENT_INFORMATION || 0) + 
+                     (documentStatsResponse.data?.ADHESION || 0) + 
+                     (documentStatsResponse.data?.RECLAMATION || 0),
+          nonApplicable: (documentStatsResponse.data?.CONTRAT_AVENANT || 0) + 
+                        (documentStatsResponse.data?.DEMANDE_RESILIATION || 0) + 
+                        (documentStatsResponse.data?.CONVENTION_TIERS_PAYANT || 0)
+        }
       });
     } catch (error) {
       console.error('Failed to load analytics data:', error);
@@ -126,7 +150,20 @@ const AnalyticsDashboard: React.FC = () => {
         totalBordereaux: 0,
         avgProcessingTime: 0,
         rejectionRate: 0,
-        activeAlerts: 0
+        activeAlerts: 0,
+        documentStats: {
+          bulletinSoin: 0,
+          complementInfo: 0,
+          adhesions: 0,
+          reclamations: 0,
+          contrats: 0,
+          resiliations: 0,
+          conventions: 0
+        },
+        slaStats: {
+          applicable: 0,
+          nonApplicable: 0
+        }
       });
     } finally {
       setLoading(false);
@@ -245,17 +282,19 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const tabLabels = [
-    'Temps Réel',
     'Vue d\'ensemble', 
+    'Types Documents',
     'Performance',
     'Réclamations',
     'Risques SLA',
-    'OV Analytics',
     'Prévisions',
     'Analyses Prédictives',
-    'Filtrage Avancé',
-    'Rapports Programmés',
     'Rapports'
+    // COMMENTED OUT: Extra tabs not in core requirements
+    // 'Temps Réel',
+    // 'OV Analytics',
+    // 'Filtrage Avancé',
+    // 'Rapports Programmés'
   ];
 
   return (
@@ -279,17 +318,19 @@ const AnalyticsDashboard: React.FC = () => {
               {tabLabels[tab]}
             </Typography>
             <Box>
-              {tab === 0 && <RealTimeDashboard />}
-              {tab === 1 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 0 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 1 && <DocumentTypesTab filters={filters} dateRange={getDateRange()} />}
               {tab === 2 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
               {tab === 3 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
               {tab === 4 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 5 && <OVAnalyticsDashboard />}
-              {tab === 6 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 7 && <PredictiveAnalyticsDashboard />}
-              {tab === 8 && <AdvancedFilteringDashboard />}
-              {tab === 9 && <ScheduledReportsManager />}
-              {tab === 10 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 5 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 6 && <PredictiveAnalyticsDashboard />}
+              {tab === 7 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
+              {/* COMMENTED OUT: Extra tabs not in core requirements */}
+              {/* {tab === 8 && <RealTimeDashboard />} */}
+              {/* {tab === 9 && <OVAnalyticsDashboard />} */}
+              {/* {tab === 10 && <AdvancedFilteringDashboard />} */}
+              {/* {tab === 11 && <ScheduledReportsManager />} */}
             </Box>
           </Paper>
         </>
@@ -408,17 +449,19 @@ const AnalyticsDashboard: React.FC = () => {
             </Tabs>
 
             <Box>
-              {tab === 0 && <RealTimeDashboard />}
-              {tab === 1 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 0 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 1 && <DocumentTypesTab filters={filters} dateRange={getDateRange()} />}
               {tab === 2 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
               {tab === 3 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
               {tab === 4 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 5 && <OVAnalyticsDashboard />}
-              {tab === 6 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 7 && <PredictiveAnalyticsDashboard />}
-              {tab === 8 && <AdvancedFilteringDashboard />}
-              {tab === 9 && <ScheduledReportsManager />}
-              {tab === 10 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 5 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 6 && <PredictiveAnalyticsDashboard />}
+              {tab === 7 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
+              {/* COMMENTED OUT: Extra tabs not in core requirements */}
+              {/* {tab === 8 && <RealTimeDashboard />} */}
+              {/* {tab === 9 && <OVAnalyticsDashboard />} */}
+              {/* {tab === 10 && <AdvancedFilteringDashboard />} */}
+              {/* {tab === 11 && <ScheduledReportsManager />} */}
             </Box>
           </Paper>
         </>

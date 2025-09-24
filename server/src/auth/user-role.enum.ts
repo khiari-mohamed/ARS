@@ -9,6 +9,7 @@ export enum UserRole {
   CHEF_EQUIPE = 'CHEF_EQUIPE',
   GESTIONNAIRE = 'GESTIONNAIRE',
   CLIENT_SERVICE = 'CLIENT_SERVICE',
+  SERVICE_CLIENT = 'SERVICE_CLIENT', // Service client profile as gestionnaire role
   FINANCE = 'FINANCE',
   SCAN_TEAM = 'SCAN_TEAM',
   BO = 'BO',

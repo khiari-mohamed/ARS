@@ -30,10 +30,13 @@ export class ClientService {
   async uploadContract(clientId: string, file: Express.Multer.File, uploadedById: string) {
     if (!file) throw new BadRequestException('No file uploaded');
     
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
-    if (!allowedTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Only PDF, JPEG, PNG, and TIFF files are allowed for contracts');
+    // Validate client exists
+    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new NotFoundException('Client not found');
+    
+    // Validate file type - Only PDF for contracts
+    if (file.mimetype !== 'application/pdf') {
+      throw new BadRequestException('Only PDF files are allowed for contracts');
     }
     
     // Validate file size (max 10MB)
@@ -55,72 +58,78 @@ export class ClientService {
     // Generate file hash for deduplication
     const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex');
     
-    // Check if file already exists
+    // Check if file already exists for this client
     const existingDocument = await this.prisma.document.findFirst({
-      where: { hash: fileHash }
+      where: { 
+        hash: fileHash,
+        type: 'CONTRAT_AVENANT'
+      }
     });
     
     if (existingDocument) {
-      // Update client association if needed
-      await this.prisma.client.update({
-        where: { id: clientId },
-        data: { contractDocumentPath: existingDocument.path }
-      });
-      
-      return existingDocument;
+      throw new BadRequestException('This contract file already exists');
     }
     
     // Generate unique filename with client prefix
     const timestamp = Date.now();
-    const randomNum = Math.floor(Math.random() * 1000000000).toString(36);
+    const sanitizedClientName = client.name.replace(/[^a-zA-Z0-9]/g, '_');
     const fileExtension = path.extname(file.originalname);
-    const fileName = `contract-${clientId}-${timestamp}-${randomNum}${fileExtension}`;
+    const fileName = `contract_${sanitizedClientName}_${timestamp}${fileExtension}`;
     const filePath = path.join(uploadsDir, fileName);
     
-    // Write file to disk
-    fs.writeFileSync(filePath, file.buffer);
-    
-    // Save document metadata with enhanced fields
-    const document = await this.prisma.document.create({
-      data: {
-        name: file.originalname,
-        type: 'contrat',
-        path: filePath,
-        uploadedById,
-        hash: fileHash,
-        status: 'UPLOADED'
-      },
-    });
-    
-    // Update client with contract document path
-    await this.prisma.client.update({
-      where: { id: clientId },
-      data: { contractDocumentPath: filePath }
-    });
-    
-    // Log the upload
-    await this.prisma.auditLog.create({
-      data: {
-        userId: uploadedById,
-        action: 'CONTRACT_DOCUMENT_UPLOADED',
-        details: {
-          clientId,
-          documentId: document.id,
-          fileName: file.originalname,
-          fileSize: file.size,
-          fileType: file.mimetype
+    try {
+      // Write file to disk
+      fs.writeFileSync(filePath, file.buffer);
+      
+      // Save document metadata
+      const document = await this.prisma.document.create({
+        data: {
+          name: file.originalname,
+          type: 'CONTRAT_AVENANT',
+          path: filePath,
+          uploadedById,
+          hash: fileHash,
+          status: 'UPLOADED'
+        },
+      });
+      
+      // Update client with contract document path
+      await this.prisma.client.update({
+        where: { id: clientId },
+        data: { contractDocumentPath: filePath }
+      });
+      
+      // Log the upload
+      await this.prisma.auditLog.create({
+        data: {
+          userId: uploadedById,
+          action: 'CONTRACT_DOCUMENT_UPLOADED',
+          details: {
+            clientId,
+            documentId: document.id,
+            fileName: file.originalname,
+            fileSize: file.size,
+            fileType: file.mimetype,
+            clientName: client.name
+          }
         }
+      });
+      
+      return document;
+    } catch (error) {
+      // Clean up file if database operation fails
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
       }
-    });
-    
-    return document;
+      throw new InternalServerErrorException('Failed to upload contract document');
+    }
   }
 
   // --- Get client documents ---
   async getClientDocuments(clientId: string) {
     return this.prisma.document.findMany({
       where: {
-        type: 'contrat',
+        type: 'CONTRAT_AVENANT',
         uploadedById: { not: undefined }
       },
       orderBy: { uploadedAt: 'desc' }
@@ -294,7 +303,10 @@ export class ClientService {
 
   // --- Performance metrics ---
   async getPerformanceMetrics(clientId: string) {
-    const [bordereauxStats, reclamationStats, slaStats] = await Promise.all([
+    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) throw new NotFoundException('Client not found');
+
+    const [bordereauxStats, reclamationStats, slaStats, paymentStats, reclamationTimingStats] = await Promise.all([
       this.prisma.bordereau.groupBy({
         by: ['statut'],
         where: { clientId },
@@ -310,13 +322,95 @@ export class ClientService {
         _avg: { delaiReglement: true },
         _min: { delaiReglement: true },
         _max: { delaiReglement: true }
-      })
+      }),
+      this.getPaymentTimingStats(clientId, client.reglementDelay),
+      this.getReclamationTimingStats(clientId, client.reclamationDelay)
     ]);
 
     return {
       bordereauxByStatus: bordereauxStats,
       reclamationsByStatus: reclamationStats,
-      slaMetrics: slaStats
+      slaMetrics: slaStats,
+      paymentStats,
+      reclamationTimingStats
+    };
+  }
+
+  private async getPaymentTimingStats(clientId: string, reglementDelay: number) {
+    const bordereauxWithPayments = await this.prisma.bordereau.findMany({
+      where: { 
+        clientId,
+        dateExecutionVirement: { not: null }
+      },
+      select: {
+        dateReception: true,
+        dateExecutionVirement: true,
+        delaiReglement: true
+      }
+    });
+
+    let paidOnTime = 0;
+    let paidLate = 0;
+    const totalPaid = bordereauxWithPayments.length;
+
+    bordereauxWithPayments.forEach(bordereau => {
+      if (bordereau.dateExecutionVirement && bordereau.dateReception) {
+        const daysTaken = Math.floor(
+          (bordereau.dateExecutionVirement.getTime() - bordereau.dateReception.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const deadline = bordereau.delaiReglement || reglementDelay;
+        
+        if (daysTaken <= deadline) {
+          paidOnTime++;
+        } else {
+          paidLate++;
+        }
+      }
+    });
+
+    return {
+      totalPaid,
+      paidOnTime,
+      paidLate,
+      onTimeRate: totalPaid > 0 ? (paidOnTime / totalPaid) * 100 : 0
+    };
+  }
+
+  private async getReclamationTimingStats(clientId: string, reclamationDelay: number) {
+    const reclamations = await this.prisma.reclamation.findMany({
+      where: { 
+        clientId
+      },
+      select: {
+        createdAt: true,
+        updatedAt: true,
+        status: true
+      }
+    });
+
+    let handledOnTime = 0;
+    let handledLate = 0;
+    const totalHandled = reclamations.length;
+
+    reclamations.forEach(reclamation => {
+      if (reclamation.updatedAt && reclamation.createdAt && reclamation.updatedAt > reclamation.createdAt) {
+        const hoursToHandle = Math.floor(
+          (reclamation.updatedAt.getTime() - reclamation.createdAt.getTime()) / (1000 * 60 * 60)
+        );
+        
+        if (hoursToHandle <= reclamationDelay) {
+          handledOnTime++;
+        } else {
+          handledLate++;
+        }
+      }
+    });
+
+    return {
+      totalHandled,
+      handledOnTime,
+      handledLate,
+      onTimeRate: totalHandled > 0 ? (handledOnTime / totalHandled) * 100 : 0
     };
   }
 

@@ -7,7 +7,7 @@ import { WorkloadAssignmentService } from '../workflow/workload-assignment.servi
 import { CreateBordereauDto } from './dto/create-bordereau.dto';
 import { UpdateBordereauDto } from './dto/update-bordereau.dto';
 import { AssignBordereauDto } from './dto/assign-bordereau.dto';
-import { Statut } from '@prisma/client';
+import { Statut, DocumentType } from '@prisma/client';
 import { Bordereau, User } from '@prisma/client';
 import { Document as PrismaDocument } from '@prisma/client';
 import { BordereauResponseDto, StatusColor } from './dto/bordereau-response.dto';
@@ -309,7 +309,7 @@ export class BordereauxService {
         const doc = await this.prisma.document.create({
           data: {
             name: file.originalname,
-            type: this.getDocumentType(file.originalname),
+            type: this.mapToDocumentType(this.getDocumentType(file.originalname)),
             path: file.path,
             bordereauId,
             uploadedById: data.userId || 'system',
@@ -873,6 +873,31 @@ export class BordereauxService {
     if (filters.withVirement === 'true' || filters.withVirement === true) {
       include.virement = true;
       console.log('🔗 Backend: Including virement data in query');
+    }
+    
+    // NEW: Include bulletinSoins when requested for dossiers list
+    if (filters.include) {
+      const includeFields = Array.isArray(filters.include) ? filters.include : filters.include.split(',');
+      
+      if (includeFields.includes('bulletinSoins')) {
+        include.BulletinSoin = {
+          select: {
+            id: true,
+            numBs: true,
+            nomAssure: true,
+            nomBeneficiaire: true,
+            etat: true,
+            totalPec: true,
+            dateCreation: true
+          }
+        };
+        console.log('🔗 Backend: Including bulletinSoins data in query');
+      }
+      
+      if (includeFields.includes('assignedToUser')) {
+        // Note: assignedToUser relation doesn't exist in schema, skip this include
+        console.log('⚠️ Backend: assignedToUser relation not found in schema, skipping');
+      }
     }
     
     // If pagination is requested, return paginated results
@@ -2391,7 +2416,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         { documents: { some: {
           OR: [
             { name: { contains: query, mode: 'insensitive' } },
-            { type: { contains: query, mode: 'insensitive' } },
+            { name: { contains: query, mode: 'insensitive' } },
             { path: { contains: query, mode: 'insensitive' } },
             // Removed invalid contains on ocrResult JSON field
           ]
@@ -2968,5 +2993,21 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
     } catch (error) {
       return { success: false, error: error.message };
     }
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): DocumentType {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, DocumentType> = {
+      'BS': 'BULLETIN_SOIN',
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'DECLARATION_SALAIRE': 'COMPLEMENT_INFORMATION',
+      'FICHE_ADHESION': 'ADHESION',
+      'CONTRAT': 'CONTRAT_AVENANT',
+      'AUTRE': 'BULLETIN_SOIN'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 }

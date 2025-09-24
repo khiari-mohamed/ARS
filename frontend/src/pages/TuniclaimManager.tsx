@@ -375,7 +375,8 @@ const TuniclaimManager: React.FC = () => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
           <Tab label="Historique" icon={<History />} />
-          <Tab label="Graphiques" icon={<Assessment />} />
+          {/* COMMENTED OUT: Advanced charts not in core requirements */}
+          {/* <Tab label="Graphiques" icon={<Assessment />} /> */}
           <Tab label="Actions" icon={<Send />} />
           <Tab label="Configuration" icon={<Settings />} />
         </Tabs>
@@ -448,7 +449,8 @@ const TuniclaimManager: React.FC = () => {
         </Card>
       </TabPanel>
 
-      <TabPanel value={tabValue} index={1}>
+      {/* COMMENTED OUT: Advanced charts not in core requirements */}
+      {/* <TabPanel value={tabValue} index={1}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Card>
@@ -472,6 +474,19 @@ const TuniclaimManager: React.FC = () => {
             </Card>
           </Grid>
         </Grid>
+      </TabPanel> */}
+      
+      <TabPanel value={tabValue} index={1}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Statistiques de synchronisation
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Fonctionnalité de graphiques avancés disponible sur demande.
+            </Typography>
+          </CardContent>
+        </Card>
       </TabPanel>
 
       <TabPanel value={tabValue} index={2}>

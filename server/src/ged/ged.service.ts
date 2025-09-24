@@ -217,7 +217,7 @@ export class GedService {
     const doc = await this.prisma.document.create({
       data: {
         name: dto.name,
-        type: dto.type,
+        type: this.mapToDocumentType(dto.type),
         path: file.path,
         uploadedById: user.id,
         bordereauId: dto.bordereauId,
@@ -303,7 +303,7 @@ export class GedService {
     const doc = await this.prisma.document.update({
       where: { id },
       data: {
-        type: tags.type,
+        type: tags.type ? this.mapToDocumentType(tags.type) : undefined,
         bordereauId: tags.bordereauId,
       },
     });
@@ -462,9 +462,9 @@ export class GedService {
 
     // Transform documents to workflow tasks
     return documentsInWorkflow.map((doc, index) => {
-      const workflowName = doc.type === 'BS' ? 'Traitement BS' : 'Approbation Document';
+      const workflowName = doc.type === 'BULLETIN_SOIN' ? 'Traitement BS' : 'Approbation Document';
       const stepName = 'Révision';
-      const timeLimit = doc.type === 'BS' ? 24 : 48;
+      const timeLimit = doc.type === 'BULLETIN_SOIN' ? 24 : 48;
       const priority = index < 2 ? 'high' : index < 5 ? 'medium' : 'low';
       
       return {
@@ -1506,5 +1506,90 @@ export class GedService {
     }
 
     return defaultConfig;
+  }
+
+  // Create document record without file upload
+  async createDocumentRecord(data: any, user: User) {
+    console.log('🚀 [BACKEND] Creating document record:', {
+      name: data.name,
+      type: data.type,
+      userId: user.id,
+      userRole: user.role
+    });
+    
+    try {
+      if (!['SCAN_TEAM', 'CHEF_EQUIPE', 'SUPER_ADMIN', 'BO'].includes(user.role)) {
+        console.error('❌ [BACKEND] Permission denied for user:', user.role);
+        throw new ForbiddenException('You do not have permission to create documents');
+      }
+
+      const mappedType = this.mapToDocumentType(data.type);
+      console.log('🔄 [BACKEND] Document type mapped:', data.type, '->', mappedType);
+
+      const doc = await this.prisma.document.create({
+        data: {
+          name: data.name,
+          type: mappedType,
+          path: data.path || `/uploads/documents/${data.name}`,
+          uploadedById: user.id,
+          status: 'UPLOADED'
+        }
+      });
+
+      console.log('✅ [BACKEND] Document created successfully:', {
+        id: doc.id,
+        name: doc.name,
+        type: doc.type,
+        status: doc.status
+      });
+
+      // Audit log
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: user.id,
+            action: 'CREATE_DOCUMENT_RECORD',
+            details: { documentId: doc.id, type: data.type }
+          }
+        });
+        console.log('📝 [BACKEND] Audit log created for document:', doc.id);
+      } catch (e) {
+        console.log(`[AUDIT] Document record created: ${doc.id} by ${user.id}`);
+      }
+
+      return doc;
+    } catch (err) {
+      console.error('❌ [BACKEND] Document creation failed:', {
+        error: err?.message || err,
+        data,
+        userId: user.id
+      });
+      throw new Error('Document creation failed: ' + (err?.message || err));
+    }
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): any {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, string> = {
+      'BS': 'BULLETIN_SOIN',
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'COMPLEMENT_DOSSIER': 'COMPLEMENT_INFORMATION',
+      'COMPLEMENT_INFORMATION': 'COMPLEMENT_INFORMATION',
+      'ADHESION': 'ADHESION',
+      'RECLAMATION': 'RECLAMATION',
+      'CONTRAT': 'CONTRAT_AVENANT',
+      'CONTRAT_AVENANT': 'CONTRAT_AVENANT',
+      'AVENANT': 'CONTRAT_AVENANT',
+      'RESILIATION': 'DEMANDE_RESILIATION',
+      'DEMANDE_RESILIATION': 'DEMANDE_RESILIATION',
+      'CONVENTION': 'CONVENTION_TIERS_PAYANT',
+      'CONVENTION_TIERS_PAYANT': 'CONVENTION_TIERS_PAYANT',
+      'TIERS_PAYANT': 'CONVENTION_TIERS_PAYANT',
+      'SCANNED_DOCUMENT': 'BULLETIN_SOIN'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 }

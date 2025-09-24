@@ -23,6 +23,9 @@ const columns: TableColumn[] = [
   { key: 'client', label: 'Client / Prestataire', sortable: true, width: '200px' },
   { key: 'nombreBS', label: 'Nb BS', sortable: true, width: '80px' },
   { key: 'dateReception', label: 'Date réception BO', sortable: true, width: '140px' },
+  { key: 'dateDebutScan', label: 'Date début Scan', sortable: true, width: '140px' },
+  { key: 'dateFinScan', label: 'Date fin Scan', sortable: true, width: '140px' },
+  { key: 'delaiReglement', label: 'Délais contractuels', sortable: true, width: '140px' },
   { key: 'dateReceptionSante', label: 'Date réception équipe Santé', sortable: true, width: '180px' },
   { key: 'dateLimite', label: 'Date limite', sortable: true, width: '120px' },
   { key: 'statut', label: 'Status', sortable: true, width: '120px' },
@@ -787,7 +790,8 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
         SCAN={isScanTeam.toString()} | 
         CHEF={isChefEquipe.toString()} | 
         GEST={isGestionnaire.toString()} | 
-        ADMIN={isSuperAdmin.toString()}
+        ADMIN={isSuperAdmin.toString()} | 
+        <strong style={{color: 'red'}}>COLUMNS UPDATED: {columns.length} columns</strong>
       </div>
       
       {/* Header with actions */}
@@ -1226,6 +1230,15 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatDate(bordereau.dateReception)}
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatDate(bordereau.dateDebutScan)}
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatDate(bordereau.dateFinScan)}
+                  </td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {bordereau.delaiReglement || '-'} jours
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatDate(bordereau.dateReceptionSante)}

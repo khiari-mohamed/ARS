@@ -29,6 +29,8 @@ import AdvancedUserManagement from '../components/AdvancedUserManagement';
 import SuperAdminAlerts from '../components/analytics/SuperAdminAlerts';
 import AssignmentCriteria from '../components/Workflow/AssignmentCriteria';
 import TeamWorkloadConfig from '../components/Workflow/TeamWorkloadConfig';
+import DocumentAssignmentManager from '../components/DocumentAssignmentManager';
+import DocumentAnalyticsDashboard from '../components/analytics/DocumentAnalyticsDashboard';
 import { fetchSystemHealth, fetchSystemStats } from '../services/superAdminService';
 
 interface TabPanelProps {
@@ -236,46 +238,56 @@ const SuperAdminDashboard: React.FC = () => {
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={activeTab} onChange={handleTabChange} aria-label="super admin tabs">
-            <Tab label="Temps Réel" />
+            {/* <Tab label="Temps Réel" /> */}
             <Tab label="Alertes Équipes" />
-            <Tab label="Affectation Avancée" />
-            <Tab label="Config Équipes" />
-            <Tab label="Dashboard Système" />
-            <Tab label="Configuration SLA" />
-            <Tab label="Configuration Système" />
+            <Tab label="Analytics Documents" />
+            {/* <Tab label="Affectation Documents" /> */}
+            {/* <Tab label="Affectation Avancée" /> */}
+            {/* <Tab label="Config Équipes" /> */}
+            {/* <Tab label="Dashboard Système" /> */}
+            {/* <Tab label="Configuration SLA" /> */}
+            {/* <Tab label="Configuration Système" /> */}
             <Tab label="Gestion Utilisateurs" />
           </Tabs>
         </Box>
 
-        <TabPanel value={activeTab} index={0}>
+        {/* <TabPanel value={activeTab} index={0}>
           <RealTimeSuperAdminDashboard />
-        </TabPanel>
+        </TabPanel> */}
 
-        <TabPanel value={activeTab} index={1}>
+        <TabPanel value={activeTab} index={0}>
           <SuperAdminAlerts />
         </TabPanel>
 
-        <TabPanel value={activeTab} index={2}>
-          <AssignmentCriteria />
+        <TabPanel value={activeTab} index={1}>
+          <DocumentAnalyticsDashboard />
+        </TabPanel>
+
+        {/* <TabPanel value={activeTab} index={2}>
+          <DocumentAssignmentManager />
         </TabPanel>
 
         <TabPanel value={activeTab} index={3}>
-          <TeamWorkloadConfig />
-        </TabPanel>
+          <AssignmentCriteria />
+        </TabPanel> */}
 
-        <TabPanel value={activeTab} index={4}>
+        {/* <TabPanel value={activeTab} index={2}>
+          <TeamWorkloadConfig />
+        </TabPanel> */}
+
+        {/* <TabPanel value={activeTab} index={3}>
           <ComprehensiveSystemDashboard />
         </TabPanel>
 
-        <TabPanel value={activeTab} index={5}>
+        <TabPanel value={activeTab} index={4}>
           <SLAConfigurationInterface />
-        </TabPanel>
+        </TabPanel> */}
 
-        <TabPanel value={activeTab} index={6}>
+        {/* <TabPanel value={activeTab} index={3}>
           <SystemConfigurationPanel />
-        </TabPanel>
+        </TabPanel> */}
 
-        <TabPanel value={activeTab} index={7}>
+        <TabPanel value={activeTab} index={2}>
           <AdvancedUserManagement />
         </TabPanel>
       </Paper>

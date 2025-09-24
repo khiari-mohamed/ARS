@@ -70,13 +70,14 @@ export class FinanceService {
     if (!virement) throw new NotFoundException('Virement not found');
     if (virement.confirmed) throw new BadRequestException('Already confirmed');
 
-    // Update virement and bordereau
+    // Update virement and bordereau - FIXED: Use actual execution date
     const now = new Date();
     await this.prisma.bordereau.update({
       where: { id: virement.bordereauId },
       data: {
         dateDepotVirement: virement.dateDepot,
-        dateExecutionVirement: virement.dateExecution,
+        dateExecutionVirement: now, // Use current date as actual execution
+        statut: 'VIREMENT_EXECUTE'
       },
     });
 

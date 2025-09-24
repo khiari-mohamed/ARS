@@ -15,12 +15,14 @@ import GedViewer from './pages/ged/GedViewer';
 import GecManager from './pages/gec/GecManager';
 import ReclamationsModule from './pages/reclamations/ReclamationsModule';
 import ReclamationDetail from './components/reclamations/ReclamationDetail';
-import UserManagement from './pages/users/UserManagement';
+// COMMENTED OUT: Redundant user management import - Use Super Admin interface instead
+// import UserManagement from './pages/users/UserManagement';
 
 import AlertsModule from './pages/AlertsModule';
 import BODashboard from './pages/BODashboard';
 import ScanDashboard from './pages/ScanDashboard';
 import ChefEquipePage from './pages/ChefEquipePage';
+import ChefEquipeTableauBordNew from './pages/dashboard/ChefEquipeTableauBordNew';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import TuniclaimManager from './pages/TuniclaimManager';
 import GuideFlowPage from './components/guide/GuideFlowPage';
@@ -59,11 +61,12 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
           
-          <Route path="/home/users" element={
+          {/* COMMENTED OUT: Redundant user management - Use Super Admin interface instead */}
+          {/* <Route path="/home/users" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR]}>
               <UserManagement />
             </ProtectedRoute>
-          } />
+          } /> */}
           
           <Route path="/home/analytics" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT]}>
@@ -84,13 +87,13 @@ const App: React.FC = () => {
           } />
           
           <Route path="/home/chef-equipe" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE]}>
-              <ChefEquipePage />
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE]}>
+              <ChefEquipeTableauBordNew />
             </ProtectedRoute>
           } />
           
           <Route path="/home/tuniclaim" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE, UserRole.FINANCE]}>
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.GESTIONNAIRE]}>
               <TuniclaimManager />
             </ProtectedRoute>
           } />

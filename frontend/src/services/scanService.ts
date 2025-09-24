@@ -152,3 +152,26 @@ export const autoAssignBordereau = async (bordereauId: string) => {
   const { data } = await LocalAPI.post(`/bordereaux/${bordereauId}/auto-assign`);
   return data;
 };
+
+// NEW: Validate multiple scan workflow
+export const validateMultipleScanWorkflow = async (bordereauId: string) => {
+  try {
+    const { data } = await LocalAPI.get(`/scan/manual/validate-multiple/${bordereauId}`);
+    return {
+      canScanMultiple: data.canScanMultiple,
+      currentScanCount: data.currentScanCount,
+      maxScansAllowed: data.maxScansAllowed || 5,
+      isValid: data.isValid,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('Multiple scan validation failed:', error);
+    return {
+      canScanMultiple: false,
+      currentScanCount: 0,
+      maxScansAllowed: 5,
+      isValid: false,
+      message: 'Validation failed'
+    };
+  }
+};

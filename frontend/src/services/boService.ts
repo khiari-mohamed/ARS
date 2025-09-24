@@ -11,8 +11,21 @@ export interface CreateBOEntryDto {
   startTime?: number;
 }
 
-export const fetchBODashboard = async () => {
-  const response = await LocalAPI.get('/bo/dashboard');
+export const fetchBODashboard = async (filters?: {
+  clientId?: string;
+  chefEquipeId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  statut?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.clientId) params.append('clientId', filters.clientId);
+  if (filters?.chefEquipeId) params.append('chefEquipeId', filters.chefEquipeId);
+  if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
+  if (filters?.dateTo) params.append('dateTo', filters.dateTo);
+  if (filters?.statut) params.append('statut', filters.statut);
+  
+  const response = await LocalAPI.get(`/bo/dashboard?${params.toString()}`);
   return response.data;
 };
 

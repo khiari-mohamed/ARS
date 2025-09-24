@@ -219,13 +219,13 @@ export class GestionnaireActionsService {
     // Calculate type breakdown
     const typeBreakdown = {
       prestation: allBordereaux.filter(b => 
-        b.documents.some(d => d.type === 'BULLETIN_SOIN' || d.type === 'PRESTATION')
+        b.documents.some(d => d.type === 'BULLETIN_SOIN')
       ).length,
       reclamation: allBordereaux.filter(b => 
         b.documents.some(d => d.type === 'RECLAMATION')
       ).length,
       complement: allBordereaux.filter(b => 
-        b.documents.some(d => d.type === 'COMPLEMENT_DOSSIER')
+        b.documents.some(d => d.type === 'COMPLEMENT_INFORMATION')
       ).length
     };
 
@@ -608,7 +608,7 @@ export class GestionnaireActionsService {
       const document = await this.prisma.document.create({
         data: {
           name: file.originalname,
-          type: this.getDocumentType(file.originalname),
+          type: this.mapToDocumentType(this.getDocumentType(file.originalname)),
           path: filePath,
           uploadedById: gestionnaireId,
           bordereauId: bordereauId,
@@ -1463,5 +1463,19 @@ export class GestionnaireActionsService {
       results,
       message: `Bulk operation completed: ${successCount} successful, ${errorCount} failed`
     };
+  }
+
+  // NEW: Map old document types to new enum
+  private mapToDocumentType(oldType?: string): any {
+    if (!oldType) return 'BULLETIN_SOIN';
+    
+    const mapping: Record<string, string> = {
+      'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'JUSTIFICATIF': 'COMPLEMENT_INFORMATION',
+      'COURRIER': 'RECLAMATION',
+      'AUTRE': 'BULLETIN_SOIN'
+    };
+    
+    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 }

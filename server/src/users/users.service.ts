@@ -120,7 +120,12 @@ export class UsersService {
     
     if (filters?.role) where.role = filters.role;
     if (filters?.department) where.department = { contains: filters.department, mode: 'insensitive' };
-    if (filters?.active !== undefined) where.active = filters.active;
+    // Default to showing only active users unless explicitly requested otherwise
+    if (filters?.active !== undefined) {
+      where.active = filters.active;
+    } else {
+      where.active = true;
+    }
     if (filters?.search) {
       where.OR = [
         { fullName: { contains: filters.search, mode: 'insensitive' } },

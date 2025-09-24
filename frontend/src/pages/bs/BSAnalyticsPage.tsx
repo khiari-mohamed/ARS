@@ -222,7 +222,8 @@ const BSAnalyticsPage: React.FC = () => {
           </Row>
         </TabPane>
 
-        <TabPane tab="Performance équipe" key="team">
+        {/* COMMENTED OUT: Performance équipe tab */}
+        {/* <TabPane tab="Performance équipe" key="team">
           <Row gutter={[8, 8]}>
             <Col span={24}>
               <Card title="Performance par gestionnaire" loading={teamLoading} size="small">
@@ -257,9 +258,10 @@ const BSAnalyticsPage: React.FC = () => {
               </Card>
             </Col>
           </Row>
-        </TabPane>
+        </TabPane> */}
 
-        <TabPane tab="Tendances" key="trends">
+        {/* COMMENTED OUT: Tendances tab */}
+        {/* <TabPane tab="Tendances" key="trends">
           <Row gutter={[8, 8]}>
             <Col span={24}>
               <Card title="Évolution des performances" loading={trendsLoading} size="small">
@@ -278,7 +280,7 @@ const BSAnalyticsPage: React.FC = () => {
               </Card>
             </Col>
           </Row>
-        </TabPane>
+        </TabPane> */}
       </Tabs>
     </div>
   );

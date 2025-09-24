@@ -286,7 +286,7 @@ const ClientListPage: React.FC = () => {
         {/* Client Details */}
         <div className="client-detail-panel">
           {selectedClient ? (
-            <ClientDetailView client={selectedClient} onUpdate={loadClients} />
+            <ClientDetailViewFixed client={selectedClient} onUpdate={loadClients} />
           ) : (
             <div className="no-selection">
               <div className="no-selection-content">
@@ -311,7 +311,90 @@ const ClientListPage: React.FC = () => {
   );
 };
 
-// Client Detail View Component
+// Fixed Client Detail View Component with inline styles
+const ClientDetailViewFixed: React.FC<{ client: Client; onUpdate: () => void }> = ({ client, onUpdate }) => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const { notify } = useNotification();
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Client Header */}
+      <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.name}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: client.status === 'active' ? '#10b981' : '#ef4444' }}></span>
+              <span style={{ fontSize: '0.875rem', color: '#6b7280', fontFamily: 'monospace' }}>ID: {client.id.slice(0, 8)}</span>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '24px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.bordereaux?.length || 0}</span>
+              <span style={{ display: 'block', fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>Bordereaux</span>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.reclamations?.length || 0}</span>
+              <span style={{ display: 'block', fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>Réclamations</span>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.contracts?.length || 0}</span>
+              <span style={{ display: 'block', fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>Contrats</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fixed Tabs */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', backgroundColor: '#f8fafc', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+          {[
+            { id: 'overview', label: '📋 Aperçu' },
+            { id: 'contracts', label: '📑 Contrats' },
+            { id: 'sla', label: '⏱️ Paramètres SLA' },
+            { id: 'bordereaux', label: '📄 Bordereaux' },
+            { id: 'reclamations', label: '📞 Réclamations' },
+            { id: 'analytics', label: '📊 Analytics' },
+            { id: 'history', label: '📚 Historique' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '8px 16px',
+                border: activeTab === tab.id ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                background: activeTab === tab.id ? '#eff6ff' : '#ffffff',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: activeTab === tab.id ? '#1e40af' : '#374151',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+        {activeTab === 'overview' && <ClientOverviewTab client={client} />}
+        {activeTab === 'contracts' && <ClientContractsTab client={client} />}
+        {activeTab === 'sla' && <ClientSLATab client={client} onUpdate={onUpdate} />}
+        {activeTab === 'bordereaux' && <ClientBordereauxTab client={client} />}
+        {activeTab === 'reclamations' && <ClientReclamationsTab client={client} />}
+        {activeTab === 'analytics' && <ClientAnalyticsTab client={client} />}
+        {activeTab === 'history' && <ClientHistoryTab client={client} />}
+      </div>
+    </div>
+  );
+};
+
+// Original Client Detail View Component
 const ClientDetailView: React.FC<{ client: Client; onUpdate: () => void }> = ({ client, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const { notify } = useNotification();
@@ -384,6 +467,102 @@ const ClientDetailView: React.FC<{ client: Client; onUpdate: () => void }> = ({ 
 };
 
 // Tab Components (simplified for now - will be implemented separately)
+// Payment Stats Component
+const PaymentStatsCard: React.FC<{ client: Client }> = ({ client }) => {
+  const [paymentStats, setPaymentStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPaymentStats = async () => {
+      try {
+        const metrics = await fetchClientPerformanceMetrics(client.id);
+        setPaymentStats(metrics);
+      } catch (error) {
+        console.error('Error loading payment stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPaymentStats();
+  }, [client.id]);
+
+  if (loading) {
+    return (
+      <div className="info-card">
+        <h4>📊 Statistiques de Paiement</h4>
+        <p>Chargement...</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {paymentStats?.paymentStats && (
+        <div className="info-card">
+          <h4>📊 Statistiques de Paiement (Module Finance)</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginTop: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#f0f9ff', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#10b981' }}>
+                {paymentStats.paymentStats.paidOnTime}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Payés dans les délais</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#fef2f2', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ef4444' }}>
+                {paymentStats.paymentStats.paidLate}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Payés en retard</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#f9fafb', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>
+                {paymentStats.paymentStats.totalPaid}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Total sinistres payés</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#eff6ff', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                {paymentStats.paymentStats.onTimeRate.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Taux de ponctualité</div>
+            </div>
+          </div>
+        </div>
+      )}
+      {paymentStats?.reclamationTimingStats && (
+        <div className="info-card">
+          <h4>📞 Statistiques de Réclamations</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginTop: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#f0f9ff', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#10b981' }}>
+                {paymentStats.reclamationTimingStats.handledOnTime}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Traitées dans les délais</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#fef2f2', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ef4444' }}>
+                {paymentStats.reclamationTimingStats.handledLate}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Traitées en retard</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#f9fafb', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>
+                {paymentStats.reclamationTimingStats.totalHandled}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Total réclamations traitées</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '8px', background: '#eff6ff', borderRadius: '6px' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                {paymentStats.reclamationTimingStats.onTimeRate.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Taux de ponctualité</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const ClientOverviewTab: React.FC<{ client: Client }> = ({ client }) => {
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -447,6 +626,7 @@ const ClientOverviewTab: React.FC<{ client: Client }> = ({ client }) => {
           <p><strong>Contrats:</strong> {client.contracts?.length || 0}</p>
           <p><strong>Réclamations:</strong> {client.reclamations?.length || 0}</p>
         </div>
+        <PaymentStatsCard client={client} />
       </div>
     </div>
   );
@@ -1161,6 +1341,56 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
                 <span className="metric-label">SLA Moyen (jours)</span>
               </div>
             </div>
+            
+            {/* Payment Timing Stats */}
+            {performanceMetrics.paymentStats && (
+              <div className="payment-stats">
+                <h5>📊 Statistiques de Paiement (Module Finance)</h5>
+                <div className="stats-row">
+                  <div className="stat-box">
+                    <span className="stat-number" style={{ color: '#10b981' }}>{performanceMetrics.paymentStats.paidOnTime}</span>
+                    <span className="stat-text">Payés dans les délais</span>
+                  </div>
+                  <div className="stat-box">
+                    <span className="stat-number" style={{ color: '#ef4444' }}>{performanceMetrics.paymentStats.paidLate}</span>
+                    <span className="stat-text">Payés en retard</span>
+                  </div>
+                  <div className="stat-box">
+                    <span className="stat-number">{performanceMetrics.paymentStats.totalPaid}</span>
+                    <span className="stat-text">Total sinistres payés</span>
+                  </div>
+                  <div className="stat-box">
+                    <span className="stat-number" style={{ color: '#3b82f6' }}>{performanceMetrics.paymentStats.onTimeRate.toFixed(1)}%</span>
+                    <span className="stat-text">Taux de ponctualité</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Reclamation Timing Stats */}
+            {performanceMetrics.reclamationTimingStats && (
+              <div className="reclamation-timing-stats">
+                <h5>📞 Statistiques de Réclamations</h5>
+                <div className="stats-row">
+                  <div className="stat-box">
+                    <span className="stat-number" style={{ color: '#10b981' }}>{performanceMetrics.reclamationTimingStats.handledOnTime}</span>
+                    <span className="stat-text">Traitées dans les délais</span>
+                  </div>
+                  <div className="stat-box">
+                    <span className="stat-number" style={{ color: '#ef4444' }}>{performanceMetrics.reclamationTimingStats.handledLate}</span>
+                    <span className="stat-text">Traitées en retard</span>
+                  </div>
+                  <div className="stat-box">
+                    <span className="stat-number">{performanceMetrics.reclamationTimingStats.totalHandled}</span>
+                    <span className="stat-text">Total réclamations traitées</span>
+                  </div>
+                  <div className="stat-box">
+                    <span className="stat-number" style={{ color: '#3b82f6' }}>{performanceMetrics.reclamationTimingStats.onTimeRate.toFixed(1)}%</span>
+                    <span className="stat-text">Taux de ponctualité</span>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Status Breakdown Charts */}
             <div className="status-charts">
