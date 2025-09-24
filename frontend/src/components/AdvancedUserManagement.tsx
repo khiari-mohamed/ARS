@@ -74,6 +74,9 @@ const AdvancedUserManagement: React.FC = () => {
   const [bulkOperation, setBulkOperation] = useState<'create' | 'update' | 'delete'>('create');
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   const [newUserData, setNewUserData] = useState({
     fullName: '',
     email: '',
@@ -87,9 +90,9 @@ const AdvancedUserManagement: React.FC = () => {
   const loadData = async () => {
     try {
       const [usersData, templatesData, departmentsData] = await Promise.all([
-        fetchAllUsers(),
+        LocalAPI.get('/users').then((res: any) => res.data),
         getRoleTemplates(),
-LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() => [])
+        LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() => [])
       ]);
       setUsers(usersData);
       setRoleTemplates(templatesData);
@@ -144,6 +147,57 @@ LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() =
       setSelectedTemplate('');
     } catch (error) {
       console.error('Failed to create user from template:', error);
+    }
+  };
+
+  const handleEditUser = (user: any) => {
+    setSelectedUser(user);
+    setNewUserData({
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone || ''
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateUser = async () => {
+    try {
+      const updateData = {
+        fullName: newUserData.fullName,
+        email: newUserData.email
+      };
+      await LocalAPI.put(`/users/${selectedUser.id}`, updateData);
+      await loadData();
+      setEditDialogOpen(false);
+      setSelectedUser(null);
+      setNewUserData({ fullName: '', email: '', phone: '' });
+    } catch (error) {
+      console.error('Failed to update user:', error);
+    }
+  };
+
+  const handleDeleteUser = (user: any) => {
+    setSelectedUser(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    try {
+      console.log('Deleting user:', selectedUser.id);
+      const response = await LocalAPI.delete(`/users/${selectedUser.id}`);
+      console.log('Delete response:', response);
+      
+      // Force immediate UI update
+      setUsers(prev => prev.filter(user => user.id !== selectedUser.id));
+      setDeleteDialogOpen(false);
+      setSelectedUser(null);
+      
+      // Also reload data
+      setTimeout(() => loadData(), 100);
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      console.error('Error response:', error.response);
+      alert(`Delete failed: ${error.response?.data?.message || error.message}`);
     }
   };
 
@@ -277,7 +331,7 @@ LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() =
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={activeTab} onChange={handleTabChange} aria-label="user management tabs">
             <Tab label="Liste des Utilisateurs" />
-            <Tab label="Modèles de Rôles" />
+            {/* <Tab label="Modèles de Rôles" /> */}
           </Tabs>
         </Box>
 
@@ -380,10 +434,19 @@ LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() =
                     </TableCell>
                     <TableCell>
                       <Box display="flex" gap={1}>
-                        <IconButton size="small">
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleEditUser(user)}
+                          title="Modifier l'utilisateur"
+                        >
                           <Edit />
                         </IconButton>
-                        <IconButton size="small" color="error">
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteUser(user)}
+                          title="Supprimer l'utilisateur"
+                        >
                           <Delete />
                         </IconButton>
                       </Box>
@@ -395,8 +458,7 @@ LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() =
           </TableContainer>
         </TabPanel>
 
-        <TabPanel value={activeTab} index={1}>
-          {/* Role Templates */}
+        {/* <TabPanel value={activeTab} index={1}>
           <Grid container spacing={3}>
             {roleTemplates.map((template) => (
               <Grid item xs={12} sm={6} md={4} key={template.id}>
@@ -433,7 +495,7 @@ LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() =
               </Grid>
             ))}
           </Grid>
-        </TabPanel>
+        </TabPanel> */}
       </Paper>
 
       {/* Bulk Operations Dialog */}
@@ -532,6 +594,63 @@ LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() =
             disabled={!selectedTemplate || !newUserData.fullName || !newUserData.email}
           >
             Créer Utilisateur
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Modifier Utilisateur</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Nom complet"
+                value={newUserData.fullName}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, fullName: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Email"
+                type="email"
+                value={newUserData.email}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, email: e.target.value }))}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)}>Annuler</Button>
+          <Button 
+            onClick={handleUpdateUser} 
+            variant="contained"
+            disabled={!newUserData.fullName || !newUserData.email}
+          >
+            Mettre à jour
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete User Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Supprimer Utilisateur</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning">
+            Êtes-vous sûr de vouloir supprimer l'utilisateur <strong>{selectedUser?.fullName}</strong> ?
+            Cette action est irréversible.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Annuler</Button>
+          <Button 
+            onClick={confirmDeleteUser} 
+            variant="contained"
+            color="error"
+          >
+            Supprimer
           </Button>
         </DialogActions>
       </Dialog>

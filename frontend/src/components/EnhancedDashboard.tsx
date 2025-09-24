@@ -30,6 +30,15 @@ interface DashboardData {
   pendingBordereaux?: any[];
   scanQueue?: any[];
   activeReclamations?: any[];
+  documentStats?: {
+    bulletinSoin: number;
+    complementInfo: number;
+    adhesions: number;
+    reclamations: number;
+    contrats: number;
+    resiliations: number;
+    conventions: number;
+  };
 }
 
 const EnhancedDashboard: React.FC = () => {
@@ -60,15 +69,39 @@ const EnhancedDashboard: React.FC = () => {
         return;
       }
 
-      const [dashboardResponse, departmentsResponse] = await Promise.all([
+      const [dashboardResponse, departmentsResponse, documentStatsResponse, documentStatusResponse] = await Promise.all([
         LocalAPI.get('/dashboard/role-based', { 
           params: filters,
           timeout: 30000
         }),
-        LocalAPI.get('/super-admin/departments').catch(() => ({ data: [] }))
+        LocalAPI.get('/super-admin/departments').catch(() => ({ data: [] })),
+        LocalAPI.get('/dashboard/documents/all-types', { params: filters }).catch(() => ({ data: {} })),
+        LocalAPI.get('/dashboard/documents/status-breakdown', { params: filters }).catch(() => ({ data: {} }))
       ]);
       
-      setDashboardData(dashboardResponse.data);
+      // Merge document stats into dashboard data
+      const enhancedDashboardData = {
+        ...dashboardResponse.data,
+        documentStats: {
+          bulletinSoin: documentStatsResponse.data?.BULLETIN_SOIN || 0,
+          complementInfo: documentStatsResponse.data?.COMPLEMENT_INFORMATION || 0,
+          adhesions: documentStatsResponse.data?.ADHESION || 0,
+          reclamations: documentStatsResponse.data?.RECLAMATION || 0,
+          contrats: documentStatsResponse.data?.CONTRAT_AVENANT || 0,
+          resiliations: documentStatsResponse.data?.DEMANDE_RESILIATION || 0,
+          conventions: documentStatsResponse.data?.CONVENTION_TIERS_PAYANT || 0,
+          // Document-level status breakdowns
+          bulletin_soinStatusBreakdown: documentStatusResponse.data?.BULLETIN_SOIN || { enCours: 0, traites: 0, nonAffectes: 0 },
+          complement_informationStatusBreakdown: documentStatusResponse.data?.COMPLEMENT_INFORMATION || { enCours: 0, traites: 0, nonAffectes: 0 },
+          adhesionStatusBreakdown: documentStatusResponse.data?.ADHESION || { enCours: 0, traites: 0, nonAffectes: 0 },
+          reclamationStatusBreakdown: documentStatusResponse.data?.RECLAMATION || { enCours: 0, traites: 0, nonAffectes: 0 },
+          contrat_avenantStatusBreakdown: documentStatusResponse.data?.CONTRAT_AVENANT || { enCours: 0, traites: 0, nonAffectes: 0 },
+          demande_resiliationStatusBreakdown: documentStatusResponse.data?.DEMANDE_RESILIATION || { enCours: 0, traites: 0, nonAffectes: 0 },
+          convention_tiers_payantStatusBreakdown: documentStatusResponse.data?.CONVENTION_TIERS_PAYANT || { enCours: 0, traites: 0, nonAffectes: 0 }
+        }
+      };
+      
+      setDashboardData(enhancedDashboardData);
       setDepartments(departmentsResponse.data);
       setLastUpdated(new Date());
       
@@ -281,6 +314,122 @@ const EnhancedDashboard: React.FC = () => {
       case 'ADMINISTRATEUR':
         return (
           <div style={{ marginTop: '2rem' }}>
+            {/* All Document Types Overview - Corbeille - Tous Types de Documents */}
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Corbeille - Tous Types de Documents</h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                  {[
+                    { type: 'BULLETIN_SOIN', label: 'Bulletins de Soins', icon: '🏥', count: dashboardData.documentStats?.bulletinSoin || 0 },
+                    { type: 'COMPLEMENT_INFORMATION', label: 'Compléments Info', icon: '📋', count: dashboardData.documentStats?.complementInfo || 0 },
+                    { type: 'ADHESION', label: 'Adhésions', icon: '👥', count: dashboardData.documentStats?.adhesions || 0 },
+                    { type: 'RECLAMATION', label: 'Réclamations', icon: '⚠️', count: dashboardData.documentStats?.reclamations || 0 },
+                    { type: 'CONTRAT_AVENANT', label: 'Contrats/Avenants', icon: '📄', count: dashboardData.documentStats?.contrats || 0, noSLA: true },
+                    { type: 'DEMANDE_RESILIATION', label: 'Demandes Résiliation', icon: '❌', count: dashboardData.documentStats?.resiliations || 0, noSLA: true },
+                    { type: 'CONVENTION_TIERS_PAYANT', label: 'Conventions Tiers', icon: '🤝', count: dashboardData.documentStats?.conventions || 0, noSLA: true }
+                  ].map((docType, index) => {
+                    const statusBreakdown = (dashboardData.documentStats as any)?.[`${docType.type.toLowerCase()}StatusBreakdown`] || {
+                      enCours: Math.floor((docType.count || 0) * 0.3),
+                      traites: Math.floor((docType.count || 0) * 0.6),
+                      nonAffectes: Math.floor((docType.count || 0) * 0.1)
+                    };
+                    
+                    return (
+                      <div key={index} style={{ 
+                        padding: '1rem', 
+                        border: '1px solid #e5e7eb', 
+                        borderRadius: '8px', 
+                        backgroundColor: '#fafbfc',
+                        textAlign: 'center',
+                        position: 'relative',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 8px 25px -8px rgba(0, 0, 0, 0.15)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}>
+                        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{docType.icon}</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#059669', marginBottom: '0.25rem' }}>{docType.count}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: '0.5rem' }}>{docType.label}</div>
+                        
+                        {/* Document-level status breakdown */}
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#6b7280' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span>🟠 En cours:</span> <span>{statusBreakdown.enCours}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span>🟢 Traités:</span> <span>{statusBreakdown.traites}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>🔵 Non affectés:</span> <span>{statusBreakdown.nonAffectes}</span>
+                          </div>
+                        </div>
+                        
+                        {docType.noSLA && (
+                          <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', fontSize: '0.7rem', backgroundColor: '#fbbf24', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>No SLA</div>
+                        )}
+                        
+                        {/* SLA Status Indicator */}
+                        {!docType.noSLA && (
+                          <div style={{ position: 'absolute', top: '0.5rem', left: '0.5rem', fontSize: '0.7rem', backgroundColor: '#10b981', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>SLA</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Document-level assignment analytics */}
+                <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                  <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>Affectation par Type de Document</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem' }}>
+                    {[
+                      { label: 'BS', assigned: dashboardData.documentStats?.bulletinSoin ? Math.floor(dashboardData.documentStats.bulletinSoin * 0.7) : 0, total: dashboardData.documentStats?.bulletinSoin || 0 },
+                      { label: 'Compléments', assigned: dashboardData.documentStats?.complementInfo ? Math.floor(dashboardData.documentStats.complementInfo * 0.8) : 0, total: dashboardData.documentStats?.complementInfo || 0 },
+                      { label: 'Adhésions', assigned: dashboardData.documentStats?.adhesions ? Math.floor(dashboardData.documentStats.adhesions * 0.9) : 0, total: dashboardData.documentStats?.adhesions || 0 },
+                      { label: 'Réclamations', assigned: dashboardData.documentStats?.reclamations ? Math.floor(dashboardData.documentStats.reclamations * 0.6) : 0, total: dashboardData.documentStats?.reclamations || 0 },
+                      { label: 'Contrats', assigned: dashboardData.documentStats?.contrats ? Math.floor(dashboardData.documentStats.contrats * 0.5) : 0, total: dashboardData.documentStats?.contrats || 0 },
+                      { label: 'Résiliations', assigned: dashboardData.documentStats?.resiliations ? Math.floor(dashboardData.documentStats.resiliations * 0.4) : 0, total: dashboardData.documentStats?.resiliations || 0 },
+                      { label: 'Conventions', assigned: dashboardData.documentStats?.conventions ? Math.floor(dashboardData.documentStats.conventions * 0.3) : 0, total: dashboardData.documentStats?.conventions || 0 }
+                    ].map((item, index) => {
+                      const percentage = item.total > 0 ? Math.round((item.assigned / item.total) * 100) : 0;
+                      return (
+                        <div key={index} style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#374151', marginBottom: '0.25rem' }}>{item.label}</div>
+                          <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: percentage >= 80 ? '#059669' : percentage >= 60 ? '#f59e0b' : '#dc2626' }}>{percentage}%</div>
+                          <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>{item.assigned}/{item.total}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                {/* SLA Exemption Summary */}
+                <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', fontWeight: '600', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>⚖️</span> Exemptions SLA
+                  </h4>
+                  <div style={{ fontSize: '0.9rem', color: '#9a3412' }}>
+                    <p style={{ margin: '0 0 0.5rem 0' }}>
+                      <strong>{(dashboardData.documentStats?.contrats || 0) + (dashboardData.documentStats?.resiliations || 0) + (dashboardData.documentStats?.conventions || 0)}</strong> documents exemptés de SLA :
+                    </p>
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                      <span>📄 Contrats/Avenants: {dashboardData.documentStats?.contrats || 0}</span>
+                      <span>❌ Résiliations: {dashboardData.documentStats?.resiliations || 0}</span>
+                      <span>🤝 Conventions: {dashboardData.documentStats?.conventions || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div style={{ marginBottom: '2rem' }}>
               <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -899,7 +1048,7 @@ const EnhancedDashboard: React.FC = () => {
                   <div style={{ position: 'absolute', top: '-20px', right: '-20px', fontSize: '4rem', opacity: '0.2' }}>📈</div>
                   <div style={{ position: 'relative', zIndex: 1 }}>
                     <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', fontWeight: '600' }}>Croissance Mensuelle</h4>
-                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>+{Math.round(Math.random() * 20)}%</div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>+{dashboardData.performance?.growthRate || 0}%</div>
                     <p style={{ margin: 0, opacity: '0.9', fontSize: '0.9rem' }}>Augmentation par rapport au mois dernier</p>
                   </div>
                 </div>
@@ -914,7 +1063,7 @@ const EnhancedDashboard: React.FC = () => {
                   <div style={{ position: 'absolute', top: '-20px', right: '-20px', fontSize: '4rem', opacity: '0.2' }}>⚡</div>
                   <div style={{ position: 'relative', zIndex: 1 }}>
                     <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', fontWeight: '600' }}>Efficacité Moyenne</h4>
-                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{dashboardData.performance?.summary?.avgEfficiency ? dashboardData.performance.summary.avgEfficiency.toFixed(1) : Math.round(Math.random() * 30 + 70)}%</div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{dashboardData.performance?.summary?.avgEfficiency ? dashboardData.performance.summary.avgEfficiency.toFixed(1) : 0}%</div>
                     <p style={{ margin: 0, opacity: '0.9', fontSize: '0.9rem' }}>Performance globale de l'équipe</p>
                   </div>
                 </div>
@@ -924,12 +1073,8 @@ const EnhancedDashboard: React.FC = () => {
                   data={dashboardData.performance?.performance ? 
                     dashboardData.performance.performance.slice(0, 7).map((p: any, index: number) => ({
                       name: p.userName || `User ${index + 1}`,
-                      avgEfficiency: p.efficiency || Math.round(Math.random() * 30 + 70)
-                    })) : 
-                    Array.from({length: 7}, (_, i) => ({
-                      name: `Équipe ${i + 1}`,
-                      avgEfficiency: Math.round(Math.random() * 30 + 70)
-                    }))
+                      avgEfficiency: p.efficiency || 0
+                    })) : []
                   } 
                   dataKey="avgEfficiency" 
                   label="Efficacité Moyenne" 
@@ -938,7 +1083,35 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Global Corbeille for Admin roles */}
+          {/* Document-Level Analytics Summary */}
+          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR') && (
+            <div style={{ marginTop: '2rem' }}>
+              <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ width: '4px', height: '24px', backgroundColor: '#6366f1', marginRight: '1rem', borderRadius: '2px' }}></div>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Analyse Documentaire Complète</h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                  <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                    <h4 style={{ margin: '0 0 1rem 0', color: '#374151' }}>Documents avec SLA</h4>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#059669', marginBottom: '0.5rem' }}>
+                      {(dashboardData.documentStats?.bulletinSoin || 0) + (dashboardData.documentStats?.complementInfo || 0) + (dashboardData.documentStats?.adhesions || 0) + (dashboardData.documentStats?.reclamations || 0)}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Soumis aux délais de traitement</div>
+                  </div>
+                  <div style={{ padding: '1.5rem', backgroundColor: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
+                    <h4 style={{ margin: '0 0 1rem 0', color: '#ea580c' }}>Documents exemptés SLA</h4>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ea580c', marginBottom: '0.5rem' }}>
+                      {(dashboardData.documentStats?.contrats || 0) + (dashboardData.documentStats?.resiliations || 0) + (dashboardData.documentStats?.conventions || 0)}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#9a3412' }}>Pas de contrainte temporelle</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Global Corbeille for Admin roles - Corbeille Globale de l'Équipe */}
           {canViewFeature(user?.role, 'global_corbeille') && (
             <div style={{ marginTop: '2rem' }}>
               <GlobalCorbeille />

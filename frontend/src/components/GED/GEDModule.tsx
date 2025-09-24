@@ -25,9 +25,10 @@ const GEDModule: React.FC = () => {
     { label: 'Ingestion', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
     { label: 'Corbeille', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
     { label: 'Recherche', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
-    { label: 'Workflows', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] },
-    { label: 'Intégrations', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
-    { label: 'PaperStream', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
+    // COMMENTED OUT: Extra tabs not in core requirements
+    // { label: 'Workflows', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] },
+    // { label: 'Intégrations', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
+    // { label: 'PaperStream', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
     { label: 'Rapports', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] }
   ];
 
@@ -64,10 +65,11 @@ const GEDModule: React.FC = () => {
               {tab === 1 && <DocumentIngestionTab />}
               {tab === 2 && <CorbeilleTab />}
               {tab === 3 && <AdvancedSearchInterface />}
-              {tab === 4 && <DocumentWorkflowManager />}
-              {tab === 5 && <IntegrationManager />}
-              {tab === 6 && <PaperStreamDashboard />}
-              {tab === 7 && <ReportsTab />}
+              {/* COMMENTED OUT: Extra tabs not in core requirements */}
+              {/* {tab === 4 && <DocumentWorkflowManager />} */}
+              {/* {tab === 5 && <IntegrationManager />} */}
+              {/* {tab === 6 && <PaperStreamDashboard />} */}
+              {tab === 4 && <ReportsTab />}
             </Box>
           </Paper>
         </>
@@ -102,9 +104,10 @@ const GEDModule: React.FC = () => {
             {availableTabs[tab]?.label === 'Ingestion' && <DocumentIngestionTab />}
             {availableTabs[tab]?.label === 'Corbeille' && <CorbeilleTab />}
             {availableTabs[tab]?.label === 'Recherche' && <AdvancedSearchInterface />}
-            {availableTabs[tab]?.label === 'Workflows' && <DocumentWorkflowManager />}
-            {availableTabs[tab]?.label === 'Intégrations' && <IntegrationManager />}
-            {availableTabs[tab]?.label === 'PaperStream' && <PaperStreamDashboard />}
+            {/* COMMENTED OUT: Extra tabs not in core requirements */}
+            {/* {availableTabs[tab]?.label === 'Workflows' && <DocumentWorkflowManager />} */}
+            {/* {availableTabs[tab]?.label === 'Intégrations' && <IntegrationManager />} */}
+            {/* {availableTabs[tab]?.label === 'PaperStream' && <PaperStreamDashboard />} */}
             {availableTabs[tab]?.label === 'Rapports' && <ReportsTab />}
           </Box>
         </Paper>

@@ -156,27 +156,27 @@ export const useRoleAccess = (): RolePermissions => {
 
       case UserRole.GESTIONNAIRE:
         return {
-          // Only assigned files and personal treatment
+          // Same access as Chef d'équipe but read-only (except for assigned dossiers)
           canAccessGlobalDashboard: false,
-          canAccessTeamDashboard: false,
+          canAccessTeamDashboard: true,
           canAccessPersonalDashboard: true,
           canAccessUserManagement: false,
           canAccessFinance: false,
           canAccessAnalytics: false,
           canAccessContracts: false,
-          canAccessTuniclaim: false,
-          canViewAllBordereaux: false,
-          canViewTeamBordereaux: false,
+          canAccessTuniclaim: true,
+          canViewAllBordereaux: true, // Can see all bordereaux (read-only)
+          canViewTeamBordereaux: true,
           canViewAssignedBordereaux: true,
-          canAssignBordereaux: false,
-          canReassignBordereaux: false,
+          canAssignBordereaux: false, // Read-only: cannot assign
+          canReassignBordereaux: false, // Read-only: cannot reassign
           canCreateUsers: false,
-          canManageTeam: false,
-          canEscalateReclamations: false,
+          canManageTeam: false, // Read-only: cannot manage team
+          canEscalateReclamations: false, // Can only modify assigned reclamations
           canAccessGlobalReports: false,
-          canAccessTeamReports: false,
-          isRestrictedToTeam: false,
-          isRestrictedToAssigned: true,
+          canAccessTeamReports: true,
+          isRestrictedToTeam: true,
+          isRestrictedToAssigned: true, // Can only modify assigned dossiers
           isRestrictedToDepartment: false,
         };
 

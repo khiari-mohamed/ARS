@@ -47,6 +47,25 @@ export class UsersController {
     }
   }
 
+  @Get('gestionnaires')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE)
+  async getGestionnaires(@Request() req) {
+    try {
+      const filters = {
+        role: 'GESTIONNAIRE',
+        active: true
+      };
+      
+      const users = await this.usersService.findAll(filters);
+      
+      // Return users without password
+      return users.map(({ password, ...user }) => user);
+    } catch (error) {
+      console.error('Error fetching gestionnaires:', error);
+      return [];
+    }
+  }
+
   @Get('dashboard/stats')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
   async getDashboardStats(@Request() req) {
@@ -119,8 +138,10 @@ export class UsersController {
   @Delete(':id')
   @Roles(UserRole.SUPER_ADMIN)
   async deleteUser(@Param('id') id: string, @Request() req) {
+    console.log('DELETE USER REQUEST:', { id, currentUser: req.user });
     const currentUser = req.user;
     const user = await this.usersService.delete(id, currentUser.id);
+    console.log('USER DELETED:', { id, active: user.active });
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }

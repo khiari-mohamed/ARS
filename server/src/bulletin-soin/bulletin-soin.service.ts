@@ -223,7 +223,7 @@ export class BulletinSoinService {
   async create(dto: CreateBulletinSoinDto) {
     let ownerId: string | undefined = dto.ownerId ? String(dto.ownerId) : undefined;
     if (!ownerId) {
-      const gestionnaires = await this.prisma.user.findMany({ where: { role: 'gestionnaire' } });
+      const gestionnaires = await this.prisma.user.findMany({ where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true } });
       let minCount = Number.POSITIVE_INFINITY;
       let selected: string | undefined = undefined;
       for (const g of gestionnaires) {
@@ -293,18 +293,19 @@ export class BulletinSoinService {
   // GET GESTIONNAIRES: Get list of gestionnaires for assignment
   async getGestionnaires() {
     try {
-      return await this.prisma.user.findMany({
-        where: { role: 'gestionnaire' },
-        select: { id: true, fullName: true, email: true }
+      console.log('🔍 Querying users with GESTIONNAIRE role...');
+      const users = await this.prisma.user.findMany({
+        where: { 
+          role: { in: ['GESTIONNAIRE', 'gestionnaire'] },
+          active: true
+        },
+        select: { id: true, fullName: true, email: true, role: true }
       });
+      console.log('✅ Found users:', users);
+      return users;
     } catch (error) {
-      console.error('Database error for gestionnaires, using fallback:', error);
-      return [
-        { id: '1', fullName: 'Gestionnaire 1', email: 'gest1@ars.com' },
-        { id: '2', fullName: 'Gestionnaire 2', email: 'gest2@ars.com' },
-        { id: '3', fullName: 'Gestionnaire 3', email: 'gest3@ars.com' },
-        { id: '4', fullName: 'Gestionnaire 4', email: 'gest4@ars.com' }
-      ];
+      console.error('❌ Database error for gestionnaires:', error);
+      throw error;
     }
   }
 
@@ -346,7 +347,7 @@ export class BulletinSoinService {
   async getTeamWorkloadStats() {
     try {
       const gestionnaires = await this.prisma.user.findMany({ 
-        where: { role: 'gestionnaire' },
+        where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true },
         select: { id: true, fullName: true }
       });
 
@@ -607,7 +608,7 @@ export class BulletinSoinService {
   async suggestAssignment() {
     try {
       const gestionnaires = await this.prisma.user.findMany({ 
-        where: { role: { in: ['gestionnaire', 'GESTIONNAIRE'] } },
+        where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true },
         select: { id: true, fullName: true }
       });
       
@@ -755,7 +756,7 @@ export class BulletinSoinService {
   // Notification methods
   async notifySlaAlerts() {
     const { overdue, approaching } = await this.getSlaAlerts();
-    const gestionnaires = await this.prisma.user.findMany({ where: { role: 'gestionnaire' } });
+    const gestionnaires = await this.prisma.user.findMany({ where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true } });
     for (const g of gestionnaires) {
       const myOverdue = overdue.filter((bs: any) => bs.ownerId === g.id);
       const myApproaching = approaching.filter((bs: any) => bs.ownerId === g.id);

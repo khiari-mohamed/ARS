@@ -15,7 +15,8 @@ import FinanceMobileView from './FinanceMobileView';
 import FinanceTestPanel from './FinanceTestPanel';
 import FinanceAlertsTab from './FinanceAlertsTab';
 import FinanceDashboard from './FinanceDashboard';
-import FinanceModuleOverview from './FinanceModuleOverview';
+// COMMENTED OUT: Static demo tab import - Use functional tabs instead
+// import FinanceModuleOverview from './FinanceModuleOverview';
 import VirementTable from './VirementTable';
 import VirementFilters from './VirementFilters';
 import VirementFormModal from './VirementFormModal';
@@ -53,7 +54,8 @@ const FinanceModule: React.FC = () => {
   const alertsCount = Array.isArray(alerts) ? alerts.filter((a: any) => a.type === 'FINANCE_NOTIFICATION').length : 0;
 
   const tabLabels = [
-    'Vue d\'Ensemble',
+    // COMMENTED OUT: Static demo tab - Use functional tabs instead
+    // 'Vue d\'Ensemble',
     'Tableau de Bord',
     'Ordre de Virement', 
     'Suivi & Statut',
@@ -108,22 +110,23 @@ const FinanceModule: React.FC = () => {
               {tabLabels[tab]}
             </Typography>
             <Box>
-              {tab === 0 && <FinanceModuleOverview />}
-              {tab === 1 && <FinanceDashboard />}
-              {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
-              {tab === 3 && <TrackingTab />}
-              {tab === 4 && <SuiviVirementTab />}
-              {tab === 5 && <DonneursTab />}
-              {tab === 6 && <AdherentsTab />}
-              {tab === 7 && (
+              {/* COMMENTED OUT: Static demo tab - Use functional tabs instead */}
+              {/* {tab === 0 && <FinanceModuleOverview />} */}
+              {tab === 0 && <FinanceDashboard />}
+              {tab === 1 && <OVProcessingTab onSwitchToTab={setTab} />}
+              {tab === 2 && <TrackingTab />}
+              {tab === 3 && <SuiviVirementTab />}
+              {tab === 4 && <DonneursTab />}
+              {tab === 5 && <AdherentsTab />}
+              {tab === 6 && (
                 <Badge badgeContent={alertsCount} color="error">
                   <FinanceAlertsTab />
                 </Badge>
               )}
-              {tab === 8 && <MultiBankFormatManager />}
-              {tab === 9 && <AutomatedReconciliation />}
-              {tab === 10 && <FinancialReportingDashboard />}
-              {tab === 11 && <ReportsTab />}
+              {tab === 7 && <MultiBankFormatManager />}
+              {tab === 8 && <AutomatedReconciliation />}
+              {tab === 9 && <FinancialReportingDashboard />}
+              {tab === 10 && <ReportsTab />}
             </Box>
           </Paper>
         </>
@@ -154,18 +157,19 @@ const FinanceModule: React.FC = () => {
           </Tabs>
 
           <Box>
-            {tab === 0 && <FinanceModuleOverview />}
-            {tab === 1 && <FinanceDashboard />}
-            {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
-            {tab === 3 && <TrackingTab />}
-            {tab === 4 && <SuiviVirementTab />}
-            {tab === 5 && <DonneursTab />}
-            {tab === 6 && <AdherentsTab />}
-            {tab === 7 && <FinanceAlertsTab />}
-            {tab === 8 && <MultiBankFormatManager />}
-            {tab === 9 && <AutomatedReconciliation />}
-            {tab === 10 && <FinancialReportingDashboard />}
-            {tab === 11 && <ReportsTab />}
+            {/* COMMENTED OUT: Static demo tab - Use functional tabs instead */}
+            {/* {tab === 0 && <FinanceModuleOverview />} */}
+            {tab === 0 && <FinanceDashboard />}
+            {tab === 1 && <OVProcessingTab onSwitchToTab={setTab} />}
+            {tab === 2 && <TrackingTab />}
+            {tab === 3 && <SuiviVirementTab />}
+            {tab === 4 && <DonneursTab />}
+            {tab === 5 && <AdherentsTab />}
+            {tab === 6 && <FinanceAlertsTab />}
+            {tab === 7 && <MultiBankFormatManager />}
+            {tab === 8 && <AutomatedReconciliation />}
+            {tab === 9 && <FinancialReportingDashboard />}
+            {tab === 10 && <ReportsTab />}
           </Box>
         </Paper>
       )}

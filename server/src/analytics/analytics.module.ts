@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsController } from './analytics.controller';
+import { DocumentTypesController } from './document-types.controller';
+import { DocumentTypesService } from './document-types.service';
 import { RealTimeAnalyticsService } from './real-time-analytics.service';
 import { SLAAnalyticsService } from './sla-analytics.service';
 import { OVAnalyticsService } from './ov-analytics.service';
@@ -15,9 +17,10 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
   imports: [EventEmitterModule.forRoot()],
-  controllers: [AnalyticsController, AdvancedFilteringController, ScheduledReportsController, ReportsController],
+  controllers: [AnalyticsController, DocumentTypesController, AdvancedFilteringController, ScheduledReportsController, ReportsController],
   providers: [
     AnalyticsService, 
+    DocumentTypesService,
     RealTimeAnalyticsService,
     SLAAnalyticsService,
     OVAnalyticsService,
@@ -26,6 +29,6 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     ReportsService,
     PrismaService
   ],
-  exports: [AnalyticsService],
+  exports: [AnalyticsService, DocumentTypesService],
 })
 export class AnalyticsModule {}

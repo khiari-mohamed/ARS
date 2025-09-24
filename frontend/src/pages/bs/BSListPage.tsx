@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Input, Button, DatePicker, Select, Space, Badge, Row, Col } from 'antd';
-import BSList from '../../components/BS/BSList';
+import DossiersList from '../../components/BS/DossiersList';
 import { useSlaAlerts, useNotifications } from '../../hooks/useBS';
 import { NotificationCenter } from '../../components/BS/NotificationCenter';
 import { PrioritiesDashboard } from '../../components/BS/PrioritiesDashboard';
@@ -26,7 +26,10 @@ const BSListPage: React.FC = () => {
     import('../../services/axios').then(({ LocalAPI }) => {
       LocalAPI.get('/bulletin-soin/gestionnaires')
         .then(res => setManagers(res.data || []))
-        .catch(() => setManagers([]));
+        .catch((error) => {
+          console.error('Error loading managers:', error);
+          setManagers([]);
+        });
     });
   }, []);
 
@@ -60,11 +63,14 @@ const BSListPage: React.FC = () => {
           value={filters.etat}
           onChange={etat => handleFiltersChange({ etat })}
           options={[
-            { value: 'IN_PROGRESS', label: 'En cours' },
-            { value: 'EN_COURS', label: 'En cours' },
-            { value: 'VALIDATED', label: 'Validé' },
-            { value: 'REJECTED', label: 'Rejeté' },
-            { value: 'CLOTURE', label: 'Clôturé' },
+            { value: 'A_SCANNER', label: 'À scanner' },
+            { value: 'SCAN_EN_COURS', label: 'En cours de scan' },
+            { value: 'SCANNE', label: 'Scanné' },
+            { value: 'A_AFFECTER', label: 'À affecter' },
+            { value: 'ASSIGNE', label: 'Assigné' },
+            { value: 'EN_COURS', label: 'En cours de traitement' },
+            { value: 'TRAITE', label: 'Traité' },
+            { value: 'CLOTURE', label: 'Clôturé' }
           ]}
         />
         <Input
@@ -113,8 +119,8 @@ const BSListPage: React.FC = () => {
         </Col>
       </Row>
 
-      {/* BS List Table */}
-      <BSList params={filters} onParamsChange={setFilters} />
+      {/* Dossiers List Table - REPLACED BS List as per company requirements */}
+      <DossiersList params={filters} onParamsChange={setFilters} />
 
       {/* Notifications */}
       {notifications && notifications.length > 0 && (

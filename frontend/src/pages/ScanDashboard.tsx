@@ -43,6 +43,8 @@ import OCRCorrectionInterface from '../components/OCRCorrectionInterface';
 import FolderMonitor from '../components/FolderMonitor';
 import { ScanCorbeille } from '../components/Workflow/ScanCorbeille';
 import ManualScanInterface from '../components/Workflow/ManualScanInterface';
+import DirectManualScanInterface from '../components/DirectManualScanInterface';
+import DocumentTypeModal from '../components/DocumentTypeModal';
 import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
 import { getBordereauForManualScan, uploadManualDocuments, finalizeScanProcess } from '../services/manualScanService';
 
@@ -61,6 +63,8 @@ const ScanDashboard: React.FC = () => {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [autoAssigning, setAutoAssigning] = useState<string | null>(null);
+  const [documentStats, setDocumentStats] = useState<any>(null);
+  const [selectedDocumentType, setSelectedDocumentType] = useState<{type: string, label: string, icon: string} | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -70,7 +74,7 @@ const ScanDashboard: React.FC = () => {
 
   const loadDashboard = async () => {
     try {
-      const [statusData, activityData, queueData, overloadData, chartData, manualScanData, allBordereaux] = await Promise.all([
+      const [statusData, activityData, queueData, overloadData, chartData, manualScanData, allBordereaux, docStatsData] = await Promise.all([
         fetchScanStatus(),
         fetchScanActivity(),
         getScanQueue(),
@@ -80,6 +84,22 @@ const ScanDashboard: React.FC = () => {
         // Get all bordereaux for progression cards
         import('../services/axios').then(({ LocalAPI }) => 
           LocalAPI.get('/bordereaux').then(res => res.data)
+        ),
+        // Get document statistics with status breakdown
+        import('../services/axios').then(({ LocalAPI }) => 
+          LocalAPI.get('/analytics/documents/status-by-type').then(res => {
+            const statusData = res.data as Record<string, Record<string, number>>;
+            const allTypesData: Record<string, number> = {};
+            const statusBreakdown: Record<string, Record<string, number>> = {};
+            
+            Object.keys(statusData).forEach(type => {
+              const typeData = statusData[type];
+              allTypesData[type] = Object.values(typeData).reduce((sum: number, count: number) => sum + count, 0);
+              statusBreakdown[type] = typeData;
+            });
+            
+            return { ...allTypesData, statusBreakdown };
+          }).catch(() => ({ statusBreakdown: {} }))
         )
       ]);
       setScanStatus(statusData);
@@ -88,6 +108,7 @@ const ScanDashboard: React.FC = () => {
       setOverloadStatus(overloadData);
       setChartData(chartData);
       setManualScanBordereaux(manualScanData);
+      setDocumentStats(docStatsData);
     } catch (error) {
       console.error('Failed to load scan dashboard:', error);
     } finally {
@@ -247,7 +268,7 @@ const ScanDashboard: React.FC = () => {
             width={{ xs: '100%', sm: 'auto' }}
             sx={{ flexWrap: { sm: 'wrap', md: 'nowrap' } }}
           >
-            <Button
+            {/* <Button
               variant="contained"
               startIcon={<Settings />}
               onClick={handleInitializeScanner}
@@ -259,7 +280,7 @@ const ScanDashboard: React.FC = () => {
               }}
             >
               {initializingScanner ? 'Init...' : 'Initialiser'}
-            </Button>
+            </Button> */}
             <Button
               variant="outlined"
               startIcon={<Scanner />}
@@ -333,7 +354,7 @@ const ScanDashboard: React.FC = () => {
             >
               📄 Scan Manuel
             </Button>
-            <Button
+            {/* <Button
               variant="outlined"
               color="secondary"
               onClick={async () => {
@@ -352,7 +373,7 @@ const ScanDashboard: React.FC = () => {
               }}
             >
               🔍 Debug
-            </Button>
+            </Button> */}
           </Box>
         </Box>
       </Box>
@@ -376,10 +397,10 @@ const ScanDashboard: React.FC = () => {
         </Alert>
       )}
 
-      {/* NEW ENHANCED SCAN CORBEILLE COMPONENT */}
-      <Box sx={{ mb: 4 }}>
+      {/* COMMENTED OUT: Redundant scan corbeille - Use main File d'Attente SCAN table instead */}
+      {/* <Box sx={{ mb: 4 }}>
         <ScanCorbeille />
-      </Box>
+      </Box> */}
 
       {/* NEW BORDEREAU PROGRESS MANAGEMENT SECTION */}
       <Box sx={{ mb: 4 }}>
@@ -442,6 +463,130 @@ const ScanDashboard: React.FC = () => {
                 </CardContent>
               </Card>
             </Grid>
+          </Grid>
+        </Paper>
+      </Box>
+
+      {/* NEW DOCUMENT TYPES STATISTICS SECTION */}
+      <Box sx={{ mb: 4 }}>
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            📋 Statistiques par Type de Document
+            <Chip label="NOUVEAU" color="secondary" size="small" />
+          </Typography>
+          
+          <Grid container spacing={2}>
+            {[
+              { type: 'BULLETIN_SOIN', label: 'Bulletins de Soins', icon: '🏥', color: '#10b981' },
+              { type: 'COMPLEMENT_INFORMATION', label: 'Compléments Info', icon: '📋', color: '#3b82f6' },
+              { type: 'ADHESION', label: 'Adhésions', icon: '👥', color: '#8b5cf6' },
+              { type: 'RECLAMATION', label: 'Réclamations', icon: '⚠️', color: '#f59e0b' },
+              { type: 'CONTRAT_AVENANT', label: 'Contrats/Avenants', icon: '📄', color: '#6b7280' },
+              { type: 'DEMANDE_RESILIATION', label: 'Demandes Résiliation', icon: '❌', color: '#ef4444' },
+              { type: 'CONVENTION_TIERS_PAYANT', label: 'Conventions Tiers', icon: '🤝', color: '#06b6d4' }
+            ].map((docType, index) => {
+              const count = documentStats?.[docType.type] || 0;
+              const statusData = documentStats?.statusBreakdown?.[docType.type] || {};
+              const uploaded = statusData.UPLOADED || 0;
+              const enCours = statusData.EN_COURS || 0;
+              const traite = statusData.TRAITE || 0;
+              const progression = count > 0 ? Math.round(((enCours + traite) / count) * 100) : 0;
+              
+              return (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
+                  <Card sx={{ 
+                    border: '1px solid #e5e7eb', 
+                    borderRadius: '12px',
+                    transition: 'all 0.2s ease',
+                    minHeight: '220px',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 8px 25px -8px rgba(0, 0, 0, 0.15)'
+                    }
+                  }}>
+                    <CardContent sx={{ py: 2, px: 2 }}>
+                      {/* Header */}
+                      <Box textAlign="center" mb={2}>
+                        <Typography sx={{ fontSize: '2rem', mb: 1 }}>{docType.icon}</Typography>
+                        <Typography variant="h4" fontWeight="bold" sx={{ color: docType.color, mb: 0.5 }}>
+                          {count}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                          {docType.label}
+                        </Typography>
+                      </Box>
+                      
+                      {/* Status Details */}
+                      <Box sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                        <Box display="flex" justifyContent="space-between" mb={0.5}>
+                          <span>📤 À scanner:</span>
+                          <Typography component="span" fontWeight="bold" color="warning.main">{uploaded}</Typography>
+                        </Box>
+                        <Box display="flex" justifyContent="space-between" mb={0.5}>
+                          <span>⚡ En cours:</span>
+                          <Typography component="span" fontWeight="bold" color="primary.main">{enCours}</Typography>
+                        </Box>
+                        <Box display="flex" justifyContent="space-between" mb={1}>
+                          <span>✅ Traités:</span>
+                          <Typography component="span" fontWeight="bold" color="success.main">{traite}</Typography>
+                        </Box>
+                        
+                        {/* Progress Bar */}
+                        <Box>
+                          <Box display="flex" justifyContent="space-between" mb={0.5}>
+                            <span>Progression:</span>
+                            <Typography component="span" fontWeight="bold">{progression}%</Typography>
+                          </Box>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={progression} 
+                            sx={{ 
+                              height: 6, 
+                              borderRadius: 3,
+                              bgcolor: 'grey.200',
+                              '& .MuiLinearProgress-bar': {
+                                bgcolor: progression >= 80 ? 'success.main' : progression >= 50 ? 'warning.main' : 'error.main'
+                              }
+                            }} 
+                          />
+                        </Box>
+                      </Box>
+                      
+                      {/* Action Button */}
+                      <Box sx={{ mt: 1 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => setSelectedDocumentType({
+                            type: docType.type,
+                            label: docType.label,
+                            icon: docType.icon
+                          })}
+                          sx={{ fontSize: '0.7rem' }}
+                        >
+                          📋 Voir Documents
+                        </Button>
+                      </Box>
+                      
+                      {['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'].includes(docType.type) && (
+                        <Chip 
+                          label="No SLA" 
+                          size="small" 
+                          sx={{ 
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            fontSize: '0.65rem', 
+                            bgcolor: '#fbbf24', 
+                            color: 'white' 
+                          }} 
+                        />
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
           </Grid>
         </Paper>
       </Box>
@@ -602,123 +747,291 @@ const ScanDashboard: React.FC = () => {
           </Paper>
         </Grid>
 
-        {/* SCAN Queue - Main Interface */}
+        {/* BORDEREAU SCAN MANAGEMENT - With Manual Scan Buttons as Required */}
         <Grid item xs={12}>
           <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box 
-              display="flex" 
-              flexDirection={{ xs: 'column', sm: 'row' }}
-              justifyContent="space-between" 
-              alignItems={{ xs: 'flex-start', sm: 'center' }}
-              gap={{ xs: 1, sm: 0 }}
-              mb={2}
-            >
-              <Typography 
-                variant="h6"
-                sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-              >
-                File d'Attente SCAN ({scanQueue.length} bordereaux)
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">
+                🔧 Gestion Scan Bordereaux
               </Typography>
-              <IconButton 
-                onClick={loadDashboard}
-                size="small"
-              >
-                <Refresh />
-              </IconButton>
+              <Box display="flex" gap={1}>
+                <Chip 
+                  label={`${scanQueue.filter(b => b.statut === 'A_SCANNER').length} à scanner`}
+                  color="warning"
+                  size="small"
+                />
+                <Chip 
+                  label={`${scanQueue.filter(b => b.statut === 'SCAN_EN_COURS').length} en cours`}
+                  color="info"
+                  size="small"
+                />
+              </Box>
             </Box>
-            <TableContainer sx={{ overflowX: 'auto', mx: { xs: -2, sm: 0 } }}>
-              <Table sx={{ minWidth: 650 }}>
+            <TableContainer>
+              <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Référence</TableCell>
-                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Client</TableCell>
-                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Date Réception</TableCell>
-                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Délai Règlement</TableCell>
-                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Chargé de Compte</TableCell>
-                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Documents</TableCell>
-                    <TableCell sx={{ px: { xs: 1, sm: 2 }, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>Actions</TableCell>
+                    <TableCell>Référence</TableCell>
+                    <TableCell>Client</TableCell>
+                    <TableCell>Statut</TableCell>
+                    <TableCell>Actions Scan</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {scanQueue.map((bordereau) => {
-                    const daysPending = Math.floor((Date.now() - new Date(bordereau.dateReception).getTime()) / (24 * 60 * 60 * 1000));
-                    const isUrgent = daysPending > 1;
-                    const chargeDeCompte = bordereau.client?.gestionnaires?.find((g: any) => g.role === 'CHEF_EQUIPE');
-                    
+                  {scanQueue.filter(b => b.statut === 'A_SCANNER' || b.statut === 'SCAN_EN_COURS').map((bordereau: any) => {
                     return (
-                      <TableRow 
-                        key={bordereau.id}
-                        sx={{ 
-                          backgroundColor: isUrgent ? 'rgba(255, 152, 0, 0.1)' : 'inherit',
-                          '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
-                        }}
-                      >
-                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
-                          <Box display="flex" alignItems="center" gap={1}>
-                            {isUrgent && <Warning color="warning" fontSize="small" />}
-                            <Typography 
-                              variant="body2" 
-                              fontWeight={isUrgent ? 'bold' : 'normal'}
-                              sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                      <TableRow key={bordereau.id}>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="bold">
+                            {bordereau.reference}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(bordereau.createdAt).toLocaleDateString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {bordereau.client?.name || 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={bordereau.statut}
+                            color={
+                              bordereau.statut === 'A_SCANNER' ? 'warning' :
+                              bordereau.statut === 'SCAN_EN_COURS' ? 'info' : 'default'
+                            }
+                            size="small"
+                          />
+                          {bordereau.statut === 'SCAN_EN_COURS' && (
+                            <Chip
+                              label="Scan Multiple Possible"
+                              color="info"
+                              size="small"
+                              variant="outlined"
+                              sx={{ ml: 1 }}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" gap={1} flexWrap="wrap">
+                            {/* Manual Scan buttons for À scanner AND En cours de Scan statuses */}
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="secondary"
+                              startIcon={<Scanner />}
+                              onClick={async () => {
+                                // NEW: Validate multiple scan capability before opening dialog
+                                if (bordereau.statut === 'SCAN_EN_COURS') {
+                                  try {
+                                    const { validateMultipleScanWorkflow } = await import('../services/scanService');
+                                    const validation = await validateMultipleScanWorkflow(bordereau.id);
+                                    
+                                    if (!validation.canScanMultiple) {
+                                      // Show error in Material-UI dialog instead of alert
+                                      const errorDialog = document.createElement('div');
+                                      errorDialog.innerHTML = `
+                                        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+                                          <div style="background: white; padding: 24px; border-radius: 8px; max-width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                                            <div style="display: flex; align-items: center; margin-bottom: 16px;">
+                                              <span style="font-size: 24px; margin-right: 8px;">❌</span>
+                                              <h3 style="margin: 0; color: #d32f2f;">Scan multiple non autorisé</h3>
+                                            </div>
+                                            <p style="margin: 8px 0; color: #666;">📊 Scans actuels: ${validation.currentScanCount}/${validation.maxScansAllowed}</p>
+                                            <p style="margin: 8px 0; color: #666;">💡 ${validation.message}</p>
+                                            <button onclick="this.parentElement.parentElement.remove()" style="background: #d32f2f; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 16px;">Fermer</button>
+                                          </div>
+                                        </div>
+                                      `;
+                                      document.body.appendChild(errorDialog);
+                                      return;
+                                    }
+                                    
+                                    // Show success in Material-UI dialog instead of alert
+                                    const successDialog = document.createElement('div');
+                                    successDialog.innerHTML = `
+                                      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+                                        <div style="background: white; padding: 24px; border-radius: 8px; max-width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                                          <div style="display: flex; align-items: center; margin-bottom: 16px;">
+                                            <span style="font-size: 24px; margin-right: 8px;">✅</span>
+                                            <h3 style="margin: 0; color: #2e7d32;">Scan supplémentaire autorisé</h3>
+                                          </div>
+                                          <p style="margin: 8px 0; color: #666;">📊 Scan #${validation.currentScanCount + 1}/${validation.maxScansAllowed}</p>
+                                          <p style="margin: 8px 0; color: #666;">🔄 Vous pouvez ajouter des documents</p>
+                                          <button onclick="this.parentElement.parentElement.remove()" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 16px;">Continuer</button>
+                                        </div>
+                                      </div>
+                                    `;
+                                    document.body.appendChild(successDialog);
+                                  } catch (error) {
+                                    console.warn('Validation failed, proceeding with scan:', error);
+                                  }
+                                }
+                                
+                                setSelectedBordereau(bordereau);
+                                setActiveDialog('manual-scan-direct');
+                              }}
+                              sx={{ 
+                                fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                minWidth: { xs: 'auto', sm: 'auto' },
+                                px: { xs: 1, sm: 2 }
+                              }}
                             >
-                              {bordereau.reference}
-                            </Typography>
+                              📄 Scan Manuel
+                              {bordereau.statut === 'SCAN_EN_COURS' && ' (Supplémentaire)'}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Visibility />}
+                              onClick={() => handleViewBordereau(bordereau.id)}
+                              sx={{ 
+                                fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                minWidth: { xs: 'auto', sm: 'auto' },
+                                px: { xs: 1, sm: 2 }
+                              }}
+                            >
+                              Voir
+                            </Button>
                           </Box>
                         </TableCell>
-                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
-                          <Typography 
-                            variant="body2"
-                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
-                          >
-                            {bordereau.client?.name}
+                      </TableRow>
+                    );
+                  })}
+                  {scanQueue.filter(b => b.statut === 'A_SCANNER' || b.statut === 'SCAN_EN_COURS').length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">
+                        <Typography 
+                          color="text.secondary" 
+                          sx={{ 
+                            py: { xs: 2, sm: 4 },
+                            fontSize: { xs: '0.875rem', sm: '1rem' }
+                          }}
+                        >
+                          Aucun bordereau nécessitant un scan manuel
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Grid>
+
+        {/* COMMENTED OUT: File d'Attente SCAN Table - REDUNDANT as per company requirements */}
+        {/* REDUNDANT TABLE - COMMENTED OUT
+        <Grid item xs={12}>
+          <Paper sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">
+                📋 File d'Attente SCAN ({scanQueue.length})
+              </Typography>
+              <Box display="flex" gap={1}>
+                <Chip 
+                  label={`${scanQueue.filter(b => b.statut === 'A_SCANNER').length} à scanner`}
+                  color="warning"
+                  size="small"
+                />
+                <Chip 
+                  label={`${scanQueue.filter(b => b.statut === 'SCAN_EN_COURS').length} en cours`}
+                  color="info"
+                  size="small"
+                />
+                <Chip 
+                  label={`${scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER'].includes(b.statut)).length} finalisés`}
+                  color="success"
+                  size="small"
+                />
+              </Box>
+            </Box>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Référence</TableCell>
+                    <TableCell>Client</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Statut</TableCell>
+                    <TableCell>Scan Status</TableCell>
+                    <TableCell>Documents</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {scanQueue.map((bordereau: any) => {
+                    return (
+                      <TableRow key={bordereau.id}>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="bold">
+                            {bordereau.reference}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(bordereau.createdAt).toLocaleDateString()}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
-                          <Typography 
-                            variant="body2"
-                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
-                          >
-                            {new Date(bordereau.dateReception).toLocaleDateString()}
-                            <br />
-                            <Typography 
-                              variant="caption" 
-                              color={isUrgent ? 'warning.main' : 'text.secondary'}
-                              sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
-                            >
-                              {daysPending} jour{daysPending > 1 ? 's' : ''}
-                            </Typography>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {bordereau.client?.name || 'N/A'}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
-                          <Typography 
-                            variant="body2"
-                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
-                          >
-                            {bordereau.contract?.delaiReglement || bordereau.delaiReglement} jours
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
-                          <Typography 
-                            variant="body2"
-                            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
-                          >
-                            {chargeDeCompte?.fullName || 'Non assigné'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
-                          <Chip
-                            label={`${bordereau.documents?.length || 0} docs`}
-                            size="small"
-                            color={bordereau.documents?.length > 0 ? 'success' : 'default'}
-                            sx={{ fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
+                        <TableCell>
+                          <Chip 
+                            label={bordereau.type || 'GENERAL'} 
+                            size="small" 
+                            variant="outlined"
                           />
                         </TableCell>
-                        <TableCell sx={{ px: { xs: 1, sm: 2 } }}>
-                          <Box 
-                            display="flex" 
-                            flexDirection={{ xs: 'column', sm: 'row' }}
-                            gap={{ xs: 0.5, sm: 1 }}
-                          >
+                        <TableCell>
+                          <Chip
+                            label={bordereau.statut}
+                            color={
+                              bordereau.statut === 'A_SCANNER' ? 'warning' :
+                              bordereau.statut === 'SCAN_EN_COURS' ? 'info' :
+                              ['SCANNE', 'A_AFFECTER'].includes(bordereau.statut) ? 'success' : 'default'
+                            }
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={bordereau.scanStatus || 'NON_SCANNE'}
+                            color={
+                              bordereau.scanStatus === 'NON_SCANNE' ? 'default' :
+                              bordereau.scanStatus === 'SCAN_EN_COURS' ? 'info' :
+                              bordereau.scanStatus === 'SCAN_FINALISE' ? 'success' : 'default'
+                            }
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {bordereau.documents?.length || 0} doc(s)
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" gap={1} flexWrap="wrap">
+                            {(bordereau.statut === 'A_SCANNER' || bordereau.statut === 'SCAN_EN_COURS') && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="secondary"
+                                startIcon={<Scanner />}
+                                onClick={() => {
+                                  setSelectedBordereau(bordereau);
+                                  setActiveDialog('manual-scan-direct');
+                                }}
+                                sx={{ 
+                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                                  minWidth: { xs: 'auto', sm: 'auto' },
+                                  px: { xs: 1, sm: 2 }
+                                }}
+                              >
+                                📄 Scan Manuel
+                              </Button>
+                            )}
                             <Button
                               size="small"
                               variant="contained"
@@ -746,7 +1059,6 @@ const ScanDashboard: React.FC = () => {
                             >
                               Voir
                             </Button>
-                            {/* NEW PROGRESS MANAGEMENT BUTTONS */}
                             {(!bordereau.scanStatus || bordereau.scanStatus === 'NON_SCANNE') && (
                               <Button
                                 size="small"
@@ -856,58 +1168,9 @@ const ScanDashboard: React.FC = () => {
               </Table>
             </TableContainer>
           </Paper>
-        </Grid>
+        </Grid> */}
 
-        {/* Recent Activity */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-            <Typography variant="h6" gutterBottom>
-              Activité Récente
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Heure</TableCell>
-                    <TableCell>Action</TableCell>
-                    <TableCell>Détails</TableCell>
-                    <TableCell>Statut</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {scanActivity.slice(0, 5).map((activity, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        {new Date(activity.timestamp).toLocaleTimeString()}
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          {getActivityIcon(activity.action)}
-                          {activity.action.replace('_', ' ')}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {activity.details?.reference || activity.details?.bordereauId || activity.details?.fileName || '--'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={activity.details?.status || 'Completed'}
-                          color={getStatusColor(activity.details?.status || 'ready') as any}
-                          size="small"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Grid>
       </Grid>
-
-
 
       {/* Dialogs */}
       <Dialog 
@@ -974,6 +1237,42 @@ const ScanDashboard: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Direct Manual Scan Dialog for specific bordereau */}
+      <Dialog 
+        open={activeDialog === 'manual-scan-direct'} 
+        onClose={() => {
+          setActiveDialog(null);
+          setSelectedBordereau(null);
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          📄 Scan Manuel - {selectedBordereau?.reference}
+          {selectedBordereau?.statut === 'SCAN_EN_COURS' && (
+            <Chip label="Scan supplémentaire" color="info" size="small" sx={{ ml: 1 }} />
+          )}
+        </DialogTitle>
+        <DialogContent>
+          {selectedBordereau && (
+            <DirectManualScanInterface 
+              bordereau={selectedBordereau}
+              onComplete={() => {
+                setActiveDialog(null);
+                setSelectedBordereau(null);
+                loadDashboard();
+              }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setActiveDialog(null);
+            setSelectedBordereau(null);
+          }}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Bordereau Details Dialog */}
       <Dialog 
         open={activeDialog === 'bordereau-details'} 
@@ -1027,6 +1326,15 @@ const ScanDashboard: React.FC = () => {
           <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Document Type Modal */}
+      <DocumentTypeModal
+        open={!!selectedDocumentType}
+        onClose={() => setSelectedDocumentType(null)}
+        documentType={selectedDocumentType?.type || ''}
+        documentTypeLabel={selectedDocumentType?.label || ''}
+        documentTypeIcon={selectedDocumentType?.icon || ''}
+      />
     </Box>
   );
 };

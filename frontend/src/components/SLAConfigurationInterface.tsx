@@ -362,11 +362,22 @@ const SLAConfigurationInterface: React.FC = () => {
                   label="Type de document"
                   onChange={(e) => setFormData(prev => ({ ...prev, documentType: e.target.value }))}
                 >
-                  <MenuItem value="BS">Bulletin de Soin</MenuItem>
-                  <MenuItem value="BS_URGENT">BS Urgent</MenuItem>
-                  <MenuItem value="CONTRAT">Contrat</MenuItem>
-                  <MenuItem value="FACTURE">Facture</MenuItem>
-                  <MenuItem value="ALL">Tous types</MenuItem>
+                  {/* SLA-Applicable Document Types */}
+                  <MenuItem value="BULLETIN_SOIN">🏥 Bulletin de Soin</MenuItem>
+                  <MenuItem value="COMPLEMENT_INFORMATION">📋 Complément Information</MenuItem>
+                  <MenuItem value="ADHESION">👥 Adhésion</MenuItem>
+                  <MenuItem value="RECLAMATION">⚠️ Réclamation</MenuItem>
+                  <MenuItem value="ALL_SLA">Tous types avec SLA</MenuItem>
+                  {/* Disabled Non-SLA Types with explanation */}
+                  <MenuItem value="CONTRAT_AVENANT" disabled>
+                    📄 Contrat/Avenant (Pas de SLA)
+                  </MenuItem>
+                  <MenuItem value="DEMANDE_RESILIATION" disabled>
+                    ❌ Demande Résiliation (Pas de SLA)
+                  </MenuItem>
+                  <MenuItem value="CONVENTION_TIERS_PAYANT" disabled>
+                    🤝 Convention Tiers Payant (Pas de SLA)
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -445,6 +456,16 @@ const SLAConfigurationInterface: React.FC = () => {
               • <strong>Alerte</strong> : Notification préventive<br/>
               • <strong>Critique</strong> : Escalade vers le management<br/>
               • <strong>Dépassement</strong> : Violation officielle du SLA
+            </Typography>
+          </Alert>
+          
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            <Typography variant="body2">
+              <strong>⚠️ Important :</strong> Les SLA ne s'appliquent PAS aux :<br/>
+              • Contrats/Avenants<br/>
+              • Demandes de Résiliation<br/>
+              • Conventions de Tiers Payant<br/>
+              Ces types de documents sont traités sans contrainte de temps.
             </Typography>
           </Alert>
         </DialogContent>

@@ -4,10 +4,13 @@ import ReclamationDashboard from '../../components/reclamations/ReclamationDashb
 import ReclamationForm from '../../components/reclamations/ReclamationForm';
 import { ReclamationsList } from '../../components/reclamations/ReclamationsList';
 import ReclamationSearch from '../../components/reclamations/ReclamationSearch';
-import { Reporting } from '../../components/reclamations/Reporting';
+// COMMENTED OUT: Extra component not in core requirements
+// import { Reporting } from '../../components/reclamations/Reporting';
 import AIClassificationPanel from '../../components/reclamations/AIClassificationPanel';
-import CustomerPortalInterface from '../../components/reclamations/CustomerPortalInterface';
-import AdvancedAnalyticsPanel from '../../components/reclamations/AdvancedAnalyticsPanel';
+// COMMENTED OUT: Extra component not in core requirements
+// import CustomerPortalInterface from '../../components/reclamations/CustomerPortalInterface';
+// COMMENTED OUT: Extra component not in core requirements
+// import AdvancedAnalyticsPanel from '../../components/reclamations/AdvancedAnalyticsPanel';
 import ChefCorbeille from '../../components/reclamations/ChefCorbeille';
 import GestionnaireCorbeille from '../../components/reclamations/GestionnaireCorbeille';
 import BOReclamationForm from '../../components/reclamations/BOReclamationForm';
@@ -29,11 +32,13 @@ const ReclamationsModule: React.FC = () => {
     switch (user?.role) {
       case 'CHEF_EQUIPE':
         return [
-          { label: 'Corbeille Chef', component: <ChefCorbeille /> },
+          // COMMENTED OUT: Redundant Corbeille Chef - Use dedicated Chef d'équipe module instead
+          // { label: 'Corbeille Chef', component: <ChefCorbeille /> },
           { label: 'Dashboard', component: <ReclamationDashboard /> },
-          { label: 'Liste Complète', component: <ReclamationsList /> },
-          { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },
-          { label: 'Rapports', component: <Reporting /> }
+          { label: 'Liste Complète', component: <ReclamationsList /> }
+          // COMMENTED OUT: Extra tabs not in core requirements
+          // { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },
+          // { label: 'Rapports', component: <Reporting /> }
         ];
       
       case 'GESTIONNAIRE':
@@ -54,19 +59,22 @@ const ReclamationsModule: React.FC = () => {
         return [
           { label: 'Dashboard', component: <ReclamationDashboard /> },
           { label: 'Liste des Réclamations', component: <ReclamationsList /> },
-          { label: 'Portail Client', component: <CustomerPortalInterface /> },
           { label: 'Recherche', component: <ReclamationSearch /> }
+          // COMMENTED OUT: Extra tab not in core requirements
+          // { label: 'Portail Client', component: <CustomerPortalInterface /> }
         ];
       
       case 'SUPER_ADMIN':
         return [
           { label: 'Dashboard', component: <ReclamationDashboard /> },
-          { label: 'Corbeille Chef', component: <ChefCorbeille /> },
+          // COMMENTED OUT: Redundant Corbeille Chef - Use dedicated Chef d'équipe module instead
+          // { label: 'Corbeille Chef', component: <ChefCorbeille /> },
           { label: 'Liste Complète', component: <ReclamationsList /> },
-          { label: 'Classification IA', component: <AIClassificationPanel /> },
-          { label: 'Portail Client', component: <CustomerPortalInterface /> },
-          { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },
-          { label: 'Rapports', component: <Reporting /> }
+          { label: 'Classification IA', component: <AIClassificationPanel /> }
+          // COMMENTED OUT: Extra tabs not in core requirements
+          // { label: 'Portail Client', component: <CustomerPortalInterface /> },
+          // { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },
+          // { label: 'Rapports', component: <Reporting /> }
         ];
       
       default:

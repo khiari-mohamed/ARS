@@ -330,6 +330,13 @@ async uploadDocument(
     return this.gedService.getPaperStreamConfig(user);
   }
 
+  // Create document without file upload
+  @Post()
+  async createDocument(@Body() body: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.gedService.createDocumentRecord(body, user);
+  }
+
   // Catch-all route MUST BE LAST
   @Get(':id')
   async getDocument(@Param('id') id: string, @Req() req: any) {

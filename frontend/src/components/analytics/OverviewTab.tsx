@@ -92,7 +92,8 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
       {kpis && (
         <Grid item xs={12}>
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
+            {/* COMMENTED OUT: Redundant Total Bordereaux card - Already in header */}
+            {/* <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>
                   <Box display="flex" alignItems="center" gap={2}>
@@ -104,7 +105,7 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
+            </Grid> */}
             <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>

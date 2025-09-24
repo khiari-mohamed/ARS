@@ -44,6 +44,18 @@ export class BulletinSoinController {
     return this.bsService.notifyOverload(body.gestionnaireId, body.riskLevel);
   }
 
+  @Get('notifications')
+  @Public()
+  async getNotifications() {
+    try {
+      // Return empty array for now - implement notifications later if needed
+      return [];
+    } catch (error) {
+      console.error('Error in getNotifications:', error);
+      return [];
+    }
+  }
+
   // EXPORT/REPORTING
   @Get('export/excel')
   async exportExcel(@Req() req, @Res() res) {
@@ -197,6 +209,22 @@ export class BulletinSoinController {
   @Patch(':id/mark-paid')
   markBsAsPaid(@Param('id') id: string) {
     return this.bsService.markBsAsPaid(id);
+  }
+
+  /**
+   * Get gestionnaires list
+   */
+  @Get('gestionnaires')
+  async getGestionnaires() {
+    console.log('🔍 Getting gestionnaires endpoint hit...');
+    try {
+      const result = await this.bsService.getGestionnaires();
+      console.log('✅ Gestionnaires found:', result.length, result);
+      return { data: result, success: true };
+    } catch (error) {
+      console.error('❌ Error in getGestionnaires controller:', error);
+      return { data: [], success: false, error: error.message };
+    }
   }
 
   /**
@@ -368,15 +396,6 @@ export class BulletinSoinController {
   @Public()
   getTeamWorkload() {
     return this.bsService.getTeamWorkloadStats();
-  }
-
-  /**
-   * Get gestionnaires list
-   */
-  @Get('gestionnaires')
-  @Public()
-  getGestionnaires() {
-    return this.bsService.getGestionnaires();
   }
 
   /**

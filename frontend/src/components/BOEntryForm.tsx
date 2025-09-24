@@ -29,9 +29,13 @@ interface Props {
 }
 
 const documentTypes = [
-  { value: 'BS', label: 'Bulletin de Soin' },
-  { value: 'CONTRAT', label: 'Contrat' },
+  { value: 'BULLETIN_SOIN', label: 'Bulletin de Soin' },
+  { value: 'COMPLEMENT_INFORMATION', label: 'Complément Information' },
+  { value: 'ADHESION', label: 'Adhésion' },
   { value: 'RECLAMATION', label: 'Réclamation' },
+  { value: 'CONTRAT_AVENANT', label: 'Contrat/Avenant' },
+  { value: 'DEMANDE_RESILIATION', label: 'Demande Résiliation' },
+  { value: 'CONVENTION_TIERS_PAYANT', label: 'Convention Tiers Payant' },
   { value: 'FACTURE', label: 'Facture' },
   { value: 'AUTRE', label: 'Autre' }
 ];
@@ -41,7 +45,7 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
     reference: '',
     clientId: '',
     contractId: '',
-    documentType: 'BS',
+    documentType: 'BULLETIN_SOIN',
     nombreDocuments: 1,
     delaiReglement: 30,
     dateReception: new Date().toISOString().split('T')[0]
@@ -67,13 +71,33 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       setFormData(prev => ({ ...prev, contractId: '' }));
     }
   }, [formData.clientId]);
+  
+  // Auto-generate reference when client or document type changes
+  useEffect(() => {
+    if (formData.clientId && formData.documentType && !formData.reference) {
+      const year = new Date().getFullYear();
+      const sequence = Math.floor(Math.random() * 99999) + 1;
+      
+      const selectedClient = clients.find(c => c.id === formData.clientId);
+      const clientAbbr = selectedClient ? 
+        selectedClient.name.split(' ').map((word: string) => word.charAt(0)).join('').substring(0, 3).toUpperCase() :
+        'CLI';
+      
+      const docType = documentTypes.find(dt => dt.value === formData.documentType);
+      const docTypeAbbr = docType ? docType.value.split('_')[0] : 'DOC';
+      
+      const reference = `${clientAbbr}-${docTypeAbbr}-${year}-${sequence.toString().padStart(5, '0')}`;
+      
+      setFormData(prev => ({ ...prev, reference }));
+    }
+  }, [formData.clientId, formData.documentType, clients]);
 
   const resetForm = () => {
     setFormData({
       reference: '',
       clientId: '',
       contractId: '',
-      documentType: 'BS',
+      documentType: 'BULLETIN_SOIN',
       nombreDocuments: 1,
       delaiReglement: 30,
       dateReception: new Date().toISOString().split('T')[0]
@@ -113,13 +137,21 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       setLoading(true);
       setError(null);
       
-      // Generate reference
-      const response = await generateReference(formData.documentType || 'BS');
-      const reference = response.reference;
+      // Generate reference using new format
+      const year = new Date().getFullYear();
+      const sequence = Math.floor(Math.random() * 99999) + 1;
       
-      if (!reference) {
-        throw new Error('No reference generated');
-      }
+      // Get client abbreviation
+      const selectedClient = clients.find(c => c.id === formData.clientId);
+      const clientAbbr = selectedClient ? 
+        selectedClient.name.split(' ').map((word: string) => word.charAt(0)).join('').substring(0, 3).toUpperCase() :
+        'CLI';
+      
+      // Get document type abbreviation
+      const docType = documentTypes.find(dt => dt.value === formData.documentType);
+      const docTypeAbbr = docType ? docType.value.split('_')[0] : 'DOC';
+      
+      const reference = `${clientAbbr}-${docTypeAbbr}-${year}-${sequence.toString().padStart(5, '0')}`;
       
       // AI auto-fill all fields
       const updates = {
@@ -167,12 +199,28 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
     setLoading(true);
     
     try {
+      // Create both bordereau and document
       const result = await createBOEntry({
         ...formData,
         startTime: Date.now()
       });
       
       if (result && (result.success || result.bordereau)) {
+        // Also create a document with the selected document type
+        try {
+          const { LocalAPI } = await import('../services/axios');
+          await LocalAPI.post('/documents', {
+            name: `${formData.reference}.pdf`,
+            type: formData.documentType,
+            path: `/uploads/bo/${formData.reference}.pdf`,
+            bordereauId: result.bordereau?.id,
+            status: 'UPLOADED'
+          });
+          console.log('Document created successfully with type:', formData.documentType);
+        } catch (docError) {
+          console.warn('Failed to create document:', docError);
+        }
+        
         console.log('BO Entry created successfully:', result);
         onSuccess();
         onClose();
@@ -194,6 +242,7 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       <DialogTitle>
         <Box display="flex" alignItems="center" gap={1}>
           <Typography variant="h6">Nouvelle Entrée BO</Typography>
+          <Chip label="Bordereau + Document" color="secondary" size="small" />
           {classification && (
             <Chip
               label={`${classification.type} (${Math.round(classification.confidence * 100)}%)`}

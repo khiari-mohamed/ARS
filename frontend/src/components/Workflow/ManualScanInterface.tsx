@@ -60,6 +60,18 @@ const fetchScanQueue = async (): Promise<ScanQueueItem[]> => {
   return data;
 };
 
+const fetchCompletedScans = async () => {
+  const { data } = await LocalAPI.get('/bordereaux', {
+    params: {
+      statut: 'SCANNE,A_AFFECTER',
+      limit: 50,
+      orderBy: 'dateFinScan',
+      order: 'desc'
+    }
+  });
+  return data;
+};
+
 const startManualScan = async (bordereauId: string) => {
   const { data } = await LocalAPI.post(`/scan/manual/start/${bordereauId}`);
   return data;
@@ -99,6 +111,12 @@ export const ManualScanInterface: React.FC = () => {
     ['scan-queue'],
     fetchScanQueue,
     { refetchInterval: 30000 }
+  );
+
+  const { data: completedScans = [] } = useQuery(
+    ['completed-scans'],
+    fetchCompletedScans,
+    { refetchInterval: 60000 }
   );
 
   const startScanMutation = useMutation(startManualScan, {
@@ -256,7 +274,7 @@ export const ManualScanInterface: React.FC = () => {
                         size="small"
                       >
                         Numériser
-                      </Button>
+                      </Button> 
                     </TableCell>
                   </TableRow>
                 ))}
@@ -451,7 +469,69 @@ export const ManualScanInterface: React.FC = () => {
 
       <Grid container spacing={3}>
         <Grid item xs={12}>
-          {selectedBordereau ? renderScanProcess() : renderScanQueue()}
+          {selectedBordereau ? renderScanProcess() : (
+            <Box>
+              {renderScanQueue()}
+              <Box mt={3}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Scans Terminés Récents
+                    </Typography>
+                    
+                    {completedScans.length === 0 ? (
+                      <Alert severity="info">
+                        Aucun scan terminé récemment
+                      </Alert>
+                    ) : (
+                      <TableContainer component={Paper}>
+                        <Table>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Référence</TableCell>
+                              <TableCell>Client</TableCell>
+                              <TableCell>Date Scan</TableCell>
+                              <TableCell>Documents</TableCell>
+                              <TableCell>Statut</TableCell>
+                              <TableCell>Assigné à</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {completedScans.map((item: any) => (
+                              <TableRow key={item.id} hover>
+                                <TableCell>{item.reference}</TableCell>
+                                <TableCell>{item.client?.name}</TableCell>
+                                <TableCell>
+                                  {item.dateFinScan ? new Date(item.dateFinScan).toLocaleDateString() : 'N/A'}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={`${item.documents?.length || 0} docs`}
+                                    size="small"
+                                    color="success"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={item.statut}
+                                    color={item.statut === 'SCANNE' ? 'success' : 'info'}
+                                    size="small"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  {item.currentHandler?.fullName || item.client?.gestionnaires?.find((g: any) => g.role === 'CHEF_EQUIPE')?.fullName || 'Non assigné'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </CardContent>
+                </Card>
+              </Box>
+            </Box>
+          )}
         </Grid>
       </Grid>
 

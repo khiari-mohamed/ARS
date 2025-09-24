@@ -350,7 +350,7 @@ async function main() {
     await prisma.document.create({
       data: {
         name: `Document_${bordereau.reference}`,
-        type: 'PDF',
+        type: 'BULLETIN_SOIN',
         path: `/uploads/${bordereau.reference}.pdf`,
         uploadedById: users[5].id,
         bordereauId: bordereau.id,

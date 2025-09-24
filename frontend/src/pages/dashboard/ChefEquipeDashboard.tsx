@@ -1,134 +1,180 @@
 import { useEffect, useState } from "react";
 import { useAuth } from '../../contexts/AuthContext';
+import { LocalAPI } from '../../services/axios';
 import "../../styles/chef-equipe.css";
 
 interface DossierStats {
-  total: number;
-  clotures: number;
-  enCours: number;
-  nonAffectes: number;
+  prestation: { total: number; breakdown: { [key: string]: number }; gestionnaireBreakdown: { [key: string]: number } };
+  adhesion: { total: number; breakdown: { [key: string]: number }; gestionnaireBreakdown: { [key: string]: number } };
+  complement: { total: number; breakdown: { [key: string]: number }; gestionnaireBreakdown: { [key: string]: number } };
+  resiliation: { total: number; breakdown: { [key: string]: number }; gestionnaireBreakdown: { [key: string]: number } };
+  reclamation: { total: number; breakdown: { [key: string]: number }; gestionnaireBreakdown: { [key: string]: number } };
+  avenant: { total: number; breakdown: { [key: string]: number }; gestionnaireBreakdown: { [key: string]: number } };
 }
 
-interface DossierType {
-  name: string;
-  total: number;
-  clotures: number;
-  enCours: number;
-  nonAffectes: number;
+interface GestionnaireAssignment {
+  gestionnaire: string;
+  totalAssigned: number;
+  documentsAssigned: number;
+  bordereauxAssigned: number;
+  documentsReturned: number;
+  documentsByType: { [key: string]: number };
+  bordereauxByType: { [key: string]: number };
 }
 
-interface RecentDossier {
+interface Dossier {
   id: string;
   reference: string;
-  client: string;
+  nom: string;
+  societe: string;
   type: string;
   statut: string;
-  gestionnaire: string;
   date: string;
 }
 
 function ChefEquipeDashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<DossierStats>({ total: 0, clotures: 0, enCours: 0, nonAffectes: 0 });
-  const [dossierTypes, setDossierTypes] = useState<DossierType[]>([]);
-  const [recentDossiers, setRecentDossiers] = useState<RecentDossier[]>([]);
-  const [dossiersEnCours, setDossiersEnCours] = useState<any[]>([]);
+  const [stats, setStats] = useState<DossierStats>({
+    prestation: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    adhesion: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    complement: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    resiliation: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    reclamation: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    avenant: { total: 0, breakdown: {}, gestionnaireBreakdown: {} }
+  });
+  const [gestionnaireAssignments, setGestionnaireAssignments] = useState<GestionnaireAssignment[]>([]);
+  const [dossiers, setDossiers] = useState<Dossier[]>([]);
+  const [filteredDossiers, setFilteredDossiers] = useState<Dossier[]>([]);
+  const [selectedDossiers, setSelectedDossiers] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState('Tous');
+  const [societeFilter, setSocieteFilter] = useState('Toutes');
+  const [statutFilter, setStatutFilter] = useState('Nouveau');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState('REF');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [typeFilter, setTypeFilter] = useState('Tous types');
   const [loading, setLoading] = useState(true);
+  const [societes, setSocietes] = useState<string[]>([]);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
+  useEffect(() => {
+    applyFilters();
+  }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers]);
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       
-      const { fetchChefEquipeStats, fetchDossierTypes, fetchRecentDossiers, fetchDossiersEnCours } = await import('../../services/chefEquipeService');
-      
-      const [statsData, typesData, recentData, enCoursData] = await Promise.all([
-        fetchChefEquipeStats(),
-        fetchDossierTypes(),
-        fetchRecentDossiers(),
-        fetchDossiersEnCours()
+      // Load real data from backend using LocalAPI with auth
+      const [statsResponse, dossiersResponse, assignmentsResponse] = await Promise.all([
+        LocalAPI.get('/bordereaux/chef-equipe/dashboard-stats'),
+        LocalAPI.get('/bordereaux/chef-equipe/dashboard-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments')
       ]);
       
-      setStats(statsData);
-      setDossierTypes(typesData);
-      setRecentDossiers(recentData);
-      setDossiersEnCours(enCoursData);
+      if (statsResponse.data) {
+        console.log('📊 Stats received:', statsResponse.data);
+        setStats(statsResponse.data);
+      }
+      
+      if (dossiersResponse.data) {
+        console.log('📄 Dossiers received:', dossiersResponse.data.length);
+        setDossiers(dossiersResponse.data);
+        
+        // Extract unique societes from dossiers
+        const uniqueSocietes = [...new Set(dossiersResponse.data.map((d: Dossier) => d.societe).filter(Boolean))] as string[];
+        setSocietes(uniqueSocietes.sort());
+      }
+      
+      if (assignmentsResponse.data) {
+        console.log('👥 Gestionnaire assignments received:', assignmentsResponse.data.length);
+        setGestionnaireAssignments(assignmentsResponse.data);
+      }
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      console.error('❌ Error loading dashboard data:', error);
+      setDossiers([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  const applyFilters = () => {
+    let filtered = [...dossiers];
+    
+    if (typeFilter !== 'Tous') {
+      filtered = filtered.filter(d => d.type === typeFilter);
+    }
+    
+    if (societeFilter !== 'Toutes') {
+      filtered = filtered.filter(d => d.societe === societeFilter);
+    }
+    
+    if (statutFilter !== 'Tous') {
+      filtered = filtered.filter(d => d.statut === statutFilter);
+    }
+    
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(d => 
+        d.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.nom.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    setFilteredDossiers(filtered);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDossiers.length === filteredDossiers.length) {
+      setSelectedDossiers([]);
+    } else {
+      setSelectedDossiers(filteredDossiers.map(d => d.id));
+    }
+  };
+
+  const handleSelectDossier = (id: string) => {
+    setSelectedDossiers(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleExport = () => {
+    const csvContent = [
+      ['Référence', 'Nom', 'Société', 'Type', 'Statut', 'Date'],
+      ...filteredDossiers.map(d => [d.reference, d.nom, d.societe, d.type, d.statut, d.date])
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dashboard-chef-equipe-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleTransfer = async (type: string) => {
+    if (selectedDossiers.length === 0) {
+      alert('Veuillez sélectionner au moins un dossier');
+      return;
+    }
     
     try {
-      const { searchDossiers } = await import('../../services/chefEquipeService');
-      const results = await searchDossiers(searchQuery, searchType);
-      setSearchResults(results);
-      setShowSearchResults(true);
-    } catch (error) {
-      console.error('Search error:', error);
-      setSearchResults([]);
-    }
-  };
-
-  const handleExport = async () => {
-    try {
-      const dataToExport = typeFilter === 'Tous types' ? dossiersEnCours : 
-        dossiersEnCours.filter(d => d.type.includes(typeFilter));
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/transfer-dossiers', {
+        dossierIds: selectedDossiers,
+        targetType: type
+      });
       
-      const csvContent = [
-        ['Référence', 'Client', 'Type', 'Jours en cours', 'Priorité'],
-        ...dataToExport.map(d => [d.reference, d.client, d.type, d.joursEnCours, d.priorite])
-      ].map(row => row.join(',')).join('\n');
-      
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `dossiers-en-cours-${new Date().toISOString().split('T')[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (response.data.success) {
+        alert(`Transfert réussi: ${response.data.transferred} dossier(s) transféré(s) vers ${type}`);
+        setSelectedDossiers([]);
+        // Reload data to reflect changes
+        loadDashboardData();
+      } else {
+        alert('Erreur lors du transfert');
+      }
     } catch (error) {
-      console.error('Export error:', error);
-    }
-  };
-
-  const handleViewDossier = (id: string) => {
-    window.open(`/home/bordereaux/${id}`, '_blank');
-  };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setShowSearchResults(false);
-  };
-
-  const getStatutColor = (statut: string) => {
-    switch (statut.toLowerCase()) {
-      case 'en cours': return 'bg-yellow-100 text-yellow-800';
-      case 'soumis': return 'bg-blue-100 text-blue-800';
-      case 'validé': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getPrioriteColor = (priorite: string) => {
-    switch (priorite.toLowerCase()) {
-      case 'élevée': return 'bg-red-100 text-red-800';
-      case 'moyenne': return 'bg-yellow-100 text-yellow-800';
-      case 'normale': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+      console.error('Transfer error:', error);
+      alert('Erreur lors du transfert');
     }
   };
 
@@ -144,225 +190,279 @@ function ChefEquipeDashboard() {
   }
 
   return (
-    <div className="chef-equipe-container">
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Header */}
-        <div className="chef-equipe-header" style={{ background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: 'white' }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
-            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '20px', borderRadius: '50%', marginRight: '24px' }}>
-              <span style={{ fontSize: '40px' }}>📊</span>
+    <div style={{ fontFamily: 'Arial, sans-serif', background: '#f5f5f5', minHeight: '100vh' }}>
+      {/* Header Bar (Red Background) */}
+      <div style={{ background: '#d52b36', color: 'white', padding: '20px 0', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '32px', fontWeight: 'bold', margin: 0 }}>Dashboard Chef d'équipe</h1>
+      </div>
+
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px' }}>
+
+        {/* Statistics Section (Cards Row) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', marginBottom: '24px' }}>
+          {/* Prestation Card */}
+          <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Prestation</h3>
+              <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.prestation.total}</span>
             </div>
-            <div>
-              <h1 style={{ fontSize: '42px', fontWeight: 'bold', color: 'white', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Tableau de Bord Gestion Dossiers</h1>
-              <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '18px', margin: 0, fontWeight: '500' }}>Suivi des dossiers par corbeille</p>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+              {Object.entries(stats.prestation.breakdown).map(([key, value]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                  <span>{key}:</span> <span>{value}</span>
+                </div>
+              ))}
+              <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+              {Object.entries(stats.prestation.gestionnaireBreakdown).map(([key, value]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                  <span>{key}:</span> <span>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Adhésion Card */}
+          <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Adhésion</h3>
+              <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.adhesion.total}</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {Object.entries(stats.adhesion.breakdown).map(([key, value]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                  <span>{key}:</span> <span>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Complément de dossier Card */}
+          <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Complément de dossier</h3>
+              <span style={{ background: '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.complement.total}</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {Object.entries(stats.complement.breakdown).map(([key, value]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                  <span>{key}:</span> <span>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Résiliation Card */}
+          <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Résiliation</h3>
+              <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.resiliation.total}</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {Object.entries(stats.resiliation.breakdown).map(([key, value]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                  <span>{key}:</span> <span>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Réclamation Card */}
+          <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Réclamation</h3>
+              <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.reclamation.total}</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {Object.entries(stats.reclamation.breakdown).map(([key, value]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                  <span>{key}:</span> <span>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Avenant Card */}
+          <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Avenant</h3>
+              <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.avenant.total}</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {Object.entries(stats.avenant.breakdown).map(([key, value]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                  <span>{key}:</span> <span>{value}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '32px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#1a1a1a' }}>Recherche de Dossiers</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr auto', gap: '16px', alignItems: 'end' }}>
+        {/* Filtres Section */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', alignItems: 'end' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Réf. GEO</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Type de document</label>
               <select 
-                value={searchType} 
-                onChange={(e) => setSearchType(e.target.value)}
-                style={{ width: '100%', padding: '12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}
+                value={typeFilter} 
+                onChange={(e) => setTypeFilter(e.target.value)}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
               >
-                <option value="REF">Référence</option>
-                <option value="CLIENT">Client</option>
-                <option value="TYPE">Type</option>
+                <option value="Tous">Tous</option>
+                <option value="Prestation">Prestation</option>
+                <option value="Adhésion">Adhésion</option>
+                <option value="Complément de dossier">Complément</option>
+                <option value="Résiliation">Résiliation</option>
+                <option value="Réclamation">Réclamation</option>
+                <option value="Avenant">Avenant</option>
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#666', marginBottom: '8px' }}>Recherche</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Société</label>
+              <select 
+                value={societeFilter} 
+                onChange={(e) => setSocieteFilter(e.target.value)}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+              >
+                <option value="Toutes">Toutes</option>
+                {societes.map(societe => (
+                  <option key={societe} value={societe}>{societe}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Statut</label>
+              <select 
+                value={statutFilter} 
+                onChange={(e) => setStatutFilter(e.target.value)}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+              >
+                <option value="Tous">Tous</option>
+                <option value="Nouveau">Nouveau</option>
+                <option value="En cours">En cours</option>
+                <option value="Traité">Traité</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Recherche</label>
               <input
                 type="text"
-                placeholder="Entrez votre recherche..."
+                placeholder="Référence ou nom..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                style={{ width: '100%', padding: '12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
               />
             </div>
-            <button
-              onClick={handleSearch}
-              disabled={!searchQuery.trim()}
-              style={{
-                background: searchQuery.trim() ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' : '#ccc',
-                color: 'white',
-                border: 'none',
-                padding: '12px 20px',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: searchQuery.trim() ? 'pointer' : 'not-allowed',
-                whiteSpace: 'nowrap',
-                height: '44px',
-                alignSelf: 'end'
-              }}
+          </div>
+        </div>
+
+        {/* Actions Section */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <button 
+              onClick={handleExport}
+              style={{ background: '#d52b36', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}
             >
-              🔍 Rechercher
+              Exporter
             </button>
+            <span style={{ fontSize: '14px', fontWeight: '500' }}>Transférer vers:</span>
+            <button onClick={() => handleTransfer('Prestation')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Prestation</button>
+            <button onClick={() => handleTransfer('Complément')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Complément</button>
+            <button onClick={() => handleTransfer('Adhésion')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Adhésion</button>
+            <button onClick={() => handleTransfer('Résiliation')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Résiliation</button>
+            <button onClick={() => handleTransfer('Avenant')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Avenant</button>
+            <button onClick={() => handleTransfer('Réclamation')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Réclamation</button>
           </div>
         </div>
 
-        {/* Search Results */}
-        {showSearchResults && (
-          <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '32px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>Résultats de recherche ({searchResults.length})</h3>
-              <button onClick={clearSearch} style={{ background: '#6b7280', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}>Fermer</button>
-            </div>
-            {searchResults.length === 0 ? (
-              <p style={{ color: '#666', textAlign: 'center', padding: '20px' }}>Aucun résultat trouvé pour "{searchQuery}"</p>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Réf. Dossier</th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Client</th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Type</th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Statut</th>
-                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {searchResults.map((result) => (
-                      <tr key={result.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '12px', fontWeight: '600', color: '#1e40af' }}>{result.reference}</td>
-                        <td style={{ padding: '12px', color: '#374151' }}>{result.client}</td>
-                        <td style={{ padding: '12px', color: '#374151' }}>{result.type}</td>
-                        <td style={{ padding: '12px' }}>
-                          <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' }} className={getStatutColor(result.statut)}>
-                            {result.statut}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px' }}>
-                          <button onClick={() => handleViewDossier(result.id)} style={{ padding: '4px 8px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Voir</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Main KPI Cards */}
-        <div className="chef-equipe-stats">
-          <div style={{ background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 12px 28px rgba(220, 38, 38, 0.3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'rgba(255,255,255,0.2)', padding: '20px', borderRadius: '50%', marginRight: '20px' }}>
-                <span style={{ fontSize: '32px' }}>📁</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', marginBottom: '4px' }}>{stats.total}</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', opacity: 0.9 }}>Total Dossiers</div>
-              </div>
-            </div>
-          </div>
-          <div style={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)', color: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 12px 28px rgba(22, 163, 74, 0.3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'rgba(255,255,255,0.2)', padding: '20px', borderRadius: '50%', marginRight: '20px' }}>
-                <span style={{ fontSize: '32px' }}>✅</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', marginBottom: '4px' }}>{stats.clotures}</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', opacity: 0.9 }}>Clôturés</div>
-              </div>
-            </div>
-          </div>
-          <div style={{ background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)', color: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 12px 28px rgba(234, 179, 8, 0.3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'rgba(255,255,255,0.2)', padding: '20px', borderRadius: '50%', marginRight: '20px' }}>
-                <span style={{ fontSize: '32px' }}>⏳</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', marginBottom: '4px' }}>{stats.enCours}</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', opacity: 0.9 }}>En cours</div>
-              </div>
-            </div>
-          </div>
-          <div style={{ background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)', color: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 12px 28px rgba(37, 99, 235, 0.3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'rgba(255,255,255,0.2)', padding: '20px', borderRadius: '50%', marginRight: '20px' }}>
-                <span style={{ fontSize: '32px' }}>✈️</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', marginBottom: '4px' }}>{stats.nonAffectes}</div>
-                <div style={{ fontSize: '16px', fontWeight: '600', opacity: 0.9 }}>Non Affectés</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Détail par Type de Dossier */}
-        <div style={{ background: 'white', borderRadius: '20px', padding: '32px', marginBottom: '32px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px', color: '#1a1a1a' }}>Détail par Type de Dossier</h3>
-          <div style={{ display: 'grid', gap: '16px' }}>
-            {dossierTypes.map((type, index) => (
-              <div key={index} style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>{type.name}</h4>
-                  <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#6366f1' }}>{type.total} dossiers</span>
+        {/* Gestionnaire Assignments Section */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: '#333' }}>Affectations par Gestionnaire</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+            {gestionnaireAssignments.map((assignment, index) => (
+              <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057' }}>
+                  {assignment.gestionnaire}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#dcfce7', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#16a34a' }}>{type.clotures}</div>
-                    <div style={{ fontSize: '12px', color: '#15803d' }}>Clôturés</div>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#fef3c7', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#d97706' }}>{type.enCours}</div>
-                    <div style={{ fontSize: '12px', color: '#b45309' }}>En cours</div>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#dbeafe', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>{type.nonAffectes}</div>
-                    <div style={{ fontSize: '12px', color: '#1d4ed8' }}>Non affectés</div>
-                  </div>
+                <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
+                  <strong>Total affectés:</strong> {assignment.totalAssigned} ({assignment.documentsAssigned} docs + {assignment.bordereauxAssigned} bordereaux)
+                </div>
+                <div style={{ fontSize: '12px', color: '#dc3545', marginBottom: '6px' }}>
+                  <strong>Documents retournés:</strong> {assignment.documentsReturned}
+                </div>
+                <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                  <strong>Par type:</strong> {Object.entries({...assignment.documentsByType, ...assignment.bordereauxByType}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Recent Dossiers Table */}
-        <div style={{ background: 'white', borderRadius: '20px', padding: '32px', marginBottom: '32px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px', color: '#1a1a1a' }}>Derniers Dossiers Ajoutés</h3>
+        {/* Dossiers Section (Table) */}
+        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Réf. Dossier</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Client</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Type</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Statut</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Gestionnaire</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Date</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Actions</th>
+                <tr style={{ background: '#d52b36', color: 'white' }}>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedDossiers.length === filteredDossiers.length && filteredDossiers.length > 0}
+                      onChange={handleSelectAll}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Référence</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Nom</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Société</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {recentDossiers.map((dossier) => (
-                  <tr key={dossier.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px', fontWeight: '600', color: '#1e40af' }}>{dossier.reference}</td>
-                    <td style={{ padding: '12px', color: '#374151' }}>{dossier.client}</td>
-                    <td style={{ padding: '12px', color: '#374151' }}>{dossier.type}</td>
-                    <td style={{ padding: '12px' }}>
-                      <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' }} className={getStatutColor(dossier.statut)}>
+                {filteredDossiers.map((dossier, index) => (
+                  <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                    <td style={{ padding: '12px 8px' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedDossiers.includes(dossier.id)}
+                        onChange={() => handleSelectDossier(dossier.id)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.nom}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.societe}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.type}</td>
+                    <td style={{ padding: '12px 8px' }}>
+                      <span style={{ 
+                        background: '#d52b36', 
+                        color: 'white', 
+                        padding: '4px 8px', 
+                        borderRadius: '12px', 
+                        fontSize: '12px', 
+                        fontWeight: 'bold' 
+                      }}>
                         {dossier.statut}
                       </span>
                     </td>
-                    <td style={{ padding: '12px', color: '#374151' }}>{dossier.gestionnaire}</td>
-                    <td style={{ padding: '12px', color: '#6b7280', fontSize: '14px' }}>{dossier.date}</td>
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <button onClick={() => handleViewDossier(dossier.id)} style={{ padding: '4px 8px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Voir</button>
-                        <button onClick={() => handleViewDossier(dossier.id)} style={{ padding: '4px 8px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Modifier</button>
-                        <button onClick={() => window.print()} style={{ padding: '4px 8px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Télécharger</button>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
+                    <td style={{ padding: '12px 8px' }}>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button 
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+                          title="Modifier"
+                        >
+                          ✏️
+                        </button>
+                        <button 
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+                          title="Supprimer"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -372,75 +472,7 @@ function ChefEquipeDashboard() {
           </div>
         </div>
 
-        {/* Dossiers En Cours */}
-        <div style={{ background: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>Dossiers En Cours ({stats.enCours})</h3>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <select 
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', minWidth: '120px' }}
-              >
-                <option>Tous types</option>
-                {dossierTypes.map(type => (
-                  <option key={type.name} value={type.name}>{type.name}</option>
-                ))}
-              </select>
-              <button 
-                onClick={handleExport}
-                style={{ 
-                  background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', 
-                  color: 'white', 
-                  border: 'none', 
-                  padding: '8px 16px', 
-                  borderRadius: '6px', 
-                  fontSize: '14px', 
-                  fontWeight: '600', 
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                📄 Exporter
-              </button>
-            </div>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Réf. Dossier</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Client</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Type</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Jours en cours</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Priorité</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dossiersEnCours.map((dossier) => (
-                  <tr key={dossier.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px', fontWeight: '600', color: '#1e40af' }}>{dossier.reference}</td>
-                    <td style={{ padding: '12px', color: '#374151' }}>{dossier.client}</td>
-                    <td style={{ padding: '12px', color: '#374151' }}>{dossier.type}</td>
-                    <td style={{ padding: '12px', color: '#374151' }}>{dossier.joursEnCours} jours</td>
-                    <td style={{ padding: '12px' }}>
-                      <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' }} className={getPrioriteColor(dossier.priorite)}>
-                        {dossier.priorite}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <button onClick={() => handleViewDossier(dossier.id)} style={{ padding: '4px 8px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Voir</button>
-                        <button onClick={() => handleViewDossier(dossier.id)} style={{ padding: '4px 8px', background: '#6b7280', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Modifier</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+
       </div>
     </div>
   );

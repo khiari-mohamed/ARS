@@ -32,7 +32,7 @@ export class DashboardService {
       
       // Get real-time data from database
       const [bordereaux, reclamations, virements, bulletinSoins] = await Promise.all([
-        this.prisma.bordereau.findMany({ where, include: { client: true, virement: true } }),
+        this.prisma.bordereau.findMany({ where, include: { client: true, virement: true, documents: true } }),
         this.prisma.reclamation.findMany({ 
           where: { 
             ...where,
@@ -232,20 +232,30 @@ export class DashboardService {
       // Get all bordereaux with SLA calculations
       const bordereaux = await this.prisma.bordereau.findMany({
         where,
-        include: { client: true, contract: true }
+        include: { client: true, contract: true, documents: true }
       });
       
-      // Calculate SLA status categories
+      // Calculate SLA status categories with document type exemptions
       const slaAnalysis = bordereaux.map(b => {
         const daysSinceReception = b.dateReception ? 
           Math.floor((now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)) : 0;
         const slaLimit = b.delaiReglement || b.contract?.delaiReglement || 5;
         const remainingDays = slaLimit - daysSinceReception;
         
+        // SLA exemptions for specific document types
+        const exemptDocumentTypes = ['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
+        const hasExemptDocuments = b.documents?.some(doc => exemptDocumentTypes.includes(doc.type));
+        
         let status: 'green' | 'orange' | 'red';
-        if (remainingDays > 2) status = 'green';
-        else if (remainingDays > 0) status = 'orange';
-        else status = 'red';
+        if (hasExemptDocuments) {
+          status = 'green'; // Exempt documents are always green (no SLA)
+        } else if (remainingDays > 2) {
+          status = 'green';
+        } else if (remainingDays > 0) {
+          status = 'orange';
+        } else {
+          status = 'red';
+        }
         
         return {
           id: b.id,
@@ -254,15 +264,17 @@ export class DashboardService {
           remainingDays,
           daysSinceReception,
           slaLimit,
-          isCompleted: ['CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)
+          isCompleted: ['CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut),
+          isExempt: hasExemptDocuments
         };
       });
       
-      // Group by status
+      // Group by status (excluding exempt documents from breach calculations)
       const withinSla = slaAnalysis.filter(s => s.status === 'green').length;
       const atRisk = slaAnalysis.filter(s => s.status === 'orange').length;
-      const breached = slaAnalysis.filter(s => s.status === 'red' && !s.isCompleted).length;
+      const breached = slaAnalysis.filter(s => s.status === 'red' && !s.isCompleted && !s.isExempt).length;
       const total = bordereaux.length;
+      const exemptCount = slaAnalysis.filter(s => s.isExempt).length;
       
       // Get AI SLA predictions
       const aiPredictions = await this.getSLAPredictions(bordereaux);
@@ -904,7 +916,7 @@ export class DashboardService {
     try {
       const where = this.buildUserFilters(user, filters);
       const [bordereaux, reclamations] = await Promise.all([
-        this.prisma.bordereau.findMany({ where, select: { id: true, statut: true, dateReception: true, delaiReglement: true } }),
+        this.prisma.bordereau.findMany({ where, include: { documents: true } }),
         this.prisma.reclamation.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'PENDING'] } } })
       ]);
       
@@ -1695,6 +1707,70 @@ export class DashboardService {
       recommendations.push('Optimiser la répartition des tâches entre équipes');
       recommendations.push('Former les nouveaux gestionnaires sur les processus ARS');
       return recommendations;
+    }
+  }
+
+  async getDocumentStatusBreakdown(user: any, filters: any = {}) {
+    try {
+      const where = this.buildUserFilters(user, filters);
+      
+      // Get all documents with their status and type
+      const documents = await this.prisma.document.findMany({
+        where: {
+          bordereau: where
+        },
+        select: {
+          type: true,
+          status: true,
+          assignedToUserId: true
+        }
+      });
+      
+      // Group by document type and calculate status breakdown
+      const breakdown = {};
+      const documentTypes = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION', 'CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
+      
+      documentTypes.forEach(type => {
+        const typeDocuments = documents.filter(d => d.type === type);
+        breakdown[type] = {
+          enCours: typeDocuments.filter(d => ['UPLOADED', 'EN_COURS'].includes(d.status || 'UPLOADED')).length,
+          traites: typeDocuments.filter(d => ['TRAITE', 'VALIDATED'].includes(d.status || 'UPLOADED')).length,
+          nonAffectes: typeDocuments.filter(d => !d.assignedToUserId).length
+        };
+      });
+      
+      return breakdown;
+    } catch (error) {
+      console.error('Error getting document status breakdown:', error);
+      return {};
+    }
+  }
+
+  async getAllDocumentTypes(user: any, filters: any = {}) {
+    try {
+      const where = this.buildUserFilters(user, filters);
+      
+      // Get document counts by type
+      const documentCounts = await this.prisma.document.groupBy({
+        by: ['type'],
+        where: {
+          bordereau: where
+        },
+        _count: {
+          id: true
+        }
+      });
+      
+      // Convert to the expected format
+      const result = {};
+      documentCounts.forEach(item => {
+        result[item.type] = item._count.id;
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting all document types:', error);
+      return {};
     }
   }
 }

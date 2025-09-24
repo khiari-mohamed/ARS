@@ -120,12 +120,12 @@ const RoleBasedDashboard: React.FC = () => {
     );
   }
 
-  // Gestionnaire - Only assigned files and personal treatment
+  // Gestionnaire - Same interface as Chef d'équipe but with read-only restrictions
   if (userRole === UserRole.GESTIONNAIRE) {
-    const GestionnaireDashboard = React.lazy(() => import('../pages/dashboard/GestionnaireDashboard'));
+    const ChefEquipeTableauBordNew = React.lazy(() => import('../pages/dashboard/ChefEquipeTableauBordNew'));
     return (
       <React.Suspense fallback={<div>Chargement...</div>}>
-        <GestionnaireDashboard />
+        <ChefEquipeTableauBordNew />
       </React.Suspense>
     );
   }

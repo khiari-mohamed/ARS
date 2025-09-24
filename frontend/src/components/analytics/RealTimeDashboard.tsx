@@ -162,7 +162,8 @@ const RealTimeDashboard: React.FC = () => {
 
       {/* Real-time KPIs */}
       <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
+        {/* COMMENTED OUT: Redundant Bordereaux Aujourd'hui card - Already in header */}
+        {/* <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -178,7 +179,7 @@ const RealTimeDashboard: React.FC = () => {
               </Box>
             </CardContent>
           </Card>
-        </Grid>
+        </Grid> */}
 
         <Grid item xs={12} sm={6} md={3}>
           <Card>

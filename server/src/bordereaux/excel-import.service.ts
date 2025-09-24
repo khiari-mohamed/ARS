@@ -80,7 +80,7 @@ export class ExcelImportService {
             await this.prisma.document.create({
               data: {
                 name: filename,
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                type: 'BULLETIN_SOIN',
                 path: `excel-imports/${filename}`,
                 bordereauId: bordereau.id,
                 uploadedById: firstUser.id

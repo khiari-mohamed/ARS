@@ -123,12 +123,28 @@ const BOInterfaceForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
 
   const generateReference = () => {
     const year = new Date().getFullYear();
-    const month = (new Date().getMonth() + 1).toString().padStart(2, '0');
-    const random = Math.floor(Math.random() * 999) + 1;
-    const reference = `BORD-${year}${month}-${random.toString().padStart(3, '0')}`;
+    const sequence = Math.floor(Math.random() * 99999) + 1;
+    
+    // Get client abbreviation
+    const selectedClient = clients.find(c => c.id === formData.clientId);
+    const clientAbbr = selectedClient ? 
+      selectedClient.name.split(' ').map((word: string) => word.charAt(0)).join('').substring(0, 3).toUpperCase() :
+      'CLI';
+    
+    // Get document type abbreviation
+    const docTypeAbbr = formData.typeFichier || 'DOC';
+    
+    const reference = `${clientAbbr}-${docTypeAbbr}-${year}-${sequence.toString().padStart(5, '0')}`;
     
     setFormData(prev => ({ ...prev, referenceBordereau: reference }));
   };
+  
+  // Auto-generate reference when client or document type changes
+  useEffect(() => {
+    if (formData.clientId && formData.typeFichier && !formData.referenceBordereau) {
+      generateReference();
+    }
+  }, [formData.clientId, formData.typeFichier, clients]);
 
   const handleSubmit = async () => {
     setError(null);
@@ -282,7 +298,8 @@ const BOInterfaceForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
             />
           </Grid>
 
-          <Grid item xs={12} sm={6}>
+          {/* Gestionnaire assignment removed - handled by Chef d'équipe */}
+          {/* <Grid item xs={12} sm={6}>
             <Autocomplete
               options={gestionnaires}
               getOptionLabel={(option) => option.fullName}
@@ -297,7 +314,7 @@ const BOInterfaceForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
                 />
               )}
             />
-          </Grid>
+          </Grid> */}
 
           {/* Pre-filled delays */}
           <Grid item xs={12} sm={6}>

@@ -73,7 +73,7 @@ async function seedGestionnaireData() {
     await prisma.document.create({
       data: {
         name: `GED-${String(i).padStart(4, '0')}`,
-        type: i % 3 === 0 ? 'RECLAMATION' : i % 3 === 1 ? 'COMPLEMENT_DOSSIER' : 'BULLETIN_SOIN',
+        type: i % 3 === 0 ? 'RECLAMATION' : i % 3 === 1 ? 'COMPLEMENT_INFORMATION' : 'BULLETIN_SOIN',
         path: `/documents/bordereau-${bordereau.id}.pdf`,
         uploadedById: gestionnaire.id,
         bordereauId: bordereau.id,

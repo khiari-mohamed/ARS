@@ -33,6 +33,9 @@ model User {
   ContractHistory             ContractHistory[]
   courriers                   Courrier[]             @relation("UserCourriers")
   documents                   Document[]             @relation("UserDocuments")
+  // NEW: Document assignment relations
+  assignedDocuments           Document[]             @relation("AssignedDocuments")
+  assignedByDocuments         Document[]             @relation("AssignedByDocuments")
   Feedback                    Feedback[]
   gecTemplatesCreated         GecTemplate[]          @relation("GecTemplateCreator")
   notifications               Notification[]
@@ -55,6 +58,10 @@ model User {
   bordereaux                  Bordereau[]            @relation("UserBordereaux")
   aiLearning                  AILearning[]           @relation("UserAILearning")
   performanceAnalyses         PerformanceAnalysis[]  @relation("UserPerformanceAnalysis")
+  // NEW: Document assignment history relations
+  assignedToHistory           DocumentAssignmentHistory[] @relation("AssignedToHistory")
+  assignedByHistory           DocumentAssignmentHistory[] @relation("AssignedByHistory")
+  fromUserHistory             DocumentAssignmentHistory[] @relation("FromUserHistory")
 }
 
 model Process {
@@ -191,6 +198,7 @@ model Bordereau {
   nombreJourTraitement     Int?
   scanStatus               String                 @default("NON_SCANNE")
   completionRate           Int                    @default(0)
+  documentStatus           String?                @default("NORMAL")
   ActionLog                ActionLog[]
   AlertLog                 AlertLog[]
   chargeCompte             User?                  @relation("ChargeCompteBordereaux", fields: [chargeCompteId], references: [id])
@@ -330,7 +338,7 @@ model ContractHistory {
 model Document {
   id                    String                 @id @default(uuid())
   name                  String
-  type                  String
+  type                  DocumentType           @default(BULLETIN_SOIN)
   path                  String
   uploadedAt            DateTime               @default(now())
   uploadedById          String
@@ -349,12 +357,23 @@ model Document {
   pageCount             Int?
   resolution            Int?
   scannerModel          String?
+  // NEW: Document-level assignment fields
+  assignedToUserId      String?
+  assignedAt            DateTime?
+  assignedByUserId      String?
+  priority              Int                    @default(1)
+  slaApplicable         Boolean                @default(true)
   AlertLog              AlertLog[]
   bordereau             Bordereau?             @relation("BordereauDocuments", fields: [bordereauId], references: [id])
   uploader              User                   @relation("UserDocuments", fields: [uploadedById], references: [id])
+  // NEW: Document assignment relations
+  assignedTo            User?                  @relation("AssignedDocuments", fields: [assignedToUserId], references: [id])
+  assignedBy            User?                  @relation("AssignedByDocuments", fields: [assignedByUserId], references: [id])
   OCRLog                OCRLog[]
   reclamations          Reclamation[]
   workflowNotifications WorkflowNotification[]
+  // NEW: Document assignment history
+  assignmentHistory     DocumentAssignmentHistory[] @relation("DocumentAssignmentHistory")
 }
 
 model Courrier {
@@ -963,6 +982,26 @@ model SystemConfiguration {
   @@index([configKey])
 }
 
+// NEW: Document assignment history tracking
+model DocumentAssignmentHistory {
+  id               String      @id @default(uuid())
+  documentId       String
+  assignedToUserId String?
+  assignedByUserId String
+  fromUserId       String?
+  action           String      // ASSIGNED, REASSIGNED, COMPLETED, RETURNED
+  reason           String?
+  createdAt        DateTime    @default(now())
+  document         Document    @relation("DocumentAssignmentHistory", fields: [documentId], references: [id])
+  assignedTo       User?       @relation("AssignedToHistory", fields: [assignedToUserId], references: [id])
+  assignedBy       User        @relation("AssignedByHistory", fields: [assignedByUserId], references: [id])
+  fromUser         User?       @relation("FromUserHistory", fields: [fromUserId], references: [id])
+
+  @@index([documentId])
+  @@index([assignedToUserId])
+  @@index([createdAt])
+}
+
 enum EtatVirement {
   NON_EXECUTE
   EN_COURS_EXECUTION
@@ -1020,4 +1059,15 @@ enum WireTransferBatchStatus {
   REJECTED
   ARCHIVED
   PROCESSED
+}
+
+// NEW: Document types enum as required
+enum DocumentType {
+  BULLETIN_SOIN
+  COMPLEMENT_INFORMATION
+  ADHESION
+  RECLAMATION
+  CONTRAT_AVENANT
+  DEMANDE_RESILIATION
+  CONVENTION_TIERS_PAYANT
 }

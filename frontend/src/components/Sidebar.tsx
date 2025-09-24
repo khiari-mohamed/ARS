@@ -25,7 +25,8 @@ const sidebarLinks = [
   { to: "/home/super-admin", label: "Interface Super Admin", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN'] },
   
   // ADMINISTRATEUR: All modules + system parameters
-  { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
+  // COMMENTED OUT: Redundant user management - Use Super Admin interface instead
+  // { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
   { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
   { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'FINANCE'] },
   

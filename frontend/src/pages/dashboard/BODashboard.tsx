@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import { useBSList } from '../../hooks/useBS';
 import BOInterfaceForm from '../../components/BOInterfaceForm';
+import DocumentEntryForm from '../../components/DocumentEntryForm';
 
 const { Option } = Select;
 
@@ -23,6 +24,7 @@ const BODashboard: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [showInterfaceForm, setShowInterfaceForm] = useState(false);
+  const [showDocumentForm, setShowDocumentForm] = useState(false);
   
   const { data: bsData } = useBSList({ limit: 100 });
   const bsList = bsData?.items || [];
@@ -196,8 +198,17 @@ const BODashboard: React.FC = () => {
                   type="default" 
                   onClick={() => setShowInterfaceForm(true)}
                   size="large"
+                  style={{ marginRight: 8 }}
                 >
                   Interface Améliorée
+                </Button>
+                <Button 
+                  type="primary" 
+                  onClick={() => setShowDocumentForm(true)}
+                  size="large"
+                  style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                >
+                  📄 Nouveau Document
                 </Button>
               </Form.Item>
             </Form>
@@ -234,6 +245,16 @@ const BODashboard: React.FC = () => {
         onSuccess={() => {
           message.success('Bordereau créé avec succès et notification envoyée au SCAN');
           // Refresh data if needed
+        }}
+      />
+      
+      {/* Document Entry Form */}
+      <DocumentEntryForm
+        open={showDocumentForm}
+        onClose={() => setShowDocumentForm(false)}
+        onSuccess={() => {
+          message.success('Document créé avec succès et prêt pour scan');
+          setShowDocumentForm(false);
         }}
       />
     </div>

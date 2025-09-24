@@ -2,7 +2,8 @@ import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import BODashboard from '../../pages/dashboard/BODashboard';
 import ScanDashboard from '../../pages/dashboard/ScanDashboard';
-import ChefDashboard from '../../pages/dashboard/ChefDashboard';
+// COMMENTED OUT: Chef dashboard - Use dedicated Chef d'équipe module instead
+// import ChefDashboard from '../../pages/dashboard/ChefDashboard';
 import GestionnaireDashboard from '../../pages/dashboard/GestionnaireDashboard';
 import { Alert } from 'antd';
 
@@ -35,7 +36,17 @@ export const BSWorkflowRouter: React.FC = () => {
     case 'chef':
     case 'chef_equipe':
     case 'team_leader':
-      return <ChefDashboard />;
+      // REMOVED: Dashboard - Use dedicated Chef d'équipe module instead
+      return (
+        <Alert
+          type="info"
+          message="Module Chef d'équipe"
+          description="Accédez au module Chef d'équipe pour la gestion de votre équipe."
+          action={
+            <a href="/home/chef-equipe">Aller au module Chef d'équipe</a>
+          }
+        />
+      );
     
     case 'gestionnaire':
     case 'processor':
@@ -56,8 +67,17 @@ export const BSWorkflowRouter: React.FC = () => {
     
     case 'super_admin':
     case 'admin':
-      // Super admin can see all dashboards - default to Chef view
-      return <ChefDashboard />;
+      // REMOVED: Dashboard - Use dedicated modules instead
+      return (
+        <Alert
+          type="info"
+          message="Super Admin - Module BS"
+          description="Utilisez les modules dédiés pour la gestion (Chef d'équipe, BO, SCAN, etc.)."
+          action={
+            <a href="/home/super-admin">Interface Super Admin</a>
+          }
+        />
+      );
     
     default:
       return (

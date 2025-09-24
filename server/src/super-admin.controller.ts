@@ -1514,4 +1514,176 @@ export class SuperAdminController {
       overloadedTeams: teamWorkload.filter(t => t.level === 'Critique').length
     };
   }
+
+  @Get('documents/comprehensive-stats')
+  @Public()
+  async getComprehensiveDocumentStats(@Query() params: any) {
+    const documentType = params.documentType;
+    
+    // Use bordereau data since documents table doesn't have the required fields
+    const documentTypes = [
+      'BULLETIN_SOIN',
+      'COMPLEMENT_INFORMATION', 
+      'ADHESION',
+      'RECLAMATION',
+      'CONTRAT_AVENANT',
+      'DEMANDE_RESILIATION',
+      'CONVENTION_TIERS_PAYANT'
+    ];
+
+    const stats: Record<string, any> = {};
+    
+    for (const type of documentTypes) {
+      if (documentType && documentType !== type) continue;
+      
+      // Get status distribution using bordereau data
+      const statusCounts = await this.prisma.bordereau.groupBy({
+        by: ['statut'],
+        _count: { statut: true }
+      });
+      
+      const statusMap = statusCounts.reduce((acc, item) => {
+        if (item.statut && item._count && typeof item._count === 'object') {
+          acc[item.statut] = item._count.statut || 0;
+        }
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Calculate SLA breaches only for SLA-applicable documents
+      const slaApplicable = !['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'].includes(type);
+      let slaBreaches = 0;
+      
+      if (slaApplicable) {
+        slaBreaches = await this.prisma.bordereau.count({
+          where: {
+            dateLimiteTraitement: { lt: new Date() },
+            statut: { notIn: ['TRAITE', 'CLOTURE'] }
+          }
+        });
+      }
+      
+      // Calculate average processing time - simplified
+      const processedDocs = await this.prisma.bordereau.findMany({
+        where: {
+          statut: { in: ['TRAITE', 'CLOTURE'] }
+        },
+        select: {
+          dateReception: true,
+          dateCloture: true
+        },
+        take: 100
+      });
+      
+      const avgProcessingTime = processedDocs.length > 0 
+        ? processedDocs.reduce((sum, doc) => {
+            if (doc.dateCloture && doc.dateReception) {
+              return sum + (doc.dateCloture.getTime() - doc.dateReception.getTime()) / (1000 * 60 * 60);
+            }
+            return sum;
+          }, 0) / processedDocs.length
+        : 0;
+      
+      stats[type] = {
+        total: Object.values(statusMap).reduce((sum: number, count: number) => sum + count, 0),
+        A_SCANNER: statusMap['A_SCANNER'] || 0,
+        EN_COURS_SCAN: statusMap['SCAN_EN_COURS'] || 0,
+        SCAN_FINALISE: statusMap['SCANNE'] || 0,
+        EN_COURS_TRAITEMENT: statusMap['EN_COURS'] || statusMap['ASSIGNE'] || 0,
+        TRAITE: statusMap['TRAITE'] || 0,
+        REGLE: statusMap['CLOTURE'] || 0,
+        slaBreaches,
+        avgProcessingTime: Math.round(avgProcessingTime * 10) / 10
+      };
+    }
+    
+    return stats;
+  }
+
+  @Get('assignments/document-level')
+  @Public()
+  async getDocumentLevelAssignments() {
+    const assignments = await this.prisma.bordereau.findMany({
+      where: {
+        assignedToUserId: { not: null }
+      },
+      include: {
+        currentHandler: {
+          select: {
+            fullName: true,
+            teamLeader: {
+              select: { fullName: true }
+            }
+          }
+        }
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 100
+    });
+
+    return assignments.map(assignment => {
+      const now = new Date();
+      let slaStatus = 'ON_TIME';
+      
+      if (assignment.dateLimiteTraitement) {
+        const hoursUntilDeadline = (assignment.dateLimiteTraitement.getTime() - now.getTime()) / (1000 * 60 * 60);
+        if (hoursUntilDeadline < 0) slaStatus = 'OVERDUE';
+        else if (hoursUntilDeadline < 24) slaStatus = 'AT_RISK';
+      }
+      
+      return {
+        documentId: assignment.id,
+        documentType: 'BULLETIN_SOIN',
+        reference: assignment.reference,
+        assignedTo: assignment.currentHandler?.fullName || 'Non assigné',
+        chefEquipe: assignment.currentHandler?.teamLeader?.fullName || 'Aucun chef',
+        status: assignment.statut,
+        assignedAt: assignment.updatedAt,
+        slaStatus
+      };
+    });
+  }
+
+  @Get('hierarchy/validation')
+  @Public()
+  async validateHierarchy() {
+    // Check for gestionnaires without chef d'équipe
+    const gestionnairesWithoutChef = await this.prisma.user.findMany({
+      where: {
+        role: 'GESTIONNAIRE',
+        active: true,
+        teamLeaderId: null
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true
+      }
+    });
+
+    // Check for orphaned assignments using bordereau
+    const orphanedAssignments = await this.prisma.bordereau.count({
+      where: {
+        assignedToUserId: { not: null },
+        currentHandler: {
+          teamLeaderId: null,
+          role: 'GESTIONNAIRE'
+        }
+      }
+    });
+
+    return {
+      isValid: gestionnairesWithoutChef.length === 0,
+      issues: gestionnairesWithoutChef.map(user => ({
+        type: 'MISSING_TEAM_LEADER',
+        userId: user.id,
+        userName: user.fullName,
+        description: `Gestionnaire ${user.fullName} sans chef d'équipe assigné`
+      })),
+      orphanedAssignments,
+      summary: {
+        gestionnairesWithoutChef: gestionnairesWithoutChef.length,
+        orphanedAssignments
+      }
+    };
+  }
 }

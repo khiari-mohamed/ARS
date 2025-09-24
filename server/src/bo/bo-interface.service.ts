@@ -9,7 +9,7 @@ export interface BOEntryData {
   clientId: string;
   delaiReglement?: number;
   delaiReclamation?: number;
-  gestionnaire?: string;
+  // gestionnaire removed - handled by Chef d'équipe
   observations?: string;
 }
 
@@ -38,7 +38,7 @@ export class BOInterfaceService {
     const dateLimiteTraitement = new Date();
     dateLimiteTraitement.setDate(dateLimiteTraitement.getDate() + delaiReglement);
 
-    // 4. Créer le bordereau
+    // 4. Créer le bordereau (sans assignation gestionnaire - sera fait par Chef d'équipe)
     const bordereau = await this.prisma.bordereau.create({
       data: {
         reference: data.referenceBordereau,
@@ -46,7 +46,7 @@ export class BOInterfaceService {
         dateReception: new Date(),
         delaiReglement,
         nombreBS: data.nombreFichiers,
-        statut: 'EN_ATTENTE'
+        statut: 'A_SCANNER' // Directement à scanner comme requis
       },
       include: {
         client: true
@@ -66,11 +66,7 @@ export class BOInterfaceService {
     // 6. Notification automatique vers SCAN
     await this.workflowNotificationService.notifyBOToScan(bordereau.id, userId);
 
-    // 7. Mettre à jour le statut vers A_SCANNER
-    await this.prisma.bordereau.update({
-      where: { id: bordereau.id },
-      data: { statut: 'A_SCANNER' }
-    });
+    // Statut déjà défini à A_SCANNER lors de la création
 
     return {
       bordereau,

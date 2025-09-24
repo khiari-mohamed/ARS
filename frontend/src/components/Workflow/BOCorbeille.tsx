@@ -19,7 +19,8 @@ import {
   Chip,
   CircularProgress
 } from '@mui/material';
-import { Assignment, Send } from '@mui/icons-material';
+import { Assignment, Send, Add } from '@mui/icons-material';
+import DocumentEntryForm from '../DocumentEntryForm';
 
 const fetchBOCorbeille = async () => {
   const { data } = await LocalAPI.get('/workflow/corbeille/bo');
@@ -31,8 +32,13 @@ const processBordereauForScan = async (bordereauId: string) => {
   return data;
 };
 
-export const BOCorbeille: React.FC = () => {
+interface BOCorbeilleProps {
+  onOpenEntryDialog?: () => void;
+}
+
+export const BOCorbeille: React.FC<BOCorbeilleProps> = ({ onOpenEntryDialog }) => {
   const queryClient = useQueryClient();
+  const [showDocumentForm, setShowDocumentForm] = useState(false);
 
   const { data: corbeilleData, isLoading, error, refetch } = useQuery(
     ['bo-corbeille'],
@@ -81,7 +87,7 @@ export const BOCorbeille: React.FC = () => {
 
   const renderStatsCard = () => (
     <Grid container spacing={3} sx={{ mb: 3 }}>
-      <Grid item xs={12} sm={6} md={4}>
+      <Grid item xs={12} sm={6}>
         <Card>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -154,9 +160,35 @@ export const BOCorbeille: React.FC = () => {
         <Typography variant="h4">
           Bureau d'Ordre - Corbeille
         </Typography>
-        <Button variant="outlined" onClick={() => refetch()} disabled={isLoading}>
-          Actualiser
-        </Button>
+        <Box display="flex" gap={1}>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={onOpenEntryDialog}
+            sx={{ 
+              minWidth: { xs: 'auto', sm: 140 },
+              fontSize: '0.875rem'
+            }}
+          >
+            Nouvelle Entrée
+          </Button>
+          <Button 
+            variant="contained" 
+            color="success"
+            startIcon={<Add />}
+            onClick={() => setShowDocumentForm(true)}
+            sx={{ 
+              minWidth: { xs: 'auto', sm: 140 },
+              fontSize: '0.875rem'
+            }}
+          >
+            📄 Nouveau Document
+          </Button>
+          {/* Actualiser button - Commented out for interface cleanup */}
+          {/* <Button variant="outlined" onClick={() => refetch()} disabled={isLoading}>
+            Actualiser
+          </Button> */}
+        </Box>
       </Box>
 
       {/* Stats Cards */}
@@ -180,6 +212,18 @@ export const BOCorbeille: React.FC = () => {
           </Typography>
         </Paper>
       )}
+      
+      {/* Document Entry Form */}
+      <DocumentEntryForm
+        open={showDocumentForm}
+        onClose={() => setShowDocumentForm(false)}
+        onSuccess={() => {
+          console.log('✅ [BO-CORBEILLE] Document créé avec succès');
+          setShowDocumentForm(false);
+          refetch(); // Refresh the corbeille
+          // Show success message (you can add a snackbar here if needed)
+        }}
+      />
     </div>
   );
 };

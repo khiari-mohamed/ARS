@@ -211,14 +211,29 @@ export class BOController {
     return await this.boService.createBatchEntry(data.entries, userId);
   }
 
-  // BO Dashboard
+  // BO Dashboard with filters
   @Get('dashboard')
   @UseGuards(JwtAuthGuard)
-  async getDashboard(@Req() req: Request) {
+  async getDashboard(
+    @Req() req: Request,
+    @Query('clientId') clientId?: string,
+    @Query('chefEquipeId') chefEquipeId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('statut') statut?: string
+  ) {
     const user = req?.['user'] as any;
     const userId = this.extractUserId(user) || 'system-user';
     
-    return await this.boService.getBODashboard(userId);
+    const filters = {
+      clientId,
+      chefEquipeId,
+      dateFrom: dateFrom ? new Date(dateFrom) : undefined,
+      dateTo: dateTo ? new Date(dateTo) : undefined,
+      statut
+    };
+    
+    return await this.boService.getBODashboard(userId, filters);
   }
 
   // BO Performance metrics

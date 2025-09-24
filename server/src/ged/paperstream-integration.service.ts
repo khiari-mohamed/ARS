@@ -144,7 +144,7 @@ export class PaperStreamIntegrationService {
       await this.prisma.document.create({
         data: {
           name: fileName,
-          type: 'SCANNED_DOCUMENT',
+          type: 'BULLETIN_SOIN',
           path: filePath,
           uploadedById: systemUser.id,
           bordereauId,
