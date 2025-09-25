@@ -783,6 +783,8 @@ export class ReclamationsController {
 
   // Alerts endpoint
   @Get('alerts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SCAN_TEAM, UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async getReclamationAlerts(@Req() req: any) {
     const user = getUserFromRequest(req);
     return this.reclamationsService.getReclamationAlerts(user);

@@ -24,6 +24,8 @@ import { ChefEquipeActionsService } from './chef-equipe-actions.service';
 import { ChefEquipeActionsController } from './chef-equipe-actions.controller';
 import { GestionnaireActionsService } from './gestionnaire-actions.service';
 import { GestionnaireActionsController } from './gestionnaire-actions.controller';
+import { ContractAssignmentService } from './contract-assignment.service';
+import { ContractAssignmentController } from './contract-assignment.controller';
 import { PrismaService } from '../prisma/prisma.service';
 import { BordereauxModule } from '../bordereaux/bordereaux.module';
 import { AlertsModule } from '../alerts/alerts.module';
@@ -39,8 +41,8 @@ import { GedModule } from '../ged/ged.module';
     AnalyticsModule,
     GedModule
   ],
-  controllers: [WorkflowController, EnhancedCorbeilleController, WorkflowCorbeilleController, TeamManagementController, ChefEquipeActionsController, GestionnaireActionsController],
-  providers: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, TeamWorkloadConfigService, WorkflowOrchestrationService, ComprehensiveNotificationService, AutoNotificationService, WorkloadAssignmentService, ChefEquipeActionsService, GestionnaireActionsService, PrismaService],
-  exports: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, AutoNotificationService, WorkloadAssignmentService, ChefEquipeActionsService, GestionnaireActionsService]
+  controllers: [WorkflowController, EnhancedCorbeilleController, WorkflowCorbeilleController, TeamManagementController, ChefEquipeActionsController, GestionnaireActionsController, ContractAssignmentController],
+  providers: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, TeamWorkloadConfigService, WorkflowOrchestrationService, ComprehensiveNotificationService, AutoNotificationService, WorkloadAssignmentService, ChefEquipeActionsService, GestionnaireActionsService, ContractAssignmentService, PrismaService],
+  exports: [WorkflowService, CorbeilleService, WorkflowNotificationsService, WorkflowNotificationService, TeamRoutingService, EnhancedCorbeilleService, AutomaticWorkflowService, SuperAdminOverviewService, BOWorkflowService, ScanWorkflowService, OverloadDetectionService, TeamManagementService, AutoNotificationService, WorkloadAssignmentService, ChefEquipeActionsService, GestionnaireActionsService, ContractAssignmentService]
 })
 export class WorkflowModule {}
