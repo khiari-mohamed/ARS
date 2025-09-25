@@ -9,6 +9,8 @@ const roleOptions = [
   { label: 'Gestionnaire', value: UserRole.GESTIONNAIRE },
   { label: 'Customer Service', value: UserRole.CUSTOMER_SERVICE },
   { label: 'Finance', value: UserRole.FINANCE },
+  { label: 'Équipe Scan', value: UserRole.SCAN_TEAM },
+  { label: 'Bureau d\'Ordre', value: UserRole.BO },
 ];
 
 const passwordHelp =

@@ -1444,21 +1444,51 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
       },
       include: {
         client: { include: { gestionnaires: true } },
-        contract: true,
+        contract: {
+          include: {
+            teamLeader: {
+              include: {
+                teamMembers: {
+                  where: { role: 'GESTIONNAIRE', active: true }
+                }
+              }
+            }
+          }
+        },
       },
     });
     
     // Auto-progress to assignment stage
     await this.progressWorkflow(id, 'SCAN_COMPLETED');
     
+    // PRIORITY 1: Contract-based assignment to chef d'équipe
+    if (bordereau.contract?.teamLeader) {
+      const { ContractAssignmentService } = await import('../workflow/contract-assignment.service');
+      const contractService = new ContractAssignmentService(this.prisma);
+      
+      try {
+        await contractService.autoAssignBordereauByContract(id);
+        this.logger.log(`Bordereau ${bordereau.reference} auto-assigned to team leader based on contract`);
+      } catch (error) {
+        this.logger.error(`Contract-based assignment failed for ${bordereau.reference}: ${error.message}`);
+        // Fallback to traditional assignment
+        await this.fallbackAssignment(id, bordereau);
+      }
+    } else {
+      // FALLBACK: Traditional assignment methods
+      await this.fallbackAssignment(id, bordereau);
+    }
+    
+    await this.logAction(id, 'COMPLETE_SCAN');
+    return BordereauResponseDto.fromEntity(bordereau);
+  }
+  
+  private async fallbackAssignment(id: string, bordereau: any): Promise<void> {
     // AUTO-NOTIFICATION: SCAN → CHEF for assignment
     await this.autoNotificationService.notifyScanToChef(id, bordereau.reference, bordereau.client.id);
     
     // AUTO-ASSIGNMENT: Trigger automatic assignment based on workload
     setTimeout(() => this.autoAssignBordereauAI(id), 2000);
-    
-    await this.logAction(id, 'COMPLETE_SCAN');
-    return BordereauResponseDto.fromEntity(bordereau);
   }
   
   /**

@@ -30,6 +30,7 @@ model User {
   processedBulletinSoins      BulletinSoin[]         @relation("ProcessedByBulletinSoins")
   chargeCompteClients         Client[]               @relation("ChargeCompte")
   Contract                    Contract[]             @relation("ManagerContracts")
+  contractsAsTeamLeader       Contract[]             @relation("ContractTeamLeader")
   ContractHistory             ContractHistory[]
   courriers                   Courrier[]             @relation("UserCourriers")
   documents                   Document[]             @relation("UserDocuments")
@@ -305,6 +306,7 @@ model Client {
 model Contract {
   id                  String            @id @default(uuid())
   assignedManagerId   String
+  teamLeaderId        String?           // NEW: Chef d'équipe assigned to this contract
   clientId            String
   clientName          String
   createdAt           DateTime          @default(now())
@@ -320,6 +322,7 @@ model Contract {
   thresholds          Json?
   bordereaux          Bordereau[]       @relation("ContractBordereaux")
   assignedManager     User              @relation("ManagerContracts", fields: [assignedManagerId], references: [id])
+  teamLeader          User?             @relation("ContractTeamLeader", fields: [teamLeaderId], references: [id])
   client              Client            @relation(fields: [clientId], references: [id])
   history             ContractHistory[]
   Reclamation         Reclamation[]

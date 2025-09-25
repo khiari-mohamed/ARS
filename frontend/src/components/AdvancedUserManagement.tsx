@@ -80,6 +80,9 @@ const AdvancedUserManagement: React.FC = () => {
   const [newUserData, setNewUserData] = useState({
     fullName: '',
     email: '',
+    password: '',
+    role: 'GESTIONNAIRE',
+    department: '',
     phone: ''
   });
 
@@ -138,15 +141,23 @@ const AdvancedUserManagement: React.FC = () => {
     }
   };
 
-  const handleCreateFromTemplate = async () => {
+  const handleCreateUser = async () => {
     try {
-      await createUserFromTemplate(selectedTemplate, newUserData);
+      const userData = {
+        fullName: newUserData.fullName,
+        email: newUserData.email,
+        password: newUserData.password,
+        role: newUserData.role,
+        department: newUserData.department || undefined,
+        active: true
+      };
+      await LocalAPI.post('/users', userData);
       await loadData();
       setTemplateDialogOpen(false);
-      setNewUserData({ fullName: '', email: '', phone: '' });
-      setSelectedTemplate('');
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '' });
     } catch (error) {
-      console.error('Failed to create user from template:', error);
+      console.error('Failed to create user:', error);
+      alert('Erreur lors de la création de l\'utilisateur');
     }
   };
 
@@ -155,6 +166,9 @@ const AdvancedUserManagement: React.FC = () => {
     setNewUserData({
       fullName: user.fullName,
       email: user.email,
+      password: '',
+      role: user.role || 'GESTIONNAIRE',
+      department: user.department || '',
       phone: user.phone || ''
     });
     setEditDialogOpen(true);
@@ -170,7 +184,7 @@ const AdvancedUserManagement: React.FC = () => {
       await loadData();
       setEditDialogOpen(false);
       setSelectedUser(null);
-      setNewUserData({ fullName: '', email: '', phone: '' });
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '' });
     } catch (error) {
       console.error('Failed to update user:', error);
     }
@@ -235,14 +249,22 @@ const AdvancedUserManagement: React.FC = () => {
         </Typography>
         <Box display="flex" gap={2}>
           <Button
+            variant="contained"
+            startIcon={<PersonAdd />}
+            onClick={() => setTemplateDialogOpen(true)}
+          >
+            Créer Utilisateur
+          </Button>
+          {/* COMMENTED OUT: Template button */}
+          {/* <Button
             variant="outlined"
             startIcon={<PersonAdd />}
             onClick={() => setTemplateDialogOpen(true)}
           >
             Créer depuis Modèle
-          </Button>
+          </Button> */}
           <Button
-            variant="contained"
+            variant="outlined"
             startIcon={<Add />}
             onClick={() => {
               setBulkOperation('create');
@@ -535,63 +557,75 @@ const AdvancedUserManagement: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Template User Creation Dialog */}
+      {/* Create User Dialog */}
       <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Créer Utilisateur depuis Modèle</DialogTitle>
+        <DialogTitle>Créer Utilisateur</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Modèle de rôle</InputLabel>
-                <Select
-                  value={selectedTemplate}
-                  label="Modèle de rôle"
-                  onChange={(e) => setSelectedTemplate(e.target.value)}
-                >
-                  {roleTemplates.map((template) => (
-                    <MenuItem key={template.id} value={template.id}>
-                      {template.name} ({template.role})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Nom complet"
                 value={newUserData.fullName}
                 onChange={(e) => setNewUserData(prev => ({ ...prev, fullName: e.target.value }))}
+                required
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Email"
                 type="email"
                 value={newUserData.email}
                 onChange={(e) => setNewUserData(prev => ({ ...prev, email: e.target.value }))}
+                required
               />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Mot de passe"
+                type="password"
+                value={newUserData.password}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, password: e.target.value }))}
+                required
+                helperText="Min 8 caractères, 1 majuscule, 1 chiffre"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Rôle</InputLabel>
+                <Select
+                  value={newUserData.role}
+                  label="Rôle"
+                  onChange={(e) => setNewUserData(prev => ({ ...prev, role: e.target.value }))}
+                >
+                  <MenuItem value="GESTIONNAIRE">Gestionnaire</MenuItem>
+                  <MenuItem value="CHEF_EQUIPE">Chef d'Équipe</MenuItem>
+                  <MenuItem value="ADMINISTRATEUR">Administrateur</MenuItem>
+                  <MenuItem value="BO">Bureau d'Ordre</MenuItem>
+                  <MenuItem value="SCAN_TEAM">Équipe Scan</MenuItem>
+                  <MenuItem value="FINANCE">Finance</MenuItem>
+                  <MenuItem value="CLIENT_SERVICE">Service Client</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Téléphone"
-                value={newUserData.phone}
-                onChange={(e) => setNewUserData(prev => ({ ...prev, phone: e.target.value }))}
+                label="Département (optionnel)"
+                value={newUserData.department}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, department: e.target.value }))}
               />
             </Grid>
           </Grid>
-          <Alert severity="info" sx={{ mt: 2 }}>
-            L'utilisateur sera créé avec un mot de passe par défaut qu'il devra changer lors de sa première connexion.
-          </Alert>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTemplateDialogOpen(false)}>Annuler</Button>
           <Button 
-            onClick={handleCreateFromTemplate} 
+            onClick={handleCreateUser} 
             variant="contained"
-            disabled={!selectedTemplate || !newUserData.fullName || !newUserData.email}
+            disabled={!newUserData.fullName || !newUserData.email || !newUserData.password}
           >
             Créer Utilisateur
           </Button>

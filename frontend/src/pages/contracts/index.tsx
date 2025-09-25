@@ -30,6 +30,7 @@ import {
   Snackbar,
   CircularProgress
 } from '@mui/material';
+import ContractAssignment from '../../components/ContractAssignment';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -74,6 +75,7 @@ const ContractsPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [mainTab, setMainTab] = useState(0);
   const [availableClients, setAvailableClients] = useState<any[]>([]);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
 
@@ -317,25 +319,38 @@ const ContractsPage: React.FC = () => {
           <Typography variant="h4" component="h1" sx={{ fontWeight: 600, color: 'primary.main' }}>
             📋 Module Contrats
           </Typography>
-          <Box display="flex" gap={2}>
-            <Button
-              variant="outlined"
-              startIcon={<ExportIcon />}
-              onClick={handleExport}
-            >
-              Exporter
-            </Button>
-            {canManage && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleCreateContract}
-              >
-                Nouveau Contrat
-              </Button>
-            )}
-          </Box>
         </Box>
+        
+        {/* Main Tabs */}
+        <Tabs value={mainTab} onChange={(e, v) => setMainTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tab label="Liste des Contrats" />
+          <Tab label="Affectation aux Équipes" />
+        </Tabs>
+      </Paper>
+
+      {mainTab === 0 && (
+        <>
+          <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Box display="flex" gap={2}>
+                <Button
+                  variant="outlined"
+                  startIcon={<ExportIcon />}
+                  onClick={handleExport}
+                >
+                  Exporter
+                </Button>
+                {canManage && (
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleCreateContract}
+                  >
+                    Nouveau Contrat
+                  </Button>
+                )}
+              </Box>
+            </Box>
 
         {/* Statistics */}
         {statistics && (
@@ -896,6 +911,12 @@ const ContractsPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+        </>
+      )}
+      
+      {mainTab === 1 && (
+        <ContractAssignment />
       )}
     </div>
   );
