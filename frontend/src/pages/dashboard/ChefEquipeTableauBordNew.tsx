@@ -33,6 +33,8 @@ interface Dossier {
   date: string;
   joursEnCours: number;
   priorite: string;
+  completionPercentage?: number;
+  dossierStates?: string[];
 }
 
 const ChefEquipeTableauBordNew: React.FC = () => {
@@ -49,6 +51,9 @@ const ChefEquipeTableauBordNew: React.FC = () => {
   const [typesDetail, setTypesDetail] = useState<TypeDetail>({});
   const [derniersDossiers, setDerniersDossiers] = useState<Dossier[]>([]);
   const [dossiersEnCours, setDossiersEnCours] = useState<Dossier[]>([]);
+  const [allGestionnaireAssignments, setAllGestionnaireAssignments] = useState<any[]>([]);
+  const [filteredGestionnaireAssignments, setFilteredGestionnaireAssignments] = useState<any[]>([]);
+  const [gestionnaireFilter, setGestionnaireFilter] = useState('Tous');
   const [searchType, setSearchType] = useState('Ref. GSD');
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('Tous types');
@@ -57,6 +62,9 @@ const ChefEquipeTableauBordNew: React.FC = () => {
   const [selectedDossier, setSelectedDossier] = useState<any>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('');
+  const [pdfViewModalOpen, setPdfViewModalOpen] = useState(false);
+  const [statusModifyModalOpen, setStatusModifyModalOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState('');
 
   useEffect(() => {
     loadData();
@@ -65,17 +73,20 @@ const ChefEquipeTableauBordNew: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [statsRes, typesRes, derniersRes, enCoursRes] = await Promise.all([
+      const [statsRes, typesRes, derniersRes, enCoursRes, assignmentsRes] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours')
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours'),
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers')
       ]);
 
       setStats(statsRes.data);
       setTypesDetail(typesRes.data);
       setDerniersDossiers(derniersRes.data);
       setDossiersEnCours(enCoursRes.data);
+      setAllGestionnaireAssignments(assignmentsRes.data || []);
+      setFilteredGestionnaireAssignments(assignmentsRes.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -115,11 +126,52 @@ const ChefEquipeTableauBordNew: React.FC = () => {
 
   const handleVoirDossier = async (dossier: Dossier) => {
     try {
-      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossier/' + dossier.id);
-      setSelectedDossier(response.data);
-      setModalOpen(true);
+      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossier-pdf/' + dossier.id);
+      if (response.data.success && response.data.pdfUrl) {
+        // Open PDF in new tab
+        window.open(response.data.pdfUrl, '_blank');
+      } else {
+        alert(response.data.error || 'PDF non disponible pour ce dossier');
+      }
     } catch (error) {
-      alert('Erreur lors de la récupération des détails');
+      alert('Erreur lors de l\'ouverture du PDF');
+    }
+  };
+
+  const handleGestionnaireFilterChange = (newFilter: string) => {
+    setGestionnaireFilter(newFilter);
+    if (newFilter === 'Tous') {
+      setFilteredGestionnaireAssignments(allGestionnaireAssignments);
+    } else {
+      setFilteredGestionnaireAssignments(
+        allGestionnaireAssignments.filter(assignment => assignment.gestionnaire === newFilter)
+      );
+    }
+  };
+
+  const handleOpenStatusModifyModal = () => {
+    setPdfViewModalOpen(false);
+    setStatusModifyModalOpen(true);
+  };
+
+  const handleModifyDossierStatus = async () => {
+    if (!selectedDossier || !newStatus) return;
+    
+    try {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+        dossierId: selectedDossier.id,
+        newStatus
+      });
+      
+      if (response.data.success) {
+        alert('Statut du dossier modifié avec succès');
+        setStatusModifyModalOpen(false);
+        setNewStatus('');
+        loadData();
+      }
+    } catch (error) {
+      console.error('Error modifying status:', error);
+      alert('Erreur lors de la modification du statut');
     }
   };
 
@@ -140,7 +192,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
 
     try {
       const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/change-document-type', {
-        bordereauId: selectedDossier.id,
+        dossierId: selectedDossier.id,
         newType: selectedType
       });
       
@@ -225,7 +277,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
 
     try {
       await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/return-to-scan', {
-        bordereauId: dossier.id,
+        dossierId: dossier.id,
         reason
       });
       alert('Dossier retourné vers l\'équipe Scan');
@@ -679,6 +731,94 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           </div>
         </div>
 
+        {/* Affectations par Gestionnaire */}
+        <div style={{ 
+          background: 'white', 
+          borderRadius: '8px', 
+          padding: '20px', 
+          marginBottom: '20px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '16px' 
+          }}>
+            <h3 style={{ 
+              fontSize: '16px', 
+              fontWeight: 'bold', 
+              color: '#333',
+              margin: 0
+            }}>
+              Affectations par Gestionnaire
+            </h3>
+            <select
+              value={gestionnaireFilter}
+              onChange={(e) => handleGestionnaireFilterChange(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="Tous">Tous les gestionnaires</option>
+              {Array.from(new Set(allGestionnaireAssignments.map(a => a.gestionnaire))).map(gest => (
+                <option key={gest} value={gest}>{gest}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+            gap: '16px' 
+          }}>
+            {filteredGestionnaireAssignments.map((assignment, index) => (
+              <div key={index} style={{ 
+                background: '#f8f9fa', 
+                borderRadius: '6px', 
+                padding: '16px', 
+                border: '1px solid #dee2e6' 
+              }}>
+                <div style={{ 
+                  fontWeight: 'bold', 
+                  fontSize: '14px', 
+                  marginBottom: '8px', 
+                  color: '#495057' 
+                }}>
+                  {assignment.gestionnaire}
+                </div>
+                <div style={{ 
+                  fontSize: '12px', 
+                  color: '#6c757d', 
+                  marginBottom: '8px' 
+                }}>
+                  <strong>Total affectés:</strong> {assignment.totalAssigned || 0}
+                </div>
+                <div style={{ fontSize: '12px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: '#28a745' }}>✓ Traités:</span>
+                    <span style={{ fontWeight: 'bold' }}>{assignment.traites || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: '#ffc107' }}>⏳ En cours:</span>
+                    <span style={{ fontWeight: 'bold' }}>{assignment.enCours || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#dc3545' }}>↩ Retournés:</span>
+                    <span style={{ fontWeight: 'bold' }}>{assignment.retournes || 0}</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                  <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Derniers Dossiers */}
         <div style={{ 
           background: 'white', 
@@ -703,7 +843,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                 fontWeight: 'bold', 
                 fontSize: '16px' 
               }}>
-                Derniers Dossiers Ajoutés
+                Derniers Bordereaux Ajoutés
               </span>
               <span style={{ 
                 background: '#4caf50', 
@@ -735,6 +875,8 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                   <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Type</th>
                   <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Statut</th>
                   <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Gestionnaire</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>% Finalisation</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>États Dossiers</th>
                   <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Date</th>
                   <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Actions</th>
                 </tr>
@@ -746,7 +888,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                       {dossier.reference}
                     </td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                      {dossier.client}
+                        {dossier.client}
                     </td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -787,6 +929,41 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                           {dossier.gestionnaire.charAt(0)}
                         </div>
                         {dossier.gestionnaire}
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ 
+                          width: '40px', 
+                          height: '6px', 
+                          background: '#e0e0e0', 
+                          borderRadius: '3px',
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{ 
+                            width: `${dossier.completionPercentage || 0}%`, 
+                            height: '100%', 
+                            background: (dossier.completionPercentage || 0) >= 80 ? '#4caf50' : (dossier.completionPercentage || 0) >= 50 ? '#ff9800' : '#f44336',
+                            transition: 'width 0.3s ease'
+                          }} />
+                        </div>
+                        <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{dossier.completionPercentage || 0}%</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {dossier.dossierStates?.map((state: string, idx: number) => (
+                          <span key={idx} style={{
+                            background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336',
+                            color: 'white',
+                            padding: '2px 6px',
+                            borderRadius: '8px',
+                            fontSize: '10px',
+                            fontWeight: 'bold'
+                          }}>
+                            {state}
+                          </span>
+                        )) || <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
                       </div>
                     </td>
                     <td style={{ padding: '12px 8px', fontSize: '14px', color: '#666' }}>
@@ -830,6 +1007,24 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                           </button>
                         ) : (
                           <span style={{ fontSize: '12px', color: '#ccc' }}>Lecture seule</span>
+                        )}
+                        {canModifyDossier(dossier) && (
+                          <button 
+                            onClick={() => {
+                              setSelectedDossier(dossier);
+                              setStatusModifyModalOpen(true);
+                            }}
+                            style={{ 
+                              background: 'none', 
+                              border: 'none', 
+                              color: '#ff9800', 
+                              cursor: 'pointer',
+                              fontSize: '16px'
+                            }}
+                            title="Modifier le statut"
+                          >
+                            ✏️
+                          </button>
                         )}
                         <button 
                           onClick={() => handleTelechargerDossier(dossier)}
@@ -878,7 +1073,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                 fontWeight: 'bold', 
                 fontSize: '16px' 
               }}>
-                Dossiers En Cours ({dossiersEnCours.length})
+                Bordereaux En Cours ({dossiersEnCours.length})
               </span>
             </div>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -1006,6 +1201,248 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* PDF View Modal */}
+      {pdfViewModalOpen && selectedDossier && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              paddingBottom: '16px'
+            }}>
+              <h2 style={{
+                margin: 0,
+                color: '#d32f2f',
+                fontSize: '20px',
+                fontWeight: 'bold'
+              }}>
+                📄 Aperçu PDF du Dossier
+              </h2>
+              <button
+                onClick={() => setPdfViewModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  padding: '4px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
+              <p style={{ fontSize: '16px', marginBottom: '20px' }}>Aperçu du dossier {selectedDossier.reference}</p>
+              <p style={{ fontSize: '14px', color: '#666', marginBottom: '30px' }}>Client: {selectedDossier.client}</p>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => setPdfViewModalOpen(false)}
+                style={{
+                  background: '#f5f5f5',
+                  color: '#333',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Fermer
+              </button>
+              <button
+                onClick={handleOpenStatusModifyModal}
+                style={{
+                  background: '#d32f2f',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Modifier le Statut
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Modify Modal */}
+      {statusModifyModalOpen && selectedDossier && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1001
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              paddingBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#d32f2f',
+                fontSize: '18px',
+                fontWeight: 'bold'
+              }}>
+                ✏️ Modifier le Statut du Dossier
+              </h3>
+              <button
+                onClick={() => setStatusModifyModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                marginBottom: '8px',
+                color: '#333'
+              }}>
+                Nouveau statut :
+              </label>
+              
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {['Nouveau', 'En cours', 'Traité', 'Retourné'].map(status => (
+                  <label key={status} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '12px',
+                    border: newStatus === status ? '2px solid #d32f2f' : '1px solid #e0e0e0',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    backgroundColor: newStatus === status ? '#ffebee' : 'white',
+                    transition: 'all 0.2s'
+                  }}>
+                    <input
+                      type="radio"
+                      name="dossierStatus"
+                      value={status}
+                      checked={newStatus === status}
+                      onChange={(e) => setNewStatus(e.target.value)}
+                      style={{
+                        marginRight: '12px',
+                        accentColor: '#d32f2f'
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                        {status === 'Nouveau' ? '🆕' : 
+                         status === 'En cours' ? '⏳' :
+                         status === 'Traité' ? '✅' : '↩️'} {status}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => setStatusModifyModalOpen(false)}
+                style={{
+                  background: '#f5f5f5',
+                  color: '#333',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleModifyDossierStatus}
+                disabled={!newStatus}
+                style={{
+                  background: newStatus ? '#d32f2f' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: newStatus ? 'pointer' : 'not-allowed',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Confirmer la Modification
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {modalOpen && selectedDossier && (

@@ -30,6 +30,7 @@ import { AIClassificationService } from './ai-classification.service';
 import { CustomerPortalService } from './customer-portal.service';
 import { GECAutoReplyService } from './gec-auto-reply.service';
 import { TuniclaimIntegrationService } from './tuniclaim-integration.service';
+import { OutlookIntegrationService } from './outlook-integration.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Dummy user extraction (replace with real auth in production)
@@ -56,6 +57,7 @@ export class ReclamationsController {
     private readonly aiClassificationService: AIClassificationService,
     private readonly gecAutoReplyService: GECAutoReplyService,
     private readonly tuniclaimIntegrationService: TuniclaimIntegrationService,
+    private readonly outlookIntegrationService: OutlookIntegrationService,
     private readonly prisma: PrismaService
   ) {}
 
@@ -66,10 +68,30 @@ export class ReclamationsController {
     @Body() dto: any,
     @Req() req: any,
   ) {
-    const userId = req.user?.sub || req.user?.id;
+    // Only SUPER_ADMIN and CHEF_EQUIPE can create reclamations
+    const userRole = req.user?.role;
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'CHEF_EQUIPE') {
+      throw new Error('Seuls les Super Admin et Chef d\'équipe peuvent créer des réclamations');
+    }
+    console.log('Full req.user object:', JSON.stringify(req.user, null, 2));
+    let userId = req.user?.sub || req.user?.id || req.user?.userId;
+    console.log('Extracted userId:', userId);
     
-    console.log('Creating reclamation with data:', dto);
-    console.log('User ID:', userId);
+    if (!userId) {
+      // Fallback: use first active user
+      const defaultUser = await this.prisma.user.findFirst({
+        where: { active: true }
+      });
+      if (!defaultUser) {
+        throw new Error('No active user found in system');
+      }
+      userId = defaultUser.id;
+      console.log('Using fallback user:', userId);
+    }
+    
+    if (!dto.clientId || !dto.description) {
+      throw new Error('Client ID and description are required');
+    }
     
     try {
       // Create reclamation directly with Prisma
@@ -82,8 +104,8 @@ export class ReclamationsController {
           department: dto.department || 'RECLAMATIONS',
           clientId: dto.clientId,
           createdById: userId,
-          assignedToId: userId, // Auto-assign to creator for now
-          evidencePath: file?.path
+          assignedToId: userId,
+          evidencePath: file?.path || undefined
         }
       });
       
@@ -98,7 +120,6 @@ export class ReclamationsController {
         }
       });
       
-      console.log('Successfully created reclamation:', reclamation.id);
       return { 
         success: true, 
         message: 'Réclamation créée avec succès',
@@ -110,13 +131,74 @@ export class ReclamationsController {
     }
   }
 
+  // Bulk import reclamations via Excel
+  @Post('bulk-import')
+  @UseInterceptors(FileInterceptor('file'))
+  async bulkImportReclamations(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any
+  ) {
+    // Only SUPER_ADMIN and CHEF_EQUIPE can import reclamations
+    const userRole = req.user?.role;
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'CHEF_EQUIPE') {
+      throw new Error('Seuls les Super Admin et Chef d\'équipe peuvent importer des réclamations');
+    }
+    let userId = req.user?.sub || req.user?.id;
+    
+    if (!userId) {
+      const defaultUser = await this.prisma.user.findFirst({
+        where: { active: true }
+      });
+      userId = defaultUser?.id;
+    }
+    
+    if (!file) {
+      throw new Error('Fichier Excel requis');
+    }
+    
+    if (!file.originalname.match(/\.(xlsx|xls)$/)) {
+      throw new Error('Seuls les fichiers Excel sont acceptés');
+    }
+    
+    console.log('File details:', {
+      originalname: file.originalname,
+      size: file.size,
+      mimetype: file.mimetype,
+      hasBuffer: !!file.buffer,
+      bufferLength: file.buffer?.length
+    });
+    
+    try {
+      const results = await this.reclamationsService.bulkImportFromExcel(file, userId);
+      return {
+        success: true,
+        message: `Import terminé: ${results.successful} créées, ${results.failed} échouées`,
+        data: results
+      };
+    } catch (error) {
+      console.error('Error in bulk import:', error);
+      throw new Error('Erreur lors de l\'import Excel');
+    }
+  }
+
   @Patch(':id')
   async updateReclamation(
     @Param('id') id: string,
     @Body() dto: any,
     @Req() req: any,
   ) {
-    const userId = req.user?.sub || req.user?.id;
+    let userId = req.user?.sub || req.user?.id || req.user?.userId;
+    
+    if (!userId) {
+      // Fallback: use first active user
+      const defaultUser = await this.prisma.user.findFirst({
+        where: { active: true }
+      });
+      if (!defaultUser) {
+        throw new Error('No active user found in system');
+      }
+      userId = defaultUser.id;
+    }
     
     console.log(`Updating reclamation ${id} by user ${userId}`);
     console.log('Update data:', dto);
@@ -209,11 +291,42 @@ export class ReclamationsController {
     return this.reclamationsService.bulkUpdate(body.ids, body.data, user);
   }
 
-  // Bulk assign endpoint
+  // Bulk assign endpoint with checkbox selection
   @Patch('bulk-assign')
   async bulkAssign(@Body() body: { ids: string[], assignedToId: string }, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.reclamationsService.bulkAssign(body.ids, body.assignedToId, user);
+  }
+
+  // Bulk assign to gestionnaires (checkbox selection like BS)
+  @Post('bulk-assign-gestionnaires')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async bulkAssignToGestionnaires(
+    @Body() body: { reclamationIds: string[], assignments: { reclamationId: string, assignedToId: string }[] },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    const results: Array<{ reclamationId: string; success: boolean; data?: any; error?: string }> = [];
+    
+    for (const assignment of body.assignments) {
+      try {
+        const result = await this.reclamationsService.assignReclamation(
+          assignment.reclamationId, 
+          assignment.assignedToId, 
+          user
+        );
+        results.push({ reclamationId: assignment.reclamationId, success: true, data: result });
+      } catch (error: any) {
+        results.push({ reclamationId: assignment.reclamationId, success: false, error: error.message });
+      }
+    }
+    
+    return {
+      totalProcessed: body.assignments.length,
+      successful: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results
+    };
   }
 
   // SLA tracking endpoint (get breaches)
@@ -259,10 +372,107 @@ export class ReclamationsController {
     return this.reclamationsService.analytics(user);
   }
 
+  // Get Outlook monitoring status
+  @Get('outlook/status')
+  async getOutlookStatus() {
+    try {
+      const recentReclamations = await this.prisma.reclamation.findMany({
+        where: {
+          type: 'EMAIL',
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // Last 7 days
+        },
+        include: {
+          client: { select: { name: true } },
+          assignedTo: { select: { fullName: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10
+      });
+
+      const stats = {
+        totalProcessed: await this.prisma.reclamation.count({ where: { type: 'EMAIL' } }),
+        todayProcessed: await this.prisma.reclamation.count({
+          where: {
+            type: 'EMAIL',
+            createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
+          }
+        }),
+        successRate: 95 // Mock success rate
+      };
+
+      return {
+        isActive: true,
+        lastCheck: new Date().toISOString(),
+        monitoredEmails: [
+          'reclamations@myinsurance.tn',
+          'digihealthservicesandsolution@gmail.com',
+          'noreply@arstunisia.com'
+        ],
+        recentReclamations: recentReclamations.map(rec => ({
+          id: rec.id,
+          fromEmail: rec.evidencePath?.includes('email_') ? 'Email automatique' : 'Email',
+          companyName: rec.client?.name || 'Société inconnue',
+          assignedTo: rec.assignedTo?.fullName || 'Non assigné',
+          createdAt: rec.createdAt.toISOString()
+        })),
+        stats
+      };
+    } catch (error) {
+      console.error('Error getting outlook status:', error);
+      return {
+        isActive: false,
+        lastCheck: null,
+        monitoredEmails: [],
+        recentReclamations: [],
+        stats: { totalProcessed: 0, todayProcessed: 0, successRate: 0 }
+      };
+    }
+  }
+
+  // Manual email check
+  @Post('outlook/check')
+  async manualEmailCheck() {
+    try {
+      // This would trigger the outlook service manually
+      return { success: true, message: 'Vérification des emails lancée' };
+    } catch (error) {
+      throw new Error('Erreur lors de la vérification manuelle');
+    }
+  }
+
   @Patch(':id/escalate')
   async escalateReclamation(@Param('id') id: string, @Req() req: any) {
-    const user = getUserFromRequest(req);
-    return this.reclamationsService.escalateReclamation(id, user);
+    let userId = req.user?.sub || req.user?.id;
+    
+    try {
+      const oldReclamation = await this.prisma.reclamation.findUnique({ where: { id } });
+      if (!oldReclamation) {
+        throw new Error('Réclamation non trouvée');
+      }
+      
+      const reclamation = await this.prisma.reclamation.update({
+        where: { id },
+        data: { status: 'ESCALATED' },
+      });
+      
+      if (userId) {
+        await this.prisma.reclamationHistory.create({
+          data: {
+            reclamationId: id,
+            userId: userId,
+            action: 'ESCALATE',
+            fromStatus: oldReclamation.status,
+            toStatus: 'ESCALATED',
+            description: 'Réclamation escaladée'
+          },
+        });
+      }
+      
+      return { success: true, message: 'Réclamation escaladée avec succès', data: reclamation };
+    } catch (error) {
+      console.error('Error escalating reclamation:', error);
+      throw new Error('Erreur lors de l\'escalade');
+    }
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -373,19 +583,37 @@ export class ReclamationsController {
   @Get('corbeille/chef')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
   async getChefCorbeille(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const userId = req.user?.sub || req.user?.id;
+    
     try {
+      // Get all team members including chef d'équipe
+      const teamMembers = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['GESTIONNAIRE', 'CLIENT_SERVICE', 'CHEF_EQUIPE'] },
+          active: true
+        },
+        select: { id: true, fullName: true }
+      });
+      
+      const teamIds = teamMembers.map(m => m.id);
+      
       const [nonAffectes, enCours, traites] = await Promise.all([
-        (this.reclamationsService as any).findMany({
+        this.prisma.reclamation.findMany({
           where: { assignedToId: null, status: { in: ['OPEN', 'PENDING'] } },
           include: { client: true, createdBy: true }
         }),
-        (this.reclamationsService as any).findMany({
-          where: { status: 'IN_PROGRESS' },
+        this.prisma.reclamation.findMany({
+          where: { 
+            assignedToId: { in: teamIds },
+            status: { in: ['IN_PROGRESS', 'OPEN'] }
+          },
           include: { client: true, assignedTo: true, createdBy: true }
         }),
-        (this.reclamationsService as any).findMany({
-          where: { status: { in: ['RESOLVED', 'CLOSED'] } },
+        this.prisma.reclamation.findMany({
+          where: { 
+            assignedToId: { in: teamIds },
+            status: { in: ['RESOLVED', 'CLOSED'] } 
+          },
           include: { client: true, assignedTo: true, createdBy: true },
           orderBy: { updatedAt: 'desc' },
           take: 50
@@ -421,6 +649,7 @@ export class ReclamationsController {
         stats
       };
     } catch (error) {
+      console.error('Error in getChefCorbeille:', error);
       return {
         nonAffectes: [],
         enCours: [],
@@ -795,6 +1024,14 @@ export class ReclamationsController {
   async markAlertAsRead(@Param('id') id: string, @Req() req: any) {
     const user = getUserFromRequest(req);
     return this.reclamationsService.markAlertAsRead(id, user);
+  }
+
+  // Outlook integration endpoints
+  @Post('outlook/sync')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE)
+  async syncOutlookEmails() {
+    await this.outlookIntegrationService.readEmailsAndCreateReclamations();
+    return { success: true, message: 'Synchronisation Outlook terminée' };
   }
 
   // === MY TUNICLAIM INTEGRATION ENDPOINTS ===

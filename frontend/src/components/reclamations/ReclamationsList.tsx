@@ -20,6 +20,8 @@ import RealTimeAlerts from './RealTimeAlerts';
 import ChefCorbeille from './ChefCorbeille';
 import GestionnaireCorbeille from './GestionnaireCorbeille';
 import BOReclamationForm from './BOReclamationForm';
+import CreateReclamationModal from './CreateReclamationModal';
+import ExcelImportModal from './ExcelImportModal';
 import {
   Box,
   Card,
@@ -102,6 +104,8 @@ export const ReclamationsList: React.FC = () => {
   const [assignDialog, setAssignDialog] = useState<{ open: boolean; reclamation: Reclamation | null }>({ open: false, reclamation: null });
   const [gecDialog, setGecDialog] = useState<{ open: boolean; reclamation: Reclamation | null }>({ open: false, reclamation: null });
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+  const [createReclamationOpen, setCreateReclamationOpen] = useState(false);
+  const [excelImportOpen, setExcelImportOpen] = useState(false);
   
   // Form states
   const [editForm, setEditForm] = useState<{ status: ReclamationStatus; description: string; assignedToId: string }>({ status: 'OPEN', description: '', assignedToId: '' });
@@ -483,6 +487,25 @@ export const ReclamationsList: React.FC = () => {
           <Divider sx={{ my: 2 }} />
           
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {(user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE') && (
+              <>
+                <Button 
+                  variant="contained"
+                  color="primary"
+                  onClick={() => setCreateReclamationOpen(true)}
+                  size="small"
+                >
+                  Créer Réclamation
+                </Button>
+                <Button 
+                  variant="outlined"
+                  onClick={() => setExcelImportOpen(true)}
+                  size="small"
+                >
+                  Import Excel
+                </Button>
+              </>
+            )}
             <ExportButtons 
               data={data || []} 
               columns={[
@@ -934,6 +957,26 @@ export const ReclamationsList: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Create Reclamation Modal */}
+      <CreateReclamationModal
+        open={createReclamationOpen}
+        onClose={() => setCreateReclamationOpen(false)}
+        onReclamationCreated={() => {
+          setCreateReclamationOpen(false);
+          queryClient.invalidateQueries(['reclamations']);
+        }}
+      />
+      
+      {/* Excel Import Modal */}
+      <ExcelImportModal
+        open={excelImportOpen}
+        onClose={() => setExcelImportOpen(false)}
+        onImportComplete={() => {
+          setExcelImportOpen(false);
+          queryClient.invalidateQueries(['reclamations']);
+        }}
+      />
 
       {/* Snackbar for notifications */}
       <Snackbar

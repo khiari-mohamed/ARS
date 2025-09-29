@@ -115,10 +115,13 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
         />
         <Upload sx={{ fontSize: 48, color: '#ccc', mb: 1 }} />
         <Typography variant="body1">
-          Cliquez pour sélectionner des documents
+          Cliquez pour sélectionner des documents (multiple)
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Formats: PDF, JPEG, PNG, TIFF (max 10MB par fichier)
+        </Typography>
+        <Typography variant="body2" color="primary" sx={{ mt: 1, fontWeight: 'bold' }}>
+          ✅ Téléversement multiple de PDF autorisé
         </Typography>
       </Box>
 

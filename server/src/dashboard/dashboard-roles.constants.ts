@@ -45,7 +45,14 @@ export const DASHBOARD_ROLES = {
   FINANCIAL_ROLES: [
     'SUPER_ADMIN',
     'ADMINISTRATEUR',
+    'RESPONSABLE_DEPARTEMENT', // Read-only financial access
     'FINANCE'
+  ],
+
+  // Roles with Super Admin level access (same view as Super Admin)
+  SUPER_ADMIN_LEVEL_ACCESS: [
+    'SUPER_ADMIN',
+    'RESPONSABLE_DEPARTEMENT' // Same visibility as Super Admin but read-only
   ]
 } as const;
 
@@ -78,6 +85,13 @@ export function hasFinancialAccess(role: string): boolean {
 }
 
 /**
+ * Check if a role has Super Admin level access
+ */
+export function hasSuperAdminLevelAccess(role: string): boolean {
+  return DASHBOARD_ROLES.SUPER_ADMIN_LEVEL_ACCESS.includes(role as any);
+}
+
+/**
  * Get role-specific permissions
  */
 export function getRolePermissions(role: string): string[] {
@@ -87,16 +101,32 @@ export function getRolePermissions(role: string): string[] {
     permissions.push('VIEW_ALL', 'EXPORT', 'MANAGE_USERS', 'SYSTEM_CONFIG');
   }
 
+  if (hasSuperAdminLevelAccess(role)) {
+    permissions.push('VIEW_ALL', 'EXPORT');
+    // RESPONSABLE_DEPARTEMENT gets read-only access to everything
+    if (role === 'RESPONSABLE_DEPARTEMENT') {
+      permissions.push('READ_only');
+    }
+  }
+
   if (hasManagementAccess(role)) {
     permissions.push('VIEW_TEAM', 'ASSIGN_TASKS', 'VIEW_PERFORMANCE');
   }
 
   if (hasFinancialAccess(role)) {
-    permissions.push('VIEW_FINANCE', 'CONFIRM_VIREMENTS', 'EXPORT_FINANCE');
+    permissions.push('VIEW_FINANCE');
+    // Only actual finance role and admins can confirm virements
+    if (role === 'FINANCE' || hasAdminAccess(role)) {
+      permissions.push('CONFIRM_VIREMENTS', 'EXPORT_FINANCE');
+    }
   }
 
   // Role-specific permissions
   switch (role) {
+    case 'RESPONSABLE_DEPARTEMENT':
+      // Same view as Super Admin but read-only
+      permissions.push('VIEW_ALL', 'VIEW_TEAM', 'VIEW_PERFORMANCE', 'VIEW_FINANCE', 'VIEW_BO', 'VIEW_SCAN', 'VIEW_CLIENT_SERVICE');
+      break;
     case 'GESTIONNAIRE':
       permissions.push('VIEW_PERSONAL', 'PROCESS_TASKS');
       break;

@@ -15,18 +15,22 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
 import { AdherentService, CreateAdherentDto, UpdateAdherentDto } from './adherent.service';
 import { DonneurOrdreService, CreateDonneurOrdreDto, UpdateDonneurOrdreDto } from './donneur-ordre.service';
 import { OrdreVirementService, CreateOrdreVirementDto, UpdateEtatVirementDto } from './ordre-virement.service';
 import { FileGenerationService } from './file-generation.service';
 import { FinanceService } from './finance.service';
 import { BankFormatConfigService } from './bank-format-config.service';
+import { SlaConfigurationService } from './sla-configuration.service';
 
 function getUserFromRequest(req: any) {
   return req.user || { id: 'demo-user', role: 'FINANCE', fullName: 'Demo User' };
 }
 
 @Controller('finance')
+@Roles(UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.FINANCE)
 export class FinanceController {
   constructor(
     private adherentService: AdherentService,
@@ -34,7 +38,8 @@ export class FinanceController {
     private ordreVirementService: OrdreVirementService,
     private fileGenerationService: FileGenerationService,
     private financeService: FinanceService,
-    private bankFormatConfig: BankFormatConfigService
+    private bankFormatConfig: BankFormatConfigService,
+    private slaConfigService: SlaConfigurationService
   ) {}
 
   // === ADHERENT ENDPOINTS ===
@@ -202,25 +207,32 @@ export class FinanceController {
 
   // === DASHBOARD ENDPOINTS ===
   @Get('dashboard')
-  async getFinanceDashboard() {
-    return this.ordreVirementService.getFinanceDashboard();
+  async getFinanceDashboard(
+    @Query() filters: {
+      compagnie?: string;
+      client?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.financeService.getFinanceDashboardWithFilters(filters, user);
   }
 
   @Get('dashboard/stats')
-  async getFinanceStats(@Query() filters: any) {
-    const ordres = await this.ordreVirementService.findOrdreVirements(filters);
-    
-    const stats = {
-      totalOrdres: ordres.length,
-      montantTotal: ordres.reduce((sum, o) => sum + o.montantTotal, 0),
-      adherentsTotal: ordres.reduce((sum, o) => sum + o.nombreAdherents, 0),
-      parEtat: ordres.reduce((acc, o) => {
-        acc[o.etatVirement] = (acc[o.etatVirement] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    };
-
-    return stats;
+  async getFinanceStats(
+    @Query() filters: {
+      compagnie?: string;
+      client?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    const dashboardData = await this.financeService.getFinanceDashboardWithFilters(filters, user);
+    return dashboardData.stats;
   }
 
   // === SUIVI ENDPOINTS ===
@@ -642,5 +654,132 @@ export class FinanceController {
   @Post('bank-formats/validate')
   async validateBankFormat(@Body() data: { formatType: string; specifications: any }) {
     return this.bankFormatConfig.validateFormatSpecification(data.formatType, data.specifications);
+  }
+
+  @Put('ordres-virement/:id/recovery')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async updateRecoveryInfo(
+    @Param('id') id: string,
+    @Body() body: {
+      demandeRecuperation?: boolean;
+      dateDemandeRecuperation?: string;
+      montantRecupere?: boolean;
+      dateMontantRecupere?: string;
+      motifObservation?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.financeService.updateRecoveryInfo(id, body, user);
+  }
+
+  @Post('ordres-virement/create-manual')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async createManualOV(
+    @Body() body: {
+      reference: string;
+      clientData: any;
+      donneurOrdreId: string;
+      montantTotal: number;
+      nombreAdherents: number;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.financeService.createManualOV(body, user);
+  }
+
+  @Put('ordres-virement/:id/reinject')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async reinjectOV(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.financeService.reinjectOV(id, user);
+  }
+
+  // === BORDEREAUX TRAITÉS ENDPOINT ===
+  @Get('bordereaux-traites')
+  async getBordereauxTraites(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.financeService.getBordereauxTraites(user);
+  }
+
+  // === NOTIFICATION ENDPOINTS ===
+  @Post('notify-responsable-equipe')
+  async notifyResponsableEquipe(
+    @Body() body: {
+      ovId: string;
+      reference: string;
+      message: string;
+      createdBy: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.financeService.notifyResponsableEquipeForValidation(body, user);
+  }
+
+  // === OV VALIDATION ENDPOINTS ===
+  @Get('validation/pending')
+  async getPendingValidationOVs(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    
+    // Simple query without complex includes
+    const pendingOVs = await this.ordreVirementService['prisma'].ordreVirement.findMany({
+      where: {
+        validationStatus: 'EN_ATTENTE_VALIDATION'
+      },
+      select: {
+        id: true,
+        reference: true,
+        montantTotal: true,
+        nombreAdherents: true,
+        dateCreation: true,
+        utilisateurSante: true
+      },
+      orderBy: { dateCreation: 'desc' },
+      take: 20
+    });
+    
+    return pendingOVs.map(ov => ({
+      id: ov.id,
+      reference: ov.reference,
+      client: 'Client Test',
+      donneurOrdre: 'Donneur Test',
+      montantTotal: ov.montantTotal,
+      nombreAdherents: ov.nombreAdherents,
+      dateCreation: ov.dateCreation,
+      utilisateurSante: ov.utilisateurSante
+    }));
+  }
+
+  @Put('validation/:id')
+  async validateOV(
+    @Param('id') id: string,
+    @Body() body: { approved: boolean; comment?: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    // Simple validation update
+    const newStatus = body.approved ? 'VALIDE' : 'REJETE_VALIDATION';
+    
+    const updatedOV = await this.ordreVirementService['prisma'].ordreVirement.update({
+      where: { id },
+      data: {
+        validationStatus: newStatus,
+        validatedBy: user.id,
+        validatedAt: new Date(),
+        validationComment: body.comment
+      }
+    });
+    
+    return {
+      success: true,
+      message: body.approved ? 'OV validé avec succès' : 'OV rejeté',
+      ordreVirement: updatedOV
+    };
   }
 }

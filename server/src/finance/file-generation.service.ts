@@ -178,21 +178,54 @@ export class FileGenerationService {
   }
 
   private generateStructure1(ordreVirement: any): string {
-    // Structure 1: Format Standard
+    // Structure 1: Format exact from company example
     let content = '';
     
-    // Header
-    content += `H${ordreVirement.donneurOrdre.rib.padEnd(20)}${new Date().toISOString().slice(0, 10).replace(/-/g, '')}${ordreVirement.reference.padEnd(20)}\n`;
-
-    // Details
-    ordreVirement.items.forEach((item: any, index: number) => {
-      const line = `D${(index + 1).toString().padStart(6, '0')}${item.adherent.rib.padEnd(20)}${item.montant.toFixed(2).padStart(12, '0')}${item.adherent.nom.padEnd(30)}${item.adherent.prenom.padEnd(30)}\n`;
-      content += line;
-    });
-
-    // Footer
+    if (!ordreVirement.items || ordreVirement.items.length === 0) {
+      return content; // Return empty if no items
+    }
+    
     const totalAmount = ordreVirement.items.reduce((sum: number, item: any) => sum + item.montant, 0);
-    content += `F${ordreVirement.items.length.toString().padStart(6, '0')}${totalAmount.toFixed(2).padStart(15, '0')}\n`;
+    const totalAmountMillimes = Math.round(totalAmount * 1000);
+    const dateFormatted = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const count = ordreVirement.items.length.toString().padStart(2, '0');
+    
+    // Header line - exact format from example
+    const headerLine = `110104   ${dateFormatted}0001${count}${totalAmountMillimes.toString().padStart(15, '0')}000000000${count}${' '.repeat(139)}`;
+    content += headerLine + '\n';
+
+    // Detail lines - exact format from example
+    ordreVirement.items.forEach((item: any, index: number) => {
+      const montantMillimes = Math.round(item.montant * 1000);
+      const bankCode = item.adherent.rib.substring(0, 2);
+      const fullName = (item.adherent.nom + item.adherent.prenom).substring(0, 30).padEnd(30, ' ');
+      const sequenceNum = (index + 1).toString();
+      
+      // Build line exactly as in example
+      let detailLine = '110104   '; // 9 chars
+      detailLine += dateFormatted; // 8 chars
+      detailLine += '0001'; // 4 chars
+      detailLine += sequenceNum; // 1 char
+      detailLine += montantMillimes.toString().padStart(15, '0'); // 15 chars
+      detailLine += '000000000'; // 9 chars
+      detailLine += '4001007404700411649'; // 19 chars
+      detailLine += 'ARS EX  "AON TUNISIE S.A."'; // 26 chars
+      detailLine += '    '; // 4 spaces
+      detailLine += bankCode; // 2 chars
+      detailLine += '   '; // 3 spaces
+      detailLine += item.adherent.rib; // 20 chars
+      detailLine += fullName; // 30 chars
+      detailLine += '00000000000000001'; // 17 zeros
+      detailLine += montantMillimes.toString().padStart(6, '0'); // 6 chars
+      detailLine += '000'; // 3 chars
+      detailLine += 'AIRBUS BORD 18-25'; // 17 chars
+      detailLine += ' '.repeat(28); // 28 spaces
+      detailLine += dateFormatted; // 8 chars
+      detailLine += '00000000010'; // 11 chars
+      detailLine += ' '.repeat(38); // 38 spaces
+      
+      content += detailLine + '\n';
+    });
 
     return content;
   }

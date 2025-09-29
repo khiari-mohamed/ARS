@@ -75,7 +75,7 @@ const App: React.FC = () => {
           } />
           
           <Route path="/home/finance" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.FINANCE]}>
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.FINANCE]}>
               <FinanceTracker />
             </ProtectedRoute>
           } />
@@ -87,6 +87,13 @@ const App: React.FC = () => {
           } />
           
           <Route path="/home/chef-equipe" element={
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE]}>
+              <ChefEquipeTableauBordNew />
+            </ProtectedRoute>
+          } />
+          
+          {/* Legacy route redirect */}
+          <Route path="/home/chef-equipe-dashboard" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE]}>
               <ChefEquipeTableauBordNew />
             </ProtectedRoute>

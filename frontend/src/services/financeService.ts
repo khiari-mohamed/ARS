@@ -195,8 +195,9 @@ class FinanceService {
   }
 
   // === DASHBOARD METHODS ===
-  async getFinanceDashboard() {
-    const { data } = await LocalAPI.get('/finance/dashboard');
+  async getFinanceDashboard(queryParams?: string) {
+    const url = queryParams ? `/finance/dashboard?${queryParams}` : '/finance/dashboard';
+    const { data } = await LocalAPI.get(url);
     return data;
   }
 
@@ -207,6 +208,18 @@ class FinanceService {
     });
     
     const { data } = await LocalAPI.get(`/finance/dashboard/stats?${params}`);
+    return data;
+  }
+  
+  // === RECOVERY METHODS ===
+  async createManualOV(ovData: {
+    reference: string;
+    clientData: any;
+    donneurOrdreId: string;
+    montantTotal: number;
+    nombreAdherents: number;
+  }) {
+    const { data } = await LocalAPI.post('/finance/ordres-virement/create-manual', ovData);
     return data;
   }
 
@@ -311,6 +324,7 @@ class FinanceService {
       'EN_COURS_EXECUTION': 'Virement en cours d\'exécution',
       'EXECUTE_PARTIELLEMENT': 'Virement exécuté partiellement',
       'REJETE': 'Virement rejeté',
+      'BLOQUE': 'Virement bloqué',
       'EXECUTE': 'Virement exécuté'
     };
     return labels[etat] || etat;
@@ -322,6 +336,7 @@ class FinanceService {
       'EN_COURS_EXECUTION': 'info',
       'EXECUTE_PARTIELLEMENT': 'warning',
       'REJETE': 'error',
+      'BLOQUE': 'error',
       'EXECUTE': 'success'
     };
     return colors[etat] || 'default';
@@ -358,6 +373,94 @@ class FinanceService {
     });
     return data;
   }
+
+  // === BORDEREAUX TRAITÉS METHODS ===
+  async getBordereauxTraites() {
+    const { data } = await LocalAPI.get('/finance/bordereaux-traites');
+    return data;
+  }
+
+  // === SLA CONFIGURATION METHODS ===
+  async getSlaConfigs(clientId?: string, moduleType?: string) {
+    const params = new URLSearchParams();
+    if (clientId) params.append('clientId', clientId);
+    if (moduleType) params.append('moduleType', moduleType);
+    
+    const { data } = await LocalAPI.get(`/finance/sla/configurations?${params}`);
+    return data;
+  }
+
+  async createSlaConfig(config: any) {
+    const { data } = await LocalAPI.post('/finance/sla/configurations', config);
+    return data;
+  }
+
+  async updateSlaConfig(id: string, config: any) {
+    const { data } = await LocalAPI.put(`/finance/sla/configurations/${id}`, config);
+    return data;
+  }
+
+  async deleteSlaConfig(id: string) {
+    const { data } = await LocalAPI.delete(`/finance/sla/configurations/${id}`);
+    return data;
+  }
+
+  async getSlaAlerts() {
+    const { data } = await LocalAPI.get('/finance/sla/alerts');
+    return data;
+  }
+
+  async checkBordereauSla(bordereauId: string) {
+    const { data } = await LocalAPI.get(`/finance/sla/check/bordereau/${bordereauId}`);
+    return data;
+  }
+
+  async checkVirementSla(virementId: string) {
+    const { data } = await LocalAPI.get(`/finance/sla/check/virement/${virementId}`);
+    return data;
+  }
+
+  // === RECOVERY & REINJECT METHODS ===
+  async updateRecoveryInfo(id: string, data: {
+    demandeRecuperation?: boolean;
+    dateDemandeRecuperation?: string | null;
+    montantRecupere?: boolean;
+    dateMontantRecupere?: string | null;
+    motifObservation?: string;
+  }) {
+    const { data: result } = await LocalAPI.put(`/finance/ordres-virement/${id}/recovery`, data);
+    return result;
+  }
+
+  async reinjectOV(id: string) {
+    const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/reinject`);
+    return data;
+  }
+
+  // === NOTIFICATION METHODS ===
+  async notifyResponsableEquipe(notificationData: {
+    ovId: string;
+    reference: string;
+    message: string;
+    createdBy: string;
+  }) {
+    const { data } = await LocalAPI.post('/finance/notify-responsable-equipe', notificationData);
+    return data;
+  }
+
+  // === OV VALIDATION METHODS ===
+  async getPendingValidationOVs() {
+    const { data } = await LocalAPI.get('/finance/validation/pending');
+    return data;
+  }
+
+  async validateOV(id: string, approved: boolean, comment?: string) {
+    const { data } = await LocalAPI.put(`/finance/validation/${id}`, {
+      approved,
+      comment
+    });
+    return data;
+  }
 }
 
 export const financeService = new FinanceService();
@@ -373,14 +476,14 @@ export const createDonneur = (donneur: Omit<DonneurOrdre, 'id'>) => financeServi
 export const updateDonneur = (id: string, donneur: Partial<DonneurOrdre>) => financeService.updateDonneurOrdre(id, donneur);
 export const deleteDonneur = (id: string) => financeService.deleteDonneurOrdre(id);
 
-export const getOVTracking = (filters: any = {}) => financeService.getOrdresVirement(filters);
+export const getOVTracking = (filters: any = {}) => financeService.getSuiviVirements(filters);
 export const updateOVStatus = (id: string, status: any) => financeService.updateEtatVirement(id, status);
 export const validateOVFile = (file: File, donneurId: string) => financeService.importExcel(file, '', donneurId);
 export const processOV = (data: any) => financeService.createOrdreVirement(data);
 export const generateOVPDF = (id: string) => financeService.downloadPDF(id);
 export const generateOVTXT = (id: string) => financeService.downloadTXT(id);
 
-export const getFinanceAlerts = () => financeService.getSuiviNotifications();
+export const getFinanceAlerts = () => financeService.getSlaAlerts();
 export const notifyFinanceTeam = (data: any) => Promise.resolve({ success: true });
 
 export default financeService;

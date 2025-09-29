@@ -18,6 +18,11 @@ import ScannerIcon from '@mui/icons-material/Scanner';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import LogoutIcon from '@mui/icons-material/Logout';
+import UserBadge from './UserBadge';
+import arsLogo from '../assets/ars-logo.png';
+import { useAuthContext } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const sidebarLinks = [
   // SUPER_ADMIN: Full access to everything
@@ -28,26 +33,22 @@ const sidebarLinks = [
   // COMMENTED OUT: Redundant user management - Use Super Admin interface instead
   // { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
   { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
-  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'FINANCE'] },
+  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
   
-  // RESPONSABLE_DEPARTEMENT: Department dashboards and team data only
+  // RESPONSABLE_DEPARTEMENT: Read-only access to all modules like Super Admin
   { to: "/home/contracts", label: "Contrats", icon: <DescriptionIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
+  { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+  { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
+  { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
+  { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
+  { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'BO', 'BUREAU_ORDRE'] },
+  { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'SCAN_TEAM'] },
+  { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+  { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'CLIENT_SERVICE'] },
+  { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
   
   // CHEF_EQUIPE: Team management, global inbox, team dashboard
   { to: "/home/chef-equipe", label: "Chef d'Équipe", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN', 'CHEF_EQUIPE'] },
-  { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
-  
-  // GESTIONNAIRE: Only assigned files and personal treatment
-  { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
-  
-  // Specialized services
-  { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'BO', 'BUREAU_ORDRE'] },
-  { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
-  { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
-  { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'CLIENT_SERVICE'] },
-  { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'FINANCE'] },
   
   // Common access
   { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
@@ -62,6 +63,13 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, userRole }) => {
   const location = useLocation();
+  const { logout } = useAuthContext();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const sidebarStyle: React.CSSProperties = {
     position: 'fixed',
@@ -133,7 +141,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, userRole }) =>
       {open && <div style={overlayStyle} onClick={onToggle}></div>}
 
       <aside style={sidebarStyle}>
-        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '2rem', color: '#1976d2', textAlign: 'center', marginTop: '2.5rem' }}>ARS</div>
+        <div style={{ marginBottom: '1rem', textAlign: 'center', marginTop: '2.5rem' }}>
+          <img src={arsLogo} alt="ARS" style={{ height: '40px', width: 'auto' }} />
+        </div>
+        <UserBadge />
         <nav style={{ flex: 1, overflowY: 'auto' }}>
           {sidebarLinks
             .filter(link => !userRole || link.roles?.includes(userRole))
@@ -154,8 +165,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, userRole }) =>
               );
             })}
         </nav>
-        <div style={{ marginTop: 'auto', fontSize: '0.8rem', color: '#cbd5e1', textAlign: 'center', paddingBottom: '1rem' }}>
-          © {new Date().getFullYear()} ARS
+        <div style={{ marginTop: 'auto' }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              ...linkStyle,
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              width: '100%',
+              marginBottom: '1rem',
+              color: '#d32f2f',
+            }}
+          >
+            <span style={{ marginRight: 8, color: '#d32f2f', display: 'flex', alignItems: 'center' }}>
+              <LogoutIcon />
+            </span>
+            Déconnexion
+          </button>
+          <div style={{ fontSize: '0.8rem', color: '#cbd5e1', textAlign: 'center', paddingBottom: '1rem' }}>
+            © {new Date().getFullYear()} ARS
+          </div>
         </div>
       </aside>
     </>

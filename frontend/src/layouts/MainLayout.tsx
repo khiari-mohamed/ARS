@@ -6,6 +6,7 @@ import { LocalAPI } from '../services/axios';
 import io from 'socket.io-client';
 import { getSocketUrl } from '../utils/getSocketUrl';
 import { Sidebar } from '../components/Sidebar';
+
 import { IconButton, Badge, Menu, MenuItem, Typography, Box } from '@mui/material';
 import { Notifications as NotificationsIcon } from '@mui/icons-material';
 
@@ -146,6 +147,8 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     <div className={`layout-root${sidebarOpen ? "" : " sidebar-collapsed"}`}>
       {/* Sidebar Component */}
       <Sidebar open={sidebarOpen} onToggle={handleToggleSidebar} userRole={userRole} />
+      
+
       
       {/* Header with Bell Icon */}
       <Box sx={{ position: 'fixed', top: 16, right: 16, zIndex: 1200 }}>

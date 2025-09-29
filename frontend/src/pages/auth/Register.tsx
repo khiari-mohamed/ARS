@@ -5,9 +5,11 @@ import logo from '../../assets/ars-logo.png';
 
 const roleOptions = [
   { label: 'Super Admin', value: UserRole.SUPER_ADMIN },
+  { label: 'Administrateur', value: UserRole.ADMINISTRATEUR },
+  { label: 'Responsable Département', value: UserRole.RESPONSABLE_DEPARTEMENT },
   { label: 'Chef d’équipe', value: UserRole.CHEF_EQUIPE },
   { label: 'Gestionnaire', value: UserRole.GESTIONNAIRE },
-  { label: 'Customer Service', value: UserRole.CUSTOMER_SERVICE },
+  { label: 'Service Client', value: UserRole.CLIENT_SERVICE },
   { label: 'Finance', value: UserRole.FINANCE },
   { label: 'Équipe Scan', value: UserRole.SCAN_TEAM },
   { label: 'Bureau d\'Ordre', value: UserRole.BO },

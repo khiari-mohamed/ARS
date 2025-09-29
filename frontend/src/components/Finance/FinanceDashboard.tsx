@@ -16,7 +16,12 @@ import {
   Paper,
   Chip,
   CircularProgress,
-  Alert
+  Alert,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select
 } from '@mui/material';
 import {
   AccountBalance,
@@ -24,7 +29,9 @@ import {
   Assignment,
   CheckCircle,
   Warning,
-  Error
+  Error,
+  FilterList,
+  Refresh
 } from '@mui/icons-material';
 
 interface DashboardStats {
@@ -55,12 +62,34 @@ const FinanceDashboard: React.FC = () => {
   const [dashboard, setDashboard] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState({
+    compagnie: '',
+    client: '',
+    dateFrom: '',
+    dateTo: ''
+  });
+  const [showFilters, setShowFilters] = useState(false);
+  const [recentOrdersFilters, setRecentOrdersFilters] = useState({
+    compagnie: '',
+    client: '',
+    dateFrom: '',
+    dateTo: ''
+  });
+  const [showRecentOrdersFilters, setShowRecentOrdersFilters] = useState(false);
+  const [showAllRecentOrders, setShowAllRecentOrders] = useState(false);
 
   const loadDashboard = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await financeService.getFinanceDashboard();
+      
+      const queryParams = new URLSearchParams();
+      if (filters.compagnie) queryParams.append('compagnie', filters.compagnie);
+      if (filters.client) queryParams.append('client', filters.client);
+      if (filters.dateFrom) queryParams.append('dateFrom', filters.dateFrom);
+      if (filters.dateTo) queryParams.append('dateTo', filters.dateTo);
+      
+      const data = await financeService.getFinanceDashboard(queryParams.toString());
       setDashboard(data);
     } catch (err: any) {
       setError(err?.message || 'Erreur lors du chargement');
@@ -71,13 +100,36 @@ const FinanceDashboard: React.FC = () => {
           ordresEnCours: 0,
           ordresExecutes: 0,
           ordresRejetes: 0,
-          montantTotal: 0
+          montantTotal: 0,
+          demandesRecuperation: 0,
+          montantsRecuperes: 0
         },
-        recentOrdres: []
+        ordresVirement: []
       });
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  const handleFilterChange = (field: string, value: string) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+  
+  const handleRecentOrdersFilterChange = (field: string, value: string) => {
+    setRecentOrdersFilters(prev => ({ ...prev, [field]: value }));
+  };
+  
+  const applyFilters = () => {
+    loadDashboard();
+  };
+  
+  const clearFilters = () => {
+    setFilters({ compagnie: '', client: '', dateFrom: '', dateTo: '' });
+    setTimeout(() => loadDashboard(), 100);
+  };
+  
+  const clearRecentOrdersFilters = () => {
+    setRecentOrdersFilters({ compagnie: '', client: '', dateFrom: '', dateTo: '' });
   };
 
   useEffect(() => {
@@ -113,7 +165,7 @@ const FinanceDashboard: React.FC = () => {
     montantTotal: 0
   };
   
-  const recentOrdres: RecentOrdre[] = dashboard?.recentOrdres || [];
+  const ordresVirement = dashboard?.ordresVirement || [];
 
   const renderStatsCards = () => (
     <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -191,49 +243,186 @@ const FinanceDashboard: React.FC = () => {
     </Grid>
   );
 
-  const renderRecentOrdres = () => (
-    <Card elevation={2}>
-      <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Typography variant="h6">Ordres de Virement Récents</Typography>
-          <Button 
-            variant="outlined" 
-            size="small"
-            onClick={loadDashboard}
-          >
-            Actualiser
-          </Button>
-        </Box>
+  const getFilteredRecentOrders = () => {
+    let filtered = ordresVirement || [];
+    
+    if (recentOrdersFilters.compagnie) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.client?.toLowerCase().includes(recentOrdersFilters.compagnie.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.client) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.client?.toLowerCase().includes(recentOrdersFilters.client.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.dateFrom) {
+      filtered = filtered.filter((ordre: any) => 
+        new Date(ordre.dateCreation) >= new Date(recentOrdersFilters.dateFrom)
+      );
+    }
+    
+    if (recentOrdersFilters.dateTo) {
+      filtered = filtered.filter((ordre: any) => 
+        new Date(ordre.dateCreation) <= new Date(recentOrdersFilters.dateTo)
+      );
+    }
+    
+    return showAllRecentOrders ? filtered : filtered.slice(0, 10);
+  };
 
-        {recentOrdres.length > 0 ? (
+  const renderRecentOrdres = () => {
+    const filteredOrders = getFilteredRecentOrders();
+    
+    return (
+      <Card elevation={2}>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">Ordres de Virement Récents</Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<FilterList />}
+                size="small"
+                onClick={() => setShowRecentOrdersFilters(!showRecentOrdersFilters)}
+              >
+                Filtres
+              </Button>
+              <Button
+                variant={showAllRecentOrders ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => setShowAllRecentOrders(!showAllRecentOrders)}
+              >
+                {showAllRecentOrders ? 'Afficher moins' : 'Afficher tout'}
+              </Button>
+              <Button 
+                variant="outlined" 
+                size="small"
+                onClick={loadDashboard}
+              >
+                Actualiser
+              </Button>
+            </Box>
+          </Box>
+          
+          {/* Recent Orders Filters */}
+          {showRecentOrdersFilters && (
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
+              <Typography variant="subtitle2" sx={{ mb: 2 }}>Filtres pour les ordres récents</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="Compagnie d'assurance"
+                    value={recentOrdersFilters.compagnie}
+                    onChange={(e) => handleRecentOrdersFilterChange('compagnie', e.target.value)}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    fullWidth
+                    label="Client"
+                    value={recentOrdersFilters.client}
+                    onChange={(e) => handleRecentOrdersFilterChange('client', e.target.value)}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField
+                    fullWidth
+                    label="Date début"
+                    type="date"
+                    value={recentOrdersFilters.dateFrom}
+                    onChange={(e) => handleRecentOrdersFilterChange('dateFrom', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField
+                    fullWidth
+                    label="Date fin"
+                    type="date"
+                    value={recentOrdersFilters.dateTo}
+                    onChange={(e) => handleRecentOrdersFilterChange('dateTo', e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <Button 
+                    variant="outlined" 
+                    onClick={clearRecentOrdersFilters} 
+                    size="small"
+                    fullWidth
+                  >
+                    Effacer
+                  </Button>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+
+        {filteredOrders.length > 0 ? (
           <TableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell>Référence</TableCell>
                   <TableCell>Client</TableCell>
-                  <TableCell>Donneur d'Ordre</TableCell>
                   <TableCell>Montant</TableCell>
                   <TableCell>État</TableCell>
                   <TableCell>Date</TableCell>
+                  <TableCell>Demande Récupération</TableCell>
+                  <TableCell>Montant Récupéré</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {recentOrdres.slice(0, 5).map((ordre: any, index: number) => (
+                {filteredOrders.map((ordre: any, index: number) => (
                   <TableRow key={ordre.id || index} hover>
                     <TableCell>{ordre.reference}</TableCell>
-                    <TableCell>{ordre.bordereau?.client?.name || ordre.client}</TableCell>
-                    <TableCell>{ordre.donneurOrdre?.nom}</TableCell>
-                    <TableCell>{ordre.montantTotal.toLocaleString('fr-TN')} TND</TableCell>
+                    <TableCell>{ordre.client}</TableCell>
+                    <TableCell>{ordre.montant?.toLocaleString('fr-TN')} TND</TableCell>
                     <TableCell>
                       <Chip
-                        label={ordre.etatVirement}
-                        color={ordre.etatVirement === 'EXECUTE' ? 'success' : 'default'}
+                        label={ordre.statut}
+                        color={ordre.statut === 'EXECUTE' ? 'success' : ordre.statut === 'REJETE' ? 'error' : 'default'}
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
                       {new Date(ordre.dateCreation).toLocaleDateString('fr-FR')}
+                    </TableCell>
+                    <TableCell>
+                      {ordre.demandeRecuperation ? (
+                        <Box>
+                          <Chip label="Oui" color="warning" size="small" />
+                          {ordre.dateDemandeRecuperation && (
+                            <Typography variant="caption" display="block">
+                              {new Date(ordre.dateDemandeRecuperation).toLocaleDateString('fr-FR')}
+                            </Typography>
+                          )}
+                        </Box>
+                      ) : (
+                        <Chip label="Non" color="default" size="small" />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {ordre.montantRecupere ? (
+                        <Box>
+                          <Chip label="Oui" color="success" size="small" />
+                          {ordre.dateMontantRecupere && (
+                            <Typography variant="caption" display="block">
+                              {new Date(ordre.dateMontantRecupere).toLocaleDateString('fr-FR')}
+                            </Typography>
+                          )}
+                        </Box>
+                      ) : (
+                        <Chip label="Non" color="default" size="small" />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -243,16 +432,38 @@ const FinanceDashboard: React.FC = () => {
         ) : (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body1" color="textSecondary">
-              Aucun ordre de virement récent
+              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) 
+                ? 'Aucun ordre de virement trouvé avec ces filtres' 
+                : 'Aucun ordre de virement récent'
+              }
             </Typography>
             <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-              Les ordres de virement apparaîtront ici une fois créés
+              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo)
+                ? 'Essayez de modifier les critères de recherche'
+                : 'Les ordres de virement apparaîtront ici une fois créés'
+              }
+            </Typography>
+          </Box>
+        )}
+        
+        {/* Show count info */}
+        {filteredOrders.length > 0 && (
+          <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="caption" color="textSecondary">
+              {showAllRecentOrders 
+                ? `Affichage de tous les ${filteredOrders.length} ordres`
+                : `Affichage de ${Math.min(10, filteredOrders.length)} sur ${(ordresVirement || []).length} ordres`
+              }
+              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) && 
+                ' (filtrés)'
+              }
             </Typography>
           </Box>
         )}
       </CardContent>
     </Card>
   );
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -261,16 +472,82 @@ const FinanceDashboard: React.FC = () => {
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           Tableau de Bord Finance
         </Typography>
-        <Box>
-          <Button 
-            variant="contained" 
-            sx={{ mr: 2 }}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={<FilterList />}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            Filtres
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Refresh />}
             onClick={loadDashboard}
           >
             Actualiser
           </Button>
         </Box>
       </Box>
+      
+      {/* Filters Section */}
+      {showFilters && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Filtres</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                label="Compagnie d'assurance"
+                value={filters.compagnie}
+                onChange={(e) => handleFilterChange('compagnie', e.target.value)}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                label="Client"
+                value={filters.client}
+                onChange={(e) => handleFilterChange('client', e.target.value)}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <TextField
+                fullWidth
+                label="Date début"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <TextField
+                fullWidth
+                label="Date fin"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button variant="contained" onClick={applyFilters} size="small">
+                  Appliquer
+                </Button>
+                <Button variant="outlined" onClick={clearFilters} size="small">
+                  Effacer
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
 
       {/* Error Alert */}
       {error && (
@@ -291,6 +568,42 @@ const FinanceDashboard: React.FC = () => {
 
       {/* Recent Orders */}
       {renderRecentOrdres()}
+      
+      {/* Recovery Stats */}
+      {dashboard?.stats && (
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          <Grid item xs={12} md={6}>
+            <Card elevation={2}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Demandes de Récupération
+                </Typography>
+                <Typography variant="h4" color="warning.main">
+                  {dashboard.stats.demandesRecuperation || 0}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Ordres avec demande de récupération
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Card elevation={2}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Montants Récupérés
+                </Typography>
+                <Typography variant="h4" color="success.main">
+                  {dashboard.stats.montantsRecuperes || 0}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Ordres avec montant récupéré
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
     </Box>
   );
 };

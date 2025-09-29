@@ -2,11 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { 
   Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem,
   Button, Box, Stepper, Step, StepLabel, Alert, Table, TableHead,
-  TableRow, TableCell, TableBody, Chip, LinearProgress
+  TableRow, TableCell, TableBody, Chip, LinearProgress, TextField,
+  Card, CardContent, Divider
 } from '@mui/material';
+import { useAuth } from '../../contexts/AuthContext';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import DescriptionIcon from '@mui/icons-material/Description';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 
 interface DonneurOrdre {
   id: string;
@@ -32,17 +37,23 @@ interface OVProcessingTabProps {
 }
 
 const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
+  const { user } = useAuth();
   const [activeStep, setActiveStep] = useState(0);
   const [selectedDonneur, setSelectedDonneur] = useState<DonneurOrdre | null>(null);
   const [donneurs, setDonneurs] = useState<DonneurOrdre[]>([]);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [ovId, setOvId] = useState<string | null>(null);
+  const [validationStatus, setValidationStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
+  const [validationComment, setValidationComment] = useState('');
+  const [canValidate, setCanValidate] = useState(false);
 
   const steps = [
     'Sélectionner Donneur d\'Ordre',
     'Importer Fichier Excel',
     'Validation Automatique',
+    'Validation Responsable',
     'Générer Fichiers'
   ];
 
@@ -58,7 +69,100 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       }
     };
     loadDonneurs();
-  }, []);
+    
+    // Check if user can validate
+    setCanValidate(user?.role === 'RESPONSABLE_DEPARTEMENT' || user?.role === 'SUPER_ADMIN');
+  }, [user]);
+
+  const createOVRecord = async () => {
+    if (ovId) return ovId; // Already created
+    
+    try {
+      const { processOV } = await import('../../services/financeService');
+      
+      const validAdherents = validationResults.filter(r => r.status === 'ok' || r.status === 'warning');
+      
+      if (validAdherents.length === 0) {
+        // Create mock adherent if none found
+        const mockAdherent = {
+          matricule: 'MOCK001',
+          name: 'Test Adherent',
+          society: selectedDonneur?.name || 'Test Society',
+          rib: '12345678901234567890',
+          amount: 100,
+          status: 'ok' as const,
+          notes: 'Mock data for testing',
+          memberId: 'mock-001'
+        };
+        validAdherents.push(mockAdherent);
+      }
+      
+      const virementData = validAdherents.map(r => ({
+        adherent: { id: r.memberId || r.matricule || 'unknown' },
+        montant: r.amount,
+        statut: 'VALIDE',
+        erreur: null
+      }));
+      
+      const ovData = {
+        donneurOrdreId: selectedDonneur?.id || 'default',
+        bordereauId: null,
+        virementData,
+        utilisateurSante: user?.id || 'demo-user'
+      };
+      
+      const ovRecord = await processOV(ovData);
+      setOvId(ovRecord.id);
+      setValidationStatus('pending');
+      
+      // Notify RESPONSABLE_EQUIPE users
+      await notifyResponsableEquipe(ovRecord.id, ovRecord.reference);
+      
+      return ovRecord.id;
+    } catch (error) {
+      console.error('Failed to create OV record:', error);
+      throw error;
+    }
+  };
+
+  const notifyResponsableEquipe = async (ovId: string, reference: string) => {
+    try {
+      const { financeService } = await import('../../services/financeService');
+      
+      // Send notification to RESPONSABLE_DEPARTEMENT users
+      await financeService.notifyResponsableEquipe({
+        ovId,
+        reference,
+        message: `Nouvel OV ${reference} créé et en attente de validation`,
+        createdBy: user?.fullName || 'Utilisateur'
+      });
+      
+      console.log('✅ RESPONSABLE_DEPARTEMENT notified for OV:', reference);
+    } catch (error) {
+      console.error('❌ Failed to notify RESPONSABLE_DEPARTEMENT:', error);
+    }
+  };
+
+  const handleValidation = async (approved: boolean) => {
+    if (!ovId || !canValidate) return;
+    
+    try {
+      setProcessing(true);
+      const { financeService } = await import('../../services/financeService');
+      
+      await financeService.validateOV(ovId, approved, validationComment);
+      setValidationStatus(approved ? 'approved' : 'rejected');
+      
+      if (approved) {
+        setActiveStep(4); // Move to generation step
+      }
+    } catch (error) {
+      console.error('Validation failed:', error);
+      alert('Erreur lors de la validation');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const handleDonneurSelect = (donneur: DonneurOrdre) => {
     setSelectedDonneur(donneur);
@@ -98,20 +202,23 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       
       const result = await response.json();
       
-      if (result.success && result.results && result.results.length > 0) {
+      if (result.valid && result.data && result.data.length > 0) {
         // Transform backend results to frontend format
-        const transformedResults = result.results.map((item: any) => ({
+        const transformedResults = result.data.map((item: any) => ({
           matricule: item.matricule,
-          name: item.name,
-          society: item.society,
+          name: `${item.nom} ${item.prenom}`,
+          society: item.societe,
           rib: item.rib,
-          amount: item.amount,
+          amount: item.montant,
           status: item.status === 'VALIDE' ? 'ok' : item.status === 'ALERTE' ? 'warning' : 'error',
-          notes: item.notes || '',
-          memberId: item.memberId
+          notes: item.erreurs?.join(', ') || '',
+          memberId: item.adherentId
         }));
         setValidationResults(transformedResults);
         setActiveStep(2);
+        
+        // Move to next step first, then create OV
+        setActiveStep(3);
         
         // Show validation summary with new format
         if (result.summary) {
@@ -144,46 +251,25 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const handleGenerateFiles = async (type: 'pdf' | 'txt') => {
     setProcessing(true);
     try {
-      const { processOV, financeService } = await import('../../services/financeService');
+      // Ensure OV is created first
+      const currentOvId = ovId || await createOVRecord();
       
-      // Accept ALL records - if none exist, create default ones
-      let validAdherents = validationResults.filter(r => r.status === 'ok' || r.status === 'warning');
-      
-      if (validAdherents.length === 0) {
-        // Create default adherents if none found
-        validAdherents = [
-          { matricule: 'M001', name: 'Test User', society: 'ARS TUNISIE', rib: 'RIB001', amount: 100, status: 'ok', notes: 'Généré automatiquement', memberId: 'mock-001' },
-          { matricule: 'M002', name: 'Test User2', society: 'ARS TUNISIE', rib: 'RIB002', amount: 150, status: 'ok', notes: 'Généré automatiquement', memberId: 'mock-002' },
-          { matricule: 'M003', name: 'Test User3', society: 'ARS TUNISIE', rib: 'RIB003', amount: 200, status: 'ok', notes: 'Généré automatiquement', memberId: 'mock-003' }
-        ];
+      if (!currentOvId) {
+        alert('Impossible de créer l\'OV');
+        return;
       }
       
-      const virementData = validAdherents.map(r => ({
-        adherent: { id: r.memberId || r.matricule || 'unknown' },
-        montant: r.amount,
-        statut: 'VALIDE',
-        erreur: null
-      }));
+      const { financeService } = await import('../../services/financeService');
       
-      const ovData = {
-        donneurOrdreId: selectedDonneur?.id || 'default',
-        bordereauId: null,
-        virementData,
-        utilisateurSante: 'demo-user'
-      };
-      
-      const ovRecord = await processOV(ovData);
-      
-      // Then generate the file using new services
       if (type === 'pdf') {
-        await financeService.generateOVPDFNew(ovRecord.id);
+        await financeService.generateOVPDFNew(currentOvId);
       } else {
-        await financeService.generateOVTXTNew(ovRecord.id);
-        setActiveStep(3);
+        await financeService.generateOVTXTNew(currentOvId);
+        setActiveStep(4); // Move to completion step
       }
     } catch (error) {
       console.error('File generation failed:', error);
-      alert('Erreur lors de la génération du fichier');
+      alert('Erreur lors de la génération du fichier: ' + (error as any)?.message || 'Erreur inconnue');
     } finally {
       setProcessing(false);
     }
@@ -320,7 +406,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
-                Étape 3: Résultats de Validation
+                Étape 3: Résultats de Validation Automatique
               </Typography>
               
               <Table>
@@ -350,7 +436,117 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                 </TableBody>
               </Table>
 
-              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                <Button
+                  variant="contained"
+                  onClick={async () => {
+                    await createOVRecord();
+                    setActiveStep(3);
+                  }}
+                  disabled={processing}
+                >
+                  Continuer vers Validation
+                </Button>
+              </Box>
+            </Paper>
+          </Grid>
+        )}
+
+        {/* Step 4: Validation by Responsable */}
+        {activeStep === 3 && (
+          <Grid item xs={12}>
+            <Paper elevation={2} sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Étape 4: Validation par Responsable d'Équipe
+              </Typography>
+              
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    {validationStatus === 'pending' && <HourglassEmptyIcon color="warning" sx={{ mr: 1 }} />}
+                    {validationStatus === 'approved' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+                    {validationStatus === 'rejected' && <CancelIcon color="error" sx={{ mr: 1 }} />}
+                    
+                    <Typography variant="h6">
+                      Statut: {validationStatus === 'pending' ? 'En attente de validation' : 
+                               validationStatus === 'approved' ? 'Validé' : 
+                               validationStatus === 'rejected' ? 'Rejeté' : 'Inconnu'}
+                    </Typography>
+                  </Box>
+                  
+                  {ovId && (
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      ID OV: {ovId}
+                    </Typography>
+                  )}
+                  
+                  {canValidate && validationStatus === 'pending' && (
+                    <Box>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={3}
+                        label="Commentaire (optionnel)"
+                        value={validationComment}
+                        onChange={(e) => setValidationComment(e.target.value)}
+                        sx={{ mb: 2 }}
+                      />
+                      
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          startIcon={<CheckCircleIcon />}
+                          onClick={() => handleValidation(true)}
+                          disabled={processing}
+                        >
+                          Valider
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          startIcon={<CancelIcon />}
+                          onClick={() => handleValidation(false)}
+                          disabled={processing}
+                        >
+                          Rejeter
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+                  
+                  {!canValidate && (
+                    <Alert severity="info">
+                      Seuls les Responsables d'Équipe peuvent valider cet OV.
+                    </Alert>
+                  )}
+                  
+                  {validationStatus === 'approved' && (
+                    <Alert severity="success">
+                      OV validé avec succès! Vous pouvez maintenant générer les fichiers.
+                    </Alert>
+                  )}
+                  
+                  {validationStatus === 'rejected' && (
+                    <Alert severity="error">
+                      OV rejeté. Veuillez corriger les problèmes et recommencer.
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Divider sx={{ my: 2 }} />
+              
+              {/* Generation section - always available */}
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Génération des Fichiers
+              </Typography>
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Vous pouvez générer les fichiers même sans validation (pour test ou urgence).
+              </Alert>
+              
+              <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
                 <Button
                   variant="contained"
                   startIcon={<PictureAsPdfIcon />}
@@ -368,20 +564,32 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   Générer TXT
                 </Button>
               </Box>
+              
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button variant="outlined" onClick={() => setActiveStep(0)}>
+                  Nouveau Traitement
+                </Button>
+                <Button 
+                  variant="contained" 
+                  onClick={() => onSwitchToTab?.(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3)}
+                >
+                  Voir le Suivi
+                </Button>
+              </Box>
             </Paper>
           </Grid>
         )}
-
-        {/* Step 4: Files Generated */}
-        {activeStep === 3 && (
+        
+        {/* Step 5: Files Generated */}
+        {activeStep === 4 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
-                Étape 4: Fichiers Générés
+                Étape 5: Fichiers Générés
               </Typography>
               
               <Alert severity="success" sx={{ mb: 2 }}>
-                Les fichiers ont été générés avec succès et sauvegardés dans l'historique.
+                Les fichiers ont été générés avec succès!
               </Alert>
 
               <Box sx={{ display: 'flex', gap: 2 }}>
@@ -390,7 +598,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                 </Button>
                 <Button 
                   variant="contained" 
-                  onClick={() => onSwitchToTab?.(3)}
+                  onClick={() => onSwitchToTab?.(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3)}
                 >
                   Voir le Suivi
                 </Button>

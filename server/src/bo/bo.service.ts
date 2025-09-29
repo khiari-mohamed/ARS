@@ -146,17 +146,25 @@ export class BOService {
           
           // First, get or create a default contract if none provided
           let contractId = entry.contractId;
+          let contractDelaiReglement = entry.delaiReglement;
+          
           if (!contractId) {
-            // Find the first contract for this client or create a default one
+            // Find the first contract for this client
             const existingContract = await this.prisma.contract.findFirst({
               where: { clientId: entry.clientId }
             });
             
             if (existingContract) {
               contractId = existingContract.id;
-            } else {
-              // Skip contract creation if no existing contract - just use undefined
-              contractId = undefined;
+              contractDelaiReglement = existingContract.delaiReglement;
+            }
+          } else {
+            // Contract specified, use its delaiReglement
+            const contract = await this.prisma.contract.findUnique({
+              where: { id: contractId }
+            });
+            if (contract) {
+              contractDelaiReglement = contract.delaiReglement;
             }
           }
           
@@ -164,7 +172,7 @@ export class BOService {
             reference: entry.reference,
             clientId: entry.clientId,
             dateReception: entry.dateReception ? new Date(entry.dateReception) : new Date(),
-            delaiReglement: entry.delaiReglement || 30,
+            delaiReglement: contractDelaiReglement || 30, // Use contract's delaiReglement
             nombreBS: entry.nombreDocuments,
             statut: 'EN_ATTENTE',
           };

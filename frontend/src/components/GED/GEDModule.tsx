@@ -19,17 +19,17 @@ const GEDModule: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
 
-  // Role-based tab filtering for Gestionnaire
+  // Role-based tab filtering
   const allTabs = [
-    { label: 'Dashboard', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
-    { label: 'Ingestion', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
-    { label: 'Corbeille', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-    { label: 'Recherche', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+    { label: 'Dashboard', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+    { label: 'Ingestion', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'SCAN_TEAM'] },
+    { label: 'Corbeille', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+    { label: 'Recherche', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
     // COMMENTED OUT: Extra tabs not in core requirements
     // { label: 'Workflows', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] },
     // { label: 'Intégrations', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
     // { label: 'PaperStream', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
-    { label: 'Rapports', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] }
+    { label: 'Rapports', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE'] }
   ];
 
   const availableTabs = allTabs.filter(tab => 
@@ -78,11 +78,18 @@ const GEDModule: React.FC = () => {
       {/* Desktop View */}
       {!isMobile && (
         <Paper elevation={2} sx={{ p: 3 }}>
-          {/* Role-based access warning for Gestionnaire */}
+          {/* Role-based access warnings */}
           {user?.role === 'GESTIONNAIRE' && (
             <Box sx={{ mb: 2, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
               <Typography variant="body2" color="warning.dark">
                 ⚠️ Accès GED limité: Vous ne pouvez consulter que les documents liés à vos dossiers assignés
+              </Typography>
+            </Box>
+          )}
+          {user?.role === 'RESPONSABLE_DEPARTEMENT' && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+              <Typography variant="body2" color="info.dark">
+                ℹ️ Mode Lecture Seule: Vous avez accès à tous les modules GED en consultation uniquement
               </Typography>
             </Box>
           )}

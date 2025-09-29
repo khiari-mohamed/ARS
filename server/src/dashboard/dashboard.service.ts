@@ -607,7 +607,7 @@ export class DashboardService {
   private buildUserFilters(user: any, filters: any = {}) {
     const where: any = {};
     
-    // Apply role-based filtering
+    // Apply role-based filtering - RESPONSABLE_DEPARTEMENT sees everything like SUPER_ADMIN
     if (user.role === 'GESTIONNAIRE') {
       where.assignedToUserId = user.id;
     } else if (user.role === 'CHEF_EQUIPE') {
@@ -617,6 +617,7 @@ export class DashboardService {
     } else if (user.role === 'SCAN') {
       where.statut = { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE'] };
     }
+    // SUPER_ADMIN, ADMINISTRATEUR, and RESPONSABLE_DEPARTEMENT see all data - no additional filters
     
     // Apply date filters
     if (filters.fromDate || filters.toDate) {
@@ -1012,6 +1013,12 @@ export class DashboardService {
           return this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
         case 'ADMINISTRATEUR':
           return this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
+        case 'RESPONSABLE_DEPARTEMENT':
+          // RESPONSABLE_DEPARTEMENT gets exact same data as SUPER_ADMIN but read-only
+          const responsableDashboard = await this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          responsableDashboard.role = 'RESPONSABLE_DEPARTEMENT';
+          responsableDashboard.permissions = [...responsableDashboard.permissions, 'READ_ONLY'];
+          return responsableDashboard;
         case 'CHEF_EQUIPE':
           return this.getChefEquipeDashboard(kpis, performance, slaStatus, alerts, user, filters);
         case 'GESTIONNAIRE':

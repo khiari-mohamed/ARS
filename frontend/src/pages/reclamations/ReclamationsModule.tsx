@@ -15,6 +15,7 @@ import ChefCorbeille from '../../components/reclamations/ChefCorbeille';
 import GestionnaireCorbeille from '../../components/reclamations/GestionnaireCorbeille';
 import BOReclamationForm from '../../components/reclamations/BOReclamationForm';
 import RealTimeAlerts from '../../components/reclamations/RealTimeAlerts';
+import OutlookEmailMonitoring from '../../components/reclamations/OutlookEmailMonitoring';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ReclamationsModule: React.FC = () => {
@@ -67,6 +68,7 @@ const ReclamationsModule: React.FC = () => {
       case 'SUPER_ADMIN':
         return [
           { label: 'Dashboard', component: <ReclamationDashboard /> },
+          { label: 'Emails Outlook', component: <OutlookEmailMonitoring /> },
           // COMMENTED OUT: Redundant Corbeille Chef - Use dedicated Chef d'équipe module instead
           // { label: 'Corbeille Chef', component: <ChefCorbeille /> },
           { label: 'Liste Complète', component: <ReclamationsList /> },

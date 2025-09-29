@@ -31,6 +31,7 @@ import AssignmentCriteria from '../components/Workflow/AssignmentCriteria';
 import TeamWorkloadConfig from '../components/Workflow/TeamWorkloadConfig';
 import DocumentAssignmentManager from '../components/DocumentAssignmentManager';
 import DocumentAnalyticsDashboard from '../components/analytics/DocumentAnalyticsDashboard';
+import OutlookEmailMonitoring from '../components/reclamations/OutlookEmailMonitoring';
 import { fetchSystemHealth, fetchSystemStats } from '../services/superAdminService';
 
 interface TabPanelProps {
@@ -239,6 +240,7 @@ const SuperAdminDashboard: React.FC = () => {
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={activeTab} onChange={handleTabChange} aria-label="super admin tabs">
             {/* <Tab label="Temps Réel" /> */}
+            <Tab label="Emails Outlook" />
             <Tab label="Alertes Équipes" />
             <Tab label="Analytics Documents" />
             {/* <Tab label="Affectation Documents" /> */}
@@ -256,10 +258,14 @@ const SuperAdminDashboard: React.FC = () => {
         </TabPanel> */}
 
         <TabPanel value={activeTab} index={0}>
-          <SuperAdminAlerts />
+          <OutlookEmailMonitoring />
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
+          <SuperAdminAlerts />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={2}>
           <DocumentAnalyticsDashboard />
         </TabPanel>
 
@@ -287,7 +293,7 @@ const SuperAdminDashboard: React.FC = () => {
           <SystemConfigurationPanel />
         </TabPanel> */}
 
-        <TabPanel value={activeTab} index={2}>
+        <TabPanel value={activeTab} index={3}>
           <AdvancedUserManagement />
         </TabPanel>
       </Paper>

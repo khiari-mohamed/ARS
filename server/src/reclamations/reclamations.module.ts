@@ -15,6 +15,8 @@ import { PredictiveModelsService } from './predictive-models.service';
 import { ContinuousLearningService } from './continuous-learning.service';
 import { GECAutoReplyService } from './gec-auto-reply.service';
 import { TuniclaimIntegrationService } from './tuniclaim-integration.service';
+import { OutlookIntegrationService } from './outlook-integration.service';
+import { OutlookSchedulerService } from './outlook-scheduler.service';
 import { GecModule } from '../gec/gec.module';
 
 @Module({
@@ -34,7 +36,9 @@ import { GecModule } from '../gec/gec.module';
     AIClassificationService,
     CustomerPortalService,
     GECAutoReplyService,
-    TuniclaimIntegrationService
+    TuniclaimIntegrationService,
+    OutlookIntegrationService,
+    OutlookSchedulerService
   ],
   exports: [
     ReclamationsService,

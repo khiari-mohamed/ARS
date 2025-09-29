@@ -7,7 +7,7 @@ function hasPermission(role: UserRole, permission: string): boolean {
   const permissions = {
     'SUPER_ADMIN': ['USER_MANAGEMENT', 'SYSTEM_CONFIG', 'ALL_ACCESS'],
     'ADMINISTRATEUR': ['USER_MANAGEMENT', 'REPORTS_ACCESS'],
-    'RESPONSABLE_DEPARTEMENT': ['TEAM_MANAGEMENT'],
+    'RESPONSABLE_DEPARTEMENT': ['READ_ONLY_ALL_ACCESS'], // Read-only access to all modules
     'CHEF_EQUIPE': ['TEAM_MANAGEMENT'],
     'GESTIONNAIRE': ['BASIC_ACCESS'],
     'CLIENT_SERVICE': ['BASIC_ACCESS'],
@@ -16,7 +16,7 @@ function hasPermission(role: UserRole, permission: string): boolean {
     'BO': ['BO_ACCESS']
   };
   
-  return permissions[role]?.includes(permission) || permissions[role]?.includes('ALL_ACCESS') || false;
+  return permissions[role]?.includes(permission) || permissions[role]?.includes('ALL_ACCESS') || permissions[role]?.includes('READ_ONLY_ALL_ACCESS') || false;
 }
 import * as bcrypt from 'bcrypt';
 import { addDays, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -70,6 +70,21 @@ export class UsersService {
       throw new BadRequestException('Password must be at least 8 characters with uppercase, lowercase, and number.');
     }
 
+    // REQUIREMENT: Gestionnaires must be assigned to a team leader
+    if (data.role === 'GESTIONNAIRE') {
+      if (!data.teamLeaderId) {
+        throw new BadRequestException('Les gestionnaires doivent être affectés à un chef d\'\u00e9quipe.');
+      }
+      
+      // Validate team leader exists and has correct role
+      const teamLeader = await this.prisma.user.findUnique({ 
+        where: { id: data.teamLeaderId } 
+      });
+      if (!teamLeader || teamLeader.role !== 'CHEF_EQUIPE') {
+        throw new BadRequestException('Le chef d\'\u00e9quipe spécifié n\'existe pas ou n\'a pas le bon rôle.');
+      }
+    }
+
     // Hash password - ensure password is provided
     if (!data.password) {
       throw new BadRequestException('Password is required');
@@ -82,6 +97,7 @@ export class UsersService {
       fullName: data.fullName,
       role: data.role,
       department: data.department || null,
+      teamLeaderId: data.teamLeaderId || null,
       active: data.active ?? true
     };
 
@@ -164,6 +180,23 @@ export class UsersService {
 
   async update(id: string, data: any, updatedBy?: string) {
     const user = await this.findById(id);
+    
+    // REQUIREMENT: Gestionnaires must be assigned to a team leader
+    if (data.role === 'GESTIONNAIRE' || (user.role === 'GESTIONNAIRE' && data.teamLeaderId !== undefined)) {
+      if (!data.teamLeaderId && user.role === 'GESTIONNAIRE') {
+        throw new BadRequestException('Les gestionnaires doivent être affectés à un chef d\'\u00e9quipe.');
+      }
+      
+      if (data.teamLeaderId) {
+        // Validate team leader exists and has correct role
+        const teamLeader = await this.prisma.user.findUnique({ 
+          where: { id: data.teamLeaderId } 
+        });
+        if (!teamLeader || teamLeader.role !== 'CHEF_EQUIPE') {
+          throw new BadRequestException('Le chef d\'\u00e9quipe spécifié n\'existe pas ou n\'a pas le bon rôle.');
+        }
+      }
+    }
     
     // Handle password update
     if (data.password) {

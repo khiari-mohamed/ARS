@@ -272,7 +272,7 @@ export class AnalyticsService {
   }
 
   private checkAnalyticsRole(user: any) {
-    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'SCAN', 'BO', 'GESTIONNAIRE'].includes(user.role)) {
+    if (!['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'SCAN', 'BO', 'GESTIONNAIRE'].includes(user.role)) {
       throw new ForbiddenException('Access denied');
     }
   }

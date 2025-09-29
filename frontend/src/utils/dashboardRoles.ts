@@ -22,6 +22,11 @@ export const DASHBOARD_ROLES = {
     'ADMINISTRATEUR'
   ],
 
+  SUPER_ADMIN_LEVEL_ACCESS: [
+    'SUPER_ADMIN',
+    'RESPONSABLE_DEPARTEMENT'  // Same view as Super Admin but read-only
+  ],
+
   MANAGEMENT_ROLES: [
     'SUPER_ADMIN',
     'ADMINISTRATEUR',
@@ -32,6 +37,7 @@ export const DASHBOARD_ROLES = {
   FINANCIAL_ROLES: [
     'SUPER_ADMIN',
     'ADMINISTRATEUR',
+    'RESPONSABLE_DEPARTEMENT',  // Can view financial data but read-only
     'FINANCE'
   ]
 } as const;
@@ -50,6 +56,14 @@ export function hasDashboardAccess(role?: string): boolean {
 export function hasAdminAccess(role?: string): boolean {
   if (!role) return false;
   return DASHBOARD_ROLES.ADMIN_ROLES.includes(role as any);
+}
+
+/**
+ * Check if a role has Super Admin level access (same view as Super Admin)
+ */
+export function hasSuperAdminLevelAccess(role?: string): boolean {
+  if (!role) return false;
+  return DASHBOARD_ROLES.SUPER_ADMIN_LEVEL_ACCESS.includes(role as any);
 }
 
 /**
@@ -99,7 +113,7 @@ export function canViewFeature(role?: string, feature?: string): boolean {
     case 'client_stats':
     case 'global_corbeille':
     case 'workforce_estimator':
-      return hasAdminAccess(role);
+      return hasSuperAdminLevelAccess(role) || hasAdminAccess(role);
     
     case 'team_management':
     case 'assign_tasks':

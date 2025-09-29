@@ -104,28 +104,28 @@ export const useRoleAccess = (): RolePermissions => {
 
       case UserRole.RESPONSABLE_DEPARTEMENT:
         return {
-          // Department dashboards and team data only
-          canAccessGlobalDashboard: false,
+          // Same view as Super Admin but read-only
+          canAccessGlobalDashboard: true,
           canAccessTeamDashboard: true,
           canAccessPersonalDashboard: true,
-          canAccessUserManagement: false,
-          canAccessFinance: false,
+          canAccessUserManagement: true, // Can view users but read-only
+          canAccessFinance: true,
           canAccessAnalytics: true,
           canAccessContracts: true,
-          canAccessTuniclaim: false,
-          canViewAllBordereaux: false,
+          canAccessTuniclaim: true,
+          canViewAllBordereaux: true,
           canViewTeamBordereaux: true,
           canViewAssignedBordereaux: true,
-          canAssignBordereaux: true,
-          canReassignBordereaux: true,
-          canCreateUsers: false,
-          canManageTeam: true,
-          canEscalateReclamations: true,
-          canAccessGlobalReports: false,
+          canAssignBordereaux: false, // Read-only: cannot assign
+          canReassignBordereaux: false, // Read-only: cannot reassign
+          canCreateUsers: false, // Read-only: cannot create users
+          canManageTeam: false, // Read-only: cannot manage team
+          canEscalateReclamations: false, // Read-only: cannot escalate
+          canAccessGlobalReports: true,
           canAccessTeamReports: true,
           isRestrictedToTeam: false,
           isRestrictedToAssigned: false,
-          isRestrictedToDepartment: true,
+          isRestrictedToDepartment: false, // Can see all departments like Super Admin
         };
 
       case UserRole.CHEF_EQUIPE:
@@ -135,7 +135,7 @@ export const useRoleAccess = (): RolePermissions => {
           canAccessTeamDashboard: true,
           canAccessPersonalDashboard: true,
           canAccessUserManagement: false,
-          canAccessFinance: false,
+          canAccessFinance: true,
           canAccessAnalytics: false,
           canAccessContracts: false,
           canAccessTuniclaim: true,

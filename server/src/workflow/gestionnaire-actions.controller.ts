@@ -158,4 +158,13 @@ export class GestionnaireActionsController {
       message: 'Upload endpoint ready - files will be processed'
     };
   }
+
+  @Post('modify-status')
+  @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  async modifyStatus(
+    @Body() body: { dossierId: string; newStatus: string },
+    @Request() req: any
+  ) {
+    return this.gestionnaireActionsService.modifyDossierStatus(body.dossierId, body.newStatus, req.user.id);
+  }
 }

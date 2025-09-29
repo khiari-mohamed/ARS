@@ -691,4 +691,109 @@ export class ReclamationsService {
     // For now, just return success
     return { success: true, alertId, readAt: new Date().toISOString() };
   }
+
+  // Bulk import reclamations from Excel
+  async bulkImportFromExcel(file: any, userId: string) {
+    const XLSX = require('xlsx');
+    
+    try {
+      if (!file.buffer) {
+        throw new Error('Fichier non reçu correctement');
+      }
+      
+      console.log('Processing Excel file:', file.originalname, 'Buffer size:', file.buffer.length);
+      
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet);
+      
+      console.log('Extracted', data.length, 'rows from Excel');
+      
+      const results = {
+        successful: 0,  
+        failed: 0,
+        errors: [] as any[]
+      };
+      
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i] as any;
+        
+        try {
+          // Validate required fields
+          if (!row.clientName || !row.type || !row.description) {
+            results.errors.push({ row: i + 1, error: 'Champs requis manquants: clientName, type, description' });
+            results.failed++;
+            continue;
+          }
+          
+          // Find client by name
+          const client = await this.prisma.client.findFirst({
+            where: {
+              name: {
+                contains: row.clientName,
+                mode: 'insensitive'
+              }
+            }
+          });
+          
+          if (!client) {
+            results.errors.push({ row: i + 1, error: `Client non trouvé: ${row.clientName}` });
+            results.failed++;
+            continue;
+          }
+          
+          // Find assignee if specified
+          let assignedToId: string | undefined = undefined;
+          if (row.assignedTo) {
+            const assignee = await this.prisma.user.findFirst({
+              where: {
+                fullName: {
+                  contains: row.assignedTo,
+                  mode: 'insensitive'
+                },
+                role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] }
+              }
+            });
+            assignedToId = assignee?.id;
+          }
+          
+          // Create reclamation
+          const reclamation = await this.prisma.reclamation.create({
+            data: {
+              clientId: client.id,
+              type: row.type || 'AUTRE',
+              severity: row.severity || 'MOYENNE',
+              status: 'OPEN',
+              description: row.description,
+              department: row.department || 'RECLAMATIONS',
+              assignedToId,
+              createdById: userId
+            }
+          });
+          
+          // Create history entry
+          await this.prisma.reclamationHistory.create({
+            data: {
+              reclamationId: reclamation.id,
+              userId,
+              action: 'BULK_IMPORT',
+              toStatus: 'OPEN',
+              description: 'Réclamation créée via import Excel'
+            }
+          });
+          
+          results.successful++;
+        } catch (error) {
+          results.errors.push({ row: i + 1, error: error.message });
+          results.failed++;
+        }
+      }
+      
+      return results;
+    } catch (error) {
+      throw new Error(`Erreur lors de la lecture du fichier Excel: ${error.message}`);
+    }
+  }
 }

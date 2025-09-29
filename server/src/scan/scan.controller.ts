@@ -24,13 +24,13 @@ export class ScanController {
   constructor(private readonly scanService: ScanService) {}
 
   @Get('status')
-  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getScanStatus() {
     return this.scanService.getScanStatus();
   }
 
   @Get('scanners')
-  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getScanners() {
     return this.scanService.detectScanners();
   }
@@ -101,13 +101,13 @@ export class ScanController {
   }
 
   @Get('activity')
-  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getRecentActivity() {
     return this.scanService.getRecentScanActivity();
   }
 
   @Get('activity-chart')
-  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getScanActivityChart() {
     return this.scanService.getScanActivityChart();
   }
@@ -131,7 +131,7 @@ export class ScanController {
   }
 
   @Get('queue')
-  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getScanQueue() {
     return this.scanService.getScanQueue();
   }
@@ -171,7 +171,7 @@ export class ScanController {
   }
 
   @Get('debug-bordereaux')
-  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async debugBordereaux() {
     return this.scanService.debugBordereauxStatus();
   }
@@ -183,7 +183,7 @@ export class ScanController {
   }
 
   @Get('dashboard-stats')
-  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDashboardStats() {
     return this.scanService.getScanDashboardStats();
   }

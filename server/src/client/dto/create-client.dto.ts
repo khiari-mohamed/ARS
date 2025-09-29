@@ -31,9 +31,8 @@ export class CreateClientDto {
   reclamationDelay: number;
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  gestionnaireIds?: string[];
+  @IsString()
+  teamLeaderId?: string;
 
   @IsOptional()
   @IsObject()

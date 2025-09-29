@@ -18,7 +18,7 @@ import { UserRole } from '../auth/user-role.enum';
 import { Request } from 'express';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPER_ADMIN)
+@Roles(UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
 @Controller('super-admin')
 export class SuperAdminController {
   constructor(private readonly superAdminService: SuperAdminService) {}

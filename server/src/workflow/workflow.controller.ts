@@ -128,7 +128,7 @@ export class WorkflowController {
    * Get BO corbeille - documents waiting for processing
    */
   @Get('corbeille/bo')
-  @Roles(UserRole.BO, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.BO, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getBOCorbeille(@Request() req: any) {
     return this.boWorkflowService.getBOCorbeille(req.user.id);
   }
@@ -137,7 +137,7 @@ export class WorkflowController {
    * Process bordereau from BO to SCAN
    */
   @Post('bo/process-for-scan/:bordereauId')
-  @Roles(UserRole.BO, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.BO, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async processBordereauForScan(
     @Param('bordereauId') bordereauId: string,
     @Request() req: any
@@ -149,7 +149,7 @@ export class WorkflowController {
    * Get SCAN corbeille - documents ready for scanning
    */
   @Get('corbeille/scan')
-  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getScanCorbeille(@Request() req: any) {
     return this.scanWorkflowService.getScanCorbeille(req.user.id);
   }
@@ -158,7 +158,7 @@ export class WorkflowController {
    * Start scanning a bordereau
    */
   @Post('scan/start/:bordereauId')
-  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async startScan(
     @Param('bordereauId') bordereauId: string,
     @Request() req: any
@@ -170,7 +170,7 @@ export class WorkflowController {
    * Complete scanning a bordereau
    */
   @Post('scan/complete/:bordereauId')
-  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SCAN_TEAM, UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async completeScan(
     @Param('bordereauId') bordereauId: string,
     @Request() req: any

@@ -13,6 +13,46 @@ import FeedbackForm from './FeedbackForm';
 import BordereauStatusIndicator from './analytics/BordereauStatusIndicator';
 import WorkforceEstimator from './analytics/WorkforceEstimator';
 import GlobalCorbeille from './analytics/GlobalCorbeille';
+import { AssignmentSuggestions } from './BS/AssignmentSuggestions';
+import { RebalancingSuggestions } from './BS/RebalancingSuggestions';
+import { PrioritiesDashboard } from './BS/PrioritiesDashboard';
+import { ReadOnlyWrapper, useIsReadOnly } from './ReadOnlyWrapper';
+import { PermissionGuard } from './PermissionGuard';
+
+interface TableauBordStats {
+  totalDossiers: number;
+  clotures: number;
+  enCours: number;
+  nonAffectes: number;
+  progressBars: {
+    clotures: number;
+    enCours: number;
+    nonAffectes: number;
+  };
+}
+
+interface TypeDetail {
+  [key: string]: {
+    total: number;
+    clotures: number;
+    enCours: number;
+    nonAffectes: number;
+  };
+}
+
+interface Dossier {
+  id: string;
+  reference: string;
+  client: string;
+  type: string;
+  statut: string;
+  gestionnaire: string;
+  date: string;
+  joursEnCours: number;
+  priorite: string;
+  completionPercentage?: number;
+  dossierStates?: string[];
+}
 
 interface DashboardData {
   kpis: any;
@@ -43,6 +83,7 @@ interface DashboardData {
 
 const EnhancedDashboard: React.FC = () => {
   const { user } = useAuthContext();
+  const isReadOnly = useIsReadOnly();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +97,468 @@ const EnhancedDashboard: React.FC = () => {
   const [realTimeEnabled, setRealTimeEnabled] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [aiInsights, setAiInsights] = useState<any>(null);
+  
+  // Super Admin specific state (like Chef d'équipe)
+  const [superAdminStats, setSuperAdminStats] = useState<any>({
+    prestation: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    adhesion: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    complement: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    resiliation: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    reclamation: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
+    avenant: { total: 0, breakdown: {}, gestionnaireBreakdown: {} }
+  });
+  const [superAdminFilters, setSuperAdminFilters] = useState({
+    typeFilter: 'Tous',
+    societeFilter: 'Toutes',
+    statutFilter: 'Tous',
+    searchQuery: '',
+    gestionnaireFilter: 'Tous'
+  });
+  const [societes, setSocietes] = useState<string[]>([]);
+  const [superAdminGestionnaireAssignments, setSuperAdminGestionnaireAssignments] = useState<any[]>([]);
+  const [superAdminGestionnaires, setSuperAdminGestionnaires] = useState<string[]>([]);
+  const [superAdminDerniersDossiers, setSuperAdminDerniersDossiers] = useState<any[]>([]);
+  const [superAdminDossiersEnCours, setSuperAdminDossiersEnCours] = useState<any[]>([]);
+  const [superAdminAllDossiers, setSuperAdminAllDossiers] = useState<any[]>([]);
+  const [showSuperAdminPDFModal, setShowSuperAdminPDFModal] = useState(false);
+  const [currentSuperAdminPDFUrl, setCurrentSuperAdminPDFUrl] = useState('');
+  const [currentSuperAdminDossier, setCurrentSuperAdminDossier] = useState<any>(null);
+
+  // Missing Chef d'équipe state variables
+  const [stats, setStats] = useState<TableauBordStats>({
+    totalDossiers: 0,
+    clotures: 0,
+    enCours: 0,
+    nonAffectes: 0,
+    progressBars: { clotures: 0, enCours: 0, nonAffectes: 0 }
+  });
+  const [typesDetail, setTypesDetail] = useState<TypeDetail>({});
+  const [derniersDossiers, setDerniersDossiers] = useState<Dossier[]>([]);
+  const [dossiersEnCours, setDossiersEnCours] = useState<Dossier[]>([]);
+  const [allGestionnaireAssignments, setAllGestionnaireAssignments] = useState<any[]>([]);
+  const [filteredGestionnaireAssignments, setFilteredGestionnaireAssignments] = useState<any[]>([]);
+  const [gestionnaireFilter, setGestionnaireFilter] = useState('Tous');
+  const [searchType, setSearchType] = useState('Ref. GSD');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('Tous types');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedDossier, setSelectedDossier] = useState<any>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState('');
+  const [pdfViewModalOpen, setPdfViewModalOpen] = useState(false);
+  const [statusModifyModalOpen, setStatusModifyModalOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState('');
+  const [dossierDetails, setDossierDetails] = useState<any>(null);
+  const [loadingDossierDetails, setLoadingDossierDetails] = useState(false);
+
+  // Fetch detailed dossier information
+  const fetchDossierDetails = async (dossierId: string) => {
+    console.log('🔍 DEBUG: fetchDossierDetails called with dossierId:', dossierId);
+    
+    try {
+      setLoadingDossierDetails(true);
+      
+      const endpoint = `/bordereaux/chef-equipe/tableau-bord/dossier/${dossierId}`;
+      console.log('🔍 DEBUG: Fetching dossier details from:', endpoint);
+      
+      const response = await LocalAPI.get(endpoint);
+      
+      console.log('🔍 DEBUG: Dossier details response:', {
+        status: response.status,
+        data: response.data,
+        documentsCount: response.data?.documents?.length || 0
+      });
+      
+      if (response.data) {
+        setDossierDetails(response.data);
+        console.log('🔍 DEBUG: Documents in dossier:', response.data.documents);
+      }
+    } catch (error: any) {
+      console.error('🔍 DEBUG: Error fetching dossier details:', {
+        error,
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+    } finally {
+      setLoadingDossierDetails(false);
+    }
+  };
+
+  // Handle document PDF view
+  const handleDocumentPDFView = async (documentId: string, documentName: string) => {
+    console.log('🔍 DEBUG: handleDocumentPDFView called with:', {
+      documentId,
+      documentName,
+      selectedDossier: selectedDossier?.id,
+      dossierDetails: dossierDetails
+    });
+    
+    try {
+      // Try the dossier PDF endpoint since document ID matches dossier ID
+      const endpoint = `/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${documentId}`;
+      console.log('🔍 DEBUG: Making request to endpoint:', endpoint);
+      
+      const response = await LocalAPI.get(endpoint);
+      
+      console.log('🔍 DEBUG: Response received:', {
+        status: response.status,
+        data: response.data,
+        headers: response.headers
+      });
+      
+      if (response.data.success && response.data.pdfUrl) {
+        // Construct direct file URL
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        let pdfUrl = response.data.pdfUrl;
+        
+        console.log('🔍 DEBUG: Original pdfUrl from server:', pdfUrl);
+        
+        // Extract just the file path from the URL
+        // The server returns: /api/bordereaux/chef-equipe/tableau-bord/serve-pdf//uploads/bordereaux/BORD-2024-0012.pdf
+        // We want: /uploads/bordereaux/BORD-2024-0012.pdf
+        
+        // Find the uploads part
+        const uploadsIndex = pdfUrl.indexOf('/uploads/');
+        if (uploadsIndex !== -1) {
+          pdfUrl = pdfUrl.substring(uploadsIndex);
+        } else {
+          // Fallback: remove all API prefixes
+          pdfUrl = pdfUrl.replace('/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/', '');
+          pdfUrl = pdfUrl.replace('/serve-pdf/', '');
+          if (!pdfUrl.startsWith('/')) {
+            pdfUrl = '/' + pdfUrl;
+          }
+        }
+        
+        // Clean up double slashes
+        const cleanedPdfUrl = pdfUrl.replace(/\/\/+/g, '/');
+        const fullPdfUrl = `${serverBaseUrl}${cleanedPdfUrl}`;
+        
+        console.log('🔍 DEBUG: Extracted path:', cleanedPdfUrl);
+        console.log('🔍 DEBUG: Final URL:', fullPdfUrl);
+        
+        // Open PDF in new tab
+        window.open(fullPdfUrl, '_blank');
+      } else {
+        console.log('🔍 DEBUG: PDF not available or response unsuccessful:', response.data);
+        alert(response.data.error || `PDF non disponible pour le document: ${documentName}`);
+      }
+    } catch (error: any) {
+      console.error('🔍 DEBUG: Error viewing document PDF:', {
+        error,
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: error.config
+      });
+      alert(`Erreur lors de l'ouverture du PDF: ${documentName}`);
+    }
+  };
+
+  // Missing Chef d'équipe functions
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    try {
+      // Use Super Admin endpoints for system-wide search
+      const response = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/search', {
+        params: { type: searchType, query: searchQuery }
+      }).catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/search', {
+        params: { type: searchType, query: searchQuery }
+      }));
+      setDerniersDossiers(response.data);
+      
+      const searchResultsCount = response.data.length;
+      console.log(`Found ${searchResultsCount} results for "${searchQuery}" in ${searchType}`);
+    } catch (error) {
+      console.error('Search error:', error);
+      alert('Erreur lors de la recherche');
+    }
+  };
+
+  const handleTypeFilterChange = async (newType: string) => {
+    setTypeFilter(newType);
+    try {
+      const response = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossiers-en-cours', {
+        params: { type: newType }
+      }).catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours', {
+        params: { type: newType }
+      }));
+      setDossiersEnCours(response.data);
+    } catch (error) {
+      console.error('Filter error:', error);
+    }
+  };
+
+  const handleVoirDossier = async (dossier: Dossier) => {
+    try {
+      const response = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossier-pdf/' + dossier.id)
+        .catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossier-pdf/' + dossier.id));
+      if (response.data.success && response.data.pdfUrl) {
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        const fullPdfUrl = `${serverBaseUrl}${response.data.pdfUrl}`;
+        window.open(fullPdfUrl, '_blank');
+      } else {
+        alert(response.data.error || 'PDF non disponible pour ce dossier');
+      }
+    } catch (error) {
+      alert('Erreur lors de l\'ouverture du PDF');
+    }
+  };
+
+  const handleGestionnaireFilterChange = (newFilter: string) => {
+    setGestionnaireFilter(newFilter);
+    if (newFilter === 'Tous') {
+      setFilteredGestionnaireAssignments(allGestionnaireAssignments);
+    } else {
+      setFilteredGestionnaireAssignments(
+        allGestionnaireAssignments.filter(assignment => assignment.gestionnaire === newFilter)
+      );
+    }
+  };
+
+  const handleModifyDossierStatus = async () => {
+    if (!selectedDossier || !newStatus) return;
+    
+    try {
+      const response = await LocalAPI.post('/bordereaux/super-admin/tableau-bord/modify-dossier-status', {
+        dossierId: selectedDossier.id,
+        newStatus
+      }).catch(() => LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+        dossierId: selectedDossier.id,
+        newStatus
+      }));
+      
+      if (response.data.success) {
+        alert('Statut du dossier modifié avec succès');
+        setStatusModifyModalOpen(false);
+        setNewStatus('');
+        loadChefEquipeData();
+      }
+    } catch (error) {
+      console.error('Error modifying status:', error);
+      alert('Erreur lors de la modification du statut');
+    }
+  };
+
+  const handleTelechargerDossier = async (dossier: any) => {
+    try {
+      const infoResponse = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/download-info/' + dossier.id)
+        .catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/download-info/' + dossier.id));
+      const downloadInfo = infoResponse.data;
+      
+      if (downloadInfo.success) {
+        const confirmMessage = `Télécharger le dossier ${downloadInfo.reference}?\n\n` +
+          `Client: ${downloadInfo.client}\n` +
+          `Documents: ${downloadInfo.summary.totalDocuments} fichier(s)\n` +
+          `Taille estimée: ${downloadInfo.summary.estimatedSize}`;
+        
+        if (confirm(confirmMessage)) {
+          const token = localStorage.getItem('token');
+          const downloadUrl = `/bordereaux/super-admin/tableau-bord/download/${dossier.id}`;
+          
+          try {
+            const response = await fetch(`${LocalAPI.defaults.baseURL}${downloadUrl}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }).catch(() => fetch(`${LocalAPI.defaults.baseURL}/bordereaux/chef-equipe/tableau-bord/download/${dossier.id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }));
+            
+            if (response.ok) {
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `Dossier_${downloadInfo.reference}_${new Date().toISOString().split('T')[0]}.zip`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            }
+          } catch (error) {
+            console.error('Download error:', error);
+            alert('Erreur lors du téléchargement');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Erreur lors du téléchargement');
+    }
+  };
+
+  const handleExportDossiersEnCours = async () => {
+    try {
+      const confirmMessage = `Exporter les dossiers en cours${typeFilter !== 'Tous types' ? ` (${typeFilter})` : ''} vers Excel?`;
+      
+      if (confirm(confirmMessage)) {
+        const token = localStorage.getItem('token');
+        const exportUrl = `/bordereaux/super-admin/tableau-bord/export-dossiers-en-cours${typeFilter !== 'Tous types' ? `?type=${encodeURIComponent(typeFilter)}` : ''}`;
+        
+        const response = await fetch(`${LocalAPI.defaults.baseURL}${exportUrl}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => fetch(`${LocalAPI.defaults.baseURL}/bordereaux/chef-equipe/tableau-bord/export-dossiers-en-cours${typeFilter !== 'Tous types' ? `?type=${encodeURIComponent(typeFilter)}` : ''}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }));
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `Dossiers_En_Cours_${typeFilter !== 'Tous types' ? typeFilter.replace(' ', '_') + '_' : ''}${new Date().toISOString().split('T')[0]}.xlsx`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        }
+        
+        alert(`Export Excel lancé!`);
+        loadChefEquipeData();
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Erreur lors de l\'export Excel');
+    }
+  };
+
+  const getAvatarColor = (name: string) => {
+    const colors = ['#9c27b0', '#e91e63', '#3f51b5', '#009688', '#ff9800'];
+    return colors[name.length % colors.length];
+  };
+
+  const getPriorityColor = (priorite: string) => {
+    switch (priorite) {
+      case 'Très': return '#f44336';
+      case 'Moyenne': return '#ff9800';
+      default: return '#4caf50';
+    }
+  };
+
+  // Load Chef d'équipe data for Super Admin
+  const loadChefEquipeData = useCallback(async () => {
+    if (user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMINISTRATEUR') return;
+    
+    try {
+      // Use Super Admin endpoints to get ALL data (system-wide)
+      const [statsRes, typesRes, derniersRes, enCoursRes, assignmentsRes] = await Promise.all([
+        LocalAPI.get('/bordereaux/super-admin/tableau-bord/stats').catch(() => 
+          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats')),
+        LocalAPI.get('/bordereaux/super-admin/tableau-bord/types-detail').catch(() => 
+          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail')),
+        LocalAPI.get('/bordereaux/super-admin/tableau-bord/derniers-dossiers').catch(() => 
+          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers')),
+        LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossiers-en-cours').catch(() => 
+          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours')),
+        LocalAPI.get('/bordereaux/super-admin/gestionnaire-assignments-dossiers').catch(() => 
+          LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers'))
+      ]);
+
+      setStats(statsRes.data);
+      setTypesDetail(typesRes.data);
+      setDerniersDossiers(derniersRes.data);
+      setDossiersEnCours(enCoursRes.data);
+      setAllGestionnaireAssignments(assignmentsRes.data || []);
+      setFilteredGestionnaireAssignments(assignmentsRes.data || []);
+    } catch (error) {
+      console.error('Error loading Chef d\'équipe data for Super Admin:', error);
+    }
+  }, [user?.role]);
+
+  // Fetch Super Admin data (like Chef d'équipe)
+  const fetchSuperAdminData = useCallback(async () => {
+    if (user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMINISTRATEUR') return;
+    
+    try {
+      setLoading(true);
+      
+      // Load Chef d'équipe data for Super Admin
+      await loadChefEquipeData();
+      
+      // Use Super Admin endpoints to get ALL data (not team-specific)
+      const [statsResponse, dossiersResponse, assignmentsResponse, enCoursResponse] = await Promise.all([
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers'),
+        // Super Admin sees ALL bordereaux en cours, not just team-specific
+        LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossiers-en-cours').catch(() => 
+          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours')
+        )
+      ]);
+      
+      if (statsResponse.data) {
+        const transformedStats = {
+          prestation: {
+            total: statsResponse.data.Prestation?.total || 0,
+            breakdown: statsResponse.data.Prestation?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Prestation?.gestionnaireBreakdown || {}
+          },
+          adhesion: {
+            total: statsResponse.data.Adhésion?.total || 0,
+            breakdown: statsResponse.data.Adhésion?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Adhésion?.gestionnaireBreakdown || {}
+          },
+          complement: {
+            total: statsResponse.data['Complément Dossier']?.total || 0,
+            breakdown: statsResponse.data['Complément Dossier']?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data['Complément Dossier']?.gestionnaireBreakdown || {}
+          },
+          resiliation: {
+            total: 0,
+            breakdown: {},
+            gestionnaireBreakdown: {}
+          },
+          reclamation: {
+            total: statsResponse.data.Réclamation?.total || 0,
+            breakdown: statsResponse.data.Réclamation?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Réclamation?.gestionnaireBreakdown || {}
+          },
+          avenant: {
+            total: statsResponse.data.Avenant?.total || 0,
+            breakdown: statsResponse.data.Avenant?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Avenant?.gestionnaireBreakdown || {}
+          }
+        };
+        setSuperAdminStats(transformedStats);
+      }
+      
+      if (dossiersResponse.data) {
+        // Extract unique societes from dossiers
+        const uniqueSocietes = [...new Set(dossiersResponse.data.map((d: any) => d.client).filter(Boolean))] as string[];
+        setSocietes(uniqueSocietes.sort());
+        setSuperAdminDerniersDossiers(dossiersResponse.data);
+        setSuperAdminAllDossiers(dossiersResponse.data);
+      }
+      
+      if (assignmentsResponse.data) {
+        setSuperAdminGestionnaireAssignments(assignmentsResponse.data);
+        // Extract unique gestionnaire names for filter
+        const uniqueGestionnaires = [...new Set(assignmentsResponse.data.map((a: any) => a.gestionnaire))].sort() as string[];
+        setSuperAdminGestionnaires(uniqueGestionnaires);
+      }
+      
+      if (enCoursResponse.data) {
+        // Transform the data to ensure proper structure for Super Admin (all bordereaux)
+        const transformedEnCours = enCoursResponse.data.map((dossier: any) => ({
+          ...dossier,
+          // Ensure we have proper completion percentage
+          completionPercentage: dossier.completionPercentage || 
+            (dossier.statut === 'Traité' ? 100 : 
+             dossier.statut === 'En cours' ? 60 : 0),
+          // Ensure we have proper status
+          statut: dossier.statut || 'En cours',
+          // Ensure we have dossier states array
+          dossierStates: dossier.dossierStates || [dossier.statut || 'En cours']
+        }));
+        setSuperAdminDossiersEnCours(transformedEnCours);
+      }
+    } catch (error: any) {
+      console.error('❌ Error loading Super Admin data:', error);
+    }
+  }, [user?.role, loadChefEquipeData]);
 
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async () => {
@@ -67,6 +570,11 @@ const EnhancedDashboard: React.FC = () => {
       if (!hasDashboardAccess(user?.role)) {
         setError('Accès non autorisé au tableau de bord ARS pour votre rôle');
         return;
+      }
+
+      // Fetch Super Admin specific data if needed
+      if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMINISTRATEUR' || user?.role === 'RESPONSABLE_DEPARTEMENT') {
+        await fetchSuperAdminData();
       }
 
       const [dashboardResponse, departmentsResponse, documentStatsResponse, documentStatusResponse] = await Promise.all([
@@ -117,7 +625,7 @@ const EnhancedDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters, user?.role]);
+  }, [filters, user?.role, fetchSuperAdminData]);
 
   // Fetch AI insights
   const fetchAIInsights = useCallback(async () => {
@@ -208,6 +716,147 @@ const EnhancedDashboard: React.FC = () => {
     };
     setFilters(clearedFilters);
     console.log('🧹 Filters cleared');
+  };
+
+  // Super Admin filter handlers
+  const handleSuperAdminFilterChange = (filterName: string, value: string) => {
+    setSuperAdminFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+
+  const clearSuperAdminFilters = () => {
+    setSuperAdminFilters({
+      typeFilter: 'Tous',
+      societeFilter: 'Toutes', 
+      statutFilter: 'Tous',
+      searchQuery: '',
+      gestionnaireFilter: 'Tous'
+    });
+  };
+
+  // Super Admin export handler
+  const handleSuperAdminExport = () => {
+    const csvContent = [
+      ['Type', 'Total', 'Client Breakdown', 'Gestionnaire Breakdown'],
+      ['Prestation', superAdminStats.prestation?.total || 0, JSON.stringify(superAdminStats.prestation?.breakdown || {}), JSON.stringify(superAdminStats.prestation?.gestionnaireBreakdown || {})],
+      ['Adhésion', superAdminStats.adhesion?.total || 0, JSON.stringify(superAdminStats.adhesion?.breakdown || {}), JSON.stringify(superAdminStats.adhesion?.gestionnaireBreakdown || {})],
+      ['Complément', superAdminStats.complement?.total || 0, JSON.stringify(superAdminStats.complement?.breakdown || {}), JSON.stringify(superAdminStats.complement?.gestionnaireBreakdown || {})],
+      ['Résiliation', superAdminStats.resiliation?.total || 0, JSON.stringify(superAdminStats.resiliation?.breakdown || {}), JSON.stringify(superAdminStats.resiliation?.gestionnaireBreakdown || {})],
+      ['Réclamation', superAdminStats.reclamation?.total || 0, JSON.stringify(superAdminStats.reclamation?.breakdown || {}), JSON.stringify(superAdminStats.reclamation?.gestionnaireBreakdown || {})],
+      ['Avenant', superAdminStats.avenant?.total || 0, JSON.stringify(superAdminStats.avenant?.breakdown || {}), JSON.stringify(superAdminStats.avenant?.gestionnaireBreakdown || {})]
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dashboard-super-admin-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Super Admin transfer handler
+  const handleSuperAdminTransfer = async (type: string) => {
+    try {
+      const response = await LocalAPI.post('/bordereaux/super-admin/transfer-documents', {
+        targetType: type,
+        filters: superAdminFilters
+      });
+      
+      if (response.data.success) {
+        alert(`Transfert réussi: ${response.data.transferred} document(s) transféré(s) vers ${type}`);
+        // Reload data to reflect changes
+        fetchDashboardData();
+      } else {
+        alert('Erreur lors du transfert');
+      }
+    } catch (error) {
+      console.error('Transfer error:', error);
+      alert('Erreur lors du transfert');
+    }
+  };
+
+  // Super Admin PDF view handler - using exact same pattern as working tables
+  const handleSuperAdminViewPDF = async (dossierId: string) => {
+    try {
+      const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${dossierId}`);
+      console.log('🔍 PDF Response:', response.data);
+      
+      if (response.data.success && response.data.pdfUrl) {
+        // Find the dossier details
+        const dossier = [...superAdminDerniersDossiers, ...superAdminDossiersEnCours, ...superAdminAllDossiers]
+          .find(d => d.id === dossierId);
+        
+        // Use the direct URL from server
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        const pdfUrl = response.data.pdfUrl;
+        
+        console.log('🔍 Original PDF URL:', pdfUrl);
+        
+        // Construct the full URL
+        const fullPdfUrl = `${serverBaseUrl}${pdfUrl}`;
+        console.log('🔍 Full PDF URL:', fullPdfUrl);
+        
+        setCurrentSuperAdminPDFUrl(fullPdfUrl);
+        setCurrentSuperAdminDossier(dossier);
+        setShowSuperAdminPDFModal(true);
+      } else {
+        alert(response.data.error || 'PDF non disponible pour ce dossier');
+      }
+    } catch (error) {
+      console.error('PDF view error:', error);
+      alert('Erreur lors de l\'ouverture du PDF');
+    }
+  };
+
+  const closeSuperAdminPDFModal = () => {
+    setShowSuperAdminPDFModal(false);
+    setCurrentSuperAdminPDFUrl('');
+    setCurrentSuperAdminDossier(null);
+  };
+
+  const handleSuperAdminStatusChangeInModal = async (newStatus: string) => {
+    if (!currentSuperAdminDossier) return;
+    
+    try {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+        dossierId: currentSuperAdminDossier.id,
+        newStatus
+      });
+      
+      if (response.data.success) {
+        alert('Statut modifié avec succès');
+        fetchDashboardData();
+        closeSuperAdminPDFModal();
+      } else {
+        alert('Erreur lors de la modification du statut');
+      }
+    } catch (error) {
+      console.error('Status modification error:', error);
+      alert('Erreur lors de la modification du statut');
+    }
+  };
+
+  // Super Admin modify status handler
+  const handleSuperAdminModifyStatus = async (dossierId: string) => {
+    const newStatus = prompt('Nouveau statut (En cours, Traité, Retourné):');
+    if (!newStatus) return;
+    
+    try {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+        dossierId,
+        newStatus
+      });
+      
+      if (response.data.success) {
+        alert('Statut modifié avec succès');
+        fetchDashboardData();
+      } else {
+        alert('Erreur lors de la modification du statut');
+      }
+    } catch (error) {
+      console.error('Status modification error:', error);
+      alert('Erreur lors de la modification du statut');
+    }
   };
 
   const exportData = async (format: 'excel' | 'pdf' = 'excel') => {
@@ -376,7 +1025,6 @@ const EnhancedDashboard: React.FC = () => {
                         {docType.noSLA && (
                           <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', fontSize: '0.7rem', backgroundColor: '#fbbf24', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>No SLA</div>
                         )}
-                        
                         {/* SLA Status Indicator */}
                         {!docType.noSLA && (
                           <div style={{ position: 'absolute', top: '0.5rem', left: '0.5rem', fontSize: '0.7rem', backgroundColor: '#10b981', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>SLA</div>
@@ -670,231 +1318,1527 @@ const EnhancedDashboard: React.FC = () => {
 
   return (
     <div style={{ padding: '1rem' }}>
-      {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        flexWrap: 'wrap',
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        gap: '1rem',
-        marginBottom: '2rem', 
-        padding: '1rem', 
-        backgroundColor: '#f8f9fa', 
-        borderRadius: '8px' 
-      }}>
-        <div style={{ flex: '1 1 auto', minWidth: '200px' }}>
-          <h1 style={{ margin: 0, color: '#2c3e50', fontSize: '1.25rem' }}>Tableau de Bord - {getRoleDisplayName(user?.role)}</h1>
-          <p style={{ margin: '0.5rem 0 0 0', color: '#7f8c8d', fontSize: '0.9rem' }}>
-            Dernière mise à jour: {lastUpdated.toLocaleTimeString()}
-          </p>
-        </div>
-        
-        <div style={{ 
-          display: 'flex', 
-          flexWrap: 'wrap',
-          gap: '0.75rem', 
-          alignItems: 'center',
-          justifyContent: 'flex-end'
-        }}>
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem',
-            fontSize: '0.9rem',
-            whiteSpace: 'nowrap'
-          }}>
-            <input
-              type="checkbox"
-              checked={realTimeEnabled}
-              onChange={(e) => setRealTimeEnabled(e.target.checked)}
-            />
-            Temps réel
-          </label>
-          
-          <button 
-            onClick={() => exportData('excel')} 
-            disabled={!dashboardData}
-            style={{ 
-              padding: '0.5rem 0.75rem', 
-              backgroundColor: dashboardData ? '#27ae60' : '#95a5a6', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px', 
-              cursor: dashboardData ? 'pointer' : 'not-allowed',
-              fontSize: '0.85rem',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            📊 Excel
-          </button>
-          
-          <button 
-            onClick={() => exportData('pdf')} 
-            disabled={!dashboardData}
-            style={{ 
-              padding: '0.5rem 0.75rem', 
-              backgroundColor: dashboardData ? '#e74c3c' : '#95a5a6', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px', 
-              cursor: dashboardData ? 'pointer' : 'not-allowed',
-              fontSize: '0.85rem',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            📄 PDF
-          </button>
-        </div>
-      </div>
+      {/* COMMENTED OUT: Original Header and Filters */}
+      {/* {Header and Filters sections commented out} */}
 
-      {/* Filters */}
-      <div style={{ 
-        padding: '1.5rem', 
-        marginBottom: '2rem', 
-        backgroundColor: 'white', 
-        borderRadius: '12px', 
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-          <div style={{ width: '4px', height: '20px', backgroundColor: '#6366f1', marginRight: '0.75rem', borderRadius: '2px' }}></div>
-          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>Filtres</h4>
-          {(filters.departmentId || filters.fromDate || filters.toDate || filters.period !== 'day') && (
-            <span style={{ 
-              marginLeft: '1rem', 
-              padding: '0.25rem 0.5rem', 
-              backgroundColor: '#dbeafe', 
-              color: '#1e40af', 
-              borderRadius: '12px', 
-              fontSize: '0.75rem',
-              fontWeight: '500'
+      {/* Chef d'équipe Style Header and Filters for Super Admin */}
+      {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR') && (
+        <div style={{ fontFamily: 'Arial, sans-serif', background: '#f5f5f5', minHeight: '100vh' }}>
+          {/* Header Bar (Red Background) */}
+          <div style={{ background: '#d52b36', color: 'white', padding: '20px 0', textAlign: 'center' }}>
+            <h1 style={{ fontSize: '32px', fontWeight: 'bold', margin: 0 }}>Dashboard {isReadOnly ? 'Responsable Département' : 'Super Admin'}</h1>
+            {isReadOnly && (
+              <div style={{ marginTop: '8px', padding: '8px 16px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '20px', display: 'inline-block' }}>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>👁️ Mode Lecture Seule - Accès complet en consultation</span>
+              </div>
+            )}
+          </div>
+
+          <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px' }}>
+            {/* Search Section */}
+            <div style={{ 
+              background: 'white', 
+              borderRadius: '8px', 
+              padding: '20px', 
+              marginBottom: '20px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              border: '1px solid #e0e0e0'
             }}>
-              Filtres actifs
-            </span>
-          )}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                marginBottom: '16px' 
+              }}>
+                <span style={{ 
+                  color: '#d32f2f', 
+                  fontSize: '16px', 
+                  marginRight: '8px' 
+                }}>🔍</span>
+                <span style={{ 
+                  color: '#d32f2f', 
+                  fontWeight: 'bold' 
+                }}>
+                  Recherche de Dossiers (Super Admin)
+                </span>
+              </div>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '150px 1fr auto', 
+                gap: '12px', 
+                alignItems: 'center' 
+              }}>
+                <select
+                  value={searchType}
+                  onChange={(e) => setSearchType(e.target.value)}
+                  style={{
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    background: 'white'
+                  }}
+                >
+                  <option value="Ref. GSD">Ref. GSD</option>
+                  <option value="Client">Client</option>
+                  <option value="Type">Type</option>
+                  <option value="Gestionnaire">Gestionnaire</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Entrez votre recherche..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  style={{
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#d32f2f'}
+                  onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                />
+                <button
+                  onClick={handleSearch}
+                  disabled={!searchQuery.trim()}
+                  style={{
+                    background: searchQuery.trim() ? '#d32f2f' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    cursor: searchQuery.trim() ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'background-color 0.2s'
+                  }}
+                >
+                  🔍 Rechercher
+                </button>
+              </div>
+              {searchQuery && (
+                <div style={{ 
+                  marginTop: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ fontSize: '12px', color: '#666' }}>
+                    Recherche active: "{searchQuery}" dans {searchType}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      loadChefEquipeData();
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#d32f2f',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Effacer
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* KPI Cards */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                marginBottom: '16px' 
+              }}>
+                <span style={{ 
+                  color: '#d32f2f', 
+                  fontSize: '16px', 
+                  marginRight: '8px' 
+                }}>📊</span>
+                <span style={{ 
+                  color: '#333', 
+                  fontWeight: 'bold', 
+                  fontSize: '16px' 
+                }}>
+                  Corbeille Globale (Super Admin)
+                </span>
+              </div>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(4, 1fr)', 
+                gap: '20px' 
+              }}>
+                {/* Total Dossiers */}
+                <div style={{ 
+                  background: '#d32f2f', 
+                  color: 'white', 
+                  padding: '24px', 
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  position: 'relative'
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>📁</div>
+                  <div style={{ fontSize: '12px', marginBottom: '8px' }}>Total Dossiers</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+                    {stats.totalDossiers.toLocaleString()}
+                  </div>
+                  <div style={{ 
+                    height: '4px', 
+                    background: 'rgba(255,255,255,0.3)', 
+                    borderRadius: '2px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ 
+                      height: '100%', 
+                      background: 'white', 
+                      width: '100%' 
+                    }} />
+                  </div>
+                </div>
+
+                {/* Clôturés */}
+                <div style={{ 
+                  background: '#4caf50', 
+                  color: 'white', 
+                  padding: '24px', 
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>✓</div>
+                  <div style={{ fontSize: '12px', marginBottom: '8px' }}>Clôturés</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+                    {stats.clotures.toLocaleString()}
+                  </div>
+                  <div style={{ 
+                    height: '4px', 
+                    background: 'rgba(255,255,255,0.3)', 
+                    borderRadius: '2px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ 
+                      height: '100%', 
+                      background: 'white', 
+                      width: `${stats.progressBars.clotures}%` 
+                    }} />
+                  </div>
+                </div>
+
+                {/* En cours */}
+                <div style={{ 
+                  background: '#ff9800', 
+                  color: 'white', 
+                  padding: '24px', 
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
+                  <div style={{ fontSize: '12px', marginBottom: '8px' }}>En cours</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+                    {stats.enCours.toLocaleString()}
+                  </div>
+                  <div style={{ 
+                    height: '4px', 
+                    background: 'rgba(255,255,255,0.3)', 
+                    borderRadius: '2px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ 
+                      height: '100%', 
+                      background: 'white', 
+                      width: `${stats.progressBars.enCours}%` 
+                    }} />
+                  </div>
+                </div>
+
+                {/* Non Affectés */}
+                <div style={{ 
+                  background: '#2196f3', 
+                  color: 'white', 
+                  padding: '24px', 
+                  borderRadius: '8px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔧</div>
+                  <div style={{ fontSize: '12px', marginBottom: '8px' }}>Non Affectés</div>
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+                    {stats.nonAffectes.toLocaleString()}
+                  </div>
+                  <div style={{ 
+                    height: '4px', 
+                    background: 'rgba(255,255,255,0.3)', 
+                    borderRadius: '2px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ 
+                      height: '100%', 
+                      background: 'white', 
+                      width: `${stats.progressBars.nonAffectes}%` 
+                    }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Détail par Type */}
+            <div style={{ 
+              background: 'white', 
+              borderRadius: '8px', 
+              padding: '20px', 
+              marginBottom: '20px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              <h3 style={{ 
+                fontSize: '16px', 
+                fontWeight: 'bold', 
+                marginBottom: '20px',
+                color: '#333'
+              }}>
+                Détail par Type de Dossier (Super Admin)
+              </h3>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(5, 1fr)', 
+                gap: '20px' 
+              }}>
+                {Object.entries(typesDetail).map(([type, data]) => (
+                  <div key={type} style={{ textAlign: 'center' }}>
+                    <div style={{ 
+                      fontSize: '20px', 
+                      marginBottom: '8px' 
+                    }}>
+                      {type === 'Prestation' ? '💊' : 
+                       type === 'Adhésion' ? '👤' :
+                       type === 'Complément Dossier' ? '📄' :
+                       type === 'Avenant' ? '📝' : '📞'}
+                    </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      fontWeight: 'bold', 
+                      marginBottom: '8px',
+                      color: '#333'
+                    }}>
+                      {type}
+                    </div>
+                    <div style={{ 
+                      fontSize: '10px', 
+                      color: '#666', 
+                      marginBottom: '4px' 
+                    }}>
+                      Total: {data.total}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#666' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginBottom: '2px' }}>
+                        <span style={{ width: '8px', height: '8px', background: '#4caf50', borderRadius: '50%' }}></span>
+                        <span>Clôturés: {data.clotures}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginBottom: '2px' }}>
+                        <span style={{ width: '8px', height: '8px', background: '#ff9800', borderRadius: '50%' }}></span>
+                        <span>En cours: {data.enCours}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                        <span style={{ width: '8px', height: '8px', background: '#2196f3', borderRadius: '50%' }}></span>
+                        <span>Non Affectés: {data.nonAffectes}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Statistics Section (Cards Row) - Chef d'équipe Style */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', marginBottom: '24px' }}>
+              {/* Prestation Card */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Prestation</h3>
+                  <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.prestation?.total || 0}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                  {Object.entries(superAdminStats.prestation?.breakdown || {}).map(([key, value]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                      <span>{key}:</span> <span>{value as number}</span>
+                    </div>
+                  ))}
+                  <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+                  {Object.entries(superAdminStats.prestation?.gestionnaireBreakdown || {}).map(([key, value]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                      <span>{key}:</span> <span>{value as number}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Adhésion Card */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Adhésion</h3>
+                  <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.adhesion?.total || 0}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  {Object.entries(superAdminStats.adhesion?.breakdown || {}).map(([key, value]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span>{key}:</span> <span>{value as number}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Complément de dossier Card */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Complément de dossier</h3>
+                  <span style={{ background: '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.complement?.total || 0}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  {Object.entries(superAdminStats.complement?.breakdown || {}).map(([key, value]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span>{key}:</span> <span>{value as number}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Résiliation Card */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Résiliation</h3>
+                  <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.resiliation?.total || 0}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  {Object.entries(superAdminStats.resiliation?.breakdown || {}).map(([key, value]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span>{key}:</span> <span>{value as number}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Réclamation Card */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Réclamation</h3>
+                  <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.reclamation?.total || 0}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  {Object.entries(superAdminStats.reclamation?.breakdown || {}).map(([key, value]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span>{key}:</span> <span>{value as number}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Avenant Card */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Avenant</h3>
+                  <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.avenant?.total || 0}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  {Object.entries(superAdminStats.avenant?.breakdown || {}).map(([key, value]) => (
+                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span>{key}:</span> <span>{value as number}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Filtres Section */}
+            <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Type de document</label>
+                  <select 
+                    value={superAdminFilters.typeFilter}
+                    onChange={(e) => handleSuperAdminFilterChange('typeFilter', e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  >
+                    <option value="Tous">Tous</option>
+                    <option value="Prestation">Prestation</option>
+                    <option value="Adhésion">Adhésion</option>
+                    <option value="Complément de dossier">Complément</option>
+                    <option value="Résiliation">Résiliation</option>
+                    <option value="Réclamation">Réclamation</option>
+                    <option value="Avenant">Avenant</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Société</label>
+                  <select 
+                    value={superAdminFilters.societeFilter}
+                    onChange={(e) => handleSuperAdminFilterChange('societeFilter', e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  >
+                    <option value="Toutes">Toutes</option>
+                    {societes.map(societe => (
+                      <option key={societe} value={societe}>{societe}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Statut</label>
+                  <select 
+                    value={superAdminFilters.statutFilter}
+                    onChange={(e) => handleSuperAdminFilterChange('statutFilter', e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  >
+                    <option value="Tous">Tous</option>
+                    <option value="En cours">En cours</option>
+                    <option value="Traité">Traité</option>
+                    <option value="Retourné">Retourné</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Recherche</label>
+                  <input
+                    type="text"
+                    placeholder="Référence ou nom..."
+                    value={superAdminFilters.searchQuery}
+                    onChange={(e) => handleSuperAdminFilterChange('searchQuery', e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                <ReadOnlyWrapper>
+                  <button 
+                    onClick={clearSuperAdminFilters}
+                    style={{ background: '#6b7280', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}
+                  >
+                    🧹 Effacer
+                  </button>
+                </ReadOnlyWrapper>
+                <button 
+                  onClick={fetchDashboardData}
+                  style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}
+                >
+                  🔄 Actualiser
+                </button>
+              </div>
+            </div>
+
+            {/* Actions Section */}
+            <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={handleSuperAdminExport}
+                  style={{ background: '#d52b36', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontSize: '14px', cursor: 'pointer' }}
+                >
+                  Exporter
+                </button>
+                <span style={{ fontSize: '14px', fontWeight: '500' }}>Transférer vers:</span>
+                <ReadOnlyWrapper>
+                  <button onClick={() => handleSuperAdminTransfer('Prestation')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Prestation</button>
+                  <button onClick={() => handleSuperAdminTransfer('Complément')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Complément</button>
+                  <button onClick={() => handleSuperAdminTransfer('Adhésion')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Adhésion</button>
+                  <button onClick={() => handleSuperAdminTransfer('Résiliation')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Résiliation</button>
+                  <button onClick={() => handleSuperAdminTransfer('Avenant')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Avenant</button>
+                  <button onClick={() => handleSuperAdminTransfer('Réclamation')} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Réclamation</button>
+                </ReadOnlyWrapper>
+              </div>
+            </div>
+
+            {/* Affectations par Gestionnaire */}
+            <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Affectations par Gestionnaire</h3>
+                <select 
+                  value={superAdminFilters.gestionnaireFilter || 'Tous'}
+                  onChange={(e) => handleSuperAdminFilterChange('gestionnaireFilter', e.target.value)}
+                  style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+                >
+                  <option value="Tous">Tous les gestionnaires</option>
+                  {superAdminGestionnaires.map(gest => (
+                    <option key={gest} value={gest}>{gest}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                {superAdminGestionnaireAssignments
+                  .filter(assignment => (superAdminFilters.gestionnaireFilter === 'Tous' || !superAdminFilters.gestionnaireFilter) || assignment.gestionnaire === superAdminFilters.gestionnaireFilter)
+                  .map((assignment, index) => (
+                  <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057' }}>
+                      {assignment.gestionnaire}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
+                      <strong>Total affectés:</strong> {assignment.totalAssigned}
+                    </div>
+                    <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#28a745' }}>✓ Traités:</span>
+                        <span style={{ fontWeight: 'bold' }}>{assignment.traites || 0}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#ffc107' }}>⏳ En cours:</span>
+                        <span style={{ fontWeight: 'bold' }}>{assignment.enCours || 0}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#dc3545' }}>↩ Retournés:</span>
+                        <span style={{ fontWeight: 'bold' }}>{assignment.retournes || 0}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                      <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Derniers Bordereaux Ajoutés */}
+            <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Derniers Bordereaux Ajoutés</h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Référence</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {superAdminDerniersDossiers.slice(0, 3).map((dossier, index) => {
+                      const completionPercentage = dossier.completionPercentage || 0;
+                      const dossierStates = dossier.dossierStates || [dossier.statut];
+                      return (
+                        <tr key={`recent-${dossier.id}`} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.type}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '40px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ width: `${completionPercentage}%`, height: '100%', background: completionPercentage >= 80 ? '#4caf50' : completionPercentage >= 50 ? '#ff9800' : '#f44336' }} />
+                              </div>
+                              <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{completionPercentage}%</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              {dossierStates.length > 0 ? dossierStates.map((state: string, idx: number) => (
+                                <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                                  {state}
+                                </span>
+                              )) : <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button onClick={() => handleSuperAdminViewPDF(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Voir PDF">📄</button>
+                              <ReadOnlyWrapper>
+                                <button onClick={() => handleSuperAdminModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                              </ReadOnlyWrapper>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Bordereaux En Cours */}
+            <div style={{ 
+              background: 'white', 
+              borderRadius: '8px', 
+              padding: '20px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: '16px' 
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ 
+                    color: '#d32f2f', 
+                    fontSize: '16px', 
+                    marginRight: '8px' 
+                  }}>🔄</span>
+                  <span style={{ 
+                    fontWeight: 'bold', 
+                    fontSize: '16px' 
+                  }}>
+                    Bordereaux En Cours ({dossiersEnCours.length})
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <select
+                    value={typeFilter}
+                    onChange={(e) => handleTypeFilterChange(e.target.value)}
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <option value="Tous types">Tous types</option>
+                    <option value="Prestation">Prestation</option>
+                    <option value="Adhésion">Adhésion</option>
+                    <option value="Complément Dossier">Complément Dossier</option>
+                    <option value="Avenant">Avenant</option>
+                    <option value="Réclamation">Réclamation</option>
+                  </select>
+                  <button 
+                    onClick={handleExportDossiersEnCours}
+                    style={{ 
+                      background: '#d32f2f', 
+                      color: 'white', 
+                      border: 'none', 
+                      padding: '6px 12px', 
+                      borderRadius: '4px', 
+                      fontSize: '12px', 
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    📊 Exporter
+                  </button>
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#fff3e0' }}>
+                      <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666' }}>Ref. Dossier</th>
+                      <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666' }}>Client</th>
+                      <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666' }}>Type</th>
+                      <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666' }}>Jours en cours</th>
+                      <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666' }}>Priorité</th>
+                      <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dossiersEnCours.slice(0, 10).map((dossier, index) => (
+                      <tr key={dossier.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>
+                          {dossier.reference}
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                          {dossier.client}
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ 
+                              width: '8px', 
+                              height: '8px', 
+                              background: index % 3 === 0 ? '#f44336' : index % 3 === 1 ? '#2196f3' : '#4caf50', 
+                              borderRadius: '50%' 
+                            }}></span>
+                            {dossier.type}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                          {dossier.joursEnCours || 0} jours
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                          <span style={{ 
+                            background: getPriorityColor(dossier.priorite || 'Normale'), 
+                            color: 'white', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '12px' 
+                          }}>
+                            {dossier.priorite || 'Normale'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                              onClick={async () => {
+                                // Set the selected dossier and fetch detailed info
+                                setSelectedDossier(dossier);
+                                await fetchDossierDetails(dossier.id);
+                                setPdfViewModalOpen(true);
+                              }}
+                              style={{ 
+                                background: 'none', 
+                                border: 'none', 
+                                color: '#2196f3', 
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                textDecoration: 'underline'
+                              }}
+                              onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#1976d2'}
+                              onMouseLeave={(e) => (e.target as HTMLElement).style.color = '#2196f3'}
+                            >
+                              Voir
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setSelectedDossier(dossier);
+                                setStatusModifyModalOpen(true);
+                              }}
+                              style={{ 
+                                background: 'none', 
+                                border: 'none', 
+                                color: '#9c27b0', 
+                                cursor: 'pointer',
+                                fontSize: '12px'
+                              }}
+                            >
+                              Retour Scan
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Dossiers Section (Table) */}
+            <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+              <div style={{ padding: '16px 20px 12px 20px', borderBottom: '1px solid #e0e0e0' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels</h3>
+                <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#d52b36', color: 'white' }}>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Réf. Dossier</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut Dossier</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Gestionnaire</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {superAdminAllDossiers.map((dossier, index) => (
+                      <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>DOS-{dossier.reference}</td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.type}</td>
+                        <td style={{ padding: '12px 8px' }}>
+                          <span style={{ 
+                            background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : '#2196f3', 
+                            color: 'white', 
+                            padding: '4px 8px', 
+                            borderRadius: '12px', 
+                            fontSize: '12px', 
+                            fontWeight: 'bold' 
+                          }}>
+                            {dossier.statut}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.gestionnaire || 'Non assigné'}</td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
+                        <td style={{ padding: '12px 8px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                              onClick={() => handleSuperAdminViewPDF(dossier.id)}
+                              style={{ 
+                                background: 'none', 
+                                border: 'none', 
+                                color: '#2196f3', 
+                                cursor: 'pointer', 
+                                fontSize: '12px',
+                                textDecoration: 'underline'
+                              }}
+                              title="Voir PDF du dossier"
+                            >
+                              Voir PDF
+                            </button>
+                            <button 
+                              onClick={() => handleSuperAdminModifyStatus(dossier.id)}
+                              style={{ 
+                                background: 'none', 
+                                border: 'none', 
+                                color: '#9c27b0', 
+                                cursor: 'pointer', 
+                                fontSize: '12px',
+                                textDecoration: 'underline'
+                              }}
+                              title="Modifier statut du dossier"
+                            >
+                              Modifier Statut
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
+
+                   )} 
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Département:</label>
-            <select 
-              name="departmentId" 
-              value={filters.departmentId} 
-              onChange={handleFilterChange} 
-              style={{ 
-                width: '100%',
-                padding: '0.75rem', 
-                borderRadius: '6px', 
-                border: '1px solid #d1d5db',
-                fontSize: '0.875rem',
-                backgroundColor: 'white',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="">Tous</option>
-              {departments.map(dept => (
-                <option key={dept.id || dept.code} value={dept.id || dept.code}>{dept.name}</option>
-              ))}
-            </select>
+        {/* Missing Chef d'équipe Modals */}
+        {/* PDF View Modal */}
+        {pdfViewModalOpen && selectedDossier && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px',
+                borderBottom: '1px solid #e0e0e0',
+                paddingBottom: '16px'
+              }}>
+                <h2 style={{
+                  margin: 0,
+                  color: '#d32f2f',
+                  fontSize: '20px',
+                  fontWeight: 'bold'
+                }}>
+                  📄 Aperçu PDF du Dossier
+                </h2>
+                <button
+                  onClick={() => setPdfViewModalOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '24px',
+                    cursor: 'pointer',
+                    color: '#666',
+                    padding: '4px'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {loadingDossierDetails ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <div style={{ fontSize: '24px', marginBottom: '16px' }}>⏳</div>
+                  <p>Chargement des détails du dossier...</p>
+                </div>
+              ) : (
+                <div>
+                  {/* Dossier Details */}
+                  <div style={{ display: 'grid', gap: '16px', marginBottom: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Référence</label>
+                        <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px', marginTop: '4px' }}>
+                          {selectedDossier.reference}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Client</label>
+                        <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px', marginTop: '4px' }}>
+                          {selectedDossier.client}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Type</label>
+                        <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px', marginTop: '4px' }}>
+                          {selectedDossier.type}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Statut</label>
+                        <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px', marginTop: '4px' }}>
+                          <span style={{
+                            background: selectedDossier.statut === 'Traité' ? '#4caf50' : selectedDossier.statut === 'En cours' ? '#ff9800' : '#2196f3',
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}>
+                            {selectedDossier.statut}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Gestionnaire</label>
+                        <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px', marginTop: '4px' }}>
+                          {selectedDossier.gestionnaire || 'Non assigné'}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Date</label>
+                        <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px', marginTop: '4px' }}>
+                          {selectedDossier.date}
+                        </div>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Priorité</label>
+                        <div style={{ padding: '8px', background: '#f5f5f5', borderRadius: '4px', marginTop: '4px' }}>
+                          <span style={{
+                            background: getPriorityColor(selectedDossier.priorite || 'Normale'),
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}>
+                            {selectedDossier.priorite || 'Normale'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Documents List */}
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#666', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>
+                      Documents ({dossierDetails?.documents?.length || 0})
+                    </label>
+                    <div style={{ maxHeight: '300px', overflow: 'auto', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                      {dossierDetails?.documents && dossierDetails.documents.length > 0 ? (
+                        dossierDetails.documents.map((doc: any, index: number) => (
+                          <div key={doc.id || index} style={{
+                            padding: '12px',
+                            borderBottom: index < dossierDetails.documents.length - 1 ? '1px solid #f0f0f0' : 'none',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          onClick={() => {
+                            console.log('🔍 DEBUG: Document clicked:', {
+                              doc,
+                              docId: doc.id,
+                              fileName: doc.fileName || doc.name
+                            });
+                            handleDocumentPDFView(doc.id, doc.fileName || doc.name);
+                          }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
+                                📄 {doc.fileName || doc.name || `Document ${index + 1}`}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#666' }}>
+                                Type: {doc.type || 'Non spécifié'} | 
+                                Taille: {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : 'Inconnue'}
+                              </div>
+                              {doc.dateUpload && (
+                                <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                                  Uploadé le: {new Date(doc.dateUpload).toLocaleDateString('fr-FR')}
+                                </div>
+                              )}
+                            </div>
+                            <button style={{
+                              background: '#2196f3',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 12px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              📄 Voir PDF
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{
+                          padding: '20px',
+                          textAlign: 'center',
+                          color: '#666',
+                          fontSize: '14px'
+                        }}>
+                          📄 Aucun document disponible pour ce dossier
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '12px',
+                paddingTop: '16px',
+                borderTop: '1px solid #e0e0e0'
+              }}>
+                <button
+                  onClick={() => {
+                    setPdfViewModalOpen(false);
+                    setDossierDetails(null);
+                  }}
+                  style={{
+                    background: '#f5f5f5',
+                    color: '#333',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Fermer
+                </button>
+                <button
+                  onClick={() => {
+                    setPdfViewModalOpen(false);
+                    setStatusModifyModalOpen(true);
+                  }}
+                  style={{
+                    background: '#d32f2f',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Modifier le Statut
+                </button>
+              </div>
+            </div>
           </div>
-          
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Du:</label>
-            <input
-              type="date"
-              name="fromDate"
-              value={filters.fromDate}
-              onChange={handleFilterChange}
-              style={{ 
-                width: '100%',
-                padding: '0.75rem', 
-                borderRadius: '6px', 
-                border: '1px solid #d1d5db',
-                fontSize: '0.875rem'
-              }}
-            />
+        )}
+
+        {/* Status Modify Modal */}
+        {statusModifyModalOpen && selectedDossier && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1001
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px',
+                borderBottom: '1px solid #e0e0e0',
+                paddingBottom: '16px'
+              }}>
+                <h3 style={{
+                  margin: 0,
+                  color: '#d32f2f',
+                  fontSize: '18px',
+                  fontWeight: 'bold'
+                }}>
+                  ✏️ Modifier le Statut du Dossier
+                </h3>
+                <button
+                  onClick={() => setStatusModifyModalOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    color: '#666'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  marginBottom: '8px',
+                  color: '#333'
+                }}>
+                  Nouveau statut :
+                </label>
+                
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {['Nouveau', 'En cours', 'Traité', 'Retourné'].map(status => (
+                    <label key={status} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '12px',
+                      border: newStatus === status ? '2px solid #d32f2f' : '1px solid #e0e0e0',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      backgroundColor: newStatus === status ? '#ffebee' : 'white',
+                      transition: 'all 0.2s'
+                    }}>
+                      <input
+                        type="radio"
+                        name="dossierStatus"
+                        value={status}
+                        checked={newStatus === status}
+                        onChange={(e) => setNewStatus(e.target.value)}
+                        style={{
+                          marginRight: '12px',
+                          accentColor: '#d32f2f'
+                        }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                          {status === 'Nouveau' ? '🆕' : 
+                           status === 'En cours' ? '⏳' :
+                           status === 'Traité' ? '✅' : '↩️'} {status}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '12px',
+                paddingTop: '16px',
+                borderTop: '1px solid #e0e0e0'
+              }}>
+                <button
+                  onClick={() => setStatusModifyModalOpen(false)}
+                  style={{
+                    background: '#f5f5f5',
+                    color: '#333',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleModifyDossierStatus}
+                  disabled={!newStatus}
+                  style={{
+                    background: newStatus ? '#d32f2f' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '4px',
+                    cursor: newStatus ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Confirmer la Modification
+                </button>
+              </div>
+            </div>
           </div>
-          
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Au:</label>
-            <input
-              type="date"
-              name="toDate"
-              value={filters.toDate}
-              onChange={handleFilterChange}
-              min={filters.fromDate}
-              style={{ 
-                width: '100%',
-                padding: '0.75rem', 
-                borderRadius: '6px', 
-                border: '1px solid #d1d5db',
-                fontSize: '0.875rem'
-              }}
-            />
+        )}
+
+        {/* Edit Type Modal */}
+        {editModalOpen && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1001
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px',
+                borderBottom: '1px solid #e0e0e0',
+                paddingBottom: '16px'
+              }}>
+                <h3 style={{
+                  margin: 0,
+                  color: '#9c27b0',
+                  fontSize: '18px',
+                  fontWeight: 'bold'
+                }}>
+                  ✏️ Modifier le Type de Dossier
+                </h3>
+                <button
+                  onClick={() => setEditModalOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '20px',
+                    cursor: 'pointer',
+                    color: '#666'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  marginBottom: '8px',
+                  color: '#333'
+                }}>
+                  Sélectionner le nouveau type :
+                </label>
+                
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {['Prestation', 'Adhésion', 'Complément Dossier', 'Avenant', 'Réclamation'].map(type => (
+                    <label key={type} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '12px',
+                      border: selectedType === type ? '2px solid #9c27b0' : '1px solid #e0e0e0',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      backgroundColor: selectedType === type ? '#f3e5f5' : 'white',
+                      transition: 'all 0.2s'
+                    }}>
+                      <input
+                        type="radio"
+                        name="documentType"
+                        value={type}
+                        checked={selectedType === type}
+                        onChange={(e) => setSelectedType(e.target.value)}
+                        style={{
+                          marginRight: '12px',
+                          accentColor: '#9c27b0'
+                        }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                          {type === 'Prestation' ? '💊' : 
+                           type === 'Adhésion' ? '👤' :
+                           type === 'Complément Dossier' ? '📄' :
+                           type === 'Avenant' ? '📝' : '📞'} {type}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                          {type === 'Prestation' ? 'Bulletins de soins et remboursements' :
+                           type === 'Adhésion' ? 'Nouvelles adhésions et inscriptions' :
+                           type === 'Complément Dossier' ? 'Documents complémentaires' :
+                           type === 'Avenant' ? 'Modifications contractuelles' : 'Réclamations et litiges'}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '12px',
+                paddingTop: '16px',
+                borderTop: '1px solid #e0e0e0'
+              }}>
+                <button
+                  onClick={() => setEditModalOpen(false)}
+                  style={{
+                    background: '#f5f5f5',
+                    color: '#333',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => {
+                    // Handle change document type
+                    setEditModalOpen(false);
+                    alert('Type de document modifié avec succès');
+                    loadChefEquipeData();
+                  }}
+                  disabled={!selectedType}
+                  style={{
+                    background: selectedType ? '#9c27b0' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '4px',
+                    cursor: selectedType ? 'pointer' : 'not-allowed',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Confirmer la Modification
+                </button>
+              </div>
+            </div>
           </div>
-          
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Période:</label>
-            <select 
-              name="period" 
-              value={filters.period} 
-              onChange={handleFilterChange} 
-              style={{ 
-                width: '100%',
-                padding: '0.75rem', 
-                borderRadius: '6px', 
-                border: '1px solid #d1d5db',
-                fontSize: '0.875rem',
-                backgroundColor: 'white',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="day">Jour</option>
-              <option value="week">Semaine</option>
-              <option value="month">Mois</option>
-            </select>
+        )}
+
+        {/* PDF Modal */}
+        {showSuperAdminPDFModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 1000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              width: '90%',
+              height: '90%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}>
+              {/* Modal Header */}
+              <div style={{
+                padding: '16px',
+                borderBottom: '1px solid #e0e0e0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: '#f8f9fa'
+              }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
+                    {currentSuperAdminDossier?.reference} - {currentSuperAdminDossier?.client}
+                  </h3>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#666' }}>
+                    Type: {currentSuperAdminDossier?.type} | Statut: {currentSuperAdminDossier?.statut}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select 
+                    onChange={(e) => handleSuperAdminStatusChangeInModal(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '14px'
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Modifier statut</option>
+                    <option value="En cours">En cours</option>
+                    <option value="Traité">Traité</option>
+                    <option value="Retourné">Retourné</option>
+                  </select>
+                  <button 
+                    onClick={closeSuperAdminPDFModal}
+                    style={{
+                      background: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '8px 16px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+              
+              {/* PDF Viewer */}
+              <div style={{ flex: 1, padding: '16px' }}>
+                {currentSuperAdminPDFUrl ? (
+                  <iframe
+                    src={currentSuperAdminPDFUrl}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      borderRadius: '4px'
+                    }}
+                    title="PDF Viewer"
+                  />
+                ) : (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: '100%',
+                    fontSize: '18px',
+                    color: '#666'
+                  }}>
+                    Chargement du PDF...
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button 
-              onClick={clearFilters} 
-              style={{ 
-                padding: '0.75rem 1rem', 
-                backgroundColor: '#6b7280', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '6px', 
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                transition: 'background-color 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4b5563'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6b7280'}
-            >
-              🧹 Effacer
-            </button>
-            <button 
-              onClick={fetchDashboardData}
-              style={{ 
-                padding: '0.75rem 1rem', 
-                backgroundColor: '#3b82f6', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '6px', 
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                transition: 'background-color 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
-            >
-              🔄 Actualiser
-            </button>
-          </div>
-        </div>
-      </div>
+        )}
+      )
 
       {/* Data Source & AI Status */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
@@ -976,112 +2920,7 @@ const EnhancedDashboard: React.FC = () => {
       {/* Main Content */}
       {dashboardData && (
         <>
-          {/* KPIs */}
-          <div style={{ marginBottom: '2rem' }}>
-            <KPIWidgets kpis={dashboardData.kpis} />
-          </div>
-
-          {/* Main Grid - Responsive 3 columns */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
-            gap: '1.5rem', 
-            marginBottom: '2rem',
-            width: '100%',
-            maxWidth: '100%'
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <SLAStatusPanel slaStatus={dashboardData.slaStatus} />
-            </div>
-            
-            <div style={{ 
-              padding: '1rem', 
-              border: '1px solid #ddd', 
-              borderRadius: '8px', 
-              backgroundColor: 'white',
-              minWidth: 0,
-              overflow: 'hidden'
-            }}>
-              <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Alertes</h3>
-              <div style={{ maxHeight: '300px', overflow: 'auto' }}>
-                <AlertsPanel alerts={dashboardData.alerts.alerts || []} />
-              </div>
-            </div>
-            
-            <div style={{ 
-              padding: '1rem', 
-              border: '1px solid #ddd', 
-              borderRadius: '8px', 
-              backgroundColor: 'white',
-              minWidth: 0,
-              overflow: 'hidden'
-            }}>
-              <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem' }}>Performance Équipe</h3>
-              <div style={{ maxHeight: '300px', overflow: 'auto' }}>
-                <UserPerformance data={dashboardData.performance.performance || []} />
-              </div>
-            </div>
-            
-            <div style={{ 
-              gridColumn: '1 / -1', 
-              padding: '2rem', 
-              border: '1px solid #e0e7ff', 
-              borderRadius: '12px', 
-              backgroundColor: 'white', 
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              minWidth: 0,
-              overflow: 'hidden'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
-                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Tendances & Indicateurs</h3>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                <div style={{ 
-                  padding: '1.5rem', 
-                  borderRadius: '12px', 
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  color: 'white',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{ position: 'absolute', top: '-20px', right: '-20px', fontSize: '4rem', opacity: '0.2' }}>📈</div>
-                  <div style={{ position: 'relative', zIndex: 1 }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', fontWeight: '600' }}>Croissance Mensuelle</h4>
-                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>+{dashboardData.performance?.growthRate || 0}%</div>
-                    <p style={{ margin: 0, opacity: '0.9', fontSize: '0.9rem' }}>Augmentation par rapport au mois dernier</p>
-                  </div>
-                </div>
-                <div style={{ 
-                  padding: '1.5rem', 
-                  borderRadius: '12px', 
-                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                  color: 'white',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{ position: 'absolute', top: '-20px', right: '-20px', fontSize: '4rem', opacity: '0.2' }}>⚡</div>
-                  <div style={{ position: 'relative', zIndex: 1 }}>
-                    <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', fontWeight: '600' }}>Efficacité Moyenne</h4>
-                    <div style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>{dashboardData.performance?.summary?.avgEfficiency ? dashboardData.performance.summary.avgEfficiency.toFixed(1) : 0}%</div>
-                    <p style={{ margin: 0, opacity: '0.9', fontSize: '0.9rem' }}>Performance globale de l'équipe</p>
-                  </div>
-                </div>
-              </div>
-              <div style={{ backgroundColor: '#f8fafc', borderRadius: '8px', padding: '1rem' }}>
-                <LineChart 
-                  data={dashboardData.performance?.performance ? 
-                    dashboardData.performance.performance.slice(0, 7).map((p: any, index: number) => ({
-                      name: p.userName || `User ${index + 1}`,
-                      avgEfficiency: p.efficiency || 0
-                    })) : []
-                  } 
-                  dataKey="avgEfficiency" 
-                  label="Efficacité Moyenne" 
-                />
-              </div>
-            </div>
-          </div>
+         
 
           {/* Document-Level Analytics Summary */}
           {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR') && (
@@ -1111,12 +2950,6 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Global Corbeille for Admin roles - Corbeille Globale de l'Équipe */}
-          {canViewFeature(user?.role, 'global_corbeille') && (
-            <div style={{ marginTop: '2rem' }}>
-              <GlobalCorbeille />
-            </div>
-          )}
 
           {/* Workforce Estimator for Admin roles */}
           {canViewFeature(user?.role, 'workforce_estimator') && (
@@ -1127,6 +2960,36 @@ const EnhancedDashboard: React.FC = () => {
 
           {/* Role-specific content */}
           {renderRoleSpecificContent()}
+
+          {/* Module Bulletin de soins - Moved to Dashboard */}
+          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR') && (
+            <div style={{ marginTop: '2rem' }}>
+              <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Module Bulletin de Soins</h3>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+                  <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                    <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>Suggestions d'Assignation IA</h4>
+                    <div style={{ height: '300px', overflow: 'auto' }}>
+                      <AssignmentSuggestions showActions={false} />
+                    </div>
+                  </div>
+                  <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                    <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>Suggestions de Rééquilibrage IA</h4>
+                    <div style={{ height: '300px', overflow: 'auto' }}>
+                      <RebalancingSuggestions />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                  <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>Priorités par Gestionnaire</h4>
+                  <PrioritiesDashboard />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* AI Dashboard for Admin roles */}
           {canViewFeature(user?.role, 'department_stats') && (

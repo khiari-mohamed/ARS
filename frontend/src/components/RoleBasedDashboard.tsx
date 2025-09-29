@@ -66,48 +66,9 @@ const RoleBasedDashboard: React.FC = () => {
     );
   }
 
-  // Responsable Département - Department dashboards and team data only
+  // Responsable Département - Same view as Super Admin but read-only
   if (userRole === UserRole.RESPONSABLE_DEPARTEMENT) {
-    return (
-      <Box>
-        <Typography variant="h4" gutterBottom>
-          Dashboard Responsable de Département
-        </Typography>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          Accès limité aux données de votre département
-        </Typography>
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Votre accès est restreint aux équipes et données de votre département uniquement
-        </Alert>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">Modules Accessibles</Typography>
-                <ul>
-                  <li>Tableaux de bord département</li>
-                  <li>Données équipes département</li>
-                  <li>Contrats département</li>
-                  <li>Analytics département</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">Limitations</Typography>
-                <ul>
-                  <li>Pas d'accès aux autres départements</li>
-                  <li>Pas de gestion globale</li>
-                  <li>Pas d'accès aux modules financiers</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
-    );
+    return <EnhancedDashboard />;
   }
 
   // Chef d'Équipe - Team management, global inbox, team dashboard
@@ -120,12 +81,12 @@ const RoleBasedDashboard: React.FC = () => {
     );
   }
 
-  // Gestionnaire - Same interface as Chef d'équipe but with read-only restrictions
+  // Gestionnaire - Same interface as Chef d'équipe but filtered to show only assigned data
   if (userRole === UserRole.GESTIONNAIRE) {
-    const ChefEquipeTableauBordNew = React.lazy(() => import('../pages/dashboard/ChefEquipeTableauBordNew'));
+    const GestionnaireDashboardNew = React.lazy(() => import('../pages/dashboard/GestionnaireDashboardNew'));
     return (
       <React.Suspense fallback={<div>Chargement...</div>}>
-        <ChefEquipeTableauBordNew />
+        <GestionnaireDashboardNew />
       </React.Suspense>
     );
   }

@@ -10,6 +10,7 @@ const Dashboard: React.FC = () => {
     return <ChefEquipeDashboard />;
   }
   
+  // RESPONSABLE_DEPARTEMENT gets same view as SUPER_ADMIN but read-only
   return <EnhancedDashboard />;
 };
 
