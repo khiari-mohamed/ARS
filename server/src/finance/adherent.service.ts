@@ -7,6 +7,8 @@ export interface CreateAdherentDto {
   prenom: string;
   clientId: string;
   rib: string;
+  codeAssure?: string;
+  numeroContrat?: string;
   statut?: string;
 }
 
@@ -14,6 +16,8 @@ export interface UpdateAdherentDto {
   nom?: string;
   prenom?: string;
   rib?: string;
+  codeAssure?: string;
+  numeroContrat?: string;
   statut?: string;
 }
 
@@ -24,54 +28,66 @@ export class AdherentService {
   constructor(private prisma: PrismaService) {}
 
   async createAdherent(dto: CreateAdherentDto, userId: string) {
-    // Create in member table instead
-    const existingMatricule = await this.prisma.member.findFirst({
+    // Validate RIB format (20 digits)
+    if (dto.rib && !/^\d{20}$/.test(dto.rib)) {
+      throw new BadRequestException('RIB must be exactly 20 digits');
+    }
+
+    // Find client by name or ID
+    let client = await this.prisma.client.findFirst({
       where: {
-        cin: dto.matricule
+        OR: [
+          { id: dto.clientId },
+          { name: dto.clientId }
+        ]
       }
     });
 
-    if (existingMatricule) {
-      throw new BadRequestException(`Matricule ${dto.matricule} already exists`);
+    if (!client) {
+      throw new BadRequestException(`Client ${dto.clientId} not found`);
     }
 
-    // Find or create society
-    let society = await this.prisma.society.findFirst({
-      where: { name: dto.clientId }
+    // Check for existing matricule
+    const existingAdherent = await this.prisma.adherent.findFirst({
+      where: {
+        matricule: dto.matricule,
+        clientId: client.id
+      }
     });
-    
-    if (!society) {
-      society = await this.prisma.society.create({
-        data: {
-          name: dto.clientId,
-          code: dto.clientId.replace(/\s+/g, '_').toUpperCase()
-        }
-      });
+
+    if (existingAdherent) {
+      throw new BadRequestException(`Matricule ${dto.matricule} already exists for this client`);
     }
 
-    const newMember = await this.prisma.member.create({
+    // Create adherent in proper table
+    const newAdherent = await this.prisma.adherent.create({
       data: {
-        cin: dto.matricule,
-        name: `${dto.nom} ${dto.prenom}`,
+        matricule: dto.matricule,
+        nom: dto.nom,
+        prenom: dto.prenom,
+        clientId: client.id,
         rib: dto.rib,
-        societyId: society.id
+        codeAssure: dto.codeAssure,
+        numeroContrat: dto.numeroContrat,
+        statut: dto.statut || 'ACTIF'
       },
       include: {
-        society: true
+        client: true
       }
     });
 
-    // Transform to adherent format
     return {
-      id: newMember.id,
-      matricule: newMember.cin,
-      nom: dto.nom,
-      prenom: dto.prenom,
-      rib: newMember.rib,
-      statut: 'ACTIF',
+      id: newAdherent.id,
+      matricule: newAdherent.matricule,
+      nom: newAdherent.nom,
+      prenom: newAdherent.prenom,
+      rib: newAdherent.rib,
+      codeAssure: newAdherent.codeAssure,
+      numeroContrat: newAdherent.numeroContrat,
+      statut: newAdherent.statut,
       client: {
-        id: newMember.society.id,
-        name: newMember.society.name
+        id: newAdherent.client.id,
+        name: newAdherent.client.name
       }
     };
   }
@@ -222,18 +238,18 @@ export class AdherentService {
   }
 
   async searchAdherents(query: string, clientId?: string) {
-    const results: any[] = [];
-
     try {
-      // Try adherent table first
-      const adherentWhere: any = {
+      // Search in adherent table with all required fields
+      const adherentWhere: any = query ? {
         OR: [
           { matricule: { contains: query, mode: 'insensitive' } },
           { nom: { contains: query, mode: 'insensitive' } },
           { prenom: { contains: query, mode: 'insensitive' } },
-          { rib: { contains: query, mode: 'insensitive' } }
+          { rib: { contains: query, mode: 'insensitive' } },
+          { codeAssure: { contains: query, mode: 'insensitive' } },
+          { numeroContrat: { contains: query, mode: 'insensitive' } }
         ]
-      };
+      } : {};
 
       if (clientId) {
         adherentWhere.clientId = clientId;
@@ -242,50 +258,27 @@ export class AdherentService {
       const adherents = await this.prisma.adherent.findMany({
         where: adherentWhere,
         include: { client: true },
-        take: 50
+        orderBy: { matricule: 'asc' },
+        take: 100
       });
 
-      results.push(...adherents);
-    } catch (error) {
-      console.log('Adherent table search failed:', error.message);
-    }
-
-    try {
-      // Try member table - if no query, get all members
-      const memberWhere: any = query ? {
-        OR: [
-          { cin: { contains: query, mode: 'insensitive' } },
-          { name: { contains: query, mode: 'insensitive' } },
-          { rib: { contains: query, mode: 'insensitive' } }
-        ]
-      } : {};
-
-      const members = await this.prisma.member.findMany({
-        where: memberWhere,
-        include: { society: true },
-        take: 50
-      });
-
-      // Transform members to adherent format
-      const transformedMembers = members.map(member => ({
-        id: member.id,
-        matricule: member.cin || member.id.substring(0, 8),
-        nom: member.name.split(' ')[0] || member.name,
-        prenom: member.name.split(' ').slice(1).join(' ') || '',
-        rib: member.rib,
-        statut: 'ACTIF',
+      return adherents.map(adherent => ({
+        id: adherent.id,
+        matricule: adherent.matricule,
+        nom: adherent.nom,
+        prenom: adherent.prenom,
+        rib: adherent.rib,
+        codeAssure: adherent.codeAssure,
+        numeroContrat: adherent.numeroContrat,
+        statut: adherent.statut,
         client: {
-          id: member.society.id,
-          name: member.society.name
+          id: adherent.client.id,
+          name: adherent.client.name
         }
       }));
-
-      results.push(...transformedMembers);
-      console.log(`Found ${members.length} members with query: ${query}`);
     } catch (error) {
-      console.log('Member table search failed:', error.message);
+      console.error('Failed to search adherents:', error);
+      return [];
     }
-
-    return results;
   }
 }

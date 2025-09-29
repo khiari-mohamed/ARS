@@ -32,9 +32,12 @@ export class FinanceService {
   }
 
   private checkFinanceRole(user: User) {
+    console.log('🔐 Checking role for user:', user?.role);
     if (!['FINANCE', 'SUPER_ADMIN'].includes(user.role)) {
+      console.log('❌ Role check failed for:', user?.role);
       throw new ForbiddenException('Access denied');
     }
+    console.log('✅ Role check passed');
   }
 
   async createVirement(dto: CreateVirementDto, user: User): Promise<Virement> {
@@ -251,21 +254,9 @@ export class FinanceService {
       });
       
       return {
-        success: validationResult.valid,
-        results: validationResult.data.map(item => ({
-          matricule: item.matricule,
-          name: `${item.nom} ${item.prenom}`,
-          society: item.societe,
-          rib: item.rib,
-          amount: item.montant,
-          status: item.status.toLowerCase(),
-          notes: item.erreurs.join(', '),
-          memberId: item.adherentId
-        })),
-        errors: validationResult.errors.map(error => ({
-          row: error.row,
-          error: error.message
-        })),
+        valid: validationResult.valid,
+        data: validationResult.data,
+        errors: validationResult.errors,
         summary: validationResult.summary
       };
       
@@ -337,88 +328,102 @@ export class FinanceService {
   }
 
   async getOVTracking(query: any, user: User) {
+    console.log('🔍 getOVTracking called with query:', query);
+    console.log('👤 User:', user);
     this.checkFinanceRole(user);
-    console.log('📡 FinanceService: getOVTracking called with query:', JSON.stringify(query, null, 2));
-    console.log('👤 FinanceService: User:', user?.id || 'system-user');
     try {
-      const where: any = {};
-      
-      if (query.society) {
-        where.society = { name: { contains: query.society, mode: 'insensitive' } };
-      }
-      if (query.status) {
-        where.status = query.status;
-      }
-      if (query.donneurOrdre) {
-        where.donneur = { name: { contains: query.donneurOrdre, mode: 'insensitive' } };
-      }
-      if (query.dateFrom || query.dateTo) {
-        where.createdAt = {};
-        if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
-        if (query.dateTo) where.createdAt.lte = new Date(query.dateTo);
-      }
-      
-      // Add amount filtering - we'll filter after getting results since amount is calculated
-      let minAmount = query.minAmount ? parseFloat(query.minAmount) : null;
-      let maxAmount = query.maxAmount ? parseFloat(query.maxAmount) : null;
-      
-      console.log('🔍 FinanceService: Amount filters - min:', minAmount, 'max:', maxAmount);
-      
-      console.log('🔍 FinanceService: Database query where clause:', JSON.stringify(where, null, 2));
-      
-      const batches = await this.prisma.wireTransferBatch.findMany({
-        where,
-        include: {
-          society: true,
-          donneur: true,
-          transfers: true,
-          history: { orderBy: { changedAt: 'desc' }, take: 1 }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-      
-      console.log('📊 FinanceService: Found', batches.length, 'wire transfer batches');
+      // Get both WireTransferBatch and OrdreVirement data
+      const [batches, ordresVirement] = await Promise.all([
+        this.prisma.wireTransferBatch.findMany({
+          include: {
+            society: true,
+            donneur: true,
+            transfers: true,
+            history: { orderBy: { changedAt: 'desc' }, take: 1 }
+          },
+          orderBy: { createdAt: 'desc' }
+        }),
+        this.prisma.ordreVirement.findMany({
+          include: {
+            bordereau: { include: { client: true } },
+            donneurOrdre: true
+          },
+          orderBy: { dateCreation: 'desc' }
+        })
+      ]);
       
       const now = new Date();
+      const result: any[] = [];
       
-      let result = batches.map(batch => {
+      // Add WireTransferBatch records
+      batches.forEach(batch => {
         const delayDays = Math.floor((now.getTime() - batch.createdAt.getTime()) / (1000 * 60 * 60 * 24));
         const lastHistory = batch.history[0];
         const totalAmount = batch.transfers.reduce((sum, t) => sum + t.amount, 0);
         
-        return {
+        result.push({
           id: batch.id,
           reference: `OV/${batch.createdAt.getFullYear()}/${batch.id.substring(0, 8)}`,
           society: batch.society.name,
-          dateInjected: batch.createdAt.toISOString().split('T')[0],
-          dateExecuted: lastHistory?.changedAt ? lastHistory.changedAt.toISOString().split('T')[0] : null,
+          dateInjected: batch.createdAt.toISOString(),
+          dateExecuted: lastHistory?.changedAt ? lastHistory.changedAt.toISOString() : null,
           status: this.mapBatchStatusToOV(batch.status),
           delay: delayDays,
           observations: lastHistory ? `Dernière modification: ${lastHistory.status}` : 'Créé',
           donneurOrdre: batch.donneur.name,
           totalAmount
-        };
+        });
       });
       
-      // Apply amount filters after mapping
-      if (minAmount !== null || maxAmount !== null) {
-        const beforeFilter = result.length;
-        result = result.filter(item => {
-          if (minAmount !== null && item.totalAmount < minAmount) return false;
-          if (maxAmount !== null && item.totalAmount > maxAmount) return false;
-          return true;
+      // Add OrdreVirement records
+      ordresVirement.forEach(ov => {
+        const delayDays = Math.floor((now.getTime() - ov.dateCreation.getTime()) / (1000 * 60 * 60 * 24));
+        
+        result.push({
+          id: ov.id,
+          reference: ov.reference,
+          society: ov.bordereau?.client?.name || 'Entrée manuelle',
+          dateInjected: ov.dateCreation.toISOString(),
+          dateExecuted: ov.dateTraitement ? ov.dateTraitement.toISOString() : null,
+          status: ov.etatVirement,
+          delay: delayDays,
+          observations: ov.commentaire || '-',
+          donneurOrdre: ov.donneurOrdre?.nom || 'N/A',
+          totalAmount: ov.montantTotal,
+          dateTraitement: ov.dateTraitement ? ov.dateTraitement.toISOString() : null,
+          motifObservation: ov.motifObservation || null,
+          demandeRecuperation: ov.demandeRecuperation || false,
+          dateDemandeRecuperation: ov.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
+          montantRecupere: ov.montantRecupere || false,
+          dateMontantRecupere: ov.dateMontantRecupere ? ov.dateMontantRecupere.toISOString() : null
         });
-        console.log(`🔍 FinanceService: Amount filtering - before: ${beforeFilter}, after: ${result.length}`);
+      });
+      
+      // Apply filters
+      let filteredResult = result;
+      if (query.society) {
+        filteredResult = filteredResult.filter(r => r.society.toLowerCase().includes(query.society.toLowerCase()));
+      }
+      if (query.status) {
+        filteredResult = filteredResult.filter(r => r.status === query.status);
+      }
+      if (query.donneurOrdre) {
+        filteredResult = filteredResult.filter(r => r.donneurOrdre.toLowerCase().includes(query.donneurOrdre.toLowerCase()));
+      }
+      if (query.dateFrom) {
+        filteredResult = filteredResult.filter(r => new Date(r.dateInjected) >= new Date(query.dateFrom));
+      }
+      if (query.dateTo) {
+        filteredResult = filteredResult.filter(r => new Date(r.dateInjected) <= new Date(query.dateTo));
       }
       
-      console.log('✅ FinanceService: Returning', result.length, 'processed OV records');
-      console.log('📊 FinanceService: Sample result:', result.length > 0 ? JSON.stringify(result[0], null, 2) : 'No data');
+      // Sort by date (newest first)
+      filteredResult.sort((a, b) => new Date(b.dateInjected).getTime() - new Date(a.dateInjected).getTime());
       
-      return result;
+      return filteredResult;
       
     } catch (error) {
       console.error('❌ FinanceService: Error fetching OV tracking:', error);
-      console.error('❌ FinanceService: Error stack:', error.stack);
       return [];
     }
   }
@@ -429,7 +434,8 @@ export class FinanceService {
       'VALIDATED': 'EN_COURS',
       'PROCESSED': 'EXECUTE',
       'REJECTED': 'REJETE',
-      'ARCHIVED': 'EXECUTE'
+      'ARCHIVED': 'EXECUTE',
+      'BLOCKED': 'REJETE'
     };
     return statusMap[status] || 'NON_EXECUTE';
   }
@@ -474,9 +480,10 @@ export class FinanceService {
   private mapOVStatusToBatch(ovStatus: string): string {
     const statusMap = {
       'NON_EXECUTE': 'CREATED',
-      'EN_COURS': 'VALIDATED',
-      'PARTIELLEMENT_EXECUTE': 'VALIDATED',
+      'EN_COURS_EXECUTION': 'VALIDATED',
+      'EXECUTE_PARTIELLEMENT': 'VALIDATED',
       'REJETE': 'REJECTED',
+      'BLOQUE': 'BLOCKED',
       'EXECUTE': 'PROCESSED'
     };
     return statusMap[ovStatus] || 'CREATED';
@@ -964,6 +971,466 @@ Document généré automatiquement par ARS`;
     } catch (error) {
       console.error('❌ FinanceService: Export failed:', error);
       res.status(500).json({ error: 'Export failed' });
+    }
+  }
+
+  async updateRecoveryInfo(id: string, data: any, user: User) {
+    this.checkFinanceRole(user);
+    try {
+      const updateData: any = {};
+      
+      if (data.demandeRecuperation !== undefined) {
+        updateData.demandeRecuperation = data.demandeRecuperation;
+        if (data.demandeRecuperation && data.dateDemandeRecuperation) {
+          updateData.dateDemandeRecuperation = new Date(data.dateDemandeRecuperation);
+        }
+      }
+      
+      if (data.montantRecupere !== undefined) {
+        updateData.montantRecupere = data.montantRecupere;
+        if (data.montantRecupere && data.dateMontantRecupere) {
+          updateData.dateMontantRecupere = new Date(data.dateMontantRecupere);
+        }
+      }
+      
+      if (data.motifObservation !== undefined) {
+        updateData.motifObservation = data.motifObservation;
+      }
+      
+      const ordreVirement = await this.prisma.ordreVirement.update({
+        where: { id },
+        data: updateData,
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
+      });
+      
+      await this.logAuditAction('UPDATE_RECOVERY_INFO', {
+        userId: user.id,
+        ordreVirementId: id,
+        changes: updateData
+      });
+      
+      return {
+        success: true,
+        message: 'Informations de récupération mises à jour',
+        ordreVirement
+      };
+    } catch (error) {
+      console.error('Error updating recovery info:', error);
+      throw new BadRequestException('Failed to update recovery information');
+    }
+  }
+
+  async createManualOV(data: any, user: User) {
+    if (!['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Chef d\'équipe and Super Admin can create manual OV');
+    }
+    
+    try {
+      // Create manual OV without bordereau link
+      const ordreVirement = await this.prisma.ordreVirement.create({
+        data: {
+          reference: data.reference,
+          donneurOrdreId: data.donneurOrdreId,
+          bordereauId: null, // Manual entry not linked to bordereau
+          utilisateurSante: user.id,
+          montantTotal: data.montantTotal,
+          nombreAdherents: data.nombreAdherents,
+          etatVirement: 'NON_EXECUTE',
+          commentaire: 'Entrée manuelle créée par Chef d\'équipe'
+        },
+        include: {
+          donneurOrdre: true
+        }
+      });
+      
+      await this.logAuditAction('CREATE_MANUAL_OV', {
+        userId: user.id,
+        ordreVirementId: ordreVirement.id,
+        reference: data.reference
+      });
+      
+      return {
+        success: true,
+        message: 'Ordre de virement manuel créé avec succès',
+        ordreVirement
+      };
+    } catch (error) {
+      console.error('Error creating manual OV:', error);
+      throw new BadRequestException('Failed to create manual OV');
+    }
+  }
+
+  async reinjectOV(id: string, user: User) {
+    if (!['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Chef d\'équipe and Super Admin can reinject OV');
+    }
+    
+    try {
+      const ordreVirement = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        include: { bordereau: true }
+      });
+      
+      if (!ordreVirement) {
+        throw new NotFoundException('Ordre de virement not found');
+      }
+      
+      if (ordreVirement.etatVirement !== 'REJETE') {
+        throw new BadRequestException('Only rejected OV can be reinjected');
+      }
+      
+      const updatedOV = await this.prisma.ordreVirement.update({
+        where: { id },
+        data: {
+          etatVirement: 'NON_EXECUTE',
+          dateCreation: new Date(), // Update injection date
+          commentaire: `Réinjection effectuée par ${user.fullName} le ${new Date().toLocaleDateString('fr-FR')}`
+        },
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
+      });
+      
+      await this.logAuditAction('REINJECT_OV', {
+        userId: user.id,
+        ordreVirementId: id
+      });
+      
+      return {
+        success: true,
+        message: 'Ordre de virement réinjecté avec succès',
+        ordreVirement: updatedOV
+      };
+    } catch (error) {
+      console.error('Error reinjecting OV:', error);
+      throw new BadRequestException('Failed to reinject OV');
+    }
+  }
+
+  async getFinanceDashboardWithFilters(filters: {
+    compagnie?: string;
+    client?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }, user: User) {
+    this.checkFinanceRole(user);
+    
+    try {
+      const where: any = {};
+      
+      if (filters.compagnie || filters.client) {
+        where.bordereau = {};
+        if (filters.compagnie || filters.client) {
+          where.bordereau.client = {
+            name: {
+              contains: filters.compagnie || filters.client,
+              mode: 'insensitive'
+            }
+          };
+        }
+      }
+      
+      if (filters.dateFrom || filters.dateTo) {
+        where.dateCreation = {};
+        if (filters.dateFrom) where.dateCreation.gte = new Date(filters.dateFrom);
+        if (filters.dateTo) where.dateCreation.lte = new Date(filters.dateTo);
+      }
+      
+      const ordresVirement = await this.prisma.ordreVirement.findMany({
+        where,
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        },
+        orderBy: { dateCreation: 'desc' },
+        take: 50
+      });
+      
+      const stats = {
+        totalOrdres: ordresVirement.length,
+        montantTotal: ordresVirement.reduce((sum, ov) => sum + ov.montantTotal, 0),
+        parStatut: ordresVirement.reduce((acc, ov) => {
+          acc[ov.etatVirement] = (acc[ov.etatVirement] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
+        demandesRecuperation: ordresVirement.filter(ov => ov.demandeRecuperation).length,
+        montantsRecuperes: ordresVirement.filter(ov => ov.montantRecupere).length
+      };
+      
+      return {
+        ordresVirement: ordresVirement.map(ov => ({
+          id: ov.id,
+          reference: ov.reference,
+          client: ov.bordereau?.client?.name || 'Entrée manuelle',
+          montant: ov.montantTotal,
+          statut: ov.etatVirement,
+          dateCreation: ov.dateCreation,
+          dateTraitement: ov.dateTraitement,
+          demandeRecuperation: ov.demandeRecuperation,
+          dateDemandeRecuperation: ov.dateDemandeRecuperation,
+          montantRecupere: ov.montantRecupere,
+          dateMontantRecupere: ov.dateMontantRecupere,
+          motifObservation: ov.motifObservation
+        })),
+        stats
+      };
+    } catch (error) {
+      console.error('Error fetching finance dashboard:', error);
+      throw new BadRequestException('Failed to fetch dashboard data');
+    }
+  }
+
+  async getBordereauxTraites(user: User) {
+    this.checkFinanceRole(user);
+    
+    try {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          statut: 'TRAITE'
+        },
+        include: {
+          client: true,
+          ordresVirement: {
+            include: {
+              donneurOrdre: true
+            }
+          }
+        },
+        orderBy: { dateCloture: 'desc' }
+      });
+      
+      return bordereaux.map(b => ({
+        id: b.id,
+        clientSociete: b.client.name,
+        referenceOV: b.ordresVirement[0]?.reference || 'N/A',
+        referenceBordereau: b.reference,
+        montantBordereau: b.nombreBS * 150, // Estimated amount
+        dateFinalisationBordereau: b.dateCloture,
+        dateInjection: b.ordresVirement[0]?.dateCreation || b.createdAt
+      }));
+    } catch (error) {
+      console.error('Error fetching bordereaux traités:', error);
+      throw new BadRequestException('Failed to fetch bordereaux traités');
+    }
+  }
+
+  // === OV VALIDATION METHODS ===
+  async getPendingValidationOVs(user: User) {
+    console.log('🔍 getPendingValidationOVs called for user:', user?.role);
+    
+    try {
+      console.log('🔍 Executing database query...');
+      const pendingOVs = await this.prisma.ordreVirement.findMany({
+        where: {
+          validationStatus: 'EN_ATTENTE_VALIDATION'
+        },
+        include: {
+          donneurOrdre: true,
+          bordereau: { include: { client: true } }
+        },
+        orderBy: { dateCreation: 'asc' }
+      });
+      
+      console.log(`🔍 Database query successful, found ${pendingOVs.length} OVs`);
+      
+      const result = pendingOVs.map((ov, index) => {
+        console.log(`🔍 Processing OV ${index + 1}:`, {
+          id: ov.id,
+          reference: ov.reference,
+          hasClient: !!ov.bordereau?.client,
+          hasDonneur: !!ov.donneurOrdre
+        });
+        
+        return {
+          id: ov.id,
+          reference: ov.reference,
+          client: ov.bordereau?.client?.name || 'Entrée manuelle',
+          donneurOrdre: ov.donneurOrdre?.nom || 'N/A',
+          montantTotal: ov.montantTotal,
+          nombreAdherents: ov.nombreAdherents,
+          dateCreation: ov.dateCreation,
+          utilisateurSante: ov.utilisateurSante
+        };
+      });
+      
+      console.log(`✅ Successfully returning ${result.length} pending OVs`);
+      return result;
+    } catch (error) {
+      console.error('❌ Error in getPendingValidationOVs:', error);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error stack:', error.stack);
+      throw new BadRequestException('Failed to fetch pending validation OVs: ' + error.message);
+    }
+  }
+
+  async validateOV(id: string, approved: boolean, comment: string | undefined, user: User) {
+    if (!['RESPONSABLE_DEPARTEMENT', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only RESPONSABLE_DEPARTEMENT and SUPER_ADMIN can validate OVs');
+    }
+    
+    try {
+      const ov = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        include: { bordereau: { include: { client: true } } }
+      });
+      
+      if (!ov) {
+        throw new NotFoundException('Ordre de virement not found');
+      }
+      
+      // Skip validation status check for now
+      // if (ov.validationStatus !== 'EN_ATTENTE_VALIDATION') {
+      //   throw new BadRequestException('OV is not pending validation');
+      // }
+      
+      const newStatus = approved ? 'VALIDE' : 'REJETE_VALIDATION';
+      
+      const updatedOV = await this.prisma.ordreVirement.update({
+        where: { id },
+        data: {
+          validationStatus: newStatus,
+          validatedBy: user.id,
+          validatedAt: new Date(),
+          validationComment: comment
+        },
+        include: {
+          donneurOrdre: true,
+          bordereau: { include: { client: true } }
+        }
+      });
+      
+      // Notify relevant users
+      if (approved) {
+        await this.notifyChefEquipeValidation(updatedOV, user);
+      } else {
+        await this.notifyRejectedValidation(updatedOV, user, comment);
+      }
+      
+      await this.logAuditAction('VALIDATE_OV', {
+        userId: user.id,
+        ordreVirementId: id,
+        approved,
+        comment
+      });
+      
+      return {
+        success: true,
+        message: approved ? 'OV validé avec succès' : 'OV rejeté',
+        ordreVirement: updatedOV
+      };
+    } catch (error) {
+      console.error('Error validating OV:', error);
+      throw new BadRequestException('Failed to validate OV');
+    }
+  }
+
+  private async notifyChefEquipeValidation(ov: any, validator: User) {
+    try {
+      const chefEquipeUsers = await this.prisma.user.findMany({
+        where: { role: 'CHEF_EQUIPE', active: true }
+      });
+      
+      const notifications = chefEquipeUsers.map(chef => ({
+        userId: chef.id,
+        type: 'OV_VALIDATED',
+        title: 'OV validé - Prêt pour traitement',
+        message: `L'OV ${ov.reference} a été validé par ${validator.fullName} et est maintenant prêt pour traitement.`,
+        data: {
+          ordreVirementId: ov.id,
+          reference: ov.reference,
+          validatedBy: validator.fullName
+        }
+      }));
+      
+      await this.prisma.notification.createMany({ data: notifications });
+    } catch (error) {
+      console.error('Failed to notify chef equipe:', error);
+    }
+  }
+
+  private async notifyRejectedValidation(ov: any, validator: User, comment?: string) {
+    try {
+      // Find the user who created the OV
+      const creator = await this.prisma.user.findUnique({
+        where: { id: ov.utilisateurSante }
+      });
+      
+      if (creator) {
+        await this.prisma.notification.create({
+          data: {
+            userId: creator.id,
+            type: 'OV_REJECTED',
+            title: 'OV rejeté lors de la validation',
+            message: `L'OV ${ov.reference} a été rejeté par ${validator.fullName}. ${comment ? `Motif: ${comment}` : ''}`,
+            data: {
+              ordreVirementId: ov.id,
+              reference: ov.reference,
+              rejectedBy: validator.fullName,
+              comment
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to notify OV creator:', error);
+    }
+  }
+
+  async notifyResponsableEquipeForValidation(data: {
+    ovId: string;
+    reference: string;
+    message: string;
+    createdBy: string;
+  }, user: User) {
+    try {
+      // Find all RESPONSABLE_DEPARTEMENT users
+      const responsableUsers = await this.prisma.user.findMany({
+        where: { 
+          role: 'RESPONSABLE_DEPARTEMENT', 
+          active: true 
+        }
+      });
+      
+      if (responsableUsers.length === 0) {
+        console.log('No RESPONSABLE_DEPARTEMENT users found');
+        return { notified: 0 };
+      }
+      
+      // Create notifications for all RESPONSABLE_DEPARTEMENT users
+      const notifications = responsableUsers.map(responsable => ({
+        userId: responsable.id,
+        type: 'OV_PENDING_VALIDATION',
+        title: 'Nouvel OV à valider',
+        message: `${data.message} par ${data.createdBy}`,
+        data: {
+          ordreVirementId: data.ovId,
+          reference: data.reference,
+          createdBy: data.createdBy
+        }
+      }));
+      
+      await this.prisma.notification.createMany({ data: notifications });
+      
+      await this.logAuditAction('NOTIFY_RESPONSABLE_EQUIPE', {
+        userId: user.id,
+        ordreVirementId: data.ovId,
+        notifiedUsers: responsableUsers.length
+      });
+      
+      console.log(`✅ Notified ${responsableUsers.length} RESPONSABLE_DEPARTEMENT users for OV ${data.reference}`);
+      
+      return {
+        success: true,
+        notified: responsableUsers.length,
+        message: `${responsableUsers.length} responsable(s) de département notifié(s)`
+      };
+    } catch (error) {
+      console.error('Failed to notify RESPONSABLE_EQUIPE:', error);
+      throw new BadRequestException('Failed to send notifications');
     }
   }
 }

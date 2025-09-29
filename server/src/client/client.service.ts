@@ -231,7 +231,7 @@ export class ClientService {
     return this.prisma.client.findMany({
       where,
       include: {
-        gestionnaires: true,
+        chargeCompte: true, // Chef d'équipe assigned to client
         contracts: true,
         bordereaux: true,
         reclamations: true,
@@ -562,7 +562,7 @@ export class ClientService {
     const clients = await this.findAll(filters || {});
     
     if (format === 'csv') {
-      const headers = ['ID', 'Name', 'Reglement Delay', 'Reclamation Delay', 'Gestionnaires', 'SLA Status', 'Risk Level'];
+      const headers = ['ID', 'Name', 'Reglement Delay', 'Reclamation Delay', 'Chef d\'Équipe', 'SLA Status', 'Risk Level'];
       const csvContent = [headers.join(',')];
       
       for (const client of clients) {
@@ -574,7 +574,7 @@ export class ClientService {
           `"${client.name}"`,
           client.reglementDelay,
           client.reclamationDelay,
-          `"${client.gestionnaires?.map(g => g.fullName).join('; ') || ''}"`,
+          `"${client.chargeCompte?.fullName || ''}"`,
           slaStatus.status,
           riskAssessment.riskLevel
         ].join(','));
@@ -829,7 +829,7 @@ export class ClientService {
     { header: 'Name', key: 'name', width: 32 },
     { header: 'Reglement Delay', key: 'reglementDelay', width: 18 },
     { header: 'Reclamation Delay', key: 'reclamationDelay', width: 18 },
-    { header: 'Gestionnaires', key: 'gestionnaires', width: 32 },
+    { header: 'Chef d\'Équipe', key: 'gestionnaires', width: 32 },
     ];
     clients.forEach((client: any) => {
     sheet.addRow({
@@ -837,7 +837,7 @@ export class ClientService {
     name: client.name,
     reglementDelay: client.reglementDelay,
     reclamationDelay: client.reclamationDelay,
-    gestionnaires: client.gestionnaires?.map((g: any) => g.fullName).join(', ') || '',
+    gestionnaires: client.chargeCompte?.fullName || '',
     });
     });
     const arrayBuffer = await workbook.xlsx.writeBuffer();
@@ -860,7 +860,7 @@ export class ClientService {
     ).text(
     'Reclamation Delay', 370, doc.y, { continued: true }
     ).text(
-    'Gestionnaires', 500, doc.y
+    'Chef d\'Équipe', 500, doc.y
     );
     doc.moveDown(0.5);
     clients.forEach((client: any) => {
@@ -873,7 +873,7 @@ export class ClientService {
     ).text(
     String(client.reclamationDelay), 370, doc.y, { continued: true }
     ).text(
-    client.gestionnaires?.map((g: any) => g.fullName).join(', ') || '', 500, doc.y
+    client.chargeCompte?.fullName || '', 500, doc.y
     );
     doc.moveDown(0.5);
     });
@@ -900,16 +900,14 @@ export class ClientService {
     if (!('slaConfig' in dto)) {
       (dto as any).slaConfig = { slaThreshold: dto.reglementDelay };
     }
-    const { gestionnaireIds, ...rest } = dto;
+    const { teamLeaderId, ...rest } = dto;
     return this.prisma.client.create({
       data: {
         ...rest,
         status: dto.status || 'active',
-        gestionnaires: gestionnaireIds ? {
-          connect: gestionnaireIds.map(id => ({ id })),
-        } : undefined,
+        chargeCompteId: teamLeaderId, // Assign client to chef d'équipe
       },
-      include: { gestionnaires: true, contracts: true, bordereaux: true, reclamations: true },
+      include: { chargeCompte: true, contracts: true, bordereaux: true, reclamations: true },
     });
   }
 
@@ -917,7 +915,7 @@ export class ClientService {
     const client = await this.prisma.client.findUnique({
       where: { id },
       include: {
-        gestionnaires: true,
+        chargeCompte: true, // Chef d'équipe assigned to client
         contracts: true,
         bordereaux: true,
         reclamations: true,
@@ -936,7 +934,7 @@ export class ClientService {
       status,
       reglementDelay,
       reclamationDelay,
-      gestionnaireIds,
+      teamLeaderId,
       slaConfig
     } = dto;
     const data: any = {
@@ -948,16 +946,12 @@ export class ClientService {
       ...(reglementDelay !== undefined && { reglementDelay }),
       ...(reclamationDelay !== undefined && { reclamationDelay }),
       ...(slaConfig !== undefined && { slaConfig }),
+      ...(teamLeaderId !== undefined && { chargeCompteId: teamLeaderId }),
     };
-    if (gestionnaireIds) {
-      data.gestionnaires = {
-        set: gestionnaireIds.map(id => ({ id })),
-      };
-    }
     return this.prisma.client.update({
       where: { id },
       data,
-      include: { gestionnaires: true, contracts: true, bordereaux: true, reclamations: true },
+      include: { chargeCompte: true, contracts: true, bordereaux: true, reclamations: true },
     });
   }
 

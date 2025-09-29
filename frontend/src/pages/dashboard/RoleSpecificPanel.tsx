@@ -20,8 +20,10 @@ const RoleSpecificPanel: React.FC<RoleSpecificPanelProps> = ({ role, data }) => 
   console.log('[RoleSpecificPanel] Rendered with role:', role, 'data:', data);
 
   switch (role) {
+    case 'SUPER_ADMIN':
     case 'ADMIN':
     case 'ADMINISTRATEUR':
+    case 'RESPONSABLE_DEPARTEMENT':
       return (
         <div role="region" aria-label="Admin Dashboard">
           {/* These components fetch their own data, do not pass 'data' */}

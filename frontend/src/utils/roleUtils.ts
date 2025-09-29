@@ -13,13 +13,17 @@ export function canEditUser(currentRole: UserRole, targetUser: User): boolean {
   if (currentRole === 'SUPER_ADMIN') return true;
   // Admin can edit anyone except super admin
   if (currentRole === 'ADMINISTRATEUR' && targetUser.role !== 'SUPER_ADMIN') return true;
-  // Responsable département can edit users in their department
-  if (currentRole === 'RESPONSABLE_DEPARTEMENT' && 
-      !['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(targetUser.role)) return true;
+  // RESPONSABLE_DEPARTEMENT has read-only access - cannot edit
+  if (currentRole === 'RESPONSABLE_DEPARTEMENT') return false;
   // Chef d'équipe can edit their team members
   if (currentRole === 'CHEF_EQUIPE' && 
       ['GESTIONNAIRE', 'CLIENT_SERVICE'].includes(targetUser.role)) return true;
   return false;
+}
+
+// Check if user has read-only access
+export function isReadOnlyRole(currentRole: UserRole): boolean {
+  return currentRole === 'RESPONSABLE_DEPARTEMENT';
 }
 
 export function canEditRole(currentRole: UserRole): boolean {
@@ -27,7 +31,7 @@ export function canEditRole(currentRole: UserRole): boolean {
 }
 
 export function canResetPassword(currentRole: UserRole): boolean {
-  return ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(currentRole);
+  return ['SUPER_ADMIN', 'ADMINISTRATEUR'].includes(currentRole);
 }
 
 export function canViewUsers(currentRole: UserRole): boolean {
@@ -62,16 +66,16 @@ export function canManageUser(currentRole: UserRole, targetRole: UserRole): bool
 export const canView = (role: string) => true;
 
 export const canCreate = (role: string) =>
-  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role);
+  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
 
 export const canAssign = (role: string) =>
-  ['CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role);
+  ['CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
 
 export const canResolve = (role: string) =>
-  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role);
+  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
 
 export const canDelete = (role: string) =>
-  ['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role);
+  ['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
 
 export const canEdit = (
   role: string,

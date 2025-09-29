@@ -31,8 +31,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   const userRole = user.role as UserRole;
   
-  // Super Admin has access to everything
-  if (userRole === UserRole.SUPER_ADMIN) {
+  // Super Admin and RESPONSABLE_DEPARTEMENT have access to everything
+  if (userRole === UserRole.SUPER_ADMIN || userRole === UserRole.RESPONSABLE_DEPARTEMENT) {
     return <>{children}</>;
   }
 

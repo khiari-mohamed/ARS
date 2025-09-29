@@ -7,12 +7,22 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import * as express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import * as path from 'path';
 
 async function bootstrap() {
   const expressApp = express();
   
-
-
+  // Serve static files from uploads directory at Express level
+  const uploadsPath = path.join(__dirname, '..', 'uploads');
+  console.log(`📁 Setting up static files from: ${uploadsPath}`);
+  expressApp.use('/uploads', express.static(uploadsPath));
+  
+  // Add logging middleware for uploads requests
+  expressApp.use('/uploads', (req, res, next) => {
+    console.log(`📄 Static file request: ${req.url}`);
+    next();
+  });
+  
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
   app.enableCors();
   app.setGlobalPrefix('api');

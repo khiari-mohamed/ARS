@@ -65,6 +65,7 @@ const ScanDashboard: React.FC = () => {
   const [autoAssigning, setAutoAssigning] = useState<string | null>(null);
   const [documentStats, setDocumentStats] = useState<any>(null);
   const [selectedDocumentType, setSelectedDocumentType] = useState<{type: string, label: string, icon: string} | null>(null);
+  const [selectedProgressionType, setSelectedProgressionType] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -341,7 +342,8 @@ const ScanDashboard: React.FC = () => {
             >
               Import
             </Button>
-            <Button
+            {/* COMMENTED OUT: SCAN MANUEL button as per requirements */}
+            {/* <Button
               variant="contained"
               color="secondary"
               startIcon={<Scanner />}
@@ -353,7 +355,7 @@ const ScanDashboard: React.FC = () => {
               }}
             >
               📄 Scan Manuel
-            </Button>
+            </Button> */}
             {/* <Button
               variant="outlined"
               color="secondary"
@@ -413,7 +415,22 @@ const ScanDashboard: React.FC = () => {
           {/* Progress KPIs */}
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={3}>
-              <Card sx={{ bgcolor: 'orange.50', border: '1px solid', borderColor: 'orange.200' }}>
+              <Card 
+                sx={{ 
+                  bgcolor: 'orange.50', 
+                  border: '1px solid', 
+                  borderColor: 'orange.200',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }
+                }}
+                onClick={() => {
+                  setSelectedProgressionType('A_SCANNER');
+                  setActiveDialog('progression-popup');
+                }}
+              >
                 <CardContent sx={{ textAlign: 'center', py: 2 }}>
                   <Typography variant="h4" color="orange.main" fontWeight="bold">
                     {scanQueue.filter(b => b.statut === 'A_SCANNER').length}
@@ -425,7 +442,22 @@ const ScanDashboard: React.FC = () => {
               </Card>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <Card sx={{ bgcolor: 'blue.50', border: '1px solid', borderColor: 'blue.200' }}>
+              <Card 
+                sx={{ 
+                  bgcolor: 'blue.50', 
+                  border: '1px solid', 
+                  borderColor: 'blue.200',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }
+                }}
+                onClick={() => {
+                  setSelectedProgressionType('SCAN_EN_COURS');
+                  setActiveDialog('progression-popup');
+                }}
+              >
                 <CardContent sx={{ textAlign: 'center', py: 2 }}>
                   <Typography variant="h4" color="blue.main" fontWeight="bold">
                     {scanQueue.filter(b => b.statut === 'SCAN_EN_COURS').length}
@@ -437,7 +469,22 @@ const ScanDashboard: React.FC = () => {
               </Card>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <Card sx={{ bgcolor: 'green.50', border: '1px solid', borderColor: 'green.200' }}>
+              <Card 
+                sx={{ 
+                  bgcolor: 'green.50', 
+                  border: '1px solid', 
+                  borderColor: 'green.200',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }
+                }}
+                onClick={() => {
+                  setSelectedProgressionType('SCANNE');
+                  setActiveDialog('progression-popup');
+                }}
+              >
                 <CardContent sx={{ textAlign: 'center', py: 2 }}>
                   <Typography variant="h4" color="green.main" fontWeight="bold">
                     {scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER'].includes(b.statut)).length}
@@ -796,10 +843,15 @@ const ScanDashboard: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={bordereau.statut}
+                            label={
+                              bordereau.statut === 'A_SCANNER' ? 'À scanner' :
+                              bordereau.statut === 'SCAN_EN_COURS' ? 'Scan en cours' :
+                              bordereau.statut === 'SCANNE' ? 'Scanné' : bordereau.statut
+                            }
                             color={
                               bordereau.statut === 'A_SCANNER' ? 'warning' :
-                              bordereau.statut === 'SCAN_EN_COURS' ? 'info' : 'default'
+                              bordereau.statut === 'SCAN_EN_COURS' ? 'info' :
+                              bordereau.statut === 'SCANNE' ? 'success' : 'default'
                             }
                             size="small"
                           />
@@ -1335,6 +1387,142 @@ const ScanDashboard: React.FC = () => {
         documentTypeLabel={selectedDocumentType?.label || ''}
         documentTypeIcon={selectedDocumentType?.icon || ''}
       />
+
+      {/* Progression Popup Dialog */}
+      <Dialog 
+        open={activeDialog === 'progression-popup'} 
+        onClose={() => {
+          setActiveDialog(null);
+          setSelectedProgressionType(null);
+        }}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedProgressionType === 'A_SCANNER' && '📤 Bordereaux Non Scannés'}
+          {selectedProgressionType === 'SCAN_EN_COURS' && '⚡ Bordereaux Scan en Cours'}
+          {selectedProgressionType === 'SCANNE' && '✅ Bordereaux Scan Finalisés'}
+        </DialogTitle>
+        <DialogContent>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell>Actions Scan</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {scanQueue
+                  .filter(b => {
+                    if (selectedProgressionType === 'A_SCANNER') return b.statut === 'A_SCANNER';
+                    if (selectedProgressionType === 'SCAN_EN_COURS') return b.statut === 'SCAN_EN_COURS';
+                    if (selectedProgressionType === 'SCANNE') return ['SCANNE', 'A_AFFECTER'].includes(b.statut);
+                    return false;
+                  })
+                  .map((bordereau: any) => (
+                    <TableRow key={bordereau.id}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {bordereau.reference}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(bordereau.createdAt).toLocaleDateString()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {bordereau.client?.name || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={
+                            bordereau.statut === 'A_SCANNER' ? 'À scanner' :
+                            bordereau.statut === 'SCAN_EN_COURS' ? 'Scan en cours' : 'Scanné'
+                          }
+                          color={
+                            bordereau.statut === 'A_SCANNER' ? 'warning' :
+                            bordereau.statut === 'SCAN_EN_COURS' ? 'info' : 'success'
+                          }
+                          size="small"
+                        />
+                        {bordereau.statut === 'SCAN_EN_COURS' && (
+                          <Chip
+                            label="Scan Multiple Possible"
+                            color="info"
+                            size="small"
+                            variant="outlined"
+                            sx={{ ml: 1 }}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" gap={1} flexWrap="wrap">
+                          {/* Manual Scan buttons for À scanner AND En cours de Scan statuses */}
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="secondary"
+                            startIcon={<Scanner />}
+                            onClick={() => {
+                              setSelectedBordereau(bordereau);
+                              setActiveDialog('manual-scan-direct');
+                            }}
+                            sx={{ 
+                              fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                              minWidth: { xs: 'auto', sm: 'auto' },
+                              px: { xs: 1, sm: 2 }
+                            }}
+                          >
+                            📄 Scan Manuel
+                            {bordereau.statut === 'SCAN_EN_COURS' && ' (Supplémentaire)'}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Visibility />}
+                            onClick={() => handleViewBordereau(bordereau.id)}
+                            sx={{ 
+                              fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                              minWidth: { xs: 'auto', sm: 'auto' },
+                              px: { xs: 1, sm: 2 }
+                            }}
+                          >
+                            Voir
+                          </Button>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                }
+                {scanQueue.filter(b => {
+                  if (selectedProgressionType === 'A_SCANNER') return b.statut === 'A_SCANNER';
+                  if (selectedProgressionType === 'SCAN_EN_COURS') return b.statut === 'SCAN_EN_COURS';
+                  if (selectedProgressionType === 'SCANNE') return ['SCANNE', 'A_AFFECTER'].includes(b.statut);
+                  return false;
+                }).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      <Typography color="text.secondary" sx={{ py: 4 }}>
+                        Aucun bordereau dans cette catégorie
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setActiveDialog(null);
+            setSelectedProgressionType(null);
+          }}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

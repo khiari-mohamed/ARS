@@ -129,6 +129,13 @@ export class GestionnaireActionsService {
       },
       include: {
         client: { select: { name: true } },
+        documents: {
+          select: { 
+            id: true,
+            name: true, 
+            type: true 
+          }
+        },
         BulletinSoin: {
           select: {
             montant: true
@@ -146,6 +153,13 @@ export class GestionnaireActionsService {
       },
       include: {
         client: { select: { name: true } },
+        documents: {
+          select: { 
+            id: true,
+            name: true, 
+            type: true 
+          }
+        },
         BulletinSoin: {
           select: {
             montant: true
@@ -156,39 +170,112 @@ export class GestionnaireActionsService {
     });
 
     return {
-      assignedItems: assignedBordereaux.map(b => ({
-        id: b.id,
-        reference: b.reference,
-        gedRef: `GED-${b.reference}`,
-        clientName: b.client?.name,
-        compagnie: b.client?.name,
-        societe: b.client?.name,
-        etat: b.statut,
-        dateCreation: b.dateReception,
-        totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
-      })),
-      processedItems: processedBordereaux.map(b => ({
-        id: b.id,
-        reference: b.reference,
-        gedRef: `GED-${b.reference}`,
-        clientName: b.client?.name,
-        compagnie: b.client?.name,
-        societe: b.client?.name,
-        etat: b.statut,
-        dateCreation: b.dateReceptionSante || b.dateReception,
-        totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
-      })),
-      returnedItems: returnedItems.map(b => ({
-        id: b.id,
-        reference: b.reference,
-        gedRef: `GED-${b.reference}`,
-        clientName: b.client?.name,
-        compagnie: b.client?.name,
-        societe: b.client?.name,
-        etat: b.statut,
-        dateCreation: b.dateReception,
-        totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
-      })),
+      assignedItems: assignedBordereaux.flatMap(b => 
+        b.documents.length > 0 
+          ? b.documents.map(doc => ({
+              id: doc.id,
+              bordereauId: b.id,
+              reference: b.reference,
+              gedRef: `GED-${b.reference}`,
+              clientName: b.client?.name,
+              client: b.client?.name,
+              compagnie: b.client?.name,
+              societe: b.client?.name,
+              type: this.getDossierType([doc]),
+              statut: this.mapBordereauStatus(b.statut),
+              etat: b.statut,
+              date: this.formatRelativeDate(b.dateReception),
+              dateCreation: b.dateReception,
+              totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
+            }))
+          : [{
+              id: b.id,
+              bordereauId: b.id,
+              reference: b.reference,
+              gedRef: `GED-${b.reference}`,
+              clientName: b.client?.name,
+              client: b.client?.name,
+              compagnie: b.client?.name,
+              societe: b.client?.name,
+              type: this.getDossierType(b.documents),
+              statut: this.mapBordereauStatus(b.statut),
+              etat: b.statut,
+              date: this.formatRelativeDate(b.dateReception),
+              dateCreation: b.dateReception,
+              totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
+            }]
+      ),
+      processedItems: processedBordereaux.flatMap(b => 
+        b.documents.length > 0 
+          ? b.documents.map(doc => ({
+              id: doc.id,
+              bordereauId: b.id,
+              reference: b.reference,
+              gedRef: `GED-${b.reference}`,
+              clientName: b.client?.name,
+              client: b.client?.name,
+              compagnie: b.client?.name,
+              societe: b.client?.name,
+              type: this.getDossierType([doc]),
+              statut: this.mapBordereauStatus(b.statut),
+              etat: b.statut,
+              date: this.formatRelativeDate(b.dateReceptionSante || b.dateReception),
+              dateCreation: b.dateReceptionSante || b.dateReception,
+              totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
+            }))
+          : [{
+              id: b.id,
+              bordereauId: b.id,
+              reference: b.reference,
+              gedRef: `GED-${b.reference}`,
+              clientName: b.client?.name,
+              client: b.client?.name,
+              compagnie: b.client?.name,
+              societe: b.client?.name,
+              type: this.getDossierType(b.documents),
+              statut: this.mapBordereauStatus(b.statut),
+              etat: b.statut,
+              date: this.formatRelativeDate(b.dateReceptionSante || b.dateReception),
+              dateCreation: b.dateReceptionSante || b.dateReception,
+              totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
+            }]
+      ),
+      returnedItems: returnedItems.flatMap(b => 
+        b.documents.length > 0 
+          ? b.documents.map(doc => ({
+              id: doc.id,
+              bordereauId: b.id,
+              reference: b.reference,
+              gedRef: `GED-${b.reference}`,
+              clientName: b.client?.name,
+              client: b.client?.name,
+              compagnie: b.client?.name,
+              societe: b.client?.name,
+              type: this.getDossierType([doc]),
+              statut: this.mapBordereauStatus(b.statut),
+              etat: b.statut,
+              date: this.formatRelativeDate(b.dateReception),
+              dateCreation: b.dateReception,
+              totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
+            }))
+          : [{
+              id: b.id,
+              bordereauId: b.id,
+              reference: b.reference,
+              gedRef: `GED-${b.reference}`,
+              clientName: b.client?.name,
+              client: b.client?.name,
+              compagnie: b.client?.name,
+              societe: b.client?.name,
+              type: this.getDossierType(b.documents),
+              statut: this.mapBordereauStatus(b.statut),
+              etat: b.statut,
+              date: this.formatRelativeDate(b.dateReception),
+              dateCreation: b.dateReception,
+              totalPec: b.BulletinSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0)
+            }]
+      ),
+
       stats: {
         assigned: assignedBordereaux.length,
         processed: processedBordereaux.length,
@@ -451,8 +538,20 @@ export class GestionnaireActionsService {
   }
 
   private getDossierType(documents: any[]): string {
+    // If no documents, default to Prestation
+    if (!documents || documents.length === 0) {
+      return 'Prestation';
+    }
+    
+    // Check document types in priority order
     if (documents.some(d => d.type === 'RECLAMATION')) return 'Réclamation';
-    if (documents.some(d => d.type === 'COMPLEMENT_DOSSIER')) return 'Complément Dossier';
+    if (documents.some(d => d.type === 'COMPLEMENT_INFORMATION')) return 'Complément Dossier';
+    if (documents.some(d => d.type === 'ADHESION')) return 'Adhésion';
+    if (documents.some(d => d.type === 'AVENANT')) return 'Avenant';
+    if (documents.some(d => d.type === 'RESILIATION')) return 'Résiliation';
+    if (documents.some(d => d.type === 'BULLETIN_SOIN')) return 'Prestation';
+    
+    // Default to Prestation for any other document types
     return 'Prestation';
   }
 
@@ -1029,66 +1128,73 @@ export class GestionnaireActionsService {
   }
 
   async getGestionnaireDashboardStats(gestionnaireId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thisWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    const [
-      totalAssigned,
-      inProgress,
-      completedToday,
-      completedThisWeek,
-      overdue,
-      avgProcessingTime
-    ] = await Promise.all([
-      this.prisma.bordereau.count({
-        where: {
-          assignedToUserId: gestionnaireId,
-          statut: { in: ['ASSIGNE', 'EN_COURS'] }
-        }
-      }),
-      this.prisma.bordereau.count({
-        where: {
-          assignedToUserId: gestionnaireId,
-          statut: 'EN_COURS'
-        }
-      }),
-      this.prisma.bordereau.count({
-        where: {
-          assignedToUserId: gestionnaireId,
-          statut: 'TRAITE',
-          updatedAt: { gte: today }
-        }
-      }),
-      this.prisma.bordereau.count({
-        where: {
-          assignedToUserId: gestionnaireId,
-          statut: 'TRAITE',
-          updatedAt: { gte: thisWeek }
-        }
-      }),
-      this.prisma.bordereau.count({
-        where: {
-          assignedToUserId: gestionnaireId,
-          statut: { in: ['ASSIGNE', 'EN_COURS'] },
-          dateReception: {
-            lte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    this.logger.log(`📈 Getting dashboard stats for gestionnaire: ${gestionnaireId}`);
+    
+    // Get all bordereaux assigned to this gestionnaire
+    const allBordereaux = await this.prisma.bordereau.findMany({
+      where: {
+        assignedToUserId: gestionnaireId
+      },
+      include: {
+        client: { select: { name: true } },
+        documents: {
+          select: { 
+            id: true,
+            name: true, 
+            type: true 
           }
         }
-      }),
-      this.calculateAverageProcessingTime(gestionnaireId)
-    ]);
+      }
+    });
 
-    return {
-      totalAssigned,
-      inProgress,
-      completedToday,
-      completedThisWeek,
-      overdue,
-      avgProcessingTime,
-      efficiency: totalAssigned > 0 ? Math.round((completedThisWeek / totalAssigned) * 100) : 0,
-      productivity: completedThisWeek
+    this.logger.log(`📁 Found ${allBordereaux.length} bordereaux for gestionnaire`);
+
+    // Group by document type to match chef d'équipe structure
+    const typeStats = {
+      prestation: { total: 0, breakdown: {} },
+      adhesion: { total: 0, breakdown: {} },
+      complement: { total: 0, breakdown: {} },
+      resiliation: { total: 0, breakdown: {} },
+      reclamation: { total: 0, breakdown: {} },
+      avenant: { total: 0, breakdown: {} }
     };
+
+    allBordereaux.forEach(bordereau => {
+      const clientName = bordereau.client?.name || 'Client inconnu';
+      const docType = this.getDossierType(bordereau.documents);
+      
+      this.logger.log(`📄 Processing bordereau ${bordereau.reference}: client=${clientName}, docType=${docType}`);
+      
+      switch (docType) {
+        case 'Prestation':
+          typeStats.prestation.total++;
+          typeStats.prestation.breakdown[clientName] = (typeStats.prestation.breakdown[clientName] || 0) + 1;
+          break;
+        case 'Réclamation':
+          typeStats.reclamation.total++;
+          typeStats.reclamation.breakdown[clientName] = (typeStats.reclamation.breakdown[clientName] || 0) + 1;
+          break;
+        case 'Complément Dossier':
+          typeStats.complement.total++;
+          typeStats.complement.breakdown[clientName] = (typeStats.complement.breakdown[clientName] || 0) + 1;
+          break;
+        case 'Adhésion':
+          typeStats.adhesion.total++;
+          typeStats.adhesion.breakdown[clientName] = (typeStats.adhesion.breakdown[clientName] || 0) + 1;
+          break;
+        case 'Avenant':
+          typeStats.avenant.total++;
+          typeStats.avenant.breakdown[clientName] = (typeStats.avenant.breakdown[clientName] || 0) + 1;
+          break;
+        case 'Résiliation':
+          typeStats.resiliation.total++;
+          typeStats.resiliation.breakdown[clientName] = (typeStats.resiliation.breakdown[clientName] || 0) + 1;
+          break;
+      }
+    });
+
+    this.logger.log(`📈 Final stats:`, JSON.stringify(typeStats, null, 2));
+    return typeStats;
   }
 
   private calculateBSStats(bulletinSoins: any[]) {
@@ -1477,5 +1583,94 @@ export class GestionnaireActionsService {
     };
     
     return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
+  }
+
+  private mapBordereauStatus(status: string): string {
+    const mapping = {
+      'ASSIGNE': 'En cours',
+      'EN_COURS': 'En cours', 
+      'TRAITE': 'Traité',
+      'CLOTURE': 'Traité',
+      'REJETE': 'Retourné',
+      'EN_DIFFICULTE': 'Retourné',
+      'VIREMENT_EXECUTE': 'Traité'
+    };
+    return mapping[status] || status;
+  }
+
+  private formatRelativeDate(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    
+    if (diffHours < 24) return `il y a ${diffHours} heure${diffHours > 1 ? 's' : ''}`;
+    if (diffDays < 30) return `il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
+    return `il y a ${Math.floor(diffDays / 30)} mois`;
+  }
+
+  async modifyDossierStatus(dossierId: string, newStatus: string, gestionnaireId: string) {
+    try {
+      // Check if this is a document ID or bordereau ID
+      const document = await this.prisma.document.findUnique({
+        where: { id: dossierId },
+        include: { bordereau: true }
+      });
+
+      if (document) {
+        // Update document status
+        const statusMapping = {
+          'En cours': 'EN_COURS',
+          'Traité': 'TRAITE',
+          'Retourné': 'REJETE'
+        };
+
+        await this.prisma.document.update({
+          where: { id: dossierId },
+          data: { status: statusMapping[newStatus] as any }
+        });
+
+        // Also update the bordereau status if needed
+        if (document.bordereau) {
+          const bordereauStatusMapping = {
+            'En cours': 'EN_COURS',
+            'Traité': 'TRAITE',
+            'Retourné': 'EN_DIFFICULTE'
+          };
+
+          await this.prisma.bordereau.update({
+            where: { id: document.bordereau.id },
+            data: { statut: bordereauStatusMapping[newStatus] as any }
+          });
+        }
+
+        return { success: true, message: 'Statut modifié avec succès' };
+      } else {
+        // Try as bordereau ID
+        const bordereau = await this.prisma.bordereau.findUnique({
+          where: { id: dossierId }
+        });
+
+        if (bordereau) {
+          const bordereauStatusMapping = {
+            'En cours': 'EN_COURS',
+            'Traité': 'TRAITE',
+            'Retourné': 'EN_DIFFICULTE'
+          };
+
+          await this.prisma.bordereau.update({
+            where: { id: dossierId },
+            data: { statut: bordereauStatusMapping[newStatus] as any }
+          });
+
+          return { success: true, message: 'Statut modifié avec succès' };
+        }
+      }
+
+      return { success: false, message: 'Dossier non trouvé' };
+    } catch (error) {
+      this.logger.error('Error modifying status:', error);
+      return { success: false, message: 'Erreur lors de la modification' };
+    }
   }
 }

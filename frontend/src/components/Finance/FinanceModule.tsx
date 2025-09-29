@@ -3,6 +3,7 @@ import {
   Box, Paper, Tabs, Tab, useTheme, useMediaQuery, Typography, Badge
 } from '@mui/material';
 import OVProcessingTab from './OVProcessingTab';
+import OVValidationTab from './OVValidationTab';
 import TrackingTab from './TrackingTab';
 import SuiviVirementTab from './SuiviVirementTab';
 import DonneursTab from './DonneursTab';
@@ -12,9 +13,10 @@ import MultiBankFormatManager from './MultiBankFormatManager';
 import AutomatedReconciliation from './AutomatedReconciliation';
 import FinancialReportingDashboard from './FinancialReportingDashboard';
 import FinanceMobileView from './FinanceMobileView';
-import FinanceTestPanel from './FinanceTestPanel';
+
 import FinanceAlertsTab from './FinanceAlertsTab';
 import FinanceDashboard from './FinanceDashboard';
+import SlaConfigurationTab from './SlaConfigurationTab';
 // COMMENTED OUT: Static demo tab import - Use functional tabs instead
 // import FinanceModuleOverview from './FinanceModuleOverview';
 import VirementTable from './VirementTable';
@@ -27,14 +29,7 @@ import VirementStatusTag from './VirementStatusTag';
 import { useAuth } from '../../contexts/AuthContext';
 import { financeService } from '../../services/financeService';
 
-// Mock useQuery for now since @tanstack/react-query might not be installed
-const useQuery = (key: any, fn: any, options?: any) => {
-  const [data, setData] = React.useState<any[]>([]);
-  React.useEffect(() => {
-    fn().then(setData).catch(() => setData([]));
-  }, []);
-  return { data };
-};
+
 
 const FinanceModule: React.FC = () => {
   const [tab, setTab] = useState(0);
@@ -45,25 +40,29 @@ const FinanceModule: React.FC = () => {
   const { user } = useAuth();
 
   // Get alerts count for badge
-  const { data: alerts } = useQuery(
-    ['finance-alerts'],
-    () => financeService.getSuiviNotifications(),
-    { refetchInterval: 60000 }
-  );
+  const [alerts, setAlerts] = React.useState<any[]>([]);
+  
+  React.useEffect(() => {
+    financeService.getSlaAlerts()
+      .then(setAlerts)
+      .catch(() => setAlerts([]));
+  }, []);
 
-  const alertsCount = Array.isArray(alerts) ? alerts.filter((a: any) => a.type === 'FINANCE_NOTIFICATION').length : 0;
+  const alertsCount = Array.isArray(alerts) ? alerts.filter((a: any) => a.level === 'CRITIQUE' || a.level === 'DEPASSEMENT').length : 0;
 
   const tabLabels = [
     // COMMENTED OUT: Static demo tab - Use functional tabs instead
     // 'Vue d\'Ensemble',
     'Tableau de Bord',
-    'Ordre de Virement', 
+    'Ordre de Virement',
+    ...(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? ['Validation OV'] : []),
     'Suivi & Statut',
     'Suivi Virement',
     'Donneurs d\'Ordre',
     'Adhérents',
     'Alertes & Retards',
     'Formats Bancaires',
+    'Configuration SLA',
     'Rapprochement Auto',
     'Rapports Financiers',
     'Rapports & Export'
@@ -96,8 +95,7 @@ const FinanceModule: React.FC = () => {
         </Typography>
       </Paper>
 
-      {/* API Test Panel (for development) */}
-      <FinanceTestPanel />
+
 
       {/* Mobile View */}
       {isMobile && (
@@ -114,19 +112,21 @@ const FinanceModule: React.FC = () => {
               {/* {tab === 0 && <FinanceModuleOverview />} */}
               {tab === 0 && <FinanceDashboard />}
               {tab === 1 && <OVProcessingTab onSwitchToTab={setTab} />}
-              {tab === 2 && <TrackingTab />}
-              {tab === 3 && <SuiviVirementTab />}
-              {tab === 4 && <DonneursTab />}
-              {tab === 5 && <AdherentsTab />}
-              {tab === 6 && (
+              {(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN') && tab === 2 && <OVValidationTab />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 3 : 2) && <TrackingTab />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3) && <SuiviVirementTab />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 5 : 4) && <DonneursTab />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 6 : 5) && <AdherentsTab />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 7 : 6) && (
                 <Badge badgeContent={alertsCount} color="error">
                   <FinanceAlertsTab />
                 </Badge>
               )}
-              {tab === 7 && <MultiBankFormatManager />}
-              {tab === 8 && <AutomatedReconciliation />}
-              {tab === 9 && <FinancialReportingDashboard />}
-              {tab === 10 && <ReportsTab />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 8 : 7) && <MultiBankFormatManager />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 9 : 8) && <SlaConfigurationTab />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 10 : 9) && <AutomatedReconciliation />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 11 : 10) && <FinancialReportingDashboard />}
+              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 12 : 11) && <ReportsTab />}
             </Box>
           </Paper>
         </>
@@ -161,15 +161,17 @@ const FinanceModule: React.FC = () => {
             {/* {tab === 0 && <FinanceModuleOverview />} */}
             {tab === 0 && <FinanceDashboard />}
             {tab === 1 && <OVProcessingTab onSwitchToTab={setTab} />}
-            {tab === 2 && <TrackingTab />}
-            {tab === 3 && <SuiviVirementTab />}
-            {tab === 4 && <DonneursTab />}
-            {tab === 5 && <AdherentsTab />}
-            {tab === 6 && <FinanceAlertsTab />}
-            {tab === 7 && <MultiBankFormatManager />}
-            {tab === 8 && <AutomatedReconciliation />}
-            {tab === 9 && <FinancialReportingDashboard />}
-            {tab === 10 && <ReportsTab />}
+            {(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN') && tab === 2 && <OVValidationTab />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 3 : 2) && <TrackingTab />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3) && <SuiviVirementTab />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 5 : 4) && <DonneursTab />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 6 : 5) && <AdherentsTab />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 7 : 6) && <FinanceAlertsTab />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 8 : 7) && <MultiBankFormatManager />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 9 : 8) && <SlaConfigurationTab />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 10 : 9) && <AutomatedReconciliation />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 11 : 10) && <FinancialReportingDashboard />}
+            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 12 : 11) && <ReportsTab />}
           </Box>
         </Paper>
       )}

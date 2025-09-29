@@ -3,9 +3,10 @@ import {
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell,
   TableBody, Chip, Button, Box, TextField, FormControl, InputLabel,
   Select, MenuItem, Alert, Dialog, DialogTitle, DialogContent,
-  DialogActions, LinearProgress
+  DialogActions, LinearProgress, Checkbox, FormControlLabel
 } from '@mui/material';
-import { Refresh, Visibility, Edit } from '@mui/icons-material';
+import { Refresh, Visibility, Edit, Add, Replay } from '@mui/icons-material';
+import { useAuth } from '../../contexts/AuthContext';
 import { financeService } from '../../services/financeService';
 
 interface SuiviVirement {
@@ -16,13 +17,19 @@ interface SuiviVirement {
   utilisateurSante: string;
   dateTraitement?: string;
   utilisateurFinance?: string;
-  etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'EXECUTE';
+  etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE';
   dateEtatFinal?: string;
   commentaire?: string;
+  motifObservation?: string;
+  demandeRecuperation?: boolean;
+  dateDemandeRecuperation?: string;
+  montantRecupere?: boolean;
+  dateMontantRecupere?: string;
   ordreVirement?: any;
 }
 
 const SuiviVirementTab: React.FC = () => {
+  const { user } = useAuth();
   const [suiviVirements, setSuiviVirements] = useState<SuiviVirement[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
@@ -38,7 +45,20 @@ const SuiviVirementTab: React.FC = () => {
   const [updateOpen, setUpdateOpen] = useState(false);
   const [updateData, setUpdateData] = useState({
     etatVirement: '',
-    commentaire: ''
+    commentaire: '',
+    motifObservation: '',
+    demandeRecuperation: false,
+    dateDemandeRecuperation: '',
+    montantRecupere: false,
+    dateMontantRecupere: ''
+  });
+  const [createManualOpen, setCreateManualOpen] = useState(false);
+  const [manualOVData, setManualOVData] = useState({
+    reference: '',
+    clientName: '',
+    donneurOrdreId: '',
+    montantTotal: 0,
+    nombreAdherents: 0
   });
 
   useEffect(() => {
@@ -48,22 +68,24 @@ const SuiviVirementTab: React.FC = () => {
   const loadSuiviVirements = async () => {
     setLoading(true);
     try {
-      // Use the virement data from database
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/dashboard`);
-      const dashboardData = await response.json();
+      const data = await financeService.getSuiviVirements(filters);
       
-      // Transform the recent orders to suivi format
-      const transformedData = dashboardData.recentOrdres.map((ordre: any, index: number) => ({
-        id: ordre.id,
-        numeroBordereau: ordre.reference || `BR-${index + 1}`,
-        societe: ordre.bordereau?.client?.name || 'ARS TUNISIE',
-        dateInjection: ordre.dateCreation || ordre.createdAt,
-        utilisateurSante: ordre.utilisateurSante || 'demo-user',
-        dateTraitement: ordre.dateTraitement,
-        utilisateurFinance: ordre.utilisateurFinance,
-        etatVirement: ordre.etatVirement || 'EXECUTE',
-        dateEtatFinal: ordre.dateEtatFinal,
-        commentaire: ordre.commentaire
+      const transformedData = data.map((record: any) => ({
+        id: record.id,
+        numeroBordereau: record.reference,
+        societe: record.society,
+        dateInjection: record.dateInjected,
+        utilisateurSante: 'demo-user',
+        dateTraitement: record.dateTraitement,
+        utilisateurFinance: 'demo-finance',
+        etatVirement: record.status,
+        dateEtatFinal: record.dateExecuted,
+        commentaire: record.observations,
+        motifObservation: record.motifObservation,
+        demandeRecuperation: record.demandeRecuperation,
+        dateDemandeRecuperation: record.dateDemandeRecuperation,
+        montantRecupere: record.montantRecupere,
+        dateMontantRecupere: record.dateMontantRecupere
       }));
       
       setSuiviVirements(transformedData);
@@ -85,7 +107,6 @@ const SuiviVirementTab: React.FC = () => {
 
   const handleViewDetails = async (suivi: SuiviVirement) => {
     try {
-      // Use the existing suivi data for details
       setSelectedSuivi(suivi);
       setDetailsOpen(true);
     } catch (error) {
@@ -97,7 +118,12 @@ const SuiviVirementTab: React.FC = () => {
     setSelectedSuivi(suivi);
     setUpdateData({
       etatVirement: suivi.etatVirement,
-      commentaire: suivi.commentaire || ''
+      commentaire: suivi.commentaire || '',
+      motifObservation: suivi.motifObservation || '',
+      demandeRecuperation: suivi.demandeRecuperation || false,
+      dateDemandeRecuperation: suivi.dateDemandeRecuperation || '',
+      montantRecupere: suivi.montantRecupere || false,
+      dateMontantRecupere: suivi.dateMontantRecupere || ''
     });
     setUpdateOpen(true);
   };
@@ -106,27 +132,60 @@ const SuiviVirementTab: React.FC = () => {
     if (!selectedSuivi) return;
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${selectedSuivi.id}/etat`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          etatVirement: updateData.etatVirement,
-          commentaire: updateData.commentaire,
-          utilisateurFinance: 'demo-user'
-        })
+      // Update virement status
+      await financeService.updateEtatVirement(selectedSuivi.id, {
+        etatVirement: updateData.etatVirement,
+        commentaire: updateData.commentaire
       });
       
-      if (response.ok) {
-        setUpdateOpen(false);
-        loadSuiviVirements();
-      } else {
-        console.error('Failed to update:', await response.text());
+      // Update recovery information if user has permission
+      if (canModifyStatus()) {
+        await financeService.updateRecoveryInfo(selectedSuivi.id, {
+          motifObservation: updateData.motifObservation,
+          demandeRecuperation: updateData.demandeRecuperation,
+          dateDemandeRecuperation: updateData.demandeRecuperation ? updateData.dateDemandeRecuperation : undefined,
+          montantRecupere: updateData.montantRecupere,
+          dateMontantRecupere: updateData.montantRecupere ? updateData.dateMontantRecupere : undefined
+        });
       }
+      
+      setUpdateOpen(false);
+      loadSuiviVirements();
     } catch (error) {
-      console.error('Failed to update etat virement:', error);
+      console.error('Failed to update virement:', error);
+    }
+  };
+
+  const handleCreateManualOV = async () => {
+    try {
+      // Get first available donneur d'ordre if not specified
+      let donneurId = manualOVData.donneurOrdreId;
+      if (!donneurId) {
+        const donneurs = await financeService.getDonneursOrdre();
+        donneurId = donneurs[0]?.id || 'default-donneur';
+      }
+      
+      await financeService.createManualOV({
+        reference: manualOVData.reference,
+        clientData: { name: manualOVData.clientName, society: manualOVData.clientName },
+        donneurOrdreId: donneurId,
+        montantTotal: manualOVData.montantTotal,
+        nombreAdherents: manualOVData.nombreAdherents
+      });
+      
+      setCreateManualOpen(false);
+      setManualOVData({
+        reference: '',
+        clientName: '',
+        donneurOrdreId: '',
+        montantTotal: 0,
+        nombreAdherents: 0
+      });
+      loadSuiviVirements();
+      alert('Entrée manuelle créée avec succès!');
+    } catch (error) {
+      console.error('Failed to create manual OV:', error);
+      alert('Erreur lors de la création: ' + (error as any).message);
     }
   };
 
@@ -136,11 +195,34 @@ const SuiviVirementTab: React.FC = () => {
       'EN_COURS_EXECUTION': { label: 'En Cours', color: 'info' as const },
       'EXECUTE_PARTIELLEMENT': { label: 'Partiel', color: 'warning' as const },
       'REJETE': { label: 'Rejeté', color: 'error' as const },
+      'BLOQUE': { label: 'Bloqué', color: 'error' as const },
       'EXECUTE': { label: 'Exécuté', color: 'success' as const }
     };
     
     const { label, color } = config[etat as keyof typeof config] || { label: etat, color: 'default' as const };
     return <Chip label={label} color={color} size="small" />;
+  };
+  
+  const canModifyStatus = () => {
+    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN';
+  };
+  
+  const canReinject = () => {
+    return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
+  };
+  
+  const handleReinject = async (suivi: SuiviVirement) => {
+    if (suivi.etatVirement !== 'REJETE') {
+      alert('Seuls les virements rejetés peuvent être réinjectés');
+      return;
+    }
+    
+    try {
+      await financeService.reinjectOV(suivi.id);
+      loadSuiviVirements();
+    } catch (error) {
+      console.error('Failed to reinject OV:', error);
+    }
   };
 
   return (
@@ -164,6 +246,7 @@ const SuiviVirementTab: React.FC = () => {
                 <MenuItem value="EN_COURS_EXECUTION">En Cours</MenuItem>
                 <MenuItem value="EXECUTE_PARTIELLEMENT">Partiel</MenuItem>
                 <MenuItem value="REJETE">Rejeté</MenuItem>
+                <MenuItem value="BLOQUE">Bloqué</MenuItem>
                 <MenuItem value="EXECUTE">Exécuté</MenuItem>
               </Select>
             </FormControl>
@@ -229,9 +312,18 @@ const SuiviVirementTab: React.FC = () => {
 
       {/* Results Table */}
       <Paper elevation={2} sx={{ p: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Suivi des Virements ({suiviVirements.length})
-        </Typography>
+        <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="h6">
+            Suivi des Virements ({suiviVirements.length})
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setCreateManualOpen(true)}
+          >
+            Créer Nouvelle Entrée
+          </Button>
+        </Box>
         
         {loading && <LinearProgress sx={{ mb: 2 }} />}
         
@@ -241,10 +333,11 @@ const SuiviVirementTab: React.FC = () => {
               <TableCell>N° Bordereau</TableCell>
               <TableCell>Société</TableCell>
               <TableCell>Date Injection</TableCell>
-              <TableCell>Utilisateur Santé</TableCell>
-              <TableCell>Date Traitement</TableCell>
-              <TableCell>Utilisateur Finance</TableCell>
-              <TableCell>État</TableCell>
+              <TableCell>Statut de virement</TableCell>
+              <TableCell>Date de traitement du virement</TableCell>
+              <TableCell>Motif / Observation</TableCell>
+              <TableCell>Demande récupération</TableCell>
+              <TableCell>Montant récupéré</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -256,15 +349,46 @@ const SuiviVirementTab: React.FC = () => {
                 <TableCell>
                   {new Date(suivi.dateInjection).toLocaleDateString('fr-FR')}
                 </TableCell>
-                <TableCell>{suivi.utilisateurSante}</TableCell>
+                <TableCell>{getEtatChip(suivi.etatVirement)}</TableCell>
                 <TableCell>
                   {suivi.dateTraitement 
                     ? new Date(suivi.dateTraitement).toLocaleDateString('fr-FR')
                     : '-'
                   }
                 </TableCell>
-                <TableCell>{suivi.utilisateurFinance || '-'}</TableCell>
-                <TableCell>{getEtatChip(suivi.etatVirement)}</TableCell>
+                <TableCell>
+                  <Typography variant="body2" sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {suivi.motifObservation || '-'}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  {suivi.demandeRecuperation ? (
+                    <Box>
+                      <Chip label="Oui" color="warning" size="small" />
+                      {suivi.dateDemandeRecuperation && (
+                        <Typography variant="caption" display="block">
+                          {new Date(suivi.dateDemandeRecuperation).toLocaleDateString('fr-FR')}
+                        </Typography>
+                      )}
+                    </Box>
+                  ) : (
+                    <Chip label="Non" color="default" size="small" />
+                  )}
+                </TableCell>
+                <TableCell>
+                  {suivi.montantRecupere ? (
+                    <Box>
+                      <Chip label="Oui" color="success" size="small" />
+                      {suivi.dateMontantRecupere && (
+                        <Typography variant="caption" display="block">
+                          {new Date(suivi.dateMontantRecupere).toLocaleDateString('fr-FR')}
+                        </Typography>
+                      )}
+                    </Box>
+                  ) : (
+                    <Chip label="Non" color="default" size="small" />
+                  )}
+                </TableCell>
                 <TableCell>
                   <Box display="flex" gap={1}>
                     <Button
@@ -274,13 +398,25 @@ const SuiviVirementTab: React.FC = () => {
                     >
                       Voir
                     </Button>
-                    <Button
-                      size="small"
-                      startIcon={<Edit />}
-                      onClick={() => handleUpdateEtat(suivi)}
-                    >
-                      Modifier
-                    </Button>
+                    {canModifyStatus() && (
+                      <Button
+                        size="small"
+                        startIcon={<Edit />}
+                        onClick={() => handleUpdateEtat(suivi)}
+                      >
+                        Modifier
+                      </Button>
+                    )}
+                    {canReinject() && suivi.etatVirement === 'REJETE' && (
+                      <Button
+                        size="small"
+                        startIcon={<Replay />}
+                        onClick={() => handleReinject(suivi)}
+                        color="warning"
+                      >
+                        Réinjecter
+                      </Button>
+                    )}
                   </Box>
                 </TableCell>
               </TableRow>
@@ -376,6 +512,7 @@ const SuiviVirementTab: React.FC = () => {
                   <MenuItem value="EN_COURS_EXECUTION">En Cours d'Exécution</MenuItem>
                   <MenuItem value="EXECUTE_PARTIELLEMENT">Exécuté Partiellement</MenuItem>
                   <MenuItem value="REJETE">Rejeté</MenuItem>
+                  <MenuItem value="BLOQUE">Bloqué</MenuItem>
                   <MenuItem value="EXECUTE">Exécuté</MenuItem>
                 </Select>
               </FormControl>
@@ -384,18 +521,120 @@ const SuiviVirementTab: React.FC = () => {
               <TextField
                 fullWidth
                 multiline
-                rows={3}
-                label="Commentaire"
-                value={updateData.commentaire}
-                onChange={(e) => setUpdateData(prev => ({ ...prev, commentaire: e.target.value }))}
+                rows={2}
+                label="Motif/Observation"
+                value={updateData.motifObservation}
+                onChange={(e) => setUpdateData(prev => ({ ...prev, motifObservation: e.target.value }))}
+                helperText="Champ libre rempli par le service financier si le virement est bloqué"
               />
             </Grid>
+            {canModifyStatus() && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={updateData.demandeRecuperation}
+                        onChange={(e) => setUpdateData(prev => ({ ...prev, demandeRecuperation: e.target.checked }))}
+                      />
+                    }
+                    label="Demande de récupération"
+                  />
+                  {updateData.demandeRecuperation && (
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Date demande"
+                      value={updateData.dateDemandeRecuperation}
+                      onChange={(e) => setUpdateData(prev => ({ ...prev, dateDemandeRecuperation: e.target.value }))}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ mt: 1 }}
+                    />
+                  )}
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={updateData.montantRecupere}
+                        onChange={(e) => setUpdateData(prev => ({ ...prev, montantRecupere: e.target.checked }))}
+                      />
+                    }
+                    label="Montant récupéré"
+                  />
+                  {updateData.montantRecupere && (
+                    <TextField
+                      fullWidth
+                      type="date"
+                      label="Date récupération"
+                      value={updateData.dateMontantRecupere}
+                      onChange={(e) => setUpdateData(prev => ({ ...prev, dateMontantRecupere: e.target.value }))}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ mt: 1 }}
+                    />
+                  )}
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setUpdateOpen(false)}>Annuler</Button>
           <Button onClick={handleSaveUpdate} variant="contained">
             Sauvegarder
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Create Manual OV Dialog */}
+      <Dialog open={createManualOpen} onClose={() => setCreateManualOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Créer Nouvelle Entrée (non liée à un bordereau)</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Référence OV"
+                value={manualOVData.reference}
+                onChange={(e) => setManualOVData(prev => ({ ...prev, reference: e.target.value }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Nom Client/Société"
+                value={manualOVData.clientName}
+                onChange={(e) => setManualOVData(prev => ({ ...prev, clientName: e.target.value }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Montant Total"
+                value={manualOVData.montantTotal}
+                onChange={(e) => setManualOVData(prev => ({ ...prev, montantTotal: parseFloat(e.target.value) || 0 }))}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Nombre Adhérents"
+                value={manualOVData.nombreAdherents}
+                onChange={(e) => setManualOVData(prev => ({ ...prev, nombreAdherents: parseInt(e.target.value) || 0 }))}
+                required
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateManualOpen(false)}>Annuler</Button>
+          <Button onClick={handleCreateManualOV} variant="contained">
+            Créer
           </Button>
         </DialogActions>
       </Dialog>

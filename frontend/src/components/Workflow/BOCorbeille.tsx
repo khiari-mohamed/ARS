@@ -172,7 +172,8 @@ export const BOCorbeille: React.FC<BOCorbeilleProps> = ({ onOpenEntryDialog }) =
           >
             Nouvelle Entrée
           </Button>
-          <Button 
+          {/* COMMENTED OUT: Redundant button - Nouvelle Entrée creates all document types */}
+          {/* <Button 
             variant="contained" 
             color="success"
             startIcon={<Add />}
@@ -183,7 +184,7 @@ export const BOCorbeille: React.FC<BOCorbeilleProps> = ({ onOpenEntryDialog }) =
             }}
           >
             📄 Nouveau Document
-          </Button>
+          </Button> */}
           {/* Actualiser button - Commented out for interface cleanup */}
           {/* <Button variant="outlined" onClick={() => refetch()} disabled={isLoading}>
             Actualiser
@@ -213,8 +214,8 @@ export const BOCorbeille: React.FC<BOCorbeilleProps> = ({ onOpenEntryDialog }) =
         </Paper>
       )}
       
-      {/* Document Entry Form */}
-      <DocumentEntryForm
+      {/* COMMENTED OUT: Document Entry Form - Redundant with BOEntryForm */}
+      {/* <DocumentEntryForm
         open={showDocumentForm}
         onClose={() => setShowDocumentForm(false)}
         onSuccess={() => {
@@ -223,7 +224,7 @@ export const BOCorbeille: React.FC<BOCorbeilleProps> = ({ onOpenEntryDialog }) =
           refetch(); // Refresh the corbeille
           // Show success message (you can add a snackbar here if needed)
         }}
-      />
+      /> */}
     </div>
   );
 };

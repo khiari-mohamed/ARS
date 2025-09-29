@@ -17,6 +17,8 @@ interface Adherent {
   surname: string;
   society: string;
   rib: string;
+  codeAssure?: string;
+  numeroContrat?: string;
   status: 'active' | 'inactive';
   duplicateRib?: boolean;
 }
@@ -38,8 +40,11 @@ const AdherentsTab: React.FC = () => {
     surname: '',
     society: '',
     rib: '',
+    codeAssure: '',
+    numeroContrat: '',
     status: 'active' as 'active' | 'inactive'
   });
+  const [contracts, setContracts] = useState<any[]>([]);
 
   useEffect(() => {
     loadAdherents();
@@ -93,6 +98,8 @@ const AdherentsTab: React.FC = () => {
         surname: member.prenom || member.name?.split(' ').slice(1).join(' ') || 'Test',
         society: member.client?.name || member.society?.name || 'ARS TUNISIE',
         rib: member.rib || `RIB${String(index + 1).padStart(17, '0')}`,
+        codeAssure: member.codeAssure || '',
+        numeroContrat: member.numeroContrat || '',
         status: member.statut === 'ACTIF' || member.status === 'active' ? 'active' : 'inactive',
         duplicateRib: false
       }));
@@ -146,6 +153,8 @@ const AdherentsTab: React.FC = () => {
       surname: '',
       society: '',
       rib: '',
+      codeAssure: '',
+      numeroContrat: '',
       status: 'active'
     });
     setDialog({open: true, adherent: null});
@@ -158,6 +167,8 @@ const AdherentsTab: React.FC = () => {
       surname: adherent.surname,
       society: adherent.society,
       rib: adherent.rib,
+      codeAssure: adherent.codeAssure || '',
+      numeroContrat: adherent.numeroContrat || '',
       status: adherent.status
     });
     setDialog({open: true, adherent});
@@ -169,12 +180,20 @@ const AdherentsTab: React.FC = () => {
 
   const handleSave = async () => {
     try {
+      // Validate RIB
+      if (form.rib.length !== 20 || !/^\d{20}$/.test(form.rib)) {
+        alert('Le RIB doit contenir exactement 20 chiffres');
+        return;
+      }
+
       const adherentData = {
         matricule: form.matricule,
         nom: form.name,
         prenom: form.surname,
         clientId: form.society,
         rib: form.rib,
+        codeAssure: form.codeAssure,
+        numeroContrat: form.numeroContrat,
         statut: form.status === 'active' ? 'ACTIF' : 'INACTIF'
       };
       
@@ -325,10 +344,11 @@ const AdherentsTab: React.FC = () => {
           <TableHead>
             <TableRow>
               <TableCell>Matricule</TableCell>
-              <TableCell>Nom</TableCell>
-              <TableCell>Prénom</TableCell>
               <TableCell>Société</TableCell>
-              <TableCell>RIB</TableCell>
+              <TableCell>Nom et Prénom</TableCell>
+              <TableCell>RIB (20 chiffres)</TableCell>
+              <TableCell>Code Assuré</TableCell>
+              <TableCell>Numéro de Contrat</TableCell>
               <TableCell>Statut</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
@@ -348,14 +368,18 @@ const AdherentsTab: React.FC = () => {
                     <Chip label="RIB Dupliqué" color="warning" size="small" />
                   )}
                 </TableCell>
-                <TableCell>{adherent.name}</TableCell>
-                <TableCell>{adherent.surname}</TableCell>
                 <TableCell>{adherent.society}</TableCell>
+                <TableCell>{adherent.name} {adherent.surname}</TableCell>
                 <TableCell>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                     {adherent.rib}
                   </Typography>
+                  {adherent.rib.length !== 20 && (
+                    <Chip label="RIB Invalide" color="error" size="small" />
+                  )}
                 </TableCell>
+                <TableCell>{adherent.codeAssure || '-'}</TableCell>
+                <TableCell>{adherent.numeroContrat || '-'}</TableCell>
                 <TableCell>{getStatusChip(adherent.status)}</TableCell>
                 <TableCell>
                   <IconButton size="small" onClick={() => handleEdit(adherent)}>
@@ -418,20 +442,48 @@ const AdherentsTab: React.FC = () => {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                label="RIB"
+                label="RIB (20 chiffres)"
                 value={form.rib}
-                onChange={(e) => setForm({...form, rib: e.target.value})}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, ''); // Only digits
+                  setForm({...form, rib: value});
+                }}
                 fullWidth
                 required
-                helperText="20 caractères pour le RIB"
-                inputProps={{ maxLength: 20 }}
-                error={checkDuplicateRib(form.rib, dialog.adherent?.id)}
+                helperText={`${form.rib.length}/20 chiffres`}
+                inputProps={{ maxLength: 20, pattern: '[0-9]*' }}
+                error={checkDuplicateRib(form.rib, dialog.adherent?.id) || (form.rib.length > 0 && form.rib.length !== 20)}
               />
               {checkDuplicateRib(form.rib, dialog.adherent?.id) && (
                 <Alert severity="warning" sx={{ mt: 1 }}>
                   Ce RIB est déjà utilisé par un autre adhérent. Une justification sera requise.
                 </Alert>
               )}
+              {form.rib.length > 0 && form.rib.length !== 20 && (
+                <Alert severity="error" sx={{ mt: 1 }}>
+                  Le RIB doit contenir exactement 20 chiffres.
+                </Alert>
+              )}
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Code Assuré"
+                value={form.codeAssure}
+                onChange={(e) => setForm({...form, codeAssure: e.target.value})}
+                fullWidth
+                required
+                helperText="Doit correspondre au champ dans la table Contrat"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Numéro de Contrat"
+                value={form.numeroContrat}
+                onChange={(e) => setForm({...form, numeroContrat: e.target.value})}
+                fullWidth
+                required
+                helperText="Référence du contrat associé"
+              />
             </Grid>
             <Grid item xs={12}>
               <FormControl fullWidth>

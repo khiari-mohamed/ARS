@@ -309,6 +309,7 @@ model Contract {
   teamLeaderId        String?           // NEW: Chef d'équipe assigned to this contract
   clientId            String
   clientName          String
+  codeAssure          String?
   createdAt           DateTime          @default(now())
   delaiReclamation    Int
   delaiReglement      Int
@@ -326,6 +327,8 @@ model Contract {
   client              Client            @relation(fields: [clientId], references: [id])
   history             ContractHistory[]
   Reclamation         Reclamation[]
+
+  @@index([codeAssure])
 }
 
 model ContractHistory {
@@ -546,6 +549,8 @@ model Adherent {
   prenom        String
   clientId      String
   rib           String
+  codeAssure    String?
+  numeroContrat String?
   statut        String         @default("ACTIF")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -556,6 +561,7 @@ model Adherent {
 
   @@unique([matricule, clientId])
   @@index([rib])
+  @@index([codeAssure])
 }
 
 model DonneurOrdre {
@@ -563,6 +569,8 @@ model DonneurOrdre {
   nom            String
   rib            String
   banque         String
+  agence         String?
+  address        String?
   structureTxt   String
   formatTxtType  String          @default("STRUCTURE_1")
   signaturePath  String?
@@ -588,6 +596,15 @@ model OrdreVirement {
   nombreAdherents    Int
   fichierPdf         String?
   fichierTxt         String?
+  demandeRecuperation Boolean             @default(false)
+  dateDemandeRecuperation DateTime?
+  montantRecupere    Boolean             @default(false)
+  dateMontantRecupere DateTime?
+  motifObservation   String?
+  validationStatus   String               @default("EN_ATTENTE_VALIDATION")
+  validatedBy        String?
+  validatedAt        DateTime?
+  validationComment  String?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   bordereau          Bordereau?           @relation(fields: [bordereauId], references: [id])
@@ -1010,6 +1027,7 @@ enum EtatVirement {
   EN_COURS_EXECUTION
   EXECUTE_PARTIELLEMENT
   REJETE
+  BLOQUE
   EXECUTE
 }
 
@@ -1021,6 +1039,11 @@ enum DocumentStatus {
   RETOUR_ADMIN
 }
 
+// Bordereau Status Flow:
+// BO Module: EN_ATTENTE
+// SCAN Module: A_SCANNER -> SCAN_EN_COURS -> SCANNE
+// Chef Module: A_AFFECTER -> ASSIGNE -> EN_COURS -> TRAITE
+// Finance Module: PRET_VIREMENT -> VIREMENT_EN_COURS -> VIREMENT_EXECUTE -> CLOTURE -> PAYE
 enum Statut {
   EN_ATTENTE
   A_SCANNER
@@ -1035,6 +1058,7 @@ enum Statut {
   VIREMENT_EXECUTE
   VIREMENT_REJETE
   CLOTURE
+  PAYE
   EN_DIFFICULTE
   PARTIEL
   MIS_EN_INSTANCE

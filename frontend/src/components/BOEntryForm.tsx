@@ -68,9 +68,22 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       loadContracts(formData.clientId);
     } else {
       setContracts([]);
-      setFormData(prev => ({ ...prev, contractId: '' }));
+      setFormData(prev => ({ ...prev, contractId: '', delaiReglement: 30 }));
     }
   }, [formData.clientId]);
+  
+  // Auto-update delaiReglement when contract changes
+  useEffect(() => {
+    if (formData.contractId) {
+      const selectedContract = contracts.find(c => c.id === formData.contractId);
+      if (selectedContract) {
+        setFormData(prev => ({ 
+          ...prev, 
+          delaiReglement: selectedContract.delaiReglement || 30 
+        }));
+      }
+    }
+  }, [formData.contractId, contracts]);
   
   // Auto-generate reference when client or document type changes
   useEffect(() => {
@@ -121,11 +134,15 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       setContracts(data);
       
       if (data.length === 1) {
+        // Auto-select the contract and its delaiReglement
         setFormData(prev => ({
           ...prev,
           contractId: data[0].id,
           delaiReglement: data[0].delaiReglement || 30
         }));
+      } else if (data.length === 0) {
+        // No contracts found, use default delay
+        setFormData(prev => ({ ...prev, delaiReglement: 30 }));
       }
     } catch (error) {
       console.error('Failed to load contracts:', error);
@@ -368,7 +385,8 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
               type="number"
               label="Délai Règlement (jours)"
               value={formData.delaiReglement}
-              onChange={(e) => setFormData(prev => ({ ...prev, delaiReglement: parseInt(e.target.value) || 30 }))}
+              disabled
+              helperText={formData.contractId ? "Défini par le contrat sélectionné" : "Valeur par défaut (30 jours)"}
               inputProps={{ min: 1 }}
             />
           </Grid>

@@ -8,17 +8,21 @@ import { FileGenerationService } from './file-generation.service';
 import { OrdreVirementService } from './ordre-virement.service';
 import { FinanceIntegrationService } from './finance-integration.service';
 import { ExcelValidationService } from './excel-validation.service';
+import { TxtParserService } from './txt-parser.service';
 import { PdfGenerationService } from './pdf-generation.service';
 import { TxtGenerationService } from './txt-generation.service';
 import { SuiviVirementService } from './suivi-virement.service';
 import { SuiviVirementController } from './suivi-virement.controller';
 import { BankFormatConfigService } from './bank-format-config.service';
+import { SlaConfigurationService } from './sla-configuration.service';
+import { SlaController } from './sla-controller';
+import { SlaIntegrationService } from './sla-integration.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WorkflowModule } from '../workflow/workflow.module';
 
 @Module({
   imports: [PrismaModule, forwardRef(() => WorkflowModule)],
-  controllers: [FinanceController, SuiviVirementController],
+  controllers: [FinanceController, SuiviVirementController, SlaController],
   providers: [
     FinanceService,
     AdherentService,
@@ -28,17 +32,23 @@ import { WorkflowModule } from '../workflow/workflow.module';
     OrdreVirementService,
     FinanceIntegrationService,
     ExcelValidationService,
+    TxtParserService,
     PdfGenerationService,
     TxtGenerationService,
     SuiviVirementService,
-    BankFormatConfigService
+    BankFormatConfigService,
+    SlaConfigurationService,
+    SlaIntegrationService
   ],
   exports: [
     AdherentService,
     DonneurOrdreService,
     OrdreVirementService,
     FinanceIntegrationService,
-    SuiviVirementService
+    SuiviVirementService,
+    TxtParserService,
+    SlaConfigurationService,
+    SlaIntegrationService
   ]
 })
 export class FinanceModule {}

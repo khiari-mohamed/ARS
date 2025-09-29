@@ -47,7 +47,8 @@ export class OrdreVirementService {
         utilisateurSante: dto.utilisateurSante,
         montantTotal,
         nombreAdherents,
-        etatVirement: 'NON_EXECUTE'
+        etatVirement: 'NON_EXECUTE',
+        validationStatus: 'EN_ATTENTE_VALIDATION'
       }
     });
 

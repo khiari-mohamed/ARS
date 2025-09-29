@@ -5,6 +5,10 @@ import corbeilleService, { CorbeilleResponse } from '../../services/corbeilleSer
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import SlaCountdown from './SlaCountdown';
+import BulkAssignmentModal from './BulkAssignmentModal';
+import ExcelImportModal from './ExcelImportModal';
+import CreateReclamationModal from './CreateReclamationModal';
+import OutlookEmailMonitoring from './OutlookEmailMonitoring';
 import { 
   Card, 
   CardContent, 
@@ -103,6 +107,9 @@ export const ChefCorbeille: React.FC = () => {
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [selectedAction, setSelectedAction] = useState<'reassign' | 'escalate' | 'resolve' | null>(null);
   const [selectedItemForAction, setSelectedItemForAction] = useState<string | null>(null);
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [excelImportOpen, setExcelImportOpen] = useState(false);
+  const [createReclamationOpen, setCreateReclamationOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -485,6 +492,13 @@ export const ChefCorbeille: React.FC = () => {
 
   return (
     <div className="chef-corbeille p-4">
+      {/* Outlook Email Monitoring */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <OutlookEmailMonitoring />
+        </CardContent>
+      </Card>
+
       <Box 
         display="flex" 
         justifyContent="space-between" 
@@ -503,16 +517,40 @@ export const ChefCorbeille: React.FC = () => {
             wordBreak: 'break-word'
           }}
         >
-          Corbeille Chef d'Équipe
+          Corbeille Chef d'Équipe - Gestion de l'Équipe
         </Typography>
-        <Button 
-          variant="outlined" 
-          onClick={() => refetch()}
-          disabled={isLoading}
-          sx={{ flexShrink: 0 }}
-        >
-          Actualiser
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+          <Button 
+            variant="contained"
+            color="primary"
+            onClick={() => setCreateReclamationOpen(true)}
+            size="small"
+          >
+            Créer Réclamation
+          </Button>
+          <Button 
+            variant="outlined"
+            onClick={() => setExcelImportOpen(true)}
+            size="small"
+          >
+            Import Excel
+          </Button>
+          {/* <Button
+            variant="contained"
+            onClick={() => setBulkAssignOpen(true)}
+            size="small"
+            disabled={!nonAffectes || nonAffectes.length === 0}
+          >
+            Affectation en Lot
+          </Button> */}
+          <Button 
+            variant="outlined" 
+            onClick={() => refetch()}
+            disabled={isLoading}
+          >
+            Actualiser
+          </Button>
+        </Box>
       </Box>
 
       {/* Alerts */}
@@ -974,6 +1012,37 @@ export const ChefCorbeille: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Bulk Assignment Modal */}
+      <BulkAssignmentModal
+        open={bulkAssignOpen}
+        onClose={() => setBulkAssignOpen(false)}
+        reclamations={nonAffectes || []}
+        onAssignmentComplete={() => {
+          setBulkAssignOpen(false);
+          refetch();
+        }}
+      />
+      
+      {/* Create Reclamation Modal */}
+      <CreateReclamationModal
+        open={createReclamationOpen}
+        onClose={() => setCreateReclamationOpen(false)}
+        onReclamationCreated={() => {
+          setCreateReclamationOpen(false);
+          refetch();
+        }}
+      />
+      
+      {/* Excel Import Modal */}
+      <ExcelImportModal
+        open={excelImportOpen}
+        onClose={() => setExcelImportOpen(false)}
+        onImportComplete={() => {
+          setExcelImportOpen(false);
+          refetch();
+        }}
+      />
     </div>
   );
 };
