@@ -193,4 +193,10 @@ export class ScanController {
   async getScanJobStatus(@Param('jobId') jobId: string) {
     return this.scanService.getScanJobStatus(jobId);
   }
+
+  @Get('document-stats-by-type')
+  @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async getDocumentStatsByType() {
+    return this.scanService.getDocumentStatsByType();
+  }
 }

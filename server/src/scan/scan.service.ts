@@ -969,12 +969,55 @@ export class ScanService {
       throw new BadRequestException('Bordereau not found');
     }
 
-    if (bordereau.documents.length === 0) {
-      throw new BadRequestException('No documents found for this bordereau');
-    }
+    // Update bordereau status to SCANNE
+    const updatedBordereau = await this.prisma.bordereau.update({
+      where: { id: bordereauId },
+      data: {
+        statut: 'SCANNE',
+        dateFinScan: new Date()
+      }
+    });
 
-    // Complete scanning
-    await this.completeScanProcess(bordereauId);
+    // Update ALL documents to SCANNE status (including bordereau document and uploaded BS documents)
+    await this.prisma.document.updateMany({
+      where: { bordereauId },
+      data: { status: 'SCANNE' }
+    });
+    
+    // Also update any documents that might have the bordereau reference as name
+    await this.prisma.document.updateMany({
+      where: { 
+        name: bordereau.reference,
+        status: { not: 'SCANNE' }
+      },
+      data: { status: 'SCANNE' }
+    });
+    
+    // Update documents that contain the bordereau reference
+    await this.prisma.document.updateMany({
+      where: { 
+        name: { contains: bordereau.reference },
+        status: { not: 'SCANNE' }
+      },
+      data: { status: 'SCANNE' }
+    });
+    
+    // Update any documents with status 'A_SCANNER' or 'UPLOADED' to 'SCANNE'
+    await this.prisma.document.updateMany({
+      where: { 
+        OR: [
+          { bordereauId },
+          { name: bordereau.reference },
+          { name: { contains: bordereau.reference } }
+        ],
+        status: { in: ['UPLOADED'] }
+      },
+      data: { status: 'SCANNE' }
+    });
+    
+    console.log(`✅ Updated all documents to SCANNE status for bordereau ${bordereauId}`);
+
+
 
     // Log validation
     await this.prisma.auditLog.create({
@@ -989,7 +1032,11 @@ export class ScanService {
       }
     });
 
-    return { success: true, message: 'Scanning validated and completed' };
+    return { 
+      success: true, 
+      message: 'Scanning validated and completed',
+      bordereau: updatedBordereau
+    };
   }
 
   // Check for overload and send alerts
@@ -1254,6 +1301,68 @@ export class ScanService {
     } catch (error) {
       throw new BadRequestException(`Failed to update bordereau: ${error.message}`);
     }
+  }
+
+  // Get document statistics by type for dashboard
+  async getDocumentStatsByType() {
+    const documentStats = await this.prisma.document.groupBy({
+      by: ['type', 'status'],
+      _count: { id: true }
+    });
+
+    const typeMapping = {
+      'BULLETIN_SOIN': 'Bulletins de Soins',
+      'COMPLEMENT_INFORMATION': 'Compléments Info', 
+      'ADHESION': 'Adhésions',
+      'RECLAMATION': 'Réclamations',
+      'CONTRAT_AVENANT': 'Contrats/Avenants',
+      'DEMANDE_RESILIATION': 'Demandes Résiliation',
+      'CONVENTION_TIERS': 'Conventions Tiers'
+    };
+
+    const result = {};
+    
+    // Initialize all types
+    Object.keys(typeMapping).forEach(type => {
+      result[type] = {
+        name: typeMapping[type],
+        total: 0,
+        aScanner: 0,
+        enCours: 0,
+        scanne: 0,
+        progression: 0
+      };
+    });
+
+    // Populate with real data
+    documentStats.forEach(stat => {
+      const type = stat.type;
+      if (result[type]) {
+        result[type].total += stat._count.id;
+        
+        switch (stat.status) {
+          case 'UPLOADED':
+            result[type].aScanner += stat._count.id;
+            break;
+          case 'TRAITE':
+            result[type].enCours += stat._count.id;
+            break;
+          case 'SCANNE':
+            result[type].scanne += stat._count.id;
+            break;
+        }
+      }
+    });
+
+    // Calculate progression for each type
+    Object.keys(result).forEach(type => {
+      const stats = result[type];
+      if (stats.total > 0) {
+        stats.progression = Math.round((stats.scanne / stats.total) * 100);
+      }
+    });
+
+    return result;
   }
 
   // NEW: Map old document types to new enum

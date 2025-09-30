@@ -106,29 +106,50 @@ export class ChefEquipeTableauBordController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDerniersDossiers() {
-    const documents = await this.prisma.document.findMany({
-      where: { 
-        bordereau: { archived: false }
-      },
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: { archived: false },
       include: {
-        bordereau: { include: { client: true } },
-        assignedTo: true
+        client: true,
+        documents: {
+          include: { assignedTo: true }
+        },
+        currentHandler: true
       },
-      orderBy: { uploadedAt: 'desc' },
+      orderBy: { dateReception: 'desc' },
       take: 10
     });
 
-    return documents.map(doc => ({
-      id: doc.id,
-      reference: `DOS-${doc.id.substring(doc.id.length - 8)}`,
-      client: doc.bordereau?.client?.name || 'N/A',
-      type: this.getDocumentTypeLabel(doc.type),
-      statut: this.getDocumentStatusLabel(doc.status || undefined),
-      gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
-      date: this.getRelativeTime(doc.uploadedAt),
-      completionPercentage: this.calculateDocumentCompletion(doc),
-      dossierStates: this.getDocumentStates(doc)
-    }));
+    return bordereaux.map(bordereau => {
+      const totalDocuments = bordereau.documents.length;
+      const traitedDocuments = bordereau.documents.filter(doc => doc.status === 'TRAITE').length;
+      const enCoursDocuments = bordereau.documents.filter(doc => doc.status === 'EN_COURS').length;
+      const scanneDocuments = bordereau.documents.filter(doc => doc.status === 'SCANNE').length;
+      
+      // Calculate completion: TRAITE = 100%, SCANNE = 80%, EN_COURS = 50%, others = 0%
+      const completionScore = (traitedDocuments * 100) + (scanneDocuments * 80) + (enCoursDocuments * 50);
+      const completionPercentage = totalDocuments > 0 ? Math.round(completionScore / (totalDocuments * 100) * 100) : 0;
+      
+      // Get document types (show document types like "Bulletin de Soin", "Adhésion", etc.)
+      const documentTypes = [...new Set(bordereau.documents.map(doc => this.getDocumentTypeLabel(doc.type)))].join(', ');
+      
+      // Get document states
+      const states: string[] = [];
+      if (traitedDocuments > 0) states.push('Traité');
+      if (enCoursDocuments > 0) states.push('En cours');
+      if (totalDocuments - traitedDocuments - enCoursDocuments > 0) states.push('Nouveau');
+      
+      return {
+        id: bordereau.id,
+        reference: bordereau.reference, // Use actual bordereau reference
+        client: bordereau.client?.name || 'N/A',
+        type: documentTypes || 'Aucun document', // Show document types
+        statut: this.getStatutLabel(bordereau.statut),
+        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+        date: bordereau.dateReception.toLocaleDateString('fr-FR'),
+        completionPercentage,
+        dossierStates: states.length > 0 ? states : ['Nouveau']
+      };
+    });
   }
 
   @Get('dossiers-en-cours')
@@ -136,12 +157,12 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDossiersEnCours(@Query('type') typeFilter?: string) {
     const where: any = {
-      bordereau: { 
-        statut: { in: ['EN_COURS', 'ASSIGNE'] },
-        archived: false 
-      }
+      statut: { in: ['EN_COURS', 'ASSIGNE'] },
+      archived: false
     };
 
+    // If type filter is applied, filter by document types within bordereaux
+    let bordereaux;
     if (typeFilter && typeFilter !== 'Tous types') {
       const typeMapping = {
         'Prestation': 'BULLETIN_SOIN',
@@ -150,28 +171,53 @@ export class ChefEquipeTableauBordController {
         'Avenant': 'CONTRAT_AVENANT',
         'Réclamation': 'RECLAMATION'
       };
-      where.type = typeMapping[typeFilter];
+      
+      bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          ...where,
+          documents: {
+            some: { type: typeMapping[typeFilter] }
+          }
+        },
+        include: {
+          client: true,
+          documents: {
+            include: { assignedTo: true }
+          },
+          currentHandler: true
+        },
+        orderBy: { dateReception: 'asc' },
+        take: 50
+      });
+    } else {
+      bordereaux = await this.prisma.bordereau.findMany({
+        where,
+        include: {
+          client: true,
+          documents: {
+            include: { assignedTo: true }
+          },
+          currentHandler: true
+        },
+        orderBy: { dateReception: 'asc' },
+        take: 50
+      });
     }
 
-    const documents = await this.prisma.document.findMany({
-      where,
-      include: {
-        bordereau: { include: { client: true } },
-        assignedTo: true
-      },
-      orderBy: { uploadedAt: 'asc' },
-      take: 50
+    return bordereaux.map(bordereau => {
+      const documentNames = bordereau.documents.map(doc => doc.name).join(', ');
+      const joursEnCours = Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+      
+      return {
+        id: bordereau.id,
+        reference: bordereau.reference, // Use actual bordereau reference
+        client: bordereau.client?.name || 'N/A',
+        type: documentNames || 'Aucun document', // Show actual document names
+        joursEnCours,
+        priorite: this.calculatePriorite(bordereau),
+        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné'
+      };
     });
-
-    return documents.map(doc => ({
-      id: doc.id,
-      reference: `DOS-${doc.id.substring(doc.id.length - 8)}`,
-      client: doc.bordereau?.client?.name || 'N/A',
-      type: this.getDocumentTypeLabel(doc.type),
-      joursEnCours: Math.floor((new Date().getTime() - new Date(doc.uploadedAt).getTime()) / (1000 * 60 * 60 * 24)),
-      priorite: this.calculateDocumentPriorite(doc),
-      gestionnaire: doc.assignedTo?.fullName || 'Non assigné'
-    }));
   }
 
   @Get('search')
@@ -213,10 +259,10 @@ export class ChefEquipeTableauBordController {
     });
 
     return documents.map(doc => ({
-      id: doc.id,
-      reference: `DOS-${doc.id.substring(doc.id.length - 8)}`,
+      id: doc.bordereau?.id || doc.id,
+      reference: doc.bordereau?.reference || doc.id,
       client: doc.bordereau?.client?.name || 'N/A',
-      type: this.getDocumentTypeLabel(doc.type),
+      type: doc.name || this.getDocumentTypeLabel(doc.type),
       statut: this.getDocumentStatusLabel(doc.status || undefined),
       gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
       date: this.getRelativeTime(doc.uploadedAt),
@@ -342,8 +388,8 @@ export class ChefEquipeTableauBordController {
     }
 
     return {
-      id: document.id,
-      reference: `DOS-${document.id.substring(document.id.length - 8)}`,
+      id: document.bordereau?.id || document.id,
+      reference: document.bordereau?.reference || document.id,
       client: document.bordereau?.client?.name || 'N/A',
       dateReception: document.uploadedAt,
       statut: this.getDocumentStatusLabel(document.status || undefined),
@@ -480,51 +526,28 @@ export class ChefEquipeTableauBordController {
   @Post('modify-dossier-status')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async modifyDossierStatus(@Body() body: { dossierId: string; newStatus: string }, @Req() req: any) {
-    // Check if gestionnaire can modify this dossier
-    if (req.user?.role === UserRole.GESTIONNAIRE) {
-      const document = await this.prisma.document.findUnique({
-        where: { id: body.dossierId }
-      });
-      
-      if (!document || document.assignedToUserId !== req.user.id) {
-        throw new Error('Accès refusé: Ce dossier ne vous est pas assigné');
-      }
-    }
-    
     const statusMapping = {
-      'Nouveau': 'UPLOADED',
       'En cours': 'EN_COURS',
       'Traité': 'TRAITE',
-      'Retourné': 'REJETE'
+      'Scanné': 'SCANNE',
+      'À affecter': 'A_AFFECTER'
     };
 
-    const document = await this.prisma.document.findUnique({
+    const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: body.dossierId }
     });
 
-    if (!document) {
-      throw new Error('Dossier non trouvé');
+    if (!bordereau) {
+      throw new Error('Bordereau non trouvé');
     }
 
-    // Update document status
-    await this.prisma.document.update({
+    // Update bordereau status
+    await this.prisma.bordereau.update({
       where: { id: body.dossierId },
-      data: { status: statusMapping[body.newStatus] as any }
+      data: { statut: statusMapping[body.newStatus] as any }
     });
 
-    // Log the change (only if user is available)
-    if (req.user?.id) {
-      await this.prisma.documentAssignmentHistory.create({
-        data: {
-          document: { connect: { id: body.dossierId } },
-          assignedBy: { connect: { id: req.user.id } },
-          action: 'STATUS_CHANGED',
-          reason: `Statut changé vers: ${body.newStatus}`
-        }
-      });
-    }
-
-    return { success: true, message: 'Statut du dossier modifié avec succès' };
+    return { success: true, message: 'Statut du bordereau modifié avec succès' };
   }
 
   @Get('dossier-pdf/:dossierId')
@@ -560,8 +583,9 @@ export class ChefEquipeTableauBordController {
       };
     }
 
-    // Use the direct PDF serving endpoint (now public)
-    const pdfUrl = `/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/${document.path}`;
+    // Clean the path to remove leading slash and construct proper URL
+    const cleanPath = document.path.startsWith('/') ? document.path.substring(1) : document.path;
+    const pdfUrl = `/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/${cleanPath}`;
 
     // Return PDF URL or path for viewing
     console.log(`📄 Returning PDF URL: ${pdfUrl}`);
@@ -587,20 +611,74 @@ export class ChefEquipeTableauBordController {
     };
   }
 
-  @Get('serve-pdf/:filename')
-  async servePDF(@Param('filename') filename: string, @Res() res: Response) {
-    const filePath = path.join(process.cwd(), 'uploads', filename);
-    console.log(`📄 Serving PDF: ${filePath}`);
-    
-    if (fs.existsSync(filePath)) {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Accept-Ranges', 'bytes');
-      return res.sendFile(filePath);
-    } else {
-      return res.status(404).json({ error: 'File not found' });
+  @Get('serve-pdf/*')
+  async servePDF(@Req() req: any, @Res() res: Response) {
+    try {
+      // Extract the file path from the URL
+      let fullPath = req.params[0];
+      if (!fullPath) {
+        const urlParts = req.url.split('/serve-pdf/');
+        fullPath = urlParts.length > 1 ? urlParts[1] : null;
+      }
+      
+      if (!fullPath) {
+        console.log('❌ No file path provided');
+        return res.status(400).json({ error: 'Invalid file path' });
+      }
+      
+      console.log(`📄 Attempting to serve file from path: ${fullPath}`);
+      
+      const filename = path.basename(fullPath);
+      console.log(`📄 Extracted filename: ${filename}`);
+      
+      const foundPath = await this.findFileInUploads(filename);
+      
+      if (foundPath) {
+        console.log(`✅ Found file at: ${foundPath}`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Accept-Ranges', 'bytes');
+        return res.sendFile(foundPath);
+      } else {
+        console.log(`❌ File not found: ${filename}`);
+        return res.status(404).json({ error: 'File not found' });
+      }
+    } catch (error) {
+      console.error('❌ Error in servePDF:', error);
+      return res.status(500).json({ error: 'Internal server error' });
     }
+  }
+
+  private async findFileInUploads(filename: string): Promise<string | null> {
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    
+    const searchInDirectory = (dir: string): string | null => {
+      if (!fs.existsSync(dir)) return null;
+      
+      try {
+        const items = fs.readdirSync(dir, { withFileTypes: true });
+        
+        for (const item of items) {
+          if (item.isFile() && (item.name === filename || item.name.endsWith('_' + filename))) {
+            return path.join(dir, item.name);
+          }
+        }
+        
+        for (const item of items) {
+          if (item.isDirectory()) {
+            const found = searchInDirectory(path.join(dir, item.name));
+            if (found) return found;
+          }
+        }
+      } catch (error) {
+        console.log(`Error reading directory ${dir}:`, error.message);
+      }
+      
+      return null;
+    };
+    
+    return searchInDirectory(uploadsDir);
   }
 
   @Get('download-info/:bordereauId')
@@ -632,6 +710,35 @@ export class ChefEquipeTableauBordController {
         createdAt: new Date().toISOString()
       }
     };
+  }
+
+  @Get('documents-individuels')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
+  async getDocumentsIndividuels() {
+    const documents = await this.prisma.document.findMany({
+      where: { 
+        bordereau: { archived: false }
+      },
+      include: {
+        bordereau: { include: { client: true } },
+        assignedTo: true
+      },
+      orderBy: { uploadedAt: 'desc' },
+      take: 50
+    });
+
+    return documents.map(doc => ({
+      id: doc.id,
+      reference: doc.name, // Show document name (like BS-5766831.pdf)
+      client: doc.bordereau?.client?.name || 'N/A',
+      type: doc.name, // Show actual document name
+      statut: this.getDocumentStatusLabel(doc.status || undefined),
+      gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+      date: this.getRelativeTime(doc.uploadedAt),
+      completionPercentage: this.calculateDocumentCompletion(doc),
+      dossierStates: this.getDocumentStates(doc)
+    }));
   }
 
   @Get('gestionnaire-assignments-dossiers')
@@ -718,7 +825,7 @@ export class ChefEquipeTableauBordController {
 
     // Prepare Excel data
     const excelData = documents.map(doc => ({
-      'Référence Dossier': `DOS-${doc.id.substring(doc.id.length - 8)}`,
+      'Référence Dossier': doc.bordereau?.reference || doc.id,
       'Client': doc.bordereau?.client?.name || 'N/A',
       'Type': this.getDocumentTypeLabel(doc.type),
       'Date Réception': new Date(doc.uploadedAt).toLocaleDateString('fr-FR'),

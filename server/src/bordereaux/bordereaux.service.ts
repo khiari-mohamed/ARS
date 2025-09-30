@@ -290,6 +290,26 @@ export class BordereauxService {
       throw new Error('Bordereau not found');
     }
 
+    // Get a valid user for uploadedById
+    let validUserId = data.userId;
+    if (!validUserId) {
+      const firstUser = await this.prisma.user.findFirst({ where: { active: true } });
+      if (!firstUser) {
+        throw new Error('No active user found for document upload');
+      }
+      validUserId = firstUser.id;
+    } else {
+      // Validate the provided userId exists
+      const userExists = await this.prisma.user.findUnique({ where: { id: validUserId } });
+      if (!userExists) {
+        const firstUser = await this.prisma.user.findFirst({ where: { active: true } });
+        if (!firstUser) {
+          throw new Error('No active user found for document upload');
+        }
+        validUserId = firstUser.id;
+      }
+    }
+
     // Update status to scanning
     await this.prisma.bordereau.update({
       where: { id: bordereauId },
@@ -310,9 +330,9 @@ export class BordereauxService {
           data: {
             name: file.originalname,
             type: this.mapToDocumentType(this.getDocumentType(file.originalname)),
-            path: file.path,
+            path: file.path || `/uploads/documents/${file.originalname}`,
             bordereauId,
-            uploadedById: data.userId || 'system',
+            uploadedById: validUserId,
             status: 'SCANNE'
           }
         });

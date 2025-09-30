@@ -31,22 +31,7 @@ export class ContractsService {
       }
       console.log('Client found:', client.name);
 
-    // Check for overlapping contracts
-    const overlap = await this.prisma.contract.findFirst({
-      where: {
-        clientId: dto.clientId,
-        OR: [
-          {
-            startDate: { lte: new Date(dto.endDate) },
-            endDate: { gte: new Date(dto.startDate) }
-          }
-        ]
-      }
-    });
-
-    if (overlap) {
-      throw new ConflictException('Overlapping contract exists for this period');
-    }
+    // Allow multiple contracts for the same period - removed overlap check
 
     // Handle file upload
     let documentPath = '';
