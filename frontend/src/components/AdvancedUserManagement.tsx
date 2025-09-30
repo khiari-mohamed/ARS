@@ -68,6 +68,7 @@ const AdvancedUserManagement: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [roleTemplates, setRoleTemplates] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [chefEquipes, setChefEquipes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
@@ -83,7 +84,8 @@ const AdvancedUserManagement: React.FC = () => {
     password: '',
     role: 'GESTIONNAIRE',
     department: '',
-    phone: ''
+    phone: '',
+    teamLeaderId: ''
   });
 
   useEffect(() => {
@@ -92,14 +94,16 @@ const AdvancedUserManagement: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [usersData, templatesData, departmentsData] = await Promise.all([
+      const [usersData, templatesData, departmentsData, chefEquipesData] = await Promise.all([
         LocalAPI.get('/users').then((res: any) => res.data),
         getRoleTemplates(),
-        LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() => [])
+        LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() => []),
+        LocalAPI.get('/users/chef-equipes').then((res: any) => res.data).catch(() => [])
       ]);
       setUsers(usersData);
       setRoleTemplates(templatesData);
       setDepartments(departmentsData);
+      setChefEquipes(chefEquipesData);
     } catch (error) {
       console.error('Failed to load user management data:', error);
     } finally {
@@ -149,12 +153,13 @@ const AdvancedUserManagement: React.FC = () => {
         password: newUserData.password,
         role: newUserData.role,
         department: newUserData.department || undefined,
+        teamLeaderId: newUserData.role === 'GESTIONNAIRE' && newUserData.teamLeaderId ? newUserData.teamLeaderId : undefined,
         active: true
       };
       await LocalAPI.post('/users', userData);
       await loadData();
       setTemplateDialogOpen(false);
-      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '' });
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '' });
     } catch (error) {
       console.error('Failed to create user:', error);
       alert('Erreur lors de la création de l\'utilisateur');
@@ -169,7 +174,8 @@ const AdvancedUserManagement: React.FC = () => {
       password: '',
       role: user.role || 'GESTIONNAIRE',
       department: user.department || '',
-      phone: user.phone || ''
+      phone: user.phone || '',
+      teamLeaderId: user.teamLeaderId || ''
     });
     setEditDialogOpen(true);
   };
@@ -184,7 +190,7 @@ const AdvancedUserManagement: React.FC = () => {
       await loadData();
       setEditDialogOpen(false);
       setSelectedUser(null);
-      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '' });
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '' });
     } catch (error) {
       console.error('Failed to update user:', error);
     }
@@ -408,6 +414,7 @@ const AdvancedUserManagement: React.FC = () => {
                   <TableCell>Email</TableCell>
                   <TableCell>Rôle</TableCell>
                   <TableCell>Département</TableCell>
+                  <TableCell>Chef d'Équipe</TableCell>
                   <TableCell>Statut</TableCell>
                   <TableCell>Dernière Connexion</TableCell>
                   <TableCell>Actions</TableCell>
@@ -440,6 +447,17 @@ const AdvancedUserManagement: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {user.department || 'Aucun département'}
+                    </TableCell>
+                    <TableCell>
+                      {user.role === 'GESTIONNAIRE' && user.teamLeader ? (
+                        <Typography variant="body2">
+                          {user.teamLeader.fullName}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          {user.role === 'GESTIONNAIRE' ? 'Non assigné' : '-'}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -610,7 +628,7 @@ const AdvancedUserManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Département (optionnel)"
@@ -618,6 +636,28 @@ const AdvancedUserManagement: React.FC = () => {
                 onChange={(e) => setNewUserData(prev => ({ ...prev, department: e.target.value }))}
               />
             </Grid>
+            {newUserData.role === 'GESTIONNAIRE' && (
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Chef d'Équipe *</InputLabel>
+                  <Select
+                    value={newUserData.teamLeaderId}
+                    label="Chef d'Équipe *"
+                    onChange={(e) => setNewUserData(prev => ({ ...prev, teamLeaderId: e.target.value }))}
+                    required
+                  >
+                    <MenuItem value="">
+                      <em>Sélectionner un Chef d'Équipe</em>
+                    </MenuItem>
+                    {chefEquipes.map((chef) => (
+                      <MenuItem key={chef.id} value={chef.id}>
+                        {chef.fullName} ({chef.email})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -625,7 +665,7 @@ const AdvancedUserManagement: React.FC = () => {
           <Button 
             onClick={handleCreateUser} 
             variant="contained"
-            disabled={!newUserData.fullName || !newUserData.email || !newUserData.password}
+            disabled={!newUserData.fullName || !newUserData.email || !newUserData.password || (newUserData.role === 'GESTIONNAIRE' && !newUserData.teamLeaderId)}
           >
             Créer Utilisateur
           </Button>

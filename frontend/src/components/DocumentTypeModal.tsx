@@ -53,8 +53,8 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
       const { LocalAPI } = await import('../services/axios');
       console.log('🔍 Loading documents for type:', documentType);
       
-      // Get all documents and filter by type
-      const response = await LocalAPI.get('/documents/search');
+      // Get all documents and filter by type with cache busting
+      const response = await LocalAPI.get(`/documents/search?_t=${Date.now()}`);
       const allDocuments = response.data || [];
       
       // Filter documents by the specific type
@@ -63,7 +63,8 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
       console.log('📊 Found documents:', {
         total: allDocuments.length,
         filtered: filteredDocuments.length,
-        type: documentType
+        type: documentType,
+        statuses: filteredDocuments.map((d: any) => `${d.name}: ${d.status}`)
       });
       
       setDocuments(filteredDocuments);
@@ -113,6 +114,7 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
     switch (status) {
       case 'UPLOADED': return 'warning';
       case 'EN_COURS': return 'info';
+      case 'SCANNE': return 'success';
       case 'TRAITE': return 'success';
       default: return 'default';
     }
@@ -122,7 +124,8 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
     switch (status) {
       case 'UPLOADED': return 'À scanner';
       case 'EN_COURS': return 'En cours';
-      case 'TRAITE': return 'Traité';
+      case 'SCANNE': return 'Scanné';
+      case 'TRAITE': return 'Scanné'; // Show as Scanné instead of Traité
       default: return status;
     }
   };
@@ -227,9 +230,24 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
                               size="small"
                               variant="contained"
                               color="success"
-                              onClick={() => handleStatusUpdate(doc.id, 'TRAITE')}
+                              onClick={async () => {
+                                setProcessing(doc.id);
+                                try {
+                                  const { LocalAPI } = await import('../services/axios');
+                                  console.log('Updating document status:', doc.id, 'to SCANNE');
+                                  const response = await LocalAPI.patch(`/documents/${doc.id}/status`, { status: 'SCANNE' });
+                                  console.log('Status update response:', response.data);
+                                  // Force refresh the documents list
+                                  await loadDocuments();
+                                } catch (error) {
+                                  console.error('Failed to finalize document scanning:', error);
+                                } finally {
+                                  setProcessing(null);
+                                }
+                              }}
+                              disabled={processing === doc.id}
                             >
-                              ✅ Finaliser
+                              {processing === doc.id ? 'En cours...' : '✅ Finaliser'}
                             </Button>
                           )}
                         </Box>
@@ -295,7 +313,8 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
               onClick={async () => {
                 try {
                   const { LocalAPI } = await import('../services/axios');
-                  await LocalAPI.patch(`/documents/${selectedDocument.id}/status`, { status: 'TRAITE' });
+                  await LocalAPI.patch(`/documents/${selectedDocument.id}/status`, { status: 'SCANNE' });
+                  // Force refresh the documents list
                   await loadDocuments();
                   setShowDocumentDetails(false);
                 } catch (error) {

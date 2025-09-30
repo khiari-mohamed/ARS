@@ -16,6 +16,7 @@ import GlobalCorbeille from './analytics/GlobalCorbeille';
 import { AssignmentSuggestions } from './BS/AssignmentSuggestions';
 import { RebalancingSuggestions } from './BS/RebalancingSuggestions';
 import { PrioritiesDashboard } from './BS/PrioritiesDashboard';
+import DossiersList from './BS/DossiersList';
 import { ReadOnlyWrapper, useIsReadOnly } from './ReadOnlyWrapper';
 import { PermissionGuard } from './PermissionGuard';
 
@@ -2961,7 +2962,20 @@ const EnhancedDashboard: React.FC = () => {
           {/* Role-specific content */}
           {renderRoleSpecificContent()}
 
-          {/* Module Bulletin de soins - Moved to Dashboard */}
+          {/* Liste Dossiers - Moved from BS Module */}
+          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || dashboardData?.role === 'CHEF_EQUIPE' || dashboardData?.role === 'RESPONSABLE_DEPARTEMENT') && (
+            <div style={{ marginTop: '2rem' }}>
+              <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Liste Dossiers</h3>
+                </div>
+                <DossiersList params={{}} />
+              </div>
+            </div>
+          )}
+
+          {/* Module Bulletin de soins - AI Suggestions */}
           {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR') && (
             <div style={{ marginTop: '2rem' }}>
               <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
