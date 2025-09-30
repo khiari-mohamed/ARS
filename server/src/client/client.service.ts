@@ -900,12 +900,24 @@ export class ClientService {
     if (!('slaConfig' in dto)) {
       (dto as any).slaConfig = { slaThreshold: dto.reglementDelay };
     }
-    const { teamLeaderId, ...rest } = dto;
+    
+    // Extract valid fields only and handle gestionnaireIds as teamLeaderId
+    const { name, email, phone, address, reglementDelay, reclamationDelay, status, slaConfig, teamLeaderId, gestionnaireIds } = dto as any;
+    
+    // Use gestionnaireIds[0] as teamLeaderId if provided
+    const chefEquipeId = teamLeaderId || (gestionnaireIds && gestionnaireIds.length > 0 ? gestionnaireIds[0] : null);
+    
     return this.prisma.client.create({
       data: {
-        ...rest,
-        status: dto.status || 'active',
-        chargeCompteId: teamLeaderId, // Assign client to chef d'équipe
+        name,
+        email,
+        phone,
+        address,
+        reglementDelay,
+        reclamationDelay,
+        status: status || 'active',
+        slaConfig,
+        chargeCompteId: chefEquipeId, // Assign client to chef d'équipe
       },
       include: { chargeCompte: true, contracts: true, bordereaux: true, reclamations: true },
     });

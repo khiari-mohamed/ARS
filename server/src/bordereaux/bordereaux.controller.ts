@@ -609,6 +609,20 @@ export class BordereauxController {
     };
   }
 
+  @Post('bulk-assign-documents')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async bulkAssignDocuments(@Body() data: { documentIds: string[]; userId: string }) {
+    await this.prisma.document.updateMany({
+      where: { id: { in: data.documentIds } },
+      data: { assignedToUserId: data.userId }
+    });
+    
+    return {
+      success: true,
+      message: `${data.documentIds.length} document(s) assigné(s) avec succès`
+    };
+  }
+
   @Post(':id/reassign')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async reassignBordereau(
