@@ -574,7 +574,7 @@ const ScanDashboard: React.FC = () => {
                           <Typography component="span" fontWeight="bold" color="primary.main">{enCours}</Typography>
                         </Box>
                         <Box display="flex" justifyContent="space-between" mb={1}>
-                          <span>✅ Traités:</span>
+                          <span>✅ Scannés:</span>
                           <Typography component="span" fontWeight="bold" color="success.main">{traite}</Typography>
                         </Box>
                         

@@ -13,8 +13,8 @@ export const getBordereauForManualScan = async () => {
 export const uploadManualDocuments = async (bordereauId: string, files: File[]) => {
   try {
     const formData = new FormData();
-    files.forEach((file, index) => {
-      formData.append(`documents`, file);
+    files.forEach((file) => {
+      formData.append('documents', file);
     });
     formData.append('bordereauId', bordereauId);
     formData.append('scanType', 'MANUAL');

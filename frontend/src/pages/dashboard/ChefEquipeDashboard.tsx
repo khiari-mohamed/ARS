@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
 import "../../styles/chef-equipe.css";
 import BSAIPage from '../bs/BSAIPage';
+import DossiersList from '../../components/BS/DossiersList';
 
 interface DossierStats {
   prestation: { total: number; breakdown: { [key: string]: number }; gestionnaireBreakdown: { [key: string]: number } };
@@ -836,6 +837,12 @@ function ChefEquipeDashboard() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Liste Dossiers Section */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '20px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Liste Dossiers</h3>
+          <DossiersList params={{}} />
         </div>
 
         {/* IA & Suggestions Section */}

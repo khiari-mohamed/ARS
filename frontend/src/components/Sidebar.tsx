@@ -38,7 +38,7 @@ const sidebarLinks = [
   // RESPONSABLE_DEPARTEMENT: Read-only access to all modules like Super Admin
   { to: "/home/contracts", label: "Contrats", icon: <DescriptionIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
   { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
-  { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
+  { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: [, 'ADMINISTRATEUR'] },
   { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
   { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
   { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'BO', 'BUREAU_ORDRE'] },
