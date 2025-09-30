@@ -23,8 +23,8 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
   const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
 
   useEffect(() => {
-    // Fetch managers (GESTIONNAIRE) from backend
-    LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
+    // Fetch team leaders (CHEF_EQUIPE) from backend
+    LocalAPI.get('/users', { params: { role: 'CHEF_EQUIPE' } })
       .then(res => setManagers(res.data || []))
       .catch(() => setManagers([]));
   }, []);
@@ -68,7 +68,7 @@ const validate = () => {
   }
   
   if (!form.gestionnaireIds || form.gestionnaireIds.length === 0) {
-    newErrors.gestionnaireIds = 'At least one gestionnaire is required';
+    newErrors.gestionnaireIds = 'Chef d\'équipe is required';
   }
   
   setErrors(newErrors);
@@ -133,18 +133,17 @@ const validate = () => {
           </Grid>
           <Grid>
             <FormControl fullWidth required error={!!errors.gestionnaireIds}>
-              <InputLabel id="gestionnaireIds-label">Gestionnaires</InputLabel>
+              <InputLabel id="gestionnaireIds-label">Chef d'Équipe</InputLabel>
               <Select
                 labelId="gestionnaireIds-label"
                 name="gestionnaireIds"
-                multiple
-                value={form.gestionnaireIds || []}
+                value={form.gestionnaireIds?.[0] || ''}
                 onChange={e => {
-                  setForm({ ...form, gestionnaireIds: e.target.value as string[] });
+                  setForm({ ...form, gestionnaireIds: e.target.value ? [e.target.value as string] : [] });
                   setErrors((prev: any) => ({ ...prev, gestionnaireIds: undefined }));
                 }}
-                label="Gestionnaires"
-                renderValue={(selected) => (selected as string[]).map(id => managers.find(m => m.id === id)?.fullName).join(', ')}
+                label="Chef d'Équipe"
+                renderValue={(selected) => managers.find(m => m.id === selected)?.fullName || ''}
               >
                 {managers.map(m => (
                   <MenuItem key={m.id} value={m.id}>{m.fullName}</MenuItem>

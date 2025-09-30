@@ -33,13 +33,10 @@ const ReclamationsModule: React.FC = () => {
     switch (user?.role) {
       case 'CHEF_EQUIPE':
         return [
-          // COMMENTED OUT: Redundant Corbeille Chef - Use dedicated Chef d'équipe module instead
-          // { label: 'Corbeille Chef', component: <ChefCorbeille /> },
           { label: 'Dashboard', component: <ReclamationDashboard /> },
-          { label: 'Liste Complète', component: <ReclamationsList /> }
-          // COMMENTED OUT: Extra tabs not in core requirements
-          // { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },
-          // { label: 'Rapports', component: <Reporting /> }
+          { label: 'Emails Outlook', component: <OutlookEmailMonitoring /> },
+          { label: 'Liste Complète', component: <ReclamationsList /> },
+          { label: 'Classification IA', component: <AIClassificationPanel /> }
         ];
       
       case 'GESTIONNAIRE':

@@ -11,7 +11,9 @@ import {
   Modal,
   Typography,
   Collapse,
-  Badge
+  Badge,
+  List,
+  Card
 } from 'antd';
 import { 
   EyeOutlined, 
@@ -19,12 +21,121 @@ import {
   CheckOutlined,
   CloseOutlined,
   DownOutlined,
-  RightOutlined
+  RightOutlined,
+  FilePdfOutlined
 } from '@ant-design/icons';
 import { LocalAPI } from '../../services/axios';
 
 const { Panel } = Collapse;
 const { Text } = Typography;
+
+// Documents Viewer Component
+interface DocumentsViewerProps {
+  dossierId: string;
+  selectedDocuments?: string[];
+  onDocumentSelect?: (documentId: string, checked: boolean) => void;
+}
+
+const DocumentsViewer: React.FC<DocumentsViewerProps> = ({ 
+  dossierId, 
+  selectedDocuments = [], 
+  onDocumentSelect 
+}) => {
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [dossierId]);
+
+  const loadDocuments = async () => {
+    setLoading(true);
+    try {
+      const response = await LocalAPI.get(`/bordereaux/${dossierId}`, {
+        params: { include: 'documents' }
+      });
+      setDocuments(response.data.documents || []);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      setDocuments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewPDF = async (documentId: string) => {
+    try {
+      const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${documentId}`);
+      if (response.data.success && response.data.pdfUrl) {
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        window.open(`${serverBaseUrl}${response.data.pdfUrl}`, '_blank');
+      } else {
+        message.error(response.data.error || 'PDF non disponible');
+      }
+    } catch (error) {
+      message.error('Erreur lors de l\'ouverture du PDF');
+    }
+  };
+
+  if (documents.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '20px' }}>
+        <Text type="secondary">Aucun document disponible pour ce dossier</Text>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+        {onDocumentSelect && (
+          <Checkbox
+            checked={documents.length > 0 && documents.every(doc => selectedDocuments.includes(doc.id))}
+            indeterminate={documents.some(doc => selectedDocuments.includes(doc.id)) && 
+                          !documents.every(doc => selectedDocuments.includes(doc.id))}
+            onChange={(e) => {
+              documents.forEach(doc => {
+                onDocumentSelect(doc.id, e.target.checked);
+              });
+            }}
+          />
+        )}
+        <Text strong style={{ fontSize: 16 }}>Documents ({documents.length})</Text>
+      </div>
+      <List
+        style={{ marginTop: 8 }}
+        dataSource={documents}
+        renderItem={(doc: any) => (
+          <List.Item
+            actions={[
+              <Button
+                type="link"
+                icon={<FilePdfOutlined />}
+                onClick={() => handleViewPDF(doc.id)}
+              >
+                Voir PDF
+              </Button>
+            ]}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+              {onDocumentSelect && (
+                <Checkbox
+                  checked={selectedDocuments.includes(doc.id)}
+                  onChange={(e) => onDocumentSelect(doc.id, e.target.checked)}
+                />
+              )}
+              <List.Item.Meta
+                avatar={<FilePdfOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
+                title={doc.name || 'Document'}
+                description={`Type: ${doc.type || 'N/A'} | Uploadé le: ${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : 'N/A'}`}
+              />
+            </div>
+          </List.Item>
+        )}
+      />
+    </div>
+  );
+};
 
 interface BS {
   id: string;
@@ -47,6 +158,7 @@ interface Dossier {
   nombreBS: number;
   bulletinSoins: BS[];
   assignedToUserId?: string;
+  documents?: any[];
 }
 
 interface DossiersListProps {
@@ -182,24 +294,36 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const handleBulkAssign = async () => {
-    if (!selectedAssignee || selectedDossiers.length === 0) {
-      message.error('Veuillez sélectionner un gestionnaire et des dossiers');
+    if (!selectedAssignee || (selectedDossiers.length === 0 && selectedBS.length === 0)) {
+      message.error('Veuillez sélectionner un gestionnaire et des éléments');
       return;
     }
 
     try {
-      await LocalAPI.post('/bordereaux/bulk-assign', {
-        bordereauIds: selectedDossiers,
-        userId: selectedAssignee
-      });
+      // Assign bordereaux if selected
+      if (selectedDossiers.length > 0) {
+        await LocalAPI.post('/bordereaux/bulk-assign', {
+          bordereauIds: selectedDossiers,
+          userId: selectedAssignee
+        });
+      }
       
-      message.success(`${selectedDossiers.length} dossier(s) assigné(s) avec succès`);
+      // Assign individual BS if selected
+      if (selectedBS.length > 0) {
+        await LocalAPI.post('/bordereaux/bulk-assign-documents', {
+          documentIds: selectedBS,
+          userId: selectedAssignee
+        });
+      }
+      
+      const totalAssigned = selectedDossiers.length + selectedBS.length;
+      message.success(`${totalAssigned} élément(s) assigné(s) avec succès`);
       setAssignModalVisible(false);
       setSelectedAssignee('');
       handleClearSelection();
       loadDossiers();
     } catch (error) {
-      console.error('Error assigning dossiers:', error);
+      console.error('Error assigning elements:', error);
       message.error('Erreur lors de l\'assignation');
     }
   };
@@ -261,98 +385,14 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const expandedRowRender = (dossier: Dossier) => {
-    const bsColumns = [
-      {
-        title: (
-          <Checkbox
-            checked={dossier.bulletinSoins?.every(bs => selectedBS.includes(bs.id))}
-            indeterminate={dossier.bulletinSoins?.some(bs => selectedBS.includes(bs.id)) && 
-                          !dossier.bulletinSoins?.every(bs => selectedBS.includes(bs.id))}
-            onChange={(e) => {
-              const bsIds = dossier.bulletinSoins?.map(bs => bs.id) || [];
-              if (e.target.checked) {
-                setSelectedBS(prev => [...prev, ...bsIds.filter(id => !prev.includes(id))]);
-              } else {
-                setSelectedBS(prev => prev.filter(id => !bsIds.includes(id)));
-              }
-            }}
-          />
-        ),
-        width: 50,
-        render: (_: any, bs: BS) => (
-          <Checkbox
-            checked={selectedBS.includes(bs.id)}
-            onChange={(e) => handleSelectBS(bs.id, e.target.checked)}
-          />
-        )
-      },
-      {
-        title: 'Numéro BS',
-        dataIndex: 'numBs',
-        key: 'numBs',
-        width: 120
-      },
-      {
-        title: 'Assuré',
-        dataIndex: 'nomAssure',
-        key: 'nomAssure',
-        width: 150
-      },
-      {
-        title: 'Bénéficiaire',
-        dataIndex: 'nomBeneficiaire',
-        key: 'nomBeneficiaire',
-        width: 150
-      },
-      {
-        title: 'Montant',
-        dataIndex: 'totalPec',
-        key: 'totalPec',
-        width: 100,
-        render: (amount: number) => amount ? `${amount.toFixed(3)} DT` : '-'
-      },
-      {
-        title: 'Statut',
-        dataIndex: 'etat',
-        key: 'etat',
-        width: 120,
-        render: (status: string) => (
-          <Tag color={getStatusColor(status)}>
-            {status}
-          </Tag>
-        )
-      },
-      {
-        title: 'Actions',
-        key: 'actions',
-        width: 100,
-        render: (_: any, bs: BS) => (
-          <Space>
-            <Tooltip title="Voir détails">
-              <Button
-                type="text"
-                icon={<EyeOutlined />}
-                size="small"
-                onClick={() => {
-                  setSelectedDossier(dossier);
-                  setDetailsModalVisible(true);
-                }}
-              />
-            </Tooltip>
-          </Space>
-        )
-      }
-    ];
-
     return (
-      <Table
-        columns={bsColumns}
-        dataSource={dossier.bulletinSoins || []}
-        rowKey="id"
-        pagination={false}
-        size="small"
-        style={{ margin: '0 48px' }}
-      />
+      <div style={{ margin: '0 48px', padding: '16px', background: '#fafafa', borderRadius: '4px' }}>
+        <DocumentsViewer 
+          dossierId={dossier.id} 
+          selectedDocuments={selectedBS}
+          onDocumentSelect={handleSelectBS}
+        />
+      </div>
     );
   };
 
@@ -494,7 +534,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           <Button
             type="primary"
             icon={<UserOutlined />}
-            disabled={selectedDossiers.length === 0}
+            disabled={selectedDossiers.length === 0 && selectedBS.length === 0}
             onClick={() => setAssignModalVisible(true)}
           >
             Assigner
@@ -554,7 +594,9 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         cancelText="Annuler"
       >
         <div style={{ marginBottom: 16 }}>
-          <Text>Dossiers sélectionnés: {selectedDossiers.length}</Text>
+          <Text>Dossiers sélectionnés: {selectedDossiers.length}</Text><br/>
+          <Text>BS individuels sélectionnés: {selectedBS.length}</Text><br/>
+          <Text strong>Total à assigner: {selectedDossiers.length + selectedBS.length}</Text>
         </div>
         <Select
           style={{ width: '100%' }}
@@ -623,51 +665,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
               <Text strong>Assigné à:</Text> {gestionnaires.find(g => g.id === selectedDossier.assignedToUserId)?.fullName || 'Non assigné'}
             </div>
             
-            {selectedDossier.bulletinSoins && selectedDossier.bulletinSoins.length > 0 && (
-              <div>
-                <Text strong style={{ fontSize: 16 }}>Bulletins de Soins ({selectedDossier.bulletinSoins.length})</Text>
-                <Table
-                  dataSource={selectedDossier.bulletinSoins}
-                  rowKey="id"
-                  pagination={false}
-                  size="small"
-                  style={{ marginTop: 8 }}
-                  columns={[
-                    {
-                      title: 'Numéro BS',
-                      dataIndex: 'numBs',
-                      width: 120
-                    },
-                    {
-                      title: 'Assuré',
-                      dataIndex: 'nomAssure',
-                      width: 150
-                    },
-                    {
-                      title: 'Bénéficiaire', 
-                      dataIndex: 'nomBeneficiaire',
-                      width: 150
-                    },
-                    {
-                      title: 'Montant',
-                      dataIndex: 'totalPec',
-                      width: 100,
-                      render: (amount: number) => amount ? `${amount.toFixed(3)} DT` : '-'
-                    },
-                    {
-                      title: 'Statut',
-                      dataIndex: 'etat',
-                      width: 120,
-                      render: (status: string) => (
-                        <Tag color={getStatusColor(status)}>
-                          {status}
-                        </Tag>
-                      )
-                    }
-                  ]}
-                />
-              </div>
-            )}
+            <DocumentsViewer dossierId={selectedDossier.id} />
           </div>
         )}
       </Modal>

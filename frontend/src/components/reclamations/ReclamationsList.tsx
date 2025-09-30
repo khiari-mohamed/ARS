@@ -331,15 +331,15 @@ export const ReclamationsList: React.FC = () => {
     }
   };
 
-  // Role-based views
-  if (user?.role === 'CHEF_EQUIPE') {
-    return (
-      <Container maxWidth={false} sx={{ py: 3 }}>
-        <ChefCorbeille />
-        <RealTimeAlerts />
-      </Container>
-    );
-  }
+  // COMMENTED OUT: Role-based views - CHEF_EQUIPE now uses standard ReclamationsList like SUPER_ADMIN
+  // if (user?.role === 'CHEF_EQUIPE') {
+  //   return (
+  //     <Container maxWidth={false} sx={{ py: 3 }}>
+  //       <ChefCorbeille />
+  //       <RealTimeAlerts />
+  //     </Container>
+  //   );
+  // }
 
   if (user?.role === 'GESTIONNAIRE') {
     return (
