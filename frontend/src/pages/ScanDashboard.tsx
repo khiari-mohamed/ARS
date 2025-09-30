@@ -88,18 +88,20 @@ const ScanDashboard: React.FC = () => {
         ),
         // Get document statistics with status breakdown
         import('../services/axios').then(({ LocalAPI }) => 
-          LocalAPI.get('/analytics/documents/status-by-type').then(res => {
-            const statusData = res.data as Record<string, Record<string, number>>;
-            const allTypesData: Record<string, number> = {};
+          LocalAPI.get('/scan/document-stats-by-type').then(res => {
+            const data = res.data;
             const statusBreakdown: Record<string, Record<string, number>> = {};
             
-            Object.keys(statusData).forEach(type => {
-              const typeData = statusData[type];
-              allTypesData[type] = Object.values(typeData).reduce((sum: number, count: number) => sum + count, 0);
-              statusBreakdown[type] = typeData;
+            Object.keys(data).forEach(type => {
+              const typeData = data[type];
+              statusBreakdown[type] = {
+                UPLOADED: typeData.aScanner || 0,
+                EN_COURS: typeData.enCours || 0,
+                TRAITE: typeData.scanne || 0
+              };
             });
             
-            return { ...allTypesData, statusBreakdown };
+            return { ...data, statusBreakdown };
           }).catch(() => ({ statusBreakdown: {} }))
         )
       ]);
@@ -532,12 +534,13 @@ const ScanDashboard: React.FC = () => {
               { type: 'DEMANDE_RESILIATION', label: 'Demandes Résiliation', icon: '❌', color: '#ef4444' },
               { type: 'CONVENTION_TIERS_PAYANT', label: 'Conventions Tiers', icon: '🤝', color: '#06b6d4' }
             ].map((docType, index) => {
-              const count = documentStats?.[docType.type] || 0;
+              const typeData = documentStats?.[docType.type];
+              const count = typeof typeData === 'object' ? typeData.total || 0 : 0;
               const statusData = documentStats?.statusBreakdown?.[docType.type] || {};
-              const uploaded = statusData.UPLOADED || 0;
-              const enCours = statusData.EN_COURS || 0;
-              const traite = statusData.TRAITE || 0;
-              const progression = count > 0 ? Math.round(((enCours + traite) / count) * 100) : 0;
+              const uploaded = typeData?.aScanner || statusData.UPLOADED || 0;
+              const enCours = typeData?.enCours || statusData.EN_COURS || 0;
+              const traite = typeData?.scanne || statusData.TRAITE || 0;
+              const progression = typeData?.progression || (count > 0 ? Math.round(((enCours + traite) / count) * 100) : 0);
               
               return (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={index}>

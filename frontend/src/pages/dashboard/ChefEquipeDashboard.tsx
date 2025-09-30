@@ -53,7 +53,9 @@ function ChefEquipeDashboard() {
   });
   const [gestionnaireAssignments, setGestionnaireAssignments] = useState<GestionnaireAssignment[]>([]);
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
+  const [documents, setDocuments] = useState<Dossier[]>([]);
   const [filteredDossiers, setFilteredDossiers] = useState<Dossier[]>([]);
+  const [filteredDocuments, setFilteredDocuments] = useState<Dossier[]>([]);
   const [selectedDossiers, setSelectedDossiers] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState('Tous');
   const [societeFilter, setSocieteFilter] = useState('Toutes');
@@ -88,9 +90,10 @@ function ChefEquipeDashboard() {
       console.log('  - /bordereaux/chef-equipe/gestionnaire-assignments-dossiers');
       
       // Load real data from backend using LocalAPI with auth
-      const [statsResponse, dossiersResponse, assignmentsResponse] = await Promise.all([
+      const [statsResponse, dossiersResponse, documentsResponse, assignmentsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-assignments-dossiers')
       ]);
       
@@ -148,6 +151,13 @@ function ChefEquipeDashboard() {
         console.log('📄 Dossiers received:', dossiersResponse.data.length, dossiersResponse.data);
         console.log('📄 First dossier structure:', dossiersResponse.data[0]);
         setDossiers(dossiersResponse.data);
+      }
+      
+      if (documentsResponse.data) {
+        console.log('📄 Documents received:', documentsResponse.data.length, documentsResponse.data);
+        console.log('📄 First document structure:', documentsResponse.data[0]);
+        setDocuments(documentsResponse.data);
+        setFilteredDocuments(documentsResponse.data);
         
         // Extract unique societes from dossiers
         const uniqueSocietes = [...new Set(dossiersResponse.data.map((d: Dossier) => d.client).filter(Boolean))] as string[];
@@ -248,10 +258,10 @@ function ChefEquipeDashboard() {
   };
 
   const handleSelectAll = () => {
-    if (selectedDossiers.length === filteredDossiers.length) {
+    if (selectedDossiers.length === filteredDocuments.length) {
       setSelectedDossiers([]);
     } else {
-      setSelectedDossiers(filteredDossiers.map(d => d.id));
+      setSelectedDossiers(filteredDocuments.map(d => d.id));
     }
   };
 
@@ -353,8 +363,12 @@ function ChefEquipeDashboard() {
 
   const handleModifyStatus = (dossierId: string) => {
     const dossier = filteredDossiers.find(d => d.id === dossierId);
+    const document = filteredDocuments.find(d => d.id === dossierId);
     if (dossier) {
       setCurrentDossier(dossier);
+      setShowStatusModal(true);
+    } else if (document) {
+      setCurrentDossier(document);
       setShowStatusModal(true);
     }
   };
@@ -363,10 +377,18 @@ function ChefEquipeDashboard() {
     if (!currentDossier) return;
     
     try {
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-        dossierId: currentDossier.id,
-        newStatus
-      });
+      // Check if this is a document from the "Dossiers Individuels" table
+      const isDocument = filteredDocuments.find(d => d.id === currentDossier.id);
+      
+      const endpoint = isDocument 
+        ? '/bordereaux/chef-equipe/tableau-bord/modify-document-status'
+        : '/bordereaux/chef-equipe/tableau-bord/modify-dossier-status';
+      
+      const payload = isDocument 
+        ? { documentId: currentDossier.id, newStatus }
+        : { dossierId: currentDossier.id, newStatus };
+      
+      const response = await LocalAPI.post(endpoint, payload);
       
       if (response.data.success) {
         alert('Statut modifié avec succès');
@@ -674,7 +696,6 @@ function ChefEquipeDashboard() {
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
                       <td style={{ padding: '12px 8px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <button onClick={() => handleViewPDF(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Voir PDF">📄</button>
                           <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
                         </div>
                       </td>
@@ -733,7 +754,6 @@ function ChefEquipeDashboard() {
                       </td>
                       <td style={{ padding: '12px 8px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <button onClick={() => handleViewPDF(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Voir PDF">📄</button>
                           <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
                         </div>
                       </td>
@@ -758,7 +778,7 @@ function ChefEquipeDashboard() {
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>
                     <input 
                       type="checkbox" 
-                      checked={selectedDossiers.length === filteredDossiers.length && filteredDossiers.length > 0}
+                      checked={selectedDossiers.length === filteredDocuments.length && filteredDocuments.length > 0}
                       onChange={handleSelectAll}
                       style={{ cursor: 'pointer' }}
                     />
@@ -773,37 +793,37 @@ function ChefEquipeDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.map((dossier, index) => (
-                  <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                {filteredDocuments.map((document, index) => (
+                  <tr key={document.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                     <td style={{ padding: '12px 8px' }}>
                       <input 
                         type="checkbox" 
-                        checked={selectedDossiers.includes(dossier.id)}
-                        onChange={() => handleSelectDossier(dossier.id)}
+                        checked={selectedDossiers.includes(document.id)}
+                        onChange={() => handleSelectDossier(document.id)}
                         style={{ cursor: 'pointer' }}
                       />
                     </td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>DOS-{dossier.reference}</td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.type}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{document.reference}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
                     <td style={{ padding: '12px 8px' }}>
                       <span style={{ 
-                        background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : '#2196f3', 
+                        background: document.statut === 'Traité' ? '#4caf50' : document.statut === 'En cours' ? '#ff9800' : '#2196f3', 
                         color: 'white', 
                         padding: '4px 8px', 
                         borderRadius: '12px', 
                         fontSize: '12px', 
                         fontWeight: 'bold' 
                       }}>
-                        {dossier.statut}
+                        {document.statut}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.gestionnaire || 'Non assigné'}</td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.date}</td>
                     <td style={{ padding: '12px 8px' }}>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
-                          onClick={() => handleViewPDF(dossier.id)}
+                          onClick={() => handleViewPDF(document.id)}
                           style={{ 
                             background: 'none', 
                             border: 'none', 
@@ -812,12 +832,12 @@ function ChefEquipeDashboard() {
                             fontSize: '12px',
                             textDecoration: 'underline'
                           }}
-                          title="Voir PDF du dossier"
+                          title="Voir PDF du document"
                         >
                           Voir PDF
                         </button>
                         <button 
-                          onClick={() => handleModifyStatus(dossier.id)}
+                          onClick={() => handleModifyStatus(document.id)}
                           style={{ 
                             background: 'none', 
                             border: 'none', 
@@ -826,7 +846,7 @@ function ChefEquipeDashboard() {
                             fontSize: '12px',
                             textDecoration: 'underline'
                           }}
-                          title="Modifier statut du dossier"
+                          title="Modifier statut du document"
                         >
                           Modifier Statut
                         </button>

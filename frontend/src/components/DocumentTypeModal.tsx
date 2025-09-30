@@ -54,7 +54,12 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
       console.log('🔍 Loading documents for type:', documentType);
       
       // Get all documents and filter by type with cache busting
-      const response = await LocalAPI.get(`/documents/search?_t=${Date.now()}`);
+      const response = await LocalAPI.get(`/documents/search?_t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       const allDocuments = response.data || [];
       
       // Filter documents by the specific type

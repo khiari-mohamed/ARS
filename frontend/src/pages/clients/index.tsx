@@ -1638,8 +1638,9 @@ const ClientFormModal: React.FC<{
   useEffect(() => {
     const loadGestionnaires = async () => {
       try {
-        const gestionnaires = await fetchAvailableGestionnaires();
-        setAvailableGestionnaires(gestionnaires);
+        // Fetch CHEF_EQUIPE users instead of GESTIONNAIRE
+        const { data } = await LocalAPI.get('/users', { params: { role: 'CHEF_EQUIPE' } });
+        setAvailableGestionnaires(data || []);
       } catch (error) {
         console.error('Error loading gestionnaires:', error);
       }
@@ -1657,19 +1658,7 @@ const ClientFormModal: React.FC<{
     }
   };
 
-  const handleGestionnaireChange = (gestionnaireId: string, checked: boolean) => {
-    if (checked) {
-      setFormData({
-        ...formData,
-        gestionnaireIds: [...formData.gestionnaireIds, gestionnaireId]
-      });
-    } else {
-      setFormData({
-        ...formData,
-        gestionnaireIds: formData.gestionnaireIds.filter(id => id !== gestionnaireId)
-      });
-    }
-  };
+  // Remove the handleGestionnaireChange function since we're using a select dropdown now
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1769,19 +1758,19 @@ const ClientFormModal: React.FC<{
           </div>
 
           <div className="form-group">
-            <label>Gestionnaires Assignés</label>
-            <div className="gestionnaires-list">
+            <label>Chef d'Équipe Assigné</label>
+            <select
+              value={formData.gestionnaireIds[0] || ''}
+              onChange={(e) => setFormData({ ...formData, gestionnaireIds: e.target.value ? [e.target.value] : [] })}
+              className="form-select"
+            >
+              <option value="">Sélectionner un chef d'équipe</option>
               {availableGestionnaires.map(gestionnaire => (
-                <label key={gestionnaire.id} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={formData.gestionnaireIds.includes(gestionnaire.id)}
-                    onChange={(e) => handleGestionnaireChange(gestionnaire.id, e.target.checked)}
-                  />
-                  <span>{gestionnaire.fullName} ({gestionnaire.email})</span>
-                </label>
+                <option key={gestionnaire.id} value={gestionnaire.id}>
+                  {gestionnaire.fullName} ({gestionnaire.email})
+                </option>
               ))}
-            </div>
+            </select>
           </div>
           
           <div className="form-actions">
