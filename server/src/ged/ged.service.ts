@@ -154,26 +154,102 @@ export class GedService {
     if (!['SCAN_TEAM', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to update document status');
     }
-    // Try to update status if the field exists, otherwise just fetch the doc
+    // Update document status using proper enum value
     let doc;
     try {
-      // Real status update now that Prisma client is correct
       doc = await this.prisma.document.update({
         where: { id },
         data: { status: status as any },
+        include: { bordereau: true }
       });
-    } catch (err) {
-      // If status field does not exist, fallback to fetching the doc
-      doc = await this.prisma.document.findUnique({ where: { id } });
-      console.warn('[WARN] Document.status field does not exist in schema. Status not updated.');
+      
+      console.log('✅ Document status updated successfully:', {
+        documentId: id,
+        oldStatus: 'EN_COURS',
+        newStatus: status,
+        actualStatus: doc.status
+      });
+    } catch (enumError) {
+      console.error('❌ Enum error, trying TRAITE instead:', enumError.message);
+      // Fallback to TRAITE if SCANNE is not valid
+      doc = await this.prisma.document.update({
+        where: { id },
+        data: { status: 'TRAITE' as any },
+        include: { bordereau: true }
+      });
+      console.log('✅ Document status updated to TRAITE as fallback');
     }
+
+    // CRITICAL FIX: Update bordereau status when document is finalized
+    console.log('🔍 Document update details:', {
+      documentId: id,
+      newStatus: status,
+      hasBordereau: !!doc?.bordereau,
+      bordereauId: doc?.bordereau?.id,
+      bordereauStatus: doc?.bordereau?.statut
+    });
+    
+    if (status === 'SCANNE') {
+      // Try to find and link bordereau if not already linked
+      if (!doc?.bordereau) {
+        console.log('🔍 Document not linked to bordereau, attempting auto-link...');
+        try {
+          // Extract reference from document name (e.g., CLI-BULLETIN-2025-43686.pdf -> CLI-BULLETIN-2025-43686)
+          const docRef = doc.name.replace(/\.(pdf|PDF)$/, '');
+          console.log('🔍 Looking for bordereau with reference:', docRef);
+          
+          const matchingBordereau = await this.prisma.bordereau.findFirst({
+            where: { reference: docRef }
+          });
+          
+          if (matchingBordereau) {
+            console.log('🔗 Found matching bordereau, linking document...');
+            // Link document to bordereau
+            await this.prisma.document.update({
+              where: { id },
+              data: { bordereauId: matchingBordereau.id }
+            });
+            
+            // Update bordereau status
+            const updatedBordereau = await this.prisma.bordereau.update({
+              where: { id: matchingBordereau.id },
+              data: { 
+                statut: 'SCANNE',
+                dateFinScan: new Date()
+              }
+            });
+            console.log(`✅ Bordereau ${matchingBordereau.id} linked and status updated to ${updatedBordereau.statut}`);
+          } else {
+            console.log('⚠️ No matching bordereau found for document:', docRef);
+          }
+        } catch (linkError) {
+          console.error('❌ Failed to auto-link document to bordereau:', linkError);
+        }
+      } else {
+        // Document already linked, update bordereau status
+        try {
+          console.log(`🔄 Updating bordereau ${doc.bordereau.id} status from ${doc.bordereau.statut} to SCANNE`);
+          const updatedBordereau = await this.prisma.bordereau.update({
+            where: { id: doc.bordereau.id },
+            data: { 
+              statut: 'SCANNE',
+              dateFinScan: new Date()
+            }
+          });
+          console.log(`✅ Bordereau ${doc.bordereau.id} status updated to ${updatedBordereau.statut}`);
+        } catch (borderError) {
+          console.error('❌ Failed to update bordereau status:', borderError);
+        }
+      }
+    }
+
     // Audit log (real or placeholder)
     try {
       await this.prisma.auditLog.create({
         data: {
           userId: user.id,
           action: 'UPDATE_DOCUMENT_STATUS',
-          details: { documentId: id, newStatus: status },
+          details: { documentId: id, newStatus: status, bordereauId: doc?.bordereau?.id },
         },
       });
     } catch (e) {

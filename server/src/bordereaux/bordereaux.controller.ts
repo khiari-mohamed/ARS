@@ -692,11 +692,11 @@ export class BordereauxController {
   }
 
   @Post(':id/manual-scan')
-  @UseInterceptors(FileInterceptor('documents'))
+  @UseInterceptors(FilesInterceptor('documents', 10))
   @Roles(UserRole.SCAN_TEAM, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async manualScanUpload(
     @Param('id') bordereauId: string,
-    @UploadedFile() files: Express.Multer.File[],
+    @UploadedFiles() files: Express.Multer.File[],
     @Body() data: any
   ) {
     return this.bordereauxService.processManualScan(bordereauId, files, data);

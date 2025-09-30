@@ -66,6 +66,25 @@ export class UsersController {
     }
   }
 
+  @Get('chef-equipes')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
+  async getChefEquipes(@Request() req) {
+    try {
+      const filters = {
+        role: 'CHEF_EQUIPE',
+        active: true
+      };
+      
+      const users = await this.usersService.findAll(filters);
+      
+      // Return users without password
+      return users.map(({ password, ...user }) => user);
+    } catch (error) {
+      console.error('Error fetching chef equipes:', error);
+      return [];
+    }
+  }
+
   @Get('dashboard/stats')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
   async getDashboardStats(@Request() req) {

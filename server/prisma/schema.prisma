@@ -1034,6 +1034,7 @@ enum EtatVirement {
 enum DocumentStatus {
   UPLOADED
   EN_COURS
+  SCANNE
   TRAITE
   REJETE
   RETOUR_ADMIN

@@ -313,7 +313,7 @@ export class BordereauxService {
             path: file.path,
             bordereauId,
             uploadedById: data.userId || 'system',
-            status: 'UPLOADED'
+            status: 'SCANNE'
           }
         });
         uploadedDocs.push(doc);

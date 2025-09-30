@@ -70,13 +70,8 @@ export class UsersService {
       throw new BadRequestException('Password must be at least 8 characters with uppercase, lowercase, and number.');
     }
 
-    // REQUIREMENT: Gestionnaires must be assigned to a team leader
-    if (data.role === 'GESTIONNAIRE') {
-      if (!data.teamLeaderId) {
-        throw new BadRequestException('Les gestionnaires doivent être affectés à un chef d\'\u00e9quipe.');
-      }
-      
-      // Validate team leader exists and has correct role
+    // OPTIONAL: Validate team leader if provided
+    if (data.teamLeaderId) {
       const teamLeader = await this.prisma.user.findUnique({ 
         where: { id: data.teamLeaderId } 
       });
@@ -153,11 +148,19 @@ export class UsersService {
       where,
       orderBy: { createdAt: 'desc' },
       include: {
+        teamLeader: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        },
         _count: {
           select: {
             bordereauxCurrentHandler: true,
             reclamations: true,
-            notifications: { where: { read: false } }
+            notifications: { where: { read: false } },
+            teamMembers: true
           }
         }
       }
@@ -181,20 +184,13 @@ export class UsersService {
   async update(id: string, data: any, updatedBy?: string) {
     const user = await this.findById(id);
     
-    // REQUIREMENT: Gestionnaires must be assigned to a team leader
-    if (data.role === 'GESTIONNAIRE' || (user.role === 'GESTIONNAIRE' && data.teamLeaderId !== undefined)) {
-      if (!data.teamLeaderId && user.role === 'GESTIONNAIRE') {
-        throw new BadRequestException('Les gestionnaires doivent être affectés à un chef d\'\u00e9quipe.');
-      }
-      
-      if (data.teamLeaderId) {
-        // Validate team leader exists and has correct role
-        const teamLeader = await this.prisma.user.findUnique({ 
-          where: { id: data.teamLeaderId } 
-        });
-        if (!teamLeader || teamLeader.role !== 'CHEF_EQUIPE') {
-          throw new BadRequestException('Le chef d\'\u00e9quipe spécifié n\'existe pas ou n\'a pas le bon rôle.');
-        }
+    // OPTIONAL: Validate team leader if provided
+    if (data.teamLeaderId) {
+      const teamLeader = await this.prisma.user.findUnique({ 
+        where: { id: data.teamLeaderId } 
+      });
+      if (!teamLeader || teamLeader.role !== 'CHEF_EQUIPE') {
+        throw new BadRequestException('Le chef d\'\u00e9quipe spécifié n\'existe pas ou n\'a pas le bon rôle.');
       }
     }
     
