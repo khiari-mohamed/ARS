@@ -16,6 +16,7 @@ import GestionnaireCorbeille from '../../components/reclamations/GestionnaireCor
 import BOReclamationForm from '../../components/reclamations/BOReclamationForm';
 import RealTimeAlerts from '../../components/reclamations/RealTimeAlerts';
 import OutlookEmailMonitoring from '../../components/reclamations/OutlookEmailMonitoring';
+import TypologieConformiteTab from '../../components/reclamations/TypologieConformiteTab';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ReclamationsModule: React.FC = () => {
@@ -36,7 +37,8 @@ const ReclamationsModule: React.FC = () => {
           { label: 'Dashboard', component: <ReclamationDashboard /> },
           { label: 'Emails Outlook', component: <OutlookEmailMonitoring /> },
           { label: 'Liste Complète', component: <ReclamationsList /> },
-          { label: 'Classification IA', component: <AIClassificationPanel /> }
+          { label: 'Classification IA', component: <AIClassificationPanel /> },
+          { label: 'Typologie & Conformité', component: <TypologieConformiteTab /> }
         ];
       
       case 'GESTIONNAIRE':
@@ -69,7 +71,8 @@ const ReclamationsModule: React.FC = () => {
           // COMMENTED OUT: Redundant Corbeille Chef - Use dedicated Chef d'équipe module instead
           // { label: 'Corbeille Chef', component: <ChefCorbeille /> },
           { label: 'Liste Complète', component: <ReclamationsList /> },
-          { label: 'Classification IA', component: <AIClassificationPanel /> }
+          { label: 'Classification IA', component: <AIClassificationPanel /> },
+          { label: 'Typologie & Conformité', component: <TypologieConformiteTab /> }
           // COMMENTED OUT: Extra tabs not in core requirements
           // { label: 'Portail Client', component: <CustomerPortalInterface /> },
           // { label: 'Analyses Avancées', component: <AdvancedAnalyticsPanel /> },

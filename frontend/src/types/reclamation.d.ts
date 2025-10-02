@@ -40,6 +40,11 @@ export interface Reclamation {
   updatedAt: string;
   document?: Document;
   documentId?: string;
+  typologie?: string;
+  conformite?: string;
+  conformiteUpdatedBy?: string;
+  conformiteUpdatedAt?: string;
+  conformiteUser?: { id: string; fullName: string };
 }
 
 export interface ReclamationHistory {
@@ -64,12 +69,14 @@ export interface CreateReclamationDTO {
   department?: string;
   assignedToId?: string;
   file?: File;
+  typologie?: string;
 }
 
 export interface UpdateReclamationDTO {
   status?: ReclamationStatus;
   description?: string;
   assignedToId?: string;
+  conformite?: string;
 }
 
 export interface SearchReclamationDTO {

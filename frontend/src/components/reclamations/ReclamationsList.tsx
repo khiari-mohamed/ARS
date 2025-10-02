@@ -108,7 +108,7 @@ export const ReclamationsList: React.FC = () => {
   const [excelImportOpen, setExcelImportOpen] = useState(false);
   
   // Form states
-  const [editForm, setEditForm] = useState<{ status: ReclamationStatus; description: string; assignedToId: string }>({ status: 'OPEN', description: '', assignedToId: '' });
+  const [editForm, setEditForm] = useState<{ status: ReclamationStatus; description: string; assignedToId: string; conformite: string }>({ status: 'OPEN', description: '', assignedToId: '', conformite: '' });
   const [assignForm, setAssignForm] = useState<{ assignedToId: string; comment: string }>({ assignedToId: '', comment: '' });
   const [selectedTemplate, setSelectedTemplate] = useState<{ type: string; name: string; content: string } | null>(null);
   const [generatedDocument, setGeneratedDocument] = useState<string>('');
@@ -195,7 +195,8 @@ export const ReclamationsList: React.FC = () => {
     setEditForm({
       status: reclamation.status,
       description: reclamation.description,
-      assignedToId: reclamation.assignedToId || ''
+      assignedToId: reclamation.assignedToId || '',
+      conformite: reclamation.conformite || ''
     });
     setEditDialog({ open: true, reclamation });
   };
@@ -544,8 +545,9 @@ export const ReclamationsList: React.FC = () => {
                     <TableRow sx={{ backgroundColor: 'grey.50' }}>
                       <TableCell sx={{ fontWeight: 600 }}>ID</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Client</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Département</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Typologie Réclamation</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Conformité</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Gravité</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>SLA</TableCell>
@@ -570,15 +572,31 @@ export const ReclamationsList: React.FC = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <Chip 
-                              label={rec.type || 'Non spécifié'} 
-                              size="small" 
-                              color="secondary" 
-                              variant="outlined"
-                            />
+                            <Chip label={rec.type} size="small" color="primary" variant="outlined" />
                           </TableCell>
                           <TableCell>
-                            <Chip label={rec.type} size="small" color="primary" variant="outlined" />
+                            {rec.typologie ? (
+                              <Chip 
+                                label={rec.typologie} 
+                                size="small" 
+                                color="info" 
+                                variant="filled"
+                              />
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">Non spécifiée</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {rec.conformite ? (
+                              <Chip 
+                                label={rec.conformite} 
+                                size="small" 
+                                color={rec.conformite === 'Fondé' ? 'success' : 'error'}
+                                variant="filled"
+                              />
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">Non définie</Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             <PriorityBadge severity={rec.severity} />
@@ -655,7 +673,7 @@ export const ReclamationsList: React.FC = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                        <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                           <Typography variant="h6" color="text.secondary" gutterBottom>
                             Aucune réclamation trouvée
                           </Typography>
@@ -722,6 +740,27 @@ export const ReclamationsList: React.FC = () => {
                   <Typography variant="subtitle2" color="text.secondary">Date de création</Typography>
                   <Typography variant="body1">{new Date(viewDialog.reclamation.createdAt).toLocaleString('fr-FR')}</Typography>
                 </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">Typologie Réclamation</Typography>
+                  {viewDialog.reclamation.typologie ? (
+                    <Chip label={viewDialog.reclamation.typologie} size="small" color="info" variant="filled" />
+                  ) : (
+                    <Typography variant="body1" color="text.secondary">Non spécifiée</Typography>
+                  )}
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">Conformité</Typography>
+                  {viewDialog.reclamation.conformite ? (
+                    <Chip 
+                      label={viewDialog.reclamation.conformite} 
+                      size="small" 
+                      color={viewDialog.reclamation.conformite === 'Fondé' ? 'success' : 'error'}
+                      variant="filled"
+                    />
+                  ) : (
+                    <Typography variant="body1" color="text.secondary">Non définie</Typography>
+                  )}
+                </Grid>
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" color="text.secondary">Description</Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{viewDialog.reclamation.description}</Typography>
@@ -774,6 +813,22 @@ export const ReclamationsList: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
+              {(user?.role === 'GESTIONNAIRE' || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN') && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Conformité</InputLabel>
+                    <Select
+                      value={editForm.conformite}
+                      onChange={(e) => setEditForm({ ...editForm, conformite: e.target.value })}
+                      label="Conformité"
+                    >
+                      <MenuItem value="">Non définie</MenuItem>
+                      <MenuItem value="Fondé">Fondé</MenuItem>
+                      <MenuItem value="Non fondé">Non fondé</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
               <Grid item xs={12}>
                 <TextField
                   fullWidth

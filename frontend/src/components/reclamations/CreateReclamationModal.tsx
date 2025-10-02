@@ -28,7 +28,8 @@ const CreateReclamationModal: React.FC<Props> = ({ open, onClose, onReclamationC
     type: 'REMBOURSEMENT',
     severity: 'MOYENNE',
     description: '',
-    department: 'RECLAMATIONS'
+    department: 'RECLAMATIONS',
+    typologie: ''
   });
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,7 +43,8 @@ const CreateReclamationModal: React.FC<Props> = ({ open, onClose, onReclamationC
         type: 'REMBOURSEMENT',
         severity: 'MOYENNE',
         description: '',
-        department: 'RECLAMATIONS'
+        department: 'RECLAMATIONS',
+        typologie: ''
       });
       setError(null);
     }
@@ -137,6 +139,19 @@ const CreateReclamationModal: React.FC<Props> = ({ open, onClose, onReclamationC
               <MenuItem value="BASSE">Basse</MenuItem>
               <MenuItem value="MOYENNE">Moyenne</MenuItem>
               <MenuItem value="HAUTE">Haute</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth>
+            <InputLabel>Typologie Réclamation</InputLabel>
+            <Select
+              value={form.typologie}
+              onChange={(e) => handleChange('typologie', e.target.value)}
+              label="Typologie Réclamation"
+            >
+              <MenuItem value="">Non spécifiée</MenuItem>
+              <MenuItem value="Réclamation BS + Demande de renseignement">Réclamation BS + Demande de renseignement</MenuItem>
+              <MenuItem value="Réclamation Tiers Payant">Réclamation Tiers Payant</MenuItem>
             </Select>
           </FormControl>
 

@@ -52,9 +52,15 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
     setLoading(true);
     try {
       const response = await LocalAPI.get(`/bordereaux/${dossierId}`, {
-        params: { include: 'documents' }
+        params: { include: 'documents,assignedTo' }
       });
-      setDocuments(response.data.documents || []);
+      const documents = response.data.documents || [];
+      // Make sure each document has assignment info
+      const documentsWithAssignment = documents.map((doc: any) => ({
+        ...doc,
+        assignedToUserId: doc.assignedToUserId || null
+      }));
+      setDocuments(documentsWithAssignment);
     } catch (error) {
       console.error('Error loading documents:', error);
       setDocuments([]);
@@ -63,12 +69,24 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
     }
   };
 
-  const handleViewPDF = async (documentId: string) => {
+  const handleViewPDF = async (documentId: string, document: any) => {
     try {
       const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${documentId}`);
       if (response.data.success && response.data.pdfUrl) {
-        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
-        window.open(`${serverBaseUrl}${response.data.pdfUrl}`, '_blank');
+        // Use the same PDF modal as ChefEquipeDashboard
+        const event = new CustomEvent('openPDFModal', {
+          detail: {
+            pdfUrl: response.data.pdfUrl,
+            document: {
+              id: documentId,
+              reference: document.name,
+              client: 'N/A', // Will be filled by parent
+              type: document.type,
+              statut: document.status || 'Nouveau'
+            }
+          }
+        });
+        window.dispatchEvent(event);
       } else {
         message.error(response.data.error || 'PDF non disponible');
       }
@@ -90,12 +108,14 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
         {onDocumentSelect && (
           <Checkbox
-            checked={documents.length > 0 && documents.every(doc => selectedDocuments.includes(doc.id))}
-            indeterminate={documents.some(doc => selectedDocuments.includes(doc.id)) && 
-                          !documents.every(doc => selectedDocuments.includes(doc.id))}
+            checked={documents.length > 0 && documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
+            indeterminate={documents.some(doc => selectedDocuments.includes(doc.id) && !doc.assignedToUserId) && 
+                          !documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
             onChange={(e) => {
               documents.forEach(doc => {
-                onDocumentSelect(doc.id, e.target.checked);
+                if (!doc.assignedToUserId) {
+                  onDocumentSelect(doc.id, e.target.checked);
+                }
               });
             }}
           />
@@ -111,7 +131,7 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
               <Button
                 type="link"
                 icon={<FilePdfOutlined />}
-                onClick={() => handleViewPDF(doc.id)}
+                onClick={() => handleViewPDF(doc.id, doc)}
               >
                 Voir PDF
               </Button>
@@ -121,6 +141,7 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
               {onDocumentSelect && (
                 <Checkbox
                   checked={selectedDocuments.includes(doc.id)}
+                  disabled={!!doc.assignedToUserId}
                   onChange={(e) => onDocumentSelect(doc.id, e.target.checked)}
                 />
               )}
@@ -247,10 +268,17 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const handleSelectDossier = (dossierId: string, checked: boolean) => {
+    const dossier = dossiers.find(d => d.id === dossierId);
+    
+    // Check if dossier is already assigned to a gestionnaire
+    if (dossier?.assignedToUserId && checked) {
+      message.warning('Ce dossier est déjà assigné à un gestionnaire');
+      return;
+    }
+    
     if (checked) {
       setSelectedDossiers(prev => [...prev, dossierId]);
       // Also select all BS in this dossier
-      const dossier = dossiers.find(d => d.id === dossierId);
       if (dossier) {
         const bsIds = dossier.bulletinSoins?.map(bs => bs.id) || [];
         setSelectedBS(prev => [...prev, ...bsIds]);
@@ -258,7 +286,6 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     } else {
       setSelectedDossiers(prev => prev.filter(id => id !== dossierId));
       // Also deselect all BS in this dossier
-      const dossier = dossiers.find(d => d.id === dossierId);
       if (dossier) {
         const bsIds = dossier.bulletinSoins?.map(bs => bs.id) || [];
         setSelectedBS(prev => prev.filter(id => !bsIds.includes(id)));
@@ -267,6 +294,15 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const handleSelectBS = (bsId: string, checked: boolean) => {
+    // Check if this document is already assigned
+    const allDocuments = dossiers.flatMap(d => d.documents || []);
+    const document = allDocuments.find(doc => doc.id === bsId);
+    
+    if (document?.assignedToUserId && checked) {
+      message.warning('Ce document est déjà assigné à un gestionnaire');
+      return;
+    }
+    
     if (checked) {
       setSelectedBS(prev => [...prev, bsId]);
     } else {
@@ -418,6 +454,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       render: (_: any, dossier: Dossier) => (
         <Checkbox
           checked={selectedDossiers.includes(dossier.id)}
+          disabled={!!dossier.assignedToUserId}
           onChange={(e) => handleSelectDossier(dossier.id, e.target.checked)}
         />
       )

@@ -1012,6 +1012,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                           <button 
                             onClick={() => {
                               setSelectedDossier(dossier);
+                              setNewStatus('');
                               setStatusModifyModalOpen(true);
                             }}
                             style={{ 

@@ -1107,9 +1107,17 @@ export class ScanService {
         },
         contract: {
           select: {
+            id: true,
+            clientName: true, // Contract reference/number
             delaiReglement: true,
             delaiReclamation: true,
-            escalationThreshold: true
+            escalationThreshold: true,
+            assignedManager: {
+              select: { id: true, fullName: true, role: true }
+            },
+            teamLeader: {
+              select: { id: true, fullName: true, role: true }
+            }
           }
         },
         documents: {
@@ -1129,6 +1137,49 @@ export class ScanService {
         }
       }
     });
+  }
+
+  // Update bordereau details (for SCAN team and Super Admin)
+  async updateBordereauDetails(bordereauId: string, updateData: any, userId: string) {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId }
+    });
+
+    if (!bordereau) {
+      throw new BadRequestException('Bordereau not found');
+    }
+
+    const data: any = {};
+    
+    // Allow updating type, client, and reference
+    if (updateData.type !== undefined) data.type = updateData.type;
+    if (updateData.clientId !== undefined) data.clientId = updateData.clientId;
+    if (updateData.reference !== undefined) data.reference = updateData.reference;
+
+    const updatedBordereau = await this.prisma.bordereau.update({
+      where: { id: bordereauId },
+      data,
+      include: {
+        client: { select: { name: true } },
+        contract: { select: { clientName: true } }
+      }
+    });
+
+    // Log the update
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'BORDEREAU_DETAILS_UPDATED',
+        details: {
+          bordereauId,
+          reference: updatedBordereau.reference,
+          changes: updateData,
+          updatedBy: userId
+        }
+      }
+    });
+
+    return updatedBordereau;
   }
 
   // Dashboard statistics
@@ -1358,7 +1409,7 @@ export class ScanService {
     Object.keys(result).forEach(type => {
       const stats = result[type];
       if (stats.total > 0) {
-        stats.progression = Math.round((stats.scanne / stats.total) * 100);
+        stats.progression = Math.round(((stats.enCours + stats.scanne) / stats.total) * 100);
       }
     });
 

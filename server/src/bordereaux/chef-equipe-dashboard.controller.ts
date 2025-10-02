@@ -12,9 +12,10 @@ export class ChefEquipeDashboardController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get('gestionnaire-assignments-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getGestionnaireAssignmentsDossiers(@Req() req) {
     console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
+    const accessFilter = this.buildAccessFilter(req.user);
     const gestionnaires = await this.prisma.user.findMany({
       where: { role: 'GESTIONNAIRE' },
       select: {
@@ -29,28 +30,28 @@ export class ChefEquipeDashboardController {
           this.prisma.document.count({
             where: {
               assignedToUserId: gestionnaire.id,
-              bordereau: { archived: false }
+              bordereau: { ...accessFilter, archived: false }
             }
           }),
           this.prisma.document.count({
             where: {
               assignedToUserId: gestionnaire.id,
               status: 'TRAITE',
-              bordereau: { archived: false }
+              bordereau: { ...accessFilter, archived: false }
             }
           }),
           this.prisma.document.count({
             where: {
               assignedToUserId: gestionnaire.id,
               status: 'EN_COURS',
-              bordereau: { archived: false }
+              bordereau: { ...accessFilter, archived: false }
             }
           }),
           this.prisma.document.count({
             where: {
               assignedToUserId: gestionnaire.id,
               status: 'RETOUR_ADMIN',
-              bordereau: { archived: false }
+              bordereau: { ...accessFilter, archived: false }
             }
           })
         ]);
@@ -59,7 +60,7 @@ export class ChefEquipeDashboardController {
           by: ['type'],
           where: {
             assignedToUserId: gestionnaire.id,
-            bordereau: { archived: false }
+            bordereau: { ...accessFilter, archived: false }
           },
           _count: { id: true }
         });
@@ -85,12 +86,13 @@ export class ChefEquipeDashboardController {
   }
 
   @Get('dashboard-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getDashboardDossiers(@Req() req) {
     console.log('📄 [BACKEND] Getting dashboard dossiers...');
+    const accessFilter = this.buildAccessFilter(req.user);
     const documents = await this.prisma.document.findMany({
       where: {
-        bordereau: { archived: false }
+        bordereau: { ...accessFilter, archived: false }
       },
       include: {
         bordereau: {
@@ -162,14 +164,15 @@ export class ChefEquipeDashboardController {
   }
 
   @Get('dashboard-stats-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getDashboardStatsDossiers(@Req() req) {
     console.log('📊 [BACKEND] Getting dashboard stats dossiers...');
+    const accessFilter = this.buildAccessFilter(req.user);
     // Get document statistics grouped by type
     const docsByType = await this.prisma.document.groupBy({
       by: ['type'],
       where: {
-        bordereau: { archived: false }
+        bordereau: { ...accessFilter, archived: false }
       },
       _count: { id: true }
     });
@@ -177,7 +180,7 @@ export class ChefEquipeDashboardController {
     // Get client breakdown and gestionnaire breakdown
     const docsWithDetails = await this.prisma.document.findMany({
       where: {
-        bordereau: { archived: false }
+        bordereau: { ...accessFilter, archived: false }
       },
       include: {
         bordereau: {
@@ -239,7 +242,7 @@ export class ChefEquipeDashboardController {
   }
 
   @Get('dossier-pdf/:dossierId')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getDossierPDF(@Param('dossierId') dossierId: string) {
     const document = await this.prisma.document.findUnique({
       where: { id: dossierId }
@@ -255,7 +258,7 @@ export class ChefEquipeDashboardController {
   }
 
   @Post('modify-dossier-status')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async modifyDossierStatus(@Body() body: { dossierId: string; newStatus: string }) {
     const { dossierId, newStatus } = body;
     
@@ -273,5 +276,21 @@ export class ChefEquipeDashboardController {
     });
 
     return { success: true };
+  }
+
+  private buildAccessFilter(user: any): any {
+    if (user?.role === 'SUPER_ADMIN') {
+      return {};
+    }
+    
+    if (user?.role === 'CHEF_EQUIPE') {
+      return {
+        contract: {
+          teamLeaderId: user.id
+        }
+      };
+    }
+    
+    return {};
   }
 }

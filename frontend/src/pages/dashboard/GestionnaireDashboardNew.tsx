@@ -39,6 +39,8 @@ function GestionnaireDashboardNew() {
     avenant: { total: 0, breakdown: {} }
   });
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
+  const [documents, setDocuments] = useState<Dossier[]>([]);
+  const [filteredDocuments, setFilteredDocuments] = useState<Dossier[]>([]);
   const [filteredDossiers, setFilteredDossiers] = useState<Dossier[]>([]);
   const [selectedDossiers, setSelectedDossiers] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState('Tous');
@@ -51,6 +53,9 @@ function GestionnaireDashboardNew() {
   const [currentPDFUrl, setCurrentPDFUrl] = useState('');
   const [currentDossier, setCurrentDossier] = useState<any>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [derniersBordereauxPage, setDerniersBordereauxPage] = useState(1);
+  const [bordereauxEnCoursPage, setBordereauxEnCoursPage] = useState(1);
+  const [dossiersIndividuelsPage, setDossiersIndividuelsPage] = useState(1);
 
   useEffect(() => {
     loadDashboardData();
@@ -58,7 +63,7 @@ function GestionnaireDashboardNew() {
 
   useEffect(() => {
     applyFilters();
-  }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers]);
+  }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers, documents]);
 
   const loadDashboardData = async () => {
     try {
@@ -66,68 +71,88 @@ function GestionnaireDashboardNew() {
       
       console.log('🔄 Loading gestionnaire dashboard data...');
       
-      // Load gestionnaire-specific data from backend
-      const [statsResponse, dossiersResponse] = await Promise.all([
-        LocalAPI.get('/workflow/gestionnaire/dashboard-stats'),
-        LocalAPI.get('/workflow/gestionnaire/corbeille')
+      // Use exact same endpoints as working ChefEquipeDashboard
+      const [statsResponse, dossiersResponse, documentsResponse, assignmentsResponse] = await Promise.all([
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-assignments-dossiers')
       ]);
       
-      console.log('📊 Raw Gestionnaire API Responses:');
-      console.log('  Stats Response:', JSON.stringify(statsResponse.data, null, 2));
-      console.log('  Dossiers Response:', JSON.stringify(dossiersResponse.data, null, 2));
+      console.log('📊 Raw API Responses (correct endpoints):');
+      console.log('  Stats Response:', statsResponse.data);
+      console.log('  Dossiers Response:', dossiersResponse.data);
+      console.log('  Documents Response:', documentsResponse.data);
+      console.log('  Assignments Response:', assignmentsResponse.data);
       
-      console.log('📊 Gestionnaire API Responses:');
-      console.log('  Stats Response:', statsResponse);
-      console.log('  Dossiers Response:', dossiersResponse);
+      // Debug: Check if we have data
+      console.log('🔍 Data check:');
+      console.log('  Stats exists:', !!statsResponse.data);
+      console.log('  Dossiers exists:', !!dossiersResponse.data);
+      console.log('  Dossiers array length:', dossiersResponse.data?.length || 0);
       
       if (statsResponse.data) {
-        console.log('📈 Processing stats data:', statsResponse.data);
+        // Process types-detail response (same as chef d'équipe)
         const transformedStats = {
           prestation: {
-            total: statsResponse.data.prestation?.total || 0,
-            breakdown: statsResponse.data.prestation?.breakdown || {}
+            total: statsResponse.data.Prestation?.total || 0,
+            breakdown: statsResponse.data.Prestation?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Prestation?.gestionnaireBreakdown || {}
           },
           adhesion: {
-            total: statsResponse.data.adhesion?.total || 0,
-            breakdown: statsResponse.data.adhesion?.breakdown || {}
+            total: statsResponse.data.Adhésion?.total || 0,
+            breakdown: statsResponse.data.Adhésion?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Adhésion?.gestionnaireBreakdown || {}
           },
           complement: {
-            total: statsResponse.data.complement?.total || 0,
-            breakdown: statsResponse.data.complement?.breakdown || {}
+            total: statsResponse.data['Complément Dossier']?.total || 0,
+            breakdown: statsResponse.data['Complément Dossier']?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data['Complément Dossier']?.gestionnaireBreakdown || {}
           },
           resiliation: {
-            total: statsResponse.data.resiliation?.total || 0,
-            breakdown: statsResponse.data.resiliation?.breakdown || {}
+            total: 0,
+            breakdown: {},
+            gestionnaireBreakdown: {}
           },
           reclamation: {
-            total: statsResponse.data.reclamation?.total || 0,
-            breakdown: statsResponse.data.reclamation?.breakdown || {}
+            total: statsResponse.data.Réclamation?.total || 0,
+            breakdown: statsResponse.data.Réclamation?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Réclamation?.gestionnaireBreakdown || {}
           },
           avenant: {
-            total: statsResponse.data.avenant?.total || 0,
-            breakdown: statsResponse.data.avenant?.breakdown || {}
+            total: statsResponse.data.Avenant?.total || 0,
+            breakdown: statsResponse.data.Avenant?.clientBreakdown || {},
+            gestionnaireBreakdown: statsResponse.data.Avenant?.gestionnaireBreakdown || {}
           }
         };
-        console.log('📊 Transformed stats:', transformedStats);
         setStats(transformedStats);
-      } else {
-        console.error('❌ No stats data received from API');
       }
       
       if (dossiersResponse.data) {
-        // Combine all assigned items from corbeille
-        const allDossiers = [
-          ...(dossiersResponse.data.assignedItems || []),
-          ...(dossiersResponse.data.processedItems || []),
-          ...(dossiersResponse.data.returnedItems || [])
-        ];
+        // derniers-dossiers endpoint returns an array directly (same as chef d'équipe)
+        const allDossiers = Array.isArray(dossiersResponse.data) ? dossiersResponse.data : [];
         
-        console.log('📄 Gestionnaire dossiers received:', allDossiers.length);
+        console.log('📄 Processing dossiers:', allDossiers.length);
+        console.log('📄 Dossiers:', allDossiers);
         setDossiers(allDossiers);
         
-        // Extract unique societes from dossiers
-        const uniqueSocietes = [...new Set(allDossiers.map((d: Dossier) => d.client || d.societe).filter(Boolean))] as string[];
+        // Extract unique societes
+        const uniqueSocietes = [...new Set(allDossiers.map((d: Dossier) => d.client).filter(Boolean))] as string[];
         setSocietes(uniqueSocietes.sort());
+        console.log('🏢 Unique societes:', uniqueSocietes);
+      } else {
+        console.log('⚠️ No dossiers data received');
+      }
+      
+      if (documentsResponse.data) {
+        // documents-individuels endpoint returns individual documents
+        const allDocuments = Array.isArray(documentsResponse.data) ? documentsResponse.data : [];
+        
+        console.log('📄 Processing documents:', allDocuments.length);
+        console.log('📄 Documents:', allDocuments);
+        setDocuments(allDocuments);
+      } else {
+        console.log('⚠️ No documents data received');
       }
     } catch (error: any) {
       console.error('❌ Error loading gestionnaire dashboard data:', error);
@@ -138,18 +163,23 @@ function GestionnaireDashboardNew() {
   };
 
   const applyFilters = () => {
+    console.log('🔍 Starting filter with dossiers:', dossiers.length);
     let filtered = [...dossiers];
+    console.log('🔍 Initial filtered:', filtered.length);
     
     if (typeFilter !== 'Tous') {
       filtered = filtered.filter(d => d.type === typeFilter);
+      console.log('🔍 After type filter:', filtered.length);
     }
     
     if (societeFilter !== 'Toutes') {
       filtered = filtered.filter(d => (d.client || d.societe) === societeFilter);
+      console.log('🔍 After societe filter:', filtered.length);
     }
     
     if (statutFilter !== 'Tous') {
       filtered = filtered.filter(d => d.statut === statutFilter);
+      console.log('🔍 After statut filter:', filtered.length);
     }
     
     if (searchQuery.trim()) {
@@ -157,9 +187,36 @@ function GestionnaireDashboardNew() {
         d.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ((d.client || d.societe) && (d.client || d.societe)!.toLowerCase().includes(searchQuery.toLowerCase()))
       );
+      console.log('🔍 After search filter:', filtered.length);
     }
     
+    console.log('🔍 Final filtered dossiers:', filtered.length, filtered);
     setFilteredDossiers(filtered);
+    
+    // Apply same filters to documents
+    let filteredDocs = [...documents];
+    
+    if (typeFilter !== 'Tous') {
+      filteredDocs = filteredDocs.filter(d => d.type === typeFilter);
+    }
+    
+    if (societeFilter !== 'Toutes') {
+      filteredDocs = filteredDocs.filter(d => (d.client || d.societe) === societeFilter);
+    }
+    
+    if (statutFilter !== 'Tous') {
+      filteredDocs = filteredDocs.filter(d => d.statut === statutFilter);
+    }
+    
+    if (searchQuery.trim()) {
+      filteredDocs = filteredDocs.filter(d => 
+        d.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ((d.client || d.societe) && (d.client || d.societe)!.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    
+    console.log('🔍 Final filtered documents:', filteredDocs.length, filteredDocs);
+    setFilteredDocuments(filteredDocs);
   };
 
   const handleSelectAll = () => {
@@ -193,7 +250,7 @@ function GestionnaireDashboardNew() {
 
   const handleViewPDF = async (dossierId: string) => {
     try {
-      // Use the same endpoint as chef d'équipe but with gestionnaire permissions
+      // Use chef d'équipe endpoint for PDF access
       const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${dossierId}`);
       if (response.data.success && response.data.hasDocument) {
         const dossier = filteredDossiers.find(d => d.id === dossierId);
@@ -221,8 +278,8 @@ function GestionnaireDashboardNew() {
     if (!currentDossier) return;
     
     try {
-      // Use gestionnaire-specific endpoint for status modification
-      const response = await LocalAPI.post('/workflow/gestionnaire/modify-status', {
+      // Use chef d'équipe endpoint for status modification
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
         dossierId: currentDossier.id,
         newStatus
       });
@@ -241,7 +298,14 @@ function GestionnaireDashboardNew() {
   };
 
   const handleModifyStatus = (dossierId: string) => {
-    const dossier = filteredDossiers.find(d => d.id === dossierId);
+    // First try to find in dossiers (bordereaux)
+    let dossier = filteredDossiers.find(d => d.id === dossierId);
+    
+    // If not found, try to find in documents (individual documents)
+    if (!dossier) {
+      dossier = filteredDocuments.find(d => d.id === dossierId);
+    }
+    
     if (dossier) {
       setCurrentDossier(dossier);
       setShowStatusModal(true);
@@ -252,7 +316,7 @@ function GestionnaireDashboardNew() {
     if (!currentDossier) return;
     
     try {
-      const response = await LocalAPI.post('/workflow/gestionnaire/modify-status', {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
         dossierId: currentDossier.id,
         newStatus
       });
@@ -318,13 +382,16 @@ function GestionnaireDashboardNew() {
               <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Adhésion</h3>
               <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.adhesion?.total || 0}</span>
             </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {Object.entries(stats.adhesion?.breakdown || {}).map(([key, value]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                  <span>{key}:</span> <span>{value}</span>
-                </div>
-              ))}
-            </div>
+            {stats.adhesion?.total > 0 && (
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                {Object.entries(stats.adhesion?.breakdown || {}).filter(([key, value]) => value > 0).map(([key, value]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                    <span>{key}:</span> <span>{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Complément de dossier Card */}
@@ -333,13 +400,16 @@ function GestionnaireDashboardNew() {
               <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Complément de dossier</h3>
               <span style={{ background: '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.complement?.total || 0}</span>
             </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {Object.entries(stats.complement?.breakdown || {}).map(([key, value]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                  <span>{key}:</span> <span>{value}</span>
-                </div>
-              ))}
-            </div>
+            {stats.complement?.total > 0 && (
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                {Object.entries(stats.complement?.breakdown || {}).filter(([key, value]) => value > 0).map(([key, value]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                    <span>{key}:</span> <span>{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Résiliation Card */}
@@ -348,13 +418,16 @@ function GestionnaireDashboardNew() {
               <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Résiliation</h3>
               <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.resiliation?.total || 0}</span>
             </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {Object.entries(stats.resiliation?.breakdown || {}).map(([key, value]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                  <span>{key}:</span> <span>{value}</span>
-                </div>
-              ))}
-            </div>
+            {stats.resiliation?.total > 0 && (
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                {Object.entries(stats.resiliation?.breakdown || {}).filter(([key, value]) => value > 0).map(([key, value]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                    <span>{key}:</span> <span>{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Réclamation Card */}
@@ -363,13 +436,16 @@ function GestionnaireDashboardNew() {
               <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Réclamation</h3>
               <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.reclamation?.total || 0}</span>
             </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {Object.entries(stats.reclamation?.breakdown || {}).map(([key, value]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                  <span>{key}:</span> <span>{value}</span>
-                </div>
-              ))}
-            </div>
+            {stats.reclamation?.total > 0 && (
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                {Object.entries(stats.reclamation?.breakdown || {}).filter(([key, value]) => value > 0).map(([key, value]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                    <span>{key}:</span> <span>{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Avenant Card */}
@@ -378,13 +454,16 @@ function GestionnaireDashboardNew() {
               <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Avenant</h3>
               <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{stats.avenant?.total || 0}</span>
             </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              {Object.entries(stats.avenant?.breakdown || {}).map(([key, value]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                  <span>{key}:</span> <span>{value}</span>
-                </div>
-              ))}
-            </div>
+            {stats.avenant?.total > 0 && (
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                {Object.entries(stats.avenant?.breakdown || {}).filter(([key, value]) => value > 0).map(([key, value]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                    <span>{key}:</span> <span>{value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -463,51 +542,81 @@ function GestionnaireDashboardNew() {
 
         {/* Derniers Bordereaux Ajoutés Section */}
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Derniers Bordereaux Ajoutés</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ color: '#d52b36', fontSize: '16px', marginRight: '8px' }}>📋</span>
+              <span style={{ fontWeight: 'bold', fontSize: '16px' }}>Derniers Bordereaux Ajoutés</span>
+              <span style={{ background: '#4caf50', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', marginLeft: '12px' }}>En temps réel</span>
+            </div>
+            <button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#f8f9fa' }}>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Référence</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Ref. Dossier</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Client</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Type</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Statut</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Gestionnaire</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>% Finalisation</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>États Dossiers</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Date</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice(0, 3).map((dossier, index) => {
+                {filteredDossiers.slice((derniersBordereauxPage - 1) * 5, derniersBordereauxPage * 5).map((dossier, index) => {
                   const completionPercentage = dossier.completionPercentage || 0;
                   const dossierStates = dossier.dossierStates || [dossier.statut];
+                  const canModify = dossier.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
                   return (
-                    <tr key={`recent-${dossier.id}`} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
-                      <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
+                    <tr key={`recent-${dossier.id}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{dossier.reference}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client || dossier.societe}</td>
-                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.type}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ width: '8px', height: '8px', background: index % 2 === 0 ? '#4caf50' : '#2196f3', borderRadius: '50%' }}></span>
+                          {dossier.type}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                        <span style={{ background: '#4caf50', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>{dossier.statut}</span>
+                      </td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '24px', height: '24px', background: '#9c27b0', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '12px', fontWeight: 'bold' }}>
+                            {(dossier.gestionnaire || user?.fullName || 'N').charAt(0)}
+                          </div>
+                          {dossier.gestionnaire || user?.fullName || 'Moi'}
+                        </div>
+                      </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{ width: '40px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${completionPercentage}%`, height: '100%', background: completionPercentage >= 80 ? '#4caf50' : completionPercentage >= 50 ? '#ff9800' : '#f44336' }} />
+                            <div style={{ width: `${completionPercentage}%`, height: '100%', background: completionPercentage >= 80 ? '#4caf50' : completionPercentage >= 50 ? '#ff9800' : '#f44336', transition: 'width 0.3s ease' }} />
                           </div>
                           <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{completionPercentage}%</span>
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {dossierStates.length > 0 ? dossierStates.map((state, idx) => (
+                          {dossierStates?.filter((state): state is string => Boolean(state)).map((state: string, idx: number) => (
                             <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
                               {state}
                             </span>
-                          )) : <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
+                          )) || <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button onClick={() => handleViewPDF(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Voir PDF">📄</button>
-                          <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', color: '#666' }}>{dossier.date}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => handleViewPDF(dossier.id)} style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }} onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#1976d2'} onMouseLeave={(e) => (e.target as HTMLElement).style.color = '#2196f3'}>Voir</button>
+                          {canModify ? (
+                            <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', color: '#9c27b0', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }} onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#7b1fa2'} onMouseLeave={(e) => (e.target as HTMLElement).style.color = '#9c27b0'}>Modifier</button>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: '#ccc' }}>Lecture seule</span>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -516,157 +625,233 @@ function GestionnaireDashboardNew() {
               </tbody>
             </table>
           </div>
+          {/* Pagination for Derniers Bordereaux */}
+          {filteredDossiers.length > 0 && (
+            <div style={{ padding: '16px', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+              <button 
+                onClick={() => setDerniersBordereauxPage(Math.max(1, derniersBordereauxPage - 1))}
+                disabled={derniersBordereauxPage === 1}
+                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: derniersBordereauxPage === 1 ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ fontSize: '12px', color: '#666' }}>
+                Page {derniersBordereauxPage} sur {Math.ceil(filteredDossiers.length / 5)}
+              </span>
+              <button 
+                onClick={() => setDerniersBordereauxPage(Math.min(Math.ceil(filteredDossiers.length / 5), derniersBordereauxPage + 1))}
+                disabled={derniersBordereauxPage >= Math.ceil(filteredDossiers.length / 5)}
+                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: derniersBordereauxPage >= Math.ceil(filteredDossiers.length / 5) ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Bordereaux en cours Section */}
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux en cours</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ color: '#ff9800', fontSize: '16px', marginRight: '8px' }}>⏳</span>
+              <span style={{ fontWeight: 'bold', fontSize: '16px' }}>Bordereaux en cours</span>
+              <span style={{ background: '#ff9800', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', marginLeft: '12px' }}>Priorité</span>
+            </div>
+            <button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#f8f9fa' }}>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Référence</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Référence</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Client</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Statut</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>% Finalisation</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>États Dossiers</th>
+                  <th style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#666' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice(0, 5).map((dossier, index) => {
+                {filteredDossiers.slice((bordereauxEnCoursPage - 1) * 5, bordereauxEnCoursPage * 5).map((dossier, index) => {
                   const completionPercentage = dossier.completionPercentage || 0;
                   const dossierStates = dossier.dossierStates || [dossier.statut];
+                  const canModify = dossier.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
                   return (
-                    <tr key={`bordereau-${dossier.id}`} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
-                      <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
+                    <tr key={`bordereau-${dossier.id}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{dossier.reference}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client || dossier.societe}</td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <span style={{ background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dossier.statut}</span>
-                      </td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>En cours de traitement</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '40px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${completionPercentage}%`, height: '100%', background: completionPercentage >= 80 ? '#4caf50' : completionPercentage >= 50 ? '#ff9800' : '#f44336' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '40px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${completionPercentage}%`, height: '100%', background: completionPercentage >= 80 ? '#4caf50' : completionPercentage >= 50 ? '#ff9800' : '#f44336', transition: 'width 0.3s ease' }} />
+                            </div>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{completionPercentage}%</span>
                           </div>
-                          <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{completionPercentage}%</span>
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {dossierStates.map((state, idx) => (
+                          {dossierStates?.filter((state): state is string => Boolean(state)).map((state: string, idx: number) => (
                             <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
                               {state}
                             </span>
-                          ))}
+                          )) || <span style={{ fontSize: '12px', color: '#999' }}>Nouveau</span>}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button onClick={() => handleViewPDF(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Voir PDF">📄</button>
-                          <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Dossiers Section (Table) */}
-        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px 12px 20px', borderBottom: '1px solid #e0e0e0' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels</h3>
-            <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#d52b36', color: 'white' }}>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={selectedDossiers.length === filteredDossiers.length && filteredDossiers.length > 0}
-                      onChange={handleSelectAll}
-                      style={{ cursor: 'pointer' }}
-                    />
-                  </th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Réf. Dossier</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut Dossier</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Gestionnaire</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDossiers.map((dossier, index) => (
-                  <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
-                    <td style={{ padding: '12px 8px' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedDossiers.includes(dossier.id)}
-                        onChange={() => handleSelectDossier(dossier.id)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                    </td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>DOS-{dossier.reference}</td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client || dossier.societe}</td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.type}</td>
-                    <td style={{ padding: '12px 8px' }}>
-                      <span style={{ 
-                        background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : '#2196f3', 
-                        color: 'white', 
-                        padding: '4px 8px', 
-                        borderRadius: '12px', 
-                        fontSize: '12px', 
-                        fontWeight: 'bold' 
-                      }}>
-                        {dossier.statut}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.gestionnaire || user?.fullName || 'Moi'}</td>
-                    <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
-                    <td style={{ padding: '12px 8px' }}>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <button 
-                          onClick={() => handleViewPDF(dossier.id)}
+                          onClick={() => handleViewPDF(dossier.id)} 
                           style={{ 
                             background: 'none', 
                             border: 'none', 
                             color: '#2196f3', 
                             cursor: 'pointer', 
-                            fontSize: '12px',
-                            textDecoration: 'underline'
+                            fontSize: '18px',
+                            padding: '4px'
                           }}
-                          title="Voir PDF du dossier"
+                          title="Modifier le dossier"
                         >
-                          Voir PDF
+                          ✏️
                         </button>
-                        <button 
-                          onClick={() => handleModifyStatus(dossier.id)}
-                          style={{ 
-                            background: 'none', 
-                            border: 'none', 
-                            color: '#9c27b0', 
-                            cursor: 'pointer', 
-                            fontSize: '12px',
-                            textDecoration: 'underline'
-                          }}
-                          title="Modifier statut du dossier"
-                        >
-                          Modifier Statut
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {/* Pagination for Bordereaux en cours */}
+          {filteredDossiers.length > 0 && (
+            <div style={{ padding: '16px', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+              <button 
+                onClick={() => setBordereauxEnCoursPage(Math.max(1, bordereauxEnCoursPage - 1))}
+                disabled={bordereauxEnCoursPage === 1}
+                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: bordereauxEnCoursPage === 1 ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ fontSize: '12px', color: '#666' }}>
+                Page {bordereauxEnCoursPage} sur {Math.ceil(filteredDossiers.length / 5)}
+              </span>
+              <button 
+                onClick={() => setBordereauxEnCoursPage(Math.min(Math.ceil(filteredDossiers.length / 5), bordereauxEnCoursPage + 1))}
+                disabled={bordereauxEnCoursPage >= Math.ceil(filteredDossiers.length / 5)}
+                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: bordereauxEnCoursPage >= Math.ceil(filteredDossiers.length / 5) ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Dossiers Section (Table) */}
+        <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px 12px 20px', borderBottom: '1px solid #e0e0e0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels</h3>
+                <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: '#666' }}>Total: {filteredDocuments.length} dossiers</span>
+                <button style={{ background: '#d52b36', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Actualiser</button>
+              </div>
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #d52b36' }}>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Réf. Dossier</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Type</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut Dossier</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Gestionnaire</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDocuments.slice((dossiersIndividuelsPage - 1) * 20, dossiersIndividuelsPage * 20).map((document, index) => {
+                  const canModify = document.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
+                  return (
+                    <tr key={document.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{document.reference}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.statut}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', color: '#666' }}>il y a 2 heures</td>
+                      <td style={{ padding: '12px 8px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => handleViewPDF(document.id)}
+                            style={{ 
+                              background: 'none', 
+                              border: 'none', 
+                              color: '#2196f3', 
+                              cursor: 'pointer', 
+                              fontSize: '12px',
+                              textDecoration: 'underline',
+                              padding: '4px 8px',
+                              borderRadius: '4px'
+                            }}
+                            title="Voir PDF du dossier"
+                          >
+                            Voir PDF
+                          </button>
+                          {canModify ? (
+                            <button 
+                              onClick={() => handleModifyStatus(document.id)}
+                              style={{ 
+                                background: 'none', 
+                                border: 'none', 
+                                color: '#9c27b0', 
+                                cursor: 'pointer', 
+                                fontSize: '12px',
+                                textDecoration: 'underline',
+                                padding: '4px 8px',
+                                borderRadius: '4px'
+                              }}
+                              title="Modifier statut du dossier"
+                            >
+                              Modifier Statut
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: '#ccc', padding: '4px 8px' }}>Lecture seule</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* Pagination for Dossiers Individuels */}
+          {filteredDocuments.length > 0 && (
+            <div style={{ padding: '16px', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+              <button 
+                onClick={() => setDossiersIndividuelsPage(Math.max(1, dossiersIndividuelsPage - 1))}
+                disabled={dossiersIndividuelsPage === 1}
+                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: dossiersIndividuelsPage === 1 ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ fontSize: '12px', color: '#666' }}>
+                Page {dossiersIndividuelsPage} sur {Math.ceil(filteredDocuments.length / 20)}
+              </span>
+              <button 
+                onClick={() => setDossiersIndividuelsPage(Math.min(Math.ceil(filteredDocuments.length / 20), dossiersIndividuelsPage + 1))}
+                disabled={dossiersIndividuelsPage >= Math.ceil(filteredDocuments.length / 20)}
+                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: dossiersIndividuelsPage >= Math.ceil(filteredDocuments.length / 20) ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* IA & Suggestions Section */}

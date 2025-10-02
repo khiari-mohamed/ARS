@@ -68,12 +68,6 @@ export class ReclamationsController {
     @Body() dto: any,
     @Req() req: any,
   ) {
-    // Only SUPER_ADMIN and CHEF_EQUIPE can create reclamations
-    const userRole = req.user?.role;
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'CHEF_EQUIPE') {
-      throw new Error('Seuls les Super Admin et Chef d\'équipe peuvent créer des réclamations');
-    }
-    console.log('Full req.user object:', JSON.stringify(req.user, null, 2));
     let userId = req.user?.sub || req.user?.id || req.user?.userId;
     console.log('Extracted userId:', userId);
     
@@ -138,11 +132,7 @@ export class ReclamationsController {
     @UploadedFile() file: Express.Multer.File,
     @Req() req: any
   ) {
-    // Only SUPER_ADMIN and CHEF_EQUIPE can import reclamations
-    const userRole = req.user?.role;
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'CHEF_EQUIPE') {
-      throw new Error('Seuls les Super Admin et Chef d\'équipe peuvent importer des réclamations');
-    }
+    // Allow authenticated users to import reclamations
     let userId = req.user?.sub || req.user?.id;
     
     if (!userId) {

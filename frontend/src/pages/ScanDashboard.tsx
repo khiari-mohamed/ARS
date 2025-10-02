@@ -21,7 +21,12 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   Scanner,
@@ -47,8 +52,10 @@ import DirectManualScanInterface from '../components/DirectManualScanInterface';
 import DocumentTypeModal from '../components/DocumentTypeModal';
 import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
 import { getBordereauForManualScan, uploadManualDocuments, finalizeScanProcess } from '../services/manualScanService';
+import { useAuthContext } from '../contexts/AuthContext';
 
 const ScanDashboard: React.FC = () => {
+  const { user } = useAuthContext();
   const [scanStatus, setScanStatus] = useState<any>(null);
   const [scanActivity, setScanActivity] = useState<any[]>([]);
   const [scanQueue, setScanQueue] = useState<any[]>([]);
@@ -66,12 +73,24 @@ const ScanDashboard: React.FC = () => {
   const [documentStats, setDocumentStats] = useState<any>(null);
   const [selectedDocumentType, setSelectedDocumentType] = useState<{type: string, label: string, icon: string} | null>(null);
   const [selectedProgressionType, setSelectedProgressionType] = useState<string | null>(null);
+  const [availableClients, setAvailableClients] = useState<any[]>([]);
 
   useEffect(() => {
     loadDashboard();
+    loadAvailableClients();
     const interval = setInterval(loadDashboard, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
   }, []);
+
+  const loadAvailableClients = async () => {
+    try {
+      const { LocalAPI } = await import('../services/axios');
+      const response = await LocalAPI.get('/clients');
+      setAvailableClients(response.data || []);
+    } catch (error) {
+      console.error('Failed to load clients:', error);
+    }
+  };
 
   const loadDashboard = async () => {
     try {
@@ -1344,31 +1363,56 @@ const ScanDashboard: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" gutterBottom>Informations Client</Typography>
                 <Typography><strong>Client:</strong> {selectedBordereau.client?.name}</Typography>
+                <Typography><strong>Référence Contrat:</strong> {selectedBordereau.contract?.clientName || 'Non assigné'}</Typography>
+                <Typography><strong>Type de Bordereau:</strong> {selectedBordereau.type || 'BULLETIN_SOIN'}</Typography>
                 <Typography><strong>Délai Règlement:</strong> {selectedBordereau.contract?.delaiReglement || selectedBordereau.delaiReglement} jours</Typography>
-                <Typography><strong>Chargé de Compte:</strong> {selectedBordereau.client?.gestionnaires?.find((g: any) => g.role === 'CHEF_EQUIPE')?.fullName || 'Non assigné'}</Typography>
+                <Typography><strong>Chargé de Compte:</strong> {
+                  selectedBordereau.contract?.teamLeader?.fullName || 
+                  selectedBordereau.contract?.assignedManager?.fullName || 
+                  selectedBordereau.client?.gestionnaires?.find((g: any) => g.role === 'CHEF_EQUIPE')?.fullName || 
+                  'Non assigné'
+                }</Typography>
               </Grid>
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" gutterBottom>Documents ({selectedBordereau.documents?.length || 0})</Typography>
-                {selectedBordereau.documents?.map((doc: any) => (
-                  <Box key={doc.id} display="flex" alignItems="center" gap={1} mb={1}>
-                    <Chip label={doc.type} size="small" />
-                    <Typography variant="body2">{doc.name}</Typography>
-                    <Chip label={doc.status} color={doc.status === 'TRAITE' ? 'success' : 'default'} size="small" />
-                  </Box>
-                ))}
+                {selectedBordereau.documents && selectedBordereau.documents.length > 0 ? (
+                  selectedBordereau.documents.map((doc: any) => (
+                    <Box key={doc.id} display="flex" alignItems="center" gap={1} mb={1}>
+                      <Chip label={doc.type} size="small" />
+                      <Typography variant="body2">{doc.name}</Typography>
+                      <Chip label={doc.status} color={doc.status === 'SCANNE' ? 'success' : doc.status === 'TRAITE' ? 'info' : 'default'} size="small" />
+                    </Box>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">Aucun document scanné</Typography>
+                )}
               </Grid>
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom>Historique</Typography>
-                {selectedBordereau.traitementHistory?.map((history: any, index: number) => (
-                  <Typography key={index} variant="body2">
-                    {new Date(history.createdAt).toLocaleString()} - {history.action}
-                  </Typography>
-                ))}
+                {selectedBordereau.traitementHistory && selectedBordereau.traitementHistory.length > 0 ? (
+                  selectedBordereau.traitementHistory.map((history: any, index: number) => (
+                    <Typography key={index} variant="body2">
+                      {new Date(history.createdAt).toLocaleString()} - {history.action}
+                    </Typography>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary">Aucun historique disponible</Typography>
+                )}
               </Grid>
             </Grid>
           )}
         </DialogContent>
         <DialogActions>
+          {/* Edit button for SCAN team and Super Admin */}
+          {(['SCAN_TEAM', 'SUPER_ADMIN'].includes(user?.role || '')) && (
+            <Button 
+              variant="outlined" 
+              color="primary"
+              onClick={() => setActiveDialog('edit-bordereau-details')}
+            >
+              Modifier
+            </Button>
+          )}
           {selectedBordereau?.statut === 'SCAN_EN_COURS' && (
             <Button 
               variant="contained" 
@@ -1379,6 +1423,97 @@ const ScanDashboard: React.FC = () => {
             </Button>
           )}
           <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Bordereau Details Dialog */}
+      <Dialog 
+        open={activeDialog === 'edit-bordereau-details'} 
+        onClose={() => setActiveDialog(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Modifier Bordereau - {selectedBordereau?.reference}
+        </DialogTitle>
+        <DialogContent>
+          {selectedBordereau && (
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Référence BO"
+                  value={selectedBordereau.reference}
+                  onChange={(e) => setSelectedBordereau({...selectedBordereau, reference: e.target.value})}
+                  helperText="Modifiable en cas d'erreur du Bureau d'Ordre"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Type de Bordereau</InputLabel>
+                  <Select
+                    value={selectedBordereau.type || 'BULLETIN_SOIN'}
+                    onChange={(e) => setSelectedBordereau({...selectedBordereau, type: e.target.value})}
+                    label="Type de Bordereau"
+                  >
+                    <MenuItem value="BULLETIN_SOIN">Bulletin de Soins</MenuItem>
+                    <MenuItem value="COMPLEMENT_INFORMATION">Complément d'Information</MenuItem>
+                    <MenuItem value="ADHESION">Adhésion</MenuItem>
+                    <MenuItem value="RECLAMATION">Réclamation</MenuItem>
+                    <MenuItem value="CONTRAT_AVENANT">Contrat/Avenant</MenuItem>
+                    <MenuItem value="DEMANDE_RESILIATION">Demande de Résiliation</MenuItem>
+                    <MenuItem value="CONVENTION_TIERS_PAYANT">Convention Tiers Payant</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Client</InputLabel>
+                  <Select
+                    value={selectedBordereau.clientId}
+                    onChange={(e) => setSelectedBordereau({...selectedBordereau, clientId: e.target.value})}
+                    label="Client"
+                  >
+                    {availableClients.map(client => (
+                      <MenuItem key={client.id} value={client.id}>{client.name}</MenuItem>
+                    ))}
+                  </Select>
+                  <Typography variant="caption" color="text.secondary">
+                    Modifiable en cas d'erreur du Bureau d'Ordre
+                  </Typography>
+                </FormControl>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActiveDialog('bordereau-details')}>Annuler</Button>
+          <Button 
+            variant="contained" 
+            onClick={async () => {
+              try {
+                const { LocalAPI } = await import('../services/axios');
+                await LocalAPI.post(`/scan/bordereau/${selectedBordereau.id}/update-details`, {
+                  type: selectedBordereau.type,
+                  clientId: selectedBordereau.clientId,
+                  reference: selectedBordereau.reference
+                });
+                
+                // Refresh bordereau data
+                const updatedBordereau = await getBordereauForScan(selectedBordereau.id);
+                setSelectedBordereau(updatedBordereau);
+                setActiveDialog('bordereau-details');
+                
+                alert('✅ Bordereau modifié avec succès');
+                await loadDashboard();
+              } catch (error: any) {
+                console.error('Update failed:', error);
+                alert(`❌ Erreur lors de la modification: ${error.response?.data?.message || error.message}`);
+              }
+            }}
+          >
+            Sauvegarder
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -43,6 +43,10 @@ export class CreateContractDto {
   @IsString()
   accountOwnerId: string; // Chargé de compte
 
+  @IsOptional()
+  @IsString()
+  teamLeaderId?: string; // Chef d'équipe
+
   @IsNotEmpty()
   @IsDateString()
   startDate: string;

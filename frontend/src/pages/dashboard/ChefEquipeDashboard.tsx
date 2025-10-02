@@ -69,9 +69,30 @@ function ChefEquipeDashboard() {
   const [currentPDFUrl, setCurrentPDFUrl] = useState('');
   const [currentDossier, setCurrentDossier] = useState<any>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [derniersPage, setDerniersPage] = useState(1);
+  const [bordereauxPage, setBordereauxPage] = useState(1);
+  const [documentsPage, setDocumentsPage] = useState(1);
+  const derniersPerPage = 5;
+  const bordereauxPerPage = 5;
+  const documentsPerPage = 20;
 
   useEffect(() => {
     loadDashboardData();
+    
+    // Listen for PDF modal events from DossiersList
+    const handlePDFModal = (event: any) => {
+      const { pdfUrl, document } = event.detail;
+      const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+      setCurrentPDFUrl(`${serverBaseUrl}${pdfUrl}`);
+      setCurrentDossier(document);
+      setShowPDFModal(true);
+    };
+    
+    window.addEventListener('openPDFModal', handlePDFModal);
+    
+    return () => {
+      window.removeEventListener('openPDFModal', handlePDFModal);
+    };
   }, []);
 
   useEffect(() => {
@@ -377,16 +398,11 @@ function ChefEquipeDashboard() {
     if (!currentDossier) return;
     
     try {
-      // Check if this is a document from the "Dossiers Individuels" table
-      const isDocument = filteredDocuments.find(d => d.id === currentDossier.id);
+
       
-      const endpoint = isDocument 
-        ? '/bordereaux/chef-equipe/tableau-bord/modify-document-status'
-        : '/bordereaux/chef-equipe/tableau-bord/modify-dossier-status';
+      const endpoint = '/bordereaux/chef-equipe/tableau-bord/modify-dossier-status';
       
-      const payload = isDocument 
-        ? { documentId: currentDossier.id, newStatus }
-        : { dossierId: currentDossier.id, newStatus };
+      const payload = { dossierId: currentDossier.id, newStatus };
       
       const response = await LocalAPI.post(endpoint, payload);
       
@@ -666,7 +682,7 @@ function ChefEquipeDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice(0, 3).map((dossier, index) => {
+                {filteredDossiers.slice((derniersPage - 1) * derniersPerPage, derniersPage * derniersPerPage).map((dossier, index) => {
                   // Use dynamic completion percentage from backend
                   const completionPercentage = dossier.completionPercentage || 0;
                   // Use dynamic states from backend
@@ -705,6 +721,44 @@ function ChefEquipeDashboard() {
               </tbody>
             </table>
           </div>
+          {/* Pagination for Derniers Bordereaux */}
+          {filteredDossiers.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', gap: '8px' }}>
+              <button
+                onClick={() => setDerniersPage(prev => Math.max(1, prev - 1))}
+                disabled={derniersPage === 1}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: derniersPage === 1 ? '#f5f5f5' : 'white',
+                  color: derniersPage === 1 ? '#999' : '#333',
+                  cursor: derniersPage === 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ padding: '8px 16px', fontSize: '14px', color: '#666' }}>
+                Page {derniersPage} sur {Math.ceil(filteredDossiers.length / derniersPerPage)}
+              </span>
+              <button
+                onClick={() => setDerniersPage(prev => Math.min(Math.ceil(filteredDossiers.length / derniersPerPage), prev + 1))}
+                disabled={derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage)}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage) ? '#f5f5f5' : 'white',
+                  color: derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage) ? '#999' : '#333',
+                  cursor: derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage) ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Bordereaux en cours Section */}
@@ -723,7 +777,7 @@ function ChefEquipeDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice(0, 5).map((dossier, index) => {
+                {filteredDossiers.slice((bordereauxPage - 1) * bordereauxPerPage, bordereauxPage * bordereauxPerPage).map((dossier, index) => {
                   // Use dynamic completion percentage from backend
                   const completionPercentage = dossier.completionPercentage || 0;
                   // Use dynamic states from backend
@@ -763,6 +817,44 @@ function ChefEquipeDashboard() {
               </tbody>
             </table>
           </div>
+          {/* Pagination for Bordereaux en cours */}
+          {filteredDossiers.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', gap: '8px' }}>
+              <button
+                onClick={() => setBordereauxPage(prev => Math.max(1, prev - 1))}
+                disabled={bordereauxPage === 1}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: bordereauxPage === 1 ? '#f5f5f5' : 'white',
+                  color: bordereauxPage === 1 ? '#999' : '#333',
+                  cursor: bordereauxPage === 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ padding: '8px 16px', fontSize: '14px', color: '#666' }}>
+                Page {bordereauxPage} sur {Math.ceil(filteredDossiers.length / bordereauxPerPage)}
+              </span>
+              <button
+                onClick={() => setBordereauxPage(prev => Math.min(Math.ceil(filteredDossiers.length / bordereauxPerPage), prev + 1))}
+                disabled={bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage)}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage) ? '#f5f5f5' : 'white',
+                  color: bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage) ? '#999' : '#333',
+                  cursor: bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage) ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Dossiers Section (Table) */}
@@ -793,7 +885,7 @@ function ChefEquipeDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDocuments.map((document, index) => (
+                {filteredDocuments.slice((documentsPage - 1) * documentsPerPage, documentsPage * documentsPerPage).map((document, index) => (
                   <tr key={document.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                     <td style={{ padding: '12px 8px' }}>
                       <input 
@@ -857,6 +949,44 @@ function ChefEquipeDashboard() {
               </tbody>
             </table>
           </div>
+          {/* Pagination for Dossiers Individuels */}
+          {filteredDocuments.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', gap: '8px' }}>
+              <button
+                onClick={() => setDocumentsPage(prev => Math.max(1, prev - 1))}
+                disabled={documentsPage === 1}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: documentsPage === 1 ? '#f5f5f5' : 'white',
+                  color: documentsPage === 1 ? '#999' : '#333',
+                  cursor: documentsPage === 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ padding: '8px 16px', fontSize: '14px', color: '#666' }}>
+                Page {documentsPage} sur {Math.ceil(filteredDocuments.length / documentsPerPage)}
+              </span>
+              <button
+                onClick={() => setDocumentsPage(prev => Math.min(Math.ceil(filteredDocuments.length / documentsPerPage), prev + 1))}
+                disabled={documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage)}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  background: documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage) ? '#f5f5f5' : 'white',
+                  color: documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage) ? '#999' : '#333',
+                  cursor: documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage) ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Liste Dossiers Section */}

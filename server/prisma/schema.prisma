@@ -45,6 +45,7 @@ model User {
   reclamations                Reclamation[]          @relation("HandlerReclamations")
   reclamationsCreated         Reclamation[]          @relation("CreatorReclamations")
   reclamationHistories        ReclamationHistory[]   @relation("UserReclamationHistories")
+  conformiteReclamations      Reclamation[]          @relation("ConformiteUpdatedBy")
   ledTeamStructures           TeamStructure[]        @relation("TeamStructureLeader")
   assignedTraitementHistories TraitementHistory[]    @relation("AssignedTraitementHistories")
   traitementHistory           TraitementHistory[]    @relation("UserTraitementHistory")
@@ -173,6 +174,7 @@ model Bordereau {
   reference                String                 @unique
   clientId                 String
   contractId               String?
+  type                     DocumentType           @default(BULLETIN_SOIN)
   dateReception            DateTime
   dateDebutScan            DateTime?
   dateFinScan              DateTime?
@@ -254,6 +256,10 @@ model Reclamation {
   department   String?
   processId    String?
   priority     Int                  @default(1)
+  typologie    String?
+  conformite   String?
+  conformiteUpdatedBy String?
+  conformiteUpdatedAt DateTime?
   assignedTo   User?                @relation("HandlerReclamations", fields: [assignedToId], references: [id])
   bordereau    Bordereau?           @relation(fields: [bordereauId], references: [id])
   client       Client               @relation(fields: [clientId], references: [id])
@@ -261,6 +267,7 @@ model Reclamation {
   createdBy    User                 @relation("CreatorReclamations", fields: [createdById], references: [id])
   document     Document?            @relation(fields: [documentId], references: [id])
   process      Process?             @relation("ProcessReclamations", fields: [processId], references: [id])
+  conformiteUser User?              @relation("ConformiteUpdatedBy", fields: [conformiteUpdatedBy], references: [id])
   history      ReclamationHistory[]
   User         User[]               @relation("ClientReclamations")
 }
@@ -1064,6 +1071,7 @@ enum Statut {
   PARTIEL
   MIS_EN_INSTANCE
   REJETE
+  RETOURNE
 }
 
 enum CourrierType {
