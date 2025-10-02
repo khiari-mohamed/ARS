@@ -17,12 +17,13 @@ export class ChefEquipeTableauBordController {
   @Get('stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
-  async getTableauBordStats() {
+  async getTableauBordStats(@Req() req: any) {
+    const accessFilter = this.buildAccessFilter(req.user);
     const [totalDossiers, clotures, enCours, nonAffectes] = await Promise.all([
-      this.prisma.bordereau.count({ where: { archived: false } }),
-      this.prisma.bordereau.count({ where: { statut: 'TRAITE', archived: false } }),
-      this.prisma.bordereau.count({ where: { statut: { in: ['EN_COURS', 'ASSIGNE'] }, archived: false } }),
-      this.prisma.bordereau.count({ where: { statut: { in: ['A_SCANNER', 'SCANNE', 'A_AFFECTER'] }, archived: false } })
+      this.prisma.bordereau.count({ where: { ...accessFilter, archived: false } }),
+      this.prisma.bordereau.count({ where: { ...accessFilter, statut: 'TRAITE', archived: false } }),
+      this.prisma.bordereau.count({ where: { ...accessFilter, statut: { in: ['EN_COURS', 'ASSIGNE'] }, archived: false } }),
+      this.prisma.bordereau.count({ where: { ...accessFilter, statut: { in: ['A_SCANNER', 'SCANNE', 'A_AFFECTER'] }, archived: false } })
     ]);
 
     return {
@@ -41,9 +42,10 @@ export class ChefEquipeTableauBordController {
   @Get('types-detail')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
-  async getTypesDetail() {
+  async getTypesDetail(@Req() req: any) {
+    const accessFilter = this.buildAccessFilter(req.user);
     const documents = await this.prisma.document.findMany({
-      where: { bordereau: { archived: false } },
+      where: { bordereau: { ...accessFilter, archived: false } },
       include: { 
         bordereau: { include: { client: true } },
         assignedTo: { select: { fullName: true } }
@@ -105,18 +107,26 @@ export class ChefEquipeTableauBordController {
   @Get('derniers-dossiers')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
-  async getDerniersDossiers() {
+  async getDerniersDossiers(@Req() req: any) {
+    const accessFilter = this.buildAccessFilter(req.user);
     const bordereaux = await this.prisma.bordereau.findMany({
-      where: { archived: false },
+      where: { ...accessFilter, archived: false },
       include: {
-        client: true,
-        documents: {
-          include: { assignedTo: true }
+        client: { select: { id: true, name: true } },
+        contract: { 
+          select: { 
+            id: true, 
+            clientName: true,
+            client: { select: { id: true, name: true } }
+          } 
         },
-        currentHandler: true
+        documents: {
+          include: { assignedTo: { select: { id: true, fullName: true } } }
+        },
+        currentHandler: { select: { id: true, fullName: true } }
       },
       orderBy: { dateReception: 'desc' },
-      take: 10
+      take: 5
     });
 
     return bordereaux.map(bordereau => {
@@ -124,10 +134,12 @@ export class ChefEquipeTableauBordController {
       const traitedDocuments = bordereau.documents.filter(doc => doc.status === 'TRAITE').length;
       const enCoursDocuments = bordereau.documents.filter(doc => doc.status === 'EN_COURS').length;
       const scanneDocuments = bordereau.documents.filter(doc => doc.status === 'SCANNE').length;
+      const uploadedDocuments = bordereau.documents.filter(doc => doc.status === 'UPLOADED' || !doc.status).length;
       
-      // Calculate completion: TRAITE = 100%, SCANNE = 80%, EN_COURS = 50%, others = 0%
-      const completionScore = (traitedDocuments * 100) + (scanneDocuments * 80) + (enCoursDocuments * 50);
-      const completionPercentage = totalDocuments > 0 ? Math.round(completionScore / (totalDocuments * 100) * 100) : 0;
+      // Calculate completion percentage based on document statuses
+      // TRAITE = 100%, SCANNE = 100%, EN_COURS = 50%, UPLOADED/null = 0%
+      const completionScore = (traitedDocuments * 100) + (scanneDocuments * 100) + (enCoursDocuments * 50) + (uploadedDocuments * 0);
+      const completionPercentage = totalDocuments > 0 ? Math.round(completionScore / totalDocuments) : 0;
       
       // Get document types (show document types like "Bulletin de Soin", "Adhésion", etc.)
       const documentTypes = [...new Set(bordereau.documents.map(doc => this.getDocumentTypeLabel(doc.type)))].join(', ');
@@ -141,7 +153,7 @@ export class ChefEquipeTableauBordController {
       return {
         id: bordereau.id,
         reference: bordereau.reference, // Use actual bordereau reference
-        client: bordereau.client?.name || 'N/A',
+        client: bordereau.contract?.client?.name || bordereau.client?.name || 'N/A',
         type: documentTypes || 'Aucun document', // Show document types
         statut: this.getStatutLabel(bordereau.statut),
         gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
@@ -155,8 +167,10 @@ export class ChefEquipeTableauBordController {
   @Get('dossiers-en-cours')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
-  async getDossiersEnCours(@Query('type') typeFilter?: string) {
+  async getDossiersEnCours(@Req() req: any, @Query('type') typeFilter?: string) {
+    const accessFilter = this.buildAccessFilter(req.user);
     const where: any = {
+      ...accessFilter,
       statut: { in: ['EN_COURS', 'ASSIGNE'] },
       archived: false
     };
@@ -180,27 +194,41 @@ export class ChefEquipeTableauBordController {
           }
         },
         include: {
-          client: true,
-          documents: {
-            include: { assignedTo: true }
+          client: { select: { id: true, name: true } },
+          contract: { 
+            select: { 
+              id: true, 
+              clientName: true,
+              client: { select: { id: true, name: true } }
+            } 
           },
-          currentHandler: true
+          documents: {
+            include: { assignedTo: { select: { id: true, fullName: true } } }
+          },
+          currentHandler: { select: { id: true, fullName: true } }
         },
         orderBy: { dateReception: 'asc' },
-        take: 50
+        take: 5
       });
     } else {
       bordereaux = await this.prisma.bordereau.findMany({
         where,
         include: {
-          client: true,
-          documents: {
-            include: { assignedTo: true }
+          client: { select: { id: true, name: true } },
+          contract: { 
+            select: { 
+              id: true, 
+              clientName: true,
+              client: { select: { id: true, name: true } }
+            } 
           },
-          currentHandler: true
+          documents: {
+            include: { assignedTo: { select: { id: true, fullName: true } } }
+          },
+          currentHandler: { select: { id: true, fullName: true } }
         },
         orderBy: { dateReception: 'asc' },
-        take: 50
+        take: 5
       });
     }
 
@@ -208,14 +236,33 @@ export class ChefEquipeTableauBordController {
       const documentNames = bordereau.documents.map(doc => doc.name).join(', ');
       const joursEnCours = Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24));
       
+      // Calculate completion percentage for bordereaux en cours
+      const totalDocuments = bordereau.documents.length;
+      const traitedDocuments = bordereau.documents.filter(doc => doc.status === 'TRAITE').length;
+      const enCoursDocuments = bordereau.documents.filter(doc => doc.status === 'EN_COURS').length;
+      const scanneDocuments = bordereau.documents.filter(doc => doc.status === 'SCANNE').length;
+      const uploadedDocuments = bordereau.documents.filter(doc => doc.status === 'UPLOADED' || !doc.status).length;
+      
+      const completionScore = (traitedDocuments * 100) + (scanneDocuments * 100) + (enCoursDocuments * 50) + (uploadedDocuments * 0);
+      const completionPercentage = totalDocuments > 0 ? Math.round(completionScore / totalDocuments) : 0;
+      
+      // Get document states
+      const states: string[] = [];
+      if (traitedDocuments > 0) states.push('Traité');
+      if (enCoursDocuments > 0) states.push('En cours');
+      if (scanneDocuments > 0) states.push('Scanné');
+      if (uploadedDocuments > 0) states.push('Nouveau');
+      
       return {
         id: bordereau.id,
         reference: bordereau.reference, // Use actual bordereau reference
-        client: bordereau.client?.name || 'N/A',
+        client: bordereau.contract?.client?.name || bordereau.client?.name || 'N/A',
         type: documentNames || 'Aucun document', // Show actual document names
         joursEnCours,
         priorite: this.calculatePriorite(bordereau),
-        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné'
+        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+        completionPercentage,
+        dossierStates: states.length > 0 ? states : ['Nouveau']
       };
     });
   }
@@ -524,30 +571,52 @@ export class ChefEquipeTableauBordController {
   }
 
   @Post('modify-dossier-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async modifyDossierStatus(@Body() body: { dossierId: string; newStatus: string }, @Req() req: any) {
     const statusMapping = {
+      'Nouveau': 'UPLOADED',
       'En cours': 'EN_COURS',
       'Traité': 'TRAITE',
-      'Scanné': 'SCANNE',
-      'À affecter': 'A_AFFECTER'
+      'Retourné': 'REJETE'
     };
 
+    const bordereauxStatusMapping = {
+      'Nouveau': 'EN_ATTENTE',
+      'En cours': 'EN_COURS',
+      'Traité': 'TRAITE',
+      'Retourné': 'REJETE'
+    };
+
+    // First try to find as document
+    const document = await this.prisma.document.findUnique({
+      where: { id: body.dossierId }
+    });
+
+    if (document) {
+      // Update document status
+      await this.prisma.document.update({
+        where: { id: body.dossierId },
+        data: { status: statusMapping[body.newStatus] as any }
+      });
+      return { success: true, message: 'Statut du document modifié avec succès' };
+    }
+
+    // If not found as document, try as bordereau
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: body.dossierId }
     });
 
-    if (!bordereau) {
-      throw new Error('Bordereau non trouvé');
+    if (bordereau) {
+      // Update bordereau status
+      await this.prisma.bordereau.update({
+        where: { id: body.dossierId },
+        data: { statut: bordereauxStatusMapping[body.newStatus] as any }
+      });
+      return { success: true, message: 'Statut du bordereau modifié avec succès' };
     }
 
-    // Update bordereau status
-    await this.prisma.bordereau.update({
-      where: { id: body.dossierId },
-      data: { statut: statusMapping[body.newStatus] as any }
-    });
-
-    return { success: true, message: 'Statut du bordereau modifié avec succès' };
+    throw new Error('Document ou bordereau non trouvé');
   }
 
   @Get('dossier-pdf/:dossierId')
@@ -715,24 +784,25 @@ export class ChefEquipeTableauBordController {
   @Get('documents-individuels')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
-  async getDocumentsIndividuels() {
+  async getDocumentsIndividuels(@Req() req: any) {
+    const accessFilter = this.buildAccessFilter(req.user);
     const documents = await this.prisma.document.findMany({
       where: { 
-        bordereau: { archived: false }
+        bordereau: { ...accessFilter, archived: false }
       },
       include: {
         bordereau: { include: { client: true } },
         assignedTo: true
       },
       orderBy: { uploadedAt: 'desc' },
-      take: 50
+      take: 20
     });
 
     return documents.map(doc => ({
       id: doc.id,
       reference: doc.name, // Show document name (like BS-5766831.pdf)
       client: doc.bordereau?.client?.name || 'N/A',
-      type: doc.name, // Show actual document name
+      type: this.getDocumentTypeLabel(doc.type), // Show actual document type
       statut: this.getDocumentStatusLabel(doc.status || undefined),
       gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
       date: this.getRelativeTime(doc.uploadedAt),
@@ -743,7 +813,8 @@ export class ChefEquipeTableauBordController {
 
   @Get('gestionnaire-assignments-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
-  async getGestionnaireAssignmentsDossiers() {
+  async getGestionnaireAssignmentsDossiers(@Req() req: any) {
+    const accessFilter = this.buildAccessFilter(req.user);
     const gestionnaires = await this.prisma.user.findMany({
       where: { role: 'GESTIONNAIRE' },
       select: {
@@ -754,7 +825,7 @@ export class ChefEquipeTableauBordController {
             bordereau: { include: { client: true } }
           },
           where: {
-            bordereau: { archived: false }
+            bordereau: { ...accessFilter, archived: false }
           }
         }
       }
@@ -922,5 +993,21 @@ export class ChefEquipeTableauBordController {
     if (joursEnCours > 7) return 'Élevée';
     if (joursEnCours > 3) return 'Moyenne';
     return 'Normale';
+  }
+
+  private buildAccessFilter(user: any): any {
+    if (user?.role === 'SUPER_ADMIN') {
+      return {};
+    }
+    
+    if (user?.role === 'CHEF_EQUIPE') {
+      return {
+        contract: {
+          teamLeaderId: user.id
+        }
+      };
+    }
+    
+    return {};
   }
 }

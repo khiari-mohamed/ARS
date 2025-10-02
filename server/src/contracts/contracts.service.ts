@@ -65,11 +65,12 @@ export class ContractsService {
       const contract = await this.prisma.contract.create({
         data: {
           clientId: dto.clientId,
-          clientName: client.name,
+          clientName: dto.contractNumber, // Store contract number, not client name
           delaiReglement: parseInt(dto.treatmentDelay.toString()),
           delaiReclamation: parseInt(dto.claimsReplyDelay.toString()),
           escalationThreshold: dto.warningThreshold ? parseInt(dto.warningThreshold.toString()) : null,
           assignedManagerId: dto.accountOwnerId,
+          teamLeaderId: dto.teamLeaderId || null, // Assign chef d'équipe
           startDate: new Date(dto.startDate),
           endDate: new Date(dto.endDate),
           documentPath,
@@ -167,6 +168,7 @@ export class ContractsService {
     if (dto.paymentDelay) updateData.delaiReglement = parseInt(dto.paymentDelay.toString());
     if (dto.warningThreshold) updateData.escalationThreshold = parseInt(dto.warningThreshold.toString());
     if (dto.accountOwnerId) updateData.assignedManagerId = dto.accountOwnerId;
+    if (dto.teamLeaderId !== undefined) updateData.teamLeaderId = dto.teamLeaderId || null;
     if (dto.startDate) updateData.startDate = new Date(dto.startDate);
     if (dto.endDate) updateData.endDate = new Date(dto.endDate);
     if (dto.notes) updateData.signature = dto.notes;

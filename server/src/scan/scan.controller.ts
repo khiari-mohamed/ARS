@@ -199,4 +199,16 @@ export class ScanController {
   async getDocumentStatsByType() {
     return this.scanService.getDocumentStatsByType();
   }
+
+  @Post('bordereau/:bordereauId/update-details')
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
+  async updateBordereauDetails(
+    @Param('bordereauId') bordereauId: string,
+    @Body() updateData: { type?: string; clientId?: string; reference?: string },
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.scanService.updateBordereauDetails(bordereauId, updateData, userId);
+  }
 }

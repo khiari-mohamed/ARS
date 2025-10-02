@@ -104,7 +104,7 @@ export class ChefEquipeActionsController {
   }
 
   @Get('dashboard-stats')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefDashboardStats(@Request() req: any) {
     return this.chefEquipeActionsService.getChefDashboardStats(req.user.id);
   }

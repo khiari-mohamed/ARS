@@ -44,5 +44,9 @@ export class CreateReclamationDto {
   @IsString()
   evidencePath?: string;
 
+  @IsOptional()
+  @IsString()
+  typologie?: string;
+
   
 }

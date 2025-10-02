@@ -24,4 +24,8 @@ export class UpdateReclamationDto {
   @IsOptional()
   @IsString()
   assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  conformite?: string;
 }

@@ -47,6 +47,9 @@ export class ChefEquipeActionsService {
       throw new BadRequestException('User is not a chef d\'équipe');
     }
 
+    // Build access filter
+    const accessFilter = this.buildChefAccessFilter(chef);
+    
     // Get team member IDs once to avoid N+1 queries
     const teamMemberIds = await this.getTeamMemberIds(chefId);
     
@@ -54,6 +57,7 @@ export class ChefEquipeActionsService {
       // Non-assigned items ready for assignment
       this.prisma.bordereau.findMany({
         where: {
+          ...accessFilter,
           statut: { in: ['SCANNE', 'A_AFFECTER'] },
           assignedToUserId: null,
           archived: false
@@ -76,6 +80,7 @@ export class ChefEquipeActionsService {
       // Items currently being processed by team members
       this.prisma.bordereau.findMany({
         where: {
+          ...accessFilter,
           statut: { in: ['ASSIGNE', 'EN_COURS'] },
           assignedToUserId: { in: teamMemberIds },
           archived: false
@@ -101,6 +106,7 @@ export class ChefEquipeActionsService {
       // Recently completed items
       this.prisma.bordereau.findMany({
         where: {
+          ...accessFilter,
           statut: { in: ['TRAITE', 'CLOTURE'] },
           assignedToUserId: { in: teamMemberIds },
           updatedAt: {
@@ -825,5 +831,21 @@ export class ChefEquipeActionsService {
     );
 
     return performance.sort((a, b) => b.efficiency - a.efficiency);
+  }
+
+  private buildChefAccessFilter(user: any): any {
+    if (user.role === 'SUPER_ADMIN') {
+      return {};
+    }
+    
+    if (user.role === 'CHEF_EQUIPE') {
+      return {
+        contract: {
+          teamLeaderId: user.id
+        }
+      };
+    }
+    
+    return {};
   }
 }

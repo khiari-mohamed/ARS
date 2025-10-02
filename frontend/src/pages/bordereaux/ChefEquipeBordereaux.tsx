@@ -3,6 +3,7 @@ import { fetchUnassignedBordereaux, fetchTeamBordereaux, assignBordereau, fetchU
 import { fetchUsers } from "../../services/userService";
 import BordereauCard from "../../components/BordereauCard";
 import { useAuth } from '../../contexts/AuthContext';
+import { LocalAPI } from '../../services/axios';
 import "../../styles/chef-equipe.css";
 
 interface Gestionnaire {
@@ -25,6 +26,9 @@ function ChefEquipeBordereaux() {
   const [loading, setLoading] = useState(true);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedBordereau, setSelectedBordereau] = useState<any>(null);
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [statsModalType, setStatsModalType] = useState<'en-cours' | 'traites' | 'retournes'>('en-cours');
+  const [statsModalData, setStatsModalData] = useState<any[]>([]);
   
   const teamId = user?.teamId || user?.id || '';
 
@@ -32,6 +36,20 @@ function ChefEquipeBordereaux() {
     loadData();
     loadGestionnaires();
   }, [teamId]);
+
+  // Debug userBordereaux for gestionnaire
+  useEffect(() => {
+    if (isGestionnaire && userBordereaux.length > 0) {
+      console.log('🔍 GESTIONNAIRE DEBUG - userBordereaux:', userBordereaux);
+      console.log('📊 GESTIONNAIRE STATUS BREAKDOWN:', {
+        total: userBordereaux.length,
+        enCours: userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length,
+        traites: userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length,
+        retournes: userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE').length,
+        statuses: userBordereaux.map(b => ({ ref: b.reference, status: b.statut }))
+      });
+    }
+  }, [userBordereaux, isGestionnaire]);
 
 
 
@@ -52,9 +70,10 @@ function ChefEquipeBordereaux() {
         // Chef d'équipe sees everything
         const [unassigned, allBordereaux] = await Promise.all([
           fetchUnassignedBordereaux(),
-          fetch('/api/bordereaux', {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-          }).then(res => res.json()).then(data => Array.isArray(data) ? data : data.items || [])
+          LocalAPI.get('/bordereaux').then(res => {
+            const data = res.data;
+            return Array.isArray(data) ? data : data.items || [];
+          })
         ]);
         setUnassignedBordereaux(unassigned || []);
         setTeamBordereaux(allBordereaux || []);
@@ -111,37 +130,47 @@ function ChefEquipeBordereaux() {
 
   const handleGestionnaireStatusChange = async (bordereauId: string, newStatus: string) => {
     try {
-      const response = await fetch(`/api/bordereaux/${bordereauId}/gestionnaire-update-status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          newStatus,
-          comment: `Status changed to ${newStatus} by ${isGestionnaire ? 'Gestionnaire' : 'Chef d\'équipe'}`
-        })
+      const response = await LocalAPI.post(`/bordereaux/${bordereauId}/gestionnaire-update-status`, {
+        newStatus,
+        comment: `Status changed to ${newStatus} by ${isGestionnaire ? 'Gestionnaire' : 'Chef d\'équipe'}`
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Status updated:', result.message);
-        setShowStatusModal(false);
-        await loadData(); // Refresh data
-      } else {
-        const error = await response.json();
-        console.error('❌ Status update failed:', error.message);
-        alert(`Erreur: ${error.message}`);
-      }
-    } catch (error) {
-      console.error('❌ Network error:', error);
-      alert('Erreur de connexion');
+      console.log('✅ Status updated:', response.data.message);
+      setShowStatusModal(false);
+      await loadData(); // Refresh data
+    } catch (error: any) {
+      console.error('❌ Status update failed:', error);
+      const errorMessage = error.response?.data?.message || 'Erreur de connexion';
+      alert(`Erreur: ${errorMessage}`);
     }
   };
 
   const openStatusModal = (bordereau: any) => {
     setSelectedBordereau(bordereau);
     setShowStatusModal(true);
+  };
+
+  const openStatsModal = (type: 'en-cours' | 'traites' | 'retournes') => {
+    if (!isGestionnaire) return;
+    
+    let data: any[] = [];
+    switch (type) {
+      case 'en-cours':
+        data = userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut));
+        break;
+      case 'traites':
+        data = userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut));
+        break;
+      case 'retournes':
+        data = userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE');
+        break;
+    }
+    
+
+    
+    setStatsModalType(type);
+    setStatsModalData(data);
+    setShowStatsModal(true);
   };
 
   const getTabData = () => {
@@ -195,73 +224,124 @@ function ChefEquipeBordereaux() {
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="chef-equipe-stats">
-          <div className="chef-equipe-stat-card">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(255, 152, 0, 0.2)' }}>
-                <span style={{ fontSize: '32px' }}>📋</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>{unassignedBordereaux.length}</div>
-                <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Non affectés</div>
-              </div>
-            </div>
-          </div>
-          <div className="chef-equipe-stat-card">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
-                <span style={{ fontSize: '32px' }}>⏳</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>
-                  {[...teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)), ...userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut))].length}
+        {/* Quick Stats - Gestionnaire Only */}
+        {isGestionnaire && (
+          <div className="chef-equipe-stats">
+            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('en-cours')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
+                  <span style={{ fontSize: '32px' }}>⏳</span>
                 </div>
-                <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
-              </div>
-            </div>
-          </div>
-          <div className="chef-equipe-stat-card">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
-                <span style={{ fontSize: '32px' }}>✅</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
-                  {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                <div>
+                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>
+                    {userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
                 </div>
-                <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
               </div>
             </div>
-          </div>
-          <div className="chef-equipe-stat-card">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(156, 39, 176, 0.2)' }}>
-                <span style={{ fontSize: '32px' }}>👥</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#9c27b0', marginBottom: '4px' }}>
-                  {isGestionnaire ? 1 : gestionnaires.length || 3}
+            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('traites')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
+                  <span style={{ fontSize: '32px' }}>✅</span>
                 </div>
-                <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Gestionnaires</div>
+                <div>
+                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
+                    {userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
+                </div>
+              </div>
+            </div>
+            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('retournes')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ background: 'linear-gradient(135deg, #ffebee 0%, #f44336 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(244, 67, 54, 0.2)' }}>
+                  <span style={{ fontSize: '32px' }}>↩️</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#f44336', marginBottom: '4px' }}>
+                    {userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE').length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Retournés</div>
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
+        
+        {/* Chef d'équipe stats (unchanged) */}
+        {!isGestionnaire && (
+          <div className="chef-equipe-stats">
+            <div className="chef-equipe-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(255, 152, 0, 0.2)' }}>
+                  <span style={{ fontSize: '32px' }}>📋</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>{unassignedBordereaux.length}</div>
+                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Non affectés</div>
+                </div>
+              </div>
+            </div>
+            <div className="chef-equipe-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
+                  <span style={{ fontSize: '32px' }}>⏳</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>
+                    {[...teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)), ...userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut))].length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
+                </div>
+              </div>
+            </div>
+            <div className="chef-equipe-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
+                  <span style={{ fontSize: '32px' }}>✅</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
+                    {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
+                </div>
+              </div>
+            </div>
+            <div className="chef-equipe-stat-card">
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(156, 39, 176, 0.2)' }}>
+                  <span style={{ fontSize: '32px' }}>👥</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#9c27b0', marginBottom: '4px' }}>
+                    {gestionnaires.length || 3}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Gestionnaires</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {/* Corbeille Globale */}
-        <div className="chef-equipe-corbeille">
-          <div className="chef-equipe-corbeille-header">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div className="chef-equipe-corbeille-icon">
-                📥
-              </div>
-              <div>
-                <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Corbeille Globale</h2>
-                <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>Gestion et affectation des dossiers</p>
+        {/* Corbeille Globale - Chef d'équipe only */}
+        {!isGestionnaire && (
+          <div className="chef-equipe-corbeille">
+            <div className="chef-equipe-corbeille-header">
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div className="chef-equipe-corbeille-icon">
+                  📥
+                </div>
+                <div>
+                  <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Corbeille Globale</h2>
+                  <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>Gestion et affectation des dossiers</p>
+                </div>
               </div>
             </div>
-          </div>
 
           {/* Tabs */}
           <div className="chef-equipe-tabs">
@@ -582,43 +662,77 @@ function ChefEquipeBordereaux() {
             </>
           )}
         </div>
+        )}
 
-        {/* Team Performance */}
+        {/* Performance Section */}
         <div className="chef-equipe-performance">
           <div className="chef-equipe-perf-header">
             <div className="chef-equipe-perf-icon">
               📊
             </div>
             <div>
-              <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Performance de l'Équipe</h2>
+              <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>
+                {isGestionnaire ? 'Performance Gestionnaire' : 'Performance de l\'\u00c9quipe'}
+              </h2>
               <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>Suivi et analyse des performances</p>
             </div>
           </div>
           <div className="chef-equipe-perf-grid">
-            <div className="chef-equipe-perf-card blue">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
-                {teamBordereaux.length}
-              </div>
-              <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total dossiers équipe</div>
-            </div>
-            <div className="chef-equipe-perf-card green">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
-                {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
-              </div>
-              <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>Dossiers traités</div>
-            </div>
-            <div className="chef-equipe-perf-card orange">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
-                {Math.round(gestionnaires.reduce((acc, g) => acc + (g.workload / g.capacity), 0) / gestionnaires.length * 100) || 0}%
-              </div>
-              <div style={{ fontSize: '16px', color: '#f57c00', fontWeight: 'bold' }}>Charge moyenne équipe</div>
-            </div>
-            <div className="chef-equipe-perf-card purple">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
-                {teamBordereaux.length > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / teamBordereaux.length) * 100) : 0}%
-              </div>
-              <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
-            </div>
+            {isGestionnaire ? (
+              <>
+                <div className="chef-equipe-perf-card blue">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
+                    {userBordereaux.length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total dossiers gestionnaire</div>
+                </div>
+                <div className="chef-equipe-perf-card green">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
+                    {userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>Dossiers traités par le gestionnaire</div>
+                </div>
+                <div className="chef-equipe-perf-card orange">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
+                    {Math.round((userBordereaux.length / 20) * 100) || 0}%
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#f57c00', fontWeight: 'bold' }}>Charge moyenne du gestionnaire</div>
+                </div>
+                <div className="chef-equipe-perf-card purple">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
+                    {userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite du gestionnaire</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="chef-equipe-perf-card blue">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
+                    {teamBordereaux.length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total dossiers équipe</div>
+                </div>
+                <div className="chef-equipe-perf-card green">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
+                    {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>Dossiers traités</div>
+                </div>
+                <div className="chef-equipe-perf-card orange">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
+                    {Math.round(gestionnaires.reduce((acc, g) => acc + (g.workload / g.capacity), 0) / gestionnaires.length * 100) || 0}%
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#f57c00', fontWeight: 'bold' }}>Charge moyenne équipe</div>
+                </div>
+                <div className="chef-equipe-perf-card purple">
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
+                    {teamBordereaux.length > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / teamBordereaux.length) * 100) : 0}%
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -727,6 +841,303 @@ function ChefEquipeBordereaux() {
               >
                 Annuler
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Stats Modal for Gestionnaire */}
+      {showStatsModal && isGestionnaire && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            width: '90%',
+            maxWidth: '1000px',
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#f8f9fa'
+            }}>
+              <div>
+                <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>
+                  {statsModalType === 'en-cours' ? '⏳ Dossiers En Cours' : 
+                   statsModalType === 'traites' ? '✅ Dossiers Traités' : 
+                   '↩️ Dossiers Retournés'}
+                </h2>
+                <p style={{ color: '#666', fontSize: '14px', margin: '4px 0 0 0' }}>
+                  {statsModalData.length} dossier(s) trouvé(s)
+                </p>
+              </div>
+              <button
+                onClick={() => setShowStatsModal(false)}
+                style={{
+                  background: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div style={{ padding: '20px', maxHeight: '60vh', overflow: 'auto' }}>
+              {statsModalData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                    {statsModalType === 'en-cours' ? '⏳' : 
+                     statsModalType === 'traites' ? '✅' : '↩️'}
+                  </div>
+                  <h3 style={{ fontSize: '20px', color: '#666', marginBottom: '8px' }}>Aucun dossier</h3>
+                  <p style={{ color: '#999' }}>Aucun dossier {statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'} pour le moment.</p>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #d52b36' }}>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Référence</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BS</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {statsModalData.map((bordereau, index) => (
+                        <tr key={bordereau.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc' }}>
+                            {bordereau.reference}
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            {bordereau.client?.name || 'Client inconnu'}
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <span style={{
+                              background: bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? '#4caf50' : 
+                                         bordereau.statut === 'RETOURNE' ? '#f44336' : '#2196f3',
+                              color: 'white',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: 'bold'
+                            }}>
+                              {bordereau.statut}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            {new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <span style={{
+                              background: '#e3f2fd',
+                              color: '#1976d2',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: 'bold'
+                            }}>
+                              {bordereau.nombreBS || 0} BS
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <span style={{
+                              background: '#fff3e0',
+                              color: '#f57c00',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: 'bold'
+                            }}>
+                              {bordereau.delaiReglement || 30}j
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={() => {
+                                  setSelectedBordereau(bordereau);
+                                  setShowStatusModal(true);
+                                  setShowStatsModal(false);
+                                }}
+                                style={{
+                                  background: '#2196f3',
+                                  color: 'white',
+                                  border: 'none',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                ✏️ Modifier
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Stats Modal */}
+      {showStatsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            width: '90%',
+            maxWidth: '1200px',
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'
+          }}>
+            <div style={{
+              padding: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#f8f9fa'
+            }}>
+              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
+                Dossiers {statsModalType === 'en-cours' ? 'En Cours' : statsModalType === 'traites' ? 'Traités' : 'Retournés'} ({statsModalData.length})
+              </h2>
+              <button 
+                onClick={() => setShowStatsModal(false)}
+                style={{
+                  background: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '8px 16px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+            
+            <div style={{ padding: '20px', maxHeight: '60vh', overflowY: 'auto' }}>
+              {statsModalData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                  <p>Aucun dossier {statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'}</p>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #d52b36' }}>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Référence</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BS</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {statsModalData.map((bordereau, index) => (
+                        <tr key={bordereau.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{bordereau.reference}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{bordereau.client?.name || 'N/A'}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <span style={{
+                              background: bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? '#4caf50' : 
+                                         bordereau.statut === 'RETOURNE' ? '#f44336' : '#2196f3',
+                              color: 'white',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '12px'
+                            }}>
+                              {bordereau.statut}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
+                              {bordereau.nombreBS || 0} BS
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
+                              {bordereau.delaiReglement || 30} jours
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <button
+                              onClick={() => {
+                                setSelectedBordereau(bordereau);
+                                setShowStatsModal(false);
+                                setShowStatusModal(true);
+                              }}
+                              style={{
+                                background: '#2196f3',
+                                color: 'white',
+                                border: 'none',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Modifier
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

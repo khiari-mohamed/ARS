@@ -3,6 +3,7 @@ import { message } from 'antd';
 import { fetchUserBordereaux } from "../../services/bordereauxService";
 import BordereauCard from "../../components/BordereauCard";
 import { useAuth } from '../../contexts/AuthContext';
+import { LocalAPI } from '../../services/axios';
 import "../../styles/gestionnaire.css";
 
 function GestionnaireBordereaux() {
@@ -27,35 +28,22 @@ function GestionnaireBordereaux() {
     const loadingMessage = message.loading('Traitement en cours...', 0);
     
     try {
-      const response = await fetch('/api/workflow/gestionnaire/process', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ 
-          bordereauId, 
-          action: 'TRAITE'
-        })
+      const response = await LocalAPI.post('/workflow/gestionnaire/process', {
+        bordereauId, 
+        action: 'TRAITE'
       });
       
       loadingMessage();
-      
-      if (response.ok) {
-        const result = await response.json();
-        message.success(result.message || 'Bordereau traité avec succès');
-        // Refresh data
-        if (userId) {
-          fetchUserBordereaux(userId).then(setUserBordereaux);
-        }
-      } else {
-        const errorData = await response.json();
-        message.error(errorData.message || 'Erreur lors du traitement');
+      message.success(response.data.message || 'Bordereau traité avec succès');
+      // Refresh data
+      if (userId) {
+        fetchUserBordereaux(userId).then(setUserBordereaux);
       }
-    } catch (error) {
+    } catch (error: any) {
       loadingMessage();
       console.error('Process bordereau failed:', error);
-      message.error('Erreur de connexion');
+      const errorMessage = error.response?.data?.message || 'Erreur de connexion';
+      message.error(errorMessage);
     }
   };
 
@@ -66,42 +54,42 @@ function GestionnaireBordereaux() {
     const loadingMessage = message.loading('Retour en cours...', 0);
     
     try {
-      const response = await fetch('/api/workflow/gestionnaire/process', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ 
-          bordereauId, 
-          action: 'RETOURNE_CHEF',
-          reason 
-        })
+      const response = await LocalAPI.post('/workflow/gestionnaire/process', {
+        bordereauId, 
+        action: 'RETOURNE_CHEF',
+        reason 
       });
       
       loadingMessage();
-      
-      if (response.ok) {
-        const result = await response.json();
-        message.success(result.message || 'Dossier retourné au chef');
-        // Refresh data
-        if (userId) {
-          fetchUserBordereaux(userId).then(setUserBordereaux);
-        }
-      } else {
-        const errorData = await response.json();
-        message.error(errorData.message || 'Erreur lors du retour');
+      message.success(response.data.message || 'Dossier retourné au chef');
+      // Refresh data
+      if (userId) {
+        fetchUserBordereaux(userId).then(setUserBordereaux);
       }
-    } catch (error) {
+    } catch (error: any) {
       loadingMessage();
       console.error('Return to chef failed:', error);
-      message.error('Erreur de connexion');
+      const errorMessage = error.response?.data?.message || 'Erreur de connexion';
+      message.error(errorMessage);
     }
   };
 
   useEffect(() => {
     if (userId) {
-      fetchUserBordereaux(userId).then(setUserBordereaux);
+      console.log('🔍 Loading bordereaux for gestionnaire:', userId);
+      fetchUserBordereaux(userId).then(data => {
+        console.log('📋 Received bordereaux data:', data);
+        console.log('📊 Status breakdown:', {
+          total: data?.length || 0,
+          enCours: data?.filter((b: any) => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length || 0,
+          traites: data?.filter((b: any) => ['TRAITE', 'CLOTURE'].includes(b.statut)).length || 0,
+          retournes: data?.filter((b: any) => b.statut === 'REJETE' || b.statut === 'RETOURNE').length || 0
+        });
+        setUserBordereaux(data || []);
+      }).catch(error => {
+        console.error('❌ Error loading bordereaux:', error);
+        setUserBordereaux([]);
+      });
     }
   }, [userId]);
 
@@ -169,7 +157,7 @@ function GestionnaireBordereaux() {
                   </div>
                   <div>
                     <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>
-                      {userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
+                      {userBordereaux.filter((b: any) => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
                     </div>
                     <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>À traiter</div>
                   </div>
@@ -182,7 +170,7 @@ function GestionnaireBordereaux() {
                   </div>
                   <div>
                     <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
-                      {userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                      {userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
                     </div>
                     <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
                   </div>
@@ -195,9 +183,9 @@ function GestionnaireBordereaux() {
                   </div>
                   <div>
                     <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#f44336', marginBottom: '4px' }}>
-                      {userBordereaux.filter(b => b.statut === 'EN_DIFFICULTE').length}
+                      {userBordereaux.filter((b: any) => b.statut === 'REJETE' || b.statut === 'RETOURNE').length}
                     </div>
-                    <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En difficulté</div>
+                    <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Retournés</div>
                   </div>
                 </div>
               </div>

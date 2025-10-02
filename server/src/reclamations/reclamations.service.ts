@@ -195,6 +195,7 @@ export class ReclamationsService {
       department: dto.department,
       contractId: dto.contractId || undefined,
       processId: dto.processId || undefined,
+      typologie: dto.typologie || undefined,
       client: dto.clientId ? { connect: { id: dto.clientId } } : undefined,
       document: dto.documentId ? { connect: { id: dto.documentId } } : undefined,
       bordereau: dto.bordereauId ? { connect: { id: dto.bordereauId } } : undefined,
@@ -223,16 +224,27 @@ export class ReclamationsService {
     this.checkRole(user, 'update');
     const old = await this.prisma.reclamation.findUnique({ where: { id } });
     if (!old) throw new NotFoundException('Reclamation not found');
+    
+    const updateData: any = {
+      ...dto,
+      department: dto.department ?? old.department,
+      contractId: dto.contractId ?? old.contractId,
+      processId: dto.processId ?? old.processId,
+      assignedToId: dto.assignedToId ?? old.assignedToId,
+    };
+    
+    // Only allow conformite update by authorized roles
+    if (dto.conformite !== undefined && ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
+      updateData.conformite = dto.conformite;
+      updateData.conformiteUpdatedBy = user.id;
+      updateData.conformiteUpdatedAt = new Date();
+    }
+    
     const reclamation = await this.prisma.reclamation.update({
       where: { id },
-      data: {
-        ...dto,
-        department: dto.department ?? old.department,
-        contractId: dto.contractId ?? old.contractId,
-        processId: dto.processId ?? old.processId,
-        assignedToId: dto.assignedToId ?? old.assignedToId,
-      },
+      data: updateData,
     });
+    
     await this.prisma.reclamationHistory.create({
       data: {
         reclamationId: id,
@@ -243,6 +255,7 @@ export class ReclamationsService {
         description: dto.description,
       },
     });
+    
     // Escalation/alert logic
     if (dto.status === 'ESCALATED') {
       await this.sendNotification('ESCALATED_RECLAMATION', reclamation);

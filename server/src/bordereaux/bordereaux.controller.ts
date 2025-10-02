@@ -827,7 +827,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/corbeille')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeCorbeille(@Req() req) {
     const user = req.user;
     
@@ -1147,7 +1147,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/dashboard-stats')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeDashboardStats(@Req() req) {
     const [clients, bordereaux, documents, reclamations, gestionnaires] = await Promise.all([
       this.prisma.client.findMany({ select: { id: true, name: true } }),
@@ -1263,7 +1263,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/dashboard-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeDashboardDossiers(@Req() req) {
     const [documents, bordereaux] = await Promise.all([
       this.prisma.document.findMany({
@@ -1341,8 +1341,15 @@ export class BordereauxController {
     return statusMap[status] || 'Nouveau';
   }
 
+  @Get('chef-equipe/tableau-bord')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  async getChefEquipeTableauBord(@Req() req) {
+    const dossiers = await this.getChefEquipeDashboardDossiers(req);
+    return { dossiers };
+  }
+
   @Get('chef-equipe/gestionnaire-assignments')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getGestionnaireAssignments(@Req() req) {
     const gestionnaires = await this.prisma.user.findMany({
       where: { role: 'GESTIONNAIRE' },
