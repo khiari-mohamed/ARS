@@ -147,8 +147,17 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
               )}
               <List.Item.Meta
                 avatar={<FilePdfOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
-                title={doc.name || 'Document'}
-                description={`Type: ${doc.type || 'N/A'} | Uploadé le: ${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : 'N/A'}`}
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{doc.name || 'Document'}</span>
+                    {doc.assignedToUserId && (
+                      <Tag icon={<UserOutlined />} color="green">
+                        {doc.assignedTo?.fullName || 'Assigné'}
+                      </Tag>
+                    )}
+                  </div>
+                }
+                description={`Type: ${doc.type || 'N/A'} | Uploadé le: ${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : 'N/A'}${doc.assignedToUserId ? ' | Assigné' : ' | Non assigné'}`}
               />
             </div>
           </List.Item>
@@ -180,6 +189,12 @@ interface Dossier {
   bulletinSoins: BS[];
   assignedToUserId?: string;
   documents?: any[];
+  documentAssignments?: {
+    total: number;
+    assigned: number;
+    unassigned: number;
+    assignedTo: string[];
+  };
 }
 
 interface DossiersListProps {
@@ -214,40 +229,70 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   const loadDossiers = async () => {
     setLoading(true);
     try {
-      const response = await LocalAPI.get('/bordereaux', {
-        params: {
-          ...params,
-          include: 'bulletinSoins,client',
-          archived: false // Only show non-archived bordereaux
-        }
-      });
+      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers');
+      const items = response.data || [];
       
-      const data = response.data;
-      const items = Array.isArray(data) ? data : data.items || [];
+      // Get additional document details for each dossier
+      const dossiersWithDocuments = await Promise.all(
+        items.map(async (item: any) => {
+          try {
+            const docResponse = await LocalAPI.get(`/bordereaux/${item.id}`, {
+              params: { include: 'documents,documents.assignedTo' }
+            });
+            const documents = docResponse.data.documents || [];
+            const assignedDocs = documents.filter((doc: any) => doc.assignedToUserId);
+            const assignedToUsers = [...new Set(assignedDocs.map((doc: any) => doc.assignedTo?.fullName).filter(Boolean))];
+            
+            return {
+              id: item.id,
+              reference: item.reference,
+              client: { name: item.client },
+              statut: item.statut,
+              dateReception: item.date,
+              nombreBS: documents.length,
+              bulletinSoins: [],
+              assignedToUserId: item.assignedToUserId,
+              documents: documents,
+              documentAssignments: {
+                total: documents.length,
+                assigned: assignedDocs.length,
+                unassigned: documents.length - assignedDocs.length,
+                assignedTo: assignedToUsers
+              }
+            };
+          } catch (error) {
+            console.error(`Error loading documents for ${item.id}:`, error);
+            return {
+              id: item.id,
+              reference: item.reference,
+              client: { name: item.client },
+              statut: item.statut,
+              dateReception: item.date,
+              nombreBS: 0,
+              bulletinSoins: [],
+              assignedToUserId: item.assignedToUserId,
+              documents: [],
+              documentAssignments: {
+                total: 0,
+                assigned: 0,
+                unassigned: 0,
+                assignedTo: []
+              }
+            };
+          }
+        })
+      );
       
-      // Map the response to match our interface
-      const mappedDossiers = items.map((item: any) => ({
-        id: item.id,
-        reference: item.reference,
-        client: item.client,
-        statut: item.statut,
-        dateReception: item.dateReception,
-        nombreBS: item.nombreBS || 0,
-        bulletinSoins: item.bulletinSoins || item.BulletinSoin || [],
-        assignedToUserId: item.assignedToUserId
-      }));
-      
-      setDossiers(mappedDossiers);
+      setDossiers(dossiersWithDocuments);
       setPagination(prev => ({
         ...prev,
-        total: data.total || items.length,
-        current: data.page || 1,
-        pageSize: data.limit || 20
+        total: dossiersWithDocuments.length,
+        current: 1,
+        pageSize: 20
       }));
     } catch (error) {
       console.error('Error loading dossiers:', error);
       message.error('Erreur lors du chargement des dossiers');
-      // Set empty data on error
       setDossiers([]);
     } finally {
       setLoading(false);
@@ -504,7 +549,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       key: 'bs',
       width: 80,
       render: (_: any, dossier: Dossier) => (
-        <Badge count={dossier.bulletinSoins?.length || 0} showZero />
+        <Badge count={dossier.nombreBS || 0} showZero />
       )
     },
     {
@@ -517,16 +562,53 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     {
       title: 'Assigné à',
       key: 'assignedTo',
-      width: 150,
+      width: 200,
       render: (_: any, dossier: Dossier) => {
-        const assignedUser = gestionnaires.find(g => g.id === dossier.assignedToUserId);
-        return assignedUser ? (
-          <Tag icon={<UserOutlined />} color="blue">
-            {assignedUser.fullName}
-          </Tag>
-        ) : (
-          <Text type="secondary">Non assigné</Text>
-        );
+        const documents = dossier.documents || [];
+        
+        if (documents.length === 0) {
+          return <Text type="secondary">Aucun document</Text>;
+        }
+        
+        const assignedDocs = documents.filter(doc => doc.assignedToUserId);
+        const assignedToUsers = [...new Set(assignedDocs.map(doc => doc.assignedTo?.fullName || 'Assigné').filter(Boolean))];
+        
+        if (assignedDocs.length === 0) {
+          return <Text type="secondary">Non assigné</Text>;
+        }
+        
+        if (assignedDocs.length === documents.length) {
+          if (assignedToUsers.length === 1) {
+            return (
+              <Tag icon={<UserOutlined />} color="green">
+                {assignedToUsers[0]}
+              </Tag>
+            );
+          } else {
+            return (
+              <Tooltip title={assignedToUsers.join(', ')}>
+                <Tag icon={<UserOutlined />} color="green">
+                  {assignedToUsers.length} gestionnaires
+                </Tag>
+              </Tooltip>
+            );
+          }
+        } else {
+          return (
+            <div>
+              <Tag color="orange">
+                {assignedDocs.length}/{documents.length} assignés
+              </Tag>
+              {assignedToUsers.length > 0 && (
+                <Tooltip title={assignedToUsers.join(', ')}>
+                  <Tag icon={<UserOutlined />} color="blue">
+                    {assignedToUsers.length} gest.
+                  </Tag>
+                </Tooltip>
+              )}
+            </div>
+          );
+        }
       }
     },
     {
@@ -698,8 +780,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
               <Text strong>Client:</Text> {selectedDossier.client?.name}<br/>
               <Text strong>Statut:</Text> <Tag color={getStatusColor(selectedDossier.statut)}>{selectedDossier.statut}</Tag><br/>
               <Text strong>Date Réception:</Text> {new Date(selectedDossier.dateReception).toLocaleDateString('fr-FR')}<br/>
-              <Text strong>Nombre BS:</Text> {selectedDossier.nombreBS}<br/>
-              <Text strong>Assigné à:</Text> {gestionnaires.find(g => g.id === selectedDossier.assignedToUserId)?.fullName || 'Non assigné'}
+              <Text strong>Nombre Documents:</Text> {selectedDossier.nombreBS}
             </div>
             
             <DocumentsViewer dossierId={selectedDossier.id} />

@@ -6,6 +6,7 @@ import { LocalAPI } from '../services/axios';
 import io from 'socket.io-client';
 import { getSocketUrl } from '../utils/getSocketUrl';
 import { Sidebar } from '../components/Sidebar';
+import OVValidationModal from '../components/Finance/OVValidationModal';
 
 import { IconButton, Badge, Menu, MenuItem, Typography, Box } from '@mui/material';
 import { Notifications as NotificationsIcon } from '@mui/icons-material';
@@ -132,6 +133,9 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'ASSIGNMENT_FAILURE': return '❌';
       case 'SLA_BREACH': return '🔴';
       case 'CUSTOM_NOTIFICATION': return '💬';
+      case 'OV_PENDING_VALIDATION': return '💰';
+      case 'OV_VALIDATED': return '✅';
+      case 'OV_REJECTED': return '❌';
       case 'reclamation': 
         if (level === 'error') return '🚨';
         if (level === 'warning') return '⚠️';
@@ -142,6 +146,24 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
+  
+  // OV Validation Modal state
+  const [validationModalOpen, setValidationModalOpen] = useState(false);
+  const [selectedOV, setSelectedOV] = useState<{ id: string; reference: string } | null>(null);
+  
+  const handleNotificationClick = (notif: NotificationItem, index: number) => {
+    // EXACT SPEC: Open validation modal for OV_PENDING_VALIDATION notifications
+    if (notif._type === 'OV_PENDING_VALIDATION' && notif.data?.ordreVirementId) {
+      setSelectedOV({
+        id: notif.data.ordreVirementId,
+        reference: notif.data.reference || 'N/A'
+      });
+      setValidationModalOpen(true);
+      setAnchorEl(null);
+    } else {
+      markAsRead(index);
+    }
+  };
 
   return (
     <div className={`layout-root${sidebarOpen ? "" : " sidebar-collapsed"}`}>
@@ -197,7 +219,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
               {notifications.map((notif, i) => (
                 <MenuItem 
                   key={notif.id || i} 
-                  onClick={() => markAsRead(i)}
+                  onClick={() => handleNotificationClick(notif, i)}
                   sx={{ 
                     opacity: notif.read ? 0.6 : 1,
                     backgroundColor: notif.read ? 'transparent' : 'rgba(25, 118, 210, 0.08)',
@@ -283,6 +305,39 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       }}>
         <Outlet />
       </main>
+      
+      {/* OV Validation Modal */}
+      {selectedOV && (
+        <OVValidationModal
+          open={validationModalOpen}
+          onClose={() => {
+            setValidationModalOpen(false);
+            setSelectedOV(null);
+          }}
+          ovId={selectedOV.id}
+          ovReference={selectedOV.reference}
+          onValidated={() => {
+            // Refresh notifications after validation
+            if (user?.id) {
+              LocalAPI.get(`/users/${user.id}/notifications`)
+                .then(({ data }) => {
+                  if (Array.isArray(data)) {
+                    setNotifications(data.map((n: any) => ({
+                      id: n.id,
+                      message: n.message || n.title,
+                      read: n.read,
+                      _type: n.type,
+                      title: n.title,
+                      createdAt: n.createdAt,
+                      data: n.data
+                    })));
+                  }
+                })
+                .catch(() => {});
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -4,12 +4,12 @@ import { VirementStatus } from '../../types/finance';
 const VirementStatusTag: React.FC<{ status: VirementStatus }> = ({ status }) => (
   <span
     className={
-      status === 'confirmed'
+      status === 'EXECUTE'
         ? 'status-badge confirmed'
         : 'status-badge pending'
     }
   >
-    {status === 'confirmed' ? 'Confirmé' : 'En attente'}
+    {status === 'EXECUTE' ? 'Exécuté' : status}
   </span>
 );
 

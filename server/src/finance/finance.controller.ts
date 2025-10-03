@@ -17,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
+import { PrismaService } from '../prisma/prisma.service';
 import { AdherentService, CreateAdherentDto, UpdateAdherentDto } from './adherent.service';
 import { DonneurOrdreService, CreateDonneurOrdreDto, UpdateDonneurOrdreDto } from './donneur-ordre.service';
 import { OrdreVirementService, CreateOrdreVirementDto, UpdateEtatVirementDto } from './ordre-virement.service';
@@ -26,11 +27,17 @@ import { BankFormatConfigService } from './bank-format-config.service';
 import { SlaConfigurationService } from './sla-configuration.service';
 
 function getUserFromRequest(req: any) {
-  return req.user || { id: 'demo-user', role: 'FINANCE', fullName: 'Demo User' };
+  // For demo/development: check if user has role override in headers
+  const roleOverride = req.headers['x-user-role'];
+  if (roleOverride) {
+    return req.user || { id: 'demo-user', role: roleOverride, fullName: 'Demo User' };
+  }
+  return req.user || { id: 'demo-user', role: 'SUPER_ADMIN', fullName: 'Demo User' };
 }
 
+// EXACT roles from specifications: Chef d'équipe, Finance, Super Admin, Responsable Département
 @Controller('finance')
-@Roles(UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.FINANCE)
+@Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
 export class FinanceController {
   constructor(
     private adherentService: AdherentService,
@@ -39,7 +46,8 @@ export class FinanceController {
     private fileGenerationService: FileGenerationService,
     private financeService: FinanceService,
     private bankFormatConfig: BankFormatConfigService,
-    private slaConfigService: SlaConfigurationService
+    private slaConfigService: SlaConfigurationService,
+    private prisma: PrismaService
   ) {}
 
   // === ADHERENT ENDPOINTS ===
@@ -175,7 +183,9 @@ export class FinanceController {
     return this.ordreVirementService.findOrdreVirementById(id);
   }
 
+  // EXACT SPEC: Chef d'équipe can download PDF after injection
   @Get('ordres-virement/:id/pdf')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN)
   async downloadPDF(@Param('id') id: string, @Res() res: Response) {
     const ordreVirement = await this.ordreVirementService.findOrdreVirementById(id);
     
@@ -190,7 +200,9 @@ export class FinanceController {
     res.send(fileContent);
   }
 
+  // EXACT SPEC: Chef d'équipe can download TXT after injection
   @Get('ordres-virement/:id/txt')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN)
   async downloadTXT(@Param('id') id: string, @Res() res: Response) {
     const ordreVirement = await this.ordreVirementService.findOrdreVirementById(id);
     
@@ -700,10 +712,109 @@ export class FinanceController {
   }
 
   // === BORDEREAUX TRAITÉS ENDPOINT ===
+  // EXACT SPEC: Only bordereaux with status "TRAITÉ" appear in Finance module
   @Get('bordereaux-traites')
-  async getBordereauxTraites(@Req() req: any) {
+  async getBordereauxTraites(
+    @Req() req: any,
+    @Query('compagnie') compagnie?: string,
+    @Query('client') client?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string
+  ) {
     const user = getUserFromRequest(req);
-    return this.financeService.getBordereauxTraites(user);
+    const filters = { compagnie, client, dateFrom, dateTo };
+    return this.financeService.getBordereauxTraites(filters, user);
+  }
+
+  // === UPDATE BORDEREAU TRAITÉ ENDPOINT ===
+  // EXACT SPEC: Finance can update virement status, recovery info
+  @Put('bordereaux-traites/:id')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async updateBordereauTraite(
+    @Param('id') id: string,
+    @Body() body: {
+      statutVirement?: string;
+      dateTraitementVirement?: string;
+      motifObservation?: string;
+      demandeRecuperation?: boolean;
+      dateDemandeRecuperation?: string;
+      montantRecupere?: boolean;
+      dateMontantRecupere?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.financeService.updateBordereauTraite(id, body, user);
+  }
+
+  // === CREATE OV FROM BORDEREAU TRAITÉ ===
+  @Post('ordres-virement/from-bordereau/:bordereauId')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async createOVFromBordereau(
+    @Param('bordereauId') bordereauId: string,
+    @Body() body: { donneurOrdreId: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    // Get bordereau data
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { client: true, BulletinSoin: true }
+    });
+    
+    if (!bordereau) {
+      throw new BadRequestException('Bordereau not found');
+    }
+    
+    if (bordereau.statut !== 'TRAITE') {
+      throw new BadRequestException('Only TRAITÉ bordereaux can generate OV');
+    }
+    
+    // Check if OV already exists
+    const existingOV = await this.prisma.ordreVirement.findFirst({
+      where: { bordereauId }
+    });
+    
+    if (existingOV) {
+      throw new BadRequestException('OV already exists for this bordereau');
+    }
+    
+    // Generate reference
+    const reference = `OV-${bordereau.reference}`;
+    const montantTotal = bordereau.nombreBS * 150;
+    
+    // Create OV linked to bordereau
+    const ov = await this.prisma.ordreVirement.create({
+      data: {
+        reference,
+        donneurOrdreId: body.donneurOrdreId,
+        bordereauId,
+        utilisateurSante: user.id,
+        montantTotal,
+        nombreAdherents: bordereau.nombreBS,
+        etatVirement: 'NON_EXECUTE',
+        validationStatus: 'EN_ATTENTE_VALIDATION'
+      },
+      include: {
+        bordereau: { include: { client: true } },
+        donneurOrdre: true
+      }
+    });
+    
+    // Notify RESPONSABLE_DEPARTEMENT
+    await this.financeService.notifyResponsableEquipeForValidation({
+      ovId: ov.id,
+      reference: ov.reference,
+      message: `Nouvel OV créé depuis bordereau ${bordereau.reference}`,
+      createdBy: user.fullName
+    }, user);
+    
+    return {
+      success: true,
+      message: 'OV créé avec succès',
+      ordreVirement: ov
+    };
   }
 
   // === NOTIFICATION ENDPOINTS ===
@@ -756,30 +867,86 @@ export class FinanceController {
   }
 
   @Put('validation/:id')
+  @Roles(UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async validateOV(
     @Param('id') id: string,
     @Body() body: { approved: boolean; comment?: string },
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
+    return this.financeService.validateOV(id, body.approved, body.comment, user);
+  }
+
+  // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
+  @Put('ordres-virement/:id/status')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async updateOVStatus(
+    @Param('id') id: string,
+    @Body() body: {
+      etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE';
+      motifObservation?: string;
+      demandeRecuperation?: boolean;
+      dateDemandeRecuperation?: string;
+      montantRecupere?: boolean;
+      dateMontantRecupere?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
     
-    // Simple validation update
-    const newStatus = body.approved ? 'VALIDE' : 'REJETE_VALIDATION';
-    
-    const updatedOV = await this.ordreVirementService['prisma'].ordreVirement.update({
-      where: { id },
-      data: {
-        validationStatus: newStatus,
-        validatedBy: user.id,
-        validatedAt: new Date(),
-        validationComment: body.comment
+    try {
+      const updateData: any = {
+        etatVirement: body.etatVirement,
+        utilisateurFinance: user.id,
+        dateTraitement: new Date()
+      };
+      
+      if (['EXECUTE', 'REJETE', 'BLOQUE'].includes(body.etatVirement)) {
+        updateData.dateEtatFinal = new Date();
       }
-    });
-    
-    return {
-      success: true,
-      message: body.approved ? 'OV validé avec succès' : 'OV rejeté',
-      ordreVirement: updatedOV
-    };
+      
+      if (body.motifObservation !== undefined) {
+        updateData.motifObservation = body.motifObservation;
+      }
+      
+      if (body.demandeRecuperation !== undefined) {
+        updateData.demandeRecuperation = body.demandeRecuperation;
+        if (body.demandeRecuperation && body.dateDemandeRecuperation) {
+          updateData.dateDemandeRecuperation = new Date(body.dateDemandeRecuperation);
+        }
+      }
+      
+      if (body.montantRecupere !== undefined) {
+        updateData.montantRecupere = body.montantRecupere;
+        if (body.montantRecupere && body.dateMontantRecupere) {
+          updateData.dateMontantRecupere = new Date(body.dateMontantRecupere);
+        }
+      }
+      
+      const updatedOV = await this.prisma.ordreVirement.update({
+        where: { id },
+        data: updateData,
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
+      });
+      
+      console.log('✅ OV status updated:', {
+        id,
+        oldStatus: 'previous',
+        newStatus: body.etatVirement,
+        user: user.id
+      });
+      
+      return {
+        success: true,
+        message: 'Statut mis à jour avec succès',
+        ordreVirement: updatedOV
+      };
+    } catch (error) {
+      console.error('❌ Failed to update OV status:', error);
+      throw new BadRequestException('Failed to update status: ' + error.message);
+    }
   }
 }

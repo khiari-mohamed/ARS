@@ -432,6 +432,19 @@ class FinanceService {
     return result;
   }
 
+  async updateBordereauTraite(id: string, data: {
+    statutVirement?: string;
+    dateTraitementVirement?: string;
+    motifObservation?: string;
+    demandeRecuperation?: boolean;
+    dateDemandeRecuperation?: string;
+    montantRecupere?: boolean;
+    dateMontantRecupere?: string;
+  }) {
+    const { data: result } = await LocalAPI.put(`/finance/bordereaux-traites/${id}`, data);
+    return result;
+  }
+
   async reinjectOV(id: string) {
     const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/reinject`);
     return data;
@@ -459,6 +472,27 @@ class FinanceService {
       approved,
       comment
     });
+    return data;
+  }
+
+  // === CREATE OV FROM BORDEREAU ===
+  async createOVFromBordereau(bordereauId: string, donneurOrdreId: string) {
+    const { data } = await LocalAPI.post(`/finance/ordres-virement/from-bordereau/${bordereauId}`, {
+      donneurOrdreId
+    });
+    return data;
+  }
+
+  // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
+  async updateOVStatus(id: string, statusData: {
+    etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE';
+    motifObservation?: string;
+    demandeRecuperation?: boolean;
+    dateDemandeRecuperation?: string;
+    montantRecupere?: boolean;
+    dateMontantRecupere?: string;
+  }) {
+    const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/status`, statusData);
     return data;
   }
 }

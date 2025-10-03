@@ -132,27 +132,22 @@ const SuiviVirementTab: React.FC = () => {
     if (!selectedSuivi) return;
 
     try {
-      // Update virement status
-      await financeService.updateEtatVirement(selectedSuivi.id, {
-        etatVirement: updateData.etatVirement,
-        commentaire: updateData.commentaire
+      // Update OV status with all fields in one call
+      await financeService.updateOVStatus(selectedSuivi.id, {
+        etatVirement: updateData.etatVirement as any,
+        motifObservation: updateData.motifObservation,
+        demandeRecuperation: updateData.demandeRecuperation,
+        dateDemandeRecuperation: updateData.demandeRecuperation ? updateData.dateDemandeRecuperation : undefined,
+        montantRecupere: updateData.montantRecupere,
+        dateMontantRecupere: updateData.montantRecupere ? updateData.dateMontantRecupere : undefined
       });
-      
-      // Update recovery information if user has permission
-      if (canModifyStatus()) {
-        await financeService.updateRecoveryInfo(selectedSuivi.id, {
-          motifObservation: updateData.motifObservation,
-          demandeRecuperation: updateData.demandeRecuperation,
-          dateDemandeRecuperation: updateData.demandeRecuperation ? updateData.dateDemandeRecuperation : undefined,
-          montantRecupere: updateData.montantRecupere,
-          dateMontantRecupere: updateData.montantRecupere ? updateData.dateMontantRecupere : undefined
-        });
-      }
       
       setUpdateOpen(false);
       loadSuiviVirements();
+      alert('Statut mis à jour avec succès!');
     } catch (error) {
       console.error('Failed to update virement:', error);
+      alert('Erreur lors de la mise à jour: ' + (error as any).message);
     }
   };
 
@@ -204,7 +199,7 @@ const SuiviVirementTab: React.FC = () => {
   };
   
   const canModifyStatus = () => {
-    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN';
+    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE';
   };
   
   const canReinject = () => {

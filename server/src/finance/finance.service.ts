@@ -235,9 +235,26 @@ export class FinanceService {
     if (!file) throw new BadRequestException('No file uploaded');
     
     try {
-      const clientId = body.clientId;
-      if (!clientId) {
-        throw new BadRequestException('Client ID is required');
+      let clientId = body.clientId;
+      
+      // Ensure client exists or create default
+      if (!clientId || clientId === 'default') {
+        const defaultClient = await this.prisma.client.findFirst();
+        if (defaultClient) {
+          clientId = defaultClient.id;
+        } else {
+          const newClient = await this.prisma.client.create({
+            data: {
+              name: 'ARS TUNISIE',
+              reglementDelay: 30,
+              reclamationDelay: 15,
+              email: 'contact@ars.tn',
+              phone: '00000000',
+              address: 'Tunis'
+            }
+          });
+          clientId = newClient.id;
+        }
       }
 
       const validationResult = await this.excelValidationService.validateExcelFile(file.buffer, clientId);
@@ -975,24 +992,39 @@ Document généré automatiquement par ARS`;
   }
 
   async updateRecoveryInfo(id: string, data: any, user: User) {
-    this.checkFinanceRole(user);
+    // EXACT SPEC: Only Finance and Super Admin can update recovery
+    if (!['FINANCE', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Finance service can update recovery information');
+    }
+    
     try {
       const updateData: any = {};
       
+      // EXACT SPEC: Demande de récupération: Oui/Non + date
       if (data.demandeRecuperation !== undefined) {
         updateData.demandeRecuperation = data.demandeRecuperation;
-        if (data.demandeRecuperation && data.dateDemandeRecuperation) {
-          updateData.dateDemandeRecuperation = new Date(data.dateDemandeRecuperation);
+        if (data.demandeRecuperation) {
+          updateData.dateDemandeRecuperation = data.dateDemandeRecuperation 
+            ? new Date(data.dateDemandeRecuperation) 
+            : new Date();
+        } else {
+          updateData.dateDemandeRecuperation = null;
         }
       }
       
+      // EXACT SPEC: Montant récupéré: Oui/Non + date
       if (data.montantRecupere !== undefined) {
         updateData.montantRecupere = data.montantRecupere;
-        if (data.montantRecupere && data.dateMontantRecupere) {
-          updateData.dateMontantRecupere = new Date(data.dateMontantRecupere);
+        if (data.montantRecupere) {
+          updateData.dateMontantRecupere = data.dateMontantRecupere 
+            ? new Date(data.dateMontantRecupere) 
+            : new Date();
+        } else {
+          updateData.dateMontantRecupere = null;
         }
       }
       
+      // EXACT SPEC: Motif/Observation (free field)
       if (data.motifObservation !== undefined) {
         updateData.motifObservation = data.motifObservation;
       }
@@ -1064,6 +1096,7 @@ Document généré automatiquement par ARS`;
   }
 
   async reinjectOV(id: string, user: User) {
+    // EXACT SPEC: Only Chef d'équipe and Super Admin
     if (!['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('Only Chef d\'équipe and Super Admin can reinject OV');
     }
@@ -1078,15 +1111,19 @@ Document généré automatiquement par ARS`;
         throw new NotFoundException('Ordre de virement not found');
       }
       
+      // EXACT SPEC: Only if status is REJETE
       if (ordreVirement.etatVirement !== 'REJETE') {
         throw new BadRequestException('Only rejected OV can be reinjected');
       }
       
+      // EXACT SPEC: Update dateCreation (injection date)
       const updatedOV = await this.prisma.ordreVirement.update({
         where: { id },
         data: {
           etatVirement: 'NON_EXECUTE',
-          dateCreation: new Date(), // Update injection date
+          dateCreation: new Date(), // Date injection updated
+          dateTraitement: null,
+          dateEtatFinal: null,
           commentaire: `Réinjection effectuée par ${user.fullName} le ${new Date().toLocaleDateString('fr-FR')}`
         },
         include: {
@@ -1095,9 +1132,16 @@ Document généré automatiquement par ARS`;
         }
       });
       
+      // Notify Finance service
+      if (updatedOV.bordereauId) {
+        await this.notifyFinanceTeam(updatedOV.bordereauId, `OV ${updatedOV.reference} réinjecté`, user);
+      }
+      
       await this.logAuditAction('REINJECT_OV', {
         userId: user.id,
-        ordreVirementId: id
+        ordreVirementId: id,
+        previousStatus: 'REJETE',
+        newStatus: 'NON_EXECUTE'
       });
       
       return {
@@ -1184,14 +1228,32 @@ Document généré automatiquement par ARS`;
     }
   }
 
-  async getBordereauxTraites(user: User) {
+  async getBordereauxTraites(filters: any, user: User) {
     this.checkFinanceRole(user);
     
     try {
+      const where: any = {
+        statut: 'TRAITE' // EXACT: Only TRAITÉ bordereaux
+      };
+      
+      // Apply filters
+      if (filters.compagnie || filters.client) {
+        where.client = {
+          name: {
+            contains: filters.compagnie || filters.client,
+            mode: 'insensitive'
+          }
+        };
+      }
+      
+      if (filters.dateFrom || filters.dateTo) {
+        where.dateCloture = {};
+        if (filters.dateFrom) where.dateCloture.gte = new Date(filters.dateFrom);
+        if (filters.dateTo) where.dateCloture.lte = new Date(filters.dateTo);
+      }
+      
       const bordereaux = await this.prisma.bordereau.findMany({
-        where: {
-          statut: 'TRAITE'
-        },
+        where,
         include: {
           client: true,
           ordresVirement: {
@@ -1203,18 +1265,162 @@ Document généré automatiquement par ARS`;
         orderBy: { dateCloture: 'desc' }
       });
       
-      return bordereaux.map(b => ({
-        id: b.id,
-        clientSociete: b.client.name,
-        referenceOV: b.ordresVirement[0]?.reference || 'N/A',
-        referenceBordereau: b.reference,
-        montantBordereau: b.nombreBS * 150, // Estimated amount
-        dateFinalisationBordereau: b.dateCloture,
-        dateInjection: b.ordresVirement[0]?.dateCreation || b.createdAt
-      }));
+      return bordereaux.map(b => {
+        const ov = b.ordresVirement[0];
+        return {
+          id: ov?.id || b.id, // Use OV id if exists, otherwise bordereau id
+          clientSociete: b.client.name,
+          referenceOV: ov?.reference || null,
+          referenceBordereau: b.reference,
+          montantBordereau: b.nombreBS * 150,
+          dateFinalisationBordereau: b.dateCloture,
+          dateInjection: ov?.dateCreation || null,
+          statutVirement: ov?.etatVirement || 'NON_EXECUTE',
+          dateTraitementVirement: ov?.dateTraitement || null,
+          motifObservation: ov?.motifObservation || null,
+          demandeRecuperation: ov?.demandeRecuperation || false,
+          dateDemandeRecuperation: ov?.dateDemandeRecuperation || null,
+          montantRecupere: ov?.montantRecupere || false,
+          dateMontantRecupere: ov?.dateMontantRecupere || null
+        };
+      });
     } catch (error) {
       console.error('Error fetching bordereaux traités:', error);
       throw new BadRequestException('Failed to fetch bordereaux traités');
+    }
+  }
+
+  async updateBordereauTraite(id: string, data: any, user: User) {
+    // EXACT SPEC: Only Finance and Super Admin
+    if (!['FINANCE', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Finance service can update bordereau traité');
+    }
+    
+    try {
+      // Find bordereau
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id },
+        include: {
+          ordresVirement: true,
+          client: true
+        }
+      });
+      
+      if (!bordereau) {
+        throw new NotFoundException('Bordereau not found');
+      }
+      
+      if (bordereau.statut !== 'TRAITE') {
+        throw new BadRequestException('Only TRAITÉ bordereaux can be updated in Finance module');
+      }
+      
+      // Find or create OrdreVirement for this bordereau
+      let ordreVirement = bordereau.ordresVirement[0];
+      
+      if (!ordreVirement) {
+        // Create OV if doesn't exist
+        const donneurs = await this.prisma.donneurOrdre.findMany({ where: { statut: 'ACTIF' }, take: 1 });
+        const donneurId = donneurs[0]?.id;
+        
+        if (!donneurId) {
+          throw new BadRequestException('No active donneur d\'ordre found');
+        }
+        
+        ordreVirement = await this.prisma.ordreVirement.create({
+          data: {
+            reference: `OV-${bordereau.reference}`,
+            donneurOrdreId: donneurId,
+            bordereauId: id,
+            utilisateurSante: user.id,
+            montantTotal: bordereau.nombreBS * 150,
+            nombreAdherents: bordereau.nombreBS,
+            etatVirement: 'NON_EXECUTE'
+          }
+        });
+      }
+      
+      // Update OrdreVirement with new data
+      const updateData: any = {};
+      
+      if (data.statutVirement) {
+        updateData.etatVirement = data.statutVirement;
+        updateData.utilisateurFinance = user.id;
+        updateData.dateTraitement = new Date();
+        
+        if (['EXECUTE', 'REJETE', 'BLOQUE'].includes(data.statutVirement)) {
+          updateData.dateEtatFinal = new Date();
+        }
+      }
+      
+      if (data.dateTraitementVirement) {
+        updateData.dateTraitement = new Date(data.dateTraitementVirement);
+      }
+      
+      if (data.motifObservation !== undefined) {
+        updateData.motifObservation = data.motifObservation;
+      }
+      
+      if (data.demandeRecuperation !== undefined) {
+        updateData.demandeRecuperation = data.demandeRecuperation;
+        if (data.demandeRecuperation) {
+          updateData.dateDemandeRecuperation = data.dateDemandeRecuperation 
+            ? new Date(data.dateDemandeRecuperation) 
+            : new Date();
+        } else {
+          updateData.dateDemandeRecuperation = null;
+        }
+      }
+      
+      if (data.montantRecupere !== undefined) {
+        updateData.montantRecupere = data.montantRecupere;
+        if (data.montantRecupere) {
+          updateData.dateMontantRecupere = data.dateMontantRecupere 
+            ? new Date(data.dateMontantRecupere) 
+            : new Date();
+        } else {
+          updateData.dateMontantRecupere = null;
+        }
+      }
+      
+      const updatedOV = await this.prisma.ordreVirement.update({
+        where: { id: ordreVirement.id },
+        data: updateData,
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
+      });
+      
+      await this.logAuditAction('UPDATE_BORDEREAU_TRAITE', {
+        userId: user.id,
+        bordereauId: id,
+        ordreVirementId: updatedOV.id,
+        changes: updateData
+      });
+      
+      return {
+        success: true,
+        message: 'Bordereau traité mis à jour avec succès',
+        bordereau: {
+          id: bordereau.id,
+          clientSociete: bordereau.client.name,
+          referenceOV: updatedOV.reference,
+          referenceBordereau: bordereau.reference,
+          montantBordereau: bordereau.nombreBS * 150,
+          dateFinalisationBordereau: bordereau.dateCloture,
+          dateInjection: updatedOV.dateCreation,
+          statutVirement: updatedOV.etatVirement,
+          dateTraitementVirement: updatedOV.dateTraitement,
+          motifObservation: updatedOV.motifObservation,
+          demandeRecuperation: updatedOV.demandeRecuperation,
+          dateDemandeRecuperation: updatedOV.dateDemandeRecuperation,
+          montantRecupere: updatedOV.montantRecupere,
+          dateMontantRecupere: updatedOV.dateMontantRecupere
+        }
+      };
+    } catch (error) {
+      console.error('Error updating bordereau traité:', error);
+      throw new BadRequestException('Failed to update bordereau traité');
     }
   }
 
@@ -1268,6 +1474,7 @@ Document généré automatiquement par ARS`;
   }
 
   async validateOV(id: string, approved: boolean, comment: string | undefined, user: User) {
+    // EXACT SPEC: Only RESPONSABLE_DEPARTEMENT and SUPER_ADMIN can validate
     if (!['RESPONSABLE_DEPARTEMENT', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('Only RESPONSABLE_DEPARTEMENT and SUPER_ADMIN can validate OVs');
     }
@@ -1281,11 +1488,6 @@ Document généré automatiquement par ARS`;
       if (!ov) {
         throw new NotFoundException('Ordre de virement not found');
       }
-      
-      // Skip validation status check for now
-      // if (ov.validationStatus !== 'EN_ATTENTE_VALIDATION') {
-      //   throw new BadRequestException('OV is not pending validation');
-      // }
       
       const newStatus = approved ? 'VALIDE' : 'REJETE_VALIDATION';
       
@@ -1431,6 +1633,142 @@ Document généré automatiquement par ARS`;
     } catch (error) {
       console.error('Failed to notify RESPONSABLE_EQUIPE:', error);
       throw new BadRequestException('Failed to send notifications');
+    }
+  }
+
+  // EXACT SPEC: Automatic notification when bordereau becomes TRAITÉ
+  async createOVFromBordereaux(bordereauIds: string[], donneurOrdreId: string, user: User) {
+    this.checkFinanceRole(user);
+    
+    try {
+      // Fetch bordereaux
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          id: { in: bordereauIds },
+          statut: 'TRAITE'
+        },
+        include: { client: true }
+      });
+      
+      if (bordereaux.length === 0) {
+        throw new BadRequestException('No TRAITÉ bordereaux found');
+      }
+      
+      // Check if any already have OVs
+      const existingOVs = await this.prisma.ordreVirement.findMany({
+        where: { bordereauId: { in: bordereauIds } }
+      });
+      
+      if (existingOVs.length > 0) {
+        throw new BadRequestException('Some bordereaux already have OVs');
+      }
+      
+      // Create OV for each bordereau
+      const createdOVs: any[] = [];
+      
+      for (const bordereau of bordereaux) {
+        const reference = `OV-${bordereau.reference}`;
+        const montantTotal = bordereau.nombreBS * 150; // Estimate
+        
+        const ov = await this.prisma.ordreVirement.create({
+          data: {
+            reference,
+            donneurOrdreId,
+            bordereauId: bordereau.id,
+            utilisateurSante: user.id,
+            montantTotal,
+            nombreAdherents: bordereau.nombreBS,
+            etatVirement: 'NON_EXECUTE',
+            validationStatus: 'EN_ATTENTE_VALIDATION'
+          },
+          include: {
+            bordereau: { include: { client: true } },
+            donneurOrdre: true
+          }
+        });
+        
+        createdOVs.push(ov);
+        
+        // Notify RESPONSABLE_DEPARTEMENT
+        await this.notifyResponsableEquipeForValidation({
+          ovId: ov.id,
+          reference: ov.reference,
+          message: `Nouvel OV créé depuis bordereau ${bordereau.reference}`,
+          createdBy: user.fullName
+        }, user);
+      }
+      
+      await this.logAuditAction('CREATE_OV_FROM_BORDEREAU', {
+        userId: user.id,
+        bordereauIds,
+        createdOVs: createdOVs.map(ov => ov.id)
+      });
+      
+      return {
+        success: true,
+        message: `${createdOVs.length} OV(s) créé(s) avec succès`,
+        ordresVirement: createdOVs
+      };
+    } catch (error) {
+      console.error('Error creating OV from bordereaux:', error);
+      throw new BadRequestException('Failed to create OV from bordereaux: ' + error.message);
+    }
+  }
+
+  async notifyFinanceOnBordereauTraite(bordereauId: string) {
+    try {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+      
+      if (!bordereau || bordereau.statut !== 'TRAITE') {
+        return { notified: 0 };
+      }
+      
+      // Find all Finance and Super Admin users
+      const financeUsers = await this.prisma.user.findMany({
+        where: { 
+          role: { in: ['FINANCE', 'SUPER_ADMIN'] }, 
+          active: true 
+        }
+      });
+      
+      if (financeUsers.length === 0) {
+        console.log('No Finance users found');
+        return { notified: 0 };
+      }
+      
+      // Create notifications
+      const notifications = financeUsers.map(financeUser => ({
+        userId: financeUser.id,
+        type: 'BORDEREAU_TRAITE',
+        title: 'Nouveau bordereau traité à traiter',
+        message: `Le bordereau ${bordereau.reference} de ${bordereau.client.name} est maintenant en statut TRAITÉ et prêt pour le traitement financier.`,
+        data: {
+          bordereauId: bordereau.id,
+          reference: bordereau.reference,
+          clientName: bordereau.client.name,
+          nombreBS: bordereau.nombreBS
+        }
+      }));
+      
+      await this.prisma.notification.createMany({ data: notifications });
+      
+      await this.logAuditAction('NOTIFY_FINANCE_BORDEREAU_TRAITE', {
+        bordereauId,
+        notifiedUsers: financeUsers.length
+      });
+      
+      console.log(`✅ Notified ${financeUsers.length} Finance users for bordereau ${bordereau.reference}`);
+      
+      return {
+        success: true,
+        notified: financeUsers.length
+      };
+    } catch (error) {
+      console.error('Failed to notify Finance on bordereau traité:', error);
+      return { notified: 0 };
     }
   }
 }

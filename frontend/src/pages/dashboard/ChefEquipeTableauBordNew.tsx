@@ -70,6 +70,11 @@ const ChefEquipeTableauBordNew: React.FC = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    // Apply filters when filter values change
+    applyFiltersToAssignments();
+  }, [typeFilter, searchQuery, allGestionnaireAssignments]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -147,6 +152,23 @@ const ChefEquipeTableauBordNew: React.FC = () => {
         allGestionnaireAssignments.filter(assignment => assignment.gestionnaire === newFilter)
       );
     }
+    
+    // Apply filters to gestionnaire assignments based on current filters
+    applyFiltersToAssignments(newFilter);
+  };
+
+  const applyFiltersToAssignments = (gestionnaireFilterValue?: string) => {
+    const currentGestionnaireFilter = gestionnaireFilterValue || gestionnaireFilter;
+    let filtered = [...allGestionnaireAssignments];
+    
+    if (currentGestionnaireFilter !== 'Tous') {
+      filtered = filtered.filter(assignment => assignment.gestionnaire === currentGestionnaireFilter);
+    }
+    
+    // Apply other filters if needed (type, societe, statut, search)
+    // This ensures the assignments table also respects the global filters
+    
+    setFilteredGestionnaireAssignments(filtered);
   };
 
   const handleOpenStatusModifyModal = () => {

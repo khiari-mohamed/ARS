@@ -34,13 +34,33 @@ const CorbeilleTab: React.FC = () => {
         
         if (response.ok) {
           const data = await response.json();
-          setDocuments(data.map((doc: any) => ({
+          let filteredData = data;
+          
+          // Filter documents based on user role
+          if (user?.role === 'CHEF_EQUIPE') {
+            // For chef d'équipe, show only documents from their team members
+            filteredData = data.filter((doc: any) => {
+              // Show documents uploaded by team members or assigned to team members
+              return doc.uploader?.teamLeaderId === user.id || 
+                     doc.uploader?.id === user.id ||
+                     doc.assignedTo?.teamLeaderId === user.id ||
+                     doc.assignedTo?.id === user.id ||
+                     doc.bordereau?.assignedToUserId === user.id;
+            });
+          } else if (user?.role === 'GESTIONNAIRE') {
+            // For gestionnaire, show only their assigned documents
+            filteredData = data.filter((doc: any) => 
+              doc.uploadedById === user.id || doc.assignedToUserId === user.id
+            );
+          }
+          
+          setDocuments(filteredData.map((doc: any) => ({
             id: doc.id,
             reference: doc.name || `DOC/${doc.id}`,
             client: doc.bordereau?.client?.name || 'Client inconnu',
             type: doc.type || 'DOCUMENT',
             status: doc.status || 'UPLOADED',
-            assignedTo: doc.uploader?.fullName,
+            assignedTo: doc.assignedTo?.fullName || doc.uploader?.fullName,
             slaStatus: calculateSlaStatus(doc.uploadedAt),
             uploadedAt: doc.uploadedAt
           })));
@@ -54,7 +74,7 @@ const CorbeilleTab: React.FC = () => {
     };
     
     loadDocuments();
-  }, [tab]);
+  }, [tab, user]);
   
   const calculateSlaStatus = (uploadedAt: string): 'green' | 'orange' | 'red' => {
     const now = new Date();
@@ -261,7 +281,6 @@ const CorbeilleTab: React.FC = () => {
                 <TableCell>Statut</TableCell>
                 <TableCell>SLA</TableCell>
                 {user?.role === 'CHEF_EQUIPE' && <TableCell>Assigné à</TableCell>}
-                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -289,33 +308,6 @@ const CorbeilleTab: React.FC = () => {
                   {user?.role === 'CHEF_EQUIPE' && (
                     <TableCell>{doc.assignedTo || 'Non assigné'}</TableCell>
                   )}
-                  <TableCell>
-                    <Stack direction="row" spacing={1}>
-                      {user?.role === 'GESTIONNAIRE' && doc.status === 'EN_COURS' && (
-                        <>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            onClick={() => handleMarkAsProcessed(doc.id)}
-                          >
-                            Marquer traité
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => handleReturnToChef(doc.id)}
-                          >
-                            Retourner
-                          </Button>
-                        </>
-                      )}
-                      {user?.role === 'CHEF_EQUIPE' && (
-                        <Button size="small" variant="outlined">
-                          Assigner
-                        </Button>
-                      )}
-                    </Stack>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

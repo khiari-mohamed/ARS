@@ -88,7 +88,7 @@ export class ReclamationsController {
     }
     
     try {
-      // Create reclamation directly with Prisma
+      // Create reclamation directly with Prisma (without foreign key fields)
       const reclamation = await this.prisma.reclamation.create({
         data: {
           type: dto.type || 'REMBOURSEMENT',
@@ -99,9 +99,24 @@ export class ReclamationsController {
           clientId: dto.clientId,
           createdById: userId,
           assignedToId: userId,
-          evidencePath: file?.path || undefined
+          evidencePath: file?.path || undefined,
+          typologie: dto.typologie || undefined
         }
       });
+      
+      // Store bordereau and contract references in description for now
+      if (dto.bordereauId || dto.contractId) {
+        const additionalInfo: string[] = [];
+        if (dto.bordereauId) additionalInfo.push(`Numéro Dossier: ${dto.bordereauId}`);
+        if (dto.contractId) additionalInfo.push(`Contrat: ${dto.contractId}`);
+        
+        await this.prisma.reclamation.update({
+          where: { id: reclamation.id },
+          data: {
+            description: `${reclamation.description}\n\n${additionalInfo.join('\n')}`
+          }
+        });
+      }
       
       // Add history entry
       await this.prisma.reclamationHistory.create({

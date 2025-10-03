@@ -734,55 +734,58 @@ export class ReclamationsService {
         const row = data[i] as any;
         
         try {
+          // Map Excel columns to our format
+          const clientName = row.CLIENT || row.clientName || row['CLIENT'];
+          const referenceDossier = row['REFERENCE DOSSIER'] || row.referenceDossier;
+          const numeroContrat = row['NUMERO CONTRAT'] || row.numeroContrat;
+          const description = row.DESCRIPTION || row.description;
+          const typologie = row.TYPOLOGIE || row.typologie;
+          const dateReclamation = row['DATE RECLAMATION'] || row.dateReclamation;
+          
           // Validate required fields
-          if (!row.clientName || !row.type || !row.description) {
-            results.errors.push({ row: i + 1, error: 'Champs requis manquants: clientName, type, description' });
+          if (!clientName || !description) {
+            results.errors.push({ row: i + 1, error: 'Champs requis manquants: CLIENT, DESCRIPTION' });
             results.failed++;
             continue;
           }
           
-          // Find client by name
-          const client = await this.prisma.client.findFirst({
+          // Find or create client
+          let client = await this.prisma.client.findFirst({
             where: {
               name: {
-                contains: row.clientName,
+                contains: clientName,
                 mode: 'insensitive'
               }
             }
           });
           
+          // If client not found, create it
           if (!client) {
-            results.errors.push({ row: i + 1, error: `Client non trouvé: ${row.clientName}` });
-            results.failed++;
-            continue;
-          }
-          
-          // Find assignee if specified
-          let assignedToId: string | undefined = undefined;
-          if (row.assignedTo) {
-            const assignee = await this.prisma.user.findFirst({
-              where: {
-                fullName: {
-                  contains: row.assignedTo,
-                  mode: 'insensitive'
-                },
-                role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] }
+            client = await this.prisma.client.create({
+              data: {
+                name: clientName,
+                reglementDelay: 30,
+                reclamationDelay: 48
               }
             });
-            assignedToId = assignee?.id;
           }
           
-          // Create reclamation
+          // Create reclamation with all fields
+          let fullDescription = description;
+          if (referenceDossier) fullDescription += `\n\nNuméro Dossier: ${referenceDossier}`;
+          if (numeroContrat) fullDescription += `\nContrat: ${numeroContrat}`;
+          
           const reclamation = await this.prisma.reclamation.create({
             data: {
               clientId: client.id,
-              type: row.type || 'AUTRE',
-              severity: row.severity || 'MOYENNE',
+              type: 'AUTRE',
+              severity: 'MOYENNE',
               status: 'OPEN',
-              description: row.description,
-              department: row.department || 'RECLAMATIONS',
-              assignedToId,
-              createdById: userId
+              description: fullDescription,
+              department: 'RECLAMATIONS',
+              typologie: typologie || undefined,
+              createdById: userId,
+              assignedToId: userId
             }
           });
           

@@ -543,11 +543,11 @@ export const ReclamationsList: React.FC = () => {
                 <Table>
                   <TableHead>
                     <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                      <TableCell sx={{ fontWeight: 600 }}>ID</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Client</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Typologie Réclamation</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Conformité</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Numéro Dossier</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Contrat</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Gravité</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>SLA</TableCell>
@@ -557,15 +557,10 @@ export const ReclamationsList: React.FC = () => {
                   </TableHead>
                   <TableBody>
                     {Array.isArray(data) && data.length > 0 ? (
-                      data.map((rec: Reclamation) => (
+                      data.map((rec: Reclamation) => {
+                        console.log('Reclamation data:', rec); // Debug log
+                        return (
                         <TableRow key={rec.id} hover>
-                          <TableCell>
-                            <Chip 
-                              label={rec.id.substring(0, 8) + '...'} 
-                              size="small" 
-                              variant="outlined"
-                            />
-                          </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight={500}>
                               {rec.client?.name || clients.find(c => c.id === rec.clientId)?.name || 'Client inconnu'}
@@ -575,28 +570,19 @@ export const ReclamationsList: React.FC = () => {
                             <Chip label={rec.type} size="small" color="primary" variant="outlined" />
                           </TableCell>
                           <TableCell>
-                            {rec.typologie ? (
-                              <Chip 
-                                label={rec.typologie} 
-                                size="small" 
-                                color="info" 
-                                variant="filled"
-                              />
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">Non spécifiée</Typography>
-                            )}
+                            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                              {rec.typologie}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            {rec.conformite ? (
-                              <Chip 
-                                label={rec.conformite} 
-                                size="small" 
-                                color={rec.conformite === 'Fondé' ? 'success' : 'error'}
-                                variant="filled"
-                              />
-                            ) : (
-                              <Typography variant="body2" color="text.secondary">Non définie</Typography>
-                            )}
+                            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                              {rec.description?.match(/Numéro Dossier: ([^\n]+)/)?.[1] || '-'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                              {rec.description?.match(/Contrat: ([^\n]+)/)?.[1] || '-'}
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             <PriorityBadge severity={rec.severity} />
@@ -670,7 +656,8 @@ export const ReclamationsList: React.FC = () => {
                             </Box>
                           </TableCell>
                         </TableRow>
-                      ))
+                        );
+                      })
                     ) : (
                       <TableRow>
                         <TableCell colSpan={10} align="center" sx={{ py: 6 }}>

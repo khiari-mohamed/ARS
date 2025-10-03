@@ -184,7 +184,8 @@ const AdvancedUserManagement: React.FC = () => {
     try {
       const updateData = {
         fullName: newUserData.fullName,
-        email: newUserData.email
+        email: newUserData.email,
+        teamLeaderId: newUserData.role === 'GESTIONNAIRE' && newUserData.teamLeaderId ? newUserData.teamLeaderId : undefined
       };
       await LocalAPI.put(`/users/${selectedUser.id}`, updateData);
       await loadData();
@@ -677,7 +678,7 @@ const AdvancedUserManagement: React.FC = () => {
         <DialogTitle>Modifier Utilisateur</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Nom complet"
@@ -685,7 +686,7 @@ const AdvancedUserManagement: React.FC = () => {
                 onChange={(e) => setNewUserData(prev => ({ ...prev, fullName: e.target.value }))}
               />
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Email"
@@ -694,6 +695,27 @@ const AdvancedUserManagement: React.FC = () => {
                 onChange={(e) => setNewUserData(prev => ({ ...prev, email: e.target.value }))}
               />
             </Grid>
+            {newUserData.role === 'GESTIONNAIRE' && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Chef d'Équipe</InputLabel>
+                  <Select
+                    value={newUserData.teamLeaderId}
+                    label="Chef d'Équipe"
+                    onChange={(e) => setNewUserData(prev => ({ ...prev, teamLeaderId: e.target.value }))}
+                  >
+                    <MenuItem value="">
+                      <em>Aucun chef d'équipe</em>
+                    </MenuItem>
+                    {chefEquipes.map((chef) => (
+                      <MenuItem key={chef.id} value={chef.id}>
+                        {chef.fullName} ({chef.email})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>

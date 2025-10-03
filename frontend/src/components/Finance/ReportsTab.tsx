@@ -13,8 +13,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 
 const ReportsTab: React.FC = () => {
   const [filters, setFilters] = useState({
-    dateFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    dateTo: new Date().toISOString().split('T')[0],
+    dateFrom: '',
+    dateTo: '',
     society: '',
     donneurOrdre: ''
   });
@@ -290,64 +290,98 @@ const ReportsTab: React.FC = () => {
 
   return (
     <Box>
-      {/* Filters */}
-      <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
+      {/* EXACT SPEC: TAB 6 - Historique & Archives */}
+      <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
+        Historique & Archives des Virements
+      </Typography>
+      
+      {/* EXACT SPEC: Filtres avancés */}
+      <Paper elevation={1} sx={{ p: 3, mb: 3, bgcolor: '#f8f9fa' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Filtres de Rapport</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            🔍 Filtres Avancés
+          </Typography>
           <Button
             startIcon={<RefreshIcon />}
             onClick={loadReportData}
             disabled={loading}
             size="small"
+            variant="outlined"
           >
             Actualiser
           </Button>
         </Box>
-        <Stack direction="row" spacing={2} flexWrap="wrap">
-          <TextField
-            label="Date Début"
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
-            size="small"
-            InputLabelProps={{ shrink: true }}
-          />
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+          Filtrer par : Société, Date, Donneur, Utilisateur, Montant Min/Max
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              label="Date Début"
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
           
-          <TextField
-            label="Date Fin"
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
-            size="small"
-            InputLabelProps={{ shrink: true }}
-          />
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              label="Date Fin"
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
           
-          <TextField
-            label="Société"
-            value={filters.society}
-            onChange={(e) => setFilters({...filters, society: e.target.value})}
-            size="small"
-            sx={{ minWidth: 150 }}
-            placeholder="Filtrer par société"
-          />
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              label="Société"
+              value={filters.society}
+              onChange={(e) => setFilters({...filters, society: e.target.value})}
+              size="small"
+              fullWidth
+              placeholder="Filtrer par société"
+            />
+          </Grid>
           
-          <TextField
-            label="Donneur d'Ordre"
-            value={filters.donneurOrdre}
-            onChange={(e) => setFilters({...filters, donneurOrdre: e.target.value})}
-            size="small"
-            sx={{ minWidth: 150 }}
-            placeholder="Filtrer par donneur"
-          />
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              label="Donneur d'Ordre"
+              value={filters.donneurOrdre}
+              onChange={(e) => setFilters({...filters, donneurOrdre: e.target.value})}
+              size="small"
+              fullWidth
+              placeholder="Filtrer par donneur"
+            />
+          </Grid>
           
-          <Button 
-            variant="outlined" 
-            onClick={() => setFilters({ dateFrom: '', dateTo: '', society: '', donneurOrdre: '' })}
-            size="small"
-          >
-            Réinitialiser
-          </Button>
-        </Stack>
+          <Grid item xs={12} sm={6} md={2}>
+            <TextField
+              label="Utilisateur"
+              size="small"
+              fullWidth
+              placeholder="Filtrer par utilisateur"
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={2}>
+            <Button 
+              variant="contained" 
+              onClick={() => setFilters({ dateFrom: '', dateTo: '', society: '', donneurOrdre: '' })}
+              size="small"
+              fullWidth
+              sx={{ height: '40px' }}
+            >
+              🔍 Rechercher
+            </Button>
+          </Grid>
+        </Grid>
       </Paper>
 
       {loading ? (
@@ -433,65 +467,147 @@ const ReportsTab: React.FC = () => {
             </Paper>
           </Grid>
 
-        {/* Export Options */}
+        {/* OV Records Table */}
         <Grid item xs={12}>
           <Paper elevation={2} sx={{ p: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Options d'Export</Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+              📋 Liste des Ordres de Virement
+            </Typography>
+            {reportData && reportData.length > 0 ? (
+              <Box sx={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f5f5f5' }}>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Référence</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Client</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Montant</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Statut</th>
+                      <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.map((ov: any, index: number) => (
+                      <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '12px' }}>{ov.reference}</td>
+                        <td style={{ padding: '12px' }}>{ov.bordereau?.client?.name || 'Entrée manuelle'}</td>
+                        <td style={{ padding: '12px' }}>{ov.montantTotal?.toLocaleString('fr-TN')} TND</td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            backgroundColor: ov.etatVirement === 'EXECUTE' ? '#4caf50' : ov.etatVirement === 'EN_COURS_EXECUTION' ? '#2196f3' : '#ff9800',
+                            color: 'white'
+                          }}>
+                            {ov.etatVirement}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px' }}>{new Date(ov.dateCreation).toLocaleDateString('fr-FR')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Box>
+            ) : (
+              <Alert severity="info">Aucun ordre de virement trouvé pour la période sélectionnée</Alert>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* EXACT SPEC: Statistiques d'Export */}
+        <Grid item xs={12}>
+          <Paper elevation={2} sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+              📈 Statistiques d'Export
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+              L'utilisateur peut revoir un ancien ordre de virement, télécharger à nouveau les fichiers, filtrer par société, date, donneur, etc.
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <Card variant="outlined" sx={{ height: '100%', bgcolor: '#f5f9ff' }}>
                   <CardContent>
-                    <Typography variant="h6" color="primary">Rapport PDF</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <PictureAsPdfIcon sx={{ fontSize: 40, color: 'error.main', mr: 2 }} />
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>Rapport PDF</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          Rapport complet avec graphiques
+                        </Typography>
+                      </Box>
+                    </Box>
                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                      Rapport complet avec graphiques et tableaux
+                      Générer un rapport Excel complet avec tous les traitements enregistrés
                     </Typography>
                     <Button
                       variant="contained"
+                      color="error"
                       startIcon={<PictureAsPdfIcon />}
                       onClick={() => handleExport('pdf')}
                       fullWidth
+                      size="large"
                       disabled={loading}
                     >
-                      Exporter PDF
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="h6" color="primary">Export Excel</Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                      Données détaillées pour analyse
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      startIcon={<TableViewIcon />}
-                      onClick={() => handleExport('excel')}
-                      fullWidth
-                      disabled={loading}
-                    >
-                      Exporter Excel
+                      📄 Générer rapport Excel
                     </Button>
                   </CardContent>
                 </Card>
               </Grid>
               
               <Grid item xs={12} md={4}>
-                <Card variant="outlined">
+                <Card variant="outlined" sx={{ height: '100%', bgcolor: '#f0fff4' }}>
                   <CardContent>
-                    <Typography variant="h6" color="primary">Rapport Personnalisé</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <TableViewIcon sx={{ fontSize: 40, color: 'success.main', mr: 2 }} />
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>Export Excel</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          Données détaillées pour analyse
+                        </Typography>
+                      </Box>
+                    </Box>
                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                      Sélectionner les sections à inclure
+                      Exporter les données en format Excel pour analyse approfondie
                     </Typography>
                     <Button
-                      variant="outlined"
+                      variant="contained"
+                      color="success"
+                      startIcon={<TableViewIcon />}
+                      onClick={() => handleExport('excel')}
+                      fullWidth
+                      size="large"
+                      disabled={loading}
+                    >
+                      📈 Graphiques
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} md={4}>
+                <Card variant="outlined" sx={{ height: '100%', bgcolor: '#fff8e1' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <GetAppIcon sx={{ fontSize: 40, color: 'warning.main', mr: 2 }} />
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>Rapport Personnalisé</Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          Configurer les sections
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                      Créer un rapport personnalisé avec les sections de votre choix
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      color="warning"
                       startIcon={<GetAppIcon />}
                       onClick={() => setCustomReportDialog(true)}
                       fullWidth
+                      size="large"
                     >
-                      Configurer
+                      📤 Exporter
                     </Button>
                   </CardContent>
                 </Card>

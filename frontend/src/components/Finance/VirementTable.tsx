@@ -50,13 +50,13 @@ const VirementTable: React.FC<VirementTableProps> = ({
                   cursor: 'pointer',
                 }}
               >
-                <td>{new Date(v.date).toLocaleDateString('fr-FR')}</td>
-                <td>{formatCurrency(v.amount)}</td>
-                <td>{v.clientName}</td>
-                <td>{v.contractId || '-'}</td>
+                <td>{new Date(v.dateCreation).toLocaleDateString('fr-FR')}</td>
+                <td>{formatCurrency(v.montantTotal)}</td>
+                <td>{v.bordereau?.client?.name || '-'}</td>
+                <td>{v.bordereauId || '-'}</td>
                 <td>{v.reference}</td>
                 <td>
-                  <VirementStatusTag status={v.status} />
+                  <VirementStatusTag status={v.etatVirement} />
                 </td>
                 <td>
                   {v.linkedBordereaux && v.linkedBordereaux.length > 0

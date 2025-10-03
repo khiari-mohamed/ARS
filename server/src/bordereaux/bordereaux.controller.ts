@@ -830,46 +830,113 @@ export class BordereauxController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeCorbeille(@Req() req) {
     const user = req.user;
+    console.log('🔍 Chef équipe corbeille - User:', user.id, user.role);
     
-    // Role-based filtering for Chef d'Équipe
-    const baseFilters = user.role === UserRole.CHEF_EQUIPE ? {
-      OR: [
-        { assignedToUserId: null }, // Unassigned
-        { assignedToUserId: user.id }, // Personally assigned
-        // TODO: Add team member filter when team structure is implemented
-      ]
-    } : {}; // Super Admin and Admin see everything
+    let whereClause: any = { archived: false };
+    
+    // Chef d'équipe only sees bordereaux from contracts assigned to them
+    if (user.role === UserRole.CHEF_EQUIPE) {
+      whereClause = {
+        archived: false,
+        contract: {
+          teamLeaderId: user.id
+        }
+      };
+      console.log('🎯 Filtering for Chef équipe:', user.id);
+    }
+    // Super Admin and Admin see everything
+    else if (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMINISTRATEUR) {
+      whereClause = { archived: false };
+      console.log('👑 Super Admin/Admin - no filtering');
+    }
     
     const [nonAffectes, enCours, traites] = await Promise.all([
-      this.bordereauxService.findAll({ 
-        ...baseFilters,
-        statut: ['SCANNE', 'A_AFFECTER'], 
-        assignedToUserId: null 
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['SCANNE', 'A_AFFECTER'] },
+          assignedToUserId: null
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       }),
-      this.bordereauxService.findAll({ 
-        ...baseFilters,
-        statut: ['ASSIGNE', 'EN_COURS'],
-        assignedToUserId: { not: null }
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['ASSIGNE', 'EN_COURS'] },
+          assignedToUserId: { not: null }
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       }),
-      this.bordereauxService.findAll({ 
-        ...baseFilters,
-        statut: ['TRAITE', 'CLOTURE'],
-        updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['TRAITE', 'CLOTURE'] },
+          updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       })
     ]);
 
+    console.log('📊 Results:', {
+      nonAffectes: nonAffectes.length,
+      enCours: enCours.length,
+      traites: traites.length
+    });
+
     return {
-      nonAffectes: Array.isArray(nonAffectes) ? nonAffectes : nonAffectes.items || [],
-      enCours: Array.isArray(enCours) ? enCours : enCours.items || [],
-      traites: Array.isArray(traites) ? traites : traites.items || [],
+      nonAffectes: nonAffectes.map(b => ({
+        ...b,
+        dateReception: b.dateReception.toISOString(),
+        dateDebutScan: b.dateDebutScan?.toISOString(),
+        dateFinScan: b.dateFinScan?.toISOString(),
+        dateReceptionSante: b.dateReceptionSante?.toISOString(),
+        dateCloture: b.dateCloture?.toISOString(),
+        createdAt: b.createdAt.toISOString(),
+        updatedAt: b.updatedAt.toISOString()
+      })),
+      enCours: enCours.map(b => ({
+        ...b,
+        dateReception: b.dateReception.toISOString(),
+        dateDebutScan: b.dateDebutScan?.toISOString(),
+        dateFinScan: b.dateFinScan?.toISOString(),
+        dateReceptionSante: b.dateReceptionSante?.toISOString(),
+        dateCloture: b.dateCloture?.toISOString(),
+        createdAt: b.createdAt.toISOString(),
+        updatedAt: b.updatedAt.toISOString()
+      })),
+      traites: traites.map(b => ({
+        ...b,
+        dateReception: b.dateReception.toISOString(),
+        dateDebutScan: b.dateDebutScan?.toISOString(),
+        dateFinScan: b.dateFinScan?.toISOString(),
+        dateReceptionSante: b.dateReceptionSante?.toISOString(),
+        dateCloture: b.dateCloture?.toISOString(),
+        createdAt: b.createdAt.toISOString(),
+        updatedAt: b.updatedAt.toISOString()
+      })),
       stats: {
-        nonAffectes: Array.isArray(nonAffectes) ? nonAffectes.length : nonAffectes.items?.length || 0,
-        enCours: Array.isArray(enCours) ? enCours.length : enCours.items?.length || 0,
-        traites: Array.isArray(traites) ? traites.length : traites.items?.length || 0
+        nonAffectes: nonAffectes.length,
+        enCours: enCours.length,
+        traites: traites.length
       },
       userRole: user.role,
       restrictions: user.role === UserRole.CHEF_EQUIPE ? {
-        message: "Accès limité à votre équipe et dossiers non affectés",
+        message: "Accès limité aux contrats assignés à votre équipe",
         canViewGlobalStats: false,
         canExportAll: false
       } : null

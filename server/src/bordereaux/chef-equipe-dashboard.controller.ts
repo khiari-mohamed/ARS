@@ -16,8 +16,17 @@ export class ChefEquipeDashboardController {
   async getGestionnaireAssignmentsDossiers(@Req() req) {
     console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
+    
+    // Filter gestionnaires based on user role
+    let gestionnaireFilter: any = { role: 'GESTIONNAIRE' };
+    
+    // If user is CHEF_EQUIPE, only show gestionnaires in their team
+    if (req.user?.role === 'CHEF_EQUIPE') {
+      gestionnaireFilter.teamLeaderId = req.user.id;
+    }
+    
     const gestionnaires = await this.prisma.user.findMany({
-      where: { role: 'GESTIONNAIRE' },
+      where: gestionnaireFilter,
       select: {
         id: true,
         fullName: true

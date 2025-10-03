@@ -48,13 +48,49 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const [validationStatus, setValidationStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
   const [validationComment, setValidationComment] = useState('');
   const [canValidate, setCanValidate] = useState(false);
+  
+  // Poll for validation status updates
+  React.useEffect(() => {
+    if (!ovId || validationStatus !== 'pending') return;
+    
+    const checkValidationStatus = async () => {
+      try {
+        const response = await fetch(
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.validationStatus === 'VALIDE') {
+            setValidationStatus('approved');
+            setActiveStep(3); // Move to PDF generation step
+          } else if (data.validationStatus === 'REJETE_VALIDATION') {
+            setValidationStatus('rejected');
+            setValidationComment(data.validationComment || '');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check validation status:', error);
+      }
+    };
+    
+    const interval = setInterval(checkValidationStatus, 5000); // Check every 5 seconds
+    return () => clearInterval(interval);
+  }, [ovId, validationStatus]);
 
+  // EXACT SPEC: 6 étapes du processus OV
   const steps = [
-    'Sélectionner Donneur d\'Ordre',
-    'Importer Fichier Excel',
-    'Validation Automatique',
-    'Validation Responsable',
-    'Générer Fichiers'
+    'Étape 1: Choix du donneur d\'ordre',
+    'Étape 2: Importation du fichier Excel',
+    'Étape 3: Affichage récapitulatif',
+    'Étape 4: Génération du PDF',
+    'Étape 5: Génération du fichier TXT',
+    'Étape 6: Historique et archivage'
   ];
 
   useEffect(() => {
@@ -113,10 +149,14 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       
       const ovRecord = await processOV(ovData);
       setOvId(ovRecord.id);
+      
+      // EXACT SPEC: Set validation status to pending and notify RESPONSABLE_DEPARTEMENT
       setValidationStatus('pending');
       
-      // Notify RESPONSABLE_EQUIPE users
+      // Notify RESPONSABLE_DEPARTEMENT users for validation
       await notifyResponsableEquipe(ovRecord.id, ovRecord.reference);
+      
+      console.log('✅ OV created and RESPONSABLE_DEPARTEMENT notified:', ovRecord.reference);
       
       return ovRecord.id;
     } catch (error) {
@@ -215,12 +255,11 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           memberId: item.adherentId
         }));
         setValidationResults(transformedResults);
+        
+        // EXACT SPEC: Move to validation summary (Step 3)
         setActiveStep(2);
         
-        // Move to next step first, then create OV
-        setActiveStep(3);
-        
-        // Show validation summary with new format
+        // Show validation summary
         if (result.summary) {
           console.log('Validation Summary:', {
             total: result.summary.total,
@@ -301,12 +340,19 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
 
       {/* Step Content */}
       <Grid container spacing={3}>
-        {/* Step 1: Select Donneur d'Ordre */}
+        {/* EXACT SPEC: Étape 1 - Choix du donneur d'ordre */}
         {activeStep === 0 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Étape 1: Sélectionner le Donneur d'Ordre
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>Étape 1 : Choix du donneur d'ordre</strong><br/>
+                Sélectionnez un donneur d'ordre. Ce choix est obligatoire avant d'aller plus loin.
+              </Alert>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Sélection du Donneur d'Ordre
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                Le donneur choisi détermine automatiquement le compte bancaire utilisé et le format technique du fichier TXT
               </Typography>
               <Grid container spacing={2}>
                 {donneurs.map((donneur) => (
@@ -314,23 +360,28 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                     <Paper 
                       variant="outlined" 
                       sx={{ 
-                        p: 2, 
+                        p: 3, 
                         cursor: 'pointer',
-                        '&:hover': { bgcolor: 'action.hover' },
-                        border: selectedDonneur?.id === donneur.id ? 2 : 1,
-                        borderColor: selectedDonneur?.id === donneur.id ? 'primary.main' : 'divider'
+                        '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)' },
+                        border: selectedDonneur?.id === donneur.id ? 3 : 1,
+                        borderColor: selectedDonneur?.id === donneur.id ? 'primary.main' : 'divider',
+                        bgcolor: selectedDonneur?.id === donneur.id ? 'primary.50' : 'white',
+                        transition: 'all 0.2s'
                       }}
                       onClick={() => handleDonneurSelect(donneur)}
                     >
-                      <Typography variant="h6">{donneur.name}</Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Banque: {donneur.bank}
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        {selectedDonneur?.id === donneur.id && <CheckCircleIcon color="primary" sx={{ mr: 1 }} />}
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>{donneur.name}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 0.5 }}>
+                        <strong>Banque:</strong> {donneur.bank}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ mb: 0.5 }}>
+                        <strong>RIB utilisé pour l'émission:</strong> {donneur.rib}
                       </Typography>
                       <Typography variant="body2" color="textSecondary">
-                        RIB: {donneur.rib}
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Format: {donneur.txtFormat}
+                        <strong>Format TXT associé:</strong> {donneur.txtFormat}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -340,28 +391,33 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           </Grid>
         )}
 
-        {/* Step 2: File Upload */}
+        {/* EXACT SPEC: Étape 2 - Importation du fichier Excel de remboursement */}
         {activeStep === 1 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Étape 2: Importer le Fichier Excel
+              <Alert severity="success" sx={{ mb: 2 }}>
+                <strong>Donneur d'ordre sélectionné:</strong> {selectedDonneur?.name} - {selectedDonneur?.bank}
+              </Alert>
+              
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Étape 2 : Importation du fichier Excel de remboursement
               </Typography>
               
-              {selectedDonneur && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Donneur sélectionné: <strong>{selectedDonneur.name}</strong> - {selectedDonneur.bank}
-                </Alert>
-              )}
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Le fichier Excel doit contenir :<br/>
+                • Le matricule de l'adhérent<br/>
+                • Le(s) montant(s) de remboursement
+              </Alert>
 
               <Box
                 sx={{
-                  border: '2px dashed #ccc',
+                  border: '3px dashed #1976d2',
                   borderRadius: 2,
-                  p: 4,
+                  p: 5,
                   textAlign: 'center',
                   cursor: 'pointer',
-                  '&:hover': { borderColor: 'primary.main' }
+                  bgcolor: '#f5f9ff',
+                  '&:hover': { borderColor: 'primary.dark', bgcolor: '#e3f2fd' }
                 }}
                 component="label"
               >
@@ -371,15 +427,15 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   onChange={handleFileUpload}
                   style={{ display: 'none' }}
                 />
-                <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                <Typography variant="h6" color="textSecondary">
-                  Glissez-déposez votre fichier Excel ici
+                <CloudUploadIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+                <Typography variant="h5" color="primary" sx={{ mb: 1, fontWeight: 600 }}>
+                  Importer le fichier Excel
                 </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  ou cliquez pour sélectionner
+                <Typography variant="body1" color="textSecondary" sx={{ mb: 1 }}>
+                  Glissez-déposez votre fichier ici ou cliquez pour parcourir
                 </Typography>
-                <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-                  Formats supportés: .xlsx, .xls
+                <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
+                  Formats acceptés: .xlsx, .xls
                 </Typography>
               </Box>
 
@@ -390,9 +446,16 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
               )}
 
               {processing && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    Traitement du fichier en cours...
+                <Box sx={{ mt: 3 }}>
+                  <Alert severity="info" sx={{ mb: 1 }}>
+                    <strong>Traitement automatique en cours...</strong>
+                  </Alert>
+                  <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                    • Vérification que le matricule existe bien<br/>
+                    • Vérification qu'il est lié à une société<br/>
+                    • Récupération du RIB de l'adhérent<br/>
+                    • Addition des montants si un adhérent apparaît plusieurs fois<br/>
+                    • Signalement des anomalies
                   </Typography>
                   <LinearProgress />
                 </Box>
@@ -401,196 +464,322 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           </Grid>
         )}
 
-        {/* Step 3: Validation Results */}
+        {/* EXACT SPEC: Étape 3 - Affichage récapitulatif */}
         {activeStep === 2 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Étape 3: Résultats de Validation Automatique
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Étape 3 : Affichage récapitulatif
               </Typography>
+              
+              <Alert severity="success" sx={{ mb: 2 }}>
+                Validation automatique terminée
+              </Alert>
               
               <Table>
                 <TableHead>
-                  <TableRow>
-                    <TableCell>Matricule</TableCell>
-                    <TableCell>Nom</TableCell>
-                    <TableCell>Société</TableCell>
-                    <TableCell>RIB</TableCell>
-                    <TableCell>Montant</TableCell>
-                    <TableCell>Statut</TableCell>
-                    <TableCell>Notes</TableCell>
+                  <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                    <TableCell><strong>Nom de la société</strong></TableCell>
+                    <TableCell><strong>Matricule adhérent</strong></TableCell>
+                    <TableCell><strong>Nom et prénom de l'adhérent</strong></TableCell>
+                    <TableCell><strong>RIB</strong></TableCell>
+                    <TableCell><strong>Montant total à virer</strong></TableCell>
+                    <TableCell><strong>Statut de chaque ligne</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {validationResults.map((result, index) => (
-                    <TableRow key={index}>
+                    <TableRow key={index} sx={{ bgcolor: result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white' }}>
+                      <TableCell>{result.society}</TableCell>
                       <TableCell>{result.matricule}</TableCell>
                       <TableCell>{result.name}</TableCell>
-                      <TableCell>{result.society}</TableCell>
                       <TableCell>{result.rib || 'N/A'}</TableCell>
-                      <TableCell>{result.amount.toFixed(2)} €</TableCell>
+                      <TableCell><strong>{result.amount.toFixed(2)} TND</strong></TableCell>
                       <TableCell>{getStatusChip(result.status)}</TableCell>
-                      <TableCell>{result.notes}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
 
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
                 <Button
-                  variant="contained"
-                  onClick={async () => {
-                    await createOVRecord();
-                    setActiveStep(3);
-                  }}
-                  disabled={processing}
+                  variant="outlined"
+                  onClick={() => setActiveStep(1)}
+                  startIcon={<CancelIcon />}
                 >
-                  Continuer vers Validation
+                  Abandonner
                 </Button>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setActiveStep(1)}
+                  >
+                    Corriger
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => {
+                      const w = window.open('', '_blank');
+                      if (!w) return;
+                      w.document.write(`
+                        <html><head><title>Récapitulatif</title><style>
+                          body{font-family:Arial;padding:20px}table{width:100%;border-collapse:collapse;margin-top:20px}
+                          th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5;font-weight:bold}
+                        </style></head><body>
+                          <h2>Récapitulatif - Ordre de Virement</h2>
+                          <p><strong>Date:</strong> ${new Date().toLocaleString('fr-FR')}</p>
+                          <p><strong>Donneur:</strong> ${selectedDonneur?.name || 'N/A'}</p>
+                          <table><thead><tr><th>Société</th><th>Matricule</th><th>Nom</th><th>RIB</th><th>Montant</th><th>Statut</th></tr></thead>
+                          <tbody>${validationResults.map(r => `<tr><td>${r.society}</td><td>${r.matricule}</td><td>${r.name}</td><td>${r.rib||'N/A'}</td><td>${r.amount.toFixed(2)}</td><td>${r.status==='ok'?'Valide':r.status==='warning'?'Attention':'Erreur'}</td></tr>`).join('')}</tbody></table>
+                          <p style="margin-top:20px"><strong>Total:</strong> ${validationResults.reduce((s,r)=>s+r.amount,0).toFixed(2)} TND</p>
+                        </body></html>
+                      `);
+                      w.document.close();
+                      setTimeout(() => w.print(), 250);
+                    }}
+                    startIcon={<PictureAsPdfIcon />}
+                    disabled={processing || !uploadedFile}
+                  >
+                    Télécharger PDF
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={async () => {
+                      // EXACT SPEC: Create OV and notify RESPONSABLE_DEPARTEMENT
+                      await createOVRecord();
+                      
+                      // Show success message
+                      alert('OV créé avec succès! Une notification a été envoyée au Responsable de Département pour validation.');
+                      
+                      // Wait for validation before moving to generation
+                      if (validationStatus === 'pending') {
+                        alert('En attente de validation par le Responsable de Département...');
+                      } else if (validationStatus === 'approved') {
+                        setActiveStep(3);
+                      }
+                    }}
+                    disabled={processing}
+                    startIcon={<CheckCircleIcon />}
+                  >
+                    Valider et Envoyer pour Validation
+                  </Button>
+                </Box>
               </Box>
             </Paper>
           </Grid>
         )}
 
-        {/* Step 4: Validation by Responsable */}
+        {/* EXACT SPEC: Étape 4 - Génération du PDF */}
         {activeStep === 3 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Étape 4: Validation par Responsable d'Équipe
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Étape 4 : Génération du PDF
               </Typography>
               
-              <Card sx={{ mb: 3 }}>
+              {/* EXACT SPEC: Show validation status */}
+              {validationStatus === 'pending' && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <strong>⚠️ En attente de validation</strong><br/>
+                  L'OV a été créé et une notification a été envoyée au Responsable de Département.<br/>
+                  Vous pourrez générer les fichiers après validation.
+                </Alert>
+              )}
+              
+              {validationStatus === 'approved' && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <strong>✅ OV Validé</strong><br/>
+                  L'OV a été validé par le Responsable de Département. Vous pouvez maintenant générer les fichiers.
+                </Alert>
+              )}
+              
+              {validationStatus === 'rejected' && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <strong>❌ OV Rejeté</strong><br/>
+                  L'OV a été rejeté par le Responsable de Département.<br/>
+                  {validationComment && `Motif: ${validationComment}`}
+                </Alert>
+              )}
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>Le système génère un document PDF clair avec :</strong><br/>
+                • En-tête : nom du donneur d'ordre, son compte bancaire, sa banque<br/>
+                • Liste des virements avec : Société / Num contrat, Matricule, Nom et prénom, RIB, Montant total<br/>
+                • Un total global en bas<br/>
+                • La signature ou le tampon du donneur<br/>
+                • La date d'émission
+              </Alert>
+
+              <Card sx={{ mb: 3, bgcolor: '#f8f9fa' }}>
                 <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    {validationStatus === 'pending' && <HourglassEmptyIcon color="warning" sx={{ mr: 1 }} />}
-                    {validationStatus === 'approved' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
-                    {validationStatus === 'rejected' && <CancelIcon color="error" sx={{ mr: 1 }} />}
-                    
-                    <Typography variant="h6">
-                      Statut: {validationStatus === 'pending' ? 'En attente de validation' : 
-                               validationStatus === 'approved' ? 'Validé' : 
-                               validationStatus === 'rejected' ? 'Rejeté' : 'Inconnu'}
-                    </Typography>
-                  </Box>
-                  
-                  {ovId && (
-                    <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                      ID OV: {ovId}
-                    </Typography>
-                  )}
-                  
-                  {canValidate && validationStatus === 'pending' && (
+                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                    Informations du virement
+                  </Typography>
+                  {selectedDonneur && (
                     <Box>
-                      <TextField
-                        fullWidth
-                        multiline
-                        rows={3}
-                        label="Commentaire (optionnel)"
-                        value={validationComment}
-                        onChange={(e) => setValidationComment(e.target.value)}
-                        sx={{ mb: 2 }}
-                      />
-                      
-                      <Box sx={{ display: 'flex', gap: 2 }}>
-                        <Button
-                          variant="contained"
-                          color="success"
-                          startIcon={<CheckCircleIcon />}
-                          onClick={() => handleValidation(true)}
-                          disabled={processing}
-                        >
-                          Valider
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          startIcon={<CancelIcon />}
-                          onClick={() => handleValidation(false)}
-                          disabled={processing}
-                        >
-                          Rejeter
-                        </Button>
-                      </Box>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Donneur d'ordre:</strong> {selectedDonneur.name}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Banque:</strong> {selectedDonneur.bank}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>RIB:</strong> {selectedDonneur.rib}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Nombre d'adhérents:</strong> {validationResults.length}
+                      </Typography>
                     </Box>
-                  )}
-                  
-                  {!canValidate && (
-                    <Alert severity="info">
-                      Seuls les Responsables d'Équipe peuvent valider cet OV.
-                    </Alert>
-                  )}
-                  
-                  {validationStatus === 'approved' && (
-                    <Alert severity="success">
-                      OV validé avec succès! Vous pouvez maintenant générer les fichiers.
-                    </Alert>
-                  )}
-                  
-                  {validationStatus === 'rejected' && (
-                    <Alert severity="error">
-                      OV rejeté. Veuillez corriger les problèmes et recommencer.
-                    </Alert>
                   )}
                 </CardContent>
               </Card>
-              
-              <Divider sx={{ my: 2 }} />
-              
-              {/* Generation section - always available */}
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Génération des Fichiers
-              </Typography>
-              
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Vous pouvez générer les fichiers même sans validation (pour test ou urgence).
-              </Alert>
-              
+
               <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
                 <Button
                   variant="contained"
+                  size="large"
                   startIcon={<PictureAsPdfIcon />}
                   onClick={() => handleGenerateFiles('pdf')}
-                  disabled={processing}
+                  disabled={processing || validationStatus !== 'approved'}
+                  sx={{ flex: 1 }}
                 >
-                  Générer PDF
+                  Générer le PDF
                 </Button>
+                {ovId && (
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    startIcon={<PictureAsPdfIcon />}
+                    onClick={() => window.open(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/pdf`, '_blank')}
+                    color="success"
+                    disabled={validationStatus !== 'approved'}
+                  >
+                    Télécharger PDF
+                  </Button>
+                )}
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={() => setActiveStep(4)}
+                  disabled={processing || validationStatus !== 'approved'}
+                >
+                  Passer à l'étape suivante
+                </Button>
+              </Box>
+
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Vous pouvez télécharger le PDF maintenant ou passer directement à la génération du fichier TXT
+              </Alert>
+            </Paper>
+          </Grid>
+        )}
+        
+        {/* EXACT SPEC: Étape 5 - Génération du fichier TXT */}
+        {activeStep === 4 && (
+          <Grid item xs={12}>
+            <Paper elevation={2} sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Étape 5 : Génération du fichier TXT
+              </Typography>
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>Le format du fichier TXT dépend du donneur sélectionné</strong><br/>
+                Le système applique automatiquement la bonne structure, et crée un fichier prêt à être envoyé à la banque.
+              </Alert>
+
+              <Card sx={{ mb: 3, bgcolor: '#f8f9fa' }}>
+                <CardContent>
+                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                    Format TXT sélectionné
+                  </Typography>
+                  {selectedDonneur && (
+                    <Typography variant="body2">
+                      <strong>Structure:</strong> {selectedDonneur.txtFormat}
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
                 <Button
                   variant="contained"
+                  size="large"
                   startIcon={<DescriptionIcon />}
                   onClick={() => handleGenerateFiles('txt')}
                   disabled={processing}
+                  sx={{ flex: 1 }}
                 >
-                  Générer TXT
+                  Générer le fichier TXT
                 </Button>
-              </Box>
-              
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button variant="outlined" onClick={() => setActiveStep(0)}>
-                  Nouveau Traitement
-                </Button>
-                <Button 
-                  variant="contained" 
-                  onClick={() => onSwitchToTab?.(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3)}
+                {ovId && (
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    startIcon={<DescriptionIcon />}
+                    onClick={() => window.open(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/txt`, '_blank')}
+                    color="success"
+                  >
+                    Télécharger TXT
+                  </Button>
+                )}
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={() => setActiveStep(5)}
+                  disabled={processing}
                 >
-                  Voir le Suivi
+                  Terminer
                 </Button>
               </Box>
             </Paper>
           </Grid>
         )}
         
-        {/* Step 5: Files Generated */}
-        {activeStep === 4 && (
+        {/* EXACT SPEC: Étape 6 - Historique et archivage */}
+        {activeStep === 5 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Étape 5: Fichiers Générés
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                Étape 6 : Historique et archivage
               </Typography>
               
-              <Alert severity="success" sx={{ mb: 2 }}>
-                Les fichiers ont été générés avec succès!
+              <Alert severity="success" sx={{ mb: 3 }}>
+                <strong>Tous les traitements sont enregistrés :</strong><br/>
+                • Nom du donneur utilisé<br/>
+                • Date et heure<br/>
+                • Nombre d'adhérents traités<br/>
+                • Montant total<br/>
+                • Fichiers générés (PDF, TXT)<br/>
+                • Nom de l'utilisateur
               </Alert>
+
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+                    Résumé de l'opération
+                  </Typography>
+                  {selectedDonneur && (
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Donneur utilisé:</strong> {selectedDonneur.name}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Date et heure:</strong> {new Date().toLocaleString('fr-FR')}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Nombre d'adhérents traités:</strong> {validationResults.length}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Montant total:</strong> {validationResults.reduce((sum, r) => sum + r.amount, 0).toFixed(2)} TND
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Utilisateur:</strong> {user?.fullName || 'Utilisateur'}
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
 
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <Button variant="outlined" onClick={() => setActiveStep(0)}>
@@ -598,9 +787,15 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                 </Button>
                 <Button 
                   variant="contained" 
-                  onClick={() => onSwitchToTab?.(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3)}
+                  onClick={() => onSwitchToTab?.(1)}
                 >
-                  Voir le Suivi
+                  Voir le Suivi & Statut
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => onSwitchToTab?.(5)}
+                >
+                  Consulter l'Historique
                 </Button>
               </Box>
             </Paper>

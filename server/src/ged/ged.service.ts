@@ -340,17 +340,46 @@ export class GedService {
     if (query.prestataire) {
       where.bordereau = { ...where.bordereau, prestataire: { name: { contains: query.prestataire, mode: 'insensitive' } } };
     }
+    
+    // Role-based filtering
     if (user.role === 'GESTIONNAIRE') {
-      where.bordereau = { ...where.bordereau, clientId: user.id };
+      where.OR = [
+        { uploadedById: user.id },
+        { bordereau: { assignedToUserId: user.id } }
+      ];
+    } else if (user.role === 'CHEF_EQUIPE') {
+      // Chef d'équipe sees documents from their team members
+      const teamMembers = await this.prisma.user.findMany({
+        where: { teamLeaderId: user.id },
+        select: { id: true }
+      });
+      const teamMemberIds = [...teamMembers.map(member => member.id), user.id];
+      
+      where.OR = [
+        { uploadedById: { in: teamMemberIds } },
+        { bordereau: { assignedToUserId: { in: teamMemberIds } } }
+      ];
     }
+    
     // Keyword search (in name, type, and OCR text)
     if (query.keywords) {
-      where.OR = [
+      const keywordConditions = [
         { name: { contains: query.keywords, mode: 'insensitive' } },
         { type: { contains: query.keywords, mode: 'insensitive' } },
         { ocrText: { contains: query.keywords, mode: 'insensitive' } },
       ];
+      
+      if (where.OR) {
+        where.AND = [
+          { OR: where.OR },
+          { OR: keywordConditions }
+        ];
+        delete where.OR;
+      } else {
+        where.OR = keywordConditions;
+      }
     }
+    
     return this.prisma.document.findMany({
       where,
       include: { bordereau: { include: { client: true, prestataire: true } }, uploader: true },
@@ -364,10 +393,23 @@ export class GedService {
       include: { bordereau: true, uploader: true },
     });
     if (!doc) throw new NotFoundException('Document not found');
-    // Access control: Gestionnaire can only view linked docs
-    if (user.role === 'GESTIONNAIRE' && doc.bordereau?.clientId !== user.id) {
-      throw new ForbiddenException('You do not have access to this document');
+    
+    // Access control based on role
+    if (user.role === 'GESTIONNAIRE') {
+      if (doc.uploadedById !== user.id && doc.bordereau?.assignedToUserId !== user.id) {
+        throw new ForbiddenException('You do not have access to this document');
+      }
+    } else if (user.role === 'CHEF_EQUIPE') {
+      // Chef d'équipe can only view documents from their team
+      const uploader = await this.prisma.user.findUnique({ where: { id: doc.uploadedById } });
+      if (uploader?.teamLeaderId !== user.id && uploader?.id !== user.id && doc.bordereau?.assignedToUserId) {
+        const assignedUser = await this.prisma.user.findUnique({ where: { id: doc.bordereau.assignedToUserId } });
+        if (assignedUser?.teamLeaderId !== user.id && assignedUser?.id !== user.id) {
+          throw new ForbiddenException('You do not have access to this document');
+        }
+      }
     }
+    
     return doc;
   }
 

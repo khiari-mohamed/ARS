@@ -26,8 +26,7 @@ const VirementHistory: React.FC<Props> = ({ virementId }) => {
         <ul>
           {history.map((h) => (
             <li key={h.id}>
-              <b>{h.action}</b> par {h.user} le {new Date(h.timestamp).toLocaleString('fr-FR')}
-              {h.remarks && <> — {h.remarks}</>}
+              <b>{h.action}</b> le {new Date(h.timestamp).toLocaleString('fr-FR')}
             </li>
           ))}
         </ul>
