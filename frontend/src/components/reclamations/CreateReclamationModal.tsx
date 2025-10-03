@@ -29,7 +29,9 @@ const CreateReclamationModal: React.FC<Props> = ({ open, onClose, onReclamationC
     severity: 'MOYENNE',
     description: '',
     department: 'RECLAMATIONS',
-    typologie: ''
+    typologie: '',
+    bordereauId: '',
+    contractId: ''
   });
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,7 +46,9 @@ const CreateReclamationModal: React.FC<Props> = ({ open, onClose, onReclamationC
         severity: 'MOYENNE',
         description: '',
         department: 'RECLAMATIONS',
-        typologie: ''
+        typologie: '',
+        bordereauId: '',
+        contractId: ''
       });
       setError(null);
     }
@@ -150,10 +154,27 @@ const CreateReclamationModal: React.FC<Props> = ({ open, onClose, onReclamationC
               label="Typologie Réclamation"
             >
               <MenuItem value="">Non spécifiée</MenuItem>
-              <MenuItem value="Réclamation BS + Demande de renseignement">Réclamation BS + Demande de renseignement</MenuItem>
+              <MenuItem value="Réclamation BS">Réclamation BS</MenuItem>
+              <MenuItem value="Demande renseignement">Demande renseignement</MenuItem>
               <MenuItem value="Réclamation Tiers Payant">Réclamation Tiers Payant</MenuItem>
             </Select>
           </FormControl>
+
+          <TextField
+            label="Numéro Dossier"
+            value={form.bordereauId}
+            onChange={(e) => handleChange('bordereauId', e.target.value)}
+            fullWidth
+            placeholder="Référence du bordereau/dossier"
+          />
+
+          <TextField
+            label="Contrat"
+            value={form.contractId}
+            onChange={(e) => handleChange('contractId', e.target.value)}
+            fullWidth
+            placeholder="ID du contrat"
+          />
 
           <TextField
             label="Description"

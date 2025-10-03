@@ -98,7 +98,7 @@ function ChefEquipeDashboard() {
   useEffect(() => {
     console.log('🔄 Applying filters with dossiers:', dossiers.length);
     applyFilters();
-  }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers]);
+  }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers, documents]);
 
   const loadDashboardData = async () => {
     try {
@@ -115,7 +115,7 @@ function ChefEquipeDashboard() {
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-assignments-dossiers')
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers')
       ]);
       
       console.log('📊 Raw API Responses:');
@@ -276,6 +276,31 @@ function ChefEquipeDashboard() {
     
     console.log('🔍 Final filtered dossiers:', filtered.length, filtered);
     setFilteredDossiers(filtered);
+    
+    // Apply same filters to documents (Dossiers Individuels table)
+    let filteredDocs = [...documents];
+    
+    if (typeFilter !== 'Tous') {
+      filteredDocs = filteredDocs.filter(d => d.type === typeFilter);
+    }
+    
+    if (societeFilter !== 'Toutes') {
+      filteredDocs = filteredDocs.filter(d => d.client === societeFilter);
+    }
+    
+    if (statutFilter !== 'Tous') {
+      filteredDocs = filteredDocs.filter(d => d.statut === statutFilter);
+    }
+    
+    if (searchQuery.trim()) {
+      filteredDocs = filteredDocs.filter(d => 
+        d.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (d.client && d.client.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    
+    console.log('🔍 Final filtered documents:', filteredDocs.length, filteredDocs);
+    setFilteredDocuments(filteredDocs);
   };
 
   const handleSelectAll = () => {

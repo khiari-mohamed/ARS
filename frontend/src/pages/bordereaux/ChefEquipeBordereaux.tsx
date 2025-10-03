@@ -67,16 +67,18 @@ function ChefEquipeBordereaux() {
         setTeamBordereaux(team || []);
         setUserBordereaux(userAssigned || []);
       } else {
-        // Chef d'équipe sees everything
-        const [unassigned, allBordereaux] = await Promise.all([
-          fetchUnassignedBordereaux(),
-          LocalAPI.get('/bordereaux').then(res => {
-            const data = res.data;
-            return Array.isArray(data) ? data : data.items || [];
-          })
-        ]);
-        setUnassignedBordereaux(unassigned || []);
-        setTeamBordereaux(allBordereaux || []);
+        // Chef d'équipe sees only bordereaux from contracts assigned to them
+        console.log('🔍 Loading data for Chef d\'équipe:', user?.id);
+        const response = await LocalAPI.get('/bordereaux/chef-equipe/corbeille');
+        const data = response.data;
+        
+        console.log('📊 Chef équipe corbeille data:', data);
+        console.log('📊 Non affectés:', data.nonAffectes?.length || 0);
+        console.log('📊 En cours:', data.enCours?.length || 0);
+        console.log('📊 Traités:', data.traites?.length || 0);
+        
+        setUnassignedBordereaux(data.nonAffectes || []);
+        setTeamBordereaux([...data.enCours || [], ...data.traites || []]);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -88,15 +90,25 @@ function ChefEquipeBordereaux() {
   const loadGestionnaires = async () => {
     try {
       const users = await fetchUsers();
-      const allGestionnaires = users
-        .filter((u: any) => u.role === 'GESTIONNAIRE')
-        .map((u: any) => ({
-          id: u.id,
-          fullName: u.fullName,
-          workload: u.workload || 0,
-          capacity: u.capacity || 20
-        }));
-      setGestionnaires(allGestionnaires);
+      let filteredGestionnaires;
+      
+      if (isGestionnaire) {
+        // Gestionnaires don't need to see other gestionnaires
+        filteredGestionnaires = [];
+      } else {
+        // Chef d'équipe only sees gestionnaires in their team
+        filteredGestionnaires = users
+          .filter((u: any) => u.role === 'GESTIONNAIRE' && u.teamLeaderId === user?.id)
+          .map((u: any) => ({
+            id: u.id,
+            fullName: u.fullName,
+            workload: u.workload || 0,
+            capacity: u.capacity || 20
+          }));
+      }
+      
+      console.log('🔍 Filtered gestionnaires for chef:', user?.id, 'Count:', filteredGestionnaires.length);
+      setGestionnaires(filteredGestionnaires);
     } catch (error) {
       console.error('Error loading gestionnaires:', error);
     }
@@ -202,7 +214,7 @@ function ChefEquipeBordereaux() {
                 {isGestionnaire ? 'Gestionnaire' : 'Chef d\'Équipe'}
               </h1>
               <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>
-                {isGestionnaire ? 'Accès en lecture seule avec modification des dossiers assignés' : 'Gestion et supervision de l\'équipe'}
+                {isGestionnaire ? 'Accès en lecture seule avec modification des dossiers assignés' : 'Gestion et supervision de votre équipe et contrats assignés'}
               </p>
             </div>
           </div>
@@ -216,7 +228,7 @@ function ChefEquipeBordereaux() {
                 <div style={{ color: isGestionnaire ? '#ef6c00' : '#388e3c', fontSize: '15px', lineHeight: '1.4' }}>
                   {isGestionnaire 
                     ? 'Vous avez une visibilité sur tous les dossiers du bordereau, mais vous ne pouvez changer le statut/état que des dossiers qui vous sont personnellement affectés'
-                    : 'Vous gérez la corbeille globale et supervisez votre équipe de gestionnaires'
+                    : 'Vous gérez uniquement les bordereaux des contrats qui vous sont assignés et supervisez vos gestionnaires'
                   }
                 </div>
               </div>
@@ -293,7 +305,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div>
                   <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>
-                    {[...teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)), ...userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut))].length}
+                    {teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
                   </div>
                   <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
                 </div>
@@ -319,7 +331,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div>
                   <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#9c27b0', marginBottom: '4px' }}>
-                    {gestionnaires.length || 3}
+                    {gestionnaires.length}
                   </div>
                   <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Gestionnaires</div>
                 </div>
@@ -355,7 +367,7 @@ function ChefEquipeBordereaux() {
               className={`chef-equipe-tab ${activeTab === 'en-cours' ? 'active' : ''}`}
               onClick={() => setActiveTab('en-cours')}
             >
-              En cours ({[...teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)), ...userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut))].length})
+              En cours ({teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length})
             </button>
             <button 
               className={`chef-equipe-tab ${activeTab === 'traites' ? 'active' : ''}`}
@@ -405,12 +417,9 @@ function ChefEquipeBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Client / Prestataire</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Référence Bordereau</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date réception BO</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date début Scannérisation</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Bulletin de soins</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date fin de Scannérisation</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Délais contractuels de règlement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date réception équipe Santé</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -483,9 +492,6 @@ function ChefEquipeBordereaux() {
                             {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {bordereau.dateDebutScan ? new Date(bordereau.dateDebutScan).toLocaleDateString('fr-FR') : '-'}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <span style={{ 
                                 background: '#e3f2fd', 
@@ -518,59 +524,6 @@ function ChefEquipeBordereaux() {
                             }}>
                               {bordereau.delaiReglement || 0} jours
                             </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {bordereau.dateReceptionSante ? new Date(bordereau.dateReceptionSante).toLocaleDateString('fr-FR') : '-'}
-                          </td>
-                          {/* Action column for both roles */}
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {isGestionnaire ? (
-                              // Gestionnaire: only modify assigned bordereaux
-                              isAssignedToMe ? (
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button
-                                    style={{
-                                      background: '#4caf50',
-                                      color: 'white',
-                                      border: 'none',
-                                      padding: '4px 8px',
-                                      borderRadius: '4px',
-                                      fontSize: '12px',
-                                      cursor: 'pointer'
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openStatusModal(bordereau);
-                                    }}
-                                  >
-                                    ✏️ Modifier
-                                  </button>
-                                </div>
-                              ) : (
-                                <span style={{ color: '#999', fontSize: '12px' }}>🔒 Lecture seule</span>
-                              )
-                            ) : (
-                              // Chef d'équipe: can modify ALL bordereaux
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                  style={{
-                                    background: '#2196f3',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '12px',
-                                    cursor: 'pointer'
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openStatusModal(bordereau);
-                                  }}
-                                >
-                                  ✏️ Modifier
-                                </button>
-                              </div>
-                            )}
                           </td>
                         </tr>
                         );
@@ -684,13 +637,13 @@ function ChefEquipeBordereaux() {
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
                     {userBordereaux.length}
                   </div>
-                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total dossiers gestionnaire</div>
+                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total bordereaux gestionnaire</div>
                 </div>
                 <div className="chef-equipe-perf-card green">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
                     {userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
                   </div>
-                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>Dossiers traités par le gestionnaire</div>
+                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>bordereaux traités par le gestionnaire</div>
                 </div>
                 <div className="chef-equipe-perf-card orange">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
@@ -709,15 +662,15 @@ function ChefEquipeBordereaux() {
               <>
                 <div className="chef-equipe-perf-card blue">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
-                    {teamBordereaux.length}
+                    {unassignedBordereaux.length + teamBordereaux.length}
                   </div>
-                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total dossiers équipe</div>
+                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total bordereaux équipe</div>
                 </div>
                 <div className="chef-equipe-perf-card green">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
                     {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
                   </div>
-                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>Dossiers traités</div>
+                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>bordereaux traités</div>
                 </div>
                 <div className="chef-equipe-perf-card orange">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
@@ -727,7 +680,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div className="chef-equipe-perf-card purple">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
-                    {teamBordereaux.length > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / teamBordereaux.length) * 100) : 0}%
+                    {(unassignedBordereaux.length + teamBordereaux.length) > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / (unassignedBordereaux.length + teamBordereaux.length)) * 100) : 0}%
                   </div>
                   <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
                 </div>

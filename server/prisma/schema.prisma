@@ -549,26 +549,28 @@ model BSLog {
   user         User         @relation(fields: [userId], references: [id])
 }
 
+// EXACT fields from specifications
 model Adherent {
   id            String         @id @default(uuid())
-  matricule     String
+  matricule     String         // Unique per société
   nom           String
   prenom        String
-  clientId      String
-  rib           String
-  codeAssure    String?
-  numeroContrat String?
-  statut        String         @default("ACTIF")
+  clientId      String         // Société de rattachement
+  rib           String         // 20 digits - compte bancaire personnel
+  codeAssure    String?        // Linked to Contract table field
+  numeroContrat String?        // Numéro de contrat
+  statut        String         @default("ACTIF") // actif/inactif
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  createdById   String?
-  updatedById   String?
+  createdById   String?        // Traceability - user who created
+  updatedById   String?        // Traceability - user who modified
   client        Client         @relation(fields: [clientId], references: [id])
   virementItems VirementItem[]
 
-  @@unique([matricule, clientId])
-  @@index([rib])
+  @@unique([matricule, clientId]) // Matricule unique per société
+  @@index([rib])                  // RIB unique per adherent
   @@index([codeAssure])
+  @@index([matricule, clientId])
 }
 
 model DonneurOrdre {
@@ -603,11 +605,13 @@ model OrdreVirement {
   nombreAdherents    Int
   fichierPdf         String?
   fichierTxt         String?
+  // Recovery tracking fields - EXACT SPEC
   demandeRecuperation Boolean             @default(false)
   dateDemandeRecuperation DateTime?
   montantRecupere    Boolean             @default(false)
   dateMontantRecupere DateTime?
   motifObservation   String?
+  // Validation workflow - Chef équipe → Responsable
   validationStatus   String               @default("EN_ATTENTE_VALIDATION")
   validatedBy        String?
   validatedAt        DateTime?
@@ -619,6 +623,10 @@ model OrdreVirement {
   suiviVirements     SuiviVirement[]
   historique         VirementHistorique[]
   items              VirementItem[]
+
+  @@index([etatVirement])
+  @@index([validationStatus])
+  @@index([demandeRecuperation, montantRecupere])
 }
 
 model VirementItem {
@@ -1029,13 +1037,14 @@ model DocumentAssignmentHistory {
   @@index([createdAt])
 }
 
+// EXACT 6 states from specifications
 enum EtatVirement {
-  NON_EXECUTE
-  EN_COURS_EXECUTION
-  EXECUTE_PARTIELLEMENT
-  REJETE
-  BLOQUE
-  EXECUTE
+  NON_EXECUTE              // When bordereau is "Traité"
+  EN_COURS_EXECUTION       // Applied by Finance service
+  EXECUTE_PARTIELLEMENT    // Partial execution (Finance action)
+  REJETE                   // Failed (Finance action)
+  BLOQUE                   // Suspended/stopped (Finance action)
+  EXECUTE                  // When bordereau is "Payé"
 }
 
 enum DocumentStatus {

@@ -44,8 +44,21 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getTypesDetail(@Req() req: any) {
     const accessFilter = this.buildAccessFilter(req.user);
+    
+    let documentFilter: any = {
+      bordereau: { ...accessFilter, archived: false }
+    };
+    
+    // For gestionnaires, only show their assigned documents
+    if (req.user?.role === 'GESTIONNAIRE') {
+      documentFilter = {
+        assignedToUserId: req.user.id,
+        bordereau: { archived: false }
+      };
+    }
+    
     const documents = await this.prisma.document.findMany({
-      where: { bordereau: { ...accessFilter, archived: false } },
+      where: documentFilter,
       include: { 
         bordereau: { include: { client: true } },
         assignedTo: { select: { fullName: true } }
@@ -109,25 +122,58 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDerniersDossiers(@Req() req: any) {
     const accessFilter = this.buildAccessFilter(req.user);
-    const bordereaux = await this.prisma.bordereau.findMany({
-      where: { ...accessFilter, archived: false },
-      include: {
-        client: { select: { id: true, name: true } },
-        contract: { 
-          select: { 
-            id: true, 
-            clientName: true,
-            client: { select: { id: true, name: true } }
-          } 
+    
+    // For gestionnaires, only get bordereaux where they have assigned documents
+    let bordereaux;
+    if (req.user?.role === 'GESTIONNAIRE') {
+      bordereaux = await this.prisma.bordereau.findMany({
+        where: { 
+          archived: false,
+          documents: {
+            some: {
+              assignedToUserId: req.user.id
+            }
+          }
         },
-        documents: {
-          include: { assignedTo: { select: { id: true, fullName: true } } }
+        include: {
+          client: { select: { id: true, name: true } },
+          contract: { 
+            select: { 
+              id: true, 
+              clientName: true,
+              client: { select: { id: true, name: true } }
+            } 
+          },
+          documents: {
+            where: { assignedToUserId: req.user.id },
+            include: { assignedTo: { select: { id: true, fullName: true } } }
+          },
+          currentHandler: { select: { id: true, fullName: true } }
         },
-        currentHandler: { select: { id: true, fullName: true } }
-      },
-      orderBy: { dateReception: 'desc' },
-      take: 5
-    });
+        orderBy: { dateReception: 'desc' },
+        take: 5
+      });
+    } else {
+      bordereaux = await this.prisma.bordereau.findMany({
+        where: { ...accessFilter, archived: false },
+        include: {
+          client: { select: { id: true, name: true } },
+          contract: { 
+            select: { 
+              id: true, 
+              clientName: true,
+              client: { select: { id: true, name: true } }
+            } 
+          },
+          documents: {
+            include: { assignedTo: { select: { id: true, fullName: true } } }
+          },
+          currentHandler: { select: { id: true, fullName: true } }
+        },
+        orderBy: { dateReception: 'desc' },
+        take: 5
+      });
+    }
 
     return bordereaux.map(bordereau => {
       const totalDocuments = bordereau.documents.length;
@@ -150,13 +196,22 @@ export class ChefEquipeTableauBordController {
       if (enCoursDocuments > 0) states.push('En cours');
       if (totalDocuments - traitedDocuments - enCoursDocuments > 0) states.push('Nouveau');
       
+      // For gestionnaires, show their name if they have documents in this bordereau
+      let gestionnaireDisplay = bordereau.currentHandler?.fullName || 'Non assigné';
+      if (req.user?.role === 'GESTIONNAIRE' && bordereau.documents.length > 0) {
+        const assignedDoc = bordereau.documents.find(doc => doc.assignedTo?.id === req.user.id);
+        if (assignedDoc) {
+          gestionnaireDisplay = assignedDoc.assignedTo.fullName;
+        }
+      }
+      
       return {
         id: bordereau.id,
         reference: bordereau.reference, // Use actual bordereau reference
         client: bordereau.contract?.client?.name || bordereau.client?.name || 'N/A',
         type: documentTypes || 'Aucun document', // Show document types
         statut: this.getStatutLabel(bordereau.statut),
-        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+        gestionnaire: gestionnaireDisplay,
         date: bordereau.dateReception.toLocaleDateString('fr-FR'),
         completionPercentage,
         dossierStates: states.length > 0 ? states : ['Nouveau']
@@ -169,15 +224,11 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDossiersEnCours(@Req() req: any, @Query('type') typeFilter?: string) {
     const accessFilter = this.buildAccessFilter(req.user);
-    const where: any = {
-      ...accessFilter,
-      statut: { in: ['EN_COURS', 'ASSIGNE'] },
-      archived: false
-    };
-
-    // If type filter is applied, filter by document types within bordereaux
+    
     let bordereaux;
-    if (typeFilter && typeFilter !== 'Tous types') {
+    
+    // For gestionnaires, only get bordereaux where they have assigned documents
+    if (req.user?.role === 'GESTIONNAIRE') {
       const typeMapping = {
         'Prestation': 'BULLETIN_SOIN',
         'Adhésion': 'ADHESION',
@@ -186,31 +237,17 @@ export class ChefEquipeTableauBordController {
         'Réclamation': 'RECLAMATION'
       };
       
-      bordereaux = await this.prisma.bordereau.findMany({
-        where: {
-          ...where,
-          documents: {
-            some: { type: typeMapping[typeFilter] }
+      const where: any = {
+        archived: false,
+        statut: { in: ['EN_COURS', 'ASSIGNE'] },
+        documents: {
+          some: {
+            assignedToUserId: req.user.id,
+            ...(typeFilter && typeFilter !== 'Tous types' ? { type: typeMapping[typeFilter] } : {})
           }
-        },
-        include: {
-          client: { select: { id: true, name: true } },
-          contract: { 
-            select: { 
-              id: true, 
-              clientName: true,
-              client: { select: { id: true, name: true } }
-            } 
-          },
-          documents: {
-            include: { assignedTo: { select: { id: true, fullName: true } } }
-          },
-          currentHandler: { select: { id: true, fullName: true } }
-        },
-        orderBy: { dateReception: 'asc' },
-        take: 5
-      });
-    } else {
+        }
+      };
+      
       bordereaux = await this.prisma.bordereau.findMany({
         where,
         include: {
@@ -223,6 +260,7 @@ export class ChefEquipeTableauBordController {
             } 
           },
           documents: {
+            where: { assignedToUserId: req.user.id },
             include: { assignedTo: { select: { id: true, fullName: true } } }
           },
           currentHandler: { select: { id: true, fullName: true } }
@@ -230,6 +268,68 @@ export class ChefEquipeTableauBordController {
         orderBy: { dateReception: 'asc' },
         take: 5
       });
+    } else {
+      const where: any = {
+        ...accessFilter,
+        statut: { in: ['EN_COURS', 'ASSIGNE'] },
+        archived: false
+      };
+
+      // If type filter is applied, filter by document types within bordereaux
+      if (typeFilter && typeFilter !== 'Tous types') {
+        const typeMapping = {
+          'Prestation': 'BULLETIN_SOIN',
+          'Adhésion': 'ADHESION',
+          'Complément Dossier': 'COMPLEMENT_INFORMATION',
+          'Avenant': 'CONTRAT_AVENANT',
+          'Réclamation': 'RECLAMATION'
+        };
+        
+        bordereaux = await this.prisma.bordereau.findMany({
+          where: {
+            ...where,
+            documents: {
+              some: { type: typeMapping[typeFilter] }
+            }
+          },
+          include: {
+            client: { select: { id: true, name: true } },
+            contract: { 
+              select: { 
+                id: true, 
+                clientName: true,
+                client: { select: { id: true, name: true } }
+              } 
+            },
+            documents: {
+              include: { assignedTo: { select: { id: true, fullName: true } } }
+            },
+            currentHandler: { select: { id: true, fullName: true } }
+          },
+          orderBy: { dateReception: 'asc' },
+          take: 5
+        });
+      } else {
+        bordereaux = await this.prisma.bordereau.findMany({
+          where,
+          include: {
+            client: { select: { id: true, name: true } },
+            contract: { 
+              select: { 
+                id: true, 
+                clientName: true,
+                client: { select: { id: true, name: true } }
+              } 
+            },
+            documents: {
+              include: { assignedTo: { select: { id: true, fullName: true } } }
+            },
+            currentHandler: { select: { id: true, fullName: true } }
+          },
+          orderBy: { dateReception: 'asc' },
+          take: 5
+        });
+      }
     }
 
     return bordereaux.map(bordereau => {
@@ -594,6 +694,11 @@ export class ChefEquipeTableauBordController {
     });
 
     if (document) {
+      // Check if gestionnaire can modify this document
+      if (req.user?.role === 'GESTIONNAIRE' && document.assignedToUserId !== req.user.id) {
+        throw new Error('Accès refusé: Ce document ne vous est pas assigné');
+      }
+      
       // Update document status
       await this.prisma.document.update({
         where: { id: body.dossierId },
@@ -608,6 +713,11 @@ export class ChefEquipeTableauBordController {
     });
 
     if (bordereau) {
+      // Check if gestionnaire can modify this bordereau
+      if (req.user?.role === 'GESTIONNAIRE' && bordereau.currentHandlerId !== req.user.id) {
+        throw new Error('Accès refusé: Ce bordereau ne vous est pas assigné');
+      }
+      
       // Update bordereau status
       await this.prisma.bordereau.update({
         where: { id: body.dossierId },
@@ -786,10 +896,21 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDocumentsIndividuels(@Req() req: any) {
     const accessFilter = this.buildAccessFilter(req.user);
+    
+    let documentFilter: any = {
+      bordereau: { ...accessFilter, archived: false }
+    };
+    
+    // For gestionnaires, only show documents assigned to them
+    if (req.user?.role === 'GESTIONNAIRE') {
+      documentFilter = {
+        assignedToUserId: req.user.id,
+        bordereau: { archived: false }
+      };
+    }
+    
     const documents = await this.prisma.document.findMany({
-      where: { 
-        bordereau: { ...accessFilter, archived: false }
-      },
+      where: documentFilter,
       include: {
         bordereau: { include: { client: true } },
         assignedTo: true
@@ -815,8 +936,22 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireAssignmentsDossiers(@Req() req: any) {
     const accessFilter = this.buildAccessFilter(req.user);
+    
+    // Filter gestionnaires based on user role
+    let gestionnaireFilter: any = { role: 'GESTIONNAIRE' };
+    
+    // If user is CHEF_EQUIPE, only show gestionnaires in their team
+    if (req.user?.role === 'CHEF_EQUIPE') {
+      gestionnaireFilter.teamLeaderId = req.user.id;
+    }
+    
+    // If user is GESTIONNAIRE, only show themselves
+    if (req.user?.role === 'GESTIONNAIRE') {
+      gestionnaireFilter.id = req.user.id;
+    }
+    
     const gestionnaires = await this.prisma.user.findMany({
-      where: { role: 'GESTIONNAIRE' },
+      where: gestionnaireFilter,
       select: {
         id: true,
         fullName: true,
@@ -1006,6 +1141,12 @@ export class ChefEquipeTableauBordController {
           teamLeaderId: user.id
         }
       };
+    }
+    
+    if (user?.role === 'GESTIONNAIRE') {
+      // For gestionnaires, filter is handled at document level, not bordereau level
+      // Return empty filter here as we filter by assignedToUserId in specific queries
+      return {};
     }
     
     return {};

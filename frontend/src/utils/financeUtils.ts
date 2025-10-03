@@ -11,8 +11,8 @@ export function hasDiscrepancy(v: Virement): boolean {
 }
 
 export function isOverdue(v: Virement, days: number = 7): boolean {
-  if (v.status === 'confirmed') return false;
-  const virementDate = new Date(v.date);
+  if (v.etatVirement === 'EXECUTE') return false;
+  const virementDate = new Date(v.dateCreation);
   const now = new Date();
   const diff = (now.getTime() - virementDate.getTime()) / (1000 * 3600 * 24);
   return diff > days;

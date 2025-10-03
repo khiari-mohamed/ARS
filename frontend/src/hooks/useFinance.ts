@@ -12,7 +12,7 @@ export function useFinance(initialFilters: VirementSearchParams = {}) {
 
   const loadVirements = useCallback(() => {
     setLoading(true);
-    fetchVirements({ ...filters, page, size })
+    fetchVirements(filters)
       .then(setVirements)
       .catch((err) => setError(err.message || 'Erreur lors du chargement'))
       .finally(() => setLoading(false));

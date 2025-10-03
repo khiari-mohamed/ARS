@@ -27,6 +27,7 @@ export interface Reclamation {
   client?: { id: string; name: string };
   documentId?: string;
   bordereauId?: string;
+  contractId?: string;
   type: string;
   severity: ReclamationSeverity;
   status: ReclamationStatus;
@@ -63,6 +64,7 @@ export interface CreateReclamationDTO {
   clientId: string;
   documentId?: string;
   bordereauId?: string;
+  contractId?: string;
   type: string;
   severity: ReclamationSeverity;
   description: string;

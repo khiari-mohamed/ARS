@@ -32,7 +32,10 @@ import { financeService } from '../../services/financeService';
 
 
 const FinanceModule: React.FC = () => {
-  const [tab, setTab] = useState(0);
+  // Read tab from URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialTab = parseInt(urlParams.get('tab') || '0', 10);
+  const [tab, setTab] = useState(initialTab);
   const [selectedVirement, setSelectedVirement] = useState<string | null>(null);
   const [showVirementModal, setShowVirementModal] = useState(false);
   const theme = useTheme();
@@ -50,22 +53,14 @@ const FinanceModule: React.FC = () => {
 
   const alertsCount = Array.isArray(alerts) ? alerts.filter((a: any) => a.level === 'CRITIQUE' || a.level === 'DEPASSEMENT').length : 0;
 
+  // EXACT SPEC: 6 tabs as per requirements
   const tabLabels = [
-    // COMMENTED OUT: Static demo tab - Use functional tabs instead
-    // 'Vue d\'Ensemble',
-    'Tableau de Bord',
-    'Ordre de Virement',
-    ...(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? ['Validation OV'] : []),
-    'Suivi & Statut',
-    'Suivi Virement',
-    'Donneurs d\'Ordre',
-    'Adhérents',
-    'Alertes & Retards',
-    'Formats Bancaires',
-    'Configuration SLA',
-    'Rapprochement Auto',
-    'Rapports Financiers',
-    'Rapports & Export'
+    'Tableau de Bord',           // TAB 1: Dashboard with filters & recent OV
+    'Suivi & Statut',            // TAB 2: Bordereaux Traités tracking
+    'Ordre de Virement',         // TAB 3: OV Processing wizard
+    'Donneur d\'Ordre',          // TAB 4: Bank account management
+    'Adhérents',                 // TAB 5: Adherent database
+    'Historique & Archives'      // TAB 6: Historical records
   ];
 
   const handleVirementSelect = (id: string) => {
@@ -108,25 +103,13 @@ const FinanceModule: React.FC = () => {
               {tabLabels[tab]}
             </Typography>
             <Box>
-              {/* COMMENTED OUT: Static demo tab - Use functional tabs instead */}
-              {/* {tab === 0 && <FinanceModuleOverview />} */}
+              {/* Mobile: Same 6 tabs */}
               {tab === 0 && <FinanceDashboard />}
-              {tab === 1 && <OVProcessingTab onSwitchToTab={setTab} />}
-              {(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN') && tab === 2 && <OVValidationTab />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 3 : 2) && <TrackingTab />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3) && <SuiviVirementTab />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 5 : 4) && <DonneursTab />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 6 : 5) && <AdherentsTab />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 7 : 6) && (
-                <Badge badgeContent={alertsCount} color="error">
-                  <FinanceAlertsTab />
-                </Badge>
-              )}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 8 : 7) && <MultiBankFormatManager />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 9 : 8) && <SlaConfigurationTab />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 10 : 9) && <AutomatedReconciliation />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 11 : 10) && <FinancialReportingDashboard />}
-              {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 12 : 11) && <ReportsTab />}
+              {tab === 1 && <TrackingTab />}
+              {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
+              {tab === 3 && <DonneursTab />}
+              {tab === 4 && <AdherentsTab />}
+              {tab === 5 && <ReportsTab />}
             </Box>
           </Paper>
         </>
@@ -157,21 +140,23 @@ const FinanceModule: React.FC = () => {
           </Tabs>
 
           <Box>
-            {/* COMMENTED OUT: Static demo tab - Use functional tabs instead */}
-            {/* {tab === 0 && <FinanceModuleOverview />} */}
+            {/* TAB 1: Tableau de Bord Finance */}
             {tab === 0 && <FinanceDashboard />}
-            {tab === 1 && <OVProcessingTab onSwitchToTab={setTab} />}
-            {(user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN') && tab === 2 && <OVValidationTab />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 3 : 2) && <TrackingTab />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 4 : 3) && <SuiviVirementTab />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 5 : 4) && <DonneursTab />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 6 : 5) && <AdherentsTab />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 7 : 6) && <FinanceAlertsTab />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 8 : 7) && <MultiBankFormatManager />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 9 : 8) && <SlaConfigurationTab />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 10 : 9) && <AutomatedReconciliation />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 11 : 10) && <FinancialReportingDashboard />}
-            {tab === (user?.role === 'RESPONSABLE_EQUIPE' || user?.role === 'SUPER_ADMIN' ? 12 : 11) && <ReportsTab />}
+            
+            {/* TAB 2: Suivi & Statut - Bordereaux Traités */}
+            {tab === 1 && <TrackingTab />}
+            
+            {/* TAB 3: Ordre de Virement - Processing Wizard */}
+            {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
+            
+            {/* TAB 4: Donneur d'Ordre Management */}
+            {tab === 3 && <DonneursTab />}
+            
+            {/* TAB 5: Adhérents Database */}
+            {tab === 4 && <AdherentsTab />}
+            
+            {/* TAB 6: Historique & Archives */}
+            {tab === 5 && <ReportsTab />}
           </Box>
         </Paper>
       )}

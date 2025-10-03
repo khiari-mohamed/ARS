@@ -93,6 +93,8 @@ function GestionnaireDashboardNew() {
       
       if (statsResponse.data) {
         // Process types-detail response (same as chef d'équipe)
+        console.log('📊 Stats Response Data:', statsResponse.data);
+        console.log('📊 Prestation total from backend:', statsResponse.data.Prestation?.total);
         const transformedStats = {
           prestation: {
             total: statsResponse.data.Prestation?.total || 0,
@@ -125,6 +127,7 @@ function GestionnaireDashboardNew() {
             gestionnaireBreakdown: statsResponse.data.Avenant?.gestionnaireBreakdown || {}
           }
         };
+        console.log('📊 Transformed stats:', transformedStats);
         setStats(transformedStats);
       }
       
@@ -150,6 +153,7 @@ function GestionnaireDashboardNew() {
         
         console.log('📄 Processing documents:', allDocuments.length);
         console.log('📄 Documents:', allDocuments);
+        console.log('📄 Documents by client:', allDocuments.map(d => ({ ref: d.reference, client: d.client })));
         setDocuments(allDocuments);
       } else {
         console.log('⚠️ No documents data received');

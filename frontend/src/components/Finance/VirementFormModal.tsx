@@ -46,8 +46,7 @@ const VirementFormModal: React.FC<Props> = ({ virementId, onClose }) => {
       <div className="modal-content">
         <h3>Confirmer le virement</h3>
         <p>
-          <b>Client:</b> {virement.clientName}<br />
-          <b>Montant:</b> {virement.amount}<br />
+          <b>Montant:</b> {virement.montantTotal}<br />
           <b>Référence:</b> {virement.reference}
         </p>
         <textarea

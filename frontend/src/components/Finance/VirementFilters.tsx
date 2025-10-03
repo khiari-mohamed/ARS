@@ -13,9 +13,8 @@ const VirementFilters: React.FC<Props> = ({ onChange }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onChange({
-      clientName: clientName || undefined,
-      bordereauReference: reference || undefined,
-      confirmed: status === 'all' ? undefined : status === 'confirmed',
+      dateFrom: undefined,
+      dateTo: undefined,
     });
   };
 

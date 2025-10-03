@@ -280,7 +280,7 @@ const FinanceDashboard: React.FC = () => {
       <Card elevation={2}>
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">Ordres de Virement Récents</Typography>
+            <Typography variant="h6">Bloc Ordres de virement récents</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
                 variant="outlined"
@@ -295,22 +295,23 @@ const FinanceDashboard: React.FC = () => {
                 size="small"
                 onClick={() => setShowAllRecentOrders(!showAllRecentOrders)}
               >
-                {showAllRecentOrders ? 'Afficher moins' : 'Afficher tout'}
+                {showAllRecentOrders ? 'Réduire' : 'Afficher tout'}
               </Button>
               <Button 
                 variant="outlined" 
                 size="small"
                 onClick={loadDashboard}
+                startIcon={<Refresh />}
               >
                 Actualiser
               </Button>
             </Box>
           </Box>
           
-          {/* Recent Orders Filters */}
+          {/* EXACT SPEC: Filtres - Compagnie d'assurance / Client / Période */}
           {showRecentOrdersFilters && (
             <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
-              <Typography variant="subtitle2" sx={{ mb: 2 }}>Filtres pour les ordres récents</Typography>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>Filtres : Compagnie d'assurance / Client / Période</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={3}>
                   <TextField
@@ -333,7 +334,7 @@ const FinanceDashboard: React.FC = () => {
                 <Grid item xs={12} md={2}>
                   <TextField
                     fullWidth
-                    label="Date début"
+                    label="Période - Début"
                     type="date"
                     value={recentOrdersFilters.dateFrom}
                     onChange={(e) => handleRecentOrdersFilterChange('dateFrom', e.target.value)}
@@ -344,7 +345,7 @@ const FinanceDashboard: React.FC = () => {
                 <Grid item xs={12} md={2}>
                   <TextField
                     fullWidth
-                    label="Date fin"
+                    label="Période - Fin"
                     type="date"
                     value={recentOrdersFilters.dateTo}
                     onChange={(e) => handleRecentOrdersFilterChange('dateTo', e.target.value)}
@@ -359,7 +360,7 @@ const FinanceDashboard: React.FC = () => {
                     size="small"
                     fullWidth
                   >
-                    Effacer
+                    Réinitialiser
                   </Button>
                 </Grid>
               </Grid>
@@ -371,13 +372,13 @@ const FinanceDashboard: React.FC = () => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Référence</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Montant</TableCell>
-                  <TableCell>État</TableCell>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Demande Récupération</TableCell>
-                  <TableCell>Montant Récupéré</TableCell>
+                  <TableCell><strong>Référence OV</strong></TableCell>
+                  <TableCell><strong>Client / Société</strong></TableCell>
+                  <TableCell><strong>Montant</strong></TableCell>
+                  <TableCell><strong>Statut</strong></TableCell>
+                  <TableCell><strong>Date</strong></TableCell>
+                  <TableCell><strong>Demande de récupération</strong></TableCell>
+                  <TableCell><strong>Montant récupéré</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -490,10 +491,10 @@ const FinanceDashboard: React.FC = () => {
         </Box>
       </Box>
       
-      {/* Filters Section */}
+      {/* EXACT SPEC: Filtres disponibles - Compagnie d'assurance, Client, Période */}
       {showFilters && (
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Filtres</Typography>
+        <Paper sx={{ p: 2, mb: 3, bgcolor: '#f8f9fa' }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Filtres disponibles</Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} md={3}>
               <TextField
@@ -502,6 +503,7 @@ const FinanceDashboard: React.FC = () => {
                 value={filters.compagnie}
                 onChange={(e) => handleFilterChange('compagnie', e.target.value)}
                 size="small"
+                placeholder="Filtrer par compagnie"
               />
             </Grid>
             <Grid item xs={12} md={3}>
@@ -511,12 +513,13 @@ const FinanceDashboard: React.FC = () => {
                 value={filters.client}
                 onChange={(e) => handleFilterChange('client', e.target.value)}
                 size="small"
+                placeholder="Filtrer par client"
               />
             </Grid>
             <Grid item xs={12} md={2}>
               <TextField
                 fullWidth
-                label="Date début"
+                label="Période - Début"
                 type="date"
                 value={filters.dateFrom}
                 onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
@@ -527,7 +530,7 @@ const FinanceDashboard: React.FC = () => {
             <Grid item xs={12} md={2}>
               <TextField
                 fullWidth
-                label="Date fin"
+                label="Période - Fin"
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => handleFilterChange('dateTo', e.target.value)}
@@ -536,12 +539,12 @@ const FinanceDashboard: React.FC = () => {
               />
             </Grid>
             <Grid item xs={12} md={2}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button variant="contained" onClick={applyFilters} size="small">
+              <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
+                <Button variant="contained" onClick={applyFilters} size="small" fullWidth>
                   Appliquer
                 </Button>
-                <Button variant="outlined" onClick={clearFilters} size="small">
-                  Effacer
+                <Button variant="outlined" onClick={clearFilters} size="small" fullWidth>
+                  Réinitialiser
                 </Button>
               </Box>
             </Grid>

@@ -275,19 +275,26 @@ const AdherentsTab: React.FC = () => {
   const duplicateRibCount = adherents.filter(a => a.duplicateRib).length;
 
   return (
-    <Paper elevation={2} sx={{ p: 3 }}>
-      <Grid container justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography variant="h6">
-          Adhérents ({filteredAdherents.length})
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleAdd}
-        >
-          Ajouter Adhérent
-        </Button>
-      </Grid>
+    <Box>
+      {/* EXACT SPEC: TAB 5 - Adhérents */}
+      <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
+        Gestion de la Base Adhérents
+      </Typography>
+      
+      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+        <Grid container justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Tableau des Adhérents ({filteredAdherents.length})
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleAdd}
+            size="large"
+          >
+            + Ajouter un adhérent
+          </Button>
+        </Grid>
 
       {/* Duplicate RIB Alert */}
       {duplicateRibCount > 0 && (
@@ -297,8 +304,11 @@ const AdherentsTab: React.FC = () => {
         </Alert>
       )}
 
-      {/* Filters */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      {/* EXACT SPEC: Recherche & Filtres */}
+      <Paper variant="outlined" sx={{ p: 2.5, mb: 3, bgcolor: '#f8f9fa' }}>
+        <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+          🔍 Recherche & Filtres
+        </Typography>
         <Stack direction="row" spacing={2} flexWrap="wrap">
           <TextField
             label="Recherche"
@@ -306,7 +316,7 @@ const AdherentsTab: React.FC = () => {
             onChange={(e) => setFilters({...filters, search: e.target.value})}
             size="small"
             placeholder="Matricule, nom, prénom..."
-            sx={{ minWidth: 200 }}
+            sx={{ minWidth: 250 }}
           />
           
           <TextField
@@ -314,10 +324,11 @@ const AdherentsTab: React.FC = () => {
             value={filters.society}
             onChange={(e) => setFilters({...filters, society: e.target.value})}
             size="small"
-            sx={{ minWidth: 150 }}
+            placeholder="Filtrer par société"
+            sx={{ minWidth: 200 }}
           />
           
-          <FormControl size="small" sx={{ minWidth: 120 }}>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Statut</InputLabel>
             <Select
               value={filters.status}
@@ -325,8 +336,8 @@ const AdherentsTab: React.FC = () => {
               label="Statut"
             >
               <MenuItem value="">Tous</MenuItem>
-              <MenuItem value="active">Actif</MenuItem>
-              <MenuItem value="inactive">Inactif</MenuItem>
+              <MenuItem value="active">🟢 Actif</MenuItem>
+              <MenuItem value="inactive">⚫ Inactif</MenuItem>
             </Select>
           </FormControl>
           
@@ -334,23 +345,49 @@ const AdherentsTab: React.FC = () => {
             variant="outlined" 
             onClick={() => setFilters({society: '', status: '', search: ''})}
           >
-            Réinitialiser
+            🔄 Appliquer
           </Button>
         </Stack>
       </Paper>
 
+      {/* EXACT SPEC: Import massif section */}
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+          📅 Import Massif
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Le fichier d'alimentation doit contenir les colonnes obligatoires :
+        </Typography>
+        <Typography variant="body2" component="div">
+          • Matricule (unique par société)<br/>
+          • Société<br/>
+          • Nom et prénom<br/>
+          • RIB (20 chiffres)<br/>
+          • Code assuré (lié au champ ajouté dans la table Contrat)<br/>
+          • Numéro de contrat
+        </Typography>
+        <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+          <Button variant="contained" startIcon={<AddIcon />}>
+            📁 Importer fichier
+          </Button>
+          <Button variant="outlined">
+            📋 Télécharger modèle
+          </Button>
+        </Box>
+      </Alert>
+
       <Box sx={{ overflowX: 'auto', width: '100%' }}>
         <Table sx={{ minWidth: 800 }}>
           <TableHead>
-            <TableRow>
-              <TableCell>Matricule</TableCell>
-              <TableCell>Société</TableCell>
-              <TableCell>Nom et Prénom</TableCell>
-              <TableCell>RIB (20 chiffres)</TableCell>
-              <TableCell>Code Assuré</TableCell>
-              <TableCell>Numéro de Contrat</TableCell>
-              <TableCell>Statut</TableCell>
-              <TableCell>Actions</TableCell>
+            <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+              <TableCell><strong>Matricule (unique par société)</strong></TableCell>
+              <TableCell><strong>Société</strong></TableCell>
+              <TableCell><strong>Nom et Prénom</strong></TableCell>
+              <TableCell><strong>RIB (20 chiffres)</strong></TableCell>
+              <TableCell><strong>Code assuré</strong></TableCell>
+              <TableCell><strong>Numéro de contrat</strong></TableCell>
+              <TableCell><strong>Statut actif/inactif</strong></TableCell>
+              <TableCell><strong>Actions</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -395,13 +432,27 @@ const AdherentsTab: React.FC = () => {
         </Table>
       </Box>
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={dialog.open} onClose={() => setDialog({open: false, adherent: null})} maxWidth="sm" fullWidth>
+      </Paper>
+
+      {/* EXACT SPEC: Formulaire Adhérent */}
+      <Dialog open={dialog.open} onClose={() => setDialog({open: false, adherent: null})} maxWidth="md" fullWidth>
         <DialogTitle>
-          {dialog.adherent ? 'Modifier' : 'Ajouter'} Adhérent
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            📝 {dialog.adherent ? 'Modifier' : 'Ajouter'} un Adhérent
+          </Typography>
+          <Typography variant="caption" color="textSecondary">
+            Modifiable en cas de mise à jour RIB ou ajout nouvel adhérent (traçabilité conservée)
+          </Typography>
         </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>Règles de gestion :</strong><br/>
+            • Le matricule ne peut pas être dupliqué pour une même société<br/>
+            • Le RIB est unique à un seul adhérent (sauf cas exceptionnels)<br/>
+            • Si un RIB existe déjà → alerte<br/>
+            • Si un matricule existe déjà dans la même société → rejet
+          </Alert>
+          <Grid container spacing={2.5} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
               <TextField
                 label="Matricule"
@@ -410,16 +461,18 @@ const AdherentsTab: React.FC = () => {
                 fullWidth
                 required
                 disabled={!!dialog.adherent}
-                helperText={dialog.adherent ? "Matricule cannot be changed" : ""}
+                helperText={dialog.adherent ? "Le matricule ne peut pas être modifié" : "Unique dans chaque société"}
+                placeholder="Ex: M001"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Société"
+                label="Société de rattachement"
                 value={form.society}
                 onChange={(e) => setForm({...form, society: e.target.value})}
                 fullWidth
                 required
+                placeholder="Via l'identifiant existant"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -442,74 +495,74 @@ const AdherentsTab: React.FC = () => {
             </Grid>
             <Grid item xs={12}>
               <TextField
-                label="RIB (20 chiffres)"
+                label="RIB (compte bancaire personnel)"
                 value={form.rib}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, ''); // Only digits
+                  const value = e.target.value.replace(/\D/g, '');
                   setForm({...form, rib: value});
                 }}
                 fullWidth
                 required
-                helperText={`${form.rib.length}/20 chiffres`}
+                helperText={`${form.rib.length}/20 chiffres - Le RIB doit contenir exactement 20 chiffres`}
                 inputProps={{ maxLength: 20, pattern: '[0-9]*' }}
                 error={checkDuplicateRib(form.rib, dialog.adherent?.id) || (form.rib.length > 0 && form.rib.length !== 20)}
+                placeholder="12345678901234567890"
               />
               {checkDuplicateRib(form.rib, dialog.adherent?.id) && (
                 <Alert severity="warning" sx={{ mt: 1 }}>
-                  Ce RIB est déjà utilisé par un autre adhérent. Une justification sera requise.
+                  ⚠️ ALERTE: Ce RIB est déjà utilisé par un autre adhérent. Sauf cas exceptionnels (compte partagé, compte familial).
                 </Alert>
               )}
               {form.rib.length > 0 && form.rib.length !== 20 && (
                 <Alert severity="error" sx={{ mt: 1 }}>
-                  Le RIB doit contenir exactement 20 chiffres.
+                  ❌ Le RIB doit contenir exactement 20 chiffres.
                 </Alert>
               )}
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Code Assuré"
+                label="Code assuré"
                 value={form.codeAssure}
                 onChange={(e) => setForm({...form, codeAssure: e.target.value})}
                 fullWidth
                 required
-                helperText="Doit correspondre au champ dans la table Contrat"
+                helperText="Lié au champ ajouté dans la table Contrat"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Numéro de Contrat"
+                label="Numéro de contrat"
                 value={form.numeroContrat}
                 onChange={(e) => setForm({...form, numeroContrat: e.target.value})}
                 fullWidth
                 required
-                helperText="Référence du contrat associé"
               />
             </Grid>
             <Grid item xs={12}>
               <FormControl fullWidth>
-                <InputLabel>Statut</InputLabel>
+                <InputLabel>Statut actif/inactif (optionnel)</InputLabel>
                 <Select
                   value={form.status}
                   onChange={(e) => setForm({...form, status: e.target.value as 'active' | 'inactive'})}
-                  label="Statut"
+                  label="Statut actif/inactif (optionnel)"
                 >
-                  <MenuItem value="active">Actif</MenuItem>
-                  <MenuItem value="inactive">Inactif</MenuItem>
+                  <MenuItem value="active">🟢 Actif</MenuItem>
+                  <MenuItem value="inactive">⚫ Inactif</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialog({open: false, adherent: null})}>
-            Annuler
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setDialog({open: false, adherent: null})} variant="outlined">
+            ❌ Annuler
           </Button>
-          <Button onClick={handleSave} variant="contained">
-            {dialog.adherent ? 'Modifier' : 'Ajouter'}
+          <Button onClick={handleSave} variant="contained" size="large">
+            {dialog.adherent ? '💾 Enregistrer' : '+ Ajouter'}
           </Button>
         </DialogActions>
       </Dialog>
-    </Paper>
+    </Box>
   );
 };
 
