@@ -1568,6 +1568,7 @@ const EnhancedDashboard: React.FC = () => {
                               >
                                 Modifier Statut
                               </button>
+                              
                             </div>
                           </td>
                         </tr>
@@ -2168,7 +2169,7 @@ const EnhancedDashboard: React.FC = () => {
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <select 
+                  {/*<select 
                     onChange={(e) => handleSuperAdminStatusChangeInModal(e.target.value)}
                     style={{
                       padding: '8px 12px',
@@ -2182,7 +2183,7 @@ const EnhancedDashboard: React.FC = () => {
                     <option value="En cours">En cours</option>
                     <option value="Traité">Traité</option>
                     <option value="Retourné">Retourné</option>
-                  </select>
+                  </select>*/}
                   <button 
                     onClick={closeSuperAdminPDFModal}
                     style={{

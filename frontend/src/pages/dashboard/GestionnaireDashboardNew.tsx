@@ -816,6 +816,7 @@ function GestionnaireDashboardNew() {
               <thead>
                 <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #d52b36' }}>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Réf. Dossier</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Réf. Bordereau</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Type</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut Dossier</th>
@@ -833,6 +834,7 @@ function GestionnaireDashboardNew() {
                   return (
                     <tr key={document.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{document.reference}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#9c27b0' }}>{(document as any).bordereauReference || 'N/A'}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
                       <td style={{ padding: '12px 8px' }}>
@@ -967,7 +969,7 @@ function GestionnaireDashboardNew() {
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <select 
+                {/*<select 
                   onChange={(e) => handleStatusChangeInModal(e.target.value)}
                   style={{
                     padding: '8px 12px',
@@ -981,7 +983,7 @@ function GestionnaireDashboardNew() {
                   <option value="En cours">En cours</option>
                   <option value="Traité">Traité</option>
                   <option value="Retourné">Retourné</option>
-                </select>
+                </select>*/}
                 <button 
                   onClick={closePDFModal}
                   style={{

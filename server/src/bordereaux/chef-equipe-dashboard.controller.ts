@@ -59,7 +59,7 @@ export class ChefEquipeDashboardController {
           this.prisma.document.count({
             where: {
               assignedToUserId: gestionnaire.id,
-              status: 'RETOUR_ADMIN',
+              status: { in: ['RETOUR_ADMIN', 'REJETE'] },
               bordereau: { ...accessFilter, archived: false }
             }
           })
@@ -79,12 +79,41 @@ export class ChefEquipeDashboardController {
           documentsByType[group.type] = group._count.id;
         });
 
+        // Get who returned the documents
+        let returnedBy: string | null = null;
+        if (retournesDocs > 0) {
+          const returnedDocs = await this.prisma.document.findMany({
+            where: {
+              assignedToUserId: gestionnaire.id,
+              status: { in: ['RETOUR_ADMIN', 'REJETE'] },
+              bordereau: { ...accessFilter, archived: false }
+            },
+            select: { id: true }
+          });
+
+          if (returnedDocs.length > 0) {
+            const history = await this.prisma.documentAssignmentHistory.findFirst({
+              where: {
+                documentId: { in: returnedDocs.map(d => d.id) },
+                action: 'RETURNED'
+              },
+              include: {
+                assignedBy: { select: { fullName: true } }
+              },
+              orderBy: { createdAt: 'desc' }
+            });
+
+            returnedBy = history?.assignedBy?.fullName || gestionnaire.fullName;
+          }
+        }
+
         return {
           gestionnaire: gestionnaire.fullName,
           totalAssigned: assignedDocs,
           traites: traitesDocs,
           enCours: enCoursDocs,
           retournes: retournesDocs,
+          returnedBy,
           documentsByType
         };
       })

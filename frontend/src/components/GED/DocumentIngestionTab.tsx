@@ -10,16 +10,17 @@ import { LocalAPI } from '../../services/axios';
 import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 
 const DocumentIngestionTab: React.FC = () => {
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [metadata, setMetadata] = useState({
     clientId: '',
-    type: 'BS',
+    contractId: '',
+    type: 'BULLETIN_SOIN',
     numberOfDocs: 1,
     bordereauRef: '',
-    assignedGestionnaire: ''
+    dateReception: new Date().toISOString().split('T')[0]
   });
   const [clients, setClients] = useState<any[]>([]);
-  const [gestionnaires, setGestionnaires] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -45,36 +46,61 @@ const DocumentIngestionTab: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load real clients and gestionnaires using LocalAPI
-        const [clientsResponse, usersResponse] = await Promise.all([
-          LocalAPI.get('/clients'),
-          LocalAPI.get('/users', { params: { role: 'GESTIONNAIRE' } })
-        ]);
-        
-        setClients(clientsResponse.data.map((c: any) => ({ id: c.id, name: c.name })));
-        setGestionnaires(usersResponse.data.filter((u: any) => u.active).map((u: any) => ({ id: u.id, name: u.fullName })));
+        const clientsResponse = await LocalAPI.get('/clients');
+        setClients(clientsResponse.data);
       } catch (error) {
-        console.error('Failed to load data:', error);
+        console.error('Failed to load clients:', error);
         setClients([]);
-        setGestionnaires([]);
       }
     };
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (metadata.clientId) {
+      loadContracts(metadata.clientId);
+    } else {
+      setContracts([]);
+      setMetadata(prev => ({ ...prev, contractId: '' }));
+    }
+  }, [metadata.clientId]);
+
+  const loadContracts = async (clientId: string) => {
+    try {
+      const { fetchContractsByClient } = await import('../../services/contractService');
+      const data = await fetchContractsByClient(clientId);
+      setContracts(data);
+      if (data.length === 1) {
+        setMetadata(prev => ({ ...prev, contractId: data[0].id }));
+      }
+    } catch (error) {
+      console.error('Failed to load contracts:', error);
+      setContracts([]);
+    }
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files);
+      setUploadedFiles(prev => [...prev, ...fileArray]);
       
-      // Generate preview for images/PDFs
-      if (file.type.startsWith('image/')) {
+      // Generate preview for first image
+      const firstImage = fileArray.find(f => f.type.startsWith('image/'));
+      if (firstImage) {
         const reader = new FileReader();
         reader.onload = (e) => setPreview(e.target?.result as string);
-        reader.readAsDataURL(file);
-      } else {
+        reader.readAsDataURL(firstImage);
+      } else if (fileArray.length > 0) {
         setPreview(null);
       }
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    if (uploadedFiles.length === 1) {
+      setPreview(null);
     }
   };
 
@@ -119,44 +145,72 @@ const DocumentIngestionTab: React.FC = () => {
   };
 
   const handleSaveAndNotify = async () => {
-    if (!uploadedFile) {
-      alert('Veuillez sélectionner un fichier');
+    if (uploadedFiles.length === 0) {
+      alert('Veuillez sélectionner au moins un fichier');
       return;
     }
 
+    if (!metadata.clientId) {
+      alert('Veuillez sélectionner un client');
+      return;
+    }
+
+    console.log('🚀 [DEBUG] Starting document upload...');
+    console.log('📋 [DEBUG] Metadata:', metadata);
+    console.log('📁 [DEBUG] Files to upload:', uploadedFiles.map(f => ({ name: f.name, size: f.size, type: f.type })));
+
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('files', uploadedFile);
-      formData.append('name', uploadedFile.name);
-      formData.append('type', metadata.type);
-      // Only add bordereauId if it's not empty
-      if (metadata.bordereauRef && metadata.bordereauRef.trim() !== '') {
-        formData.append('bordereauId', metadata.bordereauRef.trim());
+      const uploadResults = [];
+      
+      for (const file of uploadedFiles) {
+        console.log(`\n📤 [DEBUG] Uploading file: ${file.name}`);
+        
+        const formData = new FormData();
+        formData.append('files', file);
+        formData.append('name', file.name);
+        formData.append('type', metadata.type);
+        
+        if (metadata.bordereauRef && metadata.bordereauRef.trim() !== '') {
+          formData.append('bordereauId', metadata.bordereauRef.trim());
+          console.log(`🔗 [DEBUG] Linking to bordereau: ${metadata.bordereauRef.trim()}`);
+        } else {
+          console.log('⚠️ [DEBUG] No bordereau reference provided');
+        }
+
+        console.log('📡 [DEBUG] Sending POST request to /documents/upload');
+        const response = await LocalAPI.post('/documents/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        console.log('✅ [DEBUG] Upload response:', response.data);
+        uploadResults.push(response.data);
       }
 
-      const response = await LocalAPI.post('/documents/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      const result = response.data;
-      alert('Document enregistré avec succès!');
+      console.log('\n🎉 [DEBUG] All uploads completed successfully!');
+      console.log('📊 [DEBUG] Upload results:', uploadResults);
+      
+      alert(`✅ ${uploadedFiles.length} document(s) enregistré(s) avec succès!\n\nDétails: ${JSON.stringify(uploadResults, null, 2)}`);
       
       // Reset form
-      setUploadedFile(null);
+      setUploadedFiles([]);
       setPreview(null);
       setMetadata({
         clientId: '',
-        type: 'BS',
+        contractId: '',
+        type: 'BULLETIN_SOIN',
         numberOfDocs: 1,
         bordereauRef: '',
-        assignedGestionnaire: ''
+        dateReception: new Date().toISOString().split('T')[0]
       });
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert('Erreur lors de l\'upload: ' + (error as Error).message);
+    } catch (error: any) {
+      console.error('❌ [DEBUG] Upload failed:', error);
+      console.error('❌ [DEBUG] Error response:', error.response?.data);
+      console.error('❌ [DEBUG] Error status:', error.response?.status);
+      alert('Erreur lors de l\'upload: ' + (error.response?.data?.message || error.message));
     } finally {
       setUploading(false);
+      console.log('🏁 [DEBUG] Upload process finished');
     }
   };
 
@@ -192,6 +246,7 @@ const DocumentIngestionTab: React.FC = () => {
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.tiff"
               onChange={handleFileUpload}
+              multiple
               style={{ display: 'none' }}
             />
             <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
@@ -217,9 +272,21 @@ const DocumentIngestionTab: React.FC = () => {
             Importer depuis le dossier Scanner
           </Button>
 
-          {uploadedFile && (
+          {uploadedFiles.length > 0 && (
             <Alert severity="success" sx={{ mb: 2 }}>
-              Fichier sélectionné: {uploadedFile.name}
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                {uploadedFiles.length} fichier(s) sélectionné(s):
+              </Typography>
+              {uploadedFiles.map((file, index) => (
+                <Box key={index} display="flex" alignItems="center" justifyContent="space-between" mt={0.5}>
+                  <Typography variant="caption">
+                    {index + 1}. {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                  </Typography>
+                  <Button size="small" color="error" onClick={() => handleRemoveFile(index)}>
+                    Supprimer
+                  </Button>
+                </Box>
+              ))}
             </Alert>
           )}
 
@@ -246,20 +313,40 @@ const DocumentIngestionTab: React.FC = () => {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <FormControl fullWidth>
-                <InputLabel>Type de fichier</InputLabel>
+                <InputLabel>Contrat</InputLabel>
+                <Select
+                  value={metadata.contractId}
+                  onChange={(e) => setMetadata({...metadata, contractId: e.target.value})}
+                  label="Contrat"
+                  disabled={!metadata.clientId}
+                >
+                  {contracts.length === 0 && <MenuItem value="">Aucun contrat disponible</MenuItem>}
+                  {contracts.map((contract) => (
+                    <MenuItem key={contract.id} value={contract.id}>
+                      {contract.clientName || contract.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Type de Document *</InputLabel>
                 <Select
                   value={metadata.type}
                   onChange={(e) => setMetadata({...metadata, type: e.target.value})}
-                  label="Type de fichier"
+                  label="Type de Document *"
                 >
-                  <MenuItem value="BS">BS (Bordereau de Soins)</MenuItem>
+                  <MenuItem value="BULLETIN_SOIN">Bulletin de Soin</MenuItem>
+                  <MenuItem value="COMPLEMENT_INFORMATION">Complément Information</MenuItem>
                   <MenuItem value="ADHESION">Adhésion</MenuItem>
-                  <MenuItem value="CONTRAT">Contrat</MenuItem>
-                  <MenuItem value="COURRIER">Courrier</MenuItem>
                   <MenuItem value="RECLAMATION">Réclamation</MenuItem>
-                  <MenuItem value="JUSTIFICATIF">Justificatif</MenuItem>
+                  <MenuItem value="CONTRAT_AVENANT">Contrat/Avenant</MenuItem>
+                  <MenuItem value="DEMANDE_RESILIATION">Demande Résiliation</MenuItem>
+                  <MenuItem value="CONVENTION_TIERS_PAYANT">Convention Tiers Payant</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -286,32 +373,25 @@ const DocumentIngestionTab: React.FC = () => {
             </Grid>
 
             <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Gestionnaire assigné (optionnel)</InputLabel>
-                <Select
-                  value={metadata.assignedGestionnaire}
-                  onChange={(e) => setMetadata({...metadata, assignedGestionnaire: e.target.value})}
-                  label="Gestionnaire assigné (optionnel)"
-                >
-                  <MenuItem value="">Auto-assignation</MenuItem>
-                  {gestionnaires.map((gest) => (
-                    <MenuItem key={gest.id} value={gest.id}>
-                      {gest.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                label="Date de Réception *"
+                type="date"
+                value={metadata.dateReception}
+                onChange={(e) => setMetadata({...metadata, dateReception: e.target.value})}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
             </Grid>
           </Grid>
 
           <Button
             variant="contained"
             onClick={handleSaveAndNotify}
-            disabled={uploading || !uploadedFile}
+            disabled={uploading || uploadedFiles.length === 0 || !metadata.clientId}
             fullWidth
             sx={{ mt: 3 }}
           >
-            {uploading ? 'Enregistrement...' : 'Enregistrer & Notifier'}
+            {uploading ? 'Enregistrement...' : `Enregistrer ${uploadedFiles.length} document(s)`}
           </Button>
         </Paper>
       </Grid>
@@ -336,14 +416,25 @@ const DocumentIngestionTab: React.FC = () => {
                 }} 
               />
             </Box>
-          ) : uploadedFile ? (
-            <Card variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
-              <PreviewIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6">{uploadedFile.name}</Typography>
-              <Typography variant="body2" color="textSecondary">
-                {uploadedFile.type} - {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+          ) : uploadedFiles.length > 0 ? (
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                {uploadedFiles.length} fichier(s) sélectionné(s)
               </Typography>
-            </Card>
+              {uploadedFiles.map((file, index) => (
+                <Card key={index} variant="outlined" sx={{ p: 2, mb: 1 }}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <Typography variant="body2" fontWeight="bold">{file.name}</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {file.type} - {(file.size / 1024 / 1024).toFixed(2)} MB
+                      </Typography>
+                    </Box>
+                    <PreviewIcon sx={{ fontSize: 32, color: 'text.secondary' }} />
+                  </Box>
+                </Card>
+              ))}
+            </Box>
           ) : (
             <Box sx={{ 
               height: 300, 
