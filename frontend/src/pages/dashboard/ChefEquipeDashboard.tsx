@@ -39,6 +39,8 @@ interface Dossier {
   gestionnaire?: string;
   completionPercentage?: number;
   dossierStates?: string[];
+  priorite?: string;
+  joursEnCours?: number;
 }
 
 function ChefEquipeDashboard() {
@@ -69,6 +71,9 @@ function ChefEquipeDashboard() {
   const [currentPDFUrl, setCurrentPDFUrl] = useState('');
   const [currentDossier, setCurrentDossier] = useState<any>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showRetourScanModal, setShowRetourScanModal] = useState(false);
+  const [retourScanReason, setRetourScanReason] = useState('');
+  const [selectedDossierForRetour, setSelectedDossierForRetour] = useState<string | null>(null);
   const [derniersPage, setDerniersPage] = useState(1);
   const [bordereauxPage, setBordereauxPage] = useState(1);
   const [documentsPage, setDocumentsPage] = useState(1);
@@ -82,7 +87,7 @@ function ChefEquipeDashboard() {
     // Listen for PDF modal events from DossiersList
     const handlePDFModal = (event: any) => {
       const { pdfUrl, document } = event.detail;
-      const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+      const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
       setCurrentPDFUrl(`${serverBaseUrl}${pdfUrl}`);
       setCurrentDossier(document);
       setShowPDFModal(true);
@@ -366,7 +371,7 @@ function ChefEquipeDashboard() {
         const dossier = filteredDossiers.find(d => d.id === dossierId);
         
         // Set modal data and show modal
-        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         setCurrentPDFUrl(`${serverBaseUrl}${response.data.pdfUrl}`);
         setCurrentDossier(dossier);
         setShowPDFModal(true);
@@ -411,10 +416,10 @@ function ChefEquipeDashboard() {
     const dossier = filteredDossiers.find(d => d.id === dossierId);
     const document = filteredDocuments.find(d => d.id === dossierId);
     if (dossier) {
-      setCurrentDossier(dossier);
+      setCurrentDossier({ ...dossier, isDocument: false });
       setShowStatusModal(true);
     } else if (document) {
-      setCurrentDossier(document);
+      setCurrentDossier({ ...document, isDocument: true });
       setShowStatusModal(true);
     }
   };
@@ -442,6 +447,47 @@ function ChefEquipeDashboard() {
     } catch (error) {
       console.error('Status modification error:', error);
       alert('Erreur lors de la modification du statut');
+    }
+  };
+
+  const handleRetourScan = (dossierId: string) => {
+    setSelectedDossierForRetour(dossierId);
+    setRetourScanReason('');
+    setShowRetourScanModal(true);
+  };
+
+  const handleConfirmRetourScan = async () => {
+    if (!selectedDossierForRetour || !retourScanReason.trim()) {
+      alert('Veuillez saisir une raison pour le retour');
+      return;
+    }
+
+    try {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/return-to-scan', {
+        dossierId: selectedDossierForRetour,
+        reason: retourScanReason
+      });
+      
+      if (response.data.success) {
+        alert('Dossier retourné vers l\'équipe Scan avec succès');
+        setShowRetourScanModal(false);
+        setRetourScanReason('');
+        setSelectedDossierForRetour(null);
+        loadDashboardData();
+      } else {
+        alert('Erreur lors du retour vers Scan');
+      }
+    } catch (error) {
+      console.error('Retour scan error:', error);
+      alert('Erreur lors du retour vers Scan');
+    }
+  };
+
+  const getPriorityColor = (priorite?: string) => {
+    switch (priorite) {
+      case 'Très': case 'Élevée': return '#f44336';
+      case 'Moyenne': return '#ff9800';
+      default: return '#4caf50';
     }
   };
 
@@ -605,6 +651,7 @@ function ChefEquipeDashboard() {
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
               >
                 <option value="Tous">Tous</option>
+                <option value="Nouveau">Nouveau</option>
                 <option value="En cours">En cours</option>
                 <option value="Traité">Traité</option>
                 <option value="Retourné">Retourné</option>
@@ -798,6 +845,7 @@ function ChefEquipeDashboard() {
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Priorité</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
                 </tr>
               </thead>
@@ -831,9 +879,22 @@ function ChefEquipeDashboard() {
                           ))}
                         </div>
                       </td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                        <span style={{ 
+                          background: getPriorityColor(dossier.priorite), 
+                          color: 'white', 
+                          padding: '4px 8px', 
+                          borderRadius: '12px', 
+                          fontSize: '12px', 
+                          fontWeight: 'bold' 
+                        }}>
+                          {dossier.priorite || 'Normale'}
+                        </span>
+                      </td>
                       <td style={{ padding: '12px 8px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                          <button onClick={() => handleRetourScan(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#9c27b0', textDecoration: 'underline' }} title="Retour Scan">Retour Scan</button>
                         </div>
                       </td>
                     </tr>
@@ -901,6 +962,7 @@ function ChefEquipeDashboard() {
                     />
                   </th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Réf. Dossier</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Réf. Bordereau</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut Dossier</th>
@@ -921,6 +983,7 @@ function ChefEquipeDashboard() {
                       />
                     </td>
                     <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{document.reference}</td>
+                    <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#9c27b0' }}>{(document as any).bordereauReference || 'N/A'}</td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
                     <td style={{ padding: '12px 8px' }}>
@@ -1079,8 +1142,10 @@ function ChefEquipeDashboard() {
                   defaultValue=""
                 >
                   <option value="" disabled>Modifier statut</option>
+                  <option value="Nouveau">Nouveau</option>
                   <option value="En cours">En cours</option>
                   <option value="Traité">Traité</option>
+                  <option value="Rejeté">Rejeté</option>
                   <option value="Retourné">Retourné</option>
                 </select>
                 <button 
@@ -1190,33 +1255,44 @@ function ChefEquipeDashboard() {
               </p>
               
               <div style={{ display: 'grid', gap: '8px' }}>
-                {['En cours', 'Traité', 'Retourné'].map(status => (
-                  <button
-                    key={status}
-                    onClick={() => handleConfirmStatusChange(status)}
-                    style={{
-                      padding: '12px',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      backgroundColor: 'white',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                      textAlign: 'left',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#f0f0f0';
-                      e.currentTarget.style.borderColor = '#d52b36';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'white';
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                    }}
-                  >
-                    {status === 'En cours' ? '⏳' : status === 'Traité' ? '✅' : '↩️'} {status}
-                  </button>
-                ))}
+                {['Nouveau', 'En cours', 'Traité', 'Rejeté', 'Retourné'].map(status => {
+                  const isDocumentOnly = status === 'Rejeté' || status === 'Retourné';
+                  const isDisabled = isDocumentOnly && !currentDossier?.isDocument;
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => !isDisabled && handleConfirmStatusChange(status)}
+                      disabled={isDisabled}
+                      style={{
+                        padding: '12px',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '6px',
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        backgroundColor: isDisabled ? '#f5f5f5' : 'white',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        textAlign: 'left',
+                        transition: 'all 0.2s',
+                        opacity: isDisabled ? 0.5 : 1
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isDisabled) {
+                          e.currentTarget.style.backgroundColor = '#f0f0f0';
+                          e.currentTarget.style.borderColor = '#d52b36';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isDisabled) {
+                          e.currentTarget.style.backgroundColor = 'white';
+                          e.currentTarget.style.borderColor = '#e0e0e0';
+                        }
+                      }}
+                    >
+                      {status === 'Nouveau' ? '🆕' : status === 'En cours' ? '⏳' : status === 'Traité' ? '✅' : status === 'Rejeté' ? '❌' : '↩️'} {status}
+                      {isDisabled && <span style={{ fontSize: '11px', color: '#999', marginLeft: '8px' }}>(Documents uniquement)</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             
@@ -1240,6 +1316,127 @@ function ChefEquipeDashboard() {
                 }}
               >
                 Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Retour Scan Modal */}
+      {showRetourScanModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1002,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              paddingBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#d52b36',
+                fontSize: '18px',
+                fontWeight: 'bold'
+              }}>
+                ↩️ Retour vers l'équipe Scan
+              </h3>
+              <button
+                onClick={() => setShowRetourScanModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                marginBottom: '8px',
+                color: '#333'
+              }}>
+                Raison du retour vers l'équipe Scan:
+              </label>
+              <textarea
+                value={retourScanReason}
+                onChange={(e) => setRetourScanReason(e.target.value)}
+                placeholder="Veuillez expliquer la raison du retour..."
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  padding: '12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontFamily: 'Arial, sans-serif',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => setShowRetourScanModal(false)}
+                style={{
+                  background: '#f5f5f5',
+                  color: '#333',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmRetourScan}
+                disabled={!retourScanReason.trim()}
+                style={{
+                  background: retourScanReason.trim() ? '#d52b36' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: retourScanReason.trim() ? 'pointer' : 'not-allowed',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Confirmer le retour
               </button>
             </div>
           </div>

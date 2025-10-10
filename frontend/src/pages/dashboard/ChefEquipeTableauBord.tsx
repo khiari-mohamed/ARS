@@ -44,6 +44,7 @@ function ChefEquipeTableauBord() {
   const [searchType, setSearchType] = useState('Ref. GSD');
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('Tous types');
+  const [statutFilter, setStatutFilter] = useState('Tous');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,10 +55,10 @@ function ChefEquipeTableauBord() {
     try {
       setLoading(true);
       const [statsRes, typeRes, derniersRes, enCoursRes] = await Promise.all([
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord-stats'),
-        LocalAPI.get('/bordereaux/chef-equipe/detail-par-type'),
-        LocalAPI.get('/bordereaux/chef-equipe/derniers-dossiers'),
-        LocalAPI.get('/bordereaux/chef-equipe/dossiers-en-cours')
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours')
       ]);
 
       setStats(statsRes.data);
@@ -75,7 +76,7 @@ function ChefEquipeTableauBord() {
     if (!searchQuery.trim()) return;
     
     try {
-      const response = await LocalAPI.get('/bordereaux/chef-equipe/search-dossiers', {
+      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/search', {
         params: { type: searchType, query: searchQuery }
       });
       setDerniersDossiers(response.data);
@@ -84,12 +85,37 @@ function ChefEquipeTableauBord() {
     }
   };
 
+  const handleTypeFilterChange = async (newType: string) => {
+    setTypeFilter(newType);
+    await applyFilters(newType, statutFilter);
+  };
+
+  const handleStatutFilterChange = async (newStatut: string) => {
+    setStatutFilter(newStatut);
+    await applyFilters(typeFilter, newStatut);
+  };
+
+  const applyFilters = async (type: string, statut: string) => {
+    try {
+      const params: any = {};
+      if (type !== 'Tous types') params.type = type;
+      if (statut !== 'Tous') params.statut = statut;
+      
+      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours', {
+        params
+      });
+      setDossiersEnCours(response.data);
+    } catch (error) {
+      console.error('Filter error:', error);
+    }
+  };
+
   const handleChangerType = async (dossier: Dossier) => {
     const newType = prompt('Nouveau type de dossier:', dossier.type);
     if (!newType || newType === dossier.type) return;
 
     try {
-      await LocalAPI.post('/bordereaux/chef-equipe/changer-type-dossier', {
+      await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/change-document-type', {
         documentId: dossier.id,
         newType
       });
@@ -105,7 +131,7 @@ function ChefEquipeTableauBord() {
     if (!reason) return;
 
     try {
-      await LocalAPI.post('/bordereaux/chef-equipe/retourner-scan', {
+      await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/return-to-scan', {
         bordereauId: dossier.id,
         reason
       });
@@ -141,6 +167,17 @@ function ChefEquipeTableauBord() {
       case 'En cours de traitement': return '#ff9800';
       case 'Scan Finalisé': return '#2196f3';
       default: return '#9e9e9e';
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'Prestation': return '💊';
+      case 'Adhésion': return '👤';
+      case 'Complément Dossier': return '📄';
+      case 'Avenant': return '📝';
+      case 'Réclamation': return '📞';
+      default: return '📋';
     }
   };
 
@@ -640,7 +677,7 @@ function ChefEquipeTableauBord() {
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <select
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                onChange={(e) => handleTypeFilterChange(e.target.value)}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid #ddd',
@@ -655,6 +692,22 @@ function ChefEquipeTableauBord() {
                 <option value="Avenant">Avenant</option>
                 <option value="Réclamation">Réclamation</option>
               </select>
+              <select
+                value={statutFilter}
+                onChange={(e) => handleStatutFilterChange(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '12px'
+                }}
+              >
+                <option value="Tous">Tous</option>
+                <option value="Nouveau">🆕 Nouveau</option>
+                <option value="En cours">⏳ En cours</option>
+                <option value="Traité">✅ Traité</option>
+                <option value="Retourné">↩️ Retourné</option>
+              </select>
               <button style={{ 
                 background: '#d32f2f', 
                 color: 'white', 
@@ -664,7 +717,7 @@ function ChefEquipeTableauBord() {
                 fontSize: '12px', 
                 cursor: 'pointer' 
               }}>
-                Exporter
+                📊 Exporter
               </button>
             </div>
           </div>
@@ -691,12 +744,7 @@ function ChefEquipeTableauBord() {
                     </td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ 
-                          width: '8px', 
-                          height: '8px', 
-                          background: index % 3 === 0 ? '#f44336' : index % 3 === 1 ? '#2196f3' : '#4caf50', 
-                          borderRadius: '50%' 
-                        }}></span>
+                        <span style={{ fontSize: '16px' }}>{getTypeIcon(dossier.type)}</span>
                         {dossier.type}
                       </div>
                     </td>

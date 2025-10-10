@@ -772,6 +772,7 @@ export class BordereauxService {
     const data: any = {
       reference,
       dateReception: new Date(dateReception),
+      dateReceptionBO: new Date(dateReception), // Always set dateReceptionBO when creating bordereau
       clientId,
       contractId,
       delaiReglement,
@@ -948,7 +949,9 @@ export class BordereauxService {
     });
     console.log('📊 Backend: Found', bordereaux.length, 'bordereaux');
     console.log('📊 Backend: Sample results:', bordereaux.slice(0, 2).map(b => `${b.reference}: ${b.statut} (archived: ${b.archived}) (virement: ${b.virement ? 'YES' : 'NO'})`));
-    return bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
+    const result = bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
+    console.log('📊 Backend: Mapped results with dureeTraitement:', result.slice(0, 2).map(b => `${b.reference}: dureeTraitement=${b.dureeTraitement}, dureeReglement=${b.dureeReglement}`));
+    return result;
   }
 
   // Archive (soft-delete) a bordereau

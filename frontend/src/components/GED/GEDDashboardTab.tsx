@@ -22,16 +22,20 @@ const GEDDashboardTab: React.FC = () => {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Load real document statistics
-        const [statsResponse, docsResponse, paperStreamResponse] = await Promise.all([
-          LocalAPI.get('/documents/stats'),
-          LocalAPI.get('/documents/search'),
-          LocalAPI.get('/documents/paperstream/status')
-        ]);
+        // Load documents with role-based filtering
+        const docsResponse = await LocalAPI.get('/documents/search');
+        const docs = docsResponse.data || [];
         
-        const docStats = statsResponse.data;
-        const docs = docsResponse.data;
-        const psStatus = paperStreamResponse.data;
+        // Only load PaperStream status for authorized roles
+        let psStatus = null;
+        if (['SUPER_ADMIN', 'SCAN_TEAM', 'CHEF_EQUIPE'].includes(user?.role || '')) {
+          try {
+            const paperStreamResponse = await LocalAPI.get('/documents/paperstream/status');
+            psStatus = paperStreamResponse.data;
+          } catch (err) {
+            console.log('PaperStream status not available for this role');
+          }
+        }
         
         // Calculate SLA compliance from real data
         const now = new Date();
@@ -51,8 +55,8 @@ const GEDDashboardTab: React.FC = () => {
           }
         });
         
-        const totalDocs = docStats.total || docs.length;
-        const inProgress = docs.filter((d: any) => d.status === 'EN_COURS').length;
+        const totalDocs = docs.length;
+        const inProgress = docs.filter((d: any) => d.status === 'EN_COURS' || d.status === 'UPLOADED').length;
         const slaCompliancePercent = totalDocs > 0 ? ((onTime / totalDocs) * 100) : 0;
         
         setStats({
@@ -97,7 +101,6 @@ const GEDDashboardTab: React.FC = () => {
         
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
-        // Show error state instead of fallback data
         setStats({
           totalDocs: 0,
           inProgress: 0,

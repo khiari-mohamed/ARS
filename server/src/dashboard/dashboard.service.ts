@@ -605,19 +605,30 @@ export class DashboardService {
 
   // Helper methods for dashboard functionality
   private buildUserFilters(user: any, filters: any = {}) {
-    const where: any = {};
+    const where: any = {
+      // Always filter out archived data for consistency
+      archived: false
+    };
     
-    // Apply role-based filtering - RESPONSABLE_DEPARTEMENT sees everything like SUPER_ADMIN
+    // Apply role-based filtering
     if (user.role === 'GESTIONNAIRE') {
       where.assignedToUserId = user.id;
     } else if (user.role === 'CHEF_EQUIPE') {
-      where.teamId = user.id;
+      // Chef d'équipe sees only their team's data
+      where.OR = [
+        { assignedToUserId: user.id },
+        {
+          contract: {
+            teamLeaderId: user.id
+          }
+        }
+      ];
     } else if (user.role === 'BO') {
       where.statut = { in: ['EN_ATTENTE', 'A_SCANNER'] };
     } else if (user.role === 'SCAN') {
       where.statut = { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE'] };
     }
-    // SUPER_ADMIN, ADMINISTRATEUR, and RESPONSABLE_DEPARTEMENT see all data - no additional filters
+    // SUPER_ADMIN, ADMINISTRATEUR, and RESPONSABLE_DEPARTEMENT see all active data (archived: false already applied)
     
     // Apply date filters
     if (filters.fromDate || filters.toDate) {
@@ -1016,7 +1027,7 @@ export class DashboardService {
         case 'RESPONSABLE_DEPARTEMENT':
           // RESPONSABLE_DEPARTEMENT gets exact same data as SUPER_ADMIN but read-only
           const responsableDashboard = await this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
-          responsableDashboard.role = 'RESPONSABLE_DEPARTEMENT';
+          responsableDashboard.role = 'SUPER_ADMIN'; // Keep as SUPER_ADMIN for frontend compatibility
           responsableDashboard.permissions = [...responsableDashboard.permissions, 'READ_ONLY'];
           return responsableDashboard;
         case 'CHEF_EQUIPE':
@@ -1043,11 +1054,12 @@ export class DashboardService {
   }
   
   private async getSuperAdminDashboard(kpis: any, performance: any, slaStatus: any, alerts: any, user: any, filters: any) {
-    // Get additional super admin specific data
-    const [departmentStats, clientStats, financialSummary] = await Promise.all([
+    // Get additional super admin specific data aggregated from all teams
+    const [departmentStats, clientStats, financialSummary, allTeamsData] = await Promise.all([
       this.getDepartmentStatistics(),
       this.getClientStatistics(),
-      this.getFinancialSummary()
+      this.getFinancialSummary(),
+      this.getAllTeamsAggregatedData()
     ]);
     
     return {
@@ -1058,6 +1070,7 @@ export class DashboardService {
       departmentStats,
       clientStats,
       financialSummary,
+      allTeamsData,
       role: 'SUPER_ADMIN',
       permissions: ['VIEW_ALL', 'EXPORT', 'MANAGE_USERS', 'SYSTEM_CONFIG']
     };
@@ -1144,16 +1157,92 @@ export class DashboardService {
   }
   
   private async getDepartmentStatistics() {
-    const stats = await this.prisma.bordereau.groupBy({
-      by: ['statut'],
+    // Use document-based statistics for consistency
+    const stats = await this.prisma.document.groupBy({
+      by: ['status'],
+      where: {
+        bordereau: { archived: false }
+      },
       _count: { id: true }
     });
     
     return stats.map(s => ({
-      department: this.mapStatusToDepartment(s.statut),
-      status: s.statut,
+      department: this.mapDocumentStatusToDepartment(s.status),
+      status: s.status,
       count: s._count.id
     }));
+  }
+  
+  private async getAllTeamsAggregatedData() {
+    // Get all chef d'équipes and their team data
+    const chefEquipes = await this.prisma.user.findMany({
+      where: { role: 'CHEF_EQUIPE' },
+      select: { id: true, fullName: true, department: true }
+    });
+    
+    const teamsData = await Promise.all(
+      chefEquipes.map(async (chef) => {
+        const teamDocuments = await this.prisma.document.count({
+          where: {
+            bordereau: { 
+              archived: false,
+              OR: [
+                { assignedToUserId: chef.id },
+                {
+                  contract: {
+                    teamLeaderId: chef.id
+                  }
+                }
+              ]
+            }
+          }
+        });
+        
+        const teamPrestations = await this.prisma.document.count({
+          where: {
+            type: 'BULLETIN_SOIN',
+            bordereau: { 
+              archived: false,
+              OR: [
+                { assignedToUserId: chef.id },
+                {
+                  contract: {
+                    teamLeaderId: chef.id
+                  }
+                }
+              ]
+            }
+          }
+        });
+        
+        return {
+          chefEquipe: chef.fullName,
+          department: chef.department,
+          totalDocuments: teamDocuments,
+          prestations: teamPrestations
+        };
+      })
+    );
+    
+    return {
+      teams: teamsData,
+      totalTeams: chefEquipes.length,
+      aggregatedPrestations: teamsData.reduce((sum, team) => sum + team.prestations, 0),
+      aggregatedDocuments: teamsData.reduce((sum, team) => sum + team.totalDocuments, 0)
+    };
+  }
+  
+  private mapDocumentStatusToDepartment(status: string | null): string {
+    if (!status) return 'Bureau d\'Ordre';
+    
+    const mapping = {
+      'UPLOADED': 'Bureau d\'Ordre',
+      'EN_COURS': 'Gestionnaire',
+      'TRAITE': 'Gestionnaire',
+      'REJETE': 'Gestionnaire',
+      'RETOUR_ADMIN': 'Chef d\'Équipe'
+    };
+    return mapping[status] || 'Inconnu';
   }
   
   private async getClientStatistics() {

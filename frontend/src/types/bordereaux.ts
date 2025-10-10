@@ -28,6 +28,11 @@ export interface Bordereau {
   isOverdue?: boolean;
   client?: any;
   contract?: any;
+  dateReceptionBO?: string | null;
+  dureeTraitement?: number | null;
+  dureeTraitementStatus?: 'GREEN' | 'RED' | null;
+  dureeReglement?: number | null;
+  dureeReglementStatus?: 'GREEN' | 'RED' | null;
 }
 
 // Forecasting

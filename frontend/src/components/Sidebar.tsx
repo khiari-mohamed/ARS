@@ -48,7 +48,8 @@ const sidebarLinks = [
   { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
   
   // CHEF_EQUIPE: Team management, global inbox, team dashboard
-  { to: "/home/chef-equipe", label: "Chef d'Équipe", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN', 'CHEF_EQUIPE'] },
+  // COMMENTED OUT: Redundant Chef d'Équipe dashboard - Use main dashboard instead
+  // { to: "/home/chef-equipe", label: "Chef d'Équipe", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN', 'CHEF_EQUIPE'] },
   
   // Common access
   { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },

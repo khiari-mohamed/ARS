@@ -239,7 +239,7 @@ const SuperAdminDashboard: React.FC = () => {
       <Paper sx={{ width: '100%' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={activeTab} onChange={handleTabChange} aria-label="super admin tabs">
-            {/* <Tab label="Temps Réel" /> */}
+            <Tab label="Temps Réel" />
             <Tab label="Emails Outlook" />
             <Tab label="Alertes Équipes" />
             <Tab label="Analytics Documents" />
@@ -253,19 +253,19 @@ const SuperAdminDashboard: React.FC = () => {
           </Tabs>
         </Box>
 
-        {/* <TabPanel value={activeTab} index={0}>
-          <RealTimeSuperAdminDashboard />
-        </TabPanel> */}
-
         <TabPanel value={activeTab} index={0}>
-          <OutlookEmailMonitoring />
+          <RealTimeSuperAdminDashboard />
         </TabPanel>
 
         <TabPanel value={activeTab} index={1}>
-          <SuperAdminAlerts />
+          <OutlookEmailMonitoring />
         </TabPanel>
 
         <TabPanel value={activeTab} index={2}>
+          <SuperAdminAlerts />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={3}>
           <DocumentAnalyticsDashboard />
         </TabPanel>
 
@@ -293,7 +293,7 @@ const SuperAdminDashboard: React.FC = () => {
           <SystemConfigurationPanel />
         </TabPanel> */}
 
-        <TabPanel value={activeTab} index={3}>
+        <TabPanel value={activeTab} index={4}>
           <AdvancedUserManagement />
         </TabPanel>
       </Paper>

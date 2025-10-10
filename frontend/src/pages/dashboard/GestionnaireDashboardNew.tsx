@@ -26,10 +26,27 @@ interface Dossier {
   gestionnaire?: string;
   completionPercentage?: number;
   dossierStates?: string[];
+  statusModifiedByGestionnaire?: boolean;
 }
 
 function GestionnaireDashboardNew() {
   const { user } = useAuth();
+  
+  const getStatusColor = (statut?: string) => {
+    switch (statut) {
+      case 'À scanner': return '#9e9e9e';
+      case 'En cours de Scan': return '#2196f3';
+      case 'A_AFFECTER': return '#ff9800';
+      case 'Traité': return '#4caf50';
+      case 'En cours de traitement': return '#ff9800';
+      case 'En cours': return '#ff9800';
+      case 'Retourné': return '#f44336';
+      case 'Nouveau': return '#2196f3';
+      case 'Scanné': return '#2196f3';
+      case 'Rejeté': return '#f44336';
+      default: return '#9e9e9e';
+    }
+  };
   const [stats, setStats] = useState<DossierStats>({
     prestation: { total: 0, breakdown: {} },
     adhesion: { total: 0, breakdown: {} },
@@ -64,6 +81,10 @@ function GestionnaireDashboardNew() {
   useEffect(() => {
     applyFilters();
   }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers, documents]);
+  
+  useEffect(() => {
+    console.log('🔍 filteredDocuments updated:', filteredDocuments.length);
+  }, [filteredDocuments]);
 
   const loadDashboardData = async () => {
     try {
@@ -182,14 +203,20 @@ function GestionnaireDashboardNew() {
     }
     
     if (statutFilter !== 'Tous') {
-      filtered = filtered.filter(d => d.statut === statutFilter);
+      filtered = filtered.filter(d => 
+        d.statut === statutFilter || 
+        (d.dossierStates && d.dossierStates.includes(statutFilter))
+      );
       console.log('🔍 After statut filter:', filtered.length);
     }
     
     if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
       filtered = filtered.filter(d => 
-        d.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ((d.client || d.societe) && (d.client || d.societe)!.toLowerCase().includes(searchQuery.toLowerCase()))
+        d.reference.toLowerCase().includes(query) ||
+        ((d.client || d.societe) && (d.client || d.societe)!.toLowerCase().includes(query)) ||
+        (d.type && d.type.toLowerCase().includes(query)) ||
+        (d.gestionnaire && d.gestionnaire.toLowerCase().includes(query))
       );
       console.log('🔍 After search filter:', filtered.length);
     }
@@ -213,9 +240,13 @@ function GestionnaireDashboardNew() {
     }
     
     if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
       filteredDocs = filteredDocs.filter(d => 
-        d.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ((d.client || d.societe) && (d.client || d.societe)!.toLowerCase().includes(searchQuery.toLowerCase()))
+        (d.reference && d.reference.toLowerCase().includes(query)) ||
+        ((d.client || d.societe) && (d.client || d.societe)!.toLowerCase().includes(query)) ||
+        (d.type && d.type.toLowerCase().includes(query)) ||
+        (d.gestionnaire && d.gestionnaire.toLowerCase().includes(query)) ||
+        (d.statut && d.statut.toLowerCase().includes(query))
       );
     }
     
@@ -295,9 +326,10 @@ function GestionnaireDashboardNew() {
       } else {
         alert('Erreur lors de la modification du statut');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Status modification error:', error);
-      alert('Erreur lors de la modification du statut');
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la modification du statut';
+      alert(errorMessage);
     }
   };
 
@@ -333,9 +365,10 @@ function GestionnaireDashboardNew() {
       } else {
         alert('Erreur lors de la modification du statut');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Status modification error:', error);
-      alert('Erreur lors de la modification du statut');
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la modification du statut';
+      alert(errorMessage);
     }
   };
 
@@ -511,6 +544,7 @@ function GestionnaireDashboardNew() {
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
               >
                 <option value="Tous">Tous</option>
+                <option value="Nouveau">Nouveau</option>
                 <option value="En cours">En cours</option>
                 <option value="Traité">Traité</option>
                 <option value="Retourné">Retourné</option>
@@ -552,7 +586,7 @@ function GestionnaireDashboardNew() {
               <span style={{ fontWeight: 'bold', fontSize: '16px' }}>Derniers Bordereaux Ajoutés</span>
               <span style={{ background: '#4caf50', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', marginLeft: '12px' }}>En temps réel</span>
             </div>
-            <button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>
+            {/*<button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>*/}
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -573,7 +607,8 @@ function GestionnaireDashboardNew() {
                 {filteredDossiers.slice((derniersBordereauxPage - 1) * 5, derniersBordereauxPage * 5).map((dossier, index) => {
                   const completionPercentage = dossier.completionPercentage || 0;
                   const dossierStates = dossier.dossierStates || [dossier.statut];
-                  const canModify = dossier.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
+                  const isGestionnaire = user?.role === 'GESTIONNAIRE';
+                  const canModify = !isGestionnaire && (dossier.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN');
                   return (
                     <tr key={`recent-${dossier.id}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{dossier.reference}</td>
@@ -615,11 +650,10 @@ function GestionnaireDashboardNew() {
                       <td style={{ padding: '12px 8px', fontSize: '14px', color: '#666' }}>{dossier.date}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                          <button onClick={() => handleViewPDF(dossier.id)} style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }} onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#1976d2'} onMouseLeave={(e) => (e.target as HTMLElement).style.color = '#2196f3'}>Voir</button>
                           {canModify ? (
                             <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', color: '#9c27b0', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }} onMouseEnter={(e) => (e.target as HTMLElement).style.color = '#7b1fa2'} onMouseLeave={(e) => (e.target as HTMLElement).style.color = '#9c27b0'}>Modifier</button>
                           ) : (
-                            <span style={{ fontSize: '12px', color: '#ccc' }}>Lecture seule</span>
+                            <span style={{ fontSize: '12px', color: '#ccc' }}>-</span>
                           )}
                         </div>
                       </td>
@@ -661,7 +695,7 @@ function GestionnaireDashboardNew() {
               <span style={{ fontWeight: 'bold', fontSize: '16px' }}>Bordereaux en cours</span>
               <span style={{ background: '#ff9800', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', marginLeft: '12px' }}>Priorité</span>
             </div>
-            <button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>
+            {/*<button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>*/}
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -679,12 +713,23 @@ function GestionnaireDashboardNew() {
                 {filteredDossiers.slice((bordereauxEnCoursPage - 1) * 5, bordereauxEnCoursPage * 5).map((dossier, index) => {
                   const completionPercentage = dossier.completionPercentage || 0;
                   const dossierStates = dossier.dossierStates || [dossier.statut];
-                  const canModify = dossier.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
+                  const isGestionnaire = user?.role === 'GESTIONNAIRE';
                   return (
                     <tr key={`bordereau-${dossier.id}`} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{dossier.reference}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client || dossier.societe}</td>
-                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>En cours de traitement</td>
+                      <td style={{ padding: '12px 8px' }}>
+                        <span style={{ 
+                          background: getStatusColor(dossier.statut), 
+                          color: 'white', 
+                          padding: '4px 8px', 
+                          borderRadius: '12px', 
+                          fontSize: '12px', 
+                          fontWeight: 'bold' 
+                        }}>
+                          {dossier.statut || 'En cours de traitement'}
+                        </span>
+                      </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -705,20 +750,22 @@ function GestionnaireDashboardNew() {
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                        <button 
-                          onClick={() => handleViewPDF(dossier.id)} 
-                          style={{ 
-                            background: 'none', 
-                            border: 'none', 
-                            color: '#2196f3', 
-                            cursor: 'pointer', 
-                            fontSize: '18px',
-                            padding: '4px'
-                          }}
-                          title="Modifier le dossier"
-                        >
-                          ✏️
-                        </button>
+                        {!isGestionnaire && (
+                          <button 
+                            onClick={() => handleViewPDF(dossier.id)} 
+                            style={{ 
+                              background: 'none', 
+                              border: 'none', 
+                              color: '#2196f3', 
+                              cursor: 'pointer', 
+                              fontSize: '18px',
+                              padding: '4px'
+                            }}
+                            title="Modifier le dossier"
+                          >
+                            ✏️
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -760,7 +807,7 @@ function GestionnaireDashboardNew() {
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span style={{ fontSize: '12px', color: '#666' }}>Total: {filteredDocuments.length} dossiers</span>
-                <button style={{ background: '#d52b36', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Actualiser</button>
+               {/*} <button style={{ background: '#d52b36', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Actualiser</button>*/}
               </div>
             </div>
           </div>
@@ -779,13 +826,27 @@ function GestionnaireDashboardNew() {
               </thead>
               <tbody>
                 {filteredDocuments.slice((dossiersIndividuelsPage - 1) * 20, dossiersIndividuelsPage * 20).map((document, index) => {
-                  const canModify = document.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
+                  const isGestionnaire = user?.role === 'GESTIONNAIRE';
+                  const canModify = isGestionnaire 
+                    ? (!document.statusModifiedByGestionnaire && document.gestionnaire === user?.fullName)
+                    : (document.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN');
                   return (
                     <tr key={document.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{document.reference}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
-                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.statut}</td>
+                      <td style={{ padding: '12px 8px' }}>
+                        <span style={{ 
+                          background: getStatusColor(document.statut), 
+                          color: 'white', 
+                          padding: '4px 8px', 
+                          borderRadius: '12px', 
+                          fontSize: '12px', 
+                          fontWeight: 'bold' 
+                        }}>
+                          {document.statut}
+                        </span>
+                      </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px', color: '#666' }}>il y a 2 heures</td>
                       <td style={{ padding: '12px 8px' }}>

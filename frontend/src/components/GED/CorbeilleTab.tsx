@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import { useAuth } from '../../contexts/AuthContext';
+import { LocalAPI } from '../../services/axios';
 
 interface Document {
   id: string;
@@ -15,6 +16,7 @@ interface Document {
   assignedTo?: string;
   slaStatus: 'green' | 'orange' | 'red';
   uploadedAt: string;
+  bordereauStatus?: string;
 }
 
 const CorbeilleTab: React.FC = () => {
@@ -26,49 +28,24 @@ const CorbeilleTab: React.FC = () => {
   useEffect(() => {
     const loadDocuments = async () => {
       try {
-        const response = await fetch('/api/documents/search', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+        const response = await LocalAPI.get('/documents/search');
+        const docs = response.data || [];
         
-        if (response.ok) {
-          const data = await response.json();
-          let filteredData = data;
-          
-          // Filter documents based on user role
-          if (user?.role === 'CHEF_EQUIPE') {
-            // For chef d'équipe, show only documents from their team members
-            filteredData = data.filter((doc: any) => {
-              // Show documents uploaded by team members or assigned to team members
-              return doc.uploader?.teamLeaderId === user.id || 
-                     doc.uploader?.id === user.id ||
-                     doc.assignedTo?.teamLeaderId === user.id ||
-                     doc.assignedTo?.id === user.id ||
-                     doc.bordereau?.assignedToUserId === user.id;
-            });
-          } else if (user?.role === 'GESTIONNAIRE') {
-            // For gestionnaire, show only their assigned documents
-            filteredData = data.filter((doc: any) => 
-              doc.uploadedById === user.id || doc.assignedToUserId === user.id
-            );
-          }
-          
-          setDocuments(filteredData.map((doc: any) => ({
-            id: doc.id,
-            reference: doc.name || `DOC/${doc.id}`,
-            client: doc.bordereau?.client?.name || 'Client inconnu',
-            type: doc.type || 'DOCUMENT',
-            status: doc.status || 'UPLOADED',
-            assignedTo: doc.assignedTo?.fullName || doc.uploader?.fullName,
-            slaStatus: calculateSlaStatus(doc.uploadedAt),
-            uploadedAt: doc.uploadedAt
-          })));
-        } else {
-          throw new Error('Failed to load documents');
-        }
+        const allDocs: Document[] = docs.map((doc: any) => ({
+          id: doc.id,
+          reference: doc.name || `DOC-${doc.id.substring(0, 8)}`,
+          client: doc.bordereau?.client?.name || 'N/A',
+          type: doc.type || 'BULLETIN_SOIN',
+          status: doc.status,
+          bordereauStatus: doc.bordereau?.statut,
+          assignedTo: doc.assignedTo?.fullName || 'Non assigné',
+          slaStatus: calculateSlaStatus(doc.uploadedAt),
+          uploadedAt: doc.uploadedAt
+        }));
+        
+        setDocuments(allDocs);
       } catch (error) {
-        console.error('Failed to load documents:', error);
+        console.error('❌ Error loading documents:', error);
         setDocuments([]);
       }
     };
@@ -100,8 +77,10 @@ const CorbeilleTab: React.FC = () => {
     const statusConfig = {
       'TRAITE': { label: 'Traité', color: 'success' },
       'EN_COURS': { label: 'En cours', color: 'primary' },
-      'NON_AFFECTE': { label: 'Non affecté', color: 'default' },
-      'RETOURNE': { label: 'Retourné', color: 'error' }
+      'REJETE': { label: 'Retourné', color: 'error' },
+      'RETOURNE': { label: 'Retourné', color: 'error' },
+      'SCANNE': { label: 'Scanné', color: 'info' },
+      'UPLOADED': { label: 'Nouveau', color: 'default' }
     };
     const config = statusConfig[status as keyof typeof statusConfig] || { label: status, color: 'default' };
     return <Chip label={config.label} color={config.color as any} size="small" />;
@@ -114,28 +93,13 @@ const CorbeilleTab: React.FC = () => {
     }
     
     try {
-      // Bulk assign by updating each document individually
-      const promises = selectedIds.map(docId => 
-        fetch(`/api/documents/${docId}/assign`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({})
-        })
-      );
-      
-      const responses = await Promise.all(promises);
-      const allSuccessful = responses.every(response => response.ok);
-      
-      if (!allSuccessful) {
-        throw new Error('Some assignments failed');
-      }
+      await LocalAPI.post('/bordereaux/bulk-assign-documents', {
+        documentIds: selectedIds,
+        userId: user?.id
+      });
       
       alert(`${selectedIds.length} documents assignés`);
       setSelectedIds([]);
-      // Reload documents
       window.location.reload();
     } catch (error) {
       console.error('Bulk assignment failed:', error);
@@ -145,22 +109,13 @@ const CorbeilleTab: React.FC = () => {
 
   const handleMarkAsProcessed = async (docId: string) => {
     try {
-      const response = await fetch(`/api/documents/${docId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ status: 'TRAITE' })
+      await LocalAPI.patch(`/documents/${docId}`, {
+        status: 'TRAITE'
       });
       
-      if (response.ok) {
-        setDocuments(prev => prev.map(doc => 
-          doc.id === docId ? {...doc, status: 'TRAITE'} : doc
-        ));
-      } else {
-        throw new Error('Failed to update status');
-      }
+      setDocuments(prev => prev.map(doc => 
+        doc.id === docId ? {...doc, status: 'TRAITE'} : doc
+      ));
     } catch (error) {
       console.error('Status update failed:', error);
       alert('Erreur lors de la mise à jour');
@@ -169,22 +124,13 @@ const CorbeilleTab: React.FC = () => {
 
   const handleReturnToChef = async (docId: string) => {
     try {
-      const response = await fetch(`/api/documents/${docId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ status: 'RETOURNE' })
+      await LocalAPI.patch(`/documents/${docId}`, {
+        status: 'RETOURNE'
       });
       
-      if (response.ok) {
-        setDocuments(prev => prev.map(doc => 
-          doc.id === docId ? {...doc, status: 'RETOURNE'} : doc
-        ));
-      } else {
-        throw new Error('Failed to return document');
-      }
+      setDocuments(prev => prev.map(doc => 
+        doc.id === docId ? {...doc, status: 'RETOURNE'} : doc
+      ));
     } catch (error) {
       console.error('Return failed:', error);
       alert('Erreur lors du retour');
@@ -194,7 +140,7 @@ const CorbeilleTab: React.FC = () => {
   const getTabsForRole = () => {
     switch (user?.role) {
       case 'CHEF_EQUIPE':
-        return ['Traités', 'En cours', 'Non affectés'];
+        return ['Traités', 'En cours', 'Non affectés', 'Retournés'];
       case 'GESTIONNAIRE':
         return ['En cours', 'Traités', 'Retournés'];
       default:
@@ -206,18 +152,48 @@ const CorbeilleTab: React.FC = () => {
     const tabs = getTabsForRole();
     const currentTab = tabs[tab];
     
+    let filtered;
     switch (currentTab) {
       case 'Traités':
-        return documents.filter(doc => doc.status === 'TRAITE');
+        filtered = documents.filter(doc => 
+          doc.status === 'TRAITE' ||
+          doc.bordereauStatus === 'TRAITE' || 
+          doc.bordereauStatus === 'PAYE' ||
+          doc.bordereauStatus === 'CLOTURE'
+        );
+        break;
       case 'En cours':
-        return documents.filter(doc => doc.status === 'EN_COURS');
+        filtered = documents.filter(doc => 
+          doc.status === 'EN_COURS' ||
+          doc.status === 'UPLOADED' ||
+          doc.bordereauStatus === 'EN_COURS' || 
+          doc.bordereauStatus === 'ASSIGNE' ||
+          doc.bordereauStatus === 'SCAN_EN_COURS'
+        );
+        break;
       case 'Non affectés':
-        return documents.filter(doc => doc.status === 'NON_AFFECTE');
+        filtered = documents.filter(doc => 
+          doc.bordereauStatus === 'A_AFFECTER' || 
+          doc.bordereauStatus === 'A_SCANNER' ||
+          doc.bordereauStatus === 'SCANNE'
+        );
+        break;
       case 'Retournés':
-        return documents.filter(doc => doc.status === 'RETOURNE');
+        filtered = documents.filter(doc => 
+          doc.status === 'REJETE' ||
+          doc.status === 'RETOURNE' ||
+          doc.bordereauStatus === 'REJETE' ||
+          doc.bordereauStatus === 'RETOURNE'
+        );
+        break;
+      case 'Tous':
+        filtered = documents;
+        break;
       default:
-        return documents;
+        filtered = documents;
     }
+    
+    return filtered;
   };
 
   const filteredDocs = getFilteredDocuments();
@@ -317,6 +293,7 @@ const CorbeilleTab: React.FC = () => {
         {filteredDocs.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
             <Typography>Aucun document dans cette catégorie</Typography>
+            <Typography variant="caption">Total documents chargés: {documents.length}</Typography>
           </Box>
         )}
       </Paper>

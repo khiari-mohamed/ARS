@@ -32,6 +32,11 @@ export class BordereauResponseDto {
   totalDuration?: number | null;
   isOverdue?: boolean;
   assignedTo?: string;
+  dateReceptionBO?: Date | null;
+  dureeTraitement?: number | null;
+  dureeTraitementStatus?: 'GREEN' | 'RED' | null;
+  dureeReglement?: number | null;
+  dureeReglementStatus?: 'GREEN' | 'RED' | null;
 
   // Relations
   client?: User;
@@ -55,6 +60,7 @@ export class BordereauResponseDto {
       dateCloture: bordereau.dateCloture || null,
       dateDepotVirement: bordereau.dateDepotVirement || null,
       dateExecutionVirement: bordereau.dateExecutionVirement || null,
+      dateReceptionBO: bordereau.dateReceptionBO || null,
       createdAt: bordereau.createdAt,
       updatedAt: bordereau.updatedAt,
       // Include relations if they exist
@@ -106,6 +112,43 @@ export class BordereauResponseDto {
       response.scanDuration = scanDuration;
       response.totalDuration = totalDuration;
       response.isOverdue = daysRemaining <= 0;
+      
+      // Calculate Durée de traitement (date de traitement - date BO)
+      // Use dateCloture if available, otherwise use current date for in-progress calculation
+      if (bordereau.dateReceptionBO) {
+        const dateBO = new Date(bordereau.dateReceptionBO);
+        
+        if (bordereau.dateCloture) {
+          const dateTraitement = new Date(bordereau.dateCloture);
+          response.dureeTraitement = Math.floor(
+            (dateTraitement.getTime() - dateBO.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          response.dureeTraitementStatus = response.dureeTraitement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
+        } else {
+          // In progress - calculate current duration
+          const now = new Date();
+          response.dureeTraitement = Math.floor(
+            (now.getTime() - dateBO.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          response.dureeTraitementStatus = response.dureeTraitement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
+        }
+      } else {
+        response.dureeTraitement = null;
+        response.dureeTraitementStatus = null;
+      }
+      
+      // Calculate Durée de règlement (date de règlement - date BO)
+      if (bordereau.dateReceptionBO && bordereau.dateExecutionVirement) {
+        const dateBO = new Date(bordereau.dateReceptionBO);
+        const dateReglement = new Date(bordereau.dateExecutionVirement);
+        response.dureeReglement = Math.floor(
+          (dateReglement.getTime() - dateBO.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        response.dureeReglementStatus = response.dureeReglement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
+      } else {
+        response.dureeReglement = null;
+        response.dureeReglementStatus = null;
+      }
     }
     
     return response;

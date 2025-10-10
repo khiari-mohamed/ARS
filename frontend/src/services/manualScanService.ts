@@ -14,12 +14,10 @@ export const uploadManualDocuments = async (bordereauId: string, files: File[]) 
   try {
     const formData = new FormData();
     files.forEach((file) => {
-      formData.append('documents', file);
+      formData.append('files', file);
     });
-    formData.append('bordereauId', bordereauId);
-    formData.append('scanType', 'MANUAL');
 
-    const response = await LocalAPI.post(`/bordereaux/${bordereauId}/manual-scan`, formData, {
+    const response = await LocalAPI.post(`/scan/manual/upload/${bordereauId}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }

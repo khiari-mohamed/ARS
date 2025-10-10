@@ -431,9 +431,12 @@ const ScanDashboard: React.FC = () => {
             />
             
             <Upload.Dragger
-              name="documents"
+              name="files"
               multiple
-              action={`/api/bordereaux/${selectedBordereau}/add-bs`}
+              action={`/api/scan/manual/upload/${selectedBordereau}`}
+              headers={{
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              }}
               onChange={handleUploadComplete}
               accept=".pdf,.jpg,.jpeg,.png,.tiff"
             >
