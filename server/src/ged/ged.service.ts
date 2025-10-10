@@ -302,11 +302,24 @@ export class GedService {
       throw new ForbiddenException('File size exceeds 10MB limit.');
     }
     // Defensive: ensure bordereau exists if bordereauId provided
+    let actualBordereauId: string | undefined = undefined;
     if (dto.bordereauId && dto.bordereauId.trim() !== '') {
-      const bordereau = await this.prisma.bordereau.findUnique({ where: { id: dto.bordereauId } });
+      console.log(`🔍 [BACKEND] Looking up bordereau by reference: ${dto.bordereauId}`);
+      
+      // Try to find by ID first (UUID format)
+      let bordereau = await this.prisma.bordereau.findUnique({ where: { id: dto.bordereauId } });
+      
+      // If not found by ID, try by reference
       if (!bordereau) {
-        console.warn(`Bordereau ${dto.bordereauId} not found, proceeding without linking`);
-        dto.bordereauId = undefined;
+        console.log(`🔍 [BACKEND] Not found by ID, trying by reference...`);
+        bordereau = await this.prisma.bordereau.findFirst({ where: { reference: dto.bordereauId } });
+      }
+      
+      if (bordereau) {
+        actualBordereauId = bordereau.id;
+        console.log(`✅ [BACKEND] Bordereau found! ID: ${bordereau.id}, Reference: ${bordereau.reference}`);
+      } else {
+        console.warn(`⚠️ [BACKEND] Bordereau ${dto.bordereauId} not found, proceeding without linking`);
       }
     }
     const doc = await this.prisma.document.create({
@@ -315,21 +328,23 @@ export class GedService {
         type: this.mapToDocumentType(dto.type),
         path: file.path,
         uploadedById: user.id,
-        bordereauId: dto.bordereauId,
+        bordereauId: actualBordereauId,
         status: 'UPLOADED',
       },
     });
+    
+    console.log(`✅ [BACKEND] Document created with bordereauId: ${actualBordereauId || 'NOT LINKED'}`);
     // Audit log
     try {
       await this.prisma.auditLog.create({
         data: {
           userId: user.id,
           action: 'UPLOAD_DOCUMENT',
-          details: { documentId: doc.id },
+          details: { documentId: doc.id, bordereauId: actualBordereauId, bordereauRef: dto.bordereauId },
         },
       });
     } catch (e) {
-      console.log(`[AUDIT] Document uploaded: ${doc.id} by ${user.id}`);
+      console.log(`[AUDIT] Document uploaded: ${doc.id} by ${user.id}, linked to bordereau: ${actualBordereauId || 'NONE'}`);
     }
     // Notification
     await this.notificationService.notify('document_uploaded', { document: doc, user });

@@ -23,6 +23,7 @@ interface GestionnaireAssignment {
   traites?: number;
   enCours?: number;
   retournes?: number;
+  returnedBy?: string | null;
   documentsByType: { [key: string]: number };
   bordereauxByType?: { [key: string]: number };
 }
@@ -233,6 +234,7 @@ function ChefEquipeDashboard() {
       
       if (assignmentsResponse.data) {
         console.log('👥 Gestionnaire assignments received:', assignmentsResponse.data.length, assignmentsResponse.data);
+        console.log('👥 First assignment returnedBy:', assignmentsResponse.data[0]?.returnedBy);
         setGestionnaireAssignments(assignmentsResponse.data);
         
         // Extract unique gestionnaire names for filter
@@ -707,7 +709,11 @@ function ChefEquipeDashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
             {gestionnaireAssignments
               .filter(assignment => gestionnaireFilter === 'Tous' || assignment.gestionnaire === gestionnaireFilter)
-              .map((assignment, index) => (
+              .map((assignment, index) => {
+                console.log('🔍 Assignment data for', assignment.gestionnaire, ':', assignment);
+                console.log('  - retournes:', assignment.retournes);
+                console.log('  - returnedBy:', assignment.returnedBy);
+                return (
               <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6' }}>
                 <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057' }}>
                   {assignment.gestionnaire}
@@ -724,16 +730,24 @@ function ChefEquipeDashboard() {
                     <span style={{ color: '#ffc107' }}>⏳ En cours:</span>
                     <span style={{ fontWeight: 'bold' }}>{assignment.enCours || 0}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#dc3545' }}>↩ Retournés:</span>
-                    <span style={{ fontWeight: 'bold' }}>{assignment.retournes || 0}</span>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ color: '#dc3545' }}>↩ Retournés:</span>
+                      <span style={{ fontWeight: 'bold' }}>{assignment.retournes || 0}</span>
+                    </div>
+                    {assignment.returnedBy && (assignment.retournes || 0) > 0 && (
+                      <div style={{ fontSize: '11px', color: '#dc3545', fontWeight: 'bold', marginLeft: '16px', marginTop: '2px' }}>
+                        → Retourné par: {assignment.returnedBy}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ fontSize: '11px', color: '#6c757d' }}>
                   <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
                 </div>
               </div>
-            ))}
+            );
+              })}
           </div>
         </div>
 
@@ -1131,7 +1145,7 @@ function ChefEquipeDashboard() {
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <select 
+               {/* Modifier Statut Dropdown  <select 
                   onChange={(e) => handleStatusChangeInModal(e.target.value)}
                   style={{
                     padding: '8px 12px',
@@ -1147,7 +1161,7 @@ function ChefEquipeDashboard() {
                   <option value="Traité">Traité</option>
                   <option value="Rejeté">Rejeté</option>
                   <option value="Retourné">Retourné</option>
-                </select>
+                </select> */}
                 <button 
                   onClick={closePDFModal}
                   style={{

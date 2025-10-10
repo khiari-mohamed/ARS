@@ -494,25 +494,25 @@ const ScanDashboard: React.FC = () => {
                 sx={{ 
                   bgcolor: 'green.50', 
                   border: '1px solid', 
-                  borderColor: 'green.200',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                  }
-                }}
-                onClick={() => {
-                  setSelectedProgressionType('SCANNE');
-                  setActiveDialog('progression-popup');
+                  borderColor: 'green.200'
                 }}
               >
                 <CardContent sx={{ textAlign: 'center', py: 2 }}>
                   <Typography variant="h4" color="green.main" fontWeight="bold">
                     {scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER'].includes(b.statut)).length}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Scan finalisés
                   </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="success"
+                    onClick={() => setActiveDialog('scan-history')}
+                    sx={{ fontSize: '0.7rem', mt: 1 }}
+                  >
+                    📜 Historique
+                  </Button>
                 </CardContent>
               </Card>
             </Grid>
@@ -1525,6 +1525,94 @@ const ScanDashboard: React.FC = () => {
         documentTypeLabel={selectedDocumentType?.label || ''}
         documentTypeIcon={selectedDocumentType?.icon || ''}
       />
+
+      {/* Scan History Dialog - ALL scanned bordereaux with persistence */}
+      <Dialog 
+        open={activeDialog === 'scan-history'} 
+        onClose={() => setActiveDialog(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          📜 Historique Complet des Scans
+          <Chip 
+            label={`${scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut)).length} bordereaux`}
+            color="success"
+            size="small"
+            sx={{ ml: 2 }}
+          />
+        </DialogTitle>
+        <DialogContent>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Date Scan</TableCell>
+                  <TableCell>Statut Actuel</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {scanQueue
+                  .filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut))
+                  .sort((a: any, b: any) => new Date(b.dateFinScan || b.updatedAt).getTime() - new Date(a.dateFinScan || a.updatedAt).getTime())
+                  .map((bordereau: any) => (
+                    <TableRow key={bordereau.id}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {bordereau.reference}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {bordereau.client?.name || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString() : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={bordereau.statut}
+                          color="success"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<Visibility />}
+                          onClick={() => handleViewBordereau(bordereau.id)}
+                          sx={{ fontSize: '0.7rem' }}
+                        >
+                          Voir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                }
+                {scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut)).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <Typography color="text.secondary" sx={{ py: 4 }}>
+                        Aucun bordereau scanné dans l'historique
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Progression Popup Dialog */}
       <Dialog 

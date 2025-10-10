@@ -123,35 +123,68 @@ export class ChefEquipeTableauBordController {
   async getDerniersDossiers(@Req() req: any) {
     const accessFilter = this.buildAccessFilter(req.user);
     
-    // For gestionnaires, only get bordereaux where they have assigned documents
+    // For gestionnaires, get ALL bordereaux from their chef d'équipe
     let bordereaux;
     if (req.user?.role === 'GESTIONNAIRE') {
-      bordereaux = await this.prisma.bordereau.findMany({
-        where: { 
-          archived: false,
-          documents: {
-            some: {
-              assignedToUserId: req.user.id
-            }
-          }
-        },
-        include: {
-          client: { select: { id: true, name: true } },
-          contract: { 
-            select: { 
-              id: true, 
-              clientName: true,
-              client: { select: { id: true, name: true } }
-            } 
-          },
-          documents: {
-            where: { assignedToUserId: req.user.id },
-            include: { assignedTo: { select: { id: true, fullName: true } } }
-          },
-          currentHandler: { select: { id: true, fullName: true } }
-        },
-        orderBy: { dateReception: 'desc' }
+      // Get gestionnaire's team leader
+      const gestionnaire = await this.prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { teamLeaderId: true }
       });
+      
+      if (gestionnaire?.teamLeaderId) {
+        // Get ALL bordereaux managed by their chef d'équipe
+        bordereaux = await this.prisma.bordereau.findMany({
+          where: { 
+            archived: false,
+            contract: {
+              teamLeaderId: gestionnaire.teamLeaderId
+            }
+          },
+          include: {
+            client: { select: { id: true, name: true } },
+            contract: { 
+              select: { 
+                id: true, 
+                clientName: true,
+                client: { select: { id: true, name: true } }
+              } 
+            },
+            documents: {
+              include: { assignedTo: { select: { id: true, fullName: true } } }
+            },
+            currentHandler: { select: { id: true, fullName: true } }
+          },
+          orderBy: { dateReception: 'desc' }
+        });
+      } else {
+        // Fallback: if no team leader, show only bordereaux with assigned documents
+        bordereaux = await this.prisma.bordereau.findMany({
+          where: { 
+            archived: false,
+            documents: {
+              some: {
+                assignedToUserId: req.user.id
+              }
+            }
+          },
+          include: {
+            client: { select: { id: true, name: true } },
+            contract: { 
+              select: { 
+                id: true, 
+                clientName: true,
+                client: { select: { id: true, name: true } }
+              } 
+            },
+            documents: {
+              include: { assignedTo: { select: { id: true, fullName: true } } }
+            },
+            currentHandler: { select: { id: true, fullName: true } }
+          },
+          orderBy: { dateReception: 'desc' }
+        });
+      }
     } else {
       bordereaux = await this.prisma.bordereau.findMany({
         where: { ...accessFilter, archived: false },
@@ -180,23 +213,19 @@ export class ChefEquipeTableauBordController {
       const scanneDocuments = bordereau.documents.filter(doc => doc.status === 'SCANNE').length;
       const uploadedDocuments = bordereau.documents.filter(doc => doc.status === 'UPLOADED' || !doc.status).length;
       
-      // Calculate completion percentage based on document statuses
-      // TRAITE = 100%, SCANNE = 100%, EN_COURS = 50%, UPLOADED/null = 0%
-      const completionScore = (traitedDocuments * 100) + (scanneDocuments * 100) + (enCoursDocuments * 50) + (uploadedDocuments * 0);
-      const completionPercentage = totalDocuments > 0 ? Math.round(completionScore / totalDocuments) : 0;
+      // Calculate completion percentage: only TRAITE counts, all others = 0%
+      // TRAITE = 100%, all other statuses = 0%
+      const completionPercentage = totalDocuments > 0 ? Math.round((traitedDocuments / totalDocuments) * 100) : 0;
       
       // Get document types (show document types like "Bulletin de Soin", "Adhésion", etc.)
       const documentTypes = [...new Set(bordereau.documents.map(doc => this.getDocumentTypeLabel(doc.type)))].join(', ');
       
-      // Get document states - prioritize based on completion
+      // Get document states with counts
       const states: string[] = [];
-      if (completionPercentage === 100) {
-        states.push('Traité');
-      } else {
-        if (traitedDocuments > 0) states.push('Traité');
-        if (enCoursDocuments > 0) states.push('En cours');
-        if (uploadedDocuments > 0 || scanneDocuments > 0) states.push('Nouveau');
-      }
+      if (traitedDocuments > 0) states.push(`Traité ${traitedDocuments}/${totalDocuments}`);
+      if (enCoursDocuments > 0) states.push(`En cours ${enCoursDocuments}/${totalDocuments}`);
+      if (scanneDocuments > 0) states.push(`Scanné ${scanneDocuments}/${totalDocuments}`);
+      if (uploadedDocuments > 0) states.push(`Nouveau ${uploadedDocuments}/${totalDocuments}`);
       
       // For gestionnaires, show their name if they have documents in this bordereau
       let gestionnaireDisplay = bordereau.currentHandler?.fullName || 'Non assigné';
@@ -350,25 +379,24 @@ export class ChefEquipeTableauBordController {
     return bordereaux.map(bordereau => {
       const joursEnCours = Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24));
       
-      // Calculate completion percentage for bordereaux en cours
+      // Calculate completion percentage: only TRAITE counts, all others = 0%
       const totalDocuments = bordereau.documents.length;
       const traitedDocuments = bordereau.documents.filter(doc => doc.status === 'TRAITE').length;
       const enCoursDocuments = bordereau.documents.filter(doc => doc.status === 'EN_COURS').length;
       const scanneDocuments = bordereau.documents.filter(doc => doc.status === 'SCANNE').length;
       const uploadedDocuments = bordereau.documents.filter(doc => doc.status === 'UPLOADED' || !doc.status).length;
       
-      const completionScore = (traitedDocuments * 100) + (scanneDocuments * 100) + (enCoursDocuments * 50) + (uploadedDocuments * 0);
-      const completionPercentage = totalDocuments > 0 ? Math.round(completionScore / totalDocuments) : 0;
+      const completionPercentage = totalDocuments > 0 ? Math.round((traitedDocuments / totalDocuments) * 100) : 0;
       
       // Get document types (show document types like "Prestation", "Adhésion", etc.)
       const documentTypes = [...new Set(bordereau.documents.map(doc => this.getDocumentTypeLabel(doc.type)))].join(', ');
       
-      // Get document states
+      // Get document states with counts
       const states: string[] = [];
-      if (traitedDocuments > 0) states.push('Traité');
-      if (enCoursDocuments > 0) states.push('En cours');
-      if (scanneDocuments > 0) states.push('Scanné');
-      if (uploadedDocuments > 0) states.push('Nouveau');
+      if (traitedDocuments > 0) states.push(`Traité ${traitedDocuments}/${totalDocuments}`);
+      if (enCoursDocuments > 0) states.push(`En cours ${enCoursDocuments}/${totalDocuments}`);
+      if (scanneDocuments > 0) states.push(`Scanné ${scanneDocuments}/${totalDocuments}`);
+      if (uploadedDocuments > 0) states.push(`Nouveau ${uploadedDocuments}/${totalDocuments}`);
       
       return {
         id: bordereau.id,
@@ -760,7 +788,8 @@ export class ChefEquipeTableauBordController {
 
     // First try to find as document
     const document = await this.prisma.document.findUnique({
-      where: { id: body.dossierId }
+      where: { id: body.dossierId },
+      include: { assignedTo: true, bordereau: { include: { client: true } } }
     });
 
     if (document) {
@@ -786,6 +815,45 @@ export class ChefEquipeTableauBordController {
         where: { id: body.dossierId },
         data: updateData
       });
+
+      // If gestionnaire returns a document, create history and notify chef d'équipe
+      if (req.user?.role === 'GESTIONNAIRE' && body.newStatus === 'Retourné') {
+        // Create assignment history
+        if (req.user?.id) {
+          await this.prisma.documentAssignmentHistory.create({
+            data: {
+              documentId: body.dossierId,
+              assignedByUserId: req.user.id,
+              action: 'RETURNED',
+              reason: `Retourné par ${req.user.fullName || 'Gestionnaire'}`
+            }
+          });
+        }
+
+        // Notify chef d'équipe
+        const gestionnaire = await this.prisma.user.findUnique({
+          where: { id: req.user.id },
+          select: { teamLeaderId: true, fullName: true }
+        });
+
+        if (gestionnaire?.teamLeaderId) {
+          await this.prisma.notification.create({
+            data: {
+              userId: gestionnaire.teamLeaderId,
+              type: 'DOCUMENT_RETURNED',
+              title: 'Document retourné par gestionnaire',
+              message: `${gestionnaire.fullName} a retourné le document ${document.name} (${document.bordereau?.client?.name || 'N/A'})`,
+              data: { 
+                documentId: body.dossierId, 
+                gestionnaireName: gestionnaire.fullName,
+                documentName: document.name,
+                clientName: document.bordereau?.client?.name
+              }
+            }
+          });
+        }
+      }
+
       return { success: true, message: 'Statut modifié avec succès' };
     }
 
@@ -979,39 +1047,81 @@ export class ChefEquipeTableauBordController {
   async getDocumentsIndividuels(@Req() req: any) {
     const accessFilter = this.buildAccessFilter(req.user);
     
-    let documentFilter: any = {
-      bordereau: { ...accessFilter, archived: false }
-    };
+    let documents;
     
-    // For gestionnaires, only show documents assigned to them
+    // For gestionnaires, show ALL documents from their chef d'équipe's bordereaux
     if (req.user?.role === 'GESTIONNAIRE') {
-      documentFilter = {
-        assignedToUserId: req.user.id,
-        bordereau: { archived: false }
-      };
+      // Get gestionnaire's team leader
+      const gestionnaire = await this.prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { teamLeaderId: true }
+      });
+      
+      if (gestionnaire?.teamLeaderId) {
+        // Get ALL documents from bordereaux managed by their chef d'équipe
+        documents = await this.prisma.document.findMany({
+          where: {
+            bordereau: {
+              archived: false,
+              contract: {
+                teamLeaderId: gestionnaire.teamLeaderId
+              }
+            }
+          },
+          include: {
+            bordereau: { include: { client: true } },
+            assignedTo: true
+          },
+          orderBy: { uploadedAt: 'desc' }
+        });
+      } else {
+        // Fallback: if no team leader, show only assigned documents
+        documents = await this.prisma.document.findMany({
+          where: {
+            assignedToUserId: req.user.id,
+            bordereau: { archived: false }
+          },
+          include: {
+            bordereau: { include: { client: true } },
+            assignedTo: true
+          },
+          orderBy: { uploadedAt: 'desc' }
+        });
+      }
+    } else {
+      // For other roles, show all documents based on access filter
+      documents = await this.prisma.document.findMany({
+        where: {
+          bordereau: { ...accessFilter, archived: false }
+        },
+        include: {
+          bordereau: { include: { client: true } },
+          assignedTo: true
+        },
+        orderBy: { uploadedAt: 'desc' }
+      });
     }
-    
-    const documents = await this.prisma.document.findMany({
-      where: documentFilter,
-      include: {
-        bordereau: { include: { client: true } },
-        assignedTo: true
-      },
-      orderBy: { uploadedAt: 'desc' }
-    });
 
-    return documents.map(doc => ({
-      id: doc.id,
-      reference: doc.name, // Show document name (like BS-5766831.pdf)
-      bordereauReference: doc.bordereau?.reference || 'N/A', // Add bordereau reference
-      client: doc.bordereau?.client?.name || 'N/A',
-      type: this.getDocumentTypeLabel(doc.type), // Show actual document type
-      statut: this.getDocumentStatusLabel(doc.status || undefined),
-      gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
-      date: this.getRelativeTime(doc.uploadedAt),
-      completionPercentage: this.calculateDocumentCompletion(doc),
-      dossierStates: this.getDocumentStates(doc)
-    }));
+    return documents.map(doc => {
+      // If document is assigned to a gestionnaire and status is SCANNE, show as Assigné
+      let displayStatus = this.getDocumentStatusLabel(doc.status || undefined);
+      if (doc.assignedToUserId && doc.status === 'SCANNE') {
+        displayStatus = 'Assigné';
+      }
+      
+      return {
+        id: doc.id,
+        reference: doc.name, // Show document name (like BS-5766831.pdf)
+        bordereauReference: doc.bordereau?.reference || 'N/A', // Add bordereau reference
+        client: doc.bordereau?.client?.name || 'N/A',
+        type: this.getDocumentTypeLabel(doc.type), // Show actual document type
+        statut: displayStatus,
+        gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+        date: this.getRelativeTime(doc.uploadedAt),
+        completionPercentage: this.calculateDocumentCompletion(doc),
+        dossierStates: this.getDocumentStates(doc)
+      };
+    });
   }
 
   @Get('gestionnaire-assignments-dossiers')
@@ -1050,13 +1160,6 @@ export class ChefEquipeTableauBordController {
 
     const assignments = await Promise.all(
       gestionnaires.map(async (gestionnaire) => {
-        const returnedDocs = await this.prisma.documentAssignmentHistory.count({
-          where: {
-            fromUserId: gestionnaire.id,
-            action: 'RETURNED'
-          }
-        });
-
         const docsByType = {};
         gestionnaire.assignedDocuments.forEach(doc => {
           const type = this.getDocumentTypeLabel(doc.type);
@@ -1065,7 +1168,32 @@ export class ChefEquipeTableauBordController {
 
         const traites = gestionnaire.assignedDocuments.filter(doc => doc.status === 'TRAITE').length;
         const enCours = gestionnaire.assignedDocuments.filter(doc => doc.status === 'EN_COURS').length;
-        const retournes = gestionnaire.assignedDocuments.filter(doc => doc.status === 'REJETE').length;
+        const retournes = gestionnaire.assignedDocuments.filter(doc => doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN').length;
+
+        // Get who returned the documents - find the most recent return action by this gestionnaire
+        let returnedBy: string | null = null;
+        if (retournes > 0) {
+          // Find returned documents for this gestionnaire
+          const returnedDocs = gestionnaire.assignedDocuments.filter(doc => 
+            doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN'
+          );
+          
+          if (returnedDocs.length > 0) {
+            // Get the history for the first returned document
+            const history = await this.prisma.documentAssignmentHistory.findFirst({
+              where: {
+                documentId: { in: returnedDocs.map(d => d.id) },
+                action: 'RETURNED'
+              },
+              include: {
+                assignedBy: { select: { fullName: true } }
+              },
+              orderBy: { createdAt: 'desc' }
+            });
+            
+            returnedBy = history?.assignedBy?.fullName || gestionnaire.fullName;
+          }
+        }
 
         return {
           gestionnaire: gestionnaire.fullName,
@@ -1073,6 +1201,7 @@ export class ChefEquipeTableauBordController {
           traites,
           enCours,
           retournes,
+          returnedBy,
           documentsByType: docsByType
         };
       })
@@ -1183,6 +1312,7 @@ export class ChefEquipeTableauBordController {
     const mapping = {
       'UPLOADED': 'Nouveau',
       'SCANNE': 'Scanné',
+      'ASSIGNE': 'Assigné',
       'EN_COURS': 'En cours',
       'TRAITE': 'Traité',
       'REJETE': 'Rejeté',
@@ -1193,9 +1323,7 @@ export class ChefEquipeTableauBordController {
 
   private calculateDocumentCompletion(doc: any): number {
     if (doc.status === 'TRAITE') return 100;
-    if (doc.status === 'EN_COURS') return 60;
-    if (doc.status === 'REJETE') return 25;
-    return 30; // UPLOADED or other statuses
+    return 0; // All other statuses = 0%
   }
 
   private getDocumentStates(doc: any): string[] {
