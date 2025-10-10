@@ -265,12 +265,10 @@ const EnhancedDashboard: React.FC = () => {
     if (!searchQuery.trim()) return;
     
     try {
-      // Use Super Admin endpoints for system-wide search
-      const response = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/search', {
+      // Use chef-equipe endpoints for search
+      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/search', {
         params: { type: searchType, query: searchQuery }
-      }).catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/search', {
-        params: { type: searchType, query: searchQuery }
-      }));
+      });
       setDerniersDossiers(response.data);
       
       const searchResultsCount = response.data.length;
@@ -284,11 +282,9 @@ const EnhancedDashboard: React.FC = () => {
   const handleTypeFilterChange = async (newType: string) => {
     setTypeFilter(newType);
     try {
-      const response = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossiers-en-cours', {
+      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours', {
         params: { type: newType }
-      }).catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours', {
-        params: { type: newType }
-      }));
+      });
       setDossiersEnCours(response.data);
     } catch (error) {
       console.error('Filter error:', error);
@@ -297,8 +293,7 @@ const EnhancedDashboard: React.FC = () => {
 
   const handleVoirDossier = async (dossier: Dossier) => {
     try {
-      const response = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossier-pdf/' + dossier.id)
-        .catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossier-pdf/' + dossier.id));
+      const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossier-pdf/' + dossier.id);
       if (response.data.success && response.data.pdfUrl) {
         const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
         const fullPdfUrl = `${serverBaseUrl}${response.data.pdfUrl}`;
@@ -326,13 +321,10 @@ const EnhancedDashboard: React.FC = () => {
     if (!selectedDossier || !newStatus) return;
     
     try {
-      const response = await LocalAPI.post('/bordereaux/super-admin/tableau-bord/modify-dossier-status', {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
         dossierId: selectedDossier.id,
         newStatus
-      }).catch(() => LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-        dossierId: selectedDossier.id,
-        newStatus
-      }));
+      });
       
       if (response.data.success) {
         alert('Statut du dossier modifié avec succès');
@@ -348,8 +340,7 @@ const EnhancedDashboard: React.FC = () => {
 
   const handleTelechargerDossier = async (dossier: any) => {
     try {
-      const infoResponse = await LocalAPI.get('/bordereaux/super-admin/tableau-bord/download-info/' + dossier.id)
-        .catch(() => LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/download-info/' + dossier.id));
+      const infoResponse = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/download-info/' + dossier.id);
       const downloadInfo = infoResponse.data;
       
       if (downloadInfo.success) {
@@ -363,11 +354,9 @@ const EnhancedDashboard: React.FC = () => {
           const downloadUrl = `/bordereaux/super-admin/tableau-bord/download/${dossier.id}`;
           
           try {
-            const response = await fetch(`${LocalAPI.defaults.baseURL}${downloadUrl}`, {
+            const response = await fetch(`${LocalAPI.defaults.baseURL}/bordereaux/chef-equipe/tableau-bord/download/${dossier.id}`, {
               headers: { 'Authorization': `Bearer ${token}` }
-            }).catch(() => fetch(`${LocalAPI.defaults.baseURL}/bordereaux/chef-equipe/tableau-bord/download/${dossier.id}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            }));
+            });
             
             if (response.ok) {
               const blob = await response.blob();
@@ -400,11 +389,9 @@ const EnhancedDashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         const exportUrl = `/bordereaux/super-admin/tableau-bord/export-dossiers-en-cours${typeFilter !== 'Tous types' ? `?type=${encodeURIComponent(typeFilter)}` : ''}`;
         
-        const response = await fetch(`${LocalAPI.defaults.baseURL}${exportUrl}`, {
+        const response = await fetch(`${LocalAPI.defaults.baseURL}/bordereaux/chef-equipe/tableau-bord/export-dossiers-en-cours${typeFilter !== 'Tous types' ? `?type=${encodeURIComponent(typeFilter)}` : ''}`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => fetch(`${LocalAPI.defaults.baseURL}/bordereaux/chef-equipe/tableau-bord/export-dossiers-en-cours${typeFilter !== 'Tous types' ? `?type=${encodeURIComponent(typeFilter)}` : ''}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }));
+        });
         
         if (response.ok) {
           const blob = await response.blob();
@@ -442,21 +429,16 @@ const EnhancedDashboard: React.FC = () => {
 
   // Load Chef d'équipe data for Super Admin
   const loadChefEquipeData = useCallback(async () => {
-    if (user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMINISTRATEUR') return;
+    if (user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMINISTRATEUR' && user?.role !== 'RESPONSABLE_DEPARTEMENT') return;
     
     try {
-      // Use Super Admin endpoints to get ALL data (system-wide)
+      // Use chef-equipe endpoints but with super-admin access to get ALL data
       const [statsRes, typesRes, derniersRes, enCoursRes, assignmentsRes] = await Promise.all([
-        LocalAPI.get('/bordereaux/super-admin/tableau-bord/stats').catch(() => 
-          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats')),
-        LocalAPI.get('/bordereaux/super-admin/tableau-bord/types-detail').catch(() => 
-          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail')),
-        LocalAPI.get('/bordereaux/super-admin/tableau-bord/derniers-dossiers').catch(() => 
-          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers')),
-        LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossiers-en-cours').catch(() => 
-          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours')),
-        LocalAPI.get('/bordereaux/super-admin/gestionnaire-assignments-dossiers').catch(() => 
-          LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers'))
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers?superAdmin=true')
       ]);
 
       setStats(statsRes.data);
@@ -472,7 +454,7 @@ const EnhancedDashboard: React.FC = () => {
 
   // Fetch Super Admin data (like Chef d'équipe)
   const fetchSuperAdminData = useCallback(async () => {
-    if (user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMINISTRATEUR') return;
+    if (user?.role !== 'SUPER_ADMIN' && user?.role !== 'ADMINISTRATEUR' && user?.role !== 'RESPONSABLE_DEPARTEMENT') return;
     
     try {
       setLoading(true);
@@ -480,15 +462,12 @@ const EnhancedDashboard: React.FC = () => {
       // Load Chef d'équipe data for Super Admin
       await loadChefEquipeData();
       
-      // Use Super Admin endpoints to get ALL data (not team-specific)
+      // Use chef-equipe endpoints but with super-admin access to get ALL data
       const [statsResponse, dossiersResponse, assignmentsResponse, enCoursResponse] = await Promise.all([
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
-        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers'),
-        // Super Admin sees ALL bordereaux en cours, not just team-specific
-        LocalAPI.get('/bordereaux/super-admin/tableau-bord/dossiers-en-cours').catch(() => 
-          LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours')
-        )
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true')
       ]);
       
       if (statsResponse.data) {
@@ -543,19 +522,7 @@ const EnhancedDashboard: React.FC = () => {
       }
       
       if (enCoursResponse.data) {
-        // Transform the data to ensure proper structure for Super Admin (all bordereaux)
-        const transformedEnCours = enCoursResponse.data.map((dossier: any) => ({
-          ...dossier,
-          // Ensure we have proper completion percentage
-          completionPercentage: dossier.completionPercentage || 
-            (dossier.statut === 'Traité' ? 100 : 
-             dossier.statut === 'En cours' ? 60 : 0),
-          // Ensure we have proper status
-          statut: dossier.statut || 'En cours',
-          // Ensure we have dossier states array
-          dossierStates: dossier.dossierStates || [dossier.statut || 'En cours']
-        }));
-        setSuperAdminDossiersEnCours(transformedEnCours);
+        setSuperAdminDossiersEnCours(enCoursResponse.data);
       }
     } catch (error: any) {
       console.error('❌ Error loading Super Admin data:', error);
@@ -963,6 +930,7 @@ const EnhancedDashboard: React.FC = () => {
     switch (dashboardData.role) {
       case 'SUPER_ADMIN':
       case 'ADMINISTRATEUR':
+      case 'RESPONSABLE_DEPARTEMENT':
         return (
           <div style={{ marginTop: '2rem' }}>
             {/* All Document Types Overview - Corbeille - Tous Types de Documents */}
@@ -1324,7 +1292,7 @@ const EnhancedDashboard: React.FC = () => {
       {/* {Header and Filters sections commented out} */}
 
       {/* Chef d'équipe Style Header and Filters for Super Admin and Responsable Département */}
-      {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || dashboardData?.role === 'RESPONSABLE_DEPARTEMENT') && (
+      {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || user?.role === 'RESPONSABLE_DEPARTEMENT') && (
         <div style={{ fontFamily: 'Arial, sans-serif', background: '#f5f5f5', minHeight: '100vh' }}>
           {/* Header Bar (Red Background) */}
           <div style={{ background: '#d52b36', color: 'white', padding: '20px 0', textAlign: 'center' }}>
@@ -1337,23 +1305,276 @@ const EnhancedDashboard: React.FC = () => {
           </div>
 
           <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px' }}>
-            {/* Import Chef d'équipe Dashboard - Identical 100% with hidden header */}
-            <div style={{
-              /* Hide the Chef d'équipe header using CSS */
-            }}>
-              <style>
-                {`
-                  .chef-equipe-wrapper > div > div:first-child {
-                    display: none !important;
-                  }
-                  .chef-equipe-wrapper > div {
-                    background: transparent !important;
-                    min-height: auto !important;
-                  }
-                `}
-              </style>
-              <div className="chef-equipe-wrapper">
-                <ChefEquipeDashboard />
+            {/* Super Admin Dashboard - Aggregated data from all chef équipes */}
+            <div>
+              {/* Statistics Section (Cards Row) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                {/* Prestation Card */}
+                <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Prestation</h3>
+                    <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.prestation?.total || 0}</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                    {Object.entries(superAdminStats.prestation?.breakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+                    {Object.entries(superAdminStats.prestation?.gestionnaireBreakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Other cards */}
+                <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Adhésion</h3>
+                    <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.adhesion?.total || 0}</span>
+                  </div>
+                </div>
+                <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Complément de dossier</h3>
+                    <span style={{ background: '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.complement?.total || 0}</span>
+                  </div>
+                </div>
+                <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Résiliation</h3>
+                    <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.resiliation?.total || 0}</span>
+                  </div>
+                </div>
+                <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Réclamation</h3>
+                    <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.reclamation?.total || 0}</span>
+                  </div>
+                </div>
+                <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Avenant</h3>
+                    <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.avenant?.total || 0}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Affectations par Gestionnaire */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Affectations par Gestionnaire</h3>
+                  <span style={{ fontSize: '14px', color: '#666' }}>Tous les gestionnaires</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                  {superAdminGestionnaireAssignments.map((assignment, index) => (
+                    <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057' }}>
+                        {assignment.gestionnaire}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
+                        <strong>Total affectés:</strong> {assignment.totalAssigned}
+                      </div>
+                      <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#28a745' }}>✓ Traités:</span>
+                          <span style={{ fontWeight: 'bold' }}>{assignment.traites || 0}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#ffc107' }}>⏳ En cours:</span>
+                          <span style={{ fontWeight: 'bold' }}>{assignment.enCours || 0}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#dc3545' }}>↩ Retournés:</span>
+                          <span style={{ fontWeight: 'bold' }}>{assignment.retournes || 0}</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                        <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Derniers Bordereaux Ajoutés */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Derniers Bordereaux Ajoutés</h3>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Référence</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {derniersDossiers.slice(0, 5).map((dossier, index) => (
+                        <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.type === 'Aucun document' ? 'Prestation' : dossier.type}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '40px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ width: `${dossier.statut === 'Traité' ? 100 : dossier.completionPercentage || 0}%`, height: '100%', background: (dossier.statut === 'Traité' ? 100 : dossier.completionPercentage || 0) >= 80 ? '#4caf50' : (dossier.statut === 'Traité' ? 100 : dossier.completionPercentage || 0) >= 50 ? '#ff9800' : '#f44336' }} />
+                              </div>
+                              <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{dossier.statut === 'Traité' ? 100 : dossier.completionPercentage || 0}%</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              <span style={{ background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                                {dossier.statut}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <button onClick={() => handleSuperAdminModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Bordereaux en cours */}
+              <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux en cours</h3>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Référence</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dossiersEnCours.slice(0, 5).map((dossier, index) => (
+                        <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <span style={{ background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dossier.statut}</span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '40px', height: '6px', background: '#e0e0e0', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ width: `${dossier.completionPercentage || 0}%`, height: '100%', background: (dossier.completionPercentage || 0) >= 80 ? '#4caf50' : (dossier.completionPercentage || 0) >= 50 ? '#ff9800' : '#f44336' }} />
+                              </div>
+                              <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{dossier.completionPercentage || 0}%</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              {(dossier.dossierStates || [dossier.statut]).map((state: string, idx: number) => (
+                                <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                                  {state}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <button onClick={() => handleSuperAdminModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Dossiers Individuels */}
+              <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px 12px 20px', borderBottom: '1px solid #e0e0e0' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels</h3>
+                  <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#d52b36', color: 'white' }}>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Réf. Dossier</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut Dossier</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Gestionnaire</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {derniersDossiers.slice(0, 10).map((document, index) => (
+                        <tr key={document.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{document.reference}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <span style={{ 
+                              background: document.statut === 'Traité' ? '#4caf50' : document.statut === 'En cours' ? '#ff9800' : '#2196f3', 
+                              color: 'white', 
+                              padding: '4px 8px', 
+                              borderRadius: '12px', 
+                              fontSize: '12px', 
+                              fontWeight: 'bold' 
+                            }}>
+                              {document.statut}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.date}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button 
+                                onClick={() => handleSuperAdminViewPDF(document.id)}
+                                style={{ 
+                                  background: 'none', 
+                                  border: 'none', 
+                                  color: '#2196f3', 
+                                  cursor: 'pointer', 
+                                  fontSize: '12px',
+                                  textDecoration: 'underline'
+                                }}
+                                title="Voir PDF du document"
+                              >
+                                Voir PDF
+                              </button>
+                              <button 
+                                onClick={() => handleSuperAdminModifyStatus(document.id)}
+                                style={{ 
+                                  background: 'none', 
+                                  border: 'none', 
+                                  color: '#9c27b0', 
+                                  cursor: 'pointer', 
+                                  fontSize: '12px',
+                                  textDecoration: 'underline'
+                                }}
+                                title="Modifier statut du document"
+                              >
+                                Modifier Statut
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -2093,7 +2314,7 @@ const EnhancedDashboard: React.FC = () => {
          
 
           {/* Document-Level Analytics Summary */}
-          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR') && (
+          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || user?.role === 'RESPONSABLE_DEPARTEMENT') && (
             <div style={{ marginTop: '2rem' }}>
               <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -2145,7 +2366,7 @@ const EnhancedDashboard: React.FC = () => {
           )} */}
 
           {/* Module Bulletin de soins - AI Suggestions */}
-          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR') && (
+          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || user?.role === 'RESPONSABLE_DEPARTEMENT') && (
             <div style={{ marginTop: '2rem' }}>
               <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>

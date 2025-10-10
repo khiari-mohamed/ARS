@@ -53,10 +53,13 @@ const ChefEquipeTableauBordNew: React.FC = () => {
   const [dossiersEnCours, setDossiersEnCours] = useState<Dossier[]>([]);
   const [allGestionnaireAssignments, setAllGestionnaireAssignments] = useState<any[]>([]);
   const [filteredGestionnaireAssignments, setFilteredGestionnaireAssignments] = useState<any[]>([]);
+  const [dossiersIndividuels, setDossiersIndividuels] = useState<any[]>([]);
+  const [allDossiersIndividuels, setAllDossiersIndividuels] = useState<any[]>([]);
   const [gestionnaireFilter, setGestionnaireFilter] = useState('Tous');
   const [searchType, setSearchType] = useState('Ref. GSD');
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('Tous types');
+  const [statutFilter, setStatutFilter] = useState('Tous');
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedDossier, setSelectedDossier] = useState<any>(null);
@@ -65,25 +68,35 @@ const ChefEquipeTableauBordNew: React.FC = () => {
   const [pdfViewModalOpen, setPdfViewModalOpen] = useState(false);
   const [statusModifyModalOpen, setStatusModifyModalOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
+  const [derniersDossiersPage, setDerniersDossiersPage] = useState(1);
+  const [dossiersIndividuelsPage, setDossiersIndividuelsPage] = useState(1);
+  const itemsPerPage = 5;
+  const dossiersIndividuelsPerPage = 20;
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
-    // Apply filters when filter values change
+    if (derniersDossiers.length > 0) {
+      setDerniersDossiersPage(1);
+    }
+  }, [derniersDossiers.length]);
+
+  useEffect(() => {
     applyFiltersToAssignments();
   }, [typeFilter, searchQuery, allGestionnaireAssignments]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [statsRes, typesRes, derniersRes, enCoursRes, assignmentsRes] = await Promise.all([
+      const [statsRes, typesRes, derniersRes, enCoursRes, assignmentsRes, individuelsRes] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours'),
-        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers')
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels')
       ]);
 
       setStats(statsRes.data);
@@ -92,6 +105,8 @@ const ChefEquipeTableauBordNew: React.FC = () => {
       setDossiersEnCours(enCoursRes.data);
       setAllGestionnaireAssignments(assignmentsRes.data || []);
       setFilteredGestionnaireAssignments(assignmentsRes.data || []);
+      setDossiersIndividuels(individuelsRes.data || []);
+      setAllDossiersIndividuels(individuelsRes.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -108,6 +123,24 @@ const ChefEquipeTableauBordNew: React.FC = () => {
       });
       setDerniersDossiers(response.data);
       
+      // Filter individual documents based on search
+      const filtered = allDossiersIndividuels.filter(doc => {
+        const query = searchQuery.toLowerCase();
+        switch (searchType) {
+          case 'Ref. GSD':
+            return doc.reference?.toLowerCase().includes(query) || doc.bordereauReference?.toLowerCase().includes(query);
+          case 'Client':
+            return doc.client?.toLowerCase().includes(query);
+          case 'Type':
+            return doc.type?.toLowerCase().includes(query);
+          case 'Gestionnaire':
+            return doc.gestionnaire?.toLowerCase().includes(query);
+          default:
+            return true;
+        }
+      });
+      setDossiersIndividuels(filtered);
+      
       // Update the section title to show search results
       const searchResultsCount = response.data.length;
       console.log(`Found ${searchResultsCount} results for "${searchQuery}" in ${searchType}`);
@@ -119,9 +152,22 @@ const ChefEquipeTableauBordNew: React.FC = () => {
 
   const handleTypeFilterChange = async (newType: string) => {
     setTypeFilter(newType);
+    await applyFilters(newType, statutFilter);
+  };
+
+  const handleStatutFilterChange = async (newStatut: string) => {
+    setStatutFilter(newStatut);
+    await applyFilters(typeFilter, newStatut);
+  };
+
+  const applyFilters = async (type: string, statut: string) => {
     try {
+      const params: any = {};
+      if (type !== 'Tous types') params.type = type;
+      if (statut !== 'Tous') params.statut = statut;
+      
       const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours', {
-        params: { type: newType }
+        params
       });
       setDossiersEnCours(response.data);
     } catch (error) {
@@ -534,6 +580,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
               <button
                 onClick={() => {
                   setSearchQuery('');
+                  setDossiersIndividuels(allDossiersIndividuels);
                   loadData();
                 }}
                 style={{
@@ -1073,6 +1120,185 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           </div>
         </div>
 
+        {/* Dossiers Individuels */}
+        <div style={{ 
+          background: 'white', 
+          borderRadius: '8px', 
+          padding: '20px',
+          marginBottom: '20px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '16px' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ 
+                color: '#d32f2f', 
+                fontSize: '16px', 
+                marginRight: '8px' 
+              }}>📄</span>
+              <span style={{ 
+                fontWeight: 'bold', 
+                fontSize: '16px' 
+              }}>
+                Dossiers Individuels ({dossiersIndividuels.length})
+              </span>
+              <span style={{ 
+                fontSize: '12px', 
+                color: '#666', 
+                marginLeft: '12px' 
+              }}>
+                Affichage par dossier (non par bordereau)
+              </span>
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f5f5f5' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Réf. Dossier</th>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Réf. Bordereau</th>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Client</th>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Type</th>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Statut Dossier</th>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Gestionnaire</th>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Date</th>
+                  <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '12px', color: '#666', fontWeight: 'bold' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dossiersIndividuels
+                  .slice((dossiersIndividuelsPage - 1) * dossiersIndividuelsPerPage, dossiersIndividuelsPage * dossiersIndividuelsPerPage)
+                  .map((dossier, index) => (
+                  <tr key={dossier.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <td style={{ padding: '12px 8px', fontSize: '13px', fontWeight: '500' }}>
+                      {dossier.reference}
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '13px' }}>
+                      {dossier.bordereauReference}
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '13px' }}>
+                      {dossier.client}
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '13px' }}>
+                      {dossier.type}
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '13px' }}>
+                      <span style={{ 
+                        background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : dossier.statut === 'Scanné' ? '#2196f3' : '#9e9e9e',
+                        color: 'white', 
+                        padding: '3px 8px', 
+                        borderRadius: '4px', 
+                        fontSize: '11px',
+                        fontWeight: 'bold'
+                      }}>
+                        {dossier.statut}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '13px' }}>
+                      {dossier.gestionnaire}
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '13px', color: '#666' }}>
+                      {dossier.date}
+                    </td>
+                    <td style={{ padding: '12px 8px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button 
+                          onClick={() => handleVoirDossier(dossier)}
+                          style={{ 
+                            background: '#2196f3', 
+                            color: 'white', 
+                            border: 'none', 
+                            padding: '4px 10px', 
+                            borderRadius: '4px', 
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            fontWeight: '500'
+                          }}
+                        >
+                          Voir PDF
+                        </button>
+                        {canModifyDossier(dossier) && (
+                          <button 
+                            onClick={() => {
+                              setSelectedDossier(dossier);
+                              setNewStatus('');
+                              setStatusModifyModalOpen(true);
+                            }}
+                            style={{ 
+                              background: '#ff9800', 
+                              color: 'white', 
+                              border: 'none', 
+                              padding: '4px 10px', 
+                              borderRadius: '4px', 
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                              fontWeight: '500'
+                            }}
+                          >
+                            Modifier Statut
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Pagination for Dossiers Individuels */}
+          {dossiersIndividuels.length > dossiersIndividuelsPerPage && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              gap: '12px', 
+              marginTop: '20px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => setDossiersIndividuelsPage(prev => Math.max(1, prev - 1))}
+                disabled={dossiersIndividuelsPage === 1}
+                style={{
+                  background: dossiersIndividuelsPage === 1 ? '#e0e0e0' : '#d32f2f',
+                  color: dossiersIndividuelsPage === 1 ? '#999' : 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: dossiersIndividuelsPage === 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ fontSize: '14px', color: '#666' }}>
+                Page {dossiersIndividuelsPage} sur {Math.ceil(dossiersIndividuels.length / dossiersIndividuelsPerPage)}
+              </span>
+              <button
+                onClick={() => setDossiersIndividuelsPage(prev => Math.min(Math.ceil(dossiersIndividuels.length / dossiersIndividuelsPerPage), prev + 1))}
+                disabled={dossiersIndividuelsPage >= Math.ceil(dossiersIndividuels.length / dossiersIndividuelsPerPage)}
+                style={{
+                  background: dossiersIndividuelsPage >= Math.ceil(dossiersIndividuels.length / dossiersIndividuelsPerPage) ? '#e0e0e0' : '#d32f2f',
+                  color: dossiersIndividuelsPage >= Math.ceil(dossiersIndividuels.length / dossiersIndividuelsPerPage) ? '#999' : 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: dossiersIndividuelsPage >= Math.ceil(dossiersIndividuels.length / dossiersIndividuelsPerPage) ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Dossiers En Cours */}
         <div style={{ 
           background: 'white', 
@@ -1116,6 +1342,22 @@ const ChefEquipeTableauBordNew: React.FC = () => {
                 <option value="Complément Dossier">Complément Dossier</option>
                 <option value="Avenant">Avenant</option>
                 <option value="Réclamation">Réclamation</option>
+              </select>
+              <select
+                value={statutFilter}
+                onChange={(e) => handleStatutFilterChange(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '12px'
+                }}
+              >
+                <option value="Tous">Tous</option>
+                <option value="Nouveau">🆕 Nouveau</option>
+                <option value="En cours">⏳ En cours</option>
+                <option value="Traité">✅ Traité</option>
+                <option value="Retourné">↩️ Retourné</option>
               </select>
               <button 
                 onClick={handleExportDossiersEnCours}

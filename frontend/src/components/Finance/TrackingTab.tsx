@@ -458,7 +458,7 @@ const TrackingTab: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        {record.referenceOV && canModifyStatus() && (
+                        {canModifyStatus() && (
                           <Button
                             size="small"
                             startIcon={<EditIcon />}

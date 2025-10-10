@@ -156,8 +156,7 @@ function BordereauxListPage() {
   }
 
   if (userRole === 'GESTIONNAIRE') {
-    // Gestionnaires use the same interface as Chef d'équipe but with read-only restrictions
-    return <ChefEquipeBordereaux />;
+    return <GestionnaireBordereaux />;
   }
 
   if (false && userRole === 'GESTIONNAIRE_OLD') {

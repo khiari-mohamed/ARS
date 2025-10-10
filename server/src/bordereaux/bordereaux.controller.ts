@@ -97,12 +97,34 @@ export class BordereauxController {
 
   @Get('inbox/user/:userId')
   @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
-  getUserBordereaux(@Param('userId') userId: string, @Req() req) {
+  async getUserBordereaux(@Param('userId') userId: string, @Req() req) {
     const user = req.user;
     
     // Gestionnaire can only see their own bordereaux
     if (user.role === UserRole.GESTIONNAIRE && user.id !== userId) {
       throw new Error('Accès non autorisé: vous ne pouvez voir que vos propres dossiers');
+    }
+    
+    // For gestionnaires, return bordereaux that have documents assigned to them
+    if (user.role === UserRole.GESTIONNAIRE) {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          documents: {
+            some: { assignedToUserId: userId }
+          },
+          archived: false
+        },
+        include: {
+          client: { select: { name: true } },
+          contract: { select: { delaiReglement: true } },
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { where: { assignedToUserId: userId } }
+        },
+        orderBy: { dateReception: 'desc' }
+      });
+      
+      const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
+      return bordereaux.map(b => BordereauResponseDto.fromEntity(b));
     }
     
     return this.bordereauxService.findByUser(userId);
@@ -854,26 +876,28 @@ export class BordereauxController {
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['SCANNE', 'A_AFFECTER'] },
+          statut: { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'] },
           assignedToUserId: null
         },
         include: {
           client: true,
           contract: true,
-          currentHandler: { select: { fullName: true } }
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
         },
         orderBy: { dateReception: 'desc' }
       }),
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['ASSIGNE', 'EN_COURS'] },
+          statut: { in: ['ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] },
           assignedToUserId: { not: null }
         },
         include: {
           client: true,
           contract: true,
-          currentHandler: { select: { fullName: true } }
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
         },
         orderBy: { dateReception: 'desc' }
       }),
@@ -886,7 +910,8 @@ export class BordereauxController {
         include: {
           client: true,
           contract: true,
-          currentHandler: { select: { fullName: true } }
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
         },
         orderBy: { dateReception: 'desc' }
       })
@@ -898,37 +923,12 @@ export class BordereauxController {
       traites: traites.length
     });
 
+    const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
+    
     return {
-      nonAffectes: nonAffectes.map(b => ({
-        ...b,
-        dateReception: b.dateReception.toISOString(),
-        dateDebutScan: b.dateDebutScan?.toISOString(),
-        dateFinScan: b.dateFinScan?.toISOString(),
-        dateReceptionSante: b.dateReceptionSante?.toISOString(),
-        dateCloture: b.dateCloture?.toISOString(),
-        createdAt: b.createdAt.toISOString(),
-        updatedAt: b.updatedAt.toISOString()
-      })),
-      enCours: enCours.map(b => ({
-        ...b,
-        dateReception: b.dateReception.toISOString(),
-        dateDebutScan: b.dateDebutScan?.toISOString(),
-        dateFinScan: b.dateFinScan?.toISOString(),
-        dateReceptionSante: b.dateReceptionSante?.toISOString(),
-        dateCloture: b.dateCloture?.toISOString(),
-        createdAt: b.createdAt.toISOString(),
-        updatedAt: b.updatedAt.toISOString()
-      })),
-      traites: traites.map(b => ({
-        ...b,
-        dateReception: b.dateReception.toISOString(),
-        dateDebutScan: b.dateDebutScan?.toISOString(),
-        dateFinScan: b.dateFinScan?.toISOString(),
-        dateReceptionSante: b.dateReceptionSante?.toISOString(),
-        dateCloture: b.dateCloture?.toISOString(),
-        createdAt: b.createdAt.toISOString(),
-        updatedAt: b.updatedAt.toISOString()
-      })),
+      nonAffectes: nonAffectes.map(b => BordereauResponseDto.fromEntity(b)),
+      enCours: enCours.map(b => BordereauResponseDto.fromEntity(b)),
+      traites: traites.map(b => BordereauResponseDto.fromEntity(b)),
       stats: {
         nonAffectes: nonAffectes.length,
         enCours: enCours.length,

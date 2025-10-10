@@ -40,10 +40,10 @@ export class ManualScanController {
 
   @Post('upload/:bordereauId')
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
-  @UseInterceptors(FilesInterceptor('files', 10, {
+  @UseInterceptors(FilesInterceptor('files', 100, {
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB per file
-      files: 10 // Max 10 files
+      fileSize: 50 * 1024 * 1024, // 50MB per file
+      files: 100 // Max 100 files
     },
     fileFilter: (req, file, callback) => {
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
@@ -76,10 +76,10 @@ export class ManualScanController {
 
   @Post('upload-additional/:bordereauId')
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
-  @UseInterceptors(FilesInterceptor('files', 10, {
+  @UseInterceptors(FilesInterceptor('files', 100, {
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB per file
-      files: 10 // Max 10 files
+      fileSize: 50 * 1024 * 1024, // 50MB per file
+      files: 100 // Max 100 files
     },
     fileFilter: (req, file, callback) => {
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];

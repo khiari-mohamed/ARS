@@ -42,6 +42,7 @@ import {
   fetchSystemHealth,
   fetchSystemStats
 } from '../services/superAdminService';
+import { LocalAPI } from '../services/axios';
 
 interface RealTimeStats {
   timestamp: string;
@@ -59,6 +60,9 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
   const [exporting, setExporting] = useState(false);
   const [exportDialog, setExportDialog] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [dossiers, setDossiers] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>({});
 
   useEffect(() => {
     loadRealTimeData();
@@ -68,13 +72,19 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
 
   const loadRealTimeData = async () => {
     try {
-      const [realTime, queues] = await Promise.all([
+      const [realTime, queues, dossiersResponse, documentsResponse, statsResponse] = await Promise.all([
         getRealTimeStats(),
-        fetchQueuesOverview()
+        fetchQueuesOverview(),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
+        LocalAPI.get('/bordereaux/chef-equipe/dashboard-stats-dossiers')
       ]);
       
       setRealTimeData(realTime);
       setQueuesData(queues);
+      setDossiers(dossiersResponse.data || []);
+      setDocuments(documentsResponse.data || []);
+      setStats(statsResponse.data || {});
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Failed to load real-time data:', error);
@@ -324,8 +334,173 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Derniers Bordereaux Ajoutés */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Derniers Bordereaux Ajoutés
+          </Typography>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>% Finalisation</TableCell>
+                  <TableCell>États Dossiers</TableCell>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dossiers.slice(0, 5).map((dossier) => (
+                  <TableRow key={dossier.id}>
+                    <TableCell>{dossier.reference}</TableCell>
+                    <TableCell>{dossier.client}</TableCell>
+                    <TableCell>{dossier.type}</TableCell>
+                    <TableCell>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={dossier.completionPercentage || 0}
+                          sx={{ width: 40, height: 6 }}
+                        />
+                        <Typography variant="caption">
+                          {dossier.completionPercentage || 0}%
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {(dossier.dossierStates || [dossier.statut]).map((state: string, idx: number) => (
+                        <Chip key={idx} label={state} size="small" sx={{ mr: 0.5 }} />
+                      ))}
+                    </TableCell>
+                    <TableCell>{dossier.date}</TableCell>
+                    <TableCell>
+                      <IconButton size="small">
+                        ✏️
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* Bordereaux en cours */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Bordereaux en cours
+          </Typography>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Statut</TableCell>
+                  <TableCell>% Finalisation</TableCell>
+                  <TableCell>États Dossiers</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dossiers.slice(0, 5).map((dossier) => (
+                  <TableRow key={`en-cours-${dossier.id}`}>
+                    <TableCell>{dossier.reference}</TableCell>
+                    <TableCell>{dossier.client}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={dossier.statut} 
+                        color={dossier.statut === 'Traité' ? 'success' : 'primary'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={dossier.completionPercentage || 0}
+                          sx={{ width: 40, height: 6 }}
+                        />
+                        <Typography variant="caption">
+                          {dossier.completionPercentage || 0}%
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {(dossier.dossierStates || [dossier.statut]).map((state: string, idx: number) => (
+                        <Chip key={idx} label={state} size="small" sx={{ mr: 0.5 }} />
+                      ))}
+                    </TableCell>
+                    <TableCell>
+                      <IconButton size="small">
+                        ✏️
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* Dossiers Individuels */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Dossiers Individuels
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Affichage par dossier (non par bordereau)
+          </Typography>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Réf. Dossier</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Statut Dossier</TableCell>
+                  <TableCell>Gestionnaire</TableCell>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {documents.slice(0, 10).map((document) => (
+                  <TableRow key={document.id}>
+                    <TableCell>{document.reference}</TableCell>
+                    <TableCell>{document.client}</TableCell>
+                    <TableCell>{document.type}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={document.statut} 
+                        color={document.statut === 'Traité' ? 'success' : document.statut === 'En cours' ? 'warning' : 'default'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>{document.gestionnaire || 'Non assigné'}</TableCell>
+                    <TableCell>{document.date}</TableCell>
+                    <TableCell>
+                      <Button size="small" variant="text">Voir PDF</Button>
+                      <Button size="small" variant="text">Modifier Statut</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
       {/* System Performance */}
-      <Grid container spacing={3}>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>

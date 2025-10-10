@@ -12,7 +12,7 @@ export class ChefEquipeDashboardController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get('gestionnaire-assignments-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireAssignmentsDossiers(@Req() req) {
     console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
@@ -95,7 +95,7 @@ export class ChefEquipeDashboardController {
   }
 
   @Get('dashboard-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDashboardDossiers(@Req() req) {
     console.log('📄 [BACKEND] Getting dashboard dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
@@ -149,7 +149,8 @@ export class ChefEquipeDashboardController {
     if (!status) return 'En cours';
     
     const mapping = {
-      'UPLOADED': 'Téléchargé',
+      'UPLOADED': 'Nouveau',
+      'SCANNE': 'Scanné',
       'EN_COURS': 'En cours',
       'TRAITE': 'Traité',
       'REJETE': 'Rejeté',
@@ -173,7 +174,7 @@ export class ChefEquipeDashboardController {
   }
 
   @Get('dashboard-stats-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDashboardStatsDossiers(@Req() req) {
     console.log('📊 [BACKEND] Getting dashboard stats dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
@@ -251,7 +252,7 @@ export class ChefEquipeDashboardController {
   }
 
   @Get('dossier-pdf/:dossierId')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDossierPDF(@Param('dossierId') dossierId: string) {
     const document = await this.prisma.document.findUnique({
       where: { id: dossierId }
@@ -267,17 +268,19 @@ export class ChefEquipeDashboardController {
   }
 
   @Post('modify-dossier-status')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async modifyDossierStatus(@Body() body: { dossierId: string; newStatus: string }) {
     const { dossierId, newStatus } = body;
     
-    const statusMapping = {
+    const documentStatusMapping = {
+      'Nouveau': 'UPLOADED',
       'En cours': 'EN_COURS',
       'Traité': 'TRAITE',
+      'Rejeté': 'REJETE',
       'Retourné': 'RETOUR_ADMIN'
     };
 
-    const mappedStatus = statusMapping[newStatus] || newStatus;
+    const mappedStatus = documentStatusMapping[newStatus] || newStatus;
 
     await this.prisma.document.update({
       where: { id: dossierId },
@@ -288,18 +291,21 @@ export class ChefEquipeDashboardController {
   }
 
   private buildAccessFilter(user: any): any {
-    if (user?.role === 'SUPER_ADMIN') {
-      return {};
+    const baseFilter = { archived: false };
+    
+    if (user?.role === 'SUPER_ADMIN' || user?.role === 'RESPONSABLE_DEPARTEMENT') {
+      return baseFilter;
     }
     
     if (user?.role === 'CHEF_EQUIPE') {
       return {
+        ...baseFilter,
         contract: {
           teamLeaderId: user.id
         }
       };
     }
     
-    return {};
+    return baseFilter;
   }
 }

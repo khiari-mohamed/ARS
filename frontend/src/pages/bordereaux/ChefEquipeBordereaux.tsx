@@ -198,6 +198,28 @@ function ChefEquipeBordereaux() {
     }
   };
 
+  // Get Durée de traitement from backend calculation
+  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return { 
+      days: bordereau.dureeTraitement, 
+      isOnTime: bordereau.dureeTraitementStatus === 'GREEN' 
+    };
+  };
+
+  // Get Durée de règlement from backend calculation
+  const getDureeReglement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeReglement === null || bordereau.dureeReglement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return { 
+      days: bordereau.dureeReglement, 
+      isOnTime: bordereau.dureeReglementStatus === 'GREEN' 
+    };
+  };
+
   const tabData = getTabData();
 
   return (
@@ -420,6 +442,8 @@ function ChefEquipeBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Bulletin de soins</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date fin de Scannérisation</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Délais contractuels de règlement</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de traitement</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de règlement</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -524,6 +548,48 @@ function ChefEquipeBordereaux() {
                             }}>
                               {bordereau.delaiReglement || 0} jours
                             </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                            {(() => {
+                              const dureeTraitement = getDureeTraitement(bordereau);
+                              if (dureeTraitement.days === null || dureeTraitement.days === undefined) {
+                                return <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>;
+                              }
+                              return (
+                                <span style={{ 
+                                  background: dureeTraitement.isOnTime ? '#e8f5e9' : '#ffebee', 
+                                  color: dureeTraitement.isOnTime ? '#2e7d32' : '#c62828', 
+                                  padding: '4px 8px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '12px', 
+                                  fontWeight: 'bold',
+                                  display: 'inline-block'
+                                }}>
+                                  {dureeTraitement.days} jour{dureeTraitement.days !== 1 ? 's' : ''}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                            {(() => {
+                              const dureeReglement = getDureeReglement(bordereau);
+                              if (dureeReglement.days === null || dureeReglement.days === undefined) {
+                                return <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>;
+                              }
+                              return (
+                                <span style={{ 
+                                  background: dureeReglement.isOnTime ? '#e8f5e9' : '#ffebee', 
+                                  color: dureeReglement.isOnTime ? '#2e7d32' : '#c62828', 
+                                  padding: '4px 8px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '12px', 
+                                  fontWeight: 'bold',
+                                  display: 'inline-block'
+                                }}>
+                                  {dureeReglement.days} jour{dureeReglement.days !== 1 ? 's' : ''}
+                                </span>
+                              );
+                            })()}
                           </td>
                         </tr>
                         );

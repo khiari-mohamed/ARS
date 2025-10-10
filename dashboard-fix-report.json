@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-10-03T10:46:19.358Z",
+  "issue": "Dashboard calculation mismatch between roles",
+  "affectedRoles": [
+    "SUPER_ADMIN",
+    "RESPONSABLE_DEPARTEMENT"
+  ],
+  "workingRoles": [
+    "CHEF_EQUIPE"
+  ],
+  "rootCause": "Different filtering logic in dashboard.service.ts vs chef-equipe-dashboard.controller.ts",
+  "impact": "Super Admin sees inflated numbers including archived/test data",
+  "fixes": [
+    {
+      "file": "server/src/dashboard/dashboard.service.ts",
+      "issue": "buildUserFilters method missing archived filter",
+      "fix": "Add archived: false filter for all roles"
+    },
+    {
+      "file": "frontend dashboard components",
+      "issue": "Different API endpoints being called",
+      "fix": "Ensure consistent API usage across all dashboard views"
+    },
+    {
+      "file": "Data consistency",
+      "issue": "Super Admin seeing test/archived data",
+      "fix": "Apply same business rules to all roles"
+    }
+  ],
+  "priority": "HIGH - Data integrity issue"
+}

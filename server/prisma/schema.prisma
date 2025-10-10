@@ -376,6 +376,7 @@ model Document {
   assignedByUserId      String?
   priority              Int                    @default(1)
   slaApplicable         Boolean                @default(true)
+  statusModifiedByGestionnaire Boolean           @default(false)
   AlertLog              AlertLog[]
   bordereau             Bordereau?             @relation("BordereauDocuments", fields: [bordereauId], references: [id])
   uploader              User                   @relation("UserDocuments", fields: [uploadedById], references: [id])

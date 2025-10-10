@@ -86,18 +86,19 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
           
-          <Route path="/home/chef-equipe" element={
+          {/* COMMENTED OUT: Redundant Chef d'Équipe dashboard - Use main dashboard instead */}
+          {/* <Route path="/home/chef-equipe" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE]}>
               <ChefEquipeTableauBordNew />
             </ProtectedRoute>
-          } />
+          } /> */}
           
           {/* Legacy route redirect */}
-          <Route path="/home/chef-equipe-dashboard" element={
+          {/* <Route path="/home/chef-equipe-dashboard" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE]}>
               <ChefEquipeTableauBordNew />
             </ProtectedRoute>
-          } />
+          } /> */}
           
           <Route path="/home/tuniclaim" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.GESTIONNAIRE]}>

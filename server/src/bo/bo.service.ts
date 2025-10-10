@@ -168,10 +168,12 @@ export class BOService {
             }
           }
           
+          const receptionDate = entry.dateReception ? new Date(entry.dateReception) : new Date();
           const bordereauData: any = {
             reference: entry.reference,
             clientId: entry.clientId,
-            dateReception: entry.dateReception ? new Date(entry.dateReception) : new Date(),
+            dateReception: receptionDate,
+            dateReceptionBO: receptionDate, // CRITICAL: Set dateReceptionBO for duration calculations
             delaiReglement: contractDelaiReglement || 30, // Use contract's delaiReglement
             nombreBS: entry.nombreDocuments,
             statut: 'EN_ATTENTE',

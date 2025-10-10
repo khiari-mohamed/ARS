@@ -34,12 +34,14 @@ interface DocumentsViewerProps {
   dossierId: string;
   selectedDocuments?: string[];
   onDocumentSelect?: (documentId: string, checked: boolean) => void;
+  onBulkSelect?: (documentIds: string[]) => void;
 }
 
 const DocumentsViewer: React.FC<DocumentsViewerProps> = ({ 
   dossierId, 
   selectedDocuments = [], 
-  onDocumentSelect 
+  onDocumentSelect,
+  onBulkSelect
 }) => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,6 +97,18 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
     }
   };
 
+  const handleBulkSelectInBordereau = (count: number | 'all') => {
+    const unassignedDocs = documents.filter(doc => !doc.assignedToUserId);
+    console.log('Unassigned docs:', unassignedDocs.length, 'Total docs:', documents.length);
+    const docsToSelect = count === 'all' ? unassignedDocs : unassignedDocs.slice(0, count);
+    const docIds = docsToSelect.map(doc => doc.id);
+    console.log('Selecting doc IDs:', docIds);
+    
+    if (onBulkSelect) {
+      onBulkSelect(docIds);
+    }
+  };
+
   if (documents.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -105,63 +119,93 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-        {onDocumentSelect && (
-          <Checkbox
-            checked={documents.length > 0 && documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
-            indeterminate={documents.some(doc => selectedDocuments.includes(doc.id) && !doc.assignedToUserId) && 
-                          !documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
-            onChange={(e) => {
-              documents.forEach(doc => {
-                if (!doc.assignedToUserId) {
-                  onDocumentSelect(doc.id, e.target.checked);
-                }
-              });
-            }}
-          />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onDocumentSelect && (
+            <Checkbox
+              checked={documents.length > 0 && documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
+              indeterminate={documents.some(doc => selectedDocuments.includes(doc.id) && !doc.assignedToUserId) && 
+                            !documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
+              onChange={(e) => {
+                documents.forEach(doc => {
+                  if (!doc.assignedToUserId) {
+                    onDocumentSelect(doc.id, e.target.checked);
+                  }
+                });
+              }}
+            />
+          )}
+          <Text strong style={{ fontSize: 16 }}>Documents ({documents.length})</Text>
+        </div>
+        
+        {onBulkSelect && (
+          <Space size="small">
+            <Text type="secondary" style={{ fontSize: 12 }}>Sélection rapide:</Text>
+            <Button size="small" onClick={() => handleBulkSelectInBordereau(20)}>20</Button>
+            <Button size="small" onClick={() => handleBulkSelectInBordereau(30)}>30</Button>
+            <Button size="small" onClick={() => handleBulkSelectInBordereau(50)}>50</Button>
+            <Button size="small" onClick={() => handleBulkSelectInBordereau('all')}>Tout</Button>
+          </Space>
         )}
-        <Text strong style={{ fontSize: 16 }}>Documents ({documents.length})</Text>
       </div>
       <List
         style={{ marginTop: 8 }}
         dataSource={documents}
-        renderItem={(doc: any) => (
-          <List.Item
-            actions={[
-              <Button
-                type="link"
-                icon={<FilePdfOutlined />}
-                onClick={() => handleViewPDF(doc.id, doc)}
-              >
-                Voir PDF
-              </Button>
-            ]}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
-              {onDocumentSelect && (
-                <Checkbox
-                  checked={selectedDocuments.includes(doc.id)}
-                  disabled={!!doc.assignedToUserId}
-                  onChange={(e) => onDocumentSelect(doc.id, e.target.checked)}
+        renderItem={(doc: any) => {
+          const isReturned = doc.status === 'RETOUR_ADMIN';
+          return (
+            <List.Item
+              actions={[
+                <Button
+                  type="link"
+                  icon={<FilePdfOutlined />}
+                  onClick={() => handleViewPDF(doc.id, doc)}
+                >
+                  Voir PDF
+                </Button>,
+                isReturned && onDocumentSelect && (
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<UserOutlined />}
+                    onClick={() => {
+                      onDocumentSelect(doc.id, true);
+                      message.info('Document sélectionné. Utilisez le bouton "Assigner" pour le réassigner.');
+                    }}
+                  >
+                    Réassigner
+                  </Button>
+                )
+              ].filter(Boolean)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+                {onDocumentSelect && (
+                  <Checkbox
+                    checked={selectedDocuments.includes(doc.id)}
+                    disabled={!!doc.assignedToUserId && doc.status !== 'RETOUR_ADMIN'}
+                    onChange={(e) => onDocumentSelect(doc.id, e.target.checked)}
+                  />
+                )}
+                <List.Item.Meta
+                  avatar={<FilePdfOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>{doc.name || 'Document'}</span>
+                      {doc.status === 'REJETE' && <Tag color="red">❌ Rejeté</Tag>}
+                      {doc.status === 'RETOUR_ADMIN' && <Tag color="orange">↩️ Retourné</Tag>}
+                      {doc.assignedToUserId && doc.status !== 'RETOUR_ADMIN' && (
+                        <Tag icon={<UserOutlined />} color="green">
+                          {doc.assignedTo?.fullName || 'Assigné'}
+                        </Tag>
+                      )}
+                    </div>
+                  }
+                  description={`Type: ${doc.type || 'N/A'} | Uploadé le: ${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : 'N/A'}${doc.assignedToUserId && doc.status !== 'RETOUR_ADMIN' ? ' | Assigné' : ' | Non assigné'}`}
                 />
-              )}
-              <List.Item.Meta
-                avatar={<FilePdfOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
-                title={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>{doc.name || 'Document'}</span>
-                    {doc.assignedToUserId && (
-                      <Tag icon={<UserOutlined />} color="green">
-                        {doc.assignedTo?.fullName || 'Assigné'}
-                      </Tag>
-                    )}
-                  </div>
-                }
-                description={`Type: ${doc.type || 'N/A'} | Uploadé le: ${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : 'N/A'}${doc.assignedToUserId ? ' | Assigné' : ' | Non assigné'}`}
-              />
-            </div>
-          </List.Item>
-        )}
+              </div>
+            </List.Item>
+          );
+        }}
       />
     </div>
   );
@@ -215,6 +259,8 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   const [gestionnaires, setGestionnaires] = useState<{id: string; fullName: string}[]>([]);
   const [selectedAssignee, setSelectedAssignee] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [documentStatusModalVisible, setDocumentStatusModalVisible] = useState(false);
+  const [selectedDocumentStatus, setSelectedDocumentStatus] = useState<string>('');
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 20,
@@ -284,12 +330,11 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       );
       
       setDossiers(dossiersWithDocuments);
-      setPagination(prev => ({
-        ...prev,
-        total: dossiersWithDocuments.length,
+      setPagination({
         current: 1,
-        pageSize: 20
-      }));
+        pageSize: 5,
+        total: dossiersWithDocuments.length
+      });
     } catch (error) {
       console.error('Error loading dossiers:', error);
       message.error('Erreur lors du chargement des dossiers');
@@ -355,20 +400,6 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     }
   };
 
-  const handleBulkSelect = (count: number | 'all') => {
-    if (count === 'all') {
-      const allDossierIds = dossiers.map(d => d.id);
-      const allBSIds = dossiers.flatMap(d => d.bulletinSoins?.map(bs => bs.id) || []);
-      setSelectedDossiers(allDossierIds);
-      setSelectedBS(allBSIds);
-    } else {
-      const selectedDossierIds = dossiers.slice(0, count).map(d => d.id);
-      const selectedBSIds = dossiers.slice(0, count).flatMap(d => d.bulletinSoins?.map(bs => bs.id) || []);
-      setSelectedDossiers(selectedDossierIds);
-      setSelectedBS(selectedBSIds);
-    }
-  };
-
   const handleClearSelection = () => {
     setSelectedDossiers([]);
     setSelectedBS([]);
@@ -410,36 +441,57 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const handleBulkStatusUpdate = async () => {
-    if (!selectedStatus || (selectedDossiers.length === 0 && selectedBS.length === 0)) {
-      message.error('Veuillez sélectionner un statut et des éléments');
+    if (!selectedStatus || selectedDossiers.length === 0) {
+      message.error('Veuillez sélectionner un statut et des bordereaux');
       return;
     }
 
     try {
-      // Update dossier status
-      if (selectedDossiers.length > 0) {
-        await LocalAPI.post('/bordereaux/bulk-update', {
-          bordereauIds: selectedDossiers,
-          updates: { statut: selectedStatus }
-        });
-      }
+      await LocalAPI.post('/bordereaux/bulk-update', {
+        bordereauIds: selectedDossiers,
+        updates: { statut: selectedStatus }
+      });
 
-      // Update BS status
-      if (selectedBS.length > 0) {
-        for (const bsId of selectedBS) {
-          await LocalAPI.patch(`/bulletin-soin/${bsId}`, {
-            etat: selectedStatus
-          });
-        }
-      }
-
-      message.success('Statuts mis à jour avec succès');
+      message.success('Statuts des bordereaux mis à jour avec succès');
       setStatusModalVisible(false);
       setSelectedStatus('');
       handleClearSelection();
       loadDossiers();
     } catch (error) {
       console.error('Error updating status:', error);
+      message.error('Erreur lors de la mise à jour des statuts');
+    }
+  };
+
+  const handleBulkDocumentStatusUpdate = async () => {
+    if (!selectedDocumentStatus || selectedBS.length === 0) {
+      message.error('Veuillez sélectionner un statut et des documents');
+      return;
+    }
+
+    try {
+      for (const docId of selectedBS) {
+        const statusMap: any = {
+          'UPLOADED': 'Nouveau',
+          'SCANNE': 'Scanné',
+          'EN_COURS': 'En cours',
+          'TRAITE': 'Traité',
+          'REJETE': 'Rejeté',
+          'RETOUR_ADMIN': 'Retourné'
+        };
+        await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+          dossierId: docId,
+          newStatus: statusMap[selectedDocumentStatus] || selectedDocumentStatus
+        });
+      }
+
+      message.success('Statuts des documents mis à jour avec succès');
+      setDocumentStatusModalVisible(false);
+      setSelectedDocumentStatus('');
+      handleClearSelection();
+      loadDossiers();
+    } catch (error) {
+      console.error('Error updating document status:', error);
       message.error('Erreur lors de la mise à jour des statuts');
     }
   };
@@ -465,6 +517,16 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     return colors[status] || 'default';
   };
 
+  const handleBulkSelectInBordereau = (documentIds: string[]) => {
+    console.log('handleBulkSelectInBordereau called with:', documentIds);
+    setSelectedBS(prev => {
+      // Remove duplicates and add new selections
+      const uniqueIds = [...new Set([...prev, ...documentIds])];
+      console.log('Updated selectedBS:', uniqueIds);
+      return uniqueIds;
+    });
+  };
+
   const expandedRowRender = (dossier: Dossier) => {
     return (
       <div style={{ margin: '0 48px', padding: '16px', background: '#fafafa', borderRadius: '4px' }}>
@@ -472,6 +534,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           dossierId={dossier.id} 
           selectedDocuments={selectedBS}
           onDocumentSelect={handleSelectBS}
+          onBulkSelect={handleBulkSelectInBordereau}
         />
       </div>
     );
@@ -638,12 +701,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       {/* Bulk Actions */}
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space wrap>
-          <Text strong>Sélection fluide:</Text>
-          <Button size="small" onClick={() => handleBulkSelect(20)}>20</Button>
-          <Button size="small" onClick={() => handleBulkSelect(30)}>30</Button>
-          <Button size="small" onClick={() => handleBulkSelect(50)}>50</Button>
-          <Button size="small" onClick={() => handleBulkSelect('all')}>Tout</Button>
-          <Button size="small" onClick={handleClearSelection}>Effacer</Button>
+          <Button size="small" onClick={handleClearSelection}>Effacer sélection</Button>
         </Space>
         
         <Space>
@@ -660,10 +718,17 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           </Button>
           <Button
             icon={<CheckOutlined />}
-            disabled={selectedDossiers.length === 0 && selectedBS.length === 0}
+            disabled={selectedDossiers.length === 0}
             onClick={() => setStatusModalVisible(true)}
           >
-            Changer Statut
+            Changer Statut Bordereau
+          </Button>
+          <Button
+            icon={<CheckOutlined />}
+            disabled={selectedBS.length === 0}
+            onClick={() => setDocumentStatusModalVisible(true)}
+          >
+            Changer Statut Document
           </Button>
         </Space>
       </div>
@@ -729,9 +794,9 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         />
       </Modal>
 
-      {/* Status Update Modal */}
+      {/* Bordereau Status Update Modal */}
       <Modal
-        title="Changer le statut"
+        title="Changer le statut des bordereaux"
         open={statusModalVisible}
         onOk={handleBulkStatusUpdate}
         onCancel={() => {
@@ -742,7 +807,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         cancelText="Annuler"
       >
         <div style={{ marginBottom: 16 }}>
-          <Text>Éléments sélectionnés: {selectedDossiers.length} dossier(s), {selectedBS.length} BS</Text>
+          <Text>Bordereaux sélectionnés: {selectedDossiers.length}</Text>
         </div>
         <Select
           style={{ width: '100%' }}
@@ -758,6 +823,37 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
             { value: 'EN_COURS', label: 'En cours de traitement' },
             { value: 'TRAITE', label: 'Traité' },
             { value: 'CLOTURE', label: 'Clôturé' }
+          ]}
+        />
+      </Modal>
+
+      {/* Document Status Update Modal */}
+      <Modal
+        title="Changer le statut des documents"
+        open={documentStatusModalVisible}
+        onOk={handleBulkDocumentStatusUpdate}
+        onCancel={() => {
+          setDocumentStatusModalVisible(false);
+          setSelectedDocumentStatus('');
+        }}
+        okText="Mettre à jour"
+        cancelText="Annuler"
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text>Documents sélectionnés: {selectedBS.length}</Text>
+        </div>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="Sélectionner un statut"
+          value={selectedDocumentStatus}
+          onChange={setSelectedDocumentStatus}
+          options={[
+            { value: 'UPLOADED', label: 'Nouveau' },
+            { value: 'SCANNE', label: 'Scanné' },
+            { value: 'EN_COURS', label: 'En cours' },
+            { value: 'TRAITE', label: 'Traité' },
+            { value: 'REJETE', label: '❌ Rejeté' },
+            { value: 'RETOUR_ADMIN', label: '↩️ Retourné' }
           ]}
         />
       </Modal>

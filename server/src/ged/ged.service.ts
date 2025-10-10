@@ -131,16 +131,35 @@ export class GedService {
     return doc;
   }
     async getDocumentStats(user: User) {
-    // Only allow for admin/chef roles
-    if (!['SUPER_ADMIN', 'CHEF_EQUIPE'].includes(user.role)) {
+    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to view stats');
     }
-    const total = await this.prisma.document.count();
+    
+    const where: any = {};
+    if (user.role === 'GESTIONNAIRE') {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          documents: { some: { assignedToUserId: user.id } },
+          archived: false
+        },
+        select: { id: true }
+      });
+      where.bordereauId = { in: bordereaux.map(b => b.id) };
+    } else if (user.role === 'CHEF_EQUIPE') {
+      where.bordereau = {
+        contract: { teamLeaderId: user.id },
+        archived: false
+      };
+    }
+    
+    const total = await this.prisma.document.count({ where });
     const byType = await this.prisma.document.groupBy({
       by: ['type'],
+      where,
       _count: { type: true },
     });
     const recent = await this.prisma.document.findMany({
+      where,
       orderBy: { uploadedAt: 'desc' },
       take: 10,
       select: { id: true, name: true, type: true, uploadedAt: true },
@@ -322,7 +341,8 @@ export class GedService {
 }
 
   async searchDocuments(query: SearchDocumentDto, user: User) {
-    // Access control: Gestionnaires can only view linked docs, others can see all
+    console.log('🔍 [GED] searchDocuments called for user:', user.id, 'role:', user.role);
+    
     const where: any = {};
     if (query.type) where.type = query.type;
     if (query.uploadedAfter || query.uploadedBefore) {
@@ -333,7 +353,6 @@ export class GedService {
     if (query.bordereauReference) {
       where.bordereau = { reference: query.bordereauReference };
     }
-    // Filter by clientName and prestataire (if present)
     if (query.clientName) {
       where.bordereau = { ...where.bordereau, client: { name: { contains: query.clientName, mode: 'insensitive' } } };
     }
@@ -341,24 +360,24 @@ export class GedService {
       where.bordereau = { ...where.bordereau, prestataire: { name: { contains: query.prestataire, mode: 'insensitive' } } };
     }
     
-    // Role-based filtering
+    // Role-based filtering - CRITICAL FIX for GESTIONNAIRE
     if (user.role === 'GESTIONNAIRE') {
-      where.OR = [
-        { uploadedById: user.id },
-        { bordereau: { assignedToUserId: user.id } }
-      ];
-    } else if (user.role === 'CHEF_EQUIPE') {
-      // Chef d'équipe sees documents from their team members
-      const teamMembers = await this.prisma.user.findMany({
-        where: { teamLeaderId: user.id },
+      // GESTIONNAIRE sees all documents from bordereaux that have at least one document assigned to them
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          documents: { some: { assignedToUserId: user.id } },
+          archived: false
+        },
         select: { id: true }
       });
-      const teamMemberIds = [...teamMembers.map(member => member.id), user.id];
-      
-      where.OR = [
-        { uploadedById: { in: teamMemberIds } },
-        { bordereau: { assignedToUserId: { in: teamMemberIds } } }
-      ];
+      where.bordereauId = { in: bordereaux.map(b => b.id) };
+      console.log(`📊 [GED] Filtering documents from ${bordereaux.length} bordereaux assigned to gestionnaire`);
+    } else if (user.role === 'CHEF_EQUIPE') {
+      where.bordereau = {
+        ...where.bordereau,
+        contract: { teamLeaderId: user.id },
+        archived: false
+      };
     }
     
     // Keyword search (in name, type, and OCR text)
@@ -369,22 +388,37 @@ export class GedService {
         { ocrText: { contains: query.keywords, mode: 'insensitive' } },
       ];
       
-      if (where.OR) {
+      if (where.bordereauId) {
         where.AND = [
-          { OR: where.OR },
+          { bordereauId: where.bordereauId },
           { OR: keywordConditions }
         ];
-        delete where.OR;
+        delete where.bordereauId;
       } else {
         where.OR = keywordConditions;
       }
     }
     
-    return this.prisma.document.findMany({
+    console.log('🔍 [GED] Final where clause:', JSON.stringify(where, null, 2));
+    
+    const documents = await this.prisma.document.findMany({
       where,
-      include: { bordereau: { include: { client: true, prestataire: true } }, uploader: true },
+      include: { 
+        bordereau: { 
+          include: { 
+            client: true, 
+            prestataire: true,
+            contract: true
+          } 
+        }, 
+        uploader: true,
+        assignedTo: true
+      },
       orderBy: { uploadedAt: 'desc' },
     });
+    
+    console.log(`✅ [GED] Returning ${documents.length} documents for gestionnaire`);
+    return documents;
   }
 
   async getDocumentById(id: string, user: User) {
