@@ -122,9 +122,16 @@ const EnhancedDashboard: React.FC = () => {
   const [superAdminDerniersDossiers, setSuperAdminDerniersDossiers] = useState<any[]>([]);
   const [superAdminDossiersEnCours, setSuperAdminDossiersEnCours] = useState<any[]>([]);
   const [superAdminAllDossiers, setSuperAdminAllDossiers] = useState<any[]>([]);
+  const [superAdminDocumentsIndividuels, setSuperAdminDocumentsIndividuels] = useState<any[]>([]);
   const [showSuperAdminPDFModal, setShowSuperAdminPDFModal] = useState(false);
   const [currentSuperAdminPDFUrl, setCurrentSuperAdminPDFUrl] = useState('');
   const [currentSuperAdminDossier, setCurrentSuperAdminDossier] = useState<any>(null);
+  const [superAdminDerniersPage, setSuperAdminDerniersPage] = useState(1);
+  const [superAdminBordereauxPage, setSuperAdminBordereauxPage] = useState(1);
+  const [superAdminIndividuelsPage, setSuperAdminIndividuelsPage] = useState(1);
+  const superAdminDerniersPerPage = 5;
+  const superAdminBordereauxPerPage = 5;
+  const superAdminIndividuelsPerPage = 20;
 
   // Missing Chef d'équipe state variables
   const [stats, setStats] = useState<TableauBordStats>({
@@ -463,12 +470,16 @@ const EnhancedDashboard: React.FC = () => {
       await loadChefEquipeData();
       
       // Use chef-equipe endpoints but with super-admin access to get ALL data
-      const [statsResponse, dossiersResponse, assignmentsResponse, enCoursResponse] = await Promise.all([
+      console.log('🔍 DEBUG: Fetching Super Admin data with superAdmin=true parameter');
+      const [statsResponse, dossiersResponse, assignmentsResponse, enCoursResponse, individuelsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true')
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels?superAdmin=true')
       ]);
+      console.log('🔍 DEBUG: enCoursResponse received:', enCoursResponse.data?.length, 'items');
+      console.log('🔍 DEBUG: Sample data:', enCoursResponse.data?.slice(0, 2));
       
       if (statsResponse.data) {
         const transformedStats = {
@@ -522,7 +533,13 @@ const EnhancedDashboard: React.FC = () => {
       }
       
       if (enCoursResponse.data) {
+        console.log('🔍 DEBUG: Setting superAdminDossiersEnCours:', enCoursResponse.data.length, 'items');
         setSuperAdminDossiersEnCours(enCoursResponse.data);
+      }
+      
+      if (individuelsResponse.data) {
+        console.log('🔍 DEBUG: Setting superAdminDocumentsIndividuels:', individuelsResponse.data.length, 'items');
+        setSuperAdminDocumentsIndividuels(individuelsResponse.data);
       }
     } catch (error: any) {
       console.error('❌ Error loading Super Admin data:', error);
@@ -645,6 +662,21 @@ const EnhancedDashboard: React.FC = () => {
   // Real-time updates
   useEffect(() => {
     fetchDashboardData();
+    
+    // Listen for PDF modal events from DossiersList
+    const handlePDFModal = (event: any) => {
+      const { pdfUrl, document } = event.detail;
+      const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
+      setCurrentSuperAdminPDFUrl(`${serverBaseUrl}${pdfUrl}`);
+      setCurrentSuperAdminDossier(document);
+      setShowSuperAdminPDFModal(true);
+    };
+    
+    window.addEventListener('openPDFModal', handlePDFModal);
+    
+    return () => {
+      window.removeEventListener('openPDFModal', handlePDFModal);
+    };
   }, [fetchDashboardData]);
 
   useEffect(() => {
@@ -805,27 +837,11 @@ const EnhancedDashboard: React.FC = () => {
     }
   };
 
-  // Super Admin modify status handler
-  const handleSuperAdminModifyStatus = async (dossierId: string) => {
-    const newStatus = prompt('Nouveau statut (En cours, Traité, Retourné):');
-    if (!newStatus) return;
-    
-    try {
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-        dossierId,
-        newStatus
-      });
-      
-      if (response.data.success) {
-        alert('Statut modifié avec succès');
-        fetchDashboardData();
-      } else {
-        alert('Erreur lors de la modification du statut');
-      }
-    } catch (error) {
-      console.error('Status modification error:', error);
-      alert('Erreur lors de la modification du statut');
-    }
+  // Super Admin modify status handler - opens modal with dossier data
+  const handleSuperAdminModifyStatus = (dossier: any) => {
+    setSelectedDossier({ ...dossier, isDocument: false });
+    setNewStatus('');
+    setStatusModifyModalOpen(true);
   };
 
   const exportData = async (format: 'excel' | 'pdf' = 'excel') => {
@@ -1418,7 +1434,7 @@ const EnhancedDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {derniersDossiers.slice(0, 5).map((dossier, index) => (
+                      {derniersDossiers.slice((superAdminDerniersPage - 1) * superAdminDerniersPerPage, superAdminDerniersPage * superAdminDerniersPerPage).map((dossier, index) => (
                         <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                           <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
@@ -1440,18 +1456,25 @@ const EnhancedDashboard: React.FC = () => {
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
                           <td style={{ padding: '12px 8px' }}>
-                            <button onClick={() => handleSuperAdminModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                            <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                {derniersDossiers.length > superAdminDerniersPerPage && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e0e0e0' }}>
+                    <button onClick={() => setSuperAdminDerniersPage(prev => Math.max(1, prev - 1))} disabled={superAdminDerniersPage === 1} style={{ background: superAdminDerniersPage === 1 ? '#e0e0e0' : '#d32f2f', color: superAdminDerniersPage === 1 ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminDerniersPage === 1 ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>← Précédent</button>
+                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminDerniersPage} sur {Math.ceil(derniersDossiers.length / superAdminDerniersPerPage)}</span>
+                    <button onClick={() => setSuperAdminDerniersPage(prev => Math.min(Math.ceil(derniersDossiers.length / superAdminDerniersPerPage), prev + 1))} disabled={superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage)} style={{ background: superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
+                  </div>
+                )}
               </div>
 
               {/* Bordereaux en cours */}
               <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux en cours</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux en cours ({superAdminDossiersEnCours.length} total)</h3>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -1465,7 +1488,7 @@ const EnhancedDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {dossiersEnCours.slice(0, 5).map((dossier, index) => (
+                      {superAdminDossiersEnCours.slice((superAdminBordereauxPage - 1) * superAdminBordereauxPerPage, superAdminBordereauxPage * superAdminBordereauxPerPage).map((dossier, index) => (
                         <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                           <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
@@ -1490,19 +1513,26 @@ const EnhancedDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td style={{ padding: '12px 8px' }}>
-                            <button onClick={() => handleSuperAdminModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                            <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                {superAdminDossiersEnCours.length >= superAdminBordereauxPerPage && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e0e0e0' }}>
+                    <button onClick={() => setSuperAdminBordereauxPage(prev => Math.max(1, prev - 1))} disabled={superAdminBordereauxPage === 1} style={{ background: superAdminBordereauxPage === 1 ? '#e0e0e0' : '#d32f2f', color: superAdminBordereauxPage === 1 ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminBordereauxPage === 1 ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>← Précédent</button>
+                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminBordereauxPage} sur {Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage)}</span>
+                    <button onClick={() => setSuperAdminBordereauxPage(prev => Math.min(Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage), prev + 1))} disabled={superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage)} style={{ background: superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
+                  </div>
+                )}
               </div>
 
               {/* Dossiers Individuels */}
               <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px 12px 20px', borderBottom: '1px solid #e0e0e0' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels</h3>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels ({superAdminDocumentsIndividuels.length})</h3>
                   <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
@@ -1510,6 +1540,7 @@ const EnhancedDashboard: React.FC = () => {
                     <thead>
                       <tr style={{ background: '#d52b36', color: 'white' }}>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Réf. Dossier</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Réf. Bordereau</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Client</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut Dossier</th>
@@ -1519,56 +1550,60 @@ const EnhancedDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {derniersDossiers.slice(0, 10).map((document, index) => (
+                      {superAdminDocumentsIndividuels.slice((superAdminIndividuelsPage - 1) * superAdminIndividuelsPerPage, superAdminIndividuelsPage * superAdminIndividuelsPerPage).map((document, index) => (
                         <tr key={document.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{document.reference}</td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '13px', fontWeight: '500' }}>{document.reference}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '13px' }}>{document.bordereauReference}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '13px' }}>{document.client}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '13px' }}>{document.type}</td>
                           <td style={{ padding: '12px 8px' }}>
                             <span style={{ 
-                              background: document.statut === 'Traité' ? '#4caf50' : document.statut === 'En cours' ? '#ff9800' : '#2196f3', 
+                              background: document.statut === 'Traité' ? '#4caf50' : document.statut === 'En cours' ? '#ff9800' : document.statut === 'Scanné' ? '#2196f3' : '#9e9e9e', 
                               color: 'white', 
-                              padding: '4px 8px', 
-                              borderRadius: '12px', 
-                              fontSize: '12px', 
+                              padding: '3px 8px', 
+                              borderRadius: '4px', 
+                              fontSize: '11px', 
                               fontWeight: 'bold' 
                             }}>
                               {document.statut}
                             </span>
                           </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.date}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '13px' }}>{document.gestionnaire || 'Non assigné'}</td>
+                          <td style={{ padding: '12px 8px', fontSize: '13px', color: '#666' }}>{document.date}</td>
                           <td style={{ padding: '12px 8px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                               <button 
                                 onClick={() => handleSuperAdminViewPDF(document.id)}
                                 style={{ 
-                                  background: 'none', 
+                                  background: '#2196f3', 
+                                  color: 'white', 
                                   border: 'none', 
-                                  color: '#2196f3', 
-                                  cursor: 'pointer', 
-                                  fontSize: '12px',
-                                  textDecoration: 'underline'
+                                  padding: '4px 10px', 
+                                  borderRadius: '4px', 
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  fontWeight: '500'
                                 }}
                                 title="Voir PDF du document"
                               >
                                 Voir PDF
                               </button>
                               <button 
-                                onClick={() => handleSuperAdminModifyStatus(document.id)}
+                                onClick={() => handleSuperAdminModifyStatus({ ...document, isDocument: true })}
                                 style={{ 
-                                  background: 'none', 
+                                  background: '#ff9800', 
+                                  color: 'white', 
                                   border: 'none', 
-                                  color: '#9c27b0', 
-                                  cursor: 'pointer', 
-                                  fontSize: '12px',
-                                  textDecoration: 'underline'
+                                  padding: '4px 10px', 
+                                  borderRadius: '4px', 
+                                  fontSize: '11px',
+                                  cursor: 'pointer',
+                                  fontWeight: '500'
                                 }}
                                 title="Modifier statut du document"
                               >
                                 Modifier Statut
                               </button>
-                              
                             </div>
                           </td>
                         </tr>
@@ -1576,6 +1611,13 @@ const EnhancedDashboard: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                {superAdminDocumentsIndividuels.length > superAdminIndividuelsPerPage && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e0e0e0' }}>
+                    <button onClick={() => setSuperAdminIndividuelsPage(prev => Math.max(1, prev - 1))} disabled={superAdminIndividuelsPage === 1} style={{ background: superAdminIndividuelsPage === 1 ? '#e0e0e0' : '#d32f2f', color: superAdminIndividuelsPage === 1 ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminIndividuelsPage === 1 ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>← Précédent</button>
+                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminIndividuelsPage} sur {Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage)}</span>
+                    <button onClick={() => setSuperAdminIndividuelsPage(prev => Math.min(Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage), prev + 1))} disabled={superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage)} style={{ background: superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1836,19 +1878,19 @@ const EnhancedDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Status Modify Modal */}
+        {/* Status Modify Modal - Chef d'équipe style */}
         {statusModifyModalOpen && selectedDossier && (
           <div style={{
             position: 'fixed',
             top: 0,
             left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 1001,
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1001
+            alignItems: 'center'
           }}>
             <div style={{
               backgroundColor: 'white',
@@ -1868,11 +1910,11 @@ const EnhancedDashboard: React.FC = () => {
               }}>
                 <h3 style={{
                   margin: 0,
-                  color: '#d32f2f',
+                  color: '#d52b36',
                   fontSize: '18px',
                   fontWeight: 'bold'
                 }}>
-                  ✏️ Modifier le Statut du Dossier
+                  ✏️ Modifier le Statut
                 </h3>
                 <button
                   onClick={() => setStatusModifyModalOpen(false)}
@@ -1887,53 +1929,57 @@ const EnhancedDashboard: React.FC = () => {
                   ×
                 </button>
               </div>
-
+              
               <div style={{ marginBottom: '20px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  color: '#333'
-                }}>
-                  Nouveau statut :
-                </label>
+                <p style={{ fontSize: '14px', marginBottom: '16px' }}>
+                  Dossier: <strong>{selectedDossier.reference}</strong><br/>
+                  Client: <strong>{selectedDossier.client}</strong><br/>
+                  Statut actuel: <strong>{selectedDossier.statut}</strong>
+                </p>
                 
                 <div style={{ display: 'grid', gap: '8px' }}>
-                  {['Nouveau', 'En cours', 'Traité', 'Retourné'].map(status => (
-                    <label key={status} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '12px',
-                      border: newStatus === status ? '2px solid #d32f2f' : '1px solid #e0e0e0',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      backgroundColor: newStatus === status ? '#ffebee' : 'white',
-                      transition: 'all 0.2s'
-                    }}>
-                      <input
-                        type="radio"
-                        name="dossierStatus"
-                        value={status}
-                        checked={newStatus === status}
-                        onChange={(e) => setNewStatus(e.target.value)}
+                  {['Nouveau', 'En cours', 'Traité', 'Rejeté', 'Retourné'].map(status => {
+                    const isDocumentOnly = status === 'Rejeté' || status === 'Retourné';
+                    const isDisabled = isDocumentOnly && !selectedDossier?.isDocument;
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => !isDisabled && handleModifyDossierStatus()}
+                        onMouseDown={() => !isDisabled && setNewStatus(status)}
+                        disabled={isDisabled}
                         style={{
-                          marginRight: '12px',
-                          accentColor: '#d32f2f'
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '6px',
+                          cursor: isDisabled ? 'not-allowed' : 'pointer',
+                          backgroundColor: isDisabled ? '#f5f5f5' : 'white',
+                          fontSize: '14px',
+                          fontWeight: 'bold',
+                          textAlign: 'left',
+                          transition: 'all 0.2s',
+                          opacity: isDisabled ? 0.5 : 1
                         }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
-                          {status === 'Nouveau' ? '🆕' : 
-                           status === 'En cours' ? '⏳' :
-                           status === 'Traité' ? '✅' : '↩️'} {status}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
+                        onMouseEnter={(e) => {
+                          if (!isDisabled) {
+                            e.currentTarget.style.backgroundColor = '#f0f0f0';
+                            e.currentTarget.style.borderColor = '#d52b36';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isDisabled) {
+                            e.currentTarget.style.backgroundColor = 'white';
+                            e.currentTarget.style.borderColor = '#e0e0e0';
+                          }
+                        }}
+                      >
+                        {status === 'Nouveau' ? '🆕' : status === 'En cours' ? '⏳' : status === 'Traité' ? '✅' : status === 'Rejeté' ? '❌' : '↩️'} {status}
+                        {isDisabled && <span style={{ fontSize: '11px', color: '#999', marginLeft: '8px' }}>(Documents uniquement)</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
+              
               <div style={{
                 display: 'flex',
                 justifyContent: 'flex-end',
@@ -1954,22 +2000,6 @@ const EnhancedDashboard: React.FC = () => {
                   }}
                 >
                   Annuler
-                </button>
-                <button
-                  onClick={handleModifyDossierStatus}
-                  disabled={!newStatus}
-                  style={{
-                    background: newStatus ? '#d32f2f' : '#ccc',
-                    color: 'white',
-                    border: 'none',
-                    padding: '10px 20px',
-                    borderRadius: '4px',
-                    cursor: newStatus ? 'pointer' : 'not-allowed',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  Confirmer la Modification
                 </button>
               </div>
             </div>
@@ -2353,8 +2383,8 @@ const EnhancedDashboard: React.FC = () => {
           {/* Role-specific content */}
           {renderRoleSpecificContent()}
 
-          {/* COMMENTED OUT: Liste Dossiers - Already included in Chef d'équipe dashboard */}
-          {/* {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || dashboardData?.role === 'CHEF_EQUIPE' || dashboardData?.role === 'RESPONSABLE_DEPARTEMENT') && (
+          
+          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || dashboardData?.role === 'CHEF_EQUIPE' || dashboardData?.role === 'RESPONSABLE_DEPARTEMENT') && (
             <div style={{ marginTop: '2rem' }}>
               <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -2364,7 +2394,7 @@ const EnhancedDashboard: React.FC = () => {
                 <DossiersList params={{}} />
               </div>
             </div>
-          )} */}
+          )} 
 
           {/* Module Bulletin de soins - AI Suggestions */}
           {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || user?.role === 'RESPONSABLE_DEPARTEMENT') && (

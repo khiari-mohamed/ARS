@@ -1268,11 +1268,11 @@ Document généré automatiquement par ARS`;
       return bordereaux.map(b => {
         const ov = b.ordresVirement[0];
         return {
-          id: ov?.id || b.id, // Use OV id if exists, otherwise bordereau id
+          id: ov?.id || b.id,
           clientSociete: b.client.name,
           referenceOV: ov?.reference || null,
           referenceBordereau: b.reference,
-          montantBordereau: b.nombreBS * 150,
+          montantBordereau: ov?.montantTotal || 0,
           dateFinalisationBordereau: b.dateCloture,
           dateInjection: ov?.dateCreation || null,
           statutVirement: ov?.etatVirement || 'NON_EXECUTE',
@@ -1326,13 +1326,19 @@ Document généré automatiquement par ARS`;
           throw new BadRequestException('No active donneur d\'ordre found');
         }
         
+        const bulletinsSoin = await this.prisma.bulletinSoin.findMany({
+          where: { bordereauId: id },
+          select: { montant: true }
+        });
+        const actualAmount = bulletinsSoin.reduce((sum, bs) => sum + (bs.montant || 0), 0);
+        
         ordreVirement = await this.prisma.ordreVirement.create({
           data: {
             reference: `OV-${bordereau.reference}`,
             donneurOrdreId: donneurId,
             bordereauId: id,
             utilisateurSante: user.id,
-            montantTotal: bordereau.nombreBS * 150,
+            montantTotal: actualAmount,
             nombreAdherents: bordereau.nombreBS,
             etatVirement: 'NON_EXECUTE'
           }
@@ -1406,7 +1412,7 @@ Document généré automatiquement par ARS`;
           clientSociete: bordereau.client.name,
           referenceOV: updatedOV.reference,
           referenceBordereau: bordereau.reference,
-          montantBordereau: bordereau.nombreBS * 150,
+          montantBordereau: updatedOV.montantTotal,
           dateFinalisationBordereau: bordereau.dateCloture,
           dateInjection: updatedOV.dateCreation,
           statutVirement: updatedOV.etatVirement,

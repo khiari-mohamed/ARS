@@ -58,6 +58,8 @@ const BordereauxDashboard: React.FC = () => {
   const [alertsData, setAlertsData] = useState<any[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedBordereauForEdit, setSelectedBordereauForEdit] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   
   // Role-based permissions
   const isBureauOrdre = user?.role === 'BO';
@@ -236,6 +238,12 @@ const BordereauxDashboard: React.FC = () => {
     }
   };
 
+  // Pagination logic
+  const totalPages = Math.ceil(bordereaux.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedBordereaux = bordereaux.slice(startIndex, endIndex);
+
   const handleViewBordereau = (bordereauId: string) => {
     console.log('handleViewBordereau called with ID:', bordereauId);
     setSelectedBordereauForDetails(bordereauId);
@@ -292,6 +300,28 @@ const BordereauxDashboard: React.FC = () => {
     if (remaining < 0) return { color: 'text-red-600', days: remaining, label: 'En retard' };
     if (remaining <= 3) return { color: 'text-orange-600', days: remaining, label: 'Urgent' };
     return { color: 'text-green-600', days: remaining, label: 'OK' };
+  };
+
+  // Get Durée de traitement from backend calculation
+  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return { 
+      days: bordereau.dureeTraitement, 
+      isOnTime: bordereau.dureeTraitementStatus === 'GREEN' 
+    };
+  };
+
+  // Get Durée de règlement from backend calculation
+  const getDureeReglement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeReglement === null || bordereau.dureeReglement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return { 
+      days: bordereau.dureeReglement, 
+      isOnTime: bordereau.dureeReglementStatus === 'GREEN' 
+    };
   };
 
   if (loading) {
@@ -679,6 +709,12 @@ const BordereauxDashboard: React.FC = () => {
                       Date réception équipe Santé
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Durée de traitement
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Durée de règlement
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Statut
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -687,7 +723,7 @@ const BordereauxDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {bordereaux.map((bordereau) => {
+                  {paginatedBordereaux.map((bordereau) => {
                     const sla = getSLAStatus(bordereau);
                     return (
                       <tr key={bordereau.id} className="hover:bg-gray-50">
@@ -740,6 +776,48 @@ const BordereauxDashboard: React.FC = () => {
                           <div className="text-sm text-gray-500">
                             {bordereau.dateReceptionSante ? new Date(bordereau.dateReceptionSante).toLocaleDateString('fr-FR') : '-'}
                           </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {(() => {
+                            const dureeTraitement = getDureeTraitement(bordereau);
+                            if (dureeTraitement.days === null || dureeTraitement.days === undefined) {
+                              return <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>;
+                            }
+                            return (
+                              <span style={{ 
+                                background: dureeTraitement.isOnTime ? '#e8f5e9' : '#ffebee', 
+                                color: dureeTraitement.isOnTime ? '#2e7d32' : '#c62828', 
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '12px', 
+                                fontWeight: 'bold',
+                                display: 'inline-block'
+                              }}>
+                                {dureeTraitement.days} jour{dureeTraitement.days !== 1 ? 's' : ''}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {(() => {
+                            const dureeReglement = getDureeReglement(bordereau);
+                            if (dureeReglement.days === null || dureeReglement.days === undefined) {
+                              return <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>;
+                            }
+                            return (
+                              <span style={{ 
+                                background: dureeReglement.isOnTime ? '#e8f5e9' : '#ffebee', 
+                                color: dureeReglement.isOnTime ? '#2e7d32' : '#c62828', 
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '12px', 
+                                fontWeight: 'bold',
+                                display: 'inline-block'
+                              }}>
+                                {dureeReglement.days} jour{dureeReglement.days !== 1 ? 's' : ''}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(bordereau.statut)}`}>
@@ -1113,6 +1191,127 @@ const BordereauxDashboard: React.FC = () => {
                 </tbody>
               </table>
             </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{
+                padding: '20px 24px',
+                borderTop: '2px solid #e5e7eb',
+                background: 'linear-gradient(to bottom, #f9fafb, #ffffff)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#4b5563',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ fontSize: '18px' }}>📊</span>
+                  Affichage de <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{startIndex + 1}</span> à <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{Math.min(endIndex, bordereaux.length)}</span> sur <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{bordereaux.length}</span> bordereaux
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      background: currentPage === 1 ? '#f3f4f6' : 'white',
+                      color: currentPage === 1 ? '#9ca3af' : '#374151',
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      boxShadow: currentPage === 1 ? 'none' : '0 1px 3px rgba(0,0,0,0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (currentPage !== 1) {
+                        e.currentTarget.style.background = '#f3f4f6';
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (currentPage !== 1) {
+                        e.currentTarget.style.background = 'white';
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                      }
+                    }}
+                  >
+                    ← Précédent
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      style={{
+                        padding: '8px 14px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        border: currentPage === page ? '2px solid #2563eb' : '2px solid #e5e7eb',
+                        borderRadius: '8px',
+                        background: currentPage === page ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'white',
+                        color: currentPage === page ? 'white' : '#374151',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: currentPage === page ? '0 4px 12px rgba(37, 99, 235, 0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
+                        minWidth: '40px'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (currentPage !== page) {
+                          e.currentTarget.style.background = '#f3f4f6';
+                          e.currentTarget.style.borderColor = '#d1d5db';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (currentPage !== page) {
+                          e.currentTarget.style.background = 'white';
+                          e.currentTarget.style.borderColor = '#e5e7eb';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }
+                      }}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      border: '2px solid #e5e7eb',
+                      borderRadius: '8px',
+                      background: currentPage === totalPages ? '#f3f4f6' : 'white',
+                      color: currentPage === totalPages ? '#9ca3af' : '#374151',
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      boxShadow: currentPage === totalPages ? 'none' : '0 1px 3px rgba(0,0,0,0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (currentPage !== totalPages) {
+                        e.currentTarget.style.background = '#f3f4f6';
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (currentPage !== totalPages) {
+                        e.currentTarget.style.background = 'white';
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                      }
+                    }}
+                  >
+                    Suivant →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         }
           </div>
