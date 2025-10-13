@@ -350,8 +350,7 @@ export class ChefEquipeTableauBordController {
             },
             currentHandler: { select: { id: true, fullName: true } }
           },
-          orderBy: { dateReception: 'asc' },
-          take: 5
+          orderBy: { dateReception: 'asc' }
         });
       } else {
         bordereaux = await this.prisma.bordereau.findMany({
@@ -370,8 +369,7 @@ export class ChefEquipeTableauBordController {
             },
             currentHandler: { select: { id: true, fullName: true } }
           },
-          orderBy: { dateReception: 'asc' },
-          take: 5
+          orderBy: { dateReception: 'asc' }
         });
       }
     }
@@ -403,6 +401,7 @@ export class ChefEquipeTableauBordController {
         reference: bordereau.reference, // Use actual bordereau reference
         client: bordereau.contract?.client?.name || bordereau.client?.name || 'N/A',
         type: documentTypes || 'Prestation', // Show document types instead of filenames
+        statut: this.getStatutLabel(bordereau.statut),
         joursEnCours,
         priorite: this.calculatePriorite(bordereau),
         gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
