@@ -890,8 +890,7 @@ export class BordereauxController {
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] },
-          assignedToUserId: { not: null }
+          statut: { in: ['ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] }
         },
         include: {
           client: true,

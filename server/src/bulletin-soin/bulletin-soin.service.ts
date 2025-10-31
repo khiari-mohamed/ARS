@@ -290,15 +290,23 @@ export class BulletinSoinService {
     return updatedBS;
   }
 
-  // GET GESTIONNAIRES: Get list of gestionnaires for assignment
-  async getGestionnaires() {
+  // GET GESTIONNAIRES: Get list of gestionnaires for assignment (with role-based filtering)
+  async getGestionnaires(currentUser?: any) {
     try {
-      console.log('🔍 Querying users with GESTIONNAIRE role...');
+      console.log('🔍 Querying users with GESTIONNAIRE role for user:', currentUser?.role);
+      
+      let whereClause: any = { 
+        role: { in: ['GESTIONNAIRE', 'gestionnaire'] },
+        active: true
+      };
+      
+      // If user is CHEF_EQUIPE, only show their team members
+      if (currentUser?.role === 'CHEF_EQUIPE') {
+        whereClause.teamLeaderId = currentUser.id;
+      }
+      
       const users = await this.prisma.user.findMany({
-        where: { 
-          role: { in: ['GESTIONNAIRE', 'gestionnaire'] },
-          active: true
-        },
+        where: whereClause,
         select: { id: true, fullName: true, email: true, role: true }
       });
       console.log('✅ Found users:', users);

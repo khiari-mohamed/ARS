@@ -44,11 +44,27 @@ export class FileGenerationService {
   }
 
   private async generatePDF(ordreVirement: any): Promise<string> {
+    const { PdfGenerationService } = require('./pdf-generation.service');
+    const pdfService = new PdfGenerationService(this.prisma);
+    
+    const fileName = `virement_${ordreVirement.reference}_${Date.now()}.pdf`;
+    const filePath = path.join(process.cwd(), 'uploads', 'virements', fileName);
+
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const pdfBuffer = await pdfService.generateOVFromOrderId(ordreVirement.id);
+    fs.writeFileSync(filePath, pdfBuffer);
+    return filePath;
+  }
+
+  private async generatePDF_OLD(ordreVirement: any): Promise<string> {
     const doc = new PDFDocument();
     const fileName = `virement_${ordreVirement.reference}_${Date.now()}.pdf`;
     const filePath = path.join(process.cwd(), 'uploads', 'virements', fileName);
 
-    // Ensure directory exists
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

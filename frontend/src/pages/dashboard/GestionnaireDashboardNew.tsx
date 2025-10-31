@@ -692,7 +692,7 @@ function GestionnaireDashboardNew() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ color: '#ff9800', fontSize: '16px', marginRight: '8px' }}>⏳</span>
-              <span style={{ fontWeight: 'bold', fontSize: '16px' }}>Bordereaux en cours</span>
+              <span style={{ fontWeight: 'bold', fontSize: '16px' }}>Bordereaux</span>
               <span style={{ background: '#ff9800', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', marginLeft: '12px' }}>Priorité</span>
             </div>
             {/*<button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>*/}

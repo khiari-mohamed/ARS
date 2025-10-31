@@ -163,7 +163,7 @@ export class OrdreVirementService {
     return updated;
   }
 
-  async processExcelImport(fileBuffer: Buffer, clientId: string, donneurOrdreId: string, userId: string) {
+  async processExcelImport(fileBuffer: Buffer, clientId: string, donneurOrdreId: string, userId: string, bordereauId?: string) {
     // Validate Excel structure
     const validation = await this.excelImportService.validateExcelStructure(fileBuffer);
     if (!validation.valid) {
@@ -179,6 +179,7 @@ export class OrdreVirementService {
 
     return {
       importResult,
+      bordereauId,
       preview: {
         validItems: importResult.valid.slice(0, 10), // Preview first 10
         summary: importResult.summary,

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Box, Typography, Alert, Grid, Card, CardContent } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { useRoleAccess, UserRole } from '../hooks/useRoleAccess';
+import { useNavigate } from 'react-router-dom';
 import EnhancedDashboard from './EnhancedDashboard';
 import ChefEquipePage from '../pages/ChefEquipePage';
 
@@ -9,6 +10,42 @@ const RoleBasedDashboard: React.FC = () => {
   const { user } = useAuth();
   const permissions = useRoleAccess();
   const userRole = user?.role as UserRole;
+  const navigate = useNavigate();
+
+  // Auto-redirect to role-specific module on mount
+  useEffect(() => {
+    if (!user) return;
+    
+    // Skip auto-redirect for roles that should see the enhanced dashboard
+    if (userRole === UserRole.SUPER_ADMIN || userRole === UserRole.RESPONSABLE_DEPARTEMENT) {
+      return; // Let them see the enhanced dashboard
+    }
+    
+    // Auto-redirect other roles to their primary module
+    switch (userRole) {
+      case UserRole.FINANCE:
+        navigate('/home/finance', { replace: true });
+        return;
+      case UserRole.CHEF_EQUIPE:
+      case UserRole.GESTIONNAIRE:
+        // Keep existing dashboard behavior for these roles
+        return;
+      case UserRole.BO:
+      case UserRole.BUREAU_ORDRE:
+        navigate('/home/bo', { replace: true });
+        return;
+      case UserRole.SCAN_TEAM:
+        navigate('/home/scan', { replace: true });
+        return;
+      case UserRole.ADMINISTRATEUR:
+        // Keep existing dashboard for admin
+        return;
+      default:
+        // For other roles, redirect to bordereaux as default
+        navigate('/home/bordereaux', { replace: true });
+        return;
+    }
+  }, [user, userRole, navigate]);
 
   if (!user) {
     return (
@@ -23,7 +60,7 @@ const RoleBasedDashboard: React.FC = () => {
     return <EnhancedDashboard />;
   }
 
-  // Administrateur - All modules + system parameters
+  // Administrateur - Keep existing dashboard (not auto-redirected)
   if (userRole === UserRole.ADMINISTRATEUR) {
     return (
       <Box>
@@ -91,69 +128,20 @@ const RoleBasedDashboard: React.FC = () => {
     );
   }
 
-  // Finance - Finance modules only
+  // Finance - Auto-redirected to /home/finance, this fallback should not be reached
   if (userRole === UserRole.FINANCE) {
+    // Fallback UI in case redirect fails
     return (
       <Box>
-        <Typography variant="h4" gutterBottom>
-          Dashboard Finance
-        </Typography>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          Accès aux modules financiers et MY TUNICLAIM
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">Modules Accessibles</Typography>
-                <ul>
-                  <li>Module Finance</li>
-                  <li>MY TUNICLAIM</li>
-                  <li>Virements</li>
-                  <li>Rapprochements</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6">Limitations</Typography>
-                <ul>
-                  <li>Pas d'accès aux tableaux globaux</li>
-                  <li>Pas de gestion d'équipe</li>
-                  <li>Accès limité aux bordereaux</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        <Typography variant="h6">Redirection vers le module Finance...</Typography>
       </Box>
     );
   }
 
-  // Default for other roles
+  // Default fallback for other roles (should not be reached due to auto-redirect)
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Dashboard - {userRole}
-      </Typography>
-      <Alert severity="info">
-        Tableau de bord spécialisé pour votre rôle: {userRole}
-      </Alert>
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Accès Limité</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Votre rôle a un accès restreint aux fonctionnalités du système.
-                Contactez votre administrateur pour plus d'informations.
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <Typography variant="h6">Redirection en cours...</Typography>
     </Box>
   );
 };

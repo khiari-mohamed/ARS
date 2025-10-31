@@ -25,6 +25,7 @@ import {
   FilePdfOutlined
 } from '@ant-design/icons';
 import { LocalAPI } from '../../services/axios';
+import { useAuth } from '../../contexts/AuthContext';
 
 const { Panel } = Collapse;
 const { Text } = Typography;
@@ -35,13 +36,15 @@ interface DocumentsViewerProps {
   selectedDocuments?: string[];
   onDocumentSelect?: (documentId: string, checked: boolean) => void;
   onBulkSelect?: (documentIds: string[]) => void;
+  onReassignClick?: (documentId: string) => void;
 }
 
 const DocumentsViewer: React.FC<DocumentsViewerProps> = ({ 
   dossierId, 
   selectedDocuments = [], 
   onDocumentSelect,
-  onBulkSelect
+  onBulkSelect,
+  onReassignClick
 }) => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -163,15 +166,12 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
                 >
                   Voir PDF
                 </Button>,
-                isReturned && onDocumentSelect && (
+                isReturned && onReassignClick && (
                   <Button
                     type="primary"
                     size="small"
                     icon={<UserOutlined />}
-                    onClick={() => {
-                      onDocumentSelect(doc.id, true);
-                      message.info('Document sélectionné. Utilisez le bouton "Assigner" pour le réassigner.');
-                    }}
+                    onClick={() => onReassignClick(doc.id)}
                   >
                     Réassigner
                   </Button>
@@ -247,6 +247,7 @@ interface DossiersListProps {
 }
 
 const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) => {
+  const { user } = useAuth();
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDossiers, setSelectedDossiers] = useState<string[]>([]);
@@ -270,6 +271,13 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   useEffect(() => {
     loadDossiers();
     loadGestionnaires();
+    
+    // Periodic check for virement execution (every 30 seconds)
+    const virementCheckInterval = setInterval(() => {
+      checkVirementStatusForAllBordereaux();
+    }, 30000);
+    
+    return () => clearInterval(virementCheckInterval);
   }, [params]);
 
   const loadDossiers = async () => {
@@ -346,7 +354,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
 
   const loadGestionnaires = async () => {
     try {
-      console.log('Loading gestionnaires...');
+      console.log('Loading gestionnaires for user role:', user?.role);
       const response = await LocalAPI.get('/bulletin-soin/gestionnaires');
       console.log('Gestionnaires response:', response.data);
       const gestionnaires = response.data?.data || response.data || [];
@@ -384,11 +392,11 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const handleSelectBS = (bsId: string, checked: boolean) => {
-    // Check if this document is already assigned
+    // Check if this document is already assigned (except for returned documents)
     const allDocuments = dossiers.flatMap(d => d.documents || []);
     const document = allDocuments.find(doc => doc.id === bsId);
     
-    if (document?.assignedToUserId && checked) {
+    if (document?.assignedToUserId && document.status !== 'RETOUR_ADMIN' && checked) {
       message.warning('Ce document est déjà assigné à un gestionnaire');
       return;
     }
@@ -426,6 +434,17 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           documentIds: selectedBS,
           userId: selectedAssignee
         });
+        
+        // Update status to EN_COURS for reassigned documents
+        for (const docId of selectedBS) {
+          await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+            dossierId: docId,
+            newStatus: 'En cours'
+          });
+        }
+        
+        // Update bordereau status based on document assignments
+        await updateBordereauStatusBasedOnDocuments(selectedBS);
       }
       
       const totalAssigned = selectedDossiers.length + selectedBS.length;
@@ -463,6 +482,86 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     }
   };
 
+  // Automatic bordereau status update based on document states
+  const updateBordereauStatusBasedOnDocuments = async (affectedDocIds: string[]) => {
+    const affectedBordereaux = new Set<string>();
+    for (const docId of affectedDocIds) {
+      const bordereau = dossiers.find(d => d.documents?.some(doc => doc.id === docId));
+      if (bordereau) affectedBordereaux.add(bordereau.id);
+    }
+    
+    for (const bordereauId of affectedBordereaux) {
+      try {
+        // Get fresh document data and virement status
+        const response = await LocalAPI.get(`/bordereaux/${bordereauId}`, {
+          params: { include: 'documents,ordresVirement' }
+        });
+        const documents = response.data.documents || [];
+        const ordresVirement = response.data.ordresVirement || [];
+        
+        if (documents.length === 0) continue;
+        
+        const allAssigned = documents.every((doc: any) => doc.assignedToUserId);
+        const allTreatedOrRejected = documents.every((doc: any) => 
+          doc.status === 'TRAITE' || doc.status === 'REJETE'
+        );
+        
+        // Check if virement is executed
+        const virementExecuted = ordresVirement.some((ov: any) => ov.etatVirement === 'EXECUTE');
+        
+        let newStatus = null;
+        
+        // Rule 1: If all documents assigned -> EN_COURS (from A_AFFECTER)
+        if (allAssigned && response.data.statut === 'A_AFFECTER') {
+          newStatus = 'EN_COURS';
+        }
+        // Rule 2: If all documents treated/rejected -> TRAITE (from EN_COURS)
+        else if (allTreatedOrRejected && response.data.statut === 'EN_COURS') {
+          newStatus = 'TRAITE';
+        }
+        // Rule 3: If virement executed -> CLOTURE (from TRAITE or VIREMENT_EXECUTE)
+        else if (virementExecuted && (response.data.statut === 'TRAITE' || response.data.statut === 'VIREMENT_EXECUTE')) {
+          newStatus = 'CLOTURE';
+        }
+        
+        if (newStatus) {
+          await LocalAPI.put(`/bordereaux/${bordereauId}`, { statut: newStatus });
+        }
+      } catch (error) {
+        console.error(`Error updating bordereau ${bordereauId} status:`, error);
+      }
+    }
+  };
+
+  // Check virement status for all bordereaux and update to CLOTURE if executed
+  const checkVirementStatusForAllBordereaux = async () => {
+    try {
+      const bordereauxToCheck = dossiers.filter(d => 
+        d.statut === 'TRAITE' || d.statut === 'VIREMENT_EXECUTE'
+      );
+      
+      for (const bordereau of bordereauxToCheck) {
+        try {
+          const response = await LocalAPI.get(`/bordereaux/${bordereau.id}`, {
+            params: { include: 'ordresVirement' }
+          });
+          
+          const ordresVirement = response.data.ordresVirement || [];
+          const virementExecuted = ordresVirement.some((ov: any) => ov.etatVirement === 'EXECUTE');
+          
+          if (virementExecuted && (response.data.statut === 'TRAITE' || response.data.statut === 'VIREMENT_EXECUTE')) {
+            await LocalAPI.put(`/bordereaux/${bordereau.id}`, { statut: 'CLOTURE' });
+            console.log(`Bordereau ${bordereau.reference} automatically updated to CLOTURE`);
+          }
+        } catch (error) {
+          console.error(`Error checking virement for bordereau ${bordereau.id}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error in virement status check:', error);
+    }
+  };
+
   const handleBulkDocumentStatusUpdate = async () => {
     if (!selectedDocumentStatus || selectedBS.length === 0) {
       message.error('Veuillez sélectionner un statut et des documents');
@@ -485,6 +584,9 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         });
       }
 
+      // Update bordereau status based on document changes
+      await updateBordereauStatusBasedOnDocuments(selectedBS);
+      
       message.success('Statuts des documents mis à jour avec succès');
       setDocumentStatusModalVisible(false);
       setSelectedDocumentStatus('');
@@ -527,6 +629,11 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     });
   };
 
+  const handleReassignDocument = (documentId: string) => {
+    setSelectedBS([documentId]);
+    setAssignModalVisible(true);
+  };
+
   const expandedRowRender = (dossier: Dossier) => {
     return (
       <div style={{ margin: '0 48px', padding: '16px', background: '#fafafa', borderRadius: '4px' }}>
@@ -535,6 +642,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           selectedDocuments={selectedBS}
           onDocumentSelect={handleSelectBS}
           onBulkSelect={handleBulkSelectInBordereau}
+          onReassignClick={handleReassignDocument}
         />
       </div>
     );
@@ -822,7 +930,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
             { value: 'ASSIGNE', label: 'Assigné' },
             { value: 'EN_COURS', label: 'En cours de traitement' },
             { value: 'TRAITE', label: 'Traité' },
-            { value: 'CLOTURE', label: 'Clôturé' }
+            { value: 'VIREMENT_EXECUTE', label: 'Virement exécuté' }
           ]}
         />
       </Modal>
@@ -879,7 +987,12 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
               <Text strong>Nombre Documents:</Text> {selectedDossier.nombreBS}
             </div>
             
-            <DocumentsViewer dossierId={selectedDossier.id} />
+            <DocumentsViewer 
+              dossierId={selectedDossier.id} 
+              selectedDocuments={selectedBS}
+              onDocumentSelect={handleSelectBS}
+              onReassignClick={handleReassignDocument}
+            />
           </div>
         )}
       </Modal>

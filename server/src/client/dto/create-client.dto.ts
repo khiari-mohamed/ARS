@@ -5,6 +5,10 @@ export class CreateClientDto {
   @IsString()
   name: string;
 
+  @IsNotEmpty()
+  @IsString()
+  compagnieAssurance: string;
+
   @IsOptional()
   @IsEmail()
   email?: string;

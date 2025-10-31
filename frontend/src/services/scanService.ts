@@ -175,3 +175,8 @@ export const validateMultipleScanWorkflow = async (bordereauId: string) => {
     };
   }
 };
+
+export const getReturnedBordereaux = async () => {
+  const { data } = await LocalAPI.get('/scan/returned-bordereaux');
+  return data;
+};

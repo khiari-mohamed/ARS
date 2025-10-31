@@ -232,13 +232,30 @@ export class ExcelValidationService {
     }
 
     try {
-      const matricule = row.getCell(1).text?.trim();
-      const nom = row.getCell(2).text?.trim();
-      const prenom = row.getCell(3).text?.trim();
-      const societe = row.getCell(4).text?.trim();
-      const rib = row.getCell(5).text?.trim();
-      const montantStr = row.getCell(6).text?.trim().replace(',', '.');
+      // EXACT SPEC: Excel input limited to Matricule/Contract Number + Montant
+      const matricule = row.getCell(1).text?.trim(); // Matricule or Contract Number
+      const montantStr = row.getCell(2).text?.trim().replace(',', '.'); // Montant
       const montant = parseFloat(montantStr);
+      
+      // EXACT SPEC: Fetch adherent data from database using matricule
+      const adherent = matricule ? await this.prisma.adherent.findFirst({
+        where: {
+          OR: [
+            { matricule: matricule },
+            { numeroContrat: matricule }
+          ],
+          clientId: clientId
+        },
+        include: {
+          client: true
+        }
+      }) : null;
+      
+      // Use adherent data if found, otherwise mark as error
+      const nom = adherent?.nom || '';
+      const prenom = adherent?.prenom || '';
+      const societe = adherent?.client?.name || 'ARS TUNISIE';
+      const rib = adherent?.rib || '';
       
       // Skip empty or invalid rows
       if (!matricule && !nom && !prenom && !rib && isNaN(montant)) {
@@ -247,26 +264,19 @@ export class ExcelValidationService {
 
       const validationItem: VirementValidationItem = {
         matricule: matricule || '',
-        nom: nom || '',
-        prenom: prenom || '',
-        societe: societe || 'ARS TUNISIE',
-        rib: rib || '',
+        nom,
+        prenom,
+        societe,
+        rib,
         montant: isNaN(montant) ? 0 : montant,
         status: 'VALIDE',
-        erreurs: []
+        erreurs: [],
+        adherentId: adherent?.id
       };
 
-      // Validate required fields
+      // EXACT SPEC: Validate only matricule and montant (required inputs)
       if (!matricule) {
-        validationItem.erreurs.push('Matricule manquant');
-        validationItem.status = 'ERREUR';
-      }
-      if (!nom) {
-        validationItem.erreurs.push('Nom manquant');
-        validationItem.status = 'ERREUR';
-      }
-      if (!rib || rib.length < 20) {
-        validationItem.erreurs.push('RIB invalide');
+        validationItem.erreurs.push('Matricule/Numéro de contrat manquant');
         validationItem.status = 'ERREUR';
       }
       if (isNaN(montant) || montant <= 0) {
@@ -274,8 +284,14 @@ export class ExcelValidationService {
         validationItem.status = 'ERREUR';
       }
       
-      // Try to find or create adherent
-      validationItem.adherentId = await this.findOrCreateAdherent(validationItem, clientId);
+      // EXACT SPEC: Validate adherent exists in database
+      if (!adherent) {
+        validationItem.erreurs.push('Adhérent non trouvé dans la base');
+        validationItem.status = 'ERREUR';
+      } else if (!adherent.rib || adherent.rib.length < 20) {
+        validationItem.erreurs.push('RIB invalide dans la base adhérents');
+        validationItem.status = 'ALERTE';
+      }
       
       return { item: validationItem };
 

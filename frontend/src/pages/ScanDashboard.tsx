@@ -50,6 +50,8 @@ import { ScanCorbeille } from '../components/Workflow/ScanCorbeille';
 import ManualScanInterface from '../components/Workflow/ManualScanInterface';
 import DirectManualScanInterface from '../components/DirectManualScanInterface';
 import DocumentTypeModal from '../components/DocumentTypeModal';
+import ScanRejectionHandler from '../components/Workflow/ScanRejectionHandler';
+import ReturnedBordereauHandler from '../components/Workflow/ReturnedBordereauHandler';
 import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
 import { getBordereauForManualScan, uploadManualDocuments, finalizeScanProcess } from '../services/manualScanService';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -126,7 +128,10 @@ const ScanDashboard: React.FC = () => {
       ]);
       setScanStatus(statusData);
       setScanActivity(activityData);
-      setScanQueue([...queueData, ...allBordereaux.filter((b: any) => ['SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'].includes(b.statut))]);
+      // Deduplicate: merge queueData and allBordereaux, removing duplicates by ID
+      const combined = [...queueData, ...allBordereaux.filter((b: any) => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'].includes(b.statut))];
+      const uniqueScanQueue = Array.from(new Map(combined.map((b: any) => [b.id, b])).values());
+      setScanQueue(uniqueScanQueue);
       setOverloadStatus(overloadData);
       setChartData(chartData);
       setManualScanBordereaux(manualScanData);
@@ -262,8 +267,25 @@ const ScanDashboard: React.FC = () => {
     );
   }
 
+  const handleRejectedBordereauClick = async (bordereauId: string) => {
+    try {
+      const bordereau = await getBordereauForScan(bordereauId);
+      setSelectedBordereau(bordereau);
+      setActiveDialog('document-correction-details');
+    } catch (error) {
+      console.error('Failed to load rejected bordereau:', error);
+      alert('❌ Erreur lors du chargement du bordereau rejeté. Veuillez réessayer.');
+    }
+  };
+
   return (
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
+      {/* Rejection Handler */}
+      <ScanRejectionHandler onRejectedBordereauClick={handleRejectedBordereauClick} />
+      
+      {/* Returned Bordereau Handler */}
+      <ReturnedBordereauHandler onCorrectionComplete={loadDashboard} />
+      
       {/* Header */}
       <Box mb={3}>
         <Box 
@@ -377,26 +399,7 @@ const ScanDashboard: React.FC = () => {
             >
               📄 Scan Manuel
             </Button> */}
-            {/* <Button
-              variant="outlined"
-              color="secondary"
-              onClick={async () => {
-                try {
-                  const debug = await debugBordereaux();
-                  console.log('Debug bordereaux:', debug);
-                  alert(`📊 Debug Info:\n\n📋 Total bordereaux: ${debug.totalCount}\n\n📈 Status counts:\n${debug.statusCounts.map((s: any) => `• ${s.statut}: ${s._count.id}`).join('\n')}\n\n🔍 Check console for detailed info`);
-                } catch (error) {
-                  console.error('Debug failed:', error);
-                }
-              }}
-              sx={{ 
-                minWidth: { xs: 'auto', sm: 100 },
-                fontSize: '0.75rem',
-                width: { xs: '100%', sm: 'auto' }
-              }}
-            >
-              🔍 Debug
-            </Button> */}
+
           </Box>
         </Box>
       </Box>
@@ -504,15 +507,26 @@ const ScanDashboard: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Scan finalisés
                   </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    onClick={() => setActiveDialog('scan-history')}
-                    sx={{ fontSize: '0.7rem', mt: 1 }}
-                  >
-                    📜 Historique
-                  </Button>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="success"
+                      onClick={() => setActiveDialog('scan-history')}
+                      sx={{ fontSize: '0.7rem' }}
+                    >
+                      📜 Historique
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      onClick={() => setActiveDialog('document-corrections')}
+                      sx={{ fontSize: '0.7rem' }}
+                    >
+                      🔧 Corrections
+                    </Button>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
@@ -1611,6 +1625,345 @@ const ScanDashboard: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Document Corrections Dialog */}
+      <Dialog 
+        open={activeDialog === 'document-corrections'} 
+        onClose={() => setActiveDialog(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          🔧 Correction de Documents Scannés
+          <Chip 
+            label={`${scanQueue.filter((b: any) => b.documentStatus === 'RETOURNER_AU_SCAN').length} bordereaux retournés`}
+            color="warning"
+            size="small"
+            sx={{ ml: 2 }}
+          />
+        </DialogTitle>
+        <DialogContent>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Référence</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Date Scan</TableCell>
+                  <TableCell>Documents</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {scanQueue
+                  .filter((b: any) => b.documentStatus === 'RETOURNER_AU_SCAN')
+                  .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                  .map((bordereau: any) => (
+                    <TableRow key={bordereau.id}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {bordereau.reference}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {bordereau.client?.name || 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString() : 'N/A'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {bordereau.documents?.length || 0} doc(s)
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" gap={1}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            onClick={async () => {
+                              try {
+                                // Load full bordereau details with documents
+                                const fullBordereau = await getBordereauForScan(bordereau.id);
+                                setSelectedBordereau(fullBordereau);
+                                setActiveDialog('document-correction-details');
+                              } catch (error) {
+                                console.error('Failed to load bordereau details:', error);
+                                alert('❌ Erreur lors du chargement des détails du bordereau');
+                              }
+                            }}
+                            sx={{ fontSize: '0.7rem' }}
+                          >
+                            🔧 Modifier
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Visibility />}
+                            onClick={() => handleViewBordereau(bordereau.id)}
+                            sx={{ fontSize: '0.7rem' }}
+                          >
+                            Voir
+                          </Button>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                }
+                {scanQueue.filter((b: any) => b.documentStatus === 'RETOURNER_AU_SCAN').length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      <Typography color="text.secondary" sx={{ py: 4 }}>
+                        Aucun bordereau retourné pour correction
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Document Correction Details Dialog - EXACT SPECIFICATION */}
+      <Dialog 
+        open={activeDialog === 'document-correction-details'} 
+        onClose={() => {
+          setActiveDialog(null);
+          setSelectedBordereau(null);
+          setSelectedDocumentType(null);
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#fff3e0', color: '#e65100', borderBottom: '2px solid #ff9800' }}>
+          🔄 Correction Documents - {selectedBordereau?.reference}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Bordereau rejeté par le chef d'équipe - Correction requise
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          {selectedBordereau && (
+            <Box>
+              <Typography variant="h6" gutterBottom sx={{ color: '#e65100', mb: 2 }}>
+                Documents de ce bordereau:
+              </Typography>
+              
+              {selectedBordereau.documents && selectedBordereau.documents.length > 0 ? (
+                <Box sx={{ mb: 3 }}>
+                  {/* Nested Document Display as per specification */}
+                  <Paper sx={{ p: 2, bgcolor: '#fafafa', border: '1px solid #e0e0e0' }}>
+                    {selectedBordereau.documents.map((doc: any, index: number) => (
+                      <Box key={doc.id} sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        py: 1.5,
+                        px: 2,
+                        mb: index < selectedBordereau.documents.length - 1 ? 1 : 0,
+                        bgcolor: 'white',
+                        border: '1px solid #ddd',
+                        borderRadius: 1
+                      }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body1" fontWeight="bold" sx={{ color: '#333' }}>
+                            {doc.name}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                            <Chip 
+                              label={doc.type} 
+                              size="small" 
+                              variant="outlined"
+                              sx={{ fontSize: '0.7rem' }}
+                            />
+                            <Chip 
+                              label={doc.status} 
+                              size="small" 
+                              color={doc.status === 'SCANNE' ? 'success' : 'warning'}
+                              sx={{ fontSize: '0.7rem' }}
+                            />
+                          </Box>
+                        </Box>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="warning"
+                          startIcon={<AutoFixHigh />}
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = '.pdf,.jpg,.jpeg,.png,.tiff,.tif';
+                            input.onchange = async (e: any) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                try {
+                                  const formData = new FormData();
+                                  formData.append('file', file);
+                                  formData.append('documentName', doc.name);
+                                  
+                                  const { LocalAPI } = await import('../services/axios');
+                                  await LocalAPI.post(`/scan/bordereau/${selectedBordereau.id}/replace-document`, formData, {
+                                    headers: { 'Content-Type': 'multipart/form-data' }
+                                  });
+                                  
+                                  alert('✅ Document remplacé avec succès');
+                                  // Reload bordereau details
+                                  const updatedBordereau = await import('../services/scanService').then(({ getBordereauForScan }) => 
+                                    getBordereauForScan(selectedBordereau.id)
+                                  );
+                                  setSelectedBordereau(updatedBordereau);
+                                  await loadDashboard();
+                                } catch (error: any) {
+                                  alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+                                }
+                              }
+                            };
+                            input.click();
+                          }}
+                          sx={{ fontSize: '0.7rem', minWidth: 'auto' }}
+                        >
+                          Remplacer
+                        </Button>
+                      </Box>
+                    ))}
+                  </Paper>
+                </Box>
+              ) : (
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                  ⚠️ Aucun document trouvé pour ce bordereau
+                </Alert>
+              )}
+              
+              {/* Add Missing Document Section - EXACT SPECIFICATION */}
+              <Paper sx={{ p: 3, bgcolor: '#e8f5e8', border: '2px solid #4caf50' }}>
+                <Typography variant="h6" gutterBottom sx={{ color: '#2e7d32', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  ➕ Ajouter un document manquant
+                </Typography>
+                
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Type de document</InputLabel>
+                      <Select
+                        value={selectedDocumentType?.type || ''}
+                        onChange={(e) => setSelectedDocumentType({ 
+                          type: e.target.value, 
+                          label: e.target.value, 
+                          icon: '📄' 
+                        })}
+                        label="Type de document"
+                      >
+                        <MenuItem value="BULLETIN_SOIN">📋 Bulletin de Soins</MenuItem>
+                        <MenuItem value="COMPLEMENT_INFORMATION">📄 Complément Info</MenuItem>
+                        <MenuItem value="ADHESION">👥 Adhésion</MenuItem>
+                        <MenuItem value="RECLAMATION">⚠️ Réclamation</MenuItem>
+                        <MenuItem value="CONTRAT_AVENANT">📜 Contrat/Avenant</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      fullWidth
+                      disabled={!selectedDocumentType?.type}
+                      onClick={() => {
+                        if (!selectedDocumentType?.type) {
+                          alert('⚠️ Veuillez sélectionner un type de document');
+                          return;
+                        }
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.pdf,.jpg,.jpeg,.png,.tiff,.tif';
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            try {
+                              const formData = new FormData();
+                              formData.append('file', file);
+                              formData.append('documentType', selectedDocumentType.type);
+                              
+                              const { LocalAPI } = await import('../services/axios');
+                              await LocalAPI.post(`/scan/bordereau/${selectedBordereau.id}/add-missing-document`, formData, {
+                                headers: { 'Content-Type': 'multipart/form-data' }
+                              });
+                              
+                              alert('✅ Document manquant ajouté avec succès');
+                              // Reload bordereau details
+                              const updatedBordereau = await import('../services/scanService').then(({ getBordereauForScan }) => 
+                                getBordereauForScan(selectedBordereau.id)
+                              );
+                              setSelectedBordereau(updatedBordereau);
+                              await loadDashboard();
+                              setSelectedDocumentType(null);
+                            } catch (error: any) {
+                              alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+                            }
+                          }
+                        };
+                        input.click();
+                      }}
+                      sx={{ fontSize: '0.8rem' }}
+                    >
+                      ➕ Sélectionner et Ajouter
+                    </Button>
+                  </Grid>
+                  {selectedDocumentType?.type && (
+                    <Grid item xs={12}>
+                      <Alert severity="success" sx={{ mt: 1 }}>
+                        ✓ Type sélectionné: <strong>{selectedDocumentType.type}</strong> - Cliquez sur "Sélectionner et Ajouter" pour choisir le fichier
+                      </Alert>
+                    </Grid>
+                  )}
+                </Grid>
+              </Paper>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#f5f5f5', borderTop: '1px solid #ddd' }}>
+          <Button 
+            onClick={() => {
+              setActiveDialog(null);
+              setSelectedBordereau(null);
+              setSelectedDocumentType(null);
+            }}
+            color="inherit"
+          >
+            Fermer
+          </Button>
+          <Button 
+            onClick={async () => {
+              if (selectedBordereau) {
+                try {
+                  // Mark corrections as complete and reset documentStatus
+                  const { LocalAPI } = await import('../services/axios');
+                  await LocalAPI.post(`/scan/bordereau/${selectedBordereau.id}/complete-corrections`);
+                  
+                  alert('✅ Corrections terminées - Le bordereau est prêt pour re-scan');
+                  setActiveDialog(null);
+                  setSelectedBordereau(null);
+                  setSelectedDocumentType(null);
+                  await loadDashboard();
+                } catch (error: any) {
+                  alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+                }
+              }
+            }}
+            variant="contained"
+            color="success"
+          >
+            ✅ Corrections Terminées
+          </Button>
         </DialogActions>
       </Dialog>
 

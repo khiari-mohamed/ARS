@@ -211,4 +211,58 @@ export class ScanController {
     const userId = user?.id || user?.userId || user?.sub;
     return this.scanService.updateBordereauDetails(bordereauId, updateData, userId);
   }
+
+  @Post('bordereau/:bordereauId/replace-document')
+  @UseInterceptors(FileInterceptor('file'))
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
+  async replaceDocument(
+    @Param('bordereauId') bordereauId: string,
+    @Body('documentName') documentName: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.scanService.replaceDocument(bordereauId, documentName, file, userId);
+  }
+
+  @Post('bordereau/:bordereauId/add-missing-document')
+  @UseInterceptors(FileInterceptor('file'))
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
+  async addMissingDocument(
+    @Param('bordereauId') bordereauId: string,
+    @Body('documentType') documentType: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.scanService.addMissingDocument(bordereauId, file, documentType, userId);
+  }
+
+  @Get('bordereau/:bordereauId/documents')
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
+  async getBordereauDocuments(
+    @Param('bordereauId') bordereauId: string
+  ) {
+    return this.scanService.getBordereauDocuments(bordereauId);
+  }
+
+  @Post('bordereau/:bordereauId/complete-corrections')
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
+  async completeCorrections(
+    @Param('bordereauId') bordereauId: string,
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.scanService.completeCorrections(bordereauId, userId);
+  }
+
+  @Get('returned-bordereaux')
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
+  async getReturnedBordereaux() {
+    return this.scanService.getReturnedBordereaux();
+  }
+
 }
