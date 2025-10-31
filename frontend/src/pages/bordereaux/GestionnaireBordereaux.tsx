@@ -218,8 +218,8 @@ function GestionnaireBordereaux() {
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                               {['EN_COURS', 'ASSIGNE'].includes(b.statut) && (
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button onClick={() => { handleProcessBordereau(b.id); setShowModal(false); }} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>✓ Traiter</button>
-                                  <button onClick={() => { handleReturnToChef(b.id); setShowModal(false); }} style={{ background: '#ff9800', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>↩ Retour</button>
+                                  <span style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>✓ Traiter</span>
+                                  <span style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ff9800', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>↩ Retour</span>
                                 </div>
                               )}
                               {['TRAITE', 'CLOTURE'].includes(b.statut) && <span style={{ fontSize: '12px', color: '#4caf50', fontWeight: 'bold' }}>✓ Complété</span>}

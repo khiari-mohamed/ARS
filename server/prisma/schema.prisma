@@ -64,6 +64,7 @@ model User {
   assignedToHistory           DocumentAssignmentHistory[] @relation("AssignedToHistory")
   assignedByHistory           DocumentAssignmentHistory[] @relation("AssignedByHistory")
   fromUserHistory             DocumentAssignmentHistory[] @relation("FromUserHistory")
+  ovDocuments                 OVDocument[]           @relation("UserOVDocuments")
 }
 
 model Process {
@@ -220,6 +221,7 @@ model Bordereau {
   virement                 Virement?              @relation("BordereauVirement")
   workflowNotifications    WorkflowNotification[]
   User                     User[]                 @relation("UserBordereaux")
+  ovDocuments              OVDocument[]           @relation("BordereauOVDocuments")
 }
 
 model Prestataire {
@@ -301,13 +303,29 @@ model Client {
   status               String             @default("active")
   chargeCompteId       String?
   contractDocumentPath String?
+  compagnieAssuranceId String?            // NEW: Link to insurance company
   adherents            Adherent[]
   bordereaux           Bordereau[]
   chargeCompte         User?              @relation("ChargeCompte", fields: [chargeCompteId], references: [id])
+  compagnieAssurance   CompagnieAssurance? @relation("ClientCompagnieAssurance", fields: [compagnieAssuranceId], references: [id])
   contracts            Contract[]
   reclamations         Reclamation[]
   slaConfigurations    SlaConfiguration[]
   gestionnaires        User[]             @relation("ClientGestionnaires")
+}
+
+// NEW: Insurance company table
+model CompagnieAssurance {
+  id        String   @id @default(uuid())
+  nom       String   @unique
+  code      String   @unique
+  adresse   String?
+  telephone String?
+  email     String?
+  statut    String   @default("ACTIF")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  clients   Client[] @relation("ClientCompagnieAssurance")
 }
 
 model Contract {
@@ -624,6 +642,7 @@ model OrdreVirement {
   suiviVirements     SuiviVirement[]
   historique         VirementHistorique[]
   items              VirementItem[]
+  ovDocuments        OVDocument[]         @relation("OVDocuments")
 
   @@index([etatVirement])
   @@index([validationStatus])
@@ -1038,7 +1057,25 @@ model DocumentAssignmentHistory {
   @@index([createdAt])
 }
 
-// EXACT 6 states from specifications
+// NEW: OV Document table - separate from Document to avoid dashboard appearance
+model OVDocument {
+  id               String        @id @default(uuid())
+  ordreVirementId  String
+  bordereauId      String?
+  name             String
+  path             String
+  type             String        @default("BORDEREAU_PDF")
+  uploadedAt       DateTime      @default(now())
+  uploadedById     String
+  ordreVirement    OrdreVirement @relation("OVDocuments", fields: [ordreVirementId], references: [id])
+  bordereau        Bordereau?    @relation("BordereauOVDocuments", fields: [bordereauId], references: [id])
+  uploader         User          @relation("UserOVDocuments", fields: [uploadedById], references: [id])
+
+  @@index([ordreVirementId])
+  @@index([bordereauId])
+}
+
+// EXACT states from specifications + new validation statuses
 enum EtatVirement {
   NON_EXECUTE              // When bordereau is "Traité"
   EN_COURS_EXECUTION       // Applied by Finance service
@@ -1046,6 +1083,9 @@ enum EtatVirement {
   REJETE                   // Failed (Finance action)
   BLOQUE                   // Suspended/stopped (Finance action)
   EXECUTE                  // When bordereau is "Payé"
+  EN_COURS_VALIDATION      // New: After Chef uploads Excel + PDF
+  VIREMENT_NON_VALIDE      // New: Rejected at validation step
+  VIREMENT_DEPOSE          // New: Final approval status
 }
 
 enum DocumentStatus {

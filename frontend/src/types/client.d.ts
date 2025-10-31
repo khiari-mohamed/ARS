@@ -10,6 +10,11 @@ export interface Client {
   reglementDelay: number;
   reclamationDelay: number;
   slaConfig?: any;
+  compagnieAssurance?: {
+    id: string;
+    nom: string;
+    code: string;
+  };
   gestionnaires?: Array<{
     id: string;
     fullName: string;

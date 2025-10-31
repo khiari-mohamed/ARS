@@ -7,6 +7,7 @@ import io from 'socket.io-client';
 import { getSocketUrl } from '../utils/getSocketUrl';
 import { Sidebar } from '../components/Sidebar';
 import OVValidationModal from '../components/Finance/OVValidationModal';
+import NotificationDetailModal from '../components/notifications/NotificationDetailModal';
 
 import { IconButton, Badge, Menu, MenuItem, Typography, Box } from '@mui/material';
 import { Notifications as NotificationsIcon } from '@mui/icons-material';
@@ -29,8 +30,23 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     data?: any;
   };
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
+  const [playedSoundForIds, setPlayedSoundForIds] = useState<Set<string>>(new Set());
   // Managers state
   const [managers, setManagers] = useState<any[]>([]);
+  
+  // Notification detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
+  const [selectedNotificationIndex, setSelectedNotificationIndex] = useState<number>(-1);
+  
+  // Sound notification
+  
+  const playNotificationSound = () => {
+    const audio = new Audio(`${process.env.PUBLIC_URL}/sounds/iphone_16_messege_tone.mp3`);
+    audio.volume = 0.8;
+    audio.play().catch(console.error);
+  };
 
   // Fetch managers with role 'MANAGER' (adjust endpoint/role as needed)
   useEffect(() => {
@@ -60,7 +76,17 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
             }));
             // Remove old rec alerts, add new
             const others = prev.filter(n => !n._type || n._type !== 'reclamation');
-            return [...others, ...recNotifs];
+            const newNotifications = [...others, ...recNotifs];
+            
+            // Play sound for every new reclamation notification
+            const hasNewReclamations = recNotifs.some(n => 
+              !prev.find(existing => existing.id === n.id)
+            );
+            if (hasNewReclamations && prev.length > 0) {
+              playNotificationSound();
+            }
+            
+            return newNotifications;
           });
         }
       } catch (error) {
@@ -84,7 +110,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
         // Try to get notifications from the database
         const { data } = await LocalAPI.get(`/users/${user.id}/notifications`);
         if (Array.isArray(data)) {
-          setNotifications(data.map((n: any) => ({
+          const newNotifications = data.map((n: any) => ({
             id: n.id,
             message: n.message || n.title,
             read: n.read,
@@ -92,7 +118,68 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
             title: n.title,
             createdAt: n.createdAt,
             data: n.data
-          })));
+          }));
+          
+          // console.log('📥 Fetched notifications:', newNotifications.length, 'types:', newNotifications.map(n => n._type));
+          
+          const newUnreadCount = newNotifications.filter(n => !n.read).length;
+          
+          // Play sound for every new notification (especially OV validation)
+          const hasNewNotifications = newNotifications.some(n => 
+            !notifications.find(existing => existing.id === n.id)
+          );
+          
+          const newNotificationsList = newNotifications.filter(n => 
+            !notifications.find(existing => existing.id === n.id)
+          );
+          
+          if (newNotificationsList.length > 0) {
+            console.log('🆕 NEW notifications detected:', newNotificationsList.map(n => ({ id: n.id, type: n._type, title: n.title })));
+          }
+          
+          // Also check for new unread notifications (in case of status changes)
+          const hasNewUnreadNotifications = newUnreadCount > previousUnreadCount;
+          
+          if ((hasNewNotifications || hasNewUnreadNotifications) && notifications.length > 0) {
+            const newNotificationTypes = newNotifications.filter(n => 
+              !notifications.find(existing => existing.id === n.id)
+            ).map(n => n._type);
+            
+            console.log('🔊 Playing notification sound for:', {
+              hasNewNotifications,
+              hasNewUnreadNotifications,
+              newUnreadCount,
+              previousUnreadCount,
+              newNotificationTypes
+            });
+            
+            playNotificationSound();
+          }
+          
+
+          
+          // Force sound for returned scan notifications (only once per notification)
+          const returnedScanNotifications = newNotifications.filter(n => 
+            (n._type === 'DOSSIER_RETURNED_TO_SCAN' || n._type === 'BORDEREAU_REJECTED') && 
+            !n.read && 
+            n.id && 
+            !playedSoundForIds.has(n.id)
+          );
+          
+          if (returnedScanNotifications.length > 0) {
+            console.log('🔄 Playing sound for new returned scan notifications:', returnedScanNotifications.length);
+            playNotificationSound();
+            
+            // Mark these notifications as having played sound
+            const newPlayedIds = new Set(playedSoundForIds);
+            returnedScanNotifications.forEach(n => {
+              if (n.id) newPlayedIds.add(n.id);
+            });
+            setPlayedSoundForIds(newPlayedIds);
+          }
+          
+          setNotifications(newNotifications);
+          setPreviousUnreadCount(newUnreadCount);
         }
       } catch (error) {
         // Fallback: continue with existing reclamation alerts
@@ -101,10 +188,10 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     };
     
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(fetchNotifications, 3000); // Check every 3 seconds for faster response
     
     return () => clearInterval(interval);
-  }, [user?.id]);
+  }, [user?.id, notifications, previousUnreadCount]);
 
   // Mark notifications as read when clicked
   const markAsRead = async (index: number) => {
@@ -129,6 +216,9 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'NEW_BORDEREAU_SCAN': return '📄';
       case 'BORDEREAU_READY_ASSIGNMENT': return '📋';
       case 'BORDEREAU_RETURNED': return '↩️';
+      case 'BORDEREAU_REJECTED': return '🔄';
+      case 'DOSSIER_RETURNED_TO_SCAN': return '🔄';
+      case 'WORKFLOW_ASSIGNMENT': return '📋';
       case 'TEAM_OVERLOAD_ALERT': return '⚠️';
       case 'ASSIGNMENT_FAILURE': return '❌';
       case 'SLA_BREACH': return '🔴';
@@ -136,6 +226,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'OV_PENDING_VALIDATION': return '💰';
       case 'OV_VALIDATED': return '✅';
       case 'OV_REJECTED': return '❌';
+      case 'NOUVEAU_VIREMENT': return '💰';
       case 'reclamation': 
         if (level === 'error') return '🚨';
         if (level === 'warning') return '⚠️';
@@ -161,8 +252,21 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       setValidationModalOpen(true);
       setAnchorEl(null);
     } else {
-      markAsRead(index);
+      // Open detail modal for other notifications
+      setSelectedNotification(notif);
+      setSelectedNotificationIndex(index);
+      setDetailModalOpen(true);
+      setAnchorEl(null);
     }
+  };
+  
+  const handleDetailModalMarkAsRead = () => {
+    if (selectedNotificationIndex >= 0) {
+      markAsRead(selectedNotificationIndex);
+    }
+    setDetailModalOpen(false);
+    setSelectedNotification(null);
+    setSelectedNotificationIndex(-1);
   };
 
   return (
@@ -173,7 +277,10 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
       
       {/* Header with Bell Icon */}
-      <Box sx={{ position: 'fixed', top: 16, right: 16, zIndex: 1200 }}>
+      <Box sx={{ position: 'fixed', top: 16, right: 16, zIndex: 1200, display: 'flex', gap: 1 }}>
+        <IconButton onClick={playNotificationSound} size="small" title="Test Sound">
+          🔊
+        </IconButton>
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
           <Badge badgeContent={unreadCount} color="error">
             <NotificationsIcon />
@@ -338,6 +445,18 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           }}
         />
       )}
+      
+      {/* Notification Detail Modal */}
+      <NotificationDetailModal
+        open={detailModalOpen}
+        onClose={() => {
+          setDetailModalOpen(false);
+          setSelectedNotification(null);
+          setSelectedNotificationIndex(-1);
+        }}
+        notification={selectedNotification}
+        onMarkAsRead={handleDetailModalMarkAsRead}
+      />
     </div>
   );
 };

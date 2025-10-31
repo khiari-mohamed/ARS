@@ -6,6 +6,10 @@ export class UpdateClientDto {
   name?: string;
 
   @IsOptional()
+  @IsString()
+  compagnieAssurance?: string;
+
+  @IsOptional()
   @IsEmail()
   email?: string;
 

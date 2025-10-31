@@ -414,34 +414,10 @@ export class BordereauxService {
   async getBordereauReadyForScan() {
     console.log('🔍 DEBUG: getBordereauReadyForScan called');
     
-    // First, let's see all bordereaux with A_SCANNER status
-    const allAScannerBordereaux = await this.prisma.bordereau.findMany({
-      where: {
-        statut: 'A_SCANNER',
-        archived: false
-      },
-      include: {
-        client: true,
-        contract: true,
-        documents: true,
-        _count: {
-          select: { documents: true }
-        }
-      }
-    });
-    
-    console.log(`📊 Found ${allAScannerBordereaux.length} bordereaux with A_SCANNER status`);
-    allAScannerBordereaux.forEach(b => {
-      console.log(`- ${b.reference}: ${b.documents.length} documents, client: ${b.client?.name}`);
-    });
-    
-    // Get bordereaux created by BO that don't have documents yet
+    // Get UNIQUE bordereaux created by BO that are ready for scan
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         statut: 'A_SCANNER', // Created by BO, ready for scan
-        documents: {
-          none: {} // No documents attached yet
-        },
         archived: false
       },
       include: {
@@ -451,17 +427,25 @@ export class BordereauxService {
           select: { documents: true }
         }
       },
-      orderBy: { dateReception: 'asc' }
+      orderBy: { dateReception: 'asc' },
+      distinct: ['id'] // Ensure no duplicates
     });
 
-    console.log(`✅ Filtered to ${bordereaux.length} bordereaux ready for scan (no documents)`);
+    console.log(`✅ Found ${bordereaux.length} unique bordereaux ready for scan`);
     
-    const result = bordereaux.map(b => ({
+    // Remove duplicates by ID (extra safety)
+    const uniqueBordereaux = Array.from(
+      new Map(bordereaux.map(b => [b.id, b])).values()
+    );
+    
+    console.log(`✅ After deduplication: ${uniqueBordereaux.length} bordereaux`);
+    
+    const result = uniqueBordereaux.map(b => ({
       ...BordereauResponseDto.fromEntity(b),
       documentCount: b._count.documents
     }));
     
-    console.log('📤 Returning result:', JSON.stringify(result, null, 2));
+    console.log('📤 Returning result with', result.length, 'items');
     return result;
   }
 
@@ -1067,7 +1051,13 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     if (dateDepotVirement !== undefined && dateDepotVirement) data.dateDepotVirement = new Date(dateDepotVirement);
     if (dateExecutionVirement !== undefined && dateExecutionVirement) data.dateExecutionVirement = new Date(dateExecutionVirement);
     if (delaiReglement !== undefined) data.delaiReglement = delaiReglement;
-    if (statut !== undefined) data.statut = statut;
+    if (statut !== undefined) {
+      data.statut = statut;
+      // CRITICAL FIX: Automatically set dateCloture when status changes to TRAITE
+      if (statut === 'TRAITE' && !dateCloture) {
+        data.dateCloture = new Date();
+      }
+    }
     if (nombreBS !== undefined) data.nombreBS = nombreBS;
     
     const bordereau = await this.prisma.bordereau.update({
@@ -1522,6 +1512,7 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
       where: { id },
       data: {
         statut: Statut.TRAITE,
+        dateCloture: new Date(), // Set dateCloture when marked as TRAITE
       },
       include: {
         client: true,

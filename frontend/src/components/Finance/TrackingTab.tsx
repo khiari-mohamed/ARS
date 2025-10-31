@@ -8,6 +8,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AddIcon from '@mui/icons-material/Add';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface BordereauTraite {
@@ -18,7 +19,7 @@ interface BordereauTraite {
   montantBordereau: number;
   dateFinalisationBordereau?: string;
   dateInjection: string;
-  statutVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE';
+  statutVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_DEPOSE';
   dateTraitementVirement?: string;
   motifObservation?: string;
   demandeRecuperation: boolean;
@@ -50,7 +51,8 @@ const TrackingTab: React.FC = () => {
     status: '',
     donneurOrdre: '',
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
+    referenceBordereau: ''
   });
   const [editDialog, setEditDialog] = useState<{open: boolean, record: BordereauTraite | null}>({
     open: false, record: null
@@ -73,12 +75,20 @@ const TrackingTab: React.FC = () => {
     montantTotal: 0,
     nombreAdherents: 0
   });
+  const [documentViewer, setDocumentViewer] = useState<{open: boolean, url: string, title: string, type: 'pdf' | 'txt'}>({
+    open: false, url: '', title: '', type: 'pdf'
+  });
 
   const loadBordereauxTraites = async () => {
     setLoading(true);
     try {
+      console.log('🔍 Loading bordereaux traités for user:', user?.role, user?.id);
+      console.log('🔍 With filters:', filters);
+      
       const financeService = await import('../../services/financeService');
-      const data = await financeService.financeService.getBordereauxTraites();
+      const data = await financeService.financeService.getBordereauxTraites(filters);
+      
+      console.log('✅ Received bordereaux data:', data.length, 'items');
       setBordereauxTraites(data);
     } catch (error) {
       console.error('Failed to load bordereaux traités:', error);
@@ -91,6 +101,13 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     loadBordereauxTraites();
   }, []);
+  
+  // Reload when filters change
+  useEffect(() => {
+    if (filters.society || filters.status || filters.dateFrom || filters.dateTo || filters.referenceBordereau) {
+      loadBordereauxTraites();
+    }
+  }, [filters.society, filters.status, filters.dateFrom, filters.dateTo, filters.referenceBordereau]);
 
   useEffect(() => {
     let filtered = bordereauxTraites;
@@ -107,6 +124,16 @@ const TrackingTab: React.FC = () => {
     if (filters.dateTo) {
       filtered = filtered.filter(r => r.dateInjection <= filters.dateTo);
     }
+    if (filters.referenceBordereau) {
+      filtered = filtered.filter(r => r.referenceBordereau.toLowerCase().includes(filters.referenceBordereau.toLowerCase()));
+    }
+    
+    // Sort by dateTraitementVirement first (most recent), then by dateInjection (most recent first)
+    filtered = filtered.sort((a, b) => {
+      const dateA = new Date(a.dateTraitementVirement || a.dateInjection).getTime();
+      const dateB = new Date(b.dateTraitementVirement || b.dateInjection).getTime();
+      return dateB - dateA;
+    });
     
     setFilteredRecords(filtered);
   }, [bordereauxTraites, filters]);
@@ -119,7 +146,10 @@ const TrackingTab: React.FC = () => {
       'EXECUTE_PARTIELLEMENT': 'Virement exécuté partiellement',
       'REJETE': 'Virement rejeté',
       'BLOQUE': 'Virement bloqué',
-      'EXECUTE': 'Virement exécuté'
+      'EXECUTE': 'Virement exécuté',
+      'EN_COURS_VALIDATION': 'En cours de validation',
+      'VIREMENT_NON_VALIDE': 'Virement non validé',
+      'VIREMENT_DEPOSE': 'Virement déposé'
     };
 
     const statusColors = {
@@ -128,7 +158,10 @@ const TrackingTab: React.FC = () => {
       'EXECUTE_PARTIELLEMENT': 'warning',
       'REJETE': 'error',
       'BLOQUE': 'error',
-      'EXECUTE': 'success'
+      'EXECUTE': 'success',
+      'EN_COURS_VALIDATION': 'info',
+      'VIREMENT_NON_VALIDE': 'error',
+      'VIREMENT_DEPOSE': 'success'
     };
 
     const statusIcons = {
@@ -137,7 +170,10 @@ const TrackingTab: React.FC = () => {
       'EXECUTE_PARTIELLEMENT': '⚠️',
       'REJETE': '❌',
       'BLOQUE': '⏸️',
-      'EXECUTE': '✅'
+      'EXECUTE': '✅',
+      'EN_COURS_VALIDATION': '📝',
+      'VIREMENT_NON_VALIDE': '❌',
+      'VIREMENT_DEPOSE': '🏦'
     };
 
     return (
@@ -288,10 +324,15 @@ const TrackingTab: React.FC = () => {
           <Typography variant="h6" sx={{ fontWeight: 600 }}>Filtres de Recherche</Typography>
           <Button
             startIcon={<RefreshIcon />}
-            onClick={loadBordereauxTraites}
+            onClick={() => {
+              console.log('🔄 Force refresh clicked by user:', user?.role);
+              setBordereauxTraites([]); // Clear current data
+              loadBordereauxTraites();
+            }}
             disabled={loading}
             size="small"
-            variant="outlined"
+            variant="contained"
+            color="primary"
           >
             Actualiser
           </Button>
@@ -301,6 +342,14 @@ const TrackingTab: React.FC = () => {
             label="Société"
             value={filters.society}
             onChange={(e) => setFilters({...filters, society: e.target.value})}
+            size="small"
+            sx={{ minWidth: 150 }}
+          />
+          
+          <TextField
+            label="Référence bordereau"
+            value={filters.referenceBordereau}
+            onChange={(e) => setFilters({...filters, referenceBordereau: e.target.value})}
             size="small"
             sx={{ minWidth: 150 }}
           />
@@ -319,6 +368,9 @@ const TrackingTab: React.FC = () => {
               <MenuItem value="REJETE">Rejeté</MenuItem>
               <MenuItem value="BLOQUE">Bloqué</MenuItem>
               <MenuItem value="EXECUTE">Exécuté</MenuItem>
+              <MenuItem value="EN_COURS_VALIDATION">En Cours de Validation</MenuItem>
+              <MenuItem value="VIREMENT_NON_VALIDE">Virement Non Validé</MenuItem>
+              <MenuItem value="VIREMENT_DEPOSE">Virement Déposé</MenuItem>
             </Select>
           </FormControl>
 
@@ -342,7 +394,7 @@ const TrackingTab: React.FC = () => {
           
           <Button 
             variant="outlined" 
-            onClick={() => setFilters({society: '', status: '', donneurOrdre: '', dateFrom: '', dateTo: ''})}
+            onClick={() => setFilters({society: '', status: '', donneurOrdre: '', dateFrom: '', dateTo: '', referenceBordereau: ''})}
             size="small"
           >
             Réinitialiser
@@ -355,9 +407,14 @@ const TrackingTab: React.FC = () => {
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
           Bloc récapitulatif des bordereaux en état Traité
         </Typography>
-        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
           Affichage de {filteredRecords.length} bordereau(x) traité(s)
         </Typography>
+        {user?.role === 'CHEF_EQUIPE' && (
+          <Typography variant="caption" color="info.main" sx={{ fontStyle: 'italic', mb: 2, display: 'block' }}>
+            Affichage limité aux bordereaux de votre équipe
+          </Typography>
+        )}
         
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -386,6 +443,7 @@ const TrackingTab: React.FC = () => {
                   <TableCell><strong>Motif / Observation</strong></TableCell>
                   <TableCell><strong>Demande de récupération</strong></TableCell>
                   <TableCell><strong>Montant récupéré</strong></TableCell>
+                  <TableCell><strong>Documents</strong></TableCell>
                   <TableCell><strong>Actions par rôle</strong></TableCell>
                 </TableRow>
               </TableHead>
@@ -424,8 +482,9 @@ const TrackingTab: React.FC = () => {
                       }
                     </TableCell>
                     <TableCell>
+                      {/* EXACT SPEC: Don't display observation written by Responsable Département */}
                       <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                        {record.motifObservation || '-'}
+                        {record.statutVirement === 'VIREMENT_NON_VALIDE' ? '-' : (record.motifObservation || '-')}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -458,6 +517,117 @@ const TrackingTab: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {record.referenceOV && (
+                          <>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<VisibilityIcon />}
+                              onClick={async () => {
+                                try {
+                                  const { LocalAPI } = await import('../../services/axios');
+                                  const response = await LocalAPI.get(`/finance/ordres-virement/${record.id}/pdf`, {
+                                    responseType: 'blob'
+                                  });
+                                  const blob = new Blob([response.data], { type: 'application/pdf' });
+                                  const blobUrl = URL.createObjectURL(blob);
+                                  
+                                  setDocumentViewer({
+                                    open: true,
+                                    url: blobUrl,
+                                    title: `PDF OV - ${record.referenceOV}`,
+                                    type: 'pdf'
+                                  });
+                                } catch (error) {
+                                  console.error('Error loading PDF:', error);
+                                  alert('Erreur lors du chargement du PDF');
+                                }
+                              }}
+                            >
+                              PDF OV
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<VisibilityIcon />}
+                              onClick={async () => {
+                                try {
+                                  const { LocalAPI } = await import('../../services/axios');
+                                  const response = await LocalAPI.get(`/finance/ordres-virement/${record.id}/txt`, {
+                                    responseType: 'blob'
+                                  });
+                                  const blob = new Blob([response.data], { type: 'text/plain' });
+                                  const blobUrl = URL.createObjectURL(blob);
+                                  
+                                  setDocumentViewer({
+                                    open: true,
+                                    url: blobUrl,
+                                    title: `TXT - ${record.referenceOV}`,
+                                    type: 'txt'
+                                  });
+                                } catch (error) {
+                                  console.error('Error loading TXT:', error);
+                                  alert('Erreur lors du chargement du TXT');
+                                }
+                              }}
+                            >
+                              TXT
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="secondary"
+                              startIcon={<VisibilityIcon />}
+                              onClick={async () => {
+                                try {
+                                  const { LocalAPI } = await import('../../services/axios');
+                                  
+                                  // Get OV details to find bordereauId
+                                  const ovResponse = await LocalAPI.get(`/finance/ordres-virement/${record.id}`);
+                                  const ov = ovResponse.data;
+                                  
+                                  if (!ov.bordereauId) {
+                                    alert('Aucun bordereau lié à cet OV');
+                                    return;
+                                  }
+                                  
+                                  // Fetch documents by bordereauId
+                                  const response = await LocalAPI.get(`/finance/ov-documents/bordereau/${ov.bordereauId}`);
+                                  const ovDocuments = response.data;
+                                  
+                                  const pdfDoc = ovDocuments.find((doc: any) => doc.type === 'BORDEREAU_PDF');
+                                  
+                                  if (pdfDoc) {
+                                    const docResponse = await LocalAPI.get(`/finance/ordres-virement/${pdfDoc.ordreVirementId}/documents/${pdfDoc.id}/pdf`, {
+                                      responseType: 'blob'
+                                    });
+                                    const blob = new Blob([docResponse.data], { type: 'application/pdf' });
+                                    const blobUrl = URL.createObjectURL(blob);
+                                    
+                                    setDocumentViewer({
+                                      open: true,
+                                      url: blobUrl,
+                                      title: `PDF Uploadé - ${pdfDoc.name}`,
+                                      type: 'pdf'
+                                    });
+                                  } else {
+                                    alert('Aucun PDF uploadé trouvé');
+                                  }
+                                } catch (error: any) {
+                                  console.error('Error loading bordereau PDF:', error);
+                                  alert(`Erreur lors du chargement du PDF\n\n${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
+                                }
+                              }}
+                            >
+                              PDF Bordereau
+                            </Button>
+                          </>
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {/* EXACT SPEC: Finance and Super Admin can always modify */}
                         {canModifyStatus() && (
                           <Button
                             size="small"
@@ -467,6 +637,18 @@ const TrackingTab: React.FC = () => {
                             Modifier
                           </Button>
                         )}
+                        {/* EXACT SPEC: Chef d'équipe can only modify if VIREMENT_NON_VALIDE */}
+                        {user?.role === 'CHEF_EQUIPE' && record.statutVirement === 'VIREMENT_NON_VALIDE' && (
+                          <Button
+                            size="small"
+                            color="warning"
+                            startIcon={<EditIcon />}
+                            onClick={() => handleEditClick(record)}
+                          >
+                            Corriger
+                          </Button>
+                        )}
+                        {/* EXACT SPEC: Reinject only for REJETE status */}
                         {canReinject() && record.statutVirement === 'REJETE' && (
                           <Button
                             size="small"
@@ -513,6 +695,9 @@ const TrackingTab: React.FC = () => {
                 <MenuItem value="REJETE">❌ Virement rejeté</MenuItem>
                 <MenuItem value="BLOQUE">⏸️ Virement bloqué</MenuItem>
                 <MenuItem value="EXECUTE">✅ Virement exécuté</MenuItem>
+                <MenuItem value="EN_COURS_VALIDATION">📝 En cours de validation</MenuItem>
+                <MenuItem value="VIREMENT_NON_VALIDE">❌ Virement non validé</MenuItem>
+                <MenuItem value="VIREMENT_DEPOSE">🏦 Virement déposé</MenuItem>
               </Select>
               {!canModifyStatus() && (
                 <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
@@ -677,6 +862,78 @@ const TrackingTab: React.FC = () => {
             Créer l'entrée
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Document Viewer Dialog */}
+      <Dialog 
+        open={documentViewer.open} 
+        onClose={() => setDocumentViewer({open: false, url: '', title: '', type: 'pdf'})} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{ sx: { height: '90vh' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">{documentViewer.title}</Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {documentViewer.type === 'txt' && documentViewer.url && (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = documentViewer.url;
+                  link.download = documentViewer.title.replace('TXT - ', '') + '.txt';
+                  link.click();
+                }}
+              >
+                Télécharger
+              </Button>
+            )}
+            <Button 
+              onClick={() => setDocumentViewer({open: false, url: '', title: '', type: 'pdf'})}
+              size="small"
+            >
+              Fermer
+            </Button>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, height: '100%' }}>
+          {documentViewer.url ? (
+            documentViewer.type === 'pdf' ? (
+              <iframe
+                src={documentViewer.url}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title={documentViewer.title}
+              />
+            ) : (
+              <Box sx={{ p: 2, height: '100%', overflow: 'auto', backgroundColor: '#f5f5f5' }}>
+                <iframe
+                  src={documentViewer.url}
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    border: '1px solid #ddd', 
+                    backgroundColor: 'white',
+                    fontFamily: 'monospace',
+                    fontSize: '14px'
+                  }}
+                  title={documentViewer.title}
+                />
+              </Box>
+            )
+          ) : (
+            <Box sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '100%',
+              fontSize: '18px',
+              color: '#666'
+            }}>
+              Chargement du document...
+            </Box>
+          )}
+        </DialogContent>
       </Dialog>
     </Box>
   );

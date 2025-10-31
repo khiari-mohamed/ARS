@@ -45,6 +45,9 @@ const AdherentsTab: React.FC = () => {
     status: 'active' as 'active' | 'inactive'
   });
   const [contracts, setContracts] = useState<any[]>([]);
+  const [importDialog, setImportDialog] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     loadAdherents();
@@ -274,6 +277,54 @@ const AdherentsTab: React.FC = () => {
 
   const duplicateRibCount = adherents.filter(a => a.duplicateRib).length;
 
+  const handleDownloadTemplate = () => {
+    const template = [
+      ['Matricule', 'Société', 'Nom', 'Prénom', 'RIB', 'Code Assuré', 'Numéro Contrat', 'Statut'],
+      ['M001', 'ARS TUNISIE', 'Dupont', 'Jean', '12345678901234567890', 'ASS001', 'CONT001', 'ACTIF'],
+      ['M002', 'ARS TUNISIE', 'Martin', 'Marie', '09876543210987654321', 'ASS002', 'CONT002', 'ACTIF']
+    ];
+    
+    const csvContent = template.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'modele_adherents.csv';
+    link.click();
+  };
+
+  const handleImportFile = async () => {
+    if (!importFile) return;
+    
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/import`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error('Import failed');
+      }
+      
+      const result = await response.json();
+      alert(`Import réussi! ${result.imported || 0} adhérent(s) importé(s)`);
+      setImportDialog(false);
+      setImportFile(null);
+      await loadAdherents();
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert('Erreur lors de l\'import');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <Box>
       {/* EXACT SPEC: TAB 5 - Adhérents */}
@@ -367,10 +418,17 @@ const AdherentsTab: React.FC = () => {
           • Numéro de contrat
         </Typography>
         <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-          <Button variant="contained" startIcon={<AddIcon />}>
+          <Button 
+            variant="contained" 
+            startIcon={<AddIcon />}
+            onClick={() => setImportDialog(true)}
+          >
             📁 Importer fichier
           </Button>
-          <Button variant="outlined">
+          <Button 
+            variant="outlined"
+            onClick={handleDownloadTemplate}
+          >
             📋 Télécharger modèle
           </Button>
         </Box>
@@ -559,6 +617,51 @@ const AdherentsTab: React.FC = () => {
           </Button>
           <Button onClick={handleSave} variant="contained" size="large">
             {dialog.adherent ? '💾 Enregistrer' : '+ Ajouter'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>📁 Importer des Adhérents</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Le fichier doit contenir les colonnes: Matricule, Société, Nom, Prénom, RIB, Code Assuré, Numéro Contrat, Statut
+          </Alert>
+          <Box
+            sx={{
+              border: '2px dashed #1976d2',
+              borderRadius: 2,
+              p: 4,
+              textAlign: 'center',
+              cursor: 'pointer',
+              bgcolor: '#f5f9ff',
+              '&:hover': { borderColor: 'primary.dark', bgcolor: '#e3f2fd' }
+            }}
+            component="label"
+          >
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+              style={{ display: 'none' }}
+            />
+            <Typography variant="h6" color="primary">
+              {importFile ? importFile.name : 'Cliquez pour sélectionner un fichier'}
+            </Typography>
+            <Typography variant="caption" color="textSecondary">
+              Formats acceptés: .xlsx, .xls, .csv
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialog(false)}>Annuler</Button>
+          <Button 
+            onClick={handleImportFile} 
+            variant="contained"
+            disabled={!importFile || importing}
+          >
+            {importing ? 'Import en cours...' : 'Importer'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -235,6 +235,7 @@ export class ClientService {
         contracts: true,
         bordereaux: true,
         reclamations: true,
+        compagnieAssurance: true,
       },
     });
   }
@@ -891,24 +892,50 @@ export class ClientService {
   }
 
   async create(dto: CreateClientDto) {
-    // Ensure unique client name
-    const existing = await this.prisma.client.findUnique({ where: { name: dto.name } });
-    if (existing) {
-      throw new Error('A client with this name already exists.');
-    }
-    // Default SLA config if not provided
-    if (!('slaConfig' in dto)) {
-      (dto as any).slaConfig = { slaThreshold: dto.reglementDelay };
-    }
-    
-    // Extract valid fields only and handle gestionnaireIds as teamLeaderId
-    const { name, email, phone, address, reglementDelay, reclamationDelay, status, slaConfig, teamLeaderId, gestionnaireIds } = dto as any;
-    
-    // Use gestionnaireIds[0] as teamLeaderId if provided
-    const chefEquipeId = teamLeaderId || (gestionnaireIds && gestionnaireIds.length > 0 ? gestionnaireIds[0] : null);
-    
-    return this.prisma.client.create({
-      data: {
+    try {
+      console.log('Creating client with data:', dto);
+      
+      // Ensure unique client name
+      const existing = await this.prisma.client.findUnique({ where: { name: dto.name } });
+      if (existing) {
+        throw new Error('A client with this name already exists.');
+      }
+      
+      // Default SLA config if not provided
+      if (!('slaConfig' in dto)) {
+        (dto as any).slaConfig = { slaThreshold: dto.reglementDelay };
+      }
+      
+      // Extract valid fields only and handle gestionnaireIds as teamLeaderId
+      const { name, compagnieAssurance, email, phone, address, reglementDelay, reclamationDelay, status, slaConfig, teamLeaderId, gestionnaireIds } = dto as any;
+      
+      // Use gestionnaireIds[0] as teamLeaderId if provided
+      const chefEquipeId = teamLeaderId || (gestionnaireIds && gestionnaireIds.length > 0 ? gestionnaireIds[0] : null);
+      
+      // Find or create CompagnieAssurance
+      let compagnieAssuranceRecord: any = null;
+      if (compagnieAssurance) {
+        console.log('Looking for compagnie:', compagnieAssurance);
+        compagnieAssuranceRecord = await this.prisma.compagnieAssurance.findFirst({
+          where: { nom: compagnieAssurance }
+        });
+        
+        if (!compagnieAssuranceRecord) {
+          console.log('Creating new compagnie:', compagnieAssurance);
+          const code = compagnieAssurance.length > 0 ? 
+            compagnieAssurance.substring(0, Math.min(10, compagnieAssurance.length)).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'DEFAULT' : 
+            'DEFAULT';
+          compagnieAssuranceRecord = await this.prisma.compagnieAssurance.create({
+            data: {
+              nom: compagnieAssurance,
+              code: code,
+              statut: 'ACTIF'
+            }
+          });
+        }
+      }
+      
+      const clientData = {
         name,
         email,
         phone,
@@ -917,10 +944,26 @@ export class ClientService {
         reclamationDelay,
         status: status || 'active',
         slaConfig,
-        chargeCompteId: chefEquipeId, // Assign client to chef d'équipe
-      },
-      include: { chargeCompte: true, contracts: true, bordereaux: true, reclamations: true },
-    });
+        chargeCompteId: chefEquipeId,
+        compagnieAssuranceId: compagnieAssuranceRecord?.id,
+      };
+      
+      console.log('Creating client with final data:', clientData);
+      
+      return this.prisma.client.create({
+        data: clientData,
+        include: { 
+          chargeCompte: true, 
+          contracts: true, 
+          bordereaux: true, 
+          reclamations: true,
+          compagnieAssurance: true
+        },
+      });
+    } catch (error) {
+      console.error('Error creating client:', error);
+      throw error;
+    }
   }
 
   async findOne(id: string) {
@@ -931,6 +974,7 @@ export class ClientService {
         contracts: true,
         bordereaux: true,
         reclamations: true,
+        compagnieAssurance: true,
       },
     });
     if (!client) throw new NotFoundException('Client not found');
@@ -940,6 +984,7 @@ export class ClientService {
   async update(id: string, dto: UpdateClientDto) {
     const {
       name,
+      compagnieAssurance,
       email,
       phone,
       address,
@@ -948,7 +993,8 @@ export class ClientService {
       reclamationDelay,
       teamLeaderId,
       slaConfig
-    } = dto;
+    } = dto as any;
+    
     const data: any = {
       ...(name !== undefined && { name }),
       ...(email !== undefined && { email }),
@@ -960,10 +1006,38 @@ export class ClientService {
       ...(slaConfig !== undefined && { slaConfig }),
       ...(teamLeaderId !== undefined && { chargeCompteId: teamLeaderId }),
     };
+    
+    // Handle compagnieAssurance update
+    if (compagnieAssurance !== undefined) {
+      let compagnieAssuranceRecord: any = null;
+      if (compagnieAssurance) {
+        compagnieAssuranceRecord = await this.prisma.compagnieAssurance.findFirst({
+          where: { nom: compagnieAssurance }
+        });
+        
+        if (!compagnieAssuranceRecord) {
+          compagnieAssuranceRecord = await this.prisma.compagnieAssurance.create({
+            data: {
+              nom: compagnieAssurance,
+              code: compagnieAssurance.substring(0, 10).toUpperCase().replace(/[^A-Z0-9]/g, ''),
+              statut: 'ACTIF'
+            }
+          });
+        }
+      }
+      data.compagnieAssuranceId = compagnieAssuranceRecord?.id;
+    }
+    
     return this.prisma.client.update({
       where: { id },
       data,
-      include: { chargeCompte: true, contracts: true, bordereaux: true, reclamations: true },
+      include: { 
+        chargeCompte: true, 
+        contracts: true, 
+        bordereaux: true, 
+        reclamations: true,
+        compagnieAssurance: true
+      },
     });
   }
 

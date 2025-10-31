@@ -467,7 +467,8 @@ function ChefEquipeDashboard() {
     try {
       const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/return-to-scan', {
         dossierId: selectedDossierForRetour,
-        reason: retourScanReason
+        reason: retourScanReason,
+        setAsReturnedToScan: true
       });
       
       if (response.data.success) {
@@ -849,7 +850,7 @@ function ChefEquipeDashboard() {
 
         {/* Bordereaux en cours Section */}
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux en cours</h3>
+          <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux</h3>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>

@@ -33,7 +33,7 @@ export class FinanceService {
 
   private checkFinanceRole(user: User) {
     console.log('🔐 Checking role for user:', user?.role);
-    if (!['FINANCE', 'SUPER_ADMIN'].includes(user.role)) {
+    if (!['FINANCE', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'RESPONSABLE_DEPARTEMENT'].includes(user.role)) {
       console.log('❌ Role check failed for:', user?.role);
       throw new ForbiddenException('Access denied');
     }
@@ -511,6 +511,9 @@ export class FinanceService {
     try {
       const pdfBuffer = await this.pdfGenerationService.generateOVFromOrderId(id);
       
+      // Store PDF in database
+      await this.storePDFInDatabase(id, pdfBuffer, user);
+      
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="OV_${id}.pdf"`);
       res.send(pdfBuffer);
@@ -530,6 +533,9 @@ export class FinanceService {
     this.checkFinanceRole(user);
     try {
       const txtContent = await this.txtGenerationService.generateOVTxtFromOrderId(id);
+      
+      // Store TXT in database
+      await this.storeTXTInDatabase(id, txtContent, user);
       
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="OV_${id}.txt"`);
@@ -1061,15 +1067,37 @@ Document généré automatiquement par ARS`;
     }
     
     try {
+      console.log('📝 Creating manual OV with data:', data);
+      
+      // Validate required fields
+      if (!data.reference) {
+        throw new BadRequestException('Reference is required');
+      }
+      if (!data.montantTotal || data.montantTotal <= 0) {
+        throw new BadRequestException('Valid amount is required');
+      }
+      
+      // Get or validate donneurOrdreId
+      let donneurOrdreId = data.donneurOrdreId;
+      if (!donneurOrdreId || donneurOrdreId === 'default') {
+        const activeDonneur = await this.prisma.donneurOrdre.findFirst({
+          where: { statut: 'ACTIF' }
+        });
+        if (!activeDonneur) {
+          throw new BadRequestException('No active donneur d\'ordre found');
+        }
+        donneurOrdreId = activeDonneur.id;
+      }
+      
       // Create manual OV without bordereau link
       const ordreVirement = await this.prisma.ordreVirement.create({
         data: {
           reference: data.reference,
-          donneurOrdreId: data.donneurOrdreId,
-          bordereauId: null, // Manual entry not linked to bordereau
+          donneurOrdreId,
+          bordereauId: null,
           utilisateurSante: user.id,
-          montantTotal: data.montantTotal,
-          nombreAdherents: data.nombreAdherents,
+          montantTotal: parseFloat(data.montantTotal),
+          nombreAdherents: parseInt(data.nombreAdherents) || 0,
           etatVirement: 'NON_EXECUTE',
           commentaire: 'Entrée manuelle créée par Chef d\'équipe'
         },
@@ -1077,6 +1105,8 @@ Document généré automatiquement par ARS`;
           donneurOrdre: true
         }
       });
+      
+      console.log('✅ Manual OV created:', ordreVirement.id);
       
       await this.logAuditAction('CREATE_MANUAL_OV', {
         userId: user.id,
@@ -1090,8 +1120,8 @@ Document généré automatiquement par ARS`;
         ordreVirement
       };
     } catch (error) {
-      console.error('Error creating manual OV:', error);
-      throw new BadRequestException('Failed to create manual OV');
+      console.error('❌ Error creating manual OV:', error);
+      throw new BadRequestException('Failed to create manual OV: ' + error.message);
     }
   }
 
@@ -1158,6 +1188,7 @@ Document généré automatiquement par ARS`;
   async getFinanceDashboardWithFilters(filters: {
     compagnie?: string;
     client?: string;
+    referenceBordereau?: string;
     dateFrom?: string;
     dateTo?: string;
   }, user: User) {
@@ -1166,41 +1197,118 @@ Document généré automatiquement par ARS`;
     try {
       const where: any = {};
       
-      if (filters.compagnie || filters.client) {
-        where.bordereau = {};
-        if (filters.compagnie || filters.client) {
-          where.bordereau.client = {
-            name: {
-              contains: filters.compagnie || filters.client,
-              mode: 'insensitive'
+      // EXACT SPEC: Chef d'équipe sees only their clients
+      if (user.role === 'CHEF_EQUIPE') {
+        where.OR = [
+          // Manual entries created by this chef
+          {
+            bordereauId: null,
+            utilisateurSante: user.id
+          },
+          // Bordereaux from contracts assigned to this chef's team
+          {
+            bordereau: {
+              contract: {
+                teamLeaderId: user.id
+              }
             }
+          }
+        ];
+      }
+      
+      if (filters.compagnie || filters.client || filters.referenceBordereau) {
+        if (!where.bordereau) where.bordereau = {};
+        
+        if (filters.referenceBordereau) {
+          where.bordereau.reference = {
+            contains: filters.referenceBordereau,
+            mode: 'insensitive'
           };
+        }
+        
+        if (filters.compagnie || filters.client) {
+          where.bordereau.client = {};
+          
+          if (filters.compagnie) {
+            where.bordereau.client.OR = [
+              {
+                compagnieAssurance: {
+                  nom: {
+                    contains: filters.compagnie,
+                    mode: 'insensitive'
+                  }
+                }
+              },
+              {
+                name: {
+                  contains: filters.compagnie,
+                  mode: 'insensitive'
+                }
+              }
+            ];
+          }
+          
+          if (filters.client) {
+            if (filters.compagnie) {
+              // Both filters: combine with AND
+              where.bordereau.client.AND = [
+                { OR: where.bordereau.client.OR },
+                {
+                  name: {
+                    contains: filters.client,
+                    mode: 'insensitive'
+                  }
+                }
+              ];
+              delete where.bordereau.client.OR;
+            } else {
+              // Only client filter
+              where.bordereau.client.name = {
+                contains: filters.client,
+                mode: 'insensitive'
+              };
+            }
+          }
         }
       }
       
       if (filters.dateFrom || filters.dateTo) {
-        where.dateCreation = {};
-        if (filters.dateFrom) where.dateCreation.gte = new Date(filters.dateFrom);
-        if (filters.dateTo) where.dateCreation.lte = new Date(filters.dateTo);
+        where.dateTraitement = {}; // Use execution date instead of creation date
+        if (filters.dateFrom) where.dateTraitement.gte = new Date(filters.dateFrom);
+        if (filters.dateTo) where.dateTraitement.lte = new Date(filters.dateTo);
       }
       
       const ordresVirement = await this.prisma.ordreVirement.findMany({
         where,
         include: {
-          bordereau: { include: { client: true } },
+          bordereau: { 
+            include: { 
+              client: {
+                include: {
+                  compagnieAssurance: true
+                }
+              },
+              contract: {
+                include: {
+                  teamLeader: {
+                    select: { id: true, fullName: true }
+                  }
+                }
+              }
+            } 
+          },
           donneurOrdre: true
         },
-        orderBy: { dateCreation: 'desc' },
+        orderBy: { dateTraitement: 'desc' }, // Sort by execution date
         take: 50
       });
       
       const stats = {
         totalOrdres: ordresVirement.length,
+        ordresEnCours: ordresVirement.filter(ov => ['NON_EXECUTE', 'EN_COURS_EXECUTION', 'EN_COURS_VALIDATION'].includes(ov.etatVirement)).length,
+        ordresExecutes: ordresVirement.filter(ov => ['EXECUTE', 'VIREMENT_DEPOSE'].includes(ov.etatVirement)).length,
+        ordresRejetes: ordresVirement.filter(ov => ['REJETE', 'VIREMENT_NON_VALIDE'].includes(ov.etatVirement)).length,
         montantTotal: ordresVirement.reduce((sum, ov) => sum + ov.montantTotal, 0),
-        parStatut: ordresVirement.reduce((acc, ov) => {
-          acc[ov.etatVirement] = (acc[ov.etatVirement] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>),
         demandesRecuperation: ordresVirement.filter(ov => ov.demandeRecuperation).length,
         montantsRecuperes: ordresVirement.filter(ov => ov.montantRecupere).length
       };
@@ -1209,16 +1317,19 @@ Document généré automatiquement par ARS`;
         ordresVirement: ordresVirement.map(ov => ({
           id: ov.id,
           reference: ov.reference,
-          client: ov.bordereau?.client?.name || 'Entrée manuelle',
+          referenceBordereau: ov.bordereau?.reference || null, // NEW: Référence bordereau
+          compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || null, // NEW: Compagnie d'assurance
+          client: ov.bordereau?.client?.name || (ov.bordereauId ? 'Client inconnu' : 'Entrée manuelle'), // NEW: Manual entry display
+          bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle', // NEW: Manual entry display
           montant: ov.montantTotal,
           statut: ov.etatVirement,
           dateCreation: ov.dateCreation,
-          dateTraitement: ov.dateTraitement,
+          dateExecution: ov.dateTraitement || ov.dateCreation, // NEW: Use execution date
           demandeRecuperation: ov.demandeRecuperation,
           dateDemandeRecuperation: ov.dateDemandeRecuperation,
           montantRecupere: ov.montantRecupere,
           dateMontantRecupere: ov.dateMontantRecupere,
-          motifObservation: ov.motifObservation
+          motifObservation: ov.motifObservation || null // NEW: Full text display
         })),
         stats
       };
@@ -1229,33 +1340,44 @@ Document généré automatiquement par ARS`;
   }
 
   async getBordereauxTraites(filters: any, user: User) {
+    console.log('🔍 getBordereauxTraites called with user:', {
+      id: user.id,
+      role: user.role,
+      fullName: user.fullName
+    });
+    
     this.checkFinanceRole(user);
     
     try {
+      // Use same access filter logic as chef d'équipe dashboard
+      const accessFilter = this.buildAccessFilter(user);
+      
+      // KEEP bordereaux visible even after OV is created
       const where: any = {
-        statut: 'TRAITE' // EXACT: Only TRAITÉ bordereaux
+        OR: [
+          { statut: 'TRAITE' },
+          { ordresVirement: { some: {} } } // Has at least one OV
+        ],
+        ...accessFilter
       };
       
-      // Apply filters
-      if (filters.compagnie || filters.client) {
-        where.client = {
-          name: {
-            contains: filters.compagnie || filters.client,
-            mode: 'insensitive'
-          }
-        };
-      }
-      
-      if (filters.dateFrom || filters.dateTo) {
-        where.dateCloture = {};
-        if (filters.dateFrom) where.dateCloture.gte = new Date(filters.dateFrom);
-        if (filters.dateTo) where.dateCloture.lte = new Date(filters.dateTo);
-      }
+      console.log('🔍 Final where clause:', JSON.stringify(where, null, 2));
       
       const bordereaux = await this.prisma.bordereau.findMany({
         where,
         include: {
-          client: true,
+          client: {
+            include: {
+              compagnieAssurance: true
+            }
+          },
+          contract: {
+            include: {
+              teamLeader: {
+                select: { id: true, fullName: true }
+              }
+            }
+          },
           ordresVirement: {
             include: {
               donneurOrdre: true
@@ -1265,29 +1387,57 @@ Document généré automatiquement par ARS`;
         orderBy: { dateCloture: 'desc' }
       });
       
-      return bordereaux.map(b => {
+      console.log('✅ Query executed - found', bordereaux.length, 'bordereaux');
+      bordereaux.forEach(b => {
+        console.log(`  - ${b.reference}: Client=${b.client.name}, TeamLeader=${b.contract?.teamLeader?.fullName || 'NONE'} (${b.contract?.teamLeaderId || 'NO_ID'})`);
+      });
+      
+      const result = bordereaux.map(b => {
         const ov = b.ordresVirement[0];
         return {
           id: ov?.id || b.id,
           clientSociete: b.client.name,
+          compagnieAssurance: b.client.compagnieAssurance?.nom || null,
           referenceOV: ov?.reference || null,
           referenceBordereau: b.reference,
           montantBordereau: ov?.montantTotal || 0,
-          dateFinalisationBordereau: b.dateCloture,
-          dateInjection: ov?.dateCreation || null,
+          dateFinalisationBordereau: b.dateCloture ? b.dateCloture.toISOString() : null,
+          dateInjection: ov?.dateCreation ? ov.dateCreation.toISOString() : null,
           statutVirement: ov?.etatVirement || 'NON_EXECUTE',
-          dateTraitementVirement: ov?.dateTraitement || null,
+          dateTraitementVirement: ov?.dateTraitement ? ov.dateTraitement.toISOString() : null,
           motifObservation: ov?.motifObservation || null,
           demandeRecuperation: ov?.demandeRecuperation || false,
-          dateDemandeRecuperation: ov?.dateDemandeRecuperation || null,
+          dateDemandeRecuperation: ov?.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
           montantRecupere: ov?.montantRecupere || false,
-          dateMontantRecupere: ov?.dateMontantRecupere || null
+          dateMontantRecupere: ov?.dateMontantRecupere ? ov.dateMontantRecupere.toISOString() : null
         };
       });
+      
+      console.log('✅ Returning', result.length, 'bordereaux to frontend');
+      return result;
     } catch (error) {
-      console.error('Error fetching bordereaux traités:', error);
+      console.error('❌ Error fetching bordereaux traités:', error);
       throw new BadRequestException('Failed to fetch bordereaux traités');
     }
+  }
+
+  private buildAccessFilter(user: any): any {
+    const baseFilter = { archived: false };
+    
+    if (user?.role === 'SUPER_ADMIN' || user?.role === 'RESPONSABLE_DEPARTEMENT' || user?.role === 'FINANCE') {
+      return baseFilter;
+    }
+    
+    if (user?.role === 'CHEF_EQUIPE') {
+      return {
+        ...baseFilter,
+        contract: {
+          teamLeaderId: user.id
+        }
+      };
+    }
+    
+    return baseFilter;
   }
 
   async updateBordereauTraite(id: string, data: any, user: User) {
@@ -1438,7 +1588,7 @@ Document généré automatiquement par ARS`;
       console.log('🔍 Executing database query...');
       const pendingOVs = await this.prisma.ordreVirement.findMany({
         where: {
-          validationStatus: 'EN_ATTENTE_VALIDATION'
+          validationStatus: 'EN_COURS_VALIDATION'
         },
         include: {
           donneurOrdre: true,
@@ -1495,16 +1645,29 @@ Document généré automatiquement par ARS`;
         throw new NotFoundException('Ordre de virement not found');
       }
       
-      const newStatus = approved ? 'VALIDE' : 'REJETE_VALIDATION';
+      const updateData: any = {
+        validatedBy: user.id,
+        validatedAt: new Date(),
+        validationComment: comment
+      };
+      
+      if (approved) {
+        updateData.validationStatus = 'VALIDE';
+        updateData.etatVirement = 'VIREMENT_DEPOSE';
+        updateData.dateTraitement = new Date();
+        updateData.dateEtatFinal = new Date();
+        updateData.utilisateurFinance = user.id;
+      } else {
+        updateData.validationStatus = 'REJETE_VALIDATION';
+        updateData.etatVirement = 'VIREMENT_NON_VALIDE';
+        updateData.dateTraitement = new Date();
+        updateData.dateEtatFinal = new Date();
+        updateData.utilisateurFinance = user.id;
+      }
       
       const updatedOV = await this.prisma.ordreVirement.update({
         where: { id },
-        data: {
-          validationStatus: newStatus,
-          validatedBy: user.id,
-          validatedAt: new Date(),
-          validationComment: comment
-        },
+        data: updateData,
         include: {
           donneurOrdre: true,
           bordereau: { include: { client: true } }
@@ -1684,8 +1847,8 @@ Document généré automatiquement par ARS`;
             utilisateurSante: user.id,
             montantTotal,
             nombreAdherents: bordereau.nombreBS,
-            etatVirement: 'NON_EXECUTE',
-            validationStatus: 'EN_ATTENTE_VALIDATION'
+            etatVirement: 'EN_COURS_EXECUTION',
+            validationStatus: 'EN_COURS_VALIDATION'
           },
           include: {
             bordereau: { include: { client: true } },
@@ -1775,6 +1938,172 @@ Document généré automatiquement par ARS`;
     } catch (error) {
       console.error('Failed to notify Finance on bordereau traité:', error);
       return { notified: 0 };
+    }
+  }
+
+  private async storePDFInDatabase(ordreVirementId: string, pdfBuffer: Buffer, user: User) {
+    try {
+      // Store PDF file to filesystem
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+      
+      // Ensure directory exists
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const filename = `OV_${ordreVirementId}_${Date.now()}.pdf`;
+      const filePath = path.join(uploadsDir, filename);
+      
+      // Write file to disk
+      fs.writeFileSync(filePath, pdfBuffer);
+      
+      // Update OrdreVirement with PDF path
+      await this.prisma.ordreVirement.update({
+        where: { id: ordreVirementId },
+        data: {
+          fichierPdf: filePath
+        }
+      });
+
+      console.log('✅ PDF stored for OV:', ordreVirementId, 'at', filePath);
+    } catch (error) {
+      console.error('❌ Failed to store PDF:', error);
+      // Don't throw - generation should succeed even if storage fails
+    }
+  }
+
+  private async storeTXTInDatabase(ordreVirementId: string, txtContent: string, user: User) {
+    try {
+      // Store TXT file to filesystem
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+      
+      // Ensure directory exists
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const filename = `OV_${ordreVirementId}_${Date.now()}.txt`;
+      const filePath = path.join(uploadsDir, filename);
+      
+      // Write file to disk
+      const fs2 = require('fs');
+      fs2.writeFileSync(filePath, txtContent, 'utf-8');
+      
+      // Update OrdreVirement with TXT path
+      await this.prisma.ordreVirement.update({
+        where: { id: ordreVirementId },
+        data: {
+          fichierTxt: filePath
+        }
+      });
+
+      console.log('✅ TXT stored for OV:', ordreVirementId, 'at', filePath);
+    } catch (error) {
+      console.error('❌ Failed to store TXT:', error);
+      // Don't throw - generation should succeed even if storage fails
+    }
+  }
+
+  async getOVPDFBuffer(id: string, user: User): Promise<Buffer> {
+    this.checkFinanceRole(user);
+    try {
+      // Get OrdreVirement
+      const ordreVirement = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
+      });
+
+      if (!ordreVirement) {
+        throw new NotFoundException('Ordre de virement not found');
+      }
+
+      // Check if PDF file exists on disk
+      if (ordreVirement.fichierPdf) {
+        const fs = require('fs');
+        if (fs.existsSync(ordreVirement.fichierPdf)) {
+          return fs.readFileSync(ordreVirement.fichierPdf);
+        }
+      }
+
+      // Generate PDF if not exists
+      const pdfBuffer = await this.pdfGenerationService.generateOVFromOrderId(id);
+      
+      // Store for future use
+      await this.storePDFInDatabase(id, pdfBuffer, user);
+      
+      await this.logAuditAction('VIEW_OV_PDF', {
+        userId: user.id,
+        ordreVirementId: id
+      });
+
+      return pdfBuffer;
+    } catch (error) {
+      console.error('Error getting OV PDF buffer:', error);
+      throw new BadRequestException('Failed to get PDF: ' + error.message);
+    }
+  }
+
+  async getOVTXTContent(id: string, user: User): Promise<string> {
+    this.checkFinanceRole(user);
+    try {
+      // Get OrdreVirement
+      const ordreVirement = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
+      });
+
+      if (!ordreVirement) {
+        throw new NotFoundException('Ordre de virement not found');
+      }
+
+      // Check if TXT file exists on disk
+      if (ordreVirement.fichierTxt) {
+        const fs = require('fs');
+        if (fs.existsSync(ordreVirement.fichierTxt)) {
+          return fs.readFileSync(ordreVirement.fichierTxt, 'utf-8');
+        }
+      }
+
+      // Generate TXT if not exists
+      const txtContent = await this.txtGenerationService.generateOVTxtFromOrderId(id);
+      
+      // Store for future use
+      await this.storeTXTInDatabase(id, txtContent, user);
+      
+      await this.logAuditAction('VIEW_OV_TXT', {
+        userId: user.id,
+        ordreVirementId: id
+      });
+
+      return txtContent;
+    } catch (error) {
+      console.error('Error getting OV TXT content:', error);
+      throw new BadRequestException('Failed to get TXT: ' + error.message);
+    }
+  }
+
+  async getOVDocument(id: string, type: 'pdf' | 'txt', res: Response, user: User) {
+    // Legacy method - use getOVPDFBuffer or getOVTXTContent instead
+    if (type === 'pdf') {
+      const pdfBuffer = await this.getOVPDFBuffer(id, user);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="OV_${id}.pdf"`);
+      res.send(pdfBuffer);
+    } else {
+      const txtContent = await this.getOVTXTContent(id, user);
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="OV_${id}.txt"`);
+      res.send(txtContent);
     }
   }
 }

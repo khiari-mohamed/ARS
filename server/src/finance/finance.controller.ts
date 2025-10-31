@@ -11,12 +11,16 @@ import {
   UploadedFile,
   Req,
   Res,
-  BadRequestException
+  BadRequestException,
+  UseGuards
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { Roles } from '../auth/roles.decorator';
+import { Public } from '../auth/public.decorator';
 import { UserRole } from '../auth/user-role.enum';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdherentService, CreateAdherentDto, UpdateAdherentDto } from './adherent.service';
 import { DonneurOrdreService, CreateDonneurOrdreDto, UpdateDonneurOrdreDto } from './donneur-ordre.service';
@@ -27,16 +31,23 @@ import { BankFormatConfigService } from './bank-format-config.service';
 import { SlaConfigurationService } from './sla-configuration.service';
 
 function getUserFromRequest(req: any) {
-  // For demo/development: check if user has role override in headers
-  const roleOverride = req.headers['x-user-role'];
-  if (roleOverride) {
-    return req.user || { id: 'demo-user', role: roleOverride, fullName: 'Demo User' };
+  // Extract from JWT token - the JWT strategy returns: id, email, role
+  if (req.user && req.user.id) {
+    return {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      fullName: req.user.email || 'User'
+    };
   }
-  return req.user || { id: 'demo-user', role: 'SUPER_ADMIN', fullName: 'Demo User' };
+  
+  // Fallback to demo user
+  return { id: 'demo-user', role: 'SUPER_ADMIN', fullName: 'Demo User' };
 }
 
 // EXACT roles from specifications: Chef d'équipe, Finance, Super Admin, Responsable Département
 @Controller('finance')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
 export class FinanceController {
   constructor(
@@ -89,8 +100,55 @@ export class FinanceController {
   @UseInterceptors(FileInterceptor('file'))
   async importAdherents(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
     const user = getUserFromRequest(req);
-    // Implementation for bulk import would go here
-    return { message: 'Import functionality to be implemented' };
+    
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+    
+    try {
+      const XLSX = require('xlsx');
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(sheet);
+      
+      let imported = 0;
+      let errors: string[] = [];
+      
+      for (const row of data as any[]) {
+        try {
+          const adherentData = {
+            matricule: row['Matricule'] || row['matricule'],
+            nom: row['Nom'] || row['nom'],
+            prenom: row['Prénom'] || row['Prenom'] || row['prenom'],
+            clientId: row['Société'] || row['Societe'] || row['societe'] || 'default',
+            rib: String(row['RIB'] || row['rib'] || '').replace(/\D/g, ''),
+            codeAssure: row['Code Assuré'] || row['Code Assure'] || row['codeAssure'] || '',
+            numeroContrat: row['Numéro Contrat'] || row['Numero Contrat'] || row['numeroContrat'] || '',
+            statut: (row['Statut'] || row['statut'] || 'ACTIF').toUpperCase() === 'ACTIF' ? 'ACTIF' : 'INACTIF'
+          };
+          
+          if (!adherentData.matricule || !adherentData.rib) {
+            errors.push(`Ligne ignorée: matricule ou RIB manquant`);
+            continue;
+          }
+          
+          await this.adherentService.createAdherent(adherentData, user.id);
+          imported++;
+        } catch (error: any) {
+          errors.push(`Erreur ligne ${imported + 1}: ${error.message}`);
+        }
+      }
+      
+      return {
+        success: true,
+        imported,
+        total: data.length,
+        errors: errors.length > 0 ? errors : undefined
+      };
+    } catch (error) {
+      throw new BadRequestException('Failed to process file: ' + error.message);
+    }
   }
 
   @Post('adherents/validate')
@@ -139,7 +197,7 @@ export class FinanceController {
   @UseInterceptors(FileInterceptor('file'))
   async importExcel(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { clientId: string; donneurOrdreId: string },
+    @Body() body: { clientId: string; donneurOrdreId: string; bordereauId?: string },
     @Req() req: any
   ) {
     if (!file) {
@@ -151,7 +209,8 @@ export class FinanceController {
       file.buffer,
       body.clientId,
       body.donneurOrdreId,
-      user.id
+      user.id,
+      body.bordereauId
     );
   }
 
@@ -183,38 +242,30 @@ export class FinanceController {
     return this.ordreVirementService.findOrdreVirementById(id);
   }
 
-  // EXACT SPEC: Chef d'équipe can download PDF after injection
+  // EXACT SPEC: View PDF OV (generated by system) - Works like PDF Bordereau
   @Get('ordres-virement/:id/pdf')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN)
-  async downloadPDF(@Param('id') id: string, @Res() res: Response) {
-    const ordreVirement = await this.ordreVirementService.findOrdreVirementById(id);
-    
-    if (!ordreVirement.fichierPdf) {
-      throw new BadRequestException('PDF file not found');
-    }
-
-    const fileContent = await this.fileGenerationService.getFileContent(ordreVirement.fichierPdf);
-    
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="virement_${ordreVirement.reference}.pdf"`);
-    res.send(fileContent);
+  async viewOVPDF(@Param('id') id: string, @Res() res: Response, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    const pdfBuffer = await this.financeService.getOVPDFBuffer(id, user as any);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="ordre_virement_${id}.pdf"`,
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
   }
 
-  // EXACT SPEC: Chef d'équipe can download TXT after injection
+  // EXACT SPEC: View TXT OV (generated by system) - Works like PDF Bordereau
   @Get('ordres-virement/:id/txt')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN)
-  async downloadTXT(@Param('id') id: string, @Res() res: Response) {
-    const ordreVirement = await this.ordreVirementService.findOrdreVirementById(id);
-    
-    if (!ordreVirement.fichierTxt) {
-      throw new BadRequestException('TXT file not found');
-    }
-
-    const fileContent = await this.fileGenerationService.getFileContent(ordreVirement.fichierTxt);
-    
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="virement_${ordreVirement.reference}.txt"`);
-    res.send(fileContent);
+  async viewOVTXT(@Param('id') id: string, @Res() res: Response, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    const txtContent = await this.financeService.getOVTXTContent(id, user as any);
+    res.set({
+      'Content-Type': 'text/plain',
+      'Content-Disposition': `inline; filename="ordre_virement_${id}.txt"`,
+      'Content-Length': Buffer.byteLength(txtContent, 'utf8')
+    });
+    res.send(txtContent);
   }
 
   // === DASHBOARD ENDPOINTS ===
@@ -229,7 +280,78 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.getFinanceDashboardWithFilters(filters, user);
+    return this.financeService.getFinanceDashboardWithFilters(filters, user as any);
+  }
+
+  // NEW: Excel export for dashboard
+  @Get('dashboard/export')
+  async exportDashboard(
+    @Query() filters: {
+      compagnie?: string;
+      client?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+    @Res() res: Response,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    const dashboardData = await this.financeService.getFinanceDashboardWithFilters(filters, user as any);
+    
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Tableau de Bord Finance');
+    
+    // Add headers
+    worksheet.addRow([
+      'Référence OV',
+      'Référence Bordereau', 
+      'Compagnie d\'Assurance',
+      'Client/Société',
+      'Bordereau',
+      'Montant (TND)',
+      'Statut',
+      'Date d\'Exécution',
+      'Motif/Observations',
+      'Demande Récupération',
+      'Montant Récupéré'
+    ]);
+    
+    // Add data
+    dashboardData.ordresVirement.forEach((ordre: any) => {
+      worksheet.addRow([
+        ordre.reference || '',
+        ordre.referenceBordereau || '',
+        ordre.compagnieAssurance || '',
+        ordre.client || '',
+        ordre.bordereau || '',
+        ordre.montant || 0,
+        ordre.statut || '',
+        ordre.dateExecution ? new Date(ordre.dateExecution).toLocaleDateString('fr-FR') : '',
+        ordre.motifObservation || '',
+        ordre.demandeRecuperation ? 'Oui' : 'Non',
+        ordre.montantRecupere ? 'Oui' : 'Non'
+      ]);
+    });
+    
+    // Style headers
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+    
+    // Auto-fit columns
+    worksheet.columns.forEach(column => {
+      column.width = 15;
+    });
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="tableau_bord_finance_${new Date().toISOString().split('T')[0]}.xlsx"`);
+    
+    await workbook.xlsx.write(res);
+    res.end();
   }
 
   @Get('dashboard/stats')
@@ -243,7 +365,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    const dashboardData = await this.financeService.getFinanceDashboardWithFilters(filters, user);
+    const dashboardData = await this.financeService.getFinanceDashboardWithFilters(filters, user as any);
     return dashboardData.stats;
   }
 
@@ -596,7 +718,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return await this.financeService.validateOVFile(file, body, user);
+    return await this.financeService.validateOVFile(file, body, user as any);
   }
 
   // PDF generation endpoint
@@ -607,7 +729,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return await this.financeService.generateOVPDF(id, res, user);
+    return await this.financeService.generateOVPDF(id, res, user as any);
   }
 
   // TXT generation endpoint
@@ -618,7 +740,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return await this.financeService.generateOVTXT(id, res, user);
+    return await this.financeService.generateOVTXT(id, res, user as any);
   }
 
   // Suivi virement endpoints
@@ -635,7 +757,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return await this.financeService.getOVTracking(filters, user);
+    return await this.financeService.getOVTracking(filters, user as any);
   }
 
   @Get('suivi-virement/:id')
@@ -644,7 +766,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return await this.financeService.getVirementById(id, user);
+    return await this.financeService.getVirementById(id, user as any);
   }
 
   // === BANK FORMAT CONFIGURATION ===
@@ -682,7 +804,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.updateRecoveryInfo(id, body, user);
+    return this.financeService.updateRecoveryInfo(id, body, user as any);
   }
 
   @Post('ordres-virement/create-manual')
@@ -698,7 +820,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.createManualOV(body, user);
+    return this.financeService.createManualOV(body, user as any);
   }
 
   @Put('ordres-virement/:id/reinject')
@@ -708,22 +830,52 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.reinjectOV(id, user);
+    return this.financeService.reinjectOV(id, user as any);
+  }
+
+  // === TEST ENDPOINT WITHOUT AUTH ===
+  @Get('test-bordereaux-traites/:userId')
+  async testBordereauxTraites(
+    @Param('userId') userId: string,
+    @Query() filters: {
+      compagnie?: string;
+      client?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    }
+  ) {
+    console.log('🧪 TEST endpoint called for userId:', userId);
+    
+    const mockUser = {
+      id: userId,
+      role: 'CHEF_EQUIPE',
+      fullName: 'Test Chef4'
+    };
+    
+    return this.financeService.getBordereauxTraites(filters, mockUser as any);
   }
 
   // === BORDEREAUX TRAITÉS ENDPOINT ===
   // EXACT SPEC: Only bordereaux with status "TRAITÉ" appear in Finance module
   @Get('bordereaux-traites')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getBordereauxTraites(
     @Req() req: any,
-    @Query('compagnie') compagnie?: string,
-    @Query('client') client?: string,
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string
+    @Query() filters: {
+      compagnie?: string;
+      client?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    }
   ) {
+    console.log('🔍 getBordereauxTraites endpoint called');
+    console.log('🔍 Request headers:', req.headers.authorization ? 'Token present' : 'No token');
+    console.log('🔍 Raw req.user:', req.user);
+    
     const user = getUserFromRequest(req);
-    const filters = { compagnie, client, dateFrom, dateTo };
-    return this.financeService.getBordereauxTraites(filters, user);
+    console.log('🔍 Extracted user:', { id: user.id, role: user.role, fullName: user.fullName });
+    
+    return this.financeService.getBordereauxTraites(filters, user as any);
   }
 
   // === UPDATE BORDEREAU TRAITÉ ENDPOINT ===
@@ -744,7 +896,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.updateBordereauTraite(id, body, user);
+    return this.financeService.updateBordereauTraite(id, body, user as any);
   }
 
   // === CREATE OV FROM BORDEREAU TRAITÉ ===
@@ -808,7 +960,7 @@ export class FinanceController {
       reference: ov.reference,
       message: `Nouvel OV créé depuis bordereau ${bordereau.reference}`,
       createdBy: user.fullName
-    }, user);
+    }, user as any);
     
     return {
       success: true,
@@ -829,7 +981,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.notifyResponsableEquipeForValidation(body, user);
+    return this.financeService.notifyResponsableEquipeForValidation(body, user as any);
   }
 
   // === OV VALIDATION ENDPOINTS ===
@@ -874,7 +1026,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.validateOV(id, body.approved, body.comment, user);
+    return this.financeService.validateOV(id, body.approved, body.comment, user as any);
   }
 
   // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
@@ -947,6 +1099,287 @@ export class FinanceController {
     } catch (error) {
       console.error('❌ Failed to update OV status:', error);
       throw new BadRequestException('Failed to update status: ' + error.message);
+    }
+  }
+
+  // === UPLOAD PDF DOCUMENT LINKED TO BORDEREAU ===
+  @Post('upload-pdf-document')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadPdfDocument(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { bordereauId: string; documentType?: string; ordreVirementId?: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    if (!file) {
+      throw new BadRequestException('PDF file is required');
+    }
+    
+    if (file.mimetype !== 'application/pdf') {
+      throw new BadRequestException('Only PDF files are allowed');
+    }
+    
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Verify bordereau exists
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: body.bordereauId },
+        include: { client: true }
+      });
+      
+      if (!bordereau) {
+        throw new BadRequestException('Bordereau not found');
+      }
+      
+      // Get any existing user ID to avoid FK constraint
+      const anyUser = await this.prisma.user.findFirst();
+      if (!anyUser) {
+        throw new BadRequestException('No users found in system');
+      }
+      
+      // Find or create OrdreVirement for this bordereau
+      let ordreVirement = await this.prisma.ordreVirement.findFirst({
+        where: { bordereauId: body.bordereauId },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      if (!ordreVirement && body.ordreVirementId) {
+        ordreVirement = await this.prisma.ordreVirement.findUnique({
+          where: { id: body.ordreVirementId }
+        });
+      }
+      
+      if (!ordreVirement) {
+        // Create temporary OV if none exists
+        const donneurs = await this.prisma.donneurOrdre.findMany({ where: { statut: 'ACTIF' }, take: 1 });
+        if (donneurs.length === 0) {
+          throw new BadRequestException('No active donneur d\'ordre found');
+        }
+        
+        ordreVirement = await this.prisma.ordreVirement.create({
+          data: {
+            reference: `OV-${bordereau.reference}`,
+            donneurOrdreId: donneurs[0].id,
+            bordereauId: body.bordereauId,
+            utilisateurSante: user.id,
+            montantTotal: 0,
+            nombreAdherents: 0,
+            etatVirement: 'NON_EXECUTE'
+          }
+        });
+      }
+      
+      // Save file to disk
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const filename = `OV_${ordreVirement.id}_${Date.now()}_${file.originalname}`;
+      const filePath = path.join(uploadsDir, filename);
+      fs.writeFileSync(filePath, file.buffer);
+      
+      // Create OVDocument record (separate from Document table)
+      const ovDocument = await this.prisma.oVDocument.create({
+        data: {
+          name: file.originalname,
+          type: 'BORDEREAU_PDF',
+          path: filePath,
+          uploadedById: anyUser.id,
+          bordereauId: body.bordereauId,
+          ordreVirementId: ordreVirement.id
+        },
+        include: {
+          bordereau: { include: { client: true } },
+          ordreVirement: true
+        }
+      });
+      
+      console.log('✅ PDF document uploaded to OVDocument table:', {
+        ovDocumentId: ovDocument.id,
+        ordreVirementId: ordreVirement.id,
+        bordereauId: body.bordereauId,
+        filename: file.originalname,
+        filePath,
+        user: user.id
+      });
+      
+      return {
+        success: true,
+        message: 'Document PDF téléchargé et lié au bordereau avec succès',
+        document: {
+          id: ovDocument.id,
+          name: ovDocument.name,
+          bordereauReference: bordereau.reference,
+          clientName: bordereau.client.name,
+          uploadedAt: ovDocument.uploadedAt,
+          ordreVirementId: ordreVirement.id
+        }
+      };
+    } catch (error) {
+      console.error('❌ Failed to upload PDF document:', error);
+      throw new BadRequestException('Failed to upload PDF document: ' + error.message);
+    }
+  }
+
+  // === GENERATE AND STORE PDF/TXT ENDPOINTS ===
+  @Post('ordres-virement/:id/generate-pdf')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async generateAndStorePDF(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    try {
+      const pdfBuffer = await this.financeService['pdfGenerationService'].generateOVFromOrderId(id);
+      await this.financeService['storePDFInDatabase'](id, pdfBuffer, user as any);
+      
+      return {
+        success: true,
+        message: 'PDF généré et stocké avec succès',
+        ordreVirementId: id
+      };
+    } catch (error) {
+      console.error('Error generating and storing PDF:', error);
+      throw new BadRequestException('Failed to generate PDF: ' + error.message);
+    }
+  }
+
+  @Post('ordres-virement/:id/generate-txt')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async generateAndStoreTXT(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    try {
+      const txtContent = await this.financeService['txtGenerationService'].generateOVTxtFromOrderId(id);
+      await this.financeService['storeTXTInDatabase'](id, txtContent, user as any);
+      
+      return {
+        success: true,
+        message: 'TXT généré et stocké avec succès',
+        ordreVirementId: id
+      };
+    } catch (error) {
+      console.error('Error generating and storing TXT:', error);
+      throw new BadRequestException('Failed to generate TXT: ' + error.message);
+    }
+  }
+
+  // === GET OV DOCUMENTS ===
+  @Get('ordres-virement/:id/documents')
+  async getOVDocuments(@Param('id') id: string) {
+    try {
+      console.log('🔍 Fetching OV documents for ordreVirementId:', id);
+      
+      // Also check what OV this ID belongs to
+      const ov = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        select: { id: true, reference: true, bordereauId: true }
+      });
+      console.log('📝 OV Details:', ov);
+      
+      // Check all OVDocuments for this bordereau
+      if (ov?.bordereauId) {
+        const allDocsForBordereau = await this.prisma.oVDocument.findMany({
+          where: { bordereauId: ov.bordereauId },
+          select: { id: true, name: true, ordreVirementId: true, type: true }
+        });
+        console.log(`📄 All OVDocuments for bordereau ${ov.bordereauId}:`, allDocsForBordereau);
+      }
+      
+      const documents = await this.prisma.oVDocument.findMany({
+        where: { ordreVirementId: id },
+        include: {
+          bordereau: { include: { client: true } },
+          uploader: { select: { id: true, fullName: true, email: true } }
+        },
+        orderBy: { uploadedAt: 'desc' }
+      });
+      
+      console.log(`✅ Found ${documents.length} OV documents for this OV:`, documents.map(d => ({ id: d.id, name: d.name, type: d.type })));
+      
+      return documents;
+    } catch (error) {
+      console.error('❌ Error fetching OV documents:', error);
+      throw new BadRequestException('Failed to fetch OV documents');
+    }
+  }
+
+  // === VIEW OV DOCUMENT PDF ===
+  @Get('ordres-virement/:id/documents/:docId/pdf')
+  async viewOVDocumentPDF(
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+    @Res() res: Response
+  ) {
+    try {
+      console.log('📝 Fetching PDF document:', { ovId: id, docId });
+      
+      const document = await this.prisma.oVDocument.findUnique({
+        where: { id: docId }
+      });
+      
+      if (!document) {
+        console.error('❌ Document not found in database:', docId);
+        throw new BadRequestException('Document not found');
+      }
+      
+      console.log('📄 Document found:', { name: document.name, path: document.path });
+      
+      const fs = require('fs');
+      if (fs.existsSync(document.path)) {
+        console.log('✅ PDF file exists on disk, reading...');
+        const pdfBuffer = fs.readFileSync(document.path);
+        console.log('✅ PDF loaded, size:', pdfBuffer.length, 'bytes');
+        res.set({
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${document.name}"`,
+          'Content-Length': pdfBuffer.length
+        });
+        res.send(pdfBuffer);
+      } else {
+        console.error('❌ PDF file not found on disk:', document.path);
+        throw new BadRequestException(`PDF file not found on disk: ${document.path}`);
+      }
+    } catch (error) {
+      console.error('❌ Error viewing OV document PDF:', error);
+      res.status(500).json({ error: 'Failed to load PDF', details: error.message });
+    }
+  }
+
+  // === GET OV DOCUMENTS BY BORDEREAU ===
+  @Get('ov-documents/bordereau/:bordereauId')
+  async getOVDocumentsByBordereau(@Param('bordereauId') bordereauId: string) {
+    try {
+      console.log('🔍 Fetching OV documents for bordereauId:', bordereauId);
+      
+      const documents = await this.prisma.oVDocument.findMany({
+        where: { bordereauId },
+        include: {
+          ordreVirement: { select: { id: true, reference: true } },
+          uploader: { select: { id: true, fullName: true } }
+        },
+        orderBy: { uploadedAt: 'desc' }
+      });
+      
+      console.log(`✅ Found ${documents.length} documents:`, documents.map(d => ({
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        ordreVirementId: d.ordreVirementId
+      })));
+      
+      return documents;
+    } catch (error) {
+      console.error('❌ Error fetching OV documents by bordereau:', error);
+      throw new BadRequestException('Failed to fetch documents');
     }
   }
 }

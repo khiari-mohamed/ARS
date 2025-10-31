@@ -33,6 +33,10 @@ import {
   FilterList,
   Refresh
 } from '@mui/icons-material';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DashboardStats {
   totalOrdres: number;
@@ -59,12 +63,14 @@ interface RecentOrdre {
 }
 
 const FinanceDashboard: React.FC = () => {
+  const { user } = useAuth();
   const [dashboard, setDashboard] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     compagnie: '',
     client: '',
+    referenceBordereau: '',
     dateFrom: '',
     dateTo: ''
   });
@@ -72,11 +78,17 @@ const FinanceDashboard: React.FC = () => {
   const [recentOrdersFilters, setRecentOrdersFilters] = useState({
     compagnie: '',
     client: '',
+    referenceBordereau: '',
     dateFrom: '',
     dateTo: ''
   });
   const [showRecentOrdersFilters, setShowRecentOrdersFilters] = useState(false);
   const [showAllRecentOrders, setShowAllRecentOrders] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [documentViewer, setDocumentViewer] = useState<{open: boolean, url: string, title: string, type: 'pdf' | 'txt'}>({
+    open: false, url: '', title: '', type: 'pdf'
+  });
 
   const loadDashboard = async () => {
     try {
@@ -86,6 +98,7 @@ const FinanceDashboard: React.FC = () => {
       const queryParams = new URLSearchParams();
       if (filters.compagnie) queryParams.append('compagnie', filters.compagnie);
       if (filters.client) queryParams.append('client', filters.client);
+      if (filters.referenceBordereau) queryParams.append('referenceBordereau', filters.referenceBordereau);
       if (filters.dateFrom) queryParams.append('dateFrom', filters.dateFrom);
       if (filters.dateTo) queryParams.append('dateTo', filters.dateTo);
       
@@ -124,13 +137,19 @@ const FinanceDashboard: React.FC = () => {
   };
   
   const clearFilters = () => {
-    setFilters({ compagnie: '', client: '', dateFrom: '', dateTo: '' });
+    setFilters({ compagnie: '', client: '', referenceBordereau: '', dateFrom: '', dateTo: '' });
     setTimeout(() => loadDashboard(), 100);
   };
   
   const clearRecentOrdersFilters = () => {
-    setRecentOrdersFilters({ compagnie: '', client: '', dateFrom: '', dateTo: '' });
+    setRecentOrdersFilters({ compagnie: '', client: '', referenceBordereau: '', dateFrom: '', dateTo: '' });
+    setCurrentPage(1);
   };
+
+  // Reset page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [recentOrdersFilters.compagnie, recentOrdersFilters.client, recentOrdersFilters.referenceBordereau, recentOrdersFilters.dateFrom, recentOrdersFilters.dateTo]);
 
   useEffect(() => {
     loadDashboard();
@@ -169,7 +188,7 @@ const FinanceDashboard: React.FC = () => {
 
   const renderStatsCards = () => (
     <Grid container spacing={3} sx={{ mb: 3 }}>
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2.4}>
         <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -187,7 +206,7 @@ const FinanceDashboard: React.FC = () => {
         </Card>
       </Grid>
 
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2.4}>
         <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -205,7 +224,7 @@ const FinanceDashboard: React.FC = () => {
         </Card>
       </Grid>
 
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2.4}>
         <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -223,7 +242,25 @@ const FinanceDashboard: React.FC = () => {
         </Card>
       </Grid>
 
-      <Grid item xs={12} sm={6} md={3}>
+      <Grid item xs={12} sm={6} md={2.4}>
+        <Card elevation={2}>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box>
+                <Typography color="textSecondary" gutterBottom variant="body2">
+                  Rejetés
+                </Typography>
+                <Typography variant="h4" color="error.main">
+                  {stats.ordresRejetes}
+                </Typography>
+              </Box>
+              <Error color="error" fontSize="large" />
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={2.4}>
         <Card elevation={2}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -248,13 +285,19 @@ const FinanceDashboard: React.FC = () => {
     
     if (recentOrdersFilters.compagnie) {
       filtered = filtered.filter((ordre: any) => 
-        ordre.client?.toLowerCase().includes(recentOrdersFilters.compagnie.toLowerCase())
+        ordre.compagnieAssurance?.toLowerCase().includes(recentOrdersFilters.compagnie.toLowerCase())
       );
     }
     
     if (recentOrdersFilters.client) {
       filtered = filtered.filter((ordre: any) => 
         ordre.client?.toLowerCase().includes(recentOrdersFilters.client.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.referenceBordereau) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.referenceBordereau?.toLowerCase().includes(recentOrdersFilters.referenceBordereau.toLowerCase())
       );
     }
     
@@ -270,7 +313,61 @@ const FinanceDashboard: React.FC = () => {
       );
     }
     
-    return showAllRecentOrders ? filtered : filtered.slice(0, 10);
+    // Sort by dateExecution first (most recent), then by dateCreation (most recent first)
+    filtered = filtered.sort((a: any, b: any) => {
+      const dateA = new Date(a.dateExecution || a.dateCreation).getTime();
+      const dateB = new Date(b.dateExecution || b.dateCreation).getTime();
+      return dateB - dateA;
+    });
+    
+    if (showAllRecentOrders) {
+      return filtered;
+    } else {
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return filtered.slice(startIndex, endIndex);
+    }
+  };
+
+  const getTotalFilteredCount = () => {
+    let filtered = ordresVirement || [];
+    
+    if (recentOrdersFilters.compagnie) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.compagnieAssurance?.toLowerCase().includes(recentOrdersFilters.compagnie.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.client) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.client?.toLowerCase().includes(recentOrdersFilters.client.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.referenceBordereau) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.referenceBordereau?.toLowerCase().includes(recentOrdersFilters.referenceBordereau.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.dateFrom) {
+      filtered = filtered.filter((ordre: any) => 
+        new Date(ordre.dateCreation) >= new Date(recentOrdersFilters.dateFrom)
+      );
+    }
+    
+    if (recentOrdersFilters.dateTo) {
+      filtered = filtered.filter((ordre: any) => 
+        new Date(ordre.dateCreation) <= new Date(recentOrdersFilters.dateTo)
+      );
+    }
+    
+    return filtered.length;
+  };
+
+  const getTotalPages = () => {
+    const totalCount = getTotalFilteredCount();
+    return Math.ceil(totalCount / itemsPerPage);
   };
 
   const renderRecentOrdres = () => {
@@ -280,7 +377,14 @@ const FinanceDashboard: React.FC = () => {
       <Card elevation={2}>
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">Bloc Ordres de virement récents</Typography>
+            <Box>
+              <Typography variant="h6">Bloc Ordres de virement récents</Typography>
+              {user?.role === 'CHEF_EQUIPE' && (
+                <Typography variant="caption" color="info.main" sx={{ fontStyle: 'italic' }}>
+                  Affichage limité aux ordres de votre équipe
+                </Typography>
+              )}
+            </Box>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
                 variant="outlined"
@@ -293,9 +397,33 @@ const FinanceDashboard: React.FC = () => {
               <Button
                 variant={showAllRecentOrders ? 'contained' : 'outlined'}
                 size="small"
-                onClick={() => setShowAllRecentOrders(!showAllRecentOrders)}
+                onClick={() => {
+                  setShowAllRecentOrders(!showAllRecentOrders);
+                  setCurrentPage(1);
+                }}
               >
                 {showAllRecentOrders ? 'Réduire' : 'Afficher tout'}
+              </Button>
+              <Button 
+                variant="outlined" 
+                size="small"
+                onClick={async () => {
+                  try {
+                    const { financeService } = await import('../../services/financeService');
+                    await financeService.exportDashboardExcel({
+                      compagnie: recentOrdersFilters.compagnie,
+                      client: recentOrdersFilters.client,
+                      dateFrom: recentOrdersFilters.dateFrom,
+                      dateTo: recentOrdersFilters.dateTo
+                    });
+                  } catch (error) {
+                    console.error('Export failed:', error);
+                    alert('Erreur lors de l\'export Excel');
+                  }
+                }}
+                startIcon={<Assignment />}
+              >
+                Export Excel
               </Button>
               <Button 
                 variant="outlined" 
@@ -308,12 +436,12 @@ const FinanceDashboard: React.FC = () => {
             </Box>
           </Box>
           
-          {/* EXACT SPEC: Filtres - Compagnie d'assurance / Client / Période */}
+          {/* EXACT SPEC: Filtres - Compagnie d'assurance / Client / Référence Bordereau / Période */}
           {showRecentOrdersFilters && (
             <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>Filtres : Compagnie d'assurance / Client / Période</Typography>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>Filtres : Compagnie d'assurance / Client / Référence Bordereau / Période</Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={3}>
+                <Grid item xs={12} md={2.5}>
                   <TextField
                     fullWidth
                     label="Compagnie d'assurance"
@@ -322,13 +450,23 @@ const FinanceDashboard: React.FC = () => {
                     size="small"
                   />
                 </Grid>
-                <Grid item xs={12} md={3}>
+                <Grid item xs={12} md={2.5}>
                   <TextField
                     fullWidth
                     label="Client"
                     value={recentOrdersFilters.client}
                     onChange={(e) => handleRecentOrdersFilterChange('client', e.target.value)}
                     size="small"
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField
+                    fullWidth
+                    label="Référence Bordereau"
+                    value={recentOrdersFilters.referenceBordereau}
+                    onChange={(e) => handleRecentOrdersFilterChange('referenceBordereau', e.target.value)}
+                    size="small"
+                    placeholder="Ex: BORD-2024-001"
                   />
                 </Grid>
                 <Grid item xs={12} md={2}>
@@ -353,7 +491,7 @@ const FinanceDashboard: React.FC = () => {
                     size="small"
                   />
                 </Grid>
-                <Grid item xs={12} md={2}>
+                <Grid item xs={12} md={1}>
                   <Button 
                     variant="outlined" 
                     onClick={clearRecentOrdersFilters} 
@@ -373,29 +511,47 @@ const FinanceDashboard: React.FC = () => {
               <TableHead>
                 <TableRow>
                   <TableCell><strong>Référence OV</strong></TableCell>
+                  <TableCell><strong>Référence Bordereau</strong></TableCell>
+                  <TableCell><strong>Compagnie d'Assurance</strong></TableCell>
                   <TableCell><strong>Client / Société</strong></TableCell>
+                  <TableCell><strong>Bordereau</strong></TableCell>
                   <TableCell><strong>Montant</strong></TableCell>
                   <TableCell><strong>Statut</strong></TableCell>
-                  <TableCell><strong>Date</strong></TableCell>
-                  <TableCell><strong>Demande de récupération</strong></TableCell>
-                  <TableCell><strong>Montant récupéré</strong></TableCell>
+                  <TableCell><strong>Date d'Exécution</strong></TableCell>
+                  <TableCell><strong>Motif/Observations</strong></TableCell>
+                  <TableCell><strong>Demande Récupération</strong></TableCell>
+                  <TableCell><strong>Montant Récupéré</strong></TableCell>
+                  <TableCell><strong>Documents</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredOrders.map((ordre: any, index: number) => (
                   <TableRow key={ordre.id || index} hover>
                     <TableCell>{ordre.reference}</TableCell>
+                    <TableCell>{ordre.referenceBordereau || '-'}</TableCell>
+                    <TableCell>{ordre.compagnieAssurance || '-'}</TableCell>
                     <TableCell>{ordre.client}</TableCell>
+                    <TableCell>{ordre.bordereau}</TableCell>
                     <TableCell>{ordre.montant?.toLocaleString('fr-TN')} TND</TableCell>
                     <TableCell>
                       <Chip
                         label={ordre.statut}
-                        color={ordre.statut === 'EXECUTE' ? 'success' : ordre.statut === 'REJETE' ? 'error' : 'default'}
+                        color={['EXECUTE', 'VIREMENT_DEPOSE'].includes(ordre.statut) ? 'success' : ['REJETE', 'VIREMENT_NON_VALIDE'].includes(ordre.statut) ? 'error' : 'default'}
                         size="small"
                       />
                     </TableCell>
                     <TableCell>
-                      {new Date(ordre.dateCreation).toLocaleDateString('fr-FR')}
+                      {ordre.dateExecution ? new Date(ordre.dateExecution).toLocaleDateString('fr-FR') : '-'}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      {/* EXACT SPEC: Don't display observation written by Responsable Département */}
+                      <Typography variant="body2" sx={{ 
+                        wordBreak: 'break-word',
+                        whiteSpace: 'pre-wrap',
+                        fontSize: '0.875rem'
+                      }}>
+                        {ordre.statut === 'VIREMENT_NON_VALIDE' ? '-' : (ordre.motifObservation || '-')}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       {ordre.demandeRecuperation ? (
@@ -425,6 +581,102 @@ const FinanceDashboard: React.FC = () => {
                         <Chip label="Non" color="default" size="small" />
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={async () => {
+                            try {
+                              const { LocalAPI } = await import('../../services/axios');
+                              const response = await LocalAPI.get(`/finance/ordres-virement/${ordre.id}/pdf`, {
+                                responseType: 'blob'
+                              });
+                              const blob = new Blob([response.data], { type: 'application/pdf' });
+                              const blobUrl = URL.createObjectURL(blob);
+                              setDocumentViewer({
+                                open: true,
+                                url: blobUrl,
+                                title: `PDF OV - ${ordre.reference}`,
+                                type: 'pdf'
+                              });
+                            } catch (error) {
+                              console.error('Error loading PDF:', error);
+                              alert('Erreur lors du chargement du PDF');
+                            }
+                          }}
+                        >
+                          PDF OV
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={async () => {
+                            try {
+                              const { LocalAPI } = await import('../../services/axios');
+                              const response = await LocalAPI.get(`/finance/ordres-virement/${ordre.id}/txt`, {
+                                responseType: 'blob'
+                              });
+                              const blob = new Blob([response.data], { type: 'text/plain' });
+                              const blobUrl = URL.createObjectURL(blob);
+                              setDocumentViewer({
+                                open: true,
+                                url: blobUrl,
+                                title: `TXT - ${ordre.reference}`,
+                                type: 'txt'
+                              });
+                            } catch (error) {
+                              console.error('Error loading TXT:', error);
+                              alert('Erreur lors du chargement du TXT');
+                            }
+                          }}
+                        >
+                          TXT
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="secondary"
+                          onClick={async () => {
+                            try {
+                              const { LocalAPI } = await import('../../services/axios');
+                              const ovResponse = await LocalAPI.get(`/finance/ordres-virement/${ordre.id}`);
+                              const ov = ovResponse.data;
+                              
+                              if (!ov.bordereauId) {
+                                alert('Aucun bordereau lié à cet OV');
+                                return;
+                              }
+                              
+                              const response = await LocalAPI.get(`/finance/ov-documents/bordereau/${ov.bordereauId}`);
+                              const ovDocuments = response.data;
+                              const pdfDoc = ovDocuments.find((doc: any) => doc.type === 'BORDEREAU_PDF');
+                              
+                              if (pdfDoc) {
+                                const docResponse = await LocalAPI.get(`/finance/ordres-virement/${pdfDoc.ordreVirementId}/documents/${pdfDoc.id}/pdf`, {
+                                  responseType: 'blob'
+                                });
+                                const blob = new Blob([docResponse.data], { type: 'application/pdf' });
+                                const blobUrl = URL.createObjectURL(blob);
+                                setDocumentViewer({
+                                  open: true,
+                                  url: blobUrl,
+                                  title: `PDF Uploadé - ${pdfDoc.name}`,
+                                  type: 'pdf'
+                                });
+                              } else {
+                                alert('Aucun PDF uploadé trouvé');
+                              }
+                            } catch (error: any) {
+                              console.error('Error loading bordereau PDF:', error);
+                              alert(`Erreur: ${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
+                            }
+                          }}
+                        >
+                          PDF Bordereau
+                        </Button>
+                      </Box>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -433,13 +685,13 @@ const FinanceDashboard: React.FC = () => {
         ) : (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body1" color="textSecondary">
-              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) 
+              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) 
                 ? 'Aucun ordre de virement trouvé avec ces filtres' 
                 : 'Aucun ordre de virement récent'
               }
             </Typography>
             <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo)
+              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo)
                 ? 'Essayez de modifier les critères de recherche'
                 : 'Les ordres de virement apparaîtront ici une fois créés'
               }
@@ -447,18 +699,44 @@ const FinanceDashboard: React.FC = () => {
           </Box>
         )}
         
-        {/* Show count info */}
+        {/* Pagination and count info */}
         {filteredOrders.length > 0 && (
-          <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-            <Typography variant="caption" color="textSecondary">
-              {showAllRecentOrders 
-                ? `Affichage de tous les ${filteredOrders.length} ordres`
-                : `Affichage de ${Math.min(10, filteredOrders.length)} sur ${(ordresVirement || []).length} ordres`
-              }
-              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) && 
-                ' (filtrés)'
-              }
-            </Typography>
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="caption" color="textSecondary">
+                {showAllRecentOrders 
+                  ? `Affichage de tous les ${filteredOrders.length} ordres`
+                  : `Affichage de ${Math.min(itemsPerPage, filteredOrders.length)} sur ${getTotalFilteredCount()} ordres (Page ${currentPage}/${getTotalPages()})`
+                }
+                {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) && 
+                  ' (filtrés)'
+                }
+              </Typography>
+              
+              {!showAllRecentOrders && getTotalPages() > 1 && (
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Button 
+                    size="small" 
+                    variant="outlined"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                  >
+                    Précédent
+                  </Button>
+                  <Typography variant="caption" sx={{ mx: 1 }}>
+                    {currentPage} / {getTotalPages()}
+                  </Typography>
+                  <Button 
+                    size="small" 
+                    variant="outlined"
+                    disabled={currentPage === getTotalPages()}
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                  >
+                    Suivant
+                  </Button>
+                </Box>
+              )}
+            </Box>
           </Box>
         )}
       </CardContent>
@@ -491,12 +769,12 @@ const FinanceDashboard: React.FC = () => {
         </Box>
       </Box>
       
-      {/* EXACT SPEC: Filtres disponibles - Compagnie d'assurance, Client, Période */}
+      {/* EXACT SPEC: Filtres disponibles - Compagnie d'assurance, Client, Référence Bordereau, Période */}
       {showFilters && (
         <Paper sx={{ p: 2, mb: 3, bgcolor: '#f8f9fa' }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Filtres disponibles</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2.5}>
               <TextField
                 fullWidth
                 label="Compagnie d'assurance"
@@ -506,7 +784,7 @@ const FinanceDashboard: React.FC = () => {
                 placeholder="Filtrer par compagnie"
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2.5}>
               <TextField
                 fullWidth
                 label="Client"
@@ -514,6 +792,16 @@ const FinanceDashboard: React.FC = () => {
                 onChange={(e) => handleFilterChange('client', e.target.value)}
                 size="small"
                 placeholder="Filtrer par client"
+              />
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <TextField
+                fullWidth
+                label="Référence Bordereau"
+                value={filters.referenceBordereau}
+                onChange={(e) => handleFilterChange('referenceBordereau', e.target.value)}
+                size="small"
+                placeholder="Ex: BORD-2024-001"
               />
             </Grid>
             <Grid item xs={12} md={2}>
@@ -538,7 +826,7 @@ const FinanceDashboard: React.FC = () => {
                 size="small"
               />
             </Grid>
-            <Grid item xs={12} md={2}>
+            <Grid item xs={12} md={1}>
               <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
                 <Button variant="contained" onClick={applyFilters} size="small" fullWidth>
                   Appliquer
@@ -607,6 +895,78 @@ const FinanceDashboard: React.FC = () => {
           </Grid>
         </Grid>
       )}
+
+      {/* Document Viewer Dialog */}
+      <Dialog 
+        open={documentViewer.open} 
+        onClose={() => setDocumentViewer({open: false, url: '', title: '', type: 'pdf'})} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{ sx: { height: '90vh' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">{documentViewer.title}</Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {documentViewer.type === 'txt' && documentViewer.url && (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = documentViewer.url;
+                  link.download = documentViewer.title.replace('TXT - ', '') + '.txt';
+                  link.click();
+                }}
+              >
+                Télécharger
+              </Button>
+            )}
+            <Button 
+              onClick={() => setDocumentViewer({open: false, url: '', title: '', type: 'pdf'})}
+              size="small"
+            >
+              Fermer
+            </Button>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, height: '100%' }}>
+          {documentViewer.url ? (
+            documentViewer.type === 'pdf' ? (
+              <iframe
+                src={documentViewer.url}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title={documentViewer.title}
+              />
+            ) : (
+              <Box sx={{ p: 2, height: '100%', overflow: 'auto', backgroundColor: '#f5f5f5' }}>
+                <iframe
+                  src={documentViewer.url}
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    border: '1px solid #ddd', 
+                    backgroundColor: 'white',
+                    fontFamily: 'monospace',
+                    fontSize: '14px'
+                  }}
+                  title={documentViewer.title}
+                />
+              </Box>
+            )
+          ) : (
+            <Box sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '100%',
+              fontSize: '18px',
+              color: '#666'
+            }}>
+              Chargement du document...
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

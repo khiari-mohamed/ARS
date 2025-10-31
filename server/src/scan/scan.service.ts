@@ -896,7 +896,11 @@ export class ScanService {
   // Get SCAN queue with all required data per cahier de charge
   async getScanQueue() {
     return this.prisma.bordereau.findMany({
-      where: { statut: 'A_SCANNER' },
+      where: { 
+        statut: { 
+          in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'] 
+        }
+      },
       include: {
         client: {
           select: {
@@ -917,6 +921,35 @@ export class ScanService {
         }
       },
       orderBy: { dateReception: 'asc' }
+    });
+  }
+
+  // Get bordereaux returned to scan for correction
+  async getReturnedBordereaux() {
+    return this.prisma.bordereau.findMany({
+      where: { 
+        documentStatus: 'RETOURNER_AU_SCAN'
+      },
+      include: {
+        client: {
+          select: {
+            name: true,
+            gestionnaires: {
+              select: { id: true, fullName: true, role: true }
+            }
+          }
+        },
+        contract: {
+          select: {
+            delaiReglement: true,
+            delaiReclamation: true
+          }
+        },
+        documents: {
+          select: { id: true, name: true, type: true, status: true, uploadedAt: true }
+        }
+      },
+      orderBy: { updatedAt: 'desc' }
     });
   }
 
@@ -1414,6 +1447,185 @@ export class ScanService {
     });
 
     return result;
+  }
+
+  // Document correction and replacement functionality
+  async replaceDocument(bordereauId: string, documentName: string, newFile: Express.Multer.File, userId: string) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const crypto = require('crypto');
+
+      // Find existing document
+      const existingDoc = await this.prisma.document.findFirst({
+        where: {
+          bordereauId,
+          name: documentName
+        }
+      });
+
+      if (!existingDoc) {
+        throw new Error('Document original non trouvé');
+      }
+
+      // Generate new file hash
+      const fileHash = crypto.createHash('md5').update(newFile.buffer).digest('hex');
+      
+      // Save new file
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'corrections');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const newFilePath = path.join(uploadsDir, `${Date.now()}_${newFile.originalname}`);
+      fs.writeFileSync(newFilePath, newFile.buffer);
+      
+      // Update document record
+      const updatedDoc = await this.prisma.document.update({
+        where: { id: existingDoc.id },
+        data: {
+          name: newFile.originalname, // Update name to new file name
+          path: path.relative(process.cwd(), newFilePath),
+          hash: fileHash,
+          status: 'UPLOADED',
+          uploadedAt: new Date()
+        }
+      });
+
+      // Log correction
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'DOCUMENT_REPLACED',
+          details: {
+            bordereauId,
+            documentId: existingDoc.id,
+            documentName,
+            originalPath: existingDoc.path,
+            newPath: updatedDoc.path,
+            newFileName: newFile.originalname
+          }
+        }
+      });
+
+      // Reset bordereau documentStatus if it was marked for correction
+      await this.prisma.bordereau.updateMany({
+        where: { 
+          id: bordereauId,
+          documentStatus: 'RETOURNER_AU_SCAN'
+        },
+        data: { documentStatus: 'NORMAL' }
+      });
+
+      return { success: true, document: updatedDoc };
+    } catch (error) {
+      this.logger.error('Document replacement failed:', error);
+      throw error;
+    }
+  }
+
+  async addMissingDocument(bordereauId: string, newFile: Express.Multer.File, documentType: string, userId: string) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const crypto = require('crypto');
+
+      // Generate file hash
+      const fileHash = crypto.createHash('md5').update(newFile.buffer).digest('hex');
+      
+      // Save file
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'missing-docs');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const filePath = path.join(uploadsDir, `${Date.now()}_${newFile.originalname}`);
+      fs.writeFileSync(filePath, newFile.buffer);
+      
+      // Create document record
+      const newDoc = await this.prisma.document.create({
+        data: {
+          name: newFile.originalname,
+          type: this.mapToDocumentType(documentType),
+          path: path.relative(process.cwd(), filePath),
+          uploadedById: userId,
+          bordereauId,
+          hash: fileHash,
+          status: 'UPLOADED'
+        }
+      });
+
+      // Log addition
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'MISSING_DOCUMENT_ADDED',
+          details: {
+            bordereauId,
+            documentId: newDoc.id,
+            documentName: newFile.originalname,
+            documentType
+          }
+        }
+      });
+
+      // Reset bordereau documentStatus if it was marked for correction
+      await this.prisma.bordereau.updateMany({
+        where: { 
+          id: bordereauId,
+          documentStatus: 'RETOURNER_AU_SCAN'
+        },
+        data: { documentStatus: 'NORMAL' }
+      });
+
+      return { success: true, document: newDoc };
+    } catch (error) {
+      this.logger.error('Missing document addition failed:', error);
+      throw error;
+    }
+  }
+
+  async getBordereauDocuments(bordereauId: string) {
+    return this.prisma.document.findMany({
+      where: { bordereauId },
+      orderBy: { uploadedAt: 'asc' }
+    });
+  }
+
+  // Complete corrections and reset documentStatus
+  async completeCorrections(bordereauId: string, userId: string) {
+    try {
+      // Reset documentStatus to NORMAL and set to A_SCANNER for re-scanning
+      const updatedBordereau = await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { 
+          documentStatus: 'NORMAL',
+          statut: 'A_SCANNER' // Now ready for re-scanning
+        }
+      });
+
+      // Log completion
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'CORRECTIONS_COMPLETED',
+          details: {
+            bordereauId,
+            reference: updatedBordereau.reference,
+            completedAt: new Date().toISOString()
+          }
+        }
+      });
+
+      return { 
+        success: true, 
+        message: 'Corrections terminées - Bordereau prêt pour re-scan',
+        bordereau: updatedBordereau
+      };
+    } catch (error) {
+      this.logger.error('Failed to complete corrections:', error);
+      throw error;
+    }
   }
 
   // NEW: Map old document types to new enum

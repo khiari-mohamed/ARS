@@ -35,7 +35,7 @@ export class ClientController {
 
 
   @Post()
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE)
   async create(@Body() dto: CreateClientDto) {
     // Validate input
     if (!dto.name || typeof dto.reglementDelay !== 'number' || typeof dto.reclamationDelay !== 'number') {

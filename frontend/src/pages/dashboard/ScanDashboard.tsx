@@ -53,7 +53,13 @@ const ScanDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
   
-  const bordereauxToScan = bordereauxData;
+  // CRITICAL: Deduplicate again before rendering to ensure no duplicates
+  const bordereauxToScan = Array.from(
+    new Map(bordereauxData.map((b: BordereauItem) => [b.id, b])).values()
+  ) as BordereauItem[];
+  
+  console.log('📊 bordereauxToScan length:', bordereauxToScan.length);
+  console.log('📊 bordereauxToScan IDs:', bordereauxToScan.map(b => b.id));
 
   const pendingScan = bordereauxToScan.filter(b => b.scanStatus === 'NON_SCANNE');
   const inProgress = bordereauxToScan.filter(b => b.scanStatus === 'SCAN_EN_COURS');

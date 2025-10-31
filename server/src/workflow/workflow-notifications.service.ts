@@ -59,10 +59,22 @@ export class WorkflowNotificationsService {
 
     switch (status) {
       case 'A_SCANNER':
-        // BO → SCAN notification
+        // BO → SCAN notification OR Chef rejection → SCAN
         const scanUsers = await this.prisma.user.findMany({
           where: { role: 'SCAN_TEAM', active: true }
         });
+        
+        // If this is a rejection from SCANNE status, update documentStatus but keep SCANNE status
+        if (fromStatus === 'SCANNE') {
+          await this.prisma.bordereau.update({
+            where: { id: bordereau.id },
+            data: { 
+              documentStatus: 'RETOURNER_AU_SCAN',
+              statut: 'SCANNE' // Keep as SCANNE, don't change to A_SCANNER
+            }
+          });
+        }
+        
         if (scanUsers.length === 0) {
           // Fallback to SCAN role
           const fallbackScanUsers = await this.prisma.user.findMany({
@@ -70,18 +82,32 @@ export class WorkflowNotificationsService {
           });
           notifications.push(...fallbackScanUsers.map((user: any) => ({
             userId: user.id,
-            type: 'WORKFLOW_ASSIGNMENT',
-            title: 'Nouveau bordereau à scanner',
-            message: `Bordereau ${bordereau.reference} (${bordereau.client?.name}) prêt pour numérisation`,
-            data: { bordereauId: bordereau.id, action: 'SCAN' }
+            type: fromStatus === 'SCANNE' ? 'BORDEREAU_REJECTED' : 'WORKFLOW_ASSIGNMENT',
+            title: fromStatus === 'SCANNE' ? 'Bordereau rejeté - Correction requise' : 'Nouveau bordereau à scanner',
+            message: fromStatus === 'SCANNE' 
+              ? `Bordereau ${bordereau.reference} rejeté par le chef d'équipe - Correction nécessaire`
+              : `Bordereau ${bordereau.reference} (${bordereau.client?.name}) prêt pour numérisation`,
+            data: { 
+              bordereauId: bordereau.id, 
+              action: fromStatus === 'SCANNE' ? 'CORRECT_SCAN' : 'SCAN', 
+              fromStatus,
+              redirectUrl: fromStatus === 'SCANNE' ? `/scan-dashboard?rejected-bordereau=${bordereau.id}` : undefined
+            }
           })));
         } else {
           notifications.push(...scanUsers.map((user: any) => ({
             userId: user.id,
-            type: 'WORKFLOW_ASSIGNMENT',
-            title: 'Nouveau bordereau à scanner',
-            message: `Bordereau ${bordereau.reference} (${bordereau.client?.name}) prêt pour numérisation`,
-            data: { bordereauId: bordereau.id, action: 'SCAN' }
+            type: fromStatus === 'SCANNE' ? 'BORDEREAU_REJECTED' : 'WORKFLOW_ASSIGNMENT',
+            title: fromStatus === 'SCANNE' ? 'Bordereau rejeté - Correction requise' : 'Nouveau bordereau à scanner',
+            message: fromStatus === 'SCANNE' 
+              ? `Bordereau ${bordereau.reference} rejeté par le chef d'équipe - Correction nécessaire`
+              : `Bordereau ${bordereau.reference} (${bordereau.client?.name}) prêt pour numérisation`,
+            data: { 
+              bordereauId: bordereau.id, 
+              action: fromStatus === 'SCANNE' ? 'CORRECT_SCAN' : 'SCAN', 
+              fromStatus,
+              redirectUrl: fromStatus === 'SCANNE' ? `/scan-dashboard?rejected-bordereau=${bordereau.id}` : undefined
+            }
           })));
         }
         break;

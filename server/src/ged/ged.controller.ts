@@ -337,10 +337,99 @@ async uploadDocument(
     return this.gedService.createDocumentRecord(body, user);
   }
 
+  // Serve document file
+  @Get(':id/file')
+  async serveDocumentFile(@Param('id') id: string, @Req() req: any, @Res() res: any) {
+    const user = getUserFromRequest(req);
+    const document = await this.gedService.getDocumentById(id, user);
+    
+    if (!document.path) {
+      return res.status(404).json({ error: 'Document file not found' });
+    }
+    
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.resolve(document.path);
+      
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found on disk' });
+      }
+      
+      const fileContent = fs.readFileSync(filePath);
+      const mimeType = document.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+      
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${document.name}"`);
+      res.send(fileContent);
+    } catch (error) {
+      console.error('Error serving document file:', error);
+      res.status(500).json({ error: 'Failed to serve document file' });
+    }
+  }
+
   // Catch-all route MUST BE LAST
   @Get(':id')
-  async getDocument(@Param('id') id: string, @Req() req: any) {
+  async getDocument(@Param('id') id: string, @Req() req: any, @Res() res: any) {
     const user = getUserFromRequest(req);
-    return this.gedService.getDocumentById(id, user);
+    const document = await this.gedService.getDocumentById(id, user);
+    
+    // If this is a direct file request (based on Accept header), serve the file
+    const acceptHeader = req.headers.accept || '';
+    if (acceptHeader.includes('application/pdf') || acceptHeader.includes('*/*')) {
+      if (!document.path) {
+        return res.status(404).json({ error: 'Document file not found' });
+      }
+      
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Try multiple possible paths
+        const possiblePaths = [
+          path.resolve(document.path),
+          path.resolve(process.cwd(), document.path),
+          path.resolve(process.cwd(), 'uploads', document.name),
+          path.resolve(process.cwd(), 'uploads', path.basename(document.path))
+        ];
+        
+        console.log('🔍 Looking for document file:', {
+          documentId: document.id,
+          storedPath: document.path,
+          possiblePaths
+        });
+        
+        let filePath = null;
+        for (const testPath of possiblePaths) {
+          if (fs.existsSync(testPath)) {
+            filePath = testPath;
+            console.log('✅ Found file at:', filePath);
+            break;
+          }
+        }
+        
+        if (!filePath) {
+          console.error('❌ File not found at any path:', possiblePaths);
+          return res.status(404).json({ 
+            error: 'File not found on disk',
+            storedPath: document.path,
+            searchedPaths: possiblePaths
+          });
+        }
+        
+        const fileContent = fs.readFileSync(filePath);
+        const mimeType = document.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+        
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', `inline; filename="${document.name}"`);
+        res.send(fileContent);
+      } catch (error) {
+        console.error('Error serving document file:', error);
+        res.status(500).json({ error: 'Failed to serve document file' });
+      }
+    } else {
+      // Return document metadata as JSON
+      res.json(document);
+    }
   }
 }

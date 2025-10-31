@@ -82,7 +82,7 @@ const ClientListPage: React.FC = () => {
     }
   };
 
-  const handleSubmitClient = async (data: Partial<Client>) => {
+  const handleSubmitClient = async (data: any) => {
     try {
       if (editingClient) {
         await updateClient(editingClient.id, data);
@@ -1619,11 +1619,12 @@ const ClientHistoryTab: React.FC<{ client: Client }> = ({ client }) => {
 // Client Form Modal Component
 const ClientFormModal: React.FC<{
   client: Client | null;
-  onSubmit: (data: Partial<Client>) => void;
+  onSubmit: (data: any) => void;
   onClose: () => void;
 }> = ({ client, onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     name: client?.name || '',
+    compagnieAssurance: client?.compagnieAssurance?.nom || '',
     email: client?.email || '',
     phone: client?.phone || '',
     address: client?.address || '',
@@ -1675,6 +1676,18 @@ const ClientFormModal: React.FC<{
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+              className="form-input"
+              placeholder="Nom du client"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Compagnie d'Assurance *</label>
+            <input
+              type="text"
+              value={formData.compagnieAssurance}
+              onChange={(e) => setFormData({ ...formData, compagnieAssurance: e.target.value })}
               required
               className="form-input"
               placeholder="Nom de la compagnie d'assurance"

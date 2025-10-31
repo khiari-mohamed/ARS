@@ -166,6 +166,18 @@ class FinanceService {
     return data;
   }
 
+  // View PDF in popup (from database)
+  getPDFViewUrl(id: string): string {
+    const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
+    return `${serverBaseUrl}/api/finance/ordres-virement/${id}/pdf`;
+  }
+
+  // View TXT in popup (from database)
+  getTXTViewUrl(id: string): string {
+    const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
+    return `${serverBaseUrl}/api/finance/ordres-virement/${id}/txt`;
+  }
+
   async downloadPDF(id: string) {
     const response = await LocalAPI.get(`/finance/ordres-virement/${id}/pdf`, {
       responseType: 'blob'
@@ -199,6 +211,28 @@ class FinanceService {
     const url = queryParams ? `/finance/dashboard?${queryParams}` : '/finance/dashboard';
     const { data } = await LocalAPI.get(url);
     return data;
+  }
+
+  // NEW: Excel export for dashboard
+  async exportDashboardExcel(filters: any = {}) {
+    const params = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) params.append(key, filters[key]);
+    });
+    
+    const response = await LocalAPI.get(`/finance/dashboard/export?${params}`, {
+      responseType: 'blob'
+    });
+    
+    const blob = new Blob([response.data], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `tableau_bord_finance_${new Date().toISOString().split('T')[0]}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 
   async getFinanceStats(filters: any = {}) {
@@ -271,34 +305,16 @@ class FinanceService {
     return data;
   }
 
-  // Generate PDF with new backend service
+  // Generate PDF with new backend service (stores in database)
   async generateOVPDFNew(id: string) {
-    const response = await LocalAPI.get(`/finance/ordre-virement/${id}/generate-pdf`, {
-      responseType: 'blob'
-    });
-    
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `OV_${id}.pdf`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    const { data } = await LocalAPI.post(`/finance/ordres-virement/${id}/generate-pdf`);
+    return data;
   }
 
-  // Generate TXT with new backend service
+  // Generate TXT with new backend service (stores in database)
   async generateOVTXTNew(id: string) {
-    const response = await LocalAPI.get(`/finance/ordre-virement/${id}/generate-txt`, {
-      responseType: 'blob'
-    });
-    
-    const blob = new Blob([response.data], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `OV_${id}.txt`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    const { data } = await LocalAPI.post(`/finance/ordres-virement/${id}/generate-txt`);
+    return data;
   }
 
   // Suivi virement methods
@@ -350,6 +366,44 @@ class FinanceService {
     }).format(montant);
   }
 
+  // NEW: Export recent orders to Excel
+  async exportRecentOrdersExcel(data: any[]) {
+    const XLSX = require('xlsx');
+    const workbook = XLSX.utils.book_new();
+    
+    const worksheetData = [
+      ['Référence OV', 'Référence Bordereau', 'Compagnie d\'Assurance', 'Client/Société', 'Bordereau', 'Montant (TND)', 'Statut', 'Date d\'Exécution', 'Motif/Observations', 'Demande Récupération', 'Montant Récupéré'],
+      ...data.map(ordre => [
+        ordre.reference || '',
+        ordre.referenceBordereau || '',
+        ordre.compagnieAssurance || '',
+        ordre.client || '',
+        ordre.bordereau || '',
+        ordre.montant || 0,
+        ordre.statut || '',
+        ordre.dateExecution ? new Date(ordre.dateExecution).toLocaleDateString('fr-FR') : '',
+        ordre.motifObservation || '',
+        ordre.demandeRecuperation ? 'Oui' : 'Non',
+        ordre.montantRecupere ? 'Oui' : 'Non'
+      ])
+    ];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Ordres de Virement');
+    
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ordres_virement_${new Date().toISOString().split('T')[0]}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }
+
   // === BANK FORMAT CONFIGURATION ===
   async getBankFormats() {
     const { data } = await LocalAPI.get('/finance/bank-formats');
@@ -375,8 +429,14 @@ class FinanceService {
   }
 
   // === BORDEREAUX TRAITÉS METHODS ===
-  async getBordereauxTraites() {
-    const { data } = await LocalAPI.get('/finance/bordereaux-traites');
+  async getBordereauxTraites(filters: any = {}) {
+    const params = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) params.append(key, filters[key]);
+    });
+    
+    const url = params.toString() ? `/finance/bordereaux-traites?${params}` : '/finance/bordereaux-traites';
+    const { data } = await LocalAPI.get(url);
     return data;
   }
 

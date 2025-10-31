@@ -155,7 +155,7 @@ export class ChefEquipeTableauBordController {
             },
             currentHandler: { select: { id: true, fullName: true } }
           },
-          orderBy: { dateReception: 'desc' }
+          orderBy: { createdAt: 'desc' }
         });
       } else {
         // Fallback: if no team leader, show only bordereaux with assigned documents
@@ -182,7 +182,7 @@ export class ChefEquipeTableauBordController {
             },
             currentHandler: { select: { id: true, fullName: true } }
           },
-          orderBy: { dateReception: 'desc' }
+          orderBy: { createdAt: 'desc' }
         });
       }
     } else {
@@ -202,7 +202,7 @@ export class ChefEquipeTableauBordController {
           },
           currentHandler: { select: { id: true, fullName: true } }
         },
-        orderBy: { dateReception: 'desc' }
+        orderBy: { createdAt: 'desc' }
       });
     }
 
@@ -521,11 +521,11 @@ export class ChefEquipeTableauBordController {
     });
 
     if (bordereau) {
-      // Update bordereau status
+      // Set documentStatus to RETOURNER_AU_SCAN instead of changing statut
       await this.prisma.bordereau.update({
         where: { id: body.dossierId },
         data: { 
-          statut: 'A_SCANNER',
+          documentStatus: 'RETOURNER_AU_SCAN',
           currentHandlerId: null
         }
       });
@@ -1102,10 +1102,10 @@ export class ChefEquipeTableauBordController {
     }
 
     return documents.map(doc => {
-      // If document is assigned to a gestionnaire and status is SCANNE, show as Assigné
+      // If document is assigned to a gestionnaire and status is SCANNE, show as En cours
       let displayStatus = this.getDocumentStatusLabel(doc.status || undefined);
       if (doc.assignedToUserId && doc.status === 'SCANNE') {
-        displayStatus = 'Assigné';
+        displayStatus = 'En cours';
       }
       
       return {

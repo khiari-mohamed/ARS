@@ -1456,7 +1456,9 @@ const EnhancedDashboard: React.FC = () => {
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
                           <td style={{ padding: '12px 8px' }}>
-                            <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                            {!isReadOnly && (
+                              <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1474,7 +1476,7 @@ const EnhancedDashboard: React.FC = () => {
 
               {/* Bordereaux en cours */}
               <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux en cours ({superAdminDossiersEnCours.length} total)</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux  ({superAdminDossiersEnCours.length} total)</h3>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -1513,7 +1515,9 @@ const EnhancedDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td style={{ padding: '12px 8px' }}>
-                            <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                            {!isReadOnly && (
+                              <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1588,22 +1592,24 @@ const EnhancedDashboard: React.FC = () => {
                               >
                                 Voir PDF
                               </button>
-                              <button 
-                                onClick={() => handleSuperAdminModifyStatus({ ...document, isDocument: true })}
-                                style={{ 
-                                  background: '#ff9800', 
-                                  color: 'white', 
-                                  border: 'none', 
-                                  padding: '4px 10px', 
-                                  borderRadius: '4px', 
-                                  fontSize: '11px',
-                                  cursor: 'pointer',
-                                  fontWeight: '500'
-                                }}
-                                title="Modifier statut du document"
-                              >
-                                Modifier Statut
-                              </button>
+                              {!isReadOnly && (
+                                <button 
+                                  onClick={() => handleSuperAdminModifyStatus({ ...document, isDocument: true })}
+                                  style={{ 
+                                    background: '#ff9800', 
+                                    color: 'white', 
+                                    border: 'none', 
+                                    padding: '4px 10px', 
+                                    borderRadius: '4px', 
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    fontWeight: '500'
+                                  }}
+                                  title="Modifier statut du document"
+                                >
+                                  Modifier Statut
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
