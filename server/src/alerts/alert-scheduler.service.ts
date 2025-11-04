@@ -263,17 +263,17 @@ export class AlertSchedulerService {
       });
 
       if (existingAlert) {
-        // Update existing alert
+        // Update existing alert WITHOUT changing createdAt
         await this.prisma.alertLog.update({
           where: { id: existingAlert.id },
           data: {
             message: alertData.message,
-            alertLevel: alertData.alertLevel,
-            createdAt: new Date() // Update timestamp for repeat alerts
+            alertLevel: alertData.alertLevel
+            // DO NOT update createdAt - keep original timestamp
           }
         });
       } else {
-        // Create new alert
+        // Create new alert only if it doesn't exist
         await this.prisma.alertLog.create({
           data: {
             bordereauId: alertData.bordereauId,
@@ -281,8 +281,7 @@ export class AlertSchedulerService {
             alertType: alertData.alertType,
             alertLevel: alertData.alertLevel,
             message: alertData.message,
-            notifiedRoles: this.getNotificationRoles(alertData.alertType, alertData.alertLevel),
-            createdAt: new Date()
+            notifiedRoles: this.getNotificationRoles(alertData.alertType, alertData.alertLevel)
           }
         });
       }

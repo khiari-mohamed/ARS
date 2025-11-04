@@ -73,39 +73,42 @@ export class AlertsService {
   /**
    * Fallback SLA prediction when AI service is unavailable
    */
+  // private getBasicSlaPrediction(items: any[]) {
+  //   return {
+  //     sla_predictions: items.map(item => {
+  //       const now = new Date();
+  //       const deadline = new Date(item.deadline);
+  //       const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  //       const progress = item.current_progress || 0;
+  //       const total = item.total_required || 1;
+  //       const progressRatio = progress / total;
+  //       
+  //       let risk = '🟢';
+  //       let score = 0;
+  //       
+  //       if (daysLeft <= 0) {
+  //         risk = '🔴';
+  //         score = 1.0;
+  //       } else if (daysLeft <= 2 || progressRatio < 0.5) {
+  //         risk = '🔴';
+  //         score = 0.9;
+  //       } else if (daysLeft <= 5 || progressRatio < 0.7) {
+  //         risk = '🟠';
+  //         score = 0.6;
+  //       }
+  //       
+  //       return {
+  //         id: item.id,
+  //         risk,
+  //         score,
+  //         days_left: daysLeft,
+  //         explanation: `${daysLeft} jours restants, progression: ${Math.round(progressRatio * 100)}%`
+  //       };
+  //     })
+  //   };
+  // }
   private getBasicSlaPrediction(items: any[]) {
-    return {
-      sla_predictions: items.map(item => {
-        const now = new Date();
-        const deadline = new Date(item.deadline);
-        const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        const progress = item.current_progress || 0;
-        const total = item.total_required || 1;
-        const progressRatio = progress / total;
-        
-        let risk = '🟢';
-        let score = 0;
-        
-        if (daysLeft <= 0) {
-          risk = '🔴';
-          score = 1.0;
-        } else if (daysLeft <= 2 || progressRatio < 0.5) {
-          risk = '🔴';
-          score = 0.9;
-        } else if (daysLeft <= 5 || progressRatio < 0.7) {
-          risk = '🟠';
-          score = 0.6;
-        }
-        
-        return {
-          id: item.id,
-          risk,
-          score,
-          days_left: daysLeft,
-          explanation: `${daysLeft} jours restants, progression: ${Math.round(progressRatio * 100)}%`
-        };
-      })
-    };
+    return { sla_predictions: [] };
   } 
   // Allow all authenticated users to access dashboard alerts
   private checkAlertsRole(user: any) {
@@ -284,36 +287,37 @@ export class AlertsService {
   async getTeamOverloadAlerts(user: any) {
     this.checkAlertsRole(user);
     
-    // Get all teams (users with role CHEF_EQUIPE or GESTIONNAIRE)
+    // Get all teams (users with role CHEF_EQUIPE)
     const teams = await this.prisma.user.findMany({ 
       where: { 
-        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE'] }
+        role: 'CHEF_EQUIPE'
       },
       select: {
         id: true,
         fullName: true,
         email: true,
         role: true,
-        createdAt: true
+        createdAt: true,
+        capacity: true
       }
     });
     
     const overloads: any[] = [];
     
     for (const team of teams) {
-      // Count open bordereaux assigned to this team/user
+      // Count open bordereaux assigned to this team
       const count = await this.prisma.bordereau.count({ 
         where: { 
-          statut: { not: 'CLOTURE' },
-          OR: [
-            { teamId: team.id },
-            { assignedToUserId: team.id }
-          ]
+          statut: { notIn: ['CLOTURE', 'PAYE'] },
+          teamId: team.id
         }
       });
       
-      // Very low thresholds to detect any overload
-      if (count > 1) {
+      const capacity = team.capacity || 20; // Default capacity
+      const utilizationRate = (count / capacity) * 100;
+      
+      // Only alert if over 80% capacity
+      if (utilizationRate > 120) {
         overloads.push({ 
           team: {
             id: team.id,
@@ -321,14 +325,13 @@ export class AlertsService {
             email: team.email,
             role: team.role,
             createdAt: team.createdAt,
-            password: '' // Don't expose password
+            password: ''
           }, 
           count, 
           alert: 'red', 
           reason: `Surcharge critique: ${count} dossiers ouverts` 
         });
-        await this.notifyRole('SUPERVISOR', { team, count, alert: 'red', reason: 'Team overloaded' });
-      } else if (count > 0) {
+      } else if (utilizationRate > 80) {
         overloads.push({ 
           team: {
             id: team.id,
@@ -336,13 +339,12 @@ export class AlertsService {
             email: team.email,
             role: team.role,
             createdAt: team.createdAt,
-            password: '' // Don't expose password
+            password: ''
           }, 
           count, 
           alert: 'orange', 
-          reason: `Charge élevée: ${count} dossiers ouverts` 
+          reason: `Charge élevée: ${count} dossiers ouverts (${Math.round(utilizationRate)}%)` 
         });
-        await this.notifyRole('TEAM_LEADER', { team, count, alert: 'orange', reason: 'Team at risk' });
       }
     }
     
@@ -355,21 +357,26 @@ export class AlertsService {
   async getReclamationAlerts(user: any) {
     this.checkAlertsRole(user);
     
-    // Get recent courriers (last 30 days) - any type could be a complaint
+    // Get recent reclamations from Reclamation table (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const reclamations = await this.prisma.courrier.findMany({ 
+    const reclamations = await this.prisma.reclamation.findMany({ 
       where: { 
-        createdAt: { gte: thirtyDaysAgo }
+        createdAt: { gte: thirtyDaysAgo },
+        status: { in: ['SENT', 'DRAFT', 'PENDING'] }
       }, 
+      include: {
+        client: true,
+        bordereau: true
+      },
       orderBy: { createdAt: 'desc' },
       take: 10
     });
     
     return reclamations.map(r => ({
       reclamation: r,
-      alert: 'red',
+      alert: r.severity === 'HIGH' ? 'red' : 'orange',
       reason: `Réclamation du ${new Date(r.createdAt).toLocaleDateString('fr-FR')}`,
-      status: r.status || 'En cours',
+      status: r.status,
     }));
   }
 
@@ -426,11 +433,12 @@ export class AlertsService {
         
       } catch (aiError) {
         this.logger.warn('AI service unavailable, using fallback:', aiError.message);
-        forecast = { 
-          forecast: [],
-          trend_direction: 'stable',
-          model_performance: { trend_strength: 0.5 }
-        };
+        // forecast = { 
+        //   forecast: [],
+        //   trend_direction: 'stable',
+        //   model_performance: { trend_strength: 0.5 }
+        // };
+        forecast = { forecast: [], trend_direction: 'unknown', model_performance: {} };
       }
 
       return {
@@ -473,16 +481,25 @@ export class AlertsService {
     return Math.max(0, Math.round(total));
   }
 
+  // private getFallbackPredictions() {
+  //   return {
+  //     forecast: [],
+  //     trend_direction: 'stable',
+  //     recommendations: [{
+  //       action: 'monitor_workload',
+  //       priority: 'medium',
+  //       reasoning: 'AI service unavailable - manual monitoring recommended'
+  //     }],
+  //     ai_confidence: 0.5,
+  //     next_week_prediction: 0
+  //   };
+  // }
   private getFallbackPredictions() {
     return {
       forecast: [],
-      trend_direction: 'stable',
-      recommendations: [{
-        action: 'monitor_workload',
-        priority: 'medium',
-        reasoning: 'AI service unavailable - manual monitoring recommended'
-      }],
-      ai_confidence: 0.5,
+      trend_direction: 'unknown',
+      recommendations: [],
+      ai_confidence: 0,
       next_week_prediction: 0
     };
   }
@@ -507,18 +524,31 @@ export class AlertsService {
         }
       }
     }
-    // Log alert event
-    await this.prisma.alertLog.create({
-      data: {
-        bordereauId: alert.bordereau?.id || alert.bordereauId,
-        documentId: alert.documentId,
-        userId: alert.userId,
+    
+    // Check if similar alert already exists to avoid duplicates
+    const existingAlert = await this.prisma.alertLog.findFirst({
+      where: {
+        bordereauId: alert.bordereau?.id || alert.bordereauId || null,
         alertType: alert.type || 'GENERIC',
-        alertLevel: alert.alertLevel || alert.level || 'info',
-        message,
-        notifiedRoles: [role],
-      },
+        resolved: false,
+        message
+      }
     });
+    
+    // Only create alert if it doesn't exist
+    if (!existingAlert) {
+      await this.prisma.alertLog.create({
+        data: {
+          bordereauId: alert.bordereau?.id || alert.bordereauId || null,
+          documentId: alert.documentId || null,
+          userId: alert.userId || null,
+          alertType: alert.type || 'GENERIC',
+          alertLevel: alert.alertLevel || alert.level || 'info',
+          message,
+          notifiedRoles: [role],
+        },
+      });
+    }
     return { role, message, sent: true };
   }
 

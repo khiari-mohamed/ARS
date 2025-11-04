@@ -42,12 +42,12 @@ interface SMTPConfig {
 
 const OutlookIntegration: React.FC = () => {
   const [smtpConfig, setSMTPConfig] = useState<SMTPConfig>({
-    host: 'smtp.gnet.tn',
-    port: 465,
-    secure: true,
-    user: 'noreply@arstunisia.com',
+    host: process.env.REACT_APP_SMTP_HOST || 'smtp.gnet.tn',
+    port: parseInt(process.env.REACT_APP_SMTP_PORT || '465'),
+    secure: process.env.REACT_APP_SMTP_SECURE === 'true' || true,
+    user: process.env.REACT_APP_SMTP_USER || '',
     password: '',
-    from: 'ARS Tunisia <noreply@arstunisia.com>'
+    from: process.env.REACT_APP_SMTP_FROM || 'ARS Tunisia <noreply@arstunisia.com>'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');

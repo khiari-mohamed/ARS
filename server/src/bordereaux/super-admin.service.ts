@@ -41,26 +41,30 @@ export class SuperAdminService {
 
   async getSystemHealth(): Promise<SystemHealthMetrics> {
     try {
-      const cpuUsage = Math.random() * 30 + 20;
-      const memoryUsage = Math.random() * 40 + 30;
-      const diskUsage = Math.random() * 20 + 40;
+      // SYNTHETIC DATA - COMMENTED OUT
+      // const cpuUsage = Math.random() * 30 + 20;
+      // const memoryUsage = Math.random() * 40 + 30;
+      // const diskUsage = Math.random() * 20 + 40;
       
-      let status: 'healthy' | 'warning' | 'critical' = 'healthy';
-      if (cpuUsage > 80 || memoryUsage > 85 || diskUsage > 90) {
-        status = 'critical';
-      } else if (cpuUsage > 60 || memoryUsage > 70 || diskUsage > 80) {
-        status = 'warning';
-      }
+      // let status: 'healthy' | 'warning' | 'critical' = 'healthy';
+      // if (cpuUsage > 80 || memoryUsage > 85 || diskUsage > 90) {
+      //   status = 'critical';
+      // } else if (cpuUsage > 60 || memoryUsage > 70 || diskUsage > 80) {
+      //   status = 'warning';
+      // }
 
-      return {
-        status,
-        uptime: process.uptime(),
-        cpuUsage,
-        memoryUsage,
-        diskUsage,
-        activeConnections: Math.floor(Math.random() * 50) + 10,
-        responseTime: Math.random() * 100 + 50
-      };
+      // return {
+      //   status,
+      //   uptime: process.uptime(),
+      //   cpuUsage,
+      //   memoryUsage,
+      //   diskUsage,
+      //   activeConnections: Math.floor(Math.random() * 50) + 10,
+      //   responseTime: Math.random() * 100 + 50
+      // };
+      
+      // TODO: Use real system metrics from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts getSystemHealth() instead');
     } catch (error) {
       this.logger.error('Failed to get system health:', error);
       return {
@@ -77,34 +81,38 @@ export class SuperAdminService {
 
   async getAllQueuesOverview(): Promise<QueueOverview[]> {
     try {
-      const queues = [
-        'BO_ENTRY_QUEUE',
-        'SCAN_QUEUE',
-        'OCR_QUEUE',
-        'PROCESSING_QUEUE',
-        'VALIDATION_QUEUE',
-        'NOTIFICATION_QUEUE'
-      ];
+      // SYNTHETIC DATA - COMMENTED OUT
+      // const queues = [
+      //   'BO_ENTRY_QUEUE',
+      //   'SCAN_QUEUE',
+      //   'OCR_QUEUE',
+      //   'PROCESSING_QUEUE',
+      //   'VALIDATION_QUEUE',
+      //   'NOTIFICATION_QUEUE'
+      // ];
 
-      const queueOverviews: QueueOverview[] = [];
+      // const queueOverviews: QueueOverview[] = [];
 
-      for (const queueName of queues) {
-        const pending = Math.floor(Math.random() * 20);
-        const processing = Math.floor(Math.random() * 5);
-        const completed = Math.floor(Math.random() * 100) + 50;
-        const failed = Math.floor(Math.random() * 5);
+      // for (const queueName of queues) {
+      //   const pending = Math.floor(Math.random() * 20);
+      //   const processing = Math.floor(Math.random() * 5);
+      //   const completed = Math.floor(Math.random() * 100) + 50;
+      //   const failed = Math.floor(Math.random() * 5);
 
-        queueOverviews.push({
-          name: queueName,
-          pending,
-          processing,
-          completed,
-          failed,
-          avgProcessingTime: Math.random() * 300 + 60
-        });
-      }
+      //   queueOverviews.push({
+      //     name: queueName,
+      //     pending,
+      //     processing,
+      //     completed,
+      //     failed,
+      //     avgProcessingTime: Math.random() * 300 + 60
+      //   });
+      // }
 
-      return queueOverviews;
+      // return queueOverviews;
+      
+      // TODO: Use real queue data from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts getQueuesOverview() instead');
     } catch (error) {
       this.logger.error('Failed to get queues overview:', error);
       return [];
@@ -113,21 +121,25 @@ export class SuperAdminService {
 
   async getSystemPerformanceMetrics(period: string = '24h') {
     try {
-      const hours = period === '24h' ? 24 : period === '7d' ? 168 : 720;
-      const metrics: any[] = [];
+      // SYNTHETIC DATA - COMMENTED OUT
+      // const hours = period === '24h' ? 24 : period === '7d' ? 168 : 720;
+      // const metrics: any[] = [];
 
-      for (let i = 0; i < hours; i++) {
-        const timestamp = new Date(Date.now() - (hours - i) * 60 * 60 * 1000);
-        metrics.push({
-          timestamp: timestamp.toISOString(),
-          throughput: Math.floor(Math.random() * 50) + 20,
-          responseTime: Math.random() * 200 + 100,
-          errorRate: Math.random() * 5,
-          activeUsers: Math.floor(Math.random() * 30) + 10
-        });
-      }
+      // for (let i = 0; i < hours; i++) {
+      //   const timestamp = new Date(Date.now() - (hours - i) * 60 * 60 * 1000);
+      //   metrics.push({
+      //     timestamp: timestamp.toISOString(),
+      //     throughput: Math.floor(Math.random() * 50) + 20,
+      //     responseTime: Math.random() * 200 + 100,
+      //     errorRate: Math.random() * 5,
+      //     activeUsers: Math.floor(Math.random() * 30) + 10
+      //   });
+      // }
 
-      return metrics;
+      // return metrics;
+      
+      // TODO: Use real performance metrics from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts getPerformanceMetrics() instead');
     } catch (error) {
       this.logger.error('Failed to get performance metrics:', error);
       return [];
@@ -136,30 +148,34 @@ export class SuperAdminService {
 
   async getSLAConfigurations(): Promise<SLAConfiguration[]> {
     try {
-      return [
-        {
-          id: 'sla_default',
-          name: 'SLA Standard',
-          documentType: 'BS',
-          thresholds: {
-            warning: 5,
-            critical: 7,
-            breach: 10
-          },
-          active: true
-        },
-        {
-          id: 'sla_urgent',
-          name: 'SLA Urgent',
-          documentType: 'BS_URGENT',
-          thresholds: {
-            warning: 2,
-            critical: 3,
-            breach: 5
-          },
-          active: true
-        }
-      ];
+      // HARDCODED DATA - COMMENTED OUT
+      // return [
+      //   {
+      //     id: 'sla_default',
+      //     name: 'SLA Standard',
+      //     documentType: 'BS',
+      //     thresholds: {
+      //       warning: 5,
+      //       critical: 7,
+      //       breach: 10
+      //     },
+      //     active: true
+      //   },
+      //   {
+      //     id: 'sla_urgent',
+      //     name: 'SLA Urgent',
+      //     documentType: 'BS_URGENT',
+      //     thresholds: {
+      //       warning: 2,
+      //       critical: 3,
+      //       breach: 5
+      //     },
+      //     active: true
+      //   }
+      // ];
+      
+      // TODO: Use real SLA configurations from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts getSLAConfigurations() instead');
     } catch (error) {
       this.logger.error('Failed to get SLA configurations:', error);
       return [];
@@ -220,50 +236,54 @@ export class SuperAdminService {
 
   async getSystemConfiguration() {
     try {
-      return {
-        email: {
-          smtp: {
-            host: 'smtp.company.com',
-            port: 587,
-            secure: false,
-            auth: {
-              user: 'noreply@company.com',
-              pass: '***'
-            }
-          },
-          templates: {
-            bordereau_assigned: {
-              subject: 'Nouveau bordereau assigné',
-              body: 'Un nouveau bordereau vous a été assigné: {{reference}}'
-            },
-            sla_warning: {
-              subject: 'Alerte SLA',
-              body: 'Le bordereau {{reference}} approche de la limite SLA'
-            }
-          }
-        },
-        sms: {
-          provider: 'twilio',
-          apiKey: '***',
-          sender: '+33123456789'
-        },
-        integrations: {
-          paperstream: {
-            enabled: true,
-            config: {
-              scannerPath: '/dev/scanner',
-              quality: 'high'
-            }
-          },
-          ocr_engine: {
-            enabled: true,
-            config: {
-              language: 'fra+eng',
-              confidence: 0.8
-            }
-          }
-        }
-      };
+      // HARDCODED DATA - COMMENTED OUT
+      // return {
+      //   email: {
+      //     smtp: {
+      //       host: 'smtp.company.com',
+      //       port: 587,
+      //       secure: false,
+      //       auth: {
+      //         user: 'noreply@company.com',
+      //         pass: '***'
+      //       }
+      //     },
+      //     templates: {
+      //       bordereau_assigned: {
+      //         subject: 'Nouveau bordereau assigné',
+      //         body: 'Un nouveau bordereau vous a été assigné: {{reference}}'
+      //       },
+      //       sla_warning: {
+      //         subject: 'Alerte SLA',
+      //         body: 'Le bordereau {{reference}} approche de la limite SLA'
+      //       }
+      //     }
+      //   },
+      //   sms: {
+      //     provider: 'twilio',
+      //     apiKey: '***',
+      //     sender: '+33123456789'
+      //   },
+      //   integrations: {
+      //     paperstream: {
+      //       enabled: true,
+      //       config: {
+      //         scannerPath: '/dev/scanner',
+      //         quality: 'high'
+      //       }
+      //     },
+      //     ocr_engine: {
+      //       enabled: true,
+      //       config: {
+      //         language: 'fra+eng',
+      //         confidence: 0.8
+      //       }
+      //     }
+      //   }
+      // };
+      
+      // TODO: Use real system configuration from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts getSystemConfiguration() instead');
     } catch (error) {
       this.logger.error('Failed to get system configuration:', error);
       throw error;
@@ -287,9 +307,13 @@ export class SuperAdminService {
 
   async testEmailConfiguration(config: any): Promise<boolean> {
     try {
-      this.logger.log('Testing email configuration...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return Math.random() > 0.1;
+      // SYNTHETIC DATA - COMMENTED OUT
+      // this.logger.log('Testing email configuration...');
+      // await new Promise(resolve => setTimeout(resolve, 1000));
+      // return Math.random() > 0.1;
+      
+      // TODO: Use real email test from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts testEmailConfiguration() instead');
     } catch (error) {
       this.logger.error('Email test failed:', error);
       return false;
@@ -298,9 +322,13 @@ export class SuperAdminService {
 
   async testSMSConfiguration(config: any): Promise<boolean> {
     try {
-      this.logger.log('Testing SMS configuration...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return Math.random() > 0.1;
+      // SYNTHETIC DATA - COMMENTED OUT
+      // this.logger.log('Testing SMS configuration...');
+      // await new Promise(resolve => setTimeout(resolve, 1000));
+      // return Math.random() > 0.1;
+      
+      // TODO: Use real SMS test from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts testSMSConfiguration() instead');
     } catch (error) {
       this.logger.error('SMS test failed:', error);
       return false;
@@ -412,66 +440,73 @@ export class SuperAdminService {
   }
 
   async getRoleTemplates() {
-    return [
-      {
-        id: 'template_bo',
-        name: 'Bureau d\'Ordre Standard',
-        role: 'BO',
-        permissions: ['CREATE_BORDEREAU', 'VIEW_BORDEREAU', 'UPLOAD_DOCUMENTS'],
-        defaultCapacity: 30
-      },
-      {
-        id: 'template_gestionnaire',
-        name: 'Gestionnaire Standard',
-        role: 'GESTIONNAIRE',
-        permissions: ['PROCESS_BORDEREAU', 'UPDATE_STATUS', 'VIEW_ASSIGNED'],
-        defaultCapacity: 20
-      },
-      {
-        id: 'template_chef_equipe',
-        name: 'Chef d\'Équipe Standard',
-        role: 'CHEF_EQUIPE',
-        permissions: ['ASSIGN_BORDEREAU', 'VIEW_TEAM', 'MANAGE_WORKLOAD'],
-        defaultCapacity: 50
-      },
-      {
-        id: 'template_scan',
-        name: 'Équipe SCAN Standard',
-        role: 'SCAN_TEAM',
-        permissions: ['SCAN_DOCUMENTS', 'OCR_PROCESSING', 'QUALITY_CONTROL'],
-        defaultCapacity: 100
-      }
-    ];
+    // HARDCODED DATA - COMMENTED OUT
+    // return [
+    //   {
+    //     id: 'template_bo',
+    //     name: 'Bureau d\'Ordre Standard',
+    //     role: 'BO',
+    //     permissions: ['CREATE_BORDEREAU', 'VIEW_BORDEREAU', 'UPLOAD_DOCUMENTS'],
+    //     defaultCapacity: 30
+    //   },
+    //   {
+    //     id: 'template_gestionnaire',
+    //     name: 'Gestionnaire Standard',
+    //     role: 'GESTIONNAIRE',
+    //     permissions: ['PROCESS_BORDEREAU', 'UPDATE_STATUS', 'VIEW_ASSIGNED'],
+    //     defaultCapacity: 20
+    //   },
+    //   {
+    //     id: 'template_chef_equipe',
+    //     name: 'Chef d\'Équipe Standard',
+    //     role: 'CHEF_EQUIPE',
+    //     permissions: ['ASSIGN_BORDEREAU', 'VIEW_TEAM', 'MANAGE_WORKLOAD'],
+    //     defaultCapacity: 50
+    //   },
+    //   {
+    //     id: 'template_scan',
+    //     name: 'Équipe SCAN Standard',
+    //     role: 'SCAN_TEAM',
+    //     permissions: ['SCAN_DOCUMENTS', 'OCR_PROCESSING', 'QUALITY_CONTROL'],
+    //     defaultCapacity: 100
+    //   }
+    // ];
+    
+    // TODO: Use real role templates from super-admin.controller.ts
+    throw new Error('Use super-admin.controller.ts getRoleTemplates() instead');
   }
 
   async createUserFromTemplate(templateId: string, userData: any) {
     try {
-      const templates = await this.getRoleTemplates();
-      const template = templates.find(t => t.id === templateId);
+      // const templates = await this.getRoleTemplates();
+      // const template = templates.find(t => t.id === templateId);
       
-      if (!template) {
-        throw new Error('Template not found');
-      }
+      // if (!template) {
+      //   throw new Error('Template not found');
+      // }
 
-      const user = await this.prisma.user.create({
-        data: {
-          ...userData,
-          role: template.role,
-          capacity: template.defaultCapacity,
-          permissions: template.permissions,
-          password: 'default123'
-        }
-      });
+      // const user = await this.prisma.user.create({
+      //   data: {
+      //     ...userData,
+      //     role: template.role,
+      //     capacity: template.defaultCapacity,
+      //     permissions: template.permissions,
+      //     password: 'default123'
+      //   }
+      // });
 
-      await this.prisma.auditLog.create({
-        data: {
-          userId: 'SUPER_ADMIN',
-          action: 'USER_CREATED_FROM_TEMPLATE',
-          details: { templateId, userId: user.id }
-        }
-      });
+      // await this.prisma.auditLog.create({
+      //   data: {
+      //     userId: 'SUPER_ADMIN',
+      //     action: 'USER_CREATED_FROM_TEMPLATE',
+      //     details: { templateId, userId: user.id }
+      //   }
+      // });
 
-      return { ...user, password: undefined };
+      // return { ...user, password: undefined };
+      
+      // TODO: Use real implementation from super-admin.controller.ts
+      throw new Error('Use super-admin.controller.ts createUserFromTemplate() instead');
     } catch (error) {
       this.logger.error('Failed to create user from template:', error);
       throw error;

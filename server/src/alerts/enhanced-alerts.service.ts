@@ -146,7 +146,8 @@ export class EnhancedAlertsService {
 
     for (const team of teams) {
       const workload = team.bordereauxTeam.length;
-      const capacity = 50; // Default capacity, should come from team settings
+      // const capacity = 50; // Default capacity, should come from team settings
+      const capacity = team.capacity || 20; // Use actual team capacity
 
       if (workload > capacity * 1.2) {
         await this.triggerAlert('TEAM_OVERLOAD', {

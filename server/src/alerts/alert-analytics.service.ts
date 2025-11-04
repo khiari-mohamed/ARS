@@ -477,10 +477,14 @@ export class AlertAnalyticsService {
   }
 
   // === HELPER METHODS ===
+  // private async getAlertType(alertId: string): Promise<string> {
+  //   // Mock alert type retrieval
+  //   const alertTypes = ['SLA_BREACH', 'SYSTEM_DOWN', 'HIGH_VOLUME', 'PROCESSING_DELAY'];
+  //   return alertTypes[Math.floor(Math.random() * alertTypes.length)];
+  // }
   private async getAlertType(alertId: string): Promise<string> {
-    // Mock alert type retrieval
-    const alertTypes = ['SLA_BREACH', 'SYSTEM_DOWN', 'HIGH_VOLUME', 'PROCESSING_DELAY'];
-    return alertTypes[Math.floor(Math.random() * alertTypes.length)];
+    const alert = await this.prisma.alertLog.findUnique({ where: { id: alertId }, select: { alertType: true } });
+    return alert?.alertType || 'UNKNOWN';
   }
 
   private calculateFalsePositiveImpact(category: FalsePositiveAnalysis['category']): 'low' | 'medium' | 'high' {
@@ -601,8 +605,10 @@ export class AlertAnalyticsService {
         return { alertType, roi: 0, details: 'No data available' };
       }
 
-      const avgIncidentCost = 5000;
-      const avgAlertProcessingCost = 50;
+      // const avgIncidentCost = 5000; // Mock data
+      // const avgAlertProcessingCost = 50; // Mock data
+      const avgIncidentCost = 0;
+      const avgAlertProcessingCost = 0;
       const preventedIncidents = alertMetrics.truePositives;
       const totalAlertCost = alertMetrics.totalAlerts * avgAlertProcessingCost;
       const preventedCosts = preventedIncidents * avgIncidentCost;
