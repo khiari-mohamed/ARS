@@ -28,14 +28,14 @@ export class GecService {
     this.initializeEmailTransporter();
   }
 
-  private initializeEmailTransporter() {
+  private async initializeEmailTransporter() {
     this.transporter = nodemailer.createTransport({
-      host: 'smtp.gnet.tn',
-      port: 465,
-      secure: true,
+      host: process.env.SMTP_HOST || 'smtp.gnet.tn',
+      port: parseInt(process.env.SMTP_PORT || '465'),
+      secure: process.env.SMTP_SECURE === 'true' || true,
       auth: {
-        user: 'noreply@arstunisia.com',
-        pass: 'NR*ars2025**##'
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
       },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
@@ -44,6 +44,13 @@ export class GecService {
         rejectUnauthorized: false
       }
     });
+    
+    try {
+      await this.transporter.verify();
+      this.logger.log('✅ SMTP connection verified');
+    } catch (error) {
+      this.logger.error('❌ SMTP connection failed:', error.message);
+    }
   }
 
   async createCourrier(dto: CreateCourrierDto, user: any) {
@@ -54,13 +61,27 @@ export class GecService {
     try {
       const existingUser = await this.prisma.user.findUnique({ where: { id: user.id } });
       if (!existingUser) {
-        console.warn('⚠️ User not found in database, using system user');
+        console.warn('⚠️ User not found in database, finding fallback user');
         // Find any existing user to use as fallback
         const systemUser = await this.prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } });
-        userId = systemUser?.id || user.id;
+        if (!systemUser) {
+          throw new Error('No valid user found in database. Please ensure at least one user exists.');
+        }
+        userId = systemUser.id;
+        console.log('✅ Using fallback user:', userId);
       }
     } catch (error) {
       console.error('Error checking user:', error);
+      throw error;
+    }
+    
+    // Validate bordereauId if provided
+    if (dto.bordereauId) {
+      const bordereau = await this.prisma.bordereau.findUnique({ where: { id: dto.bordereauId } });
+      if (!bordereau) {
+        console.warn('⚠️ Bordereau not found, creating courrier without bordereau link');
+        dto.bordereauId = undefined;
+      }
     }
     
     const created = await this.prisma.courrier.create({

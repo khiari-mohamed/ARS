@@ -15,13 +15,24 @@ export class NotificationController {
       port: parseInt(process.env.SMTP_PORT || '465'),
       secure: process.env.SMTP_SECURE === 'true' || true,
       auth: {
-        user: process.env.SMTP_USER || 'noreply@arstunisia.com',
-        pass: process.env.SMTP_PASS || 'NR*ars2025**##'
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
       },
       tls: {
         rejectUnauthorized: false
       }
     });
+    
+    this.verifyConnection();
+  }
+  
+  private async verifyConnection() {
+    try {
+      await this.transporter.verify();
+      console.log('✅ SMTP connection verified (NotificationController)');
+    } catch (error) {
+      console.error('❌ SMTP connection failed (NotificationController):', error.message);
+    }
   }
 
   @Get('preferences')

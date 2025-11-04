@@ -10,24 +10,25 @@ export class OutlookService { // Updated for TypeScript compilation
     this.initializeTransporter();
   }
 
-  private initializeTransporter() {
+  private async initializeTransporter() {
     try {
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.gnet.tn',
-        port: 465,
-        secure: true, // SSL
+        host: process.env.SMTP_HOST || 'smtp.gnet.tn',
+        port: parseInt(process.env.SMTP_PORT || '465'),
+        secure: process.env.SMTP_SECURE === 'true' || true,
         auth: {
-          user: 'noreply@arstunisia.com',
-          pass: 'NR*ars2025**##'
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
         },
         tls: {
           rejectUnauthorized: false
         }
       });
 
-      this.logger.log('SMTP transporter initialized successfully');
+      await this.transporter.verify();
+      this.logger.log('✅ SMTP transporter initialized and verified');
     } catch (error) {
-      this.logger.error('Failed to initialize SMTP transporter:', error.message);
+      this.logger.error('❌ Failed to initialize SMTP transporter:', error.message);
     }
   }
 

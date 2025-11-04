@@ -20,9 +20,9 @@ export class CreateCourrierDto {
   @IsEnum(CourrierType)
   type: CourrierType;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  templateUsed: string;
+  templateUsed?: string;
 
   @IsOptional()
   @IsString()

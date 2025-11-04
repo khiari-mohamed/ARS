@@ -72,11 +72,11 @@ const DocumentAnalyticsDashboard: React.FC = () => {
     setLoading(true);
     try {
       const [statsResponse, assignmentsResponse, hierarchyResponse] = await Promise.all([
-        LocalAPI.get('/analytics/documents/comprehensive-stats', {
+        LocalAPI.get('/super-admin/documents/comprehensive-stats', {
           params: { documentType: selectedType !== 'ALL' ? selectedType : undefined }
         }),
-        LocalAPI.get('/analytics/assignments/document-level'),
-        LocalAPI.get('/analytics/hierarchy/validation')
+        LocalAPI.get('/super-admin/assignments/document-level'),
+        LocalAPI.get('/super-admin/hierarchy/validation')
       ]);
 
       // Process document type statistics
@@ -112,7 +112,12 @@ const DocumentAnalyticsDashboard: React.FC = () => {
 
     } catch (error) {
       console.error('Failed to load document analytics:', error);
-      // Fallback data structure
+      // FALLBACK DATA - COMMENTED OUT
+      // setDocumentStats([]);
+      // setAssignmentStats([]);
+      // setHierarchyIssues([]);
+      
+      // Set empty arrays when API fails
       setDocumentStats([]);
       setAssignmentStats([]);
       setHierarchyIssues([]);
