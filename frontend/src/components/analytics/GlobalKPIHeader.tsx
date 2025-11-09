@@ -36,13 +36,14 @@ const GlobalKPIHeader: React.FC = () => {
       // Extract real data from API response
       const totalBordereaux = kpiData.totalCount || 0;
       const processedCount = kpiData.processedCount || 0;
+      const enAttenteCount = kpiData.enAttenteCount || 0;
       const avgProcessingTime = kpiData.avgDelay || 0;
       
       // Calculate SLA compliance from processed vs total
       const slaCompliance = totalBordereaux > 0 ? Math.round((processedCount / totalBordereaux) * 100) : 0;
       
-      // Calculate rejection rate
-      const rejectedCount = totalBordereaux - processedCount;
+      // Calculate rejection rate (total - processed - en attente)
+      const rejectedCount = Math.max(0, totalBordereaux - processedCount - enAttenteCount);
       const rejectionRate = totalBordereaux > 0 ? Math.round((rejectedCount / totalBordereaux) * 100) : 0;
       
       // Count active alerts from all alert types

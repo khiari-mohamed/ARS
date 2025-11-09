@@ -15,6 +15,8 @@ export function canEditUser(currentRole: UserRole, targetUser: User): boolean {
   if (currentRole === 'ADMINISTRATEUR' && targetUser.role !== 'SUPER_ADMIN') return true;
   // RESPONSABLE_DEPARTEMENT has read-only access - cannot edit
   if (currentRole === 'RESPONSABLE_DEPARTEMENT') return false;
+  // GESTIONNAIRE_SENIOR cannot edit others (works alone)
+  if (currentRole === 'GESTIONNAIRE_SENIOR') return false;
   // Chef d'équipe can edit their team members
   if (currentRole === 'CHEF_EQUIPE' && 
       ['GESTIONNAIRE', 'CLIENT_SERVICE'].includes(targetUser.role)) return true;
@@ -49,6 +51,7 @@ export function canManageUser(currentRole: UserRole, targetRole: UserRole): bool
     'ADMINISTRATEUR': 8,
     'RESPONSABLE_DEPARTEMENT': 6,
     'CHEF_EQUIPE': 5,
+    'GESTIONNAIRE_SENIOR': 4,
     'GESTIONNAIRE': 3,
     'CLIENT_SERVICE': 3,
     'FINANCE': 3,
@@ -66,13 +69,17 @@ export function canManageUser(currentRole: UserRole, targetRole: UserRole): bool
 export const canView = (role: string) => true;
 
 export const canCreate = (role: string) =>
-  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
+  ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
 
 export const canAssign = (role: string) =>
   ['CHEF_EQUIPE', 'CLIENT_SERVICE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
 
+// GESTIONNAIRE_SENIOR cannot assign to others
+export const canAssignToOthers = (role: string) =>
+  ['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
+
 export const canResolve = (role: string) =>
-  ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
+  ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
 
 export const canDelete = (role: string) =>
   ['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(role) && !isReadOnlyRole(role as UserRole);
@@ -84,4 +91,5 @@ export const canEdit = (
 ) =>
   role === 'SUPER_ADMIN' ||
   role === 'CHEF_EQUIPE' ||
+  role === 'GESTIONNAIRE_SENIOR' ||
   (role === 'GESTIONNAIRE' && createdById === userId);

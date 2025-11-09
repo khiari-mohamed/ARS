@@ -45,6 +45,7 @@ import {
 } from '@mui/icons-material';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
+import { LocalAPI } from '../../services/axios';
 import {
   fetchContracts,
   fetchContract,
@@ -106,6 +107,8 @@ const ContractsPage: React.FC = () => {
   });
 
   const [contractFile, setContractFile] = useState<File | null>(null);
+  const [showReassignDialog, setShowReassignDialog] = useState(false);
+  const [selectedNewChef, setSelectedNewChef] = useState('');
 
   // Permissions
   const canManage = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'].includes(user?.role || '');
@@ -143,10 +146,11 @@ const ContractsPage: React.FC = () => {
     try {
       const [clients, users] = await Promise.all([
         fetchAvailableClients(),
-        fetchAvailableUsers()
+        LocalAPI.get('/users').then(res => res.data)
       ]);
       setAvailableClients(clients);
       setAvailableUsers(users);
+      console.log('Available users loaded:', users);
     } catch (error) {
       console.error('Error loading available data:', error);
     }
@@ -173,7 +177,7 @@ const ContractsPage: React.FC = () => {
       warningThreshold: 25,
       criticalThreshold: 35,
       escalationChain: [],
-      accountOwnerId: '',
+      accountOwnerId: '', // user?.id || '',
       startDate: '',
       endDate: '',
       alertSettings: {
@@ -222,10 +226,14 @@ const ContractsPage: React.FC = () => {
       notify('Veuillez saisir un numéro de contrat', 'error');
       return;
     }
-    if (!formData.accountOwnerId) {
-      notify('Veuillez sélectionner un chargé de compte', 'error');
-      return;
-    }
+    // Auto-assign current user as account owner
+    // if (!formData.accountOwnerId && user?.id) {
+    //   formData.accountOwnerId = user.id;
+    // }
+    // if (!formData.accountOwnerId) {
+    //   notify('Erreur: utilisateur non identifié', 'error');
+    //   return;
+    // }
     if (!formData.startDate) {
       notify('Veuillez saisir une date de début', 'error');
       return;
@@ -478,7 +486,7 @@ const ContractsPage: React.FC = () => {
                     <TableRow>
                       <TableCell>Numéro</TableCell>
                       <TableCell>Client</TableCell>
-                      <TableCell>Chargé de compte</TableCell>
+                      <TableCell>Chef d'équipe</TableCell>
                       <TableCell>Période</TableCell>
                       <TableCell>SLA</TableCell>
                       <TableCell>Statut</TableCell>
@@ -496,7 +504,7 @@ const ContractsPage: React.FC = () => {
                       >
                         <TableCell>{contract.clientName}</TableCell>
                         <TableCell>{contract.client?.name}</TableCell>
-                        <TableCell>{contract.assignedManager?.fullName}</TableCell>
+                        <TableCell>{contract.teamLeader?.fullName || 'N/A'}</TableCell>
                         <TableCell>
                           {new Date(contract.startDate).toLocaleDateString()} - {new Date(contract.endDate).toLocaleDateString()}
                         </TableCell>
@@ -630,7 +638,7 @@ const ContractsPage: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, criticalThreshold: parseInt(e.target.value) || 0 })}
               />
             </Grid>
-            <Grid item xs={12}>
+            {/* <Grid item xs={12}>
               <FormControl fullWidth>
                 <InputLabel>Chargé de compte</InputLabel>
                 <Select
@@ -644,6 +652,17 @@ const ContractsPage: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Chargé de compte"
+                value={user?.fullName || ''}
+                disabled
+                InputProps={{
+                  readOnly: true,
+                }}
+              />
+            </Grid> */}
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
@@ -776,7 +795,21 @@ const ContractsPage: React.FC = () => {
                   <Grid item xs={12}>
                     <Typography variant="subtitle1" gutterBottom>Informations générales</Typography>
                     <Typography><strong>Client:</strong> {selectedContract.client?.name}</Typography>
-                    <Typography><strong>Chargé de compte:</strong> {selectedContract.assignedManager?.fullName}</Typography>
+                    <Box display="flex" alignItems="center" gap={2} mt={1}>
+                      <Typography><strong>Chef d'équipe:</strong> {selectedContract.teamLeader?.fullName || 'N/A'}</Typography>
+                      {canManage && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            setSelectedNewChef('');
+                            setShowReassignDialog(true);
+                          }}
+                        >
+                          Réaffecter
+                        </Button>
+                      )}
+                    </Box>
                     <Typography><strong>Période:</strong> {new Date(selectedContract.startDate).toLocaleDateString()} - {new Date(selectedContract.endDate).toLocaleDateString()}</Typography>
                   </Grid>
                   <Grid item xs={12}>
@@ -918,6 +951,77 @@ const ContractsPage: React.FC = () => {
       {mainTab === 1 && (
         <ContractAssignment />
       )}
+
+      {/* Reassign Chef Dialog */}
+      <Dialog 
+        open={showReassignDialog} 
+        onClose={() => setShowReassignDialog(false)} 
+        maxWidth="sm" 
+        fullWidth 
+        sx={{ zIndex: 10001 }}
+        disablePortal={false}
+      >
+        <DialogTitle>Réaffecter le contrat à un autre Chef d'équipe</DialogTitle>
+        <DialogContent>
+          <Box mt={2}>
+            <Typography variant="body2" color="text.secondary" mb={1}>
+              Chef actuel: {selectedContract?.teamLeader?.fullName || 'Aucun'}
+            </Typography>
+            <FormControl fullWidth>
+              <InputLabel>Nouveau Chef d'équipe</InputLabel>
+              <Select
+                value={selectedNewChef}
+                onChange={(e) => setSelectedNewChef(e.target.value)}
+                label="Nouveau Chef d'équipe"
+                MenuProps={{
+                  style: { zIndex: 10002 }
+                }}
+              >
+                {availableUsers
+                  .filter(u => u.role === 'CHEF_EQUIPE' && u.id !== selectedContract?.teamLeader?.id)
+                  .map(chef => (
+                    <MenuItem key={chef.id} value={chef.id}>
+                      {chef.fullName} ({chef.email})
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+            {availableUsers.filter(u => u.role === 'CHEF_EQUIPE').length === 0 && (
+              <Typography variant="body2" color="error" mt={1}>
+                Aucun Chef d'équipe disponible
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowReassignDialog(false)}>Annuler</Button>
+          <Button 
+            onClick={async () => {
+              if (!selectedContract) {
+                notify('Aucun contrat sélectionné', 'error');
+                return;
+              }
+              if (!selectedNewChef) {
+                notify('Veuillez sélectionner un chef d\'équipe', 'error');
+                return;
+              }
+              try {
+                await LocalAPI.post(`/contracts/${selectedContract.id}/reassign-chef`, { newChefId: selectedNewChef });
+                notify('Chef d\'équipe réaffecté avec succès', 'success');
+                const updated = await fetchContract(selectedContract.id);
+                setSelectedContract(updated);
+                loadContracts();
+                setShowReassignDialog(false);
+              } catch (error: any) {
+                notify(error.response?.data?.message || 'Erreur lors de la réaffectation', 'error');
+              }
+            }}
+            variant="contained"
+          >
+            Réaffecter
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

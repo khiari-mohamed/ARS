@@ -307,7 +307,7 @@ export class AnalyticsService {
     //   where.createdAt = { gte: todayStart, lt: todayEnd };
     // }
     
-    const [bsPerDay, avgDelay, totalCount, processedCount] = await Promise.all([
+    const [bsPerDay, avgDelay, totalCount, processedCount, enAttenteCount] = await Promise.all([
       this.prisma.bordereau.groupBy({
         by: ['createdAt'],
         _count: { id: true },
@@ -323,6 +323,12 @@ export class AnalyticsService {
           ...where,
           statut: { in: ['CLOTURE', 'TRAITE'] }
         }
+      }),
+      this.prisma.bordereau.count({
+        where: {
+          ...where,
+          statut: { in: ['EN_ATTENTE', 'A_SCANNER', 'SCAN_EN_COURS', 'A_AFFECTER', 'ASSIGNE'] }
+        }
       })
     ]);
     
@@ -331,6 +337,7 @@ export class AnalyticsService {
       avgDelay: avgDelay._avg.delaiReglement || 0,
       totalCount,
       processedCount,
+      enAttenteCount,
       timestamp: new Date().toISOString()
     };
   }
@@ -401,12 +408,29 @@ export class AnalyticsService {
         _count: { id: true },
       });
       const slaMap = Object.fromEntries(sla.map((u: any) => [u.assignedToUserId, u._count?.id ?? 0]));
-      return users.map((u: any) => ({
-        userId: u.assignedToUserId,
-        total: u._count?.id ?? 0,
-        slaCompliant: slaMap[u.assignedToUserId] || 0,
-        complianceRate: (u._count?.id ?? 0) > 0 ? ((slaMap[u.assignedToUserId] || 0) / (u._count?.id ?? 0)) * 100 : 0
-      }));
+      
+      // Get real user information
+      const userIds = users.map((u: any) => u.assignedToUserId).filter(id => id);
+      const userDetails = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, fullName: true, email: true, department: true }
+      });
+      const userMap = Object.fromEntries(userDetails.map(u => [u.id, u]));
+      
+      return users
+        .filter((u: any) => u.assignedToUserId)
+        .map((u: any) => {
+          const userInfo = userMap[u.assignedToUserId];
+          return {
+            userId: u.assignedToUserId,
+            userName: userInfo?.fullName || userInfo?.email || null,
+            department: userInfo?.department || null,
+            total: u._count?.id ?? 0,
+            slaCompliant: slaMap[u.assignedToUserId] || 0,
+            complianceRate: (u._count?.id ?? 0) > 0 ? ((slaMap[u.assignedToUserId] || 0) / (u._count?.id ?? 0)) * 100 : 0
+          };
+        })
+        .filter(u => u.userName !== null);
     } catch (error) {
       console.error('Error getting SLA compliance by user:', error);
       return [];
@@ -1766,5 +1790,169 @@ export class AnalyticsService {
       return daysSinceCreation <= b.delaiReglement;
     }).length;
     return compliant / bordereaux.length;
+  }
+
+  async getPerformanceByDepartment(user: any, filters: any = {}) {
+    this.checkAnalyticsRole(user);
+    
+    try {
+      console.log('🔍 Getting department performance...');
+      
+      // Get all departments from database
+      const departments = await this.prisma.department.findMany({
+        where: { active: true },
+        select: { id: true, name: true, code: true }
+      });
+      
+      console.log(`📁 Found ${departments.length} departments`);
+      
+      if (departments.length === 0) {
+        console.log('❌ No departments found');
+        return [];
+      }
+      
+      // Don't apply date filters for department performance - show all time data
+      const where: any = {};
+      
+      console.log('📅 Date filters (ignored for dept performance):', filters);
+      
+      const departmentPerformance: any[] = [];
+      
+      for (const dept of departments) {
+        console.log(`📂 Processing ${dept.name}...`);
+        
+        // Get users in this department
+        const deptUsers = await this.prisma.user.findMany({
+          where: { 
+            departmentId: dept.id,
+            active: true
+          },
+          select: { id: true }
+        });
+        
+        console.log(`   Users in ${dept.name}: ${deptUsers.length}`);
+        
+        if (deptUsers.length === 0) {
+          console.log(`   ⚠️  Skipping ${dept.name} - no users`);
+          continue;
+        }
+        
+        const userIds = deptUsers.map(u => u.id);
+        
+        // Get bordereaux processed by this department (all time)
+        console.log(`   User IDs: ${userIds.join(', ')}`);
+        
+        const totalProcessed = await this.prisma.bordereau.count({
+          where: {
+            assignedToUserId: { in: userIds }
+          }
+        });
+        
+        console.log(`   Bordereaux for ${dept.name}: ${totalProcessed}`);
+        
+        if (totalProcessed === 0) {
+          console.log(`   ⚠️  Skipping ${dept.name} - no bordereaux`);
+          continue;
+        }
+        
+        // Get SLA compliant bordereaux
+        const slaCompliant = await this.prisma.bordereau.count({
+          where: {
+            assignedToUserId: { in: userIds },
+            delaiReglement: { lte: 3 }
+          }
+        });
+        
+        // Calculate average processing time
+        const avgDelayResult = await this.prisma.bordereau.aggregate({
+          where: {
+            assignedToUserId: { in: userIds }
+          },
+          _avg: { delaiReglement: true }
+        });
+        
+        const slaCompliance = Math.round((slaCompliant / totalProcessed) * 100);
+        const avgTime = avgDelayResult._avg.delaiReglement || 0;
+        
+        const deptData = {
+          department: dept.name,
+          slaCompliance,
+          avgTime: Number(avgTime.toFixed(1)),
+          workload: totalProcessed
+        };
+        
+        console.log(`   ✅ ${dept.name}: ${totalProcessed} bordereaux, ${slaCompliance}% SLA`);
+        departmentPerformance.push(deptData);
+      }
+      
+      console.log(`📊 Returning ${departmentPerformance.length} department results`);
+      return departmentPerformance;
+      
+    } catch (error) {
+      console.error('Error getting department performance:', error);
+      return [];
+    }
+  }
+
+  async getSLAComplianceByType(user: any, query: any) {
+    this.checkAnalyticsRole(user);
+    
+    const SLA_APPLICABLE_TYPES = [
+      'BULLETIN_SOIN',
+      'COMPLEMENT_INFORMATION',
+      'ADHESION',
+      'RECLAMATION'
+    ];
+    
+    const where: any = {};
+    if (query.fromDate || query.toDate) {
+      where.createdAt = {};
+      if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
+      if (query.toDate) where.createdAt.lte = new Date(query.toDate);
+    }
+    
+    const results: any = {};
+    
+    for (const docType of SLA_APPLICABLE_TYPES) {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          ...where,
+          type: docType as any,
+          dateCloture: { not: null }
+        },
+        include: {
+          client: { select: { reglementDelay: true } },
+          contract: { select: { delaiReglement: true } }
+        }
+      });
+      
+      if (bordereaux.length === 0) {
+        results[docType] = { total: 0, compliant: 0, complianceRate: 0 };
+        continue;
+      }
+      
+      let compliantCount = 0;
+      
+      for (const b of bordereaux) {
+        if (!b.dateCloture || !b.dateReception) continue;
+        
+        const slaThreshold = b.contract?.delaiReglement || b.client?.reglementDelay || 30;
+        const processingDays = Math.floor(
+          (new Date(b.dateCloture).getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        
+        if (processingDays <= slaThreshold) {
+          compliantCount++;
+        }
+      }
+      
+      results[docType] = {
+        total: bordereaux.length,
+        compliant: compliantCount,
+        complianceRate: Math.round((compliantCount / bordereaux.length) * 100)
+      };
+    }
+    
+    return results;
   }
 }

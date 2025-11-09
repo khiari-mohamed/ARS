@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
 import "../../styles/chef-equipe.css";
@@ -74,6 +74,22 @@ function GestionnaireDashboardNew() {
   const [bordereauxEnCoursPage, setBordereauxEnCoursPage] = useState(1);
   const [dossiersIndividuelsPage, setDossiersIndividuelsPage] = useState(1);
 
+  // Table-specific filters
+  const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
+  const [filterBordereaux, setFilterBordereaux] = useState({ reference: '', client: '', statut: '', dateFrom: '', dateTo: '' });
+  const [filterDocuments, setFilterDocuments] = useState({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' });
+  const [filteredDerniersTable, setFilteredDerniersTable] = useState<Dossier[]>([]);
+  const [filteredBordereauxTable, setFilteredBordereauxTable] = useState<Dossier[]>([]);
+  const [filteredDocumentsTable, setFilteredDocumentsTable] = useState<Dossier[]>([]);
+  const uniqueStatuts = useMemo(() => 
+    [...new Set([...dossiers, ...documents].map((d: any) => d.statut).filter(Boolean))].sort(),
+    [dossiers, documents]
+  );
+  const uniqueTypes = useMemo(() => 
+    [...new Set([...dossiers, ...documents].map((d: any) => d.type).filter(Boolean))].sort(),
+    [dossiers, documents]
+  );
+
   useEffect(() => {
     loadDashboardData();
   }, []);
@@ -81,6 +97,44 @@ function GestionnaireDashboardNew() {
   useEffect(() => {
     applyFilters();
   }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers, documents]);
+
+  // Apply table-specific filters
+  useEffect(() => {
+    const f1 = dossiers.filter((d: any) => {
+      const refMatch = !filterDerniers.reference || String(d.reference || '').trim().toLowerCase().includes(filterDerniers.reference.trim().toLowerCase());
+      return refMatch &&
+        (!filterDerniers.client || String(d.client || '').trim().toLowerCase().includes(filterDerniers.client.trim().toLowerCase())) &&
+        (!filterDerniers.type || d.type === filterDerniers.type) &&
+        (!filterDerniers.statut || d.statut === filterDerniers.statut) &&
+        (!filterDerniers.dateFrom || new Date(d.date) >= new Date(filterDerniers.dateFrom)) &&
+        (!filterDerniers.dateTo || new Date(d.date) <= new Date(filterDerniers.dateTo));
+    });
+    setFilteredDerniersTable(f1);
+    setDerniersBordereauxPage(1);
+
+    const f2 = dossiers.filter((d: any) =>
+      (!filterBordereaux.reference || String(d.reference || '').trim().toLowerCase().includes(filterBordereaux.reference.trim().toLowerCase())) &&
+      (!filterBordereaux.client || String(d.client || '').trim().toLowerCase().includes(filterBordereaux.client.trim().toLowerCase())) &&
+      (!filterBordereaux.statut || d.statut === filterBordereaux.statut) &&
+      (!filterBordereaux.dateFrom || new Date(d.date) >= new Date(filterBordereaux.dateFrom)) &&
+      (!filterBordereaux.dateTo || new Date(d.date) <= new Date(filterBordereaux.dateTo))
+    );
+    setFilteredBordereauxTable(f2);
+    setBordereauxEnCoursPage(1);
+
+    const f3 = documents.filter((d: any) =>
+      (!filterDocuments.reference || String(d.reference || '').trim().toLowerCase().includes(filterDocuments.reference.trim().toLowerCase())) &&
+      (!filterDocuments.bordereauReference || String(d.bordereauReference || '').trim().toLowerCase().includes(filterDocuments.bordereauReference.trim().toLowerCase())) &&
+      (!filterDocuments.client || String(d.client || '').trim().toLowerCase().includes(filterDocuments.client.trim().toLowerCase())) &&
+      (!filterDocuments.type || d.type === filterDocuments.type) &&
+      (!filterDocuments.statut || d.statut === filterDocuments.statut) &&
+      (!filterDocuments.gestionnaire || (d.gestionnaire && String(d.gestionnaire).trim().toLowerCase().includes(filterDocuments.gestionnaire.trim().toLowerCase()))) &&
+      (!filterDocuments.dateFrom || new Date(d.date) >= new Date(filterDocuments.dateFrom)) &&
+      (!filterDocuments.dateTo || new Date(d.date) <= new Date(filterDocuments.dateTo))
+    );
+    setFilteredDocumentsTable(f3);
+    setDossiersIndividuelsPage(1);
+  }, [filterDerniers, filterBordereaux, filterDocuments, dossiers, documents]);
   
   useEffect(() => {
     console.log('🔍 filteredDocuments updated:', filteredDocuments.length);
@@ -588,6 +642,22 @@ function GestionnaireDashboardNew() {
             </div>
             {/*<button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>*/}
           </div>
+          {/* Filters */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', marginBottom: '16px', padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
+            <input type="text" placeholder="Référence" value={filterDerniers.reference} onChange={(e) => setFilterDerniers({...filterDerniers, reference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Client" value={filterDerniers.client} onChange={(e) => setFilterDerniers({...filterDerniers, client: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <select value={filterDerniers.type} onChange={(e) => setFilterDerniers({...filterDerniers, type: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous types</option>
+              {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={filterDerniers.statut} onChange={(e) => setFilterDerniers({...filterDerniers, statut: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous statuts</option>
+              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input type="date" value={filterDerniers.dateFrom} onChange={(e) => setFilterDerniers({...filterDerniers, dateFrom: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" value={filterDerniers.dateTo} onChange={(e) => setFilterDerniers({...filterDerniers, dateTo: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <button onClick={() => setFilterDerniers({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -604,7 +674,7 @@ function GestionnaireDashboardNew() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice((derniersBordereauxPage - 1) * 5, derniersBordereauxPage * 5).map((dossier, index) => {
+                {filteredDerniersTable.slice((derniersBordereauxPage - 1) * 5, derniersBordereauxPage * 5).map((dossier, index) => {
                   const completionPercentage = dossier.completionPercentage || 0;
                   const dossierStates = dossier.dossierStates || [dossier.statut];
                   const isGestionnaire = user?.role === 'GESTIONNAIRE';
@@ -664,7 +734,7 @@ function GestionnaireDashboardNew() {
             </table>
           </div>
           {/* Pagination for Derniers Bordereaux */}
-          {filteredDossiers.length > 0 && (
+          {filteredDerniersTable.length > 0 && (
             <div style={{ padding: '16px', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
               <button 
                 onClick={() => setDerniersBordereauxPage(Math.max(1, derniersBordereauxPage - 1))}
@@ -674,7 +744,7 @@ function GestionnaireDashboardNew() {
                 ← Précédent
               </button>
               <span style={{ fontSize: '12px', color: '#666' }}>
-                Page {derniersBordereauxPage} sur {Math.ceil(filteredDossiers.length / 5)}
+                Page {derniersBordereauxPage} sur {Math.ceil(filteredDerniersTable.length / 5)}
               </span>
               <button 
                 onClick={() => setDerniersBordereauxPage(Math.min(Math.ceil(filteredDossiers.length / 5), derniersBordereauxPage + 1))}
@@ -697,6 +767,18 @@ function GestionnaireDashboardNew() {
             </div>
             {/*<button style={{ background: 'none', border: 'none', color: '#2196f3', cursor: 'pointer', fontSize: '12px' }}>Voir tout</button>*/}
           </div>
+          {/* Filters */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', marginBottom: '16px', padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
+            <input type="text" placeholder="Référence" value={filterBordereaux.reference} onChange={(e) => setFilterBordereaux({...filterBordereaux, reference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Client" value={filterBordereaux.client} onChange={(e) => setFilterBordereaux({...filterBordereaux, client: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <select value={filterBordereaux.statut} onChange={(e) => setFilterBordereaux({...filterBordereaux, statut: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous statuts</option>
+              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input type="date" value={filterBordereaux.dateFrom} onChange={(e) => setFilterBordereaux({...filterBordereaux, dateFrom: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" value={filterBordereaux.dateTo} onChange={(e) => setFilterBordereaux({...filterBordereaux, dateTo: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <button onClick={() => setFilterBordereaux({ reference: '', client: '', statut: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -710,7 +792,7 @@ function GestionnaireDashboardNew() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice((bordereauxEnCoursPage - 1) * 5, bordereauxEnCoursPage * 5).map((dossier, index) => {
+                {filteredBordereauxTable.slice((bordereauxEnCoursPage - 1) * 5, bordereauxEnCoursPage * 5).map((dossier, index) => {
                   const completionPercentage = dossier.completionPercentage || 0;
                   const dossierStates = dossier.dossierStates || [dossier.statut];
                   const isGestionnaire = user?.role === 'GESTIONNAIRE';
@@ -774,7 +856,7 @@ function GestionnaireDashboardNew() {
             </table>
           </div>
           {/* Pagination for Bordereaux en cours */}
-          {filteredDossiers.length > 0 && (
+          {filteredBordereauxTable.length > 0 && (
             <div style={{ padding: '16px', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
               <button 
                 onClick={() => setBordereauxEnCoursPage(Math.max(1, bordereauxEnCoursPage - 1))}
@@ -784,11 +866,11 @@ function GestionnaireDashboardNew() {
                 ← Précédent
               </button>
               <span style={{ fontSize: '12px', color: '#666' }}>
-                Page {bordereauxEnCoursPage} sur {Math.ceil(filteredDossiers.length / 5)}
+                Page {bordereauxEnCoursPage} sur {Math.ceil(filteredBordereauxTable.length / 5)}
               </span>
               <button 
-                onClick={() => setBordereauxEnCoursPage(Math.min(Math.ceil(filteredDossiers.length / 5), bordereauxEnCoursPage + 1))}
-                disabled={bordereauxEnCoursPage >= Math.ceil(filteredDossiers.length / 5)}
+                onClick={() => setDerniersBordereauxPage(Math.min(Math.ceil(filteredDerniersTable.length / 5), derniersBordereauxPage + 1))}
+                disabled={derniersBordereauxPage >= Math.ceil(filteredDerniersTable.length / 5)}
                 style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: bordereauxEnCoursPage >= Math.ceil(filteredDossiers.length / 5) ? 'not-allowed' : 'pointer', fontSize: '12px' }}
               >
                 Suivant →
@@ -806,10 +888,28 @@ function GestionnaireDashboardNew() {
                 <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#666' }}>Total: {filteredDocuments.length} dossiers</span>
+                <span style={{ fontSize: '12px', color: '#666' }}>Total: {filteredDocumentsTable.length} dossiers</span>
                {/*} <button style={{ background: '#d52b36', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}>Actualiser</button>*/}
               </div>
             </div>
+          </div>
+          {/* Filters */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: '8px', padding: '12px', background: '#f8f9fa' }}>
+            <input type="text" placeholder="Réf. Dossier" value={filterDocuments.reference} onChange={(e) => setFilterDocuments({...filterDocuments, reference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Réf. Bordereau" value={filterDocuments.bordereauReference} onChange={(e) => setFilterDocuments({...filterDocuments, bordereauReference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Client" value={filterDocuments.client} onChange={(e) => setFilterDocuments({...filterDocuments, client: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <select value={filterDocuments.type} onChange={(e) => setFilterDocuments({...filterDocuments, type: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous types</option>
+              {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={filterDocuments.statut} onChange={(e) => setFilterDocuments({...filterDocuments, statut: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous statuts</option>
+              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input type="text" placeholder="Gestionnaire" value={filterDocuments.gestionnaire} onChange={(e) => setFilterDocuments({...filterDocuments, gestionnaire: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" value={filterDocuments.dateFrom} onChange={(e) => setFilterDocuments({...filterDocuments, dateFrom: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" value={filterDocuments.dateTo} onChange={(e) => setFilterDocuments({...filterDocuments, dateTo: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <button onClick={() => setFilterDocuments({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -826,7 +926,7 @@ function GestionnaireDashboardNew() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDocuments.slice((dossiersIndividuelsPage - 1) * 20, dossiersIndividuelsPage * 20).map((document, index) => {
+                {filteredDocumentsTable.slice((dossiersIndividuelsPage - 1) * 20, dossiersIndividuelsPage * 20).map((document, index) => {
                   const isGestionnaire = user?.role === 'GESTIONNAIRE';
                   const canModify = isGestionnaire 
                     ? (!document.statusModifiedByGestionnaire && document.gestionnaire === user?.fullName)
@@ -898,7 +998,7 @@ function GestionnaireDashboardNew() {
             </table>
           </div>
           {/* Pagination for Dossiers Individuels */}
-          {filteredDocuments.length > 0 && (
+          {filteredDocumentsTable.length > 0 && (
             <div style={{ padding: '16px', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
               <button 
                 onClick={() => setDossiersIndividuelsPage(Math.max(1, dossiersIndividuelsPage - 1))}
@@ -908,12 +1008,12 @@ function GestionnaireDashboardNew() {
                 ← Précédent
               </button>
               <span style={{ fontSize: '12px', color: '#666' }}>
-                Page {dossiersIndividuelsPage} sur {Math.ceil(filteredDocuments.length / 20)}
+                Page {dossiersIndividuelsPage} sur {Math.ceil(filteredDocumentsTable.length / 20)}
               </span>
               <button 
-                onClick={() => setDossiersIndividuelsPage(Math.min(Math.ceil(filteredDocuments.length / 20), dossiersIndividuelsPage + 1))}
-                disabled={dossiersIndividuelsPage >= Math.ceil(filteredDocuments.length / 20)}
-                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: dossiersIndividuelsPage >= Math.ceil(filteredDocuments.length / 20) ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+                onClick={() => setDossiersIndividuelsPage(Math.min(Math.ceil(filteredDocumentsTable.length / 20), dossiersIndividuelsPage + 1))}
+                disabled={dossiersIndividuelsPage >= Math.ceil(filteredDocumentsTable.length / 20)}
+                style={{ padding: '4px 8px', border: '1px solid #ddd', borderRadius: '4px', cursor: dossiersIndividuelsPage >= Math.ceil(filteredDocumentsTable.length / 20) ? 'not-allowed' : 'pointer', fontSize: '12px' }}
               >
                 Suivant →
               </button>

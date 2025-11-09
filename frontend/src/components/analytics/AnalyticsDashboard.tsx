@@ -42,7 +42,9 @@ interface FilterOptions {
 const AnalyticsDashboard: React.FC = () => {
   const [tab, setTab] = useState(0);
   const [filters, setFilters] = useState<AnalyticsFilters>({
-    dateRange: 'last30days'
+    dateRange: 'all',
+    fromDate: null,
+    toDate: null
   });
   const [globalKPIs, setGlobalKPIs] = useState<any>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
@@ -173,15 +175,10 @@ const AnalyticsDashboard: React.FC = () => {
   const updateAppliedFilters = () => {
     const applied: string[] = [];
     
-    if (filters.dateRange !== 'last30days') {
-      const dateLabels: Record<string, string> = {
-        'today': 'Aujourd\'hui',
-        'last7days': '7 derniers jours',
-        'last30days': '30 derniers jours',
-        'last3months': '3 derniers mois',
-        'custom': 'Personnalisé'
-      };
-      applied.push(dateLabels[filters.dateRange] || filters.dateRange);
+    if (filters.fromDate && filters.toDate) {
+      const from = filters.fromDate.toLocaleDateString('fr-FR');
+      const to = filters.toDate.toLocaleDateString('fr-FR');
+      applied.push(`Période: ${from} - ${to}`);
     }
     
     if (filters.clientId) {
@@ -210,27 +207,17 @@ const AnalyticsDashboard: React.FC = () => {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleDateRangeChange = (dateRange: string) => {
-    if (dateRange === 'custom') {
-      setFilters(prev => ({ 
-        ...prev, 
-        dateRange,
-        fromDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-        toDate: new Date()
-      }));
-    } else {
-      setFilters(prev => ({ 
-        ...prev, 
-        dateRange,
-        fromDate: null,
-        toDate: null
-      }));
-    }
+  const handleFromDateChange = (date: Date | null) => {
+    setFilters(prev => ({ ...prev, fromDate: date }));
+  };
+
+  const handleToDateChange = (date: Date | null) => {
+    setFilters(prev => ({ ...prev, toDate: date }));
   };
 
   const resetFilters = () => {
     setFilters({ 
-      dateRange: 'last30days',
+      dateRange: 'all',
       fromDate: null,
       toDate: null
     });
@@ -243,8 +230,8 @@ const AnalyticsDashboard: React.FC = () => {
       setFilters(prev => ({ ...prev, departmentId: undefined }));
     } else if (filterToRemove.includes('SLA:')) {
       setFilters(prev => ({ ...prev, slaStatus: undefined }));
-    } else {
-      setFilters(prev => ({ ...prev, dateRange: 'last30days' }));
+    } else if (filterToRemove.includes('Période:')) {
+      setFilters(prev => ({ ...prev, fromDate: null, toDate: null }));
     }
   };
 
@@ -255,30 +242,13 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const getDateRange = () => {
-    const now = new Date();
-    
-    if (filters.dateRange === 'custom' && filters.fromDate && filters.toDate) {
+    if (filters.fromDate && filters.toDate) {
       return {
         fromDate: filters.fromDate.toISOString().split('T')[0],
         toDate: filters.toDate.toISOString().split('T')[0]
       };
     }
-    
-    switch (filters.dateRange) {
-      case 'today':
-        return { fromDate: now.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
-      case 'last7days':
-        const week = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        return { fromDate: week.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
-      case 'last30days':
-        const month = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        return { fromDate: month.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
-      case 'last3months':
-        const threeMonths = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        return { fromDate: threeMonths.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
-      default:
-        return {};
-    }
+    return {};
   };
 
   const tabLabels = [
@@ -344,19 +314,25 @@ const AnalyticsDashboard: React.FC = () => {
             <Stack spacing={2}>
               {/* Filter Controls */}
               <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Période</InputLabel>
-                  <Select
-                    value={filters.dateRange}
-                    onChange={(e) => handleDateRangeChange(e.target.value)}
-                    label="Période"
-                  >
-                    <MenuItem value="today">Aujourd'hui</MenuItem>
-                    <MenuItem value="last7days">7 derniers jours</MenuItem>
-                    <MenuItem value="last30days">30 derniers jours</MenuItem>
-                    <MenuItem value="last3months">3 derniers mois</MenuItem>
-                  </Select>
-                </FormControl>
+                <TextField
+                  label="Du"
+                  type="date"
+                  size="small"
+                  sx={{ minWidth: 150 }}
+                  value={filters.fromDate ? filters.fromDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => handleFromDateChange(e.target.value ? new Date(e.target.value) : null)}
+                  InputLabelProps={{ shrink: true }}
+                />
+
+                <TextField
+                  label="Au"
+                  type="date"
+                  size="small"
+                  sx={{ minWidth: 150 }}
+                  value={filters.toDate ? filters.toDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => handleToDateChange(e.target.value ? new Date(e.target.value) : null)}
+                  InputLabelProps={{ shrink: true }}
+                />
 
                 <Autocomplete
                   size="small"

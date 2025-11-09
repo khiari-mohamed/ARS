@@ -140,6 +140,12 @@ export class AnalyticsController {
     return this.analyticsService.getPerformance(query, user);
   }
 
+  @Get('performance/by-department')
+  async getPerformanceByDepartment(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getPerformanceByDepartment(user, query);
+  }
+
   @Get('alerts')
   async getAlerts(@Req() req: any) {
     const user = getUserFromRequest(req);
@@ -420,6 +426,12 @@ export class AnalyticsController {
         gestionnairesWithoutChef: 0
       }
     };
+  }
+
+  @Get('documents/sla-compliance-by-type')
+  async getSLAComplianceByType(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getSLAComplianceByType(user, query);
   }
 
 }

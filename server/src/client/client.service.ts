@@ -222,6 +222,34 @@ export class ClientService {
       status: query.status && query.status !== 'all' ? query.status : { not: 'deleted' },
     };
     
+    // ROLE-BASED VISIBILITY RESTRICTION
+    if (user) {
+      const userId = user.id || user.userId || user.sub;
+      const userRole = user.role;
+      
+      // Chef d'équipe: Only see clients assigned to them
+      if (userRole === 'CHEF_EQUIPE') {
+        where.OR = [
+          // Clients where they are the chargeCompte (direct assignment)
+          { chargeCompteId: userId },
+          // Clients with contracts where they are teamLeader
+          { contracts: { some: { teamLeaderId: userId } } },
+          // Clients with contracts where they are the assignedManager
+          { contracts: { some: { assignedManagerId: userId } } }
+        ];
+      }
+      
+      // Gestionnaire: Only see clients assigned to them or their team
+      if (userRole === 'GESTIONNAIRE') {
+        where.OR = [
+          // Clients in gestionnaires relation
+          { gestionnaires: { some: { id: userId } } },
+          // Clients where their chef is the chargeCompte
+          { chargeCompte: { teamMembers: { some: { id: userId } } } }
+        ];
+      }
+    }
+    
     if (query.gestionnaireId) {
       where.gestionnaires = {
         some: { id: query.gestionnaireId }
@@ -966,7 +994,7 @@ export class ClientService {
     }
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: any) {
     const client = await this.prisma.client.findUnique({
       where: { id },
       include: {
@@ -978,6 +1006,38 @@ export class ClientService {
       },
     });
     if (!client) throw new NotFoundException('Client not found');
+    
+    // ROLE-BASED ACCESS CONTROL
+    if (user) {
+      const userId = user.id || user.userId || user.sub;
+      const userRole = user.role;
+      
+      // Chef d'équipe: Only access clients assigned to them
+      if (userRole === 'CHEF_EQUIPE') {
+        const hasAccess = 
+          client.chargeCompteId === userId ||
+          client.contracts.some(c => c.teamLeaderId === userId || c.assignedManagerId === userId);
+        
+        if (!hasAccess) {
+          throw new NotFoundException('Client not found or access denied');
+        }
+      }
+      
+      // Gestionnaire: Only access clients assigned to them
+      if (userRole === 'GESTIONNAIRE') {
+        const gestionnaires = await this.prisma.client.findUnique({
+          where: { id },
+          include: { gestionnaires: true }
+        });
+        
+        const hasAccess = gestionnaires?.gestionnaires.some(g => g.id === userId);
+        
+        if (!hasAccess) {
+          throw new NotFoundException('Client not found or access denied');
+        }
+      }
+    }
+    
     return client;
   }
 

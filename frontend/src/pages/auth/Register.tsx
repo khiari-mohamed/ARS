@@ -8,6 +8,7 @@ const roleOptions = [
   { label: 'Administrateur', value: UserRole.ADMINISTRATEUR },
   { label: 'Responsable Département', value: UserRole.RESPONSABLE_DEPARTEMENT },
   { label: 'Chef d’équipe', value: UserRole.CHEF_EQUIPE },
+  { label: 'Gestionnaire Senior', value: 'GESTIONNAIRE_SENIOR' },
   { label: 'Gestionnaire', value: UserRole.GESTIONNAIRE },
   { label: 'Service Client', value: UserRole.CLIENT_SERVICE },
   { label: 'Finance', value: UserRole.FINANCE },
@@ -71,11 +72,27 @@ const Register = () => {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
+  const [department, setDepartment] = useState('');
+  const [departments, setDepartments] = useState<any[]>([]);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/super-admin/departments');
+        const data = await response.json();
+        console.log('Loaded departments:', data);
+        setDepartments(data);
+      } catch (error) {
+        console.error('Failed to load departments:', error);
+      }
+    };
+    loadDepartments();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +100,7 @@ const Register = () => {
     setSuccess('');
     setLoading(true);
     try {
-      await registerService({ email, password, fullName, role: role as UserRole });
+      await registerService({ email, password, fullName, role: role as UserRole, departmentId: department || undefined });
       setSuccess('Registration successful! You can now log in.');
       setTimeout(() => navigate('/login'), 1500);
     } catch (err: any) {
@@ -299,6 +316,28 @@ const Register = () => {
                 {roleOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="login-input"
+                value={department}
+                onChange={e => setDepartment(e.target.value)}
+                style={{
+                  border: '1.5px solid #d52b36',
+                  borderRadius: 7,
+                  padding: '12px 14px',
+                  fontSize: 16,
+                  background: '#fff',
+                  color: '#222',
+                  outline: 'none',
+                  transition: 'border 0.2s',
+                }}
+              >
+                <option value="">Département (optionnel)</option>
+                {departments.map(dept => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
                   </option>
                 ))}
               </select>

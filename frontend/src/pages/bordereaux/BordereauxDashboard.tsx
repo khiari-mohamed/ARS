@@ -37,11 +37,19 @@ const BordereauxDashboard: React.FC = () => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<any>({archived: false});
+  const [clients, setClients] = useState<any[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedClient, setSelectedClient] = useState('');
+  const [slaFilter, setSlaFilter] = useState<'all' | 'en_cours' | 'regle' | 'en_retard'>('all');
+  const [referenceFilter, setReferenceFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [showFiltersPanel, setShowFiltersPanel] = useState(false);
   const [importingExcel, setImportingExcel] = useState(false);
   const [showWorkflowDashboard, setShowWorkflowDashboard] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -73,6 +81,7 @@ const BordereauxDashboard: React.FC = () => {
     console.log('🚀 Dashboard: Initial load with default filters');
     loadData();
     loadUsers();
+    loadClients();
   }, []);
   
   useEffect(() => {
@@ -112,6 +121,49 @@ const BordereauxDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error loading users:', error);
     }
+  };
+
+  const loadClients = async () => {
+    try {
+      const { fetchClients } = await import('../../services/clientService');
+      const clientsData = await fetchClients();
+      setClients(clientsData || []);
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  };
+
+  const applyFilters = () => {
+    const newFilters: any = { archived: false };
+    
+    if (dateFrom) newFilters.dateStart = dateFrom;
+    if (dateTo) newFilters.dateEnd = dateTo;
+    if (selectedClient) newFilters.clientId = selectedClient;
+    if (referenceFilter) newFilters.reference = referenceFilter;
+    if (statusFilter) newFilters.statut = statusFilter;
+    
+    if (slaFilter !== 'all') {
+      if (slaFilter === 'en_cours') {
+        newFilters.statut = ['EN_COURS', 'ASSIGNE', 'SCAN_EN_COURS', 'A_AFFECTER'];
+      } else if (slaFilter === 'regle') {
+        newFilters.statut = ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'];
+      } else if (slaFilter === 'en_retard') {
+        newFilters.overdue = true;
+      }
+    }
+    
+    console.log('🔍 Applying filters:', newFilters);
+    setFilters(newFilters);
+  };
+
+  const resetFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setSelectedClient('');
+    setSlaFilter('all');
+    setReferenceFilter('');
+    setStatusFilter('');
+    setFilters({ archived: false });
   };
 
   const handleBulkAction = async (action: string, value?: any) => {
@@ -345,7 +397,8 @@ const BordereauxDashboard: React.FC = () => {
             <p className="bordereau-subtitle">Tableau de bord centralisé pour le suivi des bordereaux</p>
           </div>
           <div className="flex items-center gap-4">
-            {(isChefEquipe || isGestionnaire || isSuperAdmin) && (
+            {/* COMMENTED OUT: Corbeille button */}
+            {/* {(isChefEquipe || isGestionnaire || isSuperAdmin) && (
               <button
                 onClick={() => setShowCorbeilleModal(true)}
                 className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg flex items-center gap-2 font-medium"
@@ -354,7 +407,7 @@ const BordereauxDashboard: React.FC = () => {
                 {isGestionnaire && '📋 Ma Corbeille'}
                 {isSuperAdmin && '🗂️ Corbeille Globale'}
               </button>
-            )}
+            )} */}
             <div className="bordereau-user-info">
               Connecté en tant que <span style={{fontWeight: 600}}>{user?.fullName}</span>
             </div>
@@ -431,10 +484,31 @@ const BordereauxDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Actions Bar */}
-        <div className="bordereau-actions-bar">
+        {/* Filters Panel */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '0', flexWrap: 'wrap' }}>
+            <input type="text" placeholder="Référence" value={referenceFilter} onChange={(e) => setReferenceFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }} />
+            <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }}>
+              <option value="">Client</option>
+              {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }}>
+              <option value="">Statut</option>
+              <option value="EN_COURS">En cours</option>
+              <option value="TRAITE">Traité</option>
+              <option value="FINALISE">Finalisé</option>
+            </select>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+            <button onClick={applyFilters} style={{ padding: '6px 12px', background: '#2196f3', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Appliquer</button>
+            <button onClick={resetFilters} style={{ padding: '6px 12px', background: '#d52b36', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+          </div>
+        </div>
+
+        {/* Actions Bar - COMMENTED OUT */}
+        {/* <div className="bordereau-actions-bar">
           <div className="bordereau-actions-content">
-            <div className="bordereau-actions-left">
+            <div className="bordereau-actions-left"> */}
               {/* Role-specific buttons */}
               {isBureauOrdre && (
                 <>
@@ -504,16 +578,9 @@ const BordereauxDashboard: React.FC = () => {
                 </>
               )}
               
-              {(isSuperAdmin || isAdministrateur) && (
+              {/* COMMENTED OUT: Générer OV, Exporter, Importer Excel, Recherche Avancée */}
+              {/* {(isSuperAdmin || isAdministrateur) && (
                 <>
-                  {/* COMMENTED OUT: Multiple bordereau creation point - Use BO module instead */}
-                  {/* <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="bordereau-btn bordereau-btn-primary"
-                  >
-                    <span>+</span>
-                    Nouveau Bordereau
-                  </button> */}
                   <button
                     onClick={handleGenerateOV}
                     className="bordereau-btn bordereau-btn-warning"
@@ -532,7 +599,6 @@ const BordereauxDashboard: React.FC = () => {
                 Exporter
               </button>
               
-              {/* Excel Import */}
               <div className="relative">
                 <input
                   type="file"
@@ -550,14 +616,13 @@ const BordereauxDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Advanced Search */}
               <button
                 onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
                 className="bordereau-btn bordereau-btn-secondary"
               >
                 <span>🔍</span>
                 Recherche Avancée
-              </button>
+              </button> */}
 
               {selectedRows.size > 0 && (
                 <>
@@ -620,13 +685,13 @@ const BordereauxDashboard: React.FC = () => {
                   </div>
                 </>
               )}
-            </div>
+            {/* </div>
 
             <div className="flex items-center gap-3">
 
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Advanced Search Panel */}
         {showAdvancedSearch && (
@@ -660,17 +725,18 @@ const BordereauxDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* AI Recommendations Sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          <div className="lg:col-span-3">
+        {/* AI Recommendations Sidebar - COMMENTED OUT */}
+        {/* <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="lg:col-span-3"> */}
+        <div>
             {/* Content */}
         {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="bordereau-table-container">
-              <table className="bordereau-table divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">
                       <input
                         type="checkbox"
                         checked={selectedRows.size === bordereaux.length && bordereaux.length > 0}
@@ -684,50 +750,22 @@ const BordereauxDashboard: React.FC = () => {
                         className="rounded border-gray-300"
                       />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Référence Bordereau
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Client / Prestataire
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date réception BO
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date début Scannérisation
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Bulletin de soins
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date fin de Scannérisation
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Délais contractuels de règlement
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date réception équipe Santé
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Durée de traitement
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Durée de règlement
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Statut
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Référence</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Client</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Date Réception</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">BS</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Délai</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Durée Trait.</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Statut</th>
+                    <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-100">
                   {paginatedBordereaux.map((bordereau) => {
                     const sla = getSLAStatus(bordereau);
                     return (
-                      <tr key={bordereau.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                      <tr key={bordereau.id} className="hover:bg-blue-50 transition-colors group">
+                        <td className="px-3 py-3">
                           <input
                             type="checkbox"
                             checked={selectedRows.has(bordereau.id)}
@@ -743,446 +781,97 @@ const BordereauxDashboard: React.FC = () => {
                             className="rounded border-gray-300"
                           />
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{bordereau.reference}</div>
+                        <td className="px-3 py-3">
+                          <div className="text-sm font-semibold text-blue-600">{bordereau.reference}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{bordereau.client?.name}</div>
+                        <td className="px-3 py-3">
+                          <div className="text-sm text-gray-700">{bordereau.client?.name}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
+                        <td className="px-3 py-3">
+                          <div className="text-xs text-gray-600">
                             {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {bordereau.dateDebutScan ? new Date(bordereau.dateDebutScan).toLocaleDateString('fr-FR') : '-'}
+                        <td className="px-3 py-3">
+                          <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                            {bordereau.nombreBS}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-xs text-gray-600">
+                            {bordereau.delaiReglement || '-'}j
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {bordereau.nombreBS}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {bordereau.delaiReglement || '-'} jours
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {bordereau.dateReceptionSante ? new Date(bordereau.dateReceptionSante).toLocaleDateString('fr-FR') : '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-3">
                           {(() => {
                             const dureeTraitement = getDureeTraitement(bordereau);
                             if (dureeTraitement.days === null || dureeTraitement.days === undefined) {
-                              return <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>;
+                              return <span className="text-xs text-gray-400">-</span>;
                             }
                             return (
-                              <span style={{ 
-                                background: dureeTraitement.isOnTime ? '#e8f5e9' : '#ffebee', 
-                                color: dureeTraitement.isOnTime ? '#2e7d32' : '#c62828', 
-                                padding: '4px 8px', 
-                                borderRadius: '12px', 
-                                fontSize: '12px', 
-                                fontWeight: 'bold',
-                                display: 'inline-block'
-                              }}>
-                                {dureeTraitement.days} jour{dureeTraitement.days !== 1 ? 's' : ''}
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                dureeTraitement.isOnTime ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}>
+                                {dureeTraitement.days}j
                               </span>
                             );
                           })()}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {(() => {
-                            const dureeReglement = getDureeReglement(bordereau);
-                            if (dureeReglement.days === null || dureeReglement.days === undefined) {
-                              return <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>;
-                            }
-                            return (
-                              <span style={{ 
-                                background: dureeReglement.isOnTime ? '#e8f5e9' : '#ffebee', 
-                                color: dureeReglement.isOnTime ? '#2e7d32' : '#c62828', 
-                                padding: '4px 8px', 
-                                borderRadius: '12px', 
-                                fontSize: '12px', 
-                                fontWeight: 'bold',
-                                display: 'inline-block'
-                              }}>
-                                {dureeReglement.days} jour{dureeReglement.days !== 1 ? 's' : ''}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-3">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(bordereau.statut)}`}>
                             {bordereau.statut}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center gap-1 min-w-[300px]">
-                            {/* Always show Voir and Progresser */}
-                            <button
-                              className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-                              onClick={(e) => {
-                                console.log('Voir button clicked for bordereau:', bordereau.id);
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleViewBordereau(bordereau.id);
-                              }}
-                              title="Voir détails"
-                            >
-                              👁️ Voir
-                            </button>
-
-                            {/* Edit button - available for BO, Chef, Admin, Super Admin */}
-                            {(isBureauOrdre || isChefEquipe || isAdministrateur || isSuperAdmin) && (
+                        <td className="px-3 py-3 text-center relative">
+                          {/* COMMENTED OUT - 3 dots menu */}
+                          {/* <div className="relative inline-block group">
+                            <button className="px-2 py-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all text-lg font-bold">⋯</button>
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex gap-1 p-2 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 whitespace-nowrap"> */}
+                          <div className="flex gap-2 justify-center">
+                              {/* Always visible actions */}
                               <button
-                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
+                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  setSelectedBordereauForEdit(bordereau.id);
-                                  setShowEditModal(true);
+                                  handleViewBordereau(bordereau.id);
                                 }}
-                                title="Modifier le bordereau"
+                                title="Voir détails"
                               >
-                                ✏️ Modifier
+                                👁️ Voir
                               </button>
-                            )}
 
-                            <button
-                              className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleProgressBordereau(bordereau);
-                              }}
-                              title="Progresser vers l'étape suivante"
-                            >
-                              ➡️ Progresser
-                            </button>
+                              
+                              {/* COMMENTED OUT - Keep only Voir and Archiver */}
+                              {/* <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleProgressBordereau(bordereau); }} title="Progresser"><span>➡️</span><span>Suivant</span></button> */}
+                              {/* <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedBordereauForEdit(bordereau.id); setShowEditModal(true); }} title="Modifier"><span>✏️</span><span>Modifier</span></button> */}
+                              {/* <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleAssignBordereau(bordereau.id); }} title="Assigner"><span>👥</span><span>Assigner</span></button> */}
+                              {/* <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReassignBordereau(bordereau.id); }} title="Réaffecter"><span>↔️</span><span>Réaffecter</span></button> */}
+                              {/* <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAlertsData(alerts); setSelectedBordereauForAlerts(bordereau); setShowAlertsModal(true); }} title="Alertes"><span>⚠️</span><span>Alertes</span></button> */}
 
-                            {/* COMMENTED OUT: Redundant scan status entry points - Use SCAN Dashboard instead */}
-                            {/* Bureau d'Ordre specific */}
-                            {/* {isBureauOrdre && bordereau.statut === 'EN_ATTENTE' && (
-                              <button
-                                className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded transition-colors"
-                                onClick={() => batchUpdateStatus([bordereau.id], 'A_SCANNER').then(() => loadData())}
-                                title="Envoyer au scan"
-                              >
-                                📤 Scan
-                              </button>
-                            )} */}
-
-                            {/* SCAN Team specific */}
-                            {/* {isScanTeam && (
-                              <>
-                                {bordereau.statut === 'A_SCANNER' && (
-                                  <button
-                                    className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
-                                    onClick={() => startScan(bordereau.id).then(() => loadData())}
-                                    title="Démarrer scan"
-                                  >
-                                    🖨️ Start
-                                  </button>
-                                )}
-                                {bordereau.statut === 'SCAN_EN_COURS' && (
-                                  <button
-                                    className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 rounded transition-colors"
-                                    onClick={() => completeScan(bordereau.id).then(() => loadData())}
-                                    title="Terminer scan"
-                                  >
-                                    ✅ Done
-                                  </button>
-                                )}
-                              </>
-                            )} */}
-
-                            {/* Chef d'Équipe specific */}
-                            {isChefEquipe && (
-                              <>
-                                {(bordereau.statut === 'SCANNE' || bordereau.statut === 'A_AFFECTER') && (
-                                  <button
-                                    className="px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 rounded transition-colors"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleAssignBordereau(bordereau.id);
-                                    }}
-                                    title="Assigner à un gestionnaire"
-                                  >
-                                    👥 Assigner
-                                  </button>
-                                )}
-                                {bordereau.assignedToUserId && (
-                                  <button
-                                    className="px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 rounded transition-colors"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleReassignBordereau(bordereau.id);
-                                    }}
-                                    title="Réaffecter à un autre gestionnaire"
-                                  >
-                                    ↔️ Réaffecter
-                                  </button>
-                                )}
-                                {bordereau.assignedToUserId && (
-                                  <button
-                                    className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded transition-colors"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      batchUpdateStatus([bordereau.id], 'A_AFFECTER').then(() => loadData());
-                                    }}
-                                    title="Récupérer le dossier"
-                                  >
-                                    ↩️ Récupérer
-                                  </button>
-                                )}
-                              </>
-                            )}
-
-                            {/* Gestionnaire specific */}
-                            {isGestionnaire && bordereau.statut === 'EN_COURS' && (
-                              <>
+                              
+                              {/* Archive action */}
+                              {isSuperAdmin && (
                                 <button
-                                  className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 rounded transition-colors"
-                                  onClick={() => markBordereauAsProcessed(bordereau.id).then(() => loadData())}
-                                  title="Marquer comme traité"
-                                >
-                                  ✅ Traiter
-                                </button>
-                                <button
-                                  className="px-2 py-1 text-xs bg-yellow-100 hover:bg-yellow-200 rounded transition-colors"
-                                  onClick={() => batchUpdateStatus([bordereau.id], 'MIS_EN_INSTANCE').then(() => loadData())}
-                                  title="Mettre en instance"
-                                >
-                                  ⏸️ Instance
-                                </button>
-                                <button
-                                  className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 rounded transition-colors"
-                                  onClick={() => batchUpdateStatus([bordereau.id], 'VIREMENT_REJETE').then(() => loadData())}
-                                  title="Rejeter le dossier"
-                                >
-                                  ❌ Rejeter
-                                </button>
-                                <button
-                                  className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 rounded transition-colors"
-                                  onClick={() => {
-                                    const reason = prompt('Motif du retour:');
-                                    if (reason) returnBordereau(bordereau.id, reason).then(() => loadData());
-                                  }}
-                                  title="Renvoyer au chef"
-                                >
-                                  🔄 Renvoyer
-                                </button>
-                              </>
-                            )}
-
-                            {/* Super Admin specific */}
-                            {isSuperAdmin && (
-                              <>
-                                {(bordereau.statut === 'SCANNE' || bordereau.statut === 'A_AFFECTER') && (
-                                  <button
-                                    className="px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 rounded transition-colors"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleAssignBordereau(bordereau.id);
-                                    }}
-                                    title="Assigner"
-                                  >
-                                    👥 Assigner
-                                  </button>
-                                )}
-                                {bordereau.assignedToUserId && (
-                                  <button
-                                    className="px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 rounded transition-colors"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleReassignBordereau(bordereau.id);
-                                    }}
-                                    title="Réaffecter"
-                                  >
-                                    ↔️ Réaffecter
-                                  </button>
-                                )}
-                                <button
-                                  className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded transition-colors"
-                                  onClick={(e) => {
+                                  className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors"
+                                  onClick={async (e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    
-                                    // Generate dynamic alerts based on bordereau data
-                                    const alerts = [];
-                                    const today = new Date();
-                                    const reception = new Date(bordereau.dateReception);
-                                    const daysElapsed = Math.floor((today.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24));
-                                    const daysRemaining = bordereau.delaiReglement - daysElapsed;
-                                    
-                                    // SLA Breach Alert
-                                    if (daysRemaining < 0) {
-                                      alerts.push({
-                                        id: `sla-${bordereau.id}`,
-                                        type: 'SLA_BREACH',
-                                        severity: 'HIGH',
-                                        title: 'Dépassement SLA Critique',
-                                        message: `Ce bordereau a dépassé son délai de règlement de ${Math.abs(daysRemaining)} jour(s). Action immédiate requise.`,
-                                        timestamp: new Date().toISOString(),
-                                        actionRequired: true
-                                      });
-                                    }
-                                    
-                                    // SLA Warning Alert
-                                    if (daysRemaining > 0 && daysRemaining <= 3) {
-                                      alerts.push({
-                                        id: `sla-warning-${bordereau.id}`,
-                                        type: 'SLA_WARNING',
-                                        severity: 'MEDIUM',
-                                        title: 'SLA Proche de l\'expiration',
-                                        message: `Ce bordereau expire dans ${daysRemaining} jour(s). Planifiez le traitement rapidement.`,
-                                        timestamp: new Date().toISOString(),
-                                        actionRequired: false
-                                      });
-                                    }
-                                    
-                                    // Status Stuck Alert
-                                    if (bordereau.statut === 'EN_COURS' && daysElapsed > 15) {
-                                      alerts.push({
-                                        id: `stuck-${bordereau.id}`,
-                                        type: 'PROCESS_STUCK',
-                                        severity: 'MEDIUM',
-                                        title: 'Dossier bloqué en traitement',
-                                        message: `Ce dossier est en cours de traitement depuis ${daysElapsed} jours. Vérifiez l'état d'avancement.`,
-                                        timestamp: new Date().toISOString(),
-                                        actionRequired: true
-                                      });
-                                    }
-                                    
-                                    // High Volume Alert
-                                    if (bordereau.nombreBS > 50) {
-                                      alerts.push({
-                                        id: `volume-${bordereau.id}`,
-                                        type: 'HIGH_VOLUME',
-                                        severity: 'MEDIUM',
-                                        title: 'Volume élevé de BS',
-                                        message: `Ce bordereau contient ${bordereau.nombreBS} bulletins de soin. Considérez une priorité élevée.`,
-                                        timestamp: new Date().toISOString(),
-                                        actionRequired: false
-                                      });
-                                    }
-                                    
-                                    // Assignment Alert
-                                    if (!bordereau.assignedToUserId && ['SCANNE', 'A_AFFECTER'].includes(bordereau.statut)) {
-                                      alerts.push({
-                                        id: `unassigned-${bordereau.id}`,
-                                        type: 'UNASSIGNED',
-                                        severity: 'MEDIUM',
-                                        title: 'Dossier non assigné',
-                                        message: 'Ce dossier est prêt pour affectation mais n\'est assigné à aucun gestionnaire.',
-                                        timestamp: new Date().toISOString(),
-                                        actionRequired: true
-                                      });
-                                    }
-                                    
-                                    setAlertsData(alerts);
-                                    setSelectedBordereauForAlerts(bordereau);
-                                    setShowAlertsModal(true);
-                                  }}
-                                  title="Gérer alertes"
-                                >
-                                  ⚠️ Alertes
-                                </button>
-                              </>
-                            )}
-
-                            {/* More actions dropdown */}
-                            <div className="relative group">
-                              <button className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors">
-                                ⋯
-                              </button>
-                              <div className="absolute right-0 top-8 bg-white shadow-lg rounded-md py-1 z-50 hidden group-hover:block min-w-32">
-                                <button 
-                                  className="block w-full text-left px-3 py-1 text-xs hover:bg-gray-50"
-                                  onClick={async () => {
-                                    console.log('🔔 NOTIFICATION BUTTON CLICKED!');
-                                    console.log('Notify function:', notify);
-                                    
-                                    // Test the notification popup directly
-                                    notify('TEST: Notification envoyée avec succès!', 'success');
-                                    
                                     try {
-                                      const { sendCustomNotification } = await import('../../services/bordereauxService');
-                                      await sendCustomNotification(
-                                        bordereau.id,
-                                        `Notification pour le bordereau ${bordereau.reference}`,
-                                        [bordereau.assignedToUserId].filter(Boolean)
-                                      );
-                                      console.log('✅ API call successful');
+                                      await archiveBordereau(bordereau.id);
+                                      notify(`Bordereau ${bordereau.reference} archivé`, 'success');
+                                      setBordereaux(prev => prev.filter(b => b.id !== bordereau.id));
                                     } catch (error) {
-                                      console.error('Notification error:', error);
-                                      notify('Erreur lors de l\'envoi de la notification', 'error');
+                                      notify('Erreur archivage', 'error');
                                     }
                                   }}
+                                  title="Archiver"
                                 >
-                                  🔔 Notification
+                                  🗄️ Archiver
                                 </button>
-                                <button 
-                                  className="block w-full text-left px-3 py-1 text-xs hover:bg-gray-50"
-                                  onClick={async () => {
-                                    try {
-                                      const response = await fetch(`/api/bordereaux/${bordereau.id}/export-pdf`, {
-                                        method: 'GET',
-                                        headers: {
-                                          'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                        }
-                                      });
-                                      if (response.ok) {
-                                        const blob = await response.blob();
-                                        const url = window.URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `bordereau_${bordereau.reference}.pdf`;
-                                        a.click();
-                                        window.URL.revokeObjectURL(url);
-                                        notify(`PDF exporté: ${bordereau.reference}`, 'success');
-                                      } else {
-                                        notify('Erreur lors de l\'export PDF', 'error');
-                                      }
-                                    } catch (error) {
-                                      notify('Erreur lors de l\'export PDF', 'error');
-                                    }
-                                  }}
-                                >
-                                  📄 Export PDF
-                                </button>
-                                {isSuperAdmin && (
-                                  <button 
-                                    className="block w-full text-left px-3 py-1 text-xs hover:bg-gray-50 text-red-600"
-                                    onClick={async () => {
-                                      try {
-                                        await archiveBordereau(bordereau.id);
-                                        notify(`Bordereau ${bordereau.reference} archivé avec succès`, 'success');
-                                        // Immediately remove from current state
-                                        setBordereaux(prev => prev.filter(b => b.id !== bordereau.id));
-                                      } catch (error) {
-                                        notify('Erreur lors de l\'archivage', 'error');
-                                      }
-                                    }}
-                                  >
-                                    🗄️ Archiver
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                              )}
+                            {/* </div>
+                          </div> */}
                           </div>
                         </td>
                       </tr>
@@ -1316,11 +1005,11 @@ const BordereauxDashboard: React.FC = () => {
         }
           </div>
           
-          {/* AI Sidebar */}
-          <div className="lg:col-span-1 space-y-6">
+          {/* AI Sidebar - COMMENTED OUT */}
+          {/* <div className="lg:col-span-1 space-y-6">
             <AIRecommendations />
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Create Modal */}

@@ -118,6 +118,7 @@ export const canUserManageRole = (currentRole: UserRole, targetRole: UserRole): 
     'ADMINISTRATEUR': 8,
     'RESPONSABLE_DEPARTEMENT': 6,
     'CHEF_EQUIPE': 5,
+    'GESTIONNAIRE_SENIOR': 4,
     'GESTIONNAIRE': 3,
     'CLIENT_SERVICE': 3,
     'FINANCE': 3,

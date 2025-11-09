@@ -125,4 +125,15 @@ export class ContractsController {
   async downloadDocument(@Param('id') id: string, @Res() res: any) {
     return this.contractsService.downloadDocument(id, res);
   }
+
+  @Post(':id/reassign-chef')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT)
+  async reassignChef(
+    @Param('id') id: string,
+    @Body() body: { newChefId: string },
+    @Req() req: any
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    return this.contractsService.reassignChef(id, body.newChefId, userId);
+  }
 }

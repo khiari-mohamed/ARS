@@ -3,6 +3,7 @@ export type UserRole =
   | 'ADMINISTRATEUR'
   | 'RESPONSABLE_DEPARTEMENT'
   | 'CHEF_EQUIPE'
+  | 'GESTIONNAIRE_SENIOR'
   | 'GESTIONNAIRE'
   | 'CLIENT_SERVICE'
   | 'FINANCE'
@@ -15,6 +16,7 @@ export interface User {
   email: string;
   role: UserRole;
   department?: string;
+  departmentId?: string;
   team?: string;
   phone?: string;
   photo?: string;
@@ -50,6 +52,7 @@ export interface CreateUserDto {
   password: string;
   role: UserRole;
   department?: string;
+  departmentId?: string;
   team?: string;
   phone?: string;
   position?: string;
@@ -65,6 +68,7 @@ export interface UpdateUserDto {
   password?: string;
   role?: UserRole;
   department?: string;
+  departmentId?: string;
   team?: string;
   phone?: string;
   position?: string;
@@ -139,6 +143,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   ADMINISTRATEUR: 'Administrateur',
   RESPONSABLE_DEPARTEMENT: 'Responsable Département',
   CHEF_EQUIPE: 'Chef d\'Équipe',
+  GESTIONNAIRE_SENIOR: 'Gestionnaire Senior',
   GESTIONNAIRE: 'Gestionnaire',
   CLIENT_SERVICE: 'Service Client',
   FINANCE: 'Finance',

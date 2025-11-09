@@ -613,6 +613,16 @@ export class DashboardService {
     // Apply role-based filtering
     if (user.role === 'GESTIONNAIRE') {
       where.assignedToUserId = user.id;
+    } else if (user.role === 'GESTIONNAIRE_SENIOR') {
+      // Gestionnaire Senior works alone - sees only their own data
+      where.OR = [
+        { assignedToUserId: user.id },
+        {
+          contract: {
+            teamLeaderId: user.id
+          }
+        }
+      ];
     } else if (user.role === 'CHEF_EQUIPE') {
       // Chef d'équipe sees only their team's data
       where.OR = [
@@ -1030,6 +1040,8 @@ export class DashboardService {
           responsableDashboard.role = 'SUPER_ADMIN'; // Keep as SUPER_ADMIN for frontend compatibility
           responsableDashboard.permissions = [...responsableDashboard.permissions, 'READ_ONLY'];
           return responsableDashboard;
+        case 'GESTIONNAIRE_SENIOR':
+          return this.getGestionnaireSeniorDashboard(kpis, performance, slaStatus, alerts, user, filters);
         case 'CHEF_EQUIPE':
           return this.getChefEquipeDashboard(kpis, performance, slaStatus, alerts, user, filters);
         case 'GESTIONNAIRE':
@@ -1073,6 +1085,36 @@ export class DashboardService {
       allTeamsData,
       role: 'SUPER_ADMIN',
       permissions: ['VIEW_ALL', 'EXPORT', 'MANAGE_USERS', 'SYSTEM_CONFIG']
+    };
+  }
+  
+  private async getGestionnaireSeniorDashboard(kpis: any, performance: any, slaStatus: any, alerts: any, user: any, filters: any) {
+    // Gestionnaire Senior has same view as Chef but works alone
+    const personalTasks = await this.prisma.bordereau.findMany({
+      where: { 
+        OR: [
+          { assignedToUserId: user.id },
+          { contract: { teamLeaderId: user.id } }
+        ],
+        statut: { in: ['ASSIGNE', 'EN_COURS'] } 
+      },
+      include: { client: true },
+      orderBy: { dateReception: 'asc' },
+      take: 20
+    });
+    
+    return {
+      kpis,
+      performance,
+      slaStatus,
+      alerts,
+      personalTasks,
+      role: 'GESTIONNAIRE_SENIOR',
+      permissions: ['VIEW_TEAM', 'VIEW_PERFORMANCE', 'PROCESS_TASKS'],
+      restrictions: {
+        canAssignToOthers: false,
+        message: 'Gestionnaire Senior - Travail autonome sans équipe'
+      }
     };
   }
   

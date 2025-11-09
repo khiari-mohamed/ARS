@@ -472,6 +472,11 @@ export class UsersService {
     return exportData;
   }
 
+  async countActiveUsers() {
+    const count = await this.prisma.user.count({ where: { active: true } });
+    return { count };
+  }
+
   async getDashboardStats(userRole: UserRole, userId?: string) {
     const baseStats = {
       totalUsers: await this.prisma.user.count({ where: { active: true } }),

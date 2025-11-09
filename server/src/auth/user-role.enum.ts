@@ -8,6 +8,7 @@ export enum UserRole {
   RESPONSABLE_DEPARTEMENT = 'RESPONSABLE_DEPARTEMENT', // Read-only access to all modules
   RESPONSABLE_EQUIPE = 'RESPONSABLE_EQUIPE', // Validates OV before Chef d'Equipe
   CHEF_EQUIPE = 'CHEF_EQUIPE',
+  GESTIONNAIRE_SENIOR = 'GESTIONNAIRE_SENIOR', // Chef d'équipe permissions but works alone without team
   GESTIONNAIRE = 'GESTIONNAIRE',
   CLIENT_SERVICE = 'CLIENT_SERVICE',
   SERVICE_CLIENT = 'SERVICE_CLIENT', // Service client profile as gestionnaire role
@@ -22,7 +23,9 @@ export enum UserRole {
  * Throws an error if not valid.
  */
 export function assertValidRole(role: string): asserts role is UserRole {
-  if (!Object.values(UserRole).includes(role as UserRole)) {
+  const validRoles = Object.values(UserRole);
+  if (!validRoles.includes(role as UserRole)) {
+    console.error(`Invalid role: ${role}. Valid roles:`, validRoles);
     throw new Error(`Invalid role: ${role}`);
   }
 }
