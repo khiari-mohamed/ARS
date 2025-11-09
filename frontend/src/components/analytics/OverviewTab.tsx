@@ -32,12 +32,14 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
       // Calculate KPIs from real data
       const totalBordereaux = kpiData.totalCount || 0;
       const processedCount = kpiData.processedCount || 0;
+      const enAttenteCount = kpiData.enAttenteCount || 0;
       const avgProcessingTime = kpiData.avgDelay || 0;
       const processingRate = totalBordereaux > 0 ? Math.round((processedCount / totalBordereaux) * 100) : 0;
 
       setKpis({
         totalBordereaux,
         processedCount,
+        enAttenteCount,
         avgProcessingTime,
         processingRate
       });
@@ -139,7 +141,7 @@ const OverviewTab: React.FC<Props> = ({ filters, dateRange }) => {
                   <Box display="flex" alignItems="center" gap={2}>
                     <WarningIcon color="warning" />
                     <Box>
-                      <Typography variant="h4">{kpis.totalBordereaux - kpis.processedCount}</Typography>
+                      <Typography variant="h4">{kpis.enAttenteCount}</Typography>
                       <Typography color="textSecondary">En Attente</Typography>
                     </Box>
                   </Box>

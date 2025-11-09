@@ -22,6 +22,7 @@ const roleLabels: Record<UserRole, string> = {
   ADMINISTRATEUR: 'Administrateur',
   RESPONSABLE_DEPARTEMENT: 'Responsable Département',
   CHEF_EQUIPE: "Chef d'Équipe",
+  GESTIONNAIRE_SENIOR: 'Gestionnaire Senior',
   GESTIONNAIRE: 'Gestionnaire',
   CLIENT_SERVICE: 'Service Client',
   FINANCE: 'Finance',

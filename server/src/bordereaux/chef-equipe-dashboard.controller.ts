@@ -1,4 +1,7 @@
-import { Controller, Get, Post, Body, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Req, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -317,6 +320,93 @@ export class ChefEquipeDashboardController {
     });
 
     return { success: true };
+  }
+
+  @Post('remove-document-from-bordereau')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async removeDocumentFromBordereau(@Body() body: { documentId: string }, @Req() req) {
+    const document = await this.prisma.document.findUnique({
+      where: { id: body.documentId },
+      include: { bordereau: true }
+    });
+
+    if (!document || !document.bordereauId) {
+      throw new Error('Document not found or not linked to bordereau');
+    }
+
+    await this.prisma.document.update({
+      where: { id: body.documentId },
+      data: { bordereauId: null, assignedToUserId: null }
+    });
+
+    return { success: true, message: 'Document retiré du bordereau' };
+  }
+
+  @Post('add-document-to-bordereau')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async addDocumentToBordereau(@Body() body: { documentId: string; bordereauId: string }, @Req() req) {
+    const [document, bordereau] = await Promise.all([
+      this.prisma.document.findUnique({ where: { id: body.documentId } }),
+      this.prisma.bordereau.findUnique({ where: { id: body.bordereauId } })
+    ]);
+
+    if (!document) throw new Error('Document not found');
+    if (!bordereau) throw new Error('Bordereau not found');
+
+    await this.prisma.document.update({
+      where: { id: body.documentId },
+      data: { bordereauId: body.bordereauId }
+    });
+
+    return { success: true, message: 'Document ajouté au bordereau' };
+  }
+
+  @Post('upload-document-to-bordereau')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + extname(file.originalname));
+      }
+    }),
+    limits: { fileSize: 50 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new BadRequestException('Type de fichier non supporté'), false);
+      }
+    }
+  }))
+  async uploadDocumentToBordereau(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('bordereauId') bordereauId: string,
+    @Req() req
+  ) {
+    if (!file) throw new BadRequestException('Aucun fichier uploadé');
+    if (!bordereauId) throw new BadRequestException('ID bordereau requis');
+
+    const bordereau = await this.prisma.bordereau.findUnique({ 
+      where: { id: bordereauId } 
+    });
+
+    if (!bordereau) throw new BadRequestException('Bordereau introuvable');
+
+    const document = await this.prisma.document.create({
+      data: {
+        name: file.originalname,
+        path: file.filename,
+        type: 'BULLETIN_SOIN',
+        uploadedById: req.user.id,
+        bordereauId: bordereauId,
+        status: 'UPLOADED'
+      }
+    });
+
+    return { success: true, message: 'Document uploadé et ajouté', documentId: document.id };
   }
 
   private buildAccessFilter(user: any): any {

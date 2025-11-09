@@ -123,6 +123,8 @@ function GestionnaireBordereaux() {
                   </div>
                 </div>
               </div>
+              {/* RETOURNES BOX - COMMENTED OUT */}
+              {false && (
               <div className="gestionnaire-stat-card" onClick={() => { setModalType('retournes'); setModalData(userBordereaux.filter((b: any) => b.statut === 'REJETE' || b.statut === 'RETOURNE')); setShowModal(true); }} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <div style={{ background: 'linear-gradient(135deg, #ffebee 0%, #f44336 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(244, 67, 54, 0.2)' }}>
@@ -135,6 +137,7 @@ function GestionnaireBordereaux() {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           </>
         )}

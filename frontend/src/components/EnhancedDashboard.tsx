@@ -132,6 +132,15 @@ const EnhancedDashboard: React.FC = () => {
   const superAdminDerniersPerPage = 5;
   const superAdminBordereauxPerPage = 5;
   const superAdminIndividuelsPerPage = 20;
+  
+  // Filter states
+  const [filter1, setFilter1] = useState({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
+  const [filter2, setFilter2] = useState({ ref: '', client: '', statut: '', dateFrom: '', dateTo: '' });
+  const [filter3, setFilter3] = useState({ ref: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' });
+  
+  const [filteredDerniers, setFilteredDerniers] = useState<any[]>([]);
+  const [filteredEnCours, setFilteredEnCours] = useState<any[]>([]);
+  const [filteredIndividuels, setFilteredIndividuels] = useState<any[]>([]);
 
   // Missing Chef d'équipe state variables
   const [stats, setStats] = useState<TableauBordStats>({
@@ -159,6 +168,16 @@ const EnhancedDashboard: React.FC = () => {
   const [newStatus, setNewStatus] = useState('');
   const [dossierDetails, setDossierDetails] = useState<any>(null);
   const [loadingDossierDetails, setLoadingDossierDetails] = useState(false);
+  
+  // Compute unique statuses from ALL data sources combined
+  const allUniqueStatuts = React.useMemo(() => {
+    const allStatuts = [
+      ...derniersDossiers.map((d: any) => d.statut),
+      ...superAdminDossiersEnCours.map((d: any) => d.statut),
+      ...superAdminDocumentsIndividuels.map((d: any) => d.statut)
+    ].filter(Boolean);
+    return [...new Set(allStatuts)].sort();
+  }, [derniersDossiers, superAdminDossiersEnCours, superAdminDocumentsIndividuels]);
 
   // Fetch detailed dossier information
   const fetchDossierDetails = async (dossierId: string) => {
@@ -659,6 +678,39 @@ const EnhancedDashboard: React.FC = () => {
     }
   }, [dashboardData]);
 
+  // Apply filters
+  useEffect(() => {
+    let f1 = derniersDossiers.filter((d: any) => 
+      (!filter1.ref || d.reference?.toLowerCase().includes(filter1.ref.toLowerCase())) &&
+      (!filter1.client || d.client?.toLowerCase().includes(filter1.client.toLowerCase())) &&
+      (!filter1.type || d.type === filter1.type) &&
+      (!filter1.statut || d.statut === filter1.statut) &&
+      (!filter1.dateFrom || new Date(d.date) >= new Date(filter1.dateFrom)) &&
+      (!filter1.dateTo || new Date(d.date) <= new Date(filter1.dateTo))
+    );
+    setFilteredDerniers(f1);
+    
+    let f2 = superAdminDossiersEnCours.filter((d: any) => 
+      (!filter2.ref || d.reference?.toLowerCase().includes(filter2.ref.toLowerCase())) &&
+      (!filter2.client || d.client?.toLowerCase().includes(filter2.client.toLowerCase())) &&
+      (!filter2.statut || d.statut === filter2.statut) &&
+      (!filter2.dateFrom || new Date(d.date) >= new Date(filter2.dateFrom)) &&
+      (!filter2.dateTo || new Date(d.date) <= new Date(filter2.dateTo))
+    );
+    setFilteredEnCours(f2);
+    
+    let f3 = superAdminDocumentsIndividuels.filter((d: any) => 
+      (!filter3.ref || d.reference?.toLowerCase().includes(filter3.ref.toLowerCase())) &&
+      (!filter3.client || d.client?.toLowerCase().includes(filter3.client.toLowerCase())) &&
+      (!filter3.type || d.type === filter3.type) &&
+      (!filter3.statut || d.statut === filter3.statut) &&
+      (!filter3.gest || d.gestionnaire?.toLowerCase().includes(filter3.gest.toLowerCase())) &&
+      (!filter3.dateFrom || new Date(d.uploadedAt || d.date) >= new Date(filter3.dateFrom)) &&
+      (!filter3.dateTo || new Date(d.uploadedAt || d.date) <= new Date(filter3.dateTo))
+    );
+    setFilteredIndividuels(f3);
+  }, [derniersDossiers, superAdminDossiersEnCours, superAdminDocumentsIndividuels, filter1, filter2, filter3]);
+  
   // Real-time updates
   useEffect(() => {
     fetchDashboardData();
@@ -1419,7 +1471,26 @@ const EnhancedDashboard: React.FC = () => {
 
               {/* Derniers Bordereaux Ajoutés */}
               <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Derniers Bordereaux Ajoutés</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>Derniers Bordereaux Ajoutés</h3>
+                
+                {/* FILTERS */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <input type="text" placeholder="Référence" value={filter1.ref} onChange={(e) => setFilter1({...filter1, ref: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }} />
+                  <input type="text" placeholder="Client" value={filter1.client} onChange={(e) => setFilter1({...filter1, client: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }} />
+                  <select value={filter1.type} onChange={(e) => setFilter1({...filter1, type: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }}>
+                    <option value="">Type</option>
+                    <option value="Prestation">Prestation</option>
+                    <option value="Adhésion">Adhésion</option>
+                  </select>
+                  <select value={filter1.statut} onChange={(e) => setFilter1({...filter1, statut: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }}>
+                    <option value="">Statut</option>
+                    {allUniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <input type="date" value={filter1.dateFrom} onChange={(e) => setFilter1({...filter1, dateFrom: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+                  <input type="date" value={filter1.dateTo} onChange={(e) => setFilter1({...filter1, dateTo: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+                  <button onClick={() => setFilter1({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 12px', background: '#d52b36', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+                </div>
+                
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -1430,11 +1501,11 @@ const EnhancedDashboard: React.FC = () => {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                        {/* <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th> */}
                       </tr>
                     </thead>
                     <tbody>
-                      {derniersDossiers.slice((superAdminDerniersPage - 1) * superAdminDerniersPerPage, superAdminDerniersPage * superAdminDerniersPerPage).map((dossier, index) => (
+                      {filteredDerniers.slice((superAdminDerniersPage - 1) * superAdminDerniersPerPage, superAdminDerniersPage * superAdminDerniersPerPage).map((dossier, index) => (
                         <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                           <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
@@ -1455,28 +1526,42 @@ const EnhancedDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
-                          <td style={{ padding: '12px 8px' }}>
+                          {/* <td style={{ padding: '12px 8px' }}>
                             {!isReadOnly && (
                               <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
                             )}
-                          </td>
+                          </td> */}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                {derniersDossiers.length > superAdminDerniersPerPage && (
+                {filteredDerniers.length > superAdminDerniersPerPage && (
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e0e0e0' }}>
                     <button onClick={() => setSuperAdminDerniersPage(prev => Math.max(1, prev - 1))} disabled={superAdminDerniersPage === 1} style={{ background: superAdminDerniersPage === 1 ? '#e0e0e0' : '#d32f2f', color: superAdminDerniersPage === 1 ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminDerniersPage === 1 ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>← Précédent</button>
-                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminDerniersPage} sur {Math.ceil(derniersDossiers.length / superAdminDerniersPerPage)}</span>
-                    <button onClick={() => setSuperAdminDerniersPage(prev => Math.min(Math.ceil(derniersDossiers.length / superAdminDerniersPerPage), prev + 1))} disabled={superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage)} style={{ background: superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminDerniersPage >= Math.ceil(derniersDossiers.length / superAdminDerniersPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
+                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminDerniersPage} sur {Math.ceil(filteredDerniers.length / superAdminDerniersPerPage)}</span>
+                    <button onClick={() => setSuperAdminDerniersPage(prev => Math.min(Math.ceil(filteredDerniers.length / superAdminDerniersPerPage), prev + 1))} disabled={superAdminDerniersPage >= Math.ceil(filteredDerniers.length / superAdminDerniersPerPage)} style={{ background: superAdminDerniersPage >= Math.ceil(filteredDerniers.length / superAdminDerniersPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminDerniersPage >= Math.ceil(filteredDerniers.length / superAdminDerniersPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminDerniersPage >= Math.ceil(filteredDerniers.length / superAdminDerniersPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
                   </div>
                 )}
               </div>
 
               {/* Bordereaux en cours */}
               <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux  ({superAdminDossiersEnCours.length} total)</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>Bordereaux  ({superAdminDossiersEnCours.length} total)</h3>
+                
+                {/* FILTERS */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <input type="text" placeholder="Référence" value={filter2.ref} onChange={(e) => setFilter2({...filter2, ref: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }} />
+                  <input type="text" placeholder="Client" value={filter2.client} onChange={(e) => setFilter2({...filter2, client: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }} />
+                  <select value={filter2.statut} onChange={(e) => setFilter2({...filter2, statut: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }}>
+                    <option value="">Statut</option>
+                    {allUniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <input type="date" value={filter2.dateFrom} onChange={(e) => setFilter2({...filter2, dateFrom: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+                  <input type="date" value={filter2.dateTo} onChange={(e) => setFilter2({...filter2, dateTo: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+                  <button onClick={() => setFilter2({ ref: '', client: '', statut: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 12px', background: '#d52b36', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+                </div>
+                
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -1486,11 +1571,11 @@ const EnhancedDashboard: React.FC = () => {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Statut</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                        {/* <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th> */}
                       </tr>
                     </thead>
                     <tbody>
-                      {superAdminDossiersEnCours.slice((superAdminBordereauxPage - 1) * superAdminBordereauxPerPage, superAdminBordereauxPage * superAdminBordereauxPerPage).map((dossier, index) => (
+                      {filteredEnCours.slice((superAdminBordereauxPage - 1) * superAdminBordereauxPerPage, superAdminBordereauxPage * superAdminBordereauxPerPage).map((dossier, index) => (
                         <tr key={dossier.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                           <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client}</td>
@@ -1514,21 +1599,21 @@ const EnhancedDashboard: React.FC = () => {
                               ))}
                             </div>
                           </td>
-                          <td style={{ padding: '12px 8px' }}>
+                          {/* <td style={{ padding: '12px 8px' }}>
                             {!isReadOnly && (
                               <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
                             )}
-                          </td>
+                          </td> */}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                {superAdminDossiersEnCours.length >= superAdminBordereauxPerPage && (
+                {filteredEnCours.length >= superAdminBordereauxPerPage && (
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e0e0e0' }}>
                     <button onClick={() => setSuperAdminBordereauxPage(prev => Math.max(1, prev - 1))} disabled={superAdminBordereauxPage === 1} style={{ background: superAdminBordereauxPage === 1 ? '#e0e0e0' : '#d32f2f', color: superAdminBordereauxPage === 1 ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminBordereauxPage === 1 ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>← Précédent</button>
-                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminBordereauxPage} sur {Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage)}</span>
-                    <button onClick={() => setSuperAdminBordereauxPage(prev => Math.min(Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage), prev + 1))} disabled={superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage)} style={{ background: superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminBordereauxPage >= Math.ceil(superAdminDossiersEnCours.length / superAdminBordereauxPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
+                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminBordereauxPage} sur {Math.ceil(filteredEnCours.length / superAdminBordereauxPerPage)}</span>
+                    <button onClick={() => setSuperAdminBordereauxPage(prev => Math.min(Math.ceil(filteredEnCours.length / superAdminBordereauxPerPage), prev + 1))} disabled={superAdminBordereauxPage >= Math.ceil(filteredEnCours.length / superAdminBordereauxPerPage)} style={{ background: superAdminBordereauxPage >= Math.ceil(filteredEnCours.length / superAdminBordereauxPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminBordereauxPage >= Math.ceil(filteredEnCours.length / superAdminBordereauxPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminBordereauxPage >= Math.ceil(filteredEnCours.length / superAdminBordereauxPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
                   </div>
                 )}
               </div>
@@ -1537,7 +1622,26 @@ const EnhancedDashboard: React.FC = () => {
               <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px 12px 20px', borderBottom: '1px solid #e0e0e0' }}>
                   <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels ({superAdminDocumentsIndividuels.length})</h3>
-                  <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
+                  <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 8px 0' }}>Affichage par dossier (non par bordereau)</p>
+                  
+                  {/* FILTERS */}
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                    <input type="text" placeholder="Réf. Dossier" value={filter3.ref} onChange={(e) => setFilter3({...filter3, ref: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+                    <input type="text" placeholder="Client" value={filter3.client} onChange={(e) => setFilter3({...filter3, client: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
+                    <select value={filter3.type} onChange={(e) => setFilter3({...filter3, type: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '110px' }}>
+                      <option value="">Type</option>
+                      <option value="Prestation">Prestation</option>
+                      <option value="Adhésion">Adhésion</option>
+                    </select>
+                    <select value={filter3.statut} onChange={(e) => setFilter3({...filter3, statut: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '110px' }}>
+                      <option value="">Statut</option>
+                      {allUniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <input type="text" placeholder="Gestionnaire" value={filter3.gest} onChange={(e) => setFilter3({...filter3, gest: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
+                    <input type="date" value={filter3.dateFrom} onChange={(e) => setFilter3({...filter3, dateFrom: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
+                    <input type="date" value={filter3.dateTo} onChange={(e) => setFilter3({...filter3, dateTo: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
+                    <button onClick={() => setFilter3({ ref: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 12px', background: '#d52b36', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+                  </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1554,7 +1658,7 @@ const EnhancedDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {superAdminDocumentsIndividuels.slice((superAdminIndividuelsPage - 1) * superAdminIndividuelsPerPage, superAdminIndividuelsPage * superAdminIndividuelsPerPage).map((document, index) => (
+                      {filteredIndividuels.slice((superAdminIndividuelsPage - 1) * superAdminIndividuelsPerPage, superAdminIndividuelsPage * superAdminIndividuelsPerPage).map((document, index) => (
                         <tr key={document.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                           <td style={{ padding: '12px 8px', fontSize: '13px', fontWeight: '500' }}>{document.reference}</td>
                           <td style={{ padding: '12px 8px', fontSize: '13px' }}>{document.bordereauReference}</td>
@@ -1617,11 +1721,11 @@ const EnhancedDashboard: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
-                {superAdminDocumentsIndividuels.length > superAdminIndividuelsPerPage && (
+                {filteredIndividuels.length > superAdminIndividuelsPerPage && (
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e0e0e0' }}>
                     <button onClick={() => setSuperAdminIndividuelsPage(prev => Math.max(1, prev - 1))} disabled={superAdminIndividuelsPage === 1} style={{ background: superAdminIndividuelsPage === 1 ? '#e0e0e0' : '#d32f2f', color: superAdminIndividuelsPage === 1 ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminIndividuelsPage === 1 ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>← Précédent</button>
-                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminIndividuelsPage} sur {Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage)}</span>
-                    <button onClick={() => setSuperAdminIndividuelsPage(prev => Math.min(Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage), prev + 1))} disabled={superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage)} style={{ background: superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminIndividuelsPage >= Math.ceil(superAdminDocumentsIndividuels.length / superAdminIndividuelsPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
+                    <span style={{ fontSize: '14px', color: '#666' }}>Page {superAdminIndividuelsPage} sur {Math.ceil(filteredIndividuels.length / superAdminIndividuelsPerPage)}</span>
+                    <button onClick={() => setSuperAdminIndividuelsPage(prev => Math.min(Math.ceil(filteredIndividuels.length / superAdminIndividuelsPerPage), prev + 1))} disabled={superAdminIndividuelsPage >= Math.ceil(filteredIndividuels.length / superAdminIndividuelsPerPage)} style={{ background: superAdminIndividuelsPage >= Math.ceil(filteredIndividuels.length / superAdminIndividuelsPerPage) ? '#e0e0e0' : '#d32f2f', color: superAdminIndividuelsPage >= Math.ceil(filteredIndividuels.length / superAdminIndividuelsPerPage) ? '#999' : 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: superAdminIndividuelsPage >= Math.ceil(filteredIndividuels.length / superAdminIndividuelsPerPage) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Suivant →</button>
                   </div>
                 )}
               </div>

@@ -56,8 +56,8 @@ export class ClientController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.clientService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: Request) {
+    return this.clientService.findOne(id, req['user']);
   }
 
   @Patch(':id')

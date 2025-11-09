@@ -27,6 +27,11 @@ export interface Contract {
     fullName: string;
     email: string;
   };
+  teamLeader?: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
 }
 
 export interface ContractStatistics {

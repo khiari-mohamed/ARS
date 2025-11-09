@@ -33,8 +33,13 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
 
       // Calculate performance KPIs
       const totalProcessed = performanceData.processedByUser?.reduce((sum: number, user: any) => sum + (user._count?.id || 0), 0) || 0;
-      const avgSlaCompliance = slaData.length > 0 ? Math.round(slaData.reduce((sum: any, user: any) => sum + (user.complianceRate || 0), 0) / slaData.length) : 0;
-      const totalUsers = slaData.length || 0;
+      
+      // Get total active users from system (not just those with processed bordereaux)
+      const totalUsersResponse = await LocalAPI.get('/users/count-active');
+      const totalUsers = totalUsersResponse.data.count || 0;
+      
+      const activeUsersWithData = slaData.filter((user: any) => user.userName && user.total > 0);
+      const avgSlaCompliance = activeUsersWithData.length > 0 ? Math.round(activeUsersWithData.reduce((sum: any, user: any) => sum + (user.complianceRate || 0), 0) / activeUsersWithData.length) : 0;
       const avgProcessingTime = kpiData.avgDelay || 0;
 
       setPerformanceKpis({
@@ -44,57 +49,21 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
         avgProcessingTime
       });
 
-      // Get real department performance from SLA compliance data
-      const departmentPerformance: any[] = [];
-      
-      // Group SLA data by department if available
-      const departmentMap = new Map();
-      
-      slaData.forEach((user: any) => {
-        const dept = user.department || 'Unknown';
-        if (!departmentMap.has(dept)) {
-          departmentMap.set(dept, {
-            department: dept,
-            users: [],
-            totalProcessed: 0,
-            totalCompliant: 0
-          });
-        }
-        
-        const deptData = departmentMap.get(dept);
-        deptData.users.push(user);
-        deptData.totalProcessed += user.total || 0;
-        deptData.totalCompliant += Math.round((user.complianceRate || 0) * (user.total || 0) / 100);
-      });
-      
-      // Convert to department performance array
-      departmentMap.forEach((deptData, deptName) => {
-        const slaCompliance = deptData.totalProcessed > 0 
-          ? Math.round((deptData.totalCompliant / deptData.totalProcessed) * 100)
-          : Math.round(88 + Math.random() * 6); // 88-94% range as per script
-          
-        departmentPerformance.push({
-          department: deptName === 'Unknown' ? 'Équipe Santé' : deptName,
-          slaCompliance,
-          avgTime: avgProcessingTime,
-          workload: deptData.totalProcessed
-        });
-      });
+      // Get department performance from backend
+      const deptPerformanceResponse = await LocalAPI.get('/analytics/performance/by-department', { params: dateRange });
+      const departmentPerformance = deptPerformanceResponse.data || [];
       
 
 
       // Process team ranking from SLA data with real user names
-      const teamRanking = slaData.slice(0, 5).map((user: any, index: number) => {
-        const userName = user.userName || user.fullName || `Utilisateur ${index + 1}`;
-        const processed = user.total || Math.floor(Math.random() * 50) + 10;
-        const slaRate = user.complianceRate ? Math.round(user.complianceRate) : Math.round(75 + Math.random() * 20);
-        
-        return {
-          name: userName,
-          processed,
-          slaRate
-        };
-      });
+      const teamRanking = slaData
+        .filter((user: any) => user.userName && user.total > 0)
+        .slice(0, 5)
+        .map((user: any) => ({
+          name: user.userName,
+          processed: user.total,
+          slaRate: Math.round(user.complianceRate)
+        }));
 
 
 
@@ -217,21 +186,27 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Top Performers</Typography>
           <Box>
-            {data.teamRanking.map((team: any, index: number) => (
-              <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="subtitle1">{team.name}</Typography>
-                  <Chip 
-                    label={`${team.slaRate}%`} 
-                    color={getSLAColor(team.slaRate) as any}
-                    size="small"
-                  />
+            {data.teamRanking.length > 0 ? (
+              data.teamRanking.map((team: any, index: number) => (
+                <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="subtitle1">{team.name}</Typography>
+                    <Chip 
+                      label={`${team.slaRate}%`} 
+                      color={getSLAColor(team.slaRate) as any}
+                      size="small"
+                    />
+                  </Box>
+                  <Typography variant="body2" color="textSecondary">
+                    {team.processed} bordereaux traités
+                  </Typography>
                 </Box>
-                <Typography variant="body2" color="textSecondary">
-                  {team.processed} bordereaux traités
-                </Typography>
-              </Box>
-            ))}
+              ))
+            ) : (
+              <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 3 }}>
+                Aucun gestionnaire avec des bordereaux traités dans cette période
+              </Typography>
+            )}
           </Box>
         </Paper>
       </Grid>

@@ -132,6 +132,23 @@ const rolePermissions: Record<UserRole, RolePermission[]> = {
       description: 'Gestion des réclamations de son équipe'
     }
   ],
+  GESTIONNAIRE_SENIOR: [
+    {
+      module: 'Équipe',
+      permissions: ['Voir ses dossiers', 'Suivre charge de travail'],
+      description: 'Travail autonome sans équipe'
+    },
+    {
+      module: 'Bordereaux',
+      permissions: ['Voir affectés', 'Traiter', 'Retourner', 'Rejeter'],
+      description: 'Traitement des bordereaux qui lui sont affectés'
+    },
+    {
+      module: 'Rapports',
+      permissions: ['Rapports personnels', 'Performance individuelle'],
+      description: 'Accès aux rapports de son activité'
+    }
+  ],
   GESTIONNAIRE: [
     {
       module: 'Bordereaux',
@@ -224,6 +241,7 @@ const roleIcons: Record<UserRole, React.ReactElement> = {
   ADMINISTRATEUR: <SupervisorAccount color="warning" />,
   RESPONSABLE_DEPARTEMENT: <Business color="info" />,
   CHEF_EQUIPE: <Person color="primary" />,
+  GESTIONNAIRE_SENIOR: <SupervisorAccount color="primary" />,
   GESTIONNAIRE: <Assignment color="success" />,
   CLIENT_SERVICE: <Person color="info" />,
   FINANCE: <AccountBalance color="warning" />,

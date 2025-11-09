@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
 import "../../styles/chef-equipe.css";
@@ -75,12 +75,35 @@ function ChefEquipeDashboard() {
   const [showRetourScanModal, setShowRetourScanModal] = useState(false);
   const [retourScanReason, setRetourScanReason] = useState('');
   const [selectedDossierForRetour, setSelectedDossierForRetour] = useState<string | null>(null);
+  const [showAddDocumentModal, setShowAddDocumentModal] = useState(false);
+  const [selectedBordereauForDoc, setSelectedBordereauForDoc] = useState<string | null>(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
   const [derniersPage, setDerniersPage] = useState(1);
   const [bordereauxPage, setBordereauxPage] = useState(1);
   const [documentsPage, setDocumentsPage] = useState(1);
   const derniersPerPage = 5;
   const bordereauxPerPage = 5;
   const documentsPerPage = 20;
+
+  // Table-specific filters
+  const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
+  const [filterBordereaux, setFilterBordereaux] = useState({ reference: '', client: '', statut: '', dateFrom: '', dateTo: '' });
+  const [filterDocuments, setFilterDocuments] = useState({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' });
+  const [filteredDerniersTable, setFilteredDerniersTable] = useState<Dossier[]>([]);
+  const [filteredBordereauxTable, setFilteredBordereauxTable] = useState<Dossier[]>([]);
+  const [filteredDocumentsTable, setFilteredDocumentsTable] = useState<Dossier[]>([]);
+  const uniqueStatuts = useMemo(() => 
+    [...new Set([...dossiers, ...documents].map((d: any) => d.statut).filter(Boolean))].sort(),
+    [dossiers, documents]
+  );
+  const uniqueTypes = useMemo(() => 
+    [...new Set([...dossiers, ...documents].map((d: any) => d.type).filter(Boolean))].sort(),
+    [dossiers, documents]
+  );
+  const uniqueGestionnairesFilter = useMemo(() => 
+    [...new Set(documents.map((d: any) => d.gestionnaire).filter(Boolean))].sort(),
+    [documents]
+  );
 
   useEffect(() => {
     loadDashboardData();
@@ -105,6 +128,47 @@ function ChefEquipeDashboard() {
     console.log('🔄 Applying filters with dossiers:', dossiers.length);
     applyFilters();
   }, [typeFilter, societeFilter, statutFilter, searchQuery, dossiers, documents]);
+
+  // Apply table-specific filters
+  useEffect(() => {
+    const f1 = dossiers.filter((d: any) => {
+      const refMatch = !filterDerniers.reference || String(d.reference || '').trim().toLowerCase().includes(filterDerniers.reference.trim().toLowerCase());
+      if (filterDerniers.reference && !refMatch) {
+        console.log('❌ No match:', d.reference, 'vs', filterDerniers.reference);
+      }
+      return refMatch &&
+        (!filterDerniers.client || String(d.client || '').trim().toLowerCase().includes(filterDerniers.client.trim().toLowerCase())) &&
+        (!filterDerniers.type || d.type === filterDerniers.type) &&
+        (!filterDerniers.statut || d.statut === filterDerniers.statut) &&
+        (!filterDerniers.dateFrom || new Date(d.date) >= new Date(filterDerniers.dateFrom)) &&
+        (!filterDerniers.dateTo || new Date(d.date) <= new Date(filterDerniers.dateTo));
+    });
+    console.log('🔍 Filtered Derniers:', f1.length, 'from', dossiers.length);
+    setFilteredDerniersTable(f1);
+    setDerniersPage(1);
+
+    const f2 = dossiers.filter((d: any) =>
+      (!filterBordereaux.reference || d.reference.toLowerCase().includes(filterBordereaux.reference.toLowerCase())) &&
+      (!filterBordereaux.client || d.client.toLowerCase().includes(filterBordereaux.client.toLowerCase())) &&
+      (!filterBordereaux.statut || d.statut === filterBordereaux.statut) &&
+      (!filterBordereaux.dateFrom || new Date(d.date) >= new Date(filterBordereaux.dateFrom)) &&
+      (!filterBordereaux.dateTo || new Date(d.date) <= new Date(filterBordereaux.dateTo))
+    );
+    setFilteredBordereauxTable(f2);
+
+    const f3 = documents.filter((d: any) =>
+      (!filterDocuments.reference || String(d.reference || '').trim().toLowerCase().includes(filterDocuments.reference.trim().toLowerCase())) &&
+      (!filterDocuments.bordereauReference || String(d.bordereauReference || '').trim().toLowerCase().includes(filterDocuments.bordereauReference.trim().toLowerCase())) &&
+      (!filterDocuments.client || String(d.client || '').trim().toLowerCase().includes(filterDocuments.client.trim().toLowerCase())) &&
+      (!filterDocuments.type || d.type === filterDocuments.type) &&
+      (!filterDocuments.statut || d.statut === filterDocuments.statut) &&
+      (!filterDocuments.gestionnaire || (d.gestionnaire && String(d.gestionnaire).trim().toLowerCase().includes(filterDocuments.gestionnaire.trim().toLowerCase()))) &&
+      (!filterDocuments.dateFrom || new Date(d.date) >= new Date(filterDocuments.dateFrom)) &&
+      (!filterDocuments.dateTo || new Date(d.date) <= new Date(filterDocuments.dateTo))
+    );
+    setFilteredDocumentsTable(f3);
+    setDocumentsPage(1);
+  }, [filterDerniers, filterBordereaux, filterDocuments, dossiers, documents]);
 
   const loadDashboardData = async () => {
     try {
@@ -458,6 +522,57 @@ function ChefEquipeDashboard() {
     setShowRetourScanModal(true);
   };
 
+  const handleRemoveDocument = async (documentId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir retirer ce document du bordereau ?')) return;
+    
+    try {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/remove-document-from-bordereau', {
+        documentId
+      });
+      
+      if (response.data.success) {
+        alert('Document retiré avec succès');
+        loadDashboardData();
+      }
+    } catch (error) {
+      console.error('Remove document error:', error);
+      alert('Erreur lors du retrait du document');
+    }
+  };
+
+  const handleAddDocument = (bordereauId: string) => {
+    setSelectedBordereauForDoc(bordereauId);
+    setShowAddDocumentModal(true);
+  };
+
+  const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedBordereauForDoc) return;
+
+    setUploadingDocument(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('bordereauId', selectedBordereauForDoc);
+
+    try {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/upload-document-to-bordereau', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (response.data.success) {
+        alert('Document uploadé et ajouté avec succès');
+        setShowAddDocumentModal(false);
+        setSelectedBordereauForDoc(null);
+        loadDashboardData();
+      }
+    } catch (error) {
+      console.error('Upload document error:', error);
+      alert('Erreur lors de l\'upload du document');
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
+
   const handleConfirmRetourScan = async () => {
     if (!selectedDossierForRetour || !retourScanReason.trim()) {
       alert('Veuillez saisir une raison pour le retour');
@@ -755,6 +870,22 @@ function ChefEquipeDashboard() {
         {/* Derniers Bordereaux Ajoutés Section */}
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Derniers Bordereaux Ajoutés</h3>
+          {/* Filters */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', marginBottom: '16px', padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
+            <input type="text" placeholder="Référence" value={filterDerniers.reference} onChange={(e) => setFilterDerniers({...filterDerniers, reference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Client" value={filterDerniers.client} onChange={(e) => setFilterDerniers({...filterDerniers, client: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <select value={filterDerniers.type} onChange={(e) => setFilterDerniers({...filterDerniers, type: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous types</option>
+              {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={filterDerniers.statut} onChange={(e) => setFilterDerniers({...filterDerniers, statut: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous statuts</option>
+              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input type="date" placeholder="Date début" value={filterDerniers.dateFrom} onChange={(e) => setFilterDerniers({...filterDerniers, dateFrom: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" placeholder="Date fin" value={filterDerniers.dateTo} onChange={(e) => setFilterDerniers({...filterDerniers, dateTo: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <button onClick={() => setFilterDerniers({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -765,11 +896,11 @@ function ChefEquipeDashboard() {
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th>
+                  {/* <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th> */}
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice((derniersPage - 1) * derniersPerPage, derniersPage * derniersPerPage).map((dossier, index) => {
+                {filteredDerniersTable.slice((derniersPage - 1) * derniersPerPage, derniersPage * derniersPerPage).map((dossier, index) => {
                   // Use dynamic completion percentage from backend
                   const completionPercentage = dossier.completionPercentage || 0;
                   // Use dynamic states from backend
@@ -797,11 +928,11 @@ function ChefEquipeDashboard() {
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
-                      <td style={{ padding: '12px 8px' }}>
+                      {/* <td style={{ padding: '12px 8px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
                         </div>
-                      </td>
+                      </td> */}
                     </tr>
                   );
                 })}
@@ -809,7 +940,7 @@ function ChefEquipeDashboard() {
             </table>
           </div>
           {/* Pagination for Derniers Bordereaux */}
-          {filteredDossiers.length > 0 && (
+          {filteredDerniersTable.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', gap: '8px' }}>
               <button
                 onClick={() => setDerniersPage(prev => Math.max(1, prev - 1))}
@@ -827,18 +958,18 @@ function ChefEquipeDashboard() {
                 ← Précédent
               </button>
               <span style={{ padding: '8px 16px', fontSize: '14px', color: '#666' }}>
-                Page {derniersPage} sur {Math.ceil(filteredDossiers.length / derniersPerPage)}
+                Page {derniersPage} sur {Math.ceil(filteredDerniersTable.length / derniersPerPage)}
               </span>
               <button
-                onClick={() => setDerniersPage(prev => Math.min(Math.ceil(filteredDossiers.length / derniersPerPage), prev + 1))}
-                disabled={derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage)}
+                onClick={() => setDerniersPage(prev => Math.min(Math.ceil(filteredDerniersTable.length / derniersPerPage), prev + 1))}
+                disabled={derniersPage >= Math.ceil(filteredDerniersTable.length / derniersPerPage)}
                 style={{
                   padding: '8px 12px',
                   border: '1px solid #ddd',
                   borderRadius: '4px',
-                  background: derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage) ? '#f5f5f5' : 'white',
-                  color: derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage) ? '#999' : '#333',
-                  cursor: derniersPage >= Math.ceil(filteredDossiers.length / derniersPerPage) ? 'not-allowed' : 'pointer',
+                  background: derniersPage >= Math.ceil(filteredDerniersTable.length / derniersPerPage) ? '#f5f5f5' : 'white',
+                  color: derniersPage >= Math.ceil(filteredDerniersTable.length / derniersPerPage) ? '#999' : '#333',
+                  cursor: derniersPage >= Math.ceil(filteredDerniersTable.length / derniersPerPage) ? 'not-allowed' : 'pointer',
                   fontSize: '14px'
                 }}
               >
@@ -851,6 +982,18 @@ function ChefEquipeDashboard() {
         {/* Bordereaux en cours Section */}
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Bordereaux</h3>
+          {/* Filters */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', marginBottom: '16px', padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
+            <input type="text" placeholder="Référence" value={filterBordereaux.reference} onChange={(e) => setFilterBordereaux({...filterBordereaux, reference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Client" value={filterBordereaux.client} onChange={(e) => setFilterBordereaux({...filterBordereaux, client: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <select value={filterBordereaux.statut} onChange={(e) => setFilterBordereaux({...filterBordereaux, statut: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous statuts</option>
+              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input type="date" placeholder="Date début" value={filterBordereaux.dateFrom} onChange={(e) => setFilterBordereaux({...filterBordereaux, dateFrom: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" placeholder="Date fin" value={filterBordereaux.dateTo} onChange={(e) => setFilterBordereaux({...filterBordereaux, dateTo: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <button onClick={() => setFilterBordereaux({ reference: '', client: '', statut: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
@@ -865,7 +1008,7 @@ function ChefEquipeDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDossiers.slice((bordereauxPage - 1) * bordereauxPerPage, bordereauxPage * bordereauxPerPage).map((dossier, index) => {
+                {filteredBordereauxTable.slice((bordereauxPage - 1) * bordereauxPerPage, bordereauxPage * bordereauxPerPage).map((dossier, index) => {
                   // Use dynamic completion percentage from backend
                   const completionPercentage = dossier.completionPercentage || 0;
                   // Use dynamic states from backend
@@ -908,8 +1051,9 @@ function ChefEquipeDashboard() {
                       </td>
                       <td style={{ padding: '12px 8px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
+                          {/* <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button> */}
                           <button onClick={() => handleRetourScan(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#9c27b0', textDecoration: 'underline' }} title="Retour Scan">Retour Scan</button>
+                          <button onClick={() => handleAddDocument(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4caf50', textDecoration: 'underline' }} title="Ajouter Document">+ Doc</button>
                         </div>
                       </td>
                     </tr>
@@ -919,7 +1063,7 @@ function ChefEquipeDashboard() {
             </table>
           </div>
           {/* Pagination for Bordereaux en cours */}
-          {filteredDossiers.length > 0 && (
+          {filteredBordereauxTable.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', gap: '8px' }}>
               <button
                 onClick={() => setBordereauxPage(prev => Math.max(1, prev - 1))}
@@ -937,18 +1081,18 @@ function ChefEquipeDashboard() {
                 ← Précédent
               </button>
               <span style={{ padding: '8px 16px', fontSize: '14px', color: '#666' }}>
-                Page {bordereauxPage} sur {Math.ceil(filteredDossiers.length / bordereauxPerPage)}
+                Page {bordereauxPage} sur {Math.ceil(filteredBordereauxTable.length / bordereauxPerPage)}
               </span>
               <button
-                onClick={() => setBordereauxPage(prev => Math.min(Math.ceil(filteredDossiers.length / bordereauxPerPage), prev + 1))}
-                disabled={bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage)}
+                onClick={() => setBordereauxPage(prev => Math.min(Math.ceil(filteredBordereauxTable.length / bordereauxPerPage), prev + 1))}
+                disabled={bordereauxPage >= Math.ceil(filteredBordereauxTable.length / bordereauxPerPage)}
                 style={{
                   padding: '8px 12px',
                   border: '1px solid #ddd',
                   borderRadius: '4px',
-                  background: bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage) ? '#f5f5f5' : 'white',
-                  color: bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage) ? '#999' : '#333',
-                  cursor: bordereauxPage >= Math.ceil(filteredDossiers.length / bordereauxPerPage) ? 'not-allowed' : 'pointer',
+                  background: bordereauxPage >= Math.ceil(filteredBordereauxTable.length / bordereauxPerPage) ? '#f5f5f5' : 'white',
+                  color: bordereauxPage >= Math.ceil(filteredBordereauxTable.length / bordereauxPerPage) ? '#999' : '#333',
+                  cursor: bordereauxPage >= Math.ceil(filteredBordereauxTable.length / bordereauxPerPage) ? 'not-allowed' : 'pointer',
                   fontSize: '14px'
                 }}
               >
@@ -963,6 +1107,24 @@ function ChefEquipeDashboard() {
           <div style={{ padding: '16px 20px 12px 20px', borderBottom: '1px solid #e0e0e0' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Dossiers Individuels</h3>
             <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0 0' }}>Affichage par dossier (non par bordereau)</p>
+          </div>
+          {/* Filters */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: '8px', padding: '12px', background: '#f8f9fa' }}>
+            <input type="text" placeholder="Réf. Dossier" value={filterDocuments.reference} onChange={(e) => setFilterDocuments({...filterDocuments, reference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Réf. Bordereau" value={filterDocuments.bordereauReference} onChange={(e) => setFilterDocuments({...filterDocuments, bordereauReference: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="text" placeholder="Client" value={filterDocuments.client} onChange={(e) => setFilterDocuments({...filterDocuments, client: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <select value={filterDocuments.type} onChange={(e) => setFilterDocuments({...filterDocuments, type: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous types</option>
+              {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select value={filterDocuments.statut} onChange={(e) => setFilterDocuments({...filterDocuments, statut: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
+              <option value="">Tous statuts</option>
+              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input type="text" placeholder="Gestionnaire" value={filterDocuments.gestionnaire} onChange={(e) => setFilterDocuments({...filterDocuments, gestionnaire: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" placeholder="Date début" value={filterDocuments.dateFrom} onChange={(e) => setFilterDocuments({...filterDocuments, dateFrom: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <input type="date" placeholder="Date fin" value={filterDocuments.dateTo} onChange={(e) => setFilterDocuments({...filterDocuments, dateTo: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
+            <button onClick={() => setFilterDocuments({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -987,7 +1149,7 @@ function ChefEquipeDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDocuments.slice((documentsPage - 1) * documentsPerPage, documentsPage * documentsPerPage).map((document, index) => (
+                {filteredDocumentsTable.slice((documentsPage - 1) * documentsPerPage, documentsPage * documentsPerPage).map((document, index) => (
                   <tr key={document.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                     <td style={{ padding: '12px 8px' }}>
                       <input 
@@ -1031,7 +1193,7 @@ function ChefEquipeDashboard() {
                         >
                           Voir PDF
                         </button>
-                        <button 
+                        {/* <button 
                           onClick={() => handleModifyStatus(document.id)}
                           style={{ 
                             background: 'none', 
@@ -1044,6 +1206,20 @@ function ChefEquipeDashboard() {
                           title="Modifier statut du document"
                         >
                           Modifier Statut
+                        </button> */}
+                        <button 
+                          onClick={() => handleRemoveDocument(document.id)}
+                          style={{ 
+                            background: 'none', 
+                            border: 'none', 
+                            color: '#f44336', 
+                            cursor: 'pointer', 
+                            fontSize: '12px',
+                            textDecoration: 'underline'
+                          }}
+                          title="Retirer du bordereau"
+                        >
+                          Retirer
                         </button>
                       </div>
                     </td>
@@ -1053,7 +1229,7 @@ function ChefEquipeDashboard() {
             </table>
           </div>
           {/* Pagination for Dossiers Individuels */}
-          {filteredDocuments.length > 0 && (
+          {filteredDocumentsTable.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', gap: '8px' }}>
               <button
                 onClick={() => setDocumentsPage(prev => Math.max(1, prev - 1))}
@@ -1071,18 +1247,18 @@ function ChefEquipeDashboard() {
                 ← Précédent
               </button>
               <span style={{ padding: '8px 16px', fontSize: '14px', color: '#666' }}>
-                Page {documentsPage} sur {Math.ceil(filteredDocuments.length / documentsPerPage)}
+                Page {documentsPage} sur {Math.ceil(filteredDocumentsTable.length / documentsPerPage)}
               </span>
               <button
-                onClick={() => setDocumentsPage(prev => Math.min(Math.ceil(filteredDocuments.length / documentsPerPage), prev + 1))}
-                disabled={documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage)}
+                onClick={() => setDocumentsPage(prev => Math.min(Math.ceil(filteredDocumentsTable.length / documentsPerPage), prev + 1))}
+                disabled={documentsPage >= Math.ceil(filteredDocumentsTable.length / documentsPerPage)}
                 style={{
                   padding: '8px 12px',
                   border: '1px solid #ddd',
                   borderRadius: '4px',
-                  background: documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage) ? '#f5f5f5' : 'white',
-                  color: documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage) ? '#999' : '#333',
-                  cursor: documentsPage >= Math.ceil(filteredDocuments.length / documentsPerPage) ? 'not-allowed' : 'pointer',
+                  background: documentsPage >= Math.ceil(filteredDocumentsTable.length / documentsPerPage) ? '#f5f5f5' : 'white',
+                  color: documentsPage >= Math.ceil(filteredDocumentsTable.length / documentsPerPage) ? '#999' : '#333',
+                  cursor: documentsPage >= Math.ceil(filteredDocumentsTable.length / documentsPerPage) ? 'not-allowed' : 'pointer',
                   fontSize: '14px'
                 }}
               >
@@ -1327,6 +1503,117 @@ function ChefEquipeDashboard() {
                   padding: '10px 20px',
                   borderRadius: '4px',
                   cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Add Document Modal */}
+      {showAddDocumentModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1002,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              paddingBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#d52b36',
+                fontSize: '18px',
+                fontWeight: 'bold'
+              }}>
+                📎 Ajouter un Document
+              </h3>
+              <button
+                onClick={() => setShowAddDocumentModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                marginBottom: '8px',
+                color: '#333'
+              }}>
+                Sélectionner un fichier:
+              </label>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={handleUploadDocument}
+                disabled={uploadingDocument}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px dashed #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  cursor: uploadingDocument ? 'not-allowed' : 'pointer'
+                }}
+              />
+              {uploadingDocument && (
+                <div style={{ marginTop: '12px', textAlign: 'center', color: '#666' }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
+                  <p>Upload en cours...</p>
+                </div>
+              )}
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => setShowAddDocumentModal(false)}
+                disabled={uploadingDocument}
+                style={{
+                  background: '#f5f5f5',
+                  color: '#333',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: uploadingDocument ? 'not-allowed' : 'pointer',
                   fontSize: '14px'
                 }}
               >

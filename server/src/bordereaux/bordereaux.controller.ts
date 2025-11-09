@@ -607,7 +607,11 @@ export class BordereauxController {
 
   @Post('bulk-assign')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
-  async bulkAssignBordereaux(@Body() data: { bordereauIds: string[]; userId: string }) {
+  async bulkAssignBordereaux(@Body() data: { bordereauIds: string[]; userId: string }, @Req() req) {
+    // GESTIONNAIRE_SENIOR cannot assign to others
+    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
+      throw new Error('Gestionnaire Senior ne peut pas affecter des dossiers à d\'autres gestionnaires');
+    }
     const results: Array<{
       bordereauId: string;
       success: boolean;
@@ -633,7 +637,11 @@ export class BordereauxController {
 
   @Post('bulk-assign-documents')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
-  async bulkAssignDocuments(@Body() data: { documentIds: string[]; userId: string }) {
+  async bulkAssignDocuments(@Body() data: { documentIds: string[]; userId: string }, @Req() req) {
+    // GESTIONNAIRE_SENIOR cannot assign documents to others
+    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
+      throw new Error('Gestionnaire Senior ne peut pas affecter des documents à d\'autres gestionnaires');
+    }
     await this.prisma.document.updateMany({
       where: { id: { in: data.documentIds } },
       data: { assignedToUserId: data.userId }
@@ -649,8 +657,13 @@ export class BordereauxController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async reassignBordereau(
     @Param('id') bordereauId: string,
-    @Body() data: { newUserId: string; comment?: string; timestamp?: string }
+    @Body() data: { newUserId: string; comment?: string; timestamp?: string },
+    @Req() req
   ) {
+    // GESTIONNAIRE_SENIOR cannot reassign to others
+    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
+      throw new Error('Gestionnaire Senior ne peut pas réaffecter des dossiers à d\'autres gestionnaires');
+    }
     console.log('🔄 REASSIGN ENDPOINT HIT');
     console.log('Bordereau ID:', bordereauId);
     console.log('New User ID:', data.newUserId);
@@ -849,22 +862,22 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/corbeille')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeCorbeille(@Req() req) {
     const user = req.user;
     console.log('🔍 Chef équipe corbeille - User:', user.id, user.role);
     
     let whereClause: any = { archived: false };
     
-    // Chef d'équipe only sees bordereaux from contracts assigned to them
-    if (user.role === UserRole.CHEF_EQUIPE) {
+    // Chef d'équipe and Gestionnaire Senior only see bordereaux from contracts assigned to them
+    if (user.role === UserRole.CHEF_EQUIPE || user.role === UserRole.GESTIONNAIRE_SENIOR) {
       whereClause = {
         archived: false,
         contract: {
           teamLeaderId: user.id
         }
       };
-      console.log('🎯 Filtering for Chef équipe:', user.id);
+      console.log('🎯 Filtering for Chef équipe/Gestionnaire Senior:', user.id);
     }
     // Super Admin and Admin see everything
     else if (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMINISTRATEUR) {
@@ -903,7 +916,7 @@ export class BordereauxController {
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['TRAITE', 'CLOTURE'] },
+          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] },
           updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
         },
         include: {
@@ -934,10 +947,13 @@ export class BordereauxController {
         traites: traites.length
       },
       userRole: user.role,
-      restrictions: user.role === UserRole.CHEF_EQUIPE ? {
-        message: "Accès limité aux contrats assignés à votre équipe",
+      restrictions: (user.role === UserRole.CHEF_EQUIPE || user.role === UserRole.GESTIONNAIRE_SENIOR) ? {
+        message: user.role === UserRole.GESTIONNAIRE_SENIOR 
+          ? "Gestionnaire Senior - Accès limité à vos clients (travail autonome)"
+          : "Accès limité aux contrats assignés à votre équipe",
         canViewGlobalStats: false,
-        canExportAll: false
+        canExportAll: false,
+        canAssignToOthers: user.role === UserRole.GESTIONNAIRE_SENIOR ? false : true
       } : null
     };
   }
@@ -1032,7 +1048,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/stats')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async getChefEquipeStats() {
     const [total, clotures, enCours, nonAffectes] = await Promise.all([
       this.bordereauxService.count({}),
@@ -1045,7 +1061,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/types')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async getDossierTypes() {
     // Since 'type' field doesn't exist in schema, return mock data based on clients or other criteria
     const types = [
@@ -1080,7 +1096,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/recent')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async getRecentDossiers() {
     const recent = await this.bordereauxService.findAll({
       page: 1,
@@ -1103,7 +1119,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/en-cours')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async getDossiersEnCours() {
     const enCours = await this.bordereauxService.findAll({
       statut: ['EN_COURS', 'ASSIGNE'],
@@ -1124,7 +1140,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/search')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async searchDossiers(@Query('query') query: string, @Query('type') type: string) {
     const filters: any = {
       page: 1,
@@ -1213,7 +1229,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/dashboard-stats')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeDashboardStats(@Req() req) {
     const [clients, bordereaux, documents, reclamations, gestionnaires] = await Promise.all([
       this.prisma.client.findMany({ select: { id: true, name: true } }),
@@ -1329,7 +1345,7 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/dashboard-dossiers')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeDashboardDossiers(@Req() req) {
     const [documents, bordereaux] = await Promise.all([
       this.prisma.document.findMany({
@@ -1408,14 +1424,14 @@ export class BordereauxController {
   }
 
   @Get('chef-equipe/tableau-bord')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeTableauBord(@Req() req) {
     const dossiers = await this.getChefEquipeDashboardDossiers(req);
     return { dossiers };
   }
 
   @Get('chef-equipe/gestionnaire-assignments')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getGestionnaireAssignments(@Req() req) {
     const gestionnaires = await this.prisma.user.findMany({
       where: { role: 'GESTIONNAIRE' },
@@ -1530,6 +1546,10 @@ export class BordereauxController {
   @Post('chef-equipe/transfer-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async transferDossiers(@Body() data: { dossierIds: string[]; targetType: string }, @Req() req) {
+    // GESTIONNAIRE_SENIOR cannot transfer to others
+    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
+      throw new Error('Gestionnaire Senior ne peut pas transférer des dossiers à d\'autres gestionnaires');
+    }
     const user = req.user;
     const results: Array<{ id: string; success: boolean; type?: string; error?: string }> = [];
     

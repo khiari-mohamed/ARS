@@ -27,7 +27,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE, UserRole.BO)
   async getAllUsers(@Request() req, @Query() query: any) {
     try {
       const filters = {
@@ -83,6 +83,11 @@ export class UsersController {
       console.error('Error fetching chef equipes:', error);
       return [];
     }
+  }
+
+  @Get('count-active')
+  async getActiveUsersCount() {
+    return this.usersService.countActiveUsers();
   }
 
   @Get('dashboard/stats')

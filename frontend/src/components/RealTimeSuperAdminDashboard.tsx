@@ -20,8 +20,16 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  TextField,
+  MenuItem,
+  Collapse,
+  Stack
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { fr } from 'date-fns/locale';
 import {
   Refresh,
   Download,
@@ -32,7 +40,9 @@ import {
   TrendingDown,
   People,
   Assignment,
-  Speed
+  Speed,
+  FilterList,
+  Clear
 } from '@mui/icons-material';
 import { 
   getRealTimeStats, 
@@ -63,12 +73,102 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
   const [dossiers, setDossiers] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({});
+  
+  // Filter states for each table
+  const [showFilters1, setShowFilters1] = useState(false);
+  const [showFilters2, setShowFilters2] = useState(false);
+  const [showFilters3, setShowFilters3] = useState(false);
+  
+  const [filters1, setFilters1] = useState({
+    reference: '',
+    client: '',
+    type: '',
+    statut: '',
+    dateFrom: null as Date | null,
+    dateTo: null as Date | null
+  });
+  
+  const [filters2, setFilters2] = useState({
+    reference: '',
+    client: '',
+    statut: '',
+    dateFrom: null as Date | null,
+    dateTo: null as Date | null
+  });
+  
+  const [filters3, setFilters3] = useState({
+    reference: '',
+    client: '',
+    type: '',
+    statut: '',
+    gestionnaire: '',
+    dateFrom: null as Date | null,
+    dateTo: null as Date | null
+  });
+  
+  const [filteredDossiers1, setFilteredDossiers1] = useState<any[]>([]);
+  const [filteredDossiers2, setFilteredDossiers2] = useState<any[]>([]);
+  const [filteredDocuments, setFilteredDocuments] = useState<any[]>([]);
 
   useEffect(() => {
     loadRealTimeData();
     const interval = setInterval(loadRealTimeData, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, []);
+  
+  useEffect(() => {
+    applyFilters();
+  }, [dossiers, documents, filters1, filters2, filters3]);
+  
+  const applyFilters = () => {
+    // Filter Table 1: Derniers Bordereaux
+    let filtered1 = dossiers.filter(d => {
+      if (filters1.reference && !d.reference?.toLowerCase().includes(filters1.reference.toLowerCase())) return false;
+      if (filters1.client && !d.client?.toLowerCase().includes(filters1.client.toLowerCase())) return false;
+      if (filters1.type && d.type !== filters1.type) return false;
+      if (filters1.statut && d.statut !== filters1.statut) return false;
+      if (filters1.dateFrom && new Date(d.dateReception) < filters1.dateFrom) return false;
+      if (filters1.dateTo && new Date(d.dateReception) > filters1.dateTo) return false;
+      return true;
+    });
+    setFilteredDossiers1(filtered1);
+    
+    // Filter Table 2: Bordereaux en cours
+    let filtered2 = dossiers.filter(d => {
+      if (filters2.reference && !d.reference?.toLowerCase().includes(filters2.reference.toLowerCase())) return false;
+      if (filters2.client && !d.client?.toLowerCase().includes(filters2.client.toLowerCase())) return false;
+      if (filters2.statut && d.statut !== filters2.statut) return false;
+      if (filters2.dateFrom && new Date(d.dateReception) < filters2.dateFrom) return false;
+      if (filters2.dateTo && new Date(d.dateReception) > filters2.dateTo) return false;
+      return true;
+    });
+    setFilteredDossiers2(filtered2);
+    
+    // Filter Table 3: Dossiers Individuels
+    let filtered3 = documents.filter(d => {
+      if (filters3.reference && !d.reference?.toLowerCase().includes(filters3.reference.toLowerCase())) return false;
+      if (filters3.client && !d.client?.toLowerCase().includes(filters3.client.toLowerCase())) return false;
+      if (filters3.type && d.type !== filters3.type) return false;
+      if (filters3.statut && d.statut !== filters3.statut) return false;
+      if (filters3.gestionnaire && !d.gestionnaire?.toLowerCase().includes(filters3.gestionnaire.toLowerCase())) return false;
+      if (filters3.dateFrom && new Date(d.uploadedAt || d.date) < filters3.dateFrom) return false;
+      if (filters3.dateTo && new Date(d.uploadedAt || d.date) > filters3.dateTo) return false;
+      return true;
+    });
+    setFilteredDocuments(filtered3);
+  };
+  
+  const clearFilters1 = () => {
+    setFilters1({ reference: '', client: '', type: '', statut: '', dateFrom: null, dateTo: null });
+  };
+  
+  const clearFilters2 = () => {
+    setFilters2({ reference: '', client: '', statut: '', dateFrom: null, dateTo: null });
+  };
+  
+  const clearFilters3 = () => {
+    setFilters3({ reference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: null, dateTo: null });
+  };
 
   const loadRealTimeData = async () => {
     try {
@@ -337,9 +437,73 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
       {/* Derniers Bordereaux Ajoutés */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Derniers Bordereaux Ajoutés
-          </Typography>
+          <Box mb={2}>
+            <Typography variant="h6" mb={2}>
+              Derniers Bordereaux Ajoutés ({filteredDossiers1.length})
+            </Typography>
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%' }}>
+                <TextField
+                  size="small"
+                  label="Référence"
+                  value={filters1.reference}
+                  onChange={(e) => setFilters1({ ...filters1, reference: e.target.value })}
+                  sx={{ width: 150 }}
+                />
+                <TextField
+                  size="small"
+                  label="Client"
+                  value={filters1.client}
+                  onChange={(e) => setFilters1({ ...filters1, client: e.target.value })}
+                  sx={{ width: 150 }}
+                />
+                <TextField
+                  size="small"
+                  select
+                  label="Type"
+                  value={filters1.type}
+                  onChange={(e) => setFilters1({ ...filters1, type: e.target.value })}
+                  sx={{ width: 120 }}
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  <MenuItem value="BULLETIN_SOIN">Prestation</MenuItem>
+                  <MenuItem value="ADHESION">Adhésion</MenuItem>
+                  <MenuItem value="RECLAMATION">Réclamation</MenuItem>
+                </TextField>
+                <TextField
+                  size="small"
+                  select
+                  label="Statut"
+                  value={filters1.statut}
+                  onChange={(e) => setFilters1({ ...filters1, statut: e.target.value })}
+                  sx={{ width: 120 }}
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  <MenuItem value="EN_ATTENTE">En Attente</MenuItem>
+                  <MenuItem value="SCANNE">Scanné</MenuItem>
+                  <MenuItem value="EN_COURS">En Cours</MenuItem>
+                  <MenuItem value="TRAITE">Traité</MenuItem>
+                  <MenuItem value="REJETE">Rejeté</MenuItem>
+                </TextField>
+                <DatePicker
+                  label="Date début"
+                  value={filters1.dateFrom}
+                  onChange={(date) => setFilters1({ ...filters1, dateFrom: date })}
+                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
+                />
+                <DatePicker
+                  label="Date fin"
+                  value={filters1.dateTo}
+                  onChange={(date) => setFilters1({ ...filters1, dateTo: date })}
+                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
+                />
+                <Button size="small" onClick={clearFilters1} startIcon={<Clear />} variant="outlined">
+                  Effacer
+                </Button>
+              </Stack>
+            </LocalizationProvider>
+          </Box>
+          
           <TableContainer>
             <Table>
               <TableHead>
@@ -354,7 +518,7 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dossiers.slice(0, 5).map((dossier) => (
+                {filteredDossiers1.slice(0, 10).map((dossier) => (
                   <TableRow key={dossier.id}>
                     <TableCell>{dossier.reference}</TableCell>
                     <TableCell>{dossier.client}</TableCell>
@@ -393,9 +557,59 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
       {/* Bordereaux en cours */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Bordereaux en cours
-          </Typography>
+          <Box mb={2}>
+            <Typography variant="h6" mb={2}>
+              Bordereaux ({filteredDossiers2.length} total)
+            </Typography>
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%' }}>
+                <TextField
+                  size="small"
+                  label="Référence"
+                  value={filters2.reference}
+                  onChange={(e) => setFilters2({ ...filters2, reference: e.target.value })}
+                  sx={{ width: 150 }}
+                />
+                <TextField
+                  size="small"
+                  label="Client"
+                  value={filters2.client}
+                  onChange={(e) => setFilters2({ ...filters2, client: e.target.value })}
+                  sx={{ width: 150 }}
+                />
+                <TextField
+                  size="small"
+                  select
+                  label="Statut"
+                  value={filters2.statut}
+                  onChange={(e) => setFilters2({ ...filters2, statut: e.target.value })}
+                  sx={{ width: 120 }}
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  <MenuItem value="ASSIGNE">Assigné</MenuItem>
+                  <MenuItem value="EN_COURS">En Cours</MenuItem>
+                  <MenuItem value="TRAITE">Traité</MenuItem>
+                  <MenuItem value="A_AFFECTER">À Affecter</MenuItem>
+                </TextField>
+                <DatePicker
+                  label="Date début"
+                  value={filters2.dateFrom}
+                  onChange={(date) => setFilters2({ ...filters2, dateFrom: date })}
+                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
+                />
+                <DatePicker
+                  label="Date fin"
+                  value={filters2.dateTo}
+                  onChange={(date) => setFilters2({ ...filters2, dateTo: date })}
+                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
+                />
+                <Button size="small" onClick={clearFilters2} startIcon={<Clear />} variant="outlined">
+                  Effacer
+                </Button>
+              </Stack>
+            </LocalizationProvider>
+          </Box>
+          
           <TableContainer>
             <Table>
               <TableHead>
@@ -409,7 +623,7 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dossiers.slice(0, 5).map((dossier) => (
+                {filteredDossiers2.slice(0, 10).map((dossier) => (
                   <TableRow key={`en-cours-${dossier.id}`}>
                     <TableCell>{dossier.reference}</TableCell>
                     <TableCell>{dossier.client}</TableCell>
@@ -453,12 +667,82 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
       {/* Dossiers Individuels */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Dossiers Individuels
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Affichage par dossier (non par bordereau)
-          </Typography>
+          <Box mb={2}>
+            <Typography variant="h6" mb={1}>
+              Dossiers Individuels ({filteredDocuments.length})
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Affichage par dossier (non par bordereau)
+            </Typography>
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%' }}>
+                <TextField
+                  size="small"
+                  label="Réf. Dossier"
+                  value={filters3.reference}
+                  onChange={(e) => setFilters3({ ...filters3, reference: e.target.value })}
+                  sx={{ width: 140 }}
+                />
+                <TextField
+                  size="small"
+                  label="Client"
+                  value={filters3.client}
+                  onChange={(e) => setFilters3({ ...filters3, client: e.target.value })}
+                  sx={{ width: 130 }}
+                />
+                <TextField
+                  size="small"
+                  select
+                  label="Type"
+                  value={filters3.type}
+                  onChange={(e) => setFilters3({ ...filters3, type: e.target.value })}
+                  sx={{ width: 110 }}
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  <MenuItem value="BULLETIN_SOIN">Prestation</MenuItem>
+                  <MenuItem value="ADHESION">Adhésion</MenuItem>
+                  <MenuItem value="RECLAMATION">Réclamation</MenuItem>
+                </TextField>
+                <TextField
+                  size="small"
+                  select
+                  label="Statut"
+                  value={filters3.statut}
+                  onChange={(e) => setFilters3({ ...filters3, statut: e.target.value })}
+                  sx={{ width: 110 }}
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  <MenuItem value="Nouveau">Nouveau</MenuItem>
+                  <MenuItem value="En cours">En cours</MenuItem>
+                  <MenuItem value="Traité">Traité</MenuItem>
+                  <MenuItem value="Rejeté">Rejeté</MenuItem>
+                </TextField>
+                <TextField
+                  size="small"
+                  label="Gestionnaire"
+                  value={filters3.gestionnaire}
+                  onChange={(e) => setFilters3({ ...filters3, gestionnaire: e.target.value })}
+                  sx={{ width: 130 }}
+                />
+                <DatePicker
+                  label="Date début"
+                  value={filters3.dateFrom}
+                  onChange={(date) => setFilters3({ ...filters3, dateFrom: date })}
+                  slotProps={{ textField: { size: 'small', sx: { width: 130 } } }}
+                />
+                <DatePicker
+                  label="Date fin"
+                  value={filters3.dateTo}
+                  onChange={(date) => setFilters3({ ...filters3, dateTo: date })}
+                  slotProps={{ textField: { size: 'small', sx: { width: 130 } } }}
+                />
+                <Button size="small" onClick={clearFilters3} startIcon={<Clear />} variant="outlined">
+                  Effacer
+                </Button>
+              </Stack>
+            </LocalizationProvider>
+          </Box>
+          
           <TableContainer>
             <Table>
               <TableHead>
@@ -473,7 +757,7 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {documents.slice(0, 10).map((document) => (
+                {filteredDocuments.slice(0, 20).map((document) => (
                   <TableRow key={document.id}>
                     <TableCell>{document.reference}</TableCell>
                     <TableCell>{document.client}</TableCell>

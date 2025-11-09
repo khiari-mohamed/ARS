@@ -18,6 +18,7 @@ const roleColors: Record<UserRole, string> = {
   ADMINISTRATEUR: '#3f51b5',
   RESPONSABLE_DEPARTEMENT: '#ff9800',
   CHEF_EQUIPE: '#4caf50',
+  GESTIONNAIRE_SENIOR: '#00bcd4',
   GESTIONNAIRE: '#2196f3',
   CLIENT_SERVICE: '#9c27b0',
   FINANCE: '#ff5722',

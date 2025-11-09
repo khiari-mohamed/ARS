@@ -922,16 +922,29 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           placeholder="Sélectionner un statut"
           value={selectedStatus}
           onChange={setSelectedStatus}
-          options={[
-            { value: 'A_SCANNER', label: 'À scanner' },
-            { value: 'SCAN_EN_COURS', label: 'En cours de scan' },
-            { value: 'SCANNE', label: 'Scanné' },
-            { value: 'A_AFFECTER', label: 'À affecter' },
-            { value: 'ASSIGNE', label: 'Assigné' },
-            { value: 'EN_COURS', label: 'En cours de traitement' },
-            { value: 'TRAITE', label: 'Traité' },
-            { value: 'VIREMENT_EXECUTE', label: 'Virement exécuté' }
-          ]}
+          options={(() => {
+            if (user?.role === 'GESTIONNAIRE') {
+              return [
+                { value: 'TRAITE', label: 'Traité' },
+                { value: 'RETOUR_ADMIN', label: '↩️ Retourné' }
+              ];
+            } else if (user?.role === 'CHEF_EQUIPE') {
+              return [
+                { value: 'TRAITE', label: 'Traité' }
+              ];
+            } else {
+              return [
+                { value: 'A_SCANNER', label: 'À scanner' },
+                { value: 'SCAN_EN_COURS', label: 'En cours de scan' },
+                { value: 'SCANNE', label: 'Scanné' },
+                { value: 'A_AFFECTER', label: 'À affecter' },
+                { value: 'ASSIGNE', label: 'Assigné' },
+                { value: 'EN_COURS', label: 'En cours de traitement' },
+                { value: 'TRAITE', label: 'Traité' },
+                { value: 'VIREMENT_EXECUTE', label: 'Virement exécuté' }
+              ];
+            }
+          })()}
         />
       </Modal>
 
@@ -955,14 +968,27 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           placeholder="Sélectionner un statut"
           value={selectedDocumentStatus}
           onChange={setSelectedDocumentStatus}
-          options={[
-            { value: 'UPLOADED', label: 'Nouveau' },
-            { value: 'SCANNE', label: 'Scanné' },
-            { value: 'EN_COURS', label: 'En cours' },
-            { value: 'TRAITE', label: 'Traité' },
-            { value: 'REJETE', label: '❌ Rejeté' },
-            { value: 'RETOUR_ADMIN', label: '↩️ Retourné' }
-          ]}
+          options={(() => {
+            if (user?.role === 'GESTIONNAIRE') {
+              return [
+                { value: 'TRAITE', label: 'Traité' },
+                { value: 'RETOUR_ADMIN', label: '↩️ Retourné' }
+              ];
+            } else if (user?.role === 'CHEF_EQUIPE') {
+              return [
+                { value: 'TRAITE', label: 'Traité' }
+              ];
+            } else {
+              return [
+                { value: 'UPLOADED', label: 'Nouveau' },
+                { value: 'SCANNE', label: 'Scanné' },
+                { value: 'EN_COURS', label: 'En cours' },
+                { value: 'TRAITE', label: 'Traité' },
+                { value: 'REJETE', label: '❌ Rejeté' },
+                { value: 'RETOUR_ADMIN', label: '↩️ Retourné' }
+              ];
+            }
+          })()}
         />
       </Modal>
 

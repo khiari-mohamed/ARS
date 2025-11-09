@@ -188,7 +188,7 @@ export default function UserManagement() {
         email: newUser.email.trim().toLowerCase(),
         password: newUser.password,
         role: newUser.role as UserRole,
-        department: newUser.department.trim() || undefined,
+        departmentId: newUser.department || undefined,
         active: true
       });
       setShowCreateDialog(false);
@@ -761,12 +761,19 @@ export default function UserManagement() {
               </FormControl>
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Département (optionnel)"
-                value={newUser.department}
-                onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
-              />
+              <FormControl fullWidth>
+                <InputLabel>Département</InputLabel>
+                <Select
+                  value={newUser.department}
+                  onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
+                  displayEmpty
+                >
+                  <MenuItem value="">Aucun département</MenuItem>
+                  {departments.map(dept => (
+                    <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </DialogContent>
@@ -826,12 +833,19 @@ export default function UserManagement() {
                 </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Département"
-                  defaultValue={showEditDialog.department || ''}
-                  onChange={(e) => setShowEditDialog({ ...showEditDialog, department: e.target.value })}
-                />
+                <FormControl fullWidth>
+                  <InputLabel>Département</InputLabel>
+                  <Select
+                    value={showEditDialog.departmentId || ''}
+                    onChange={(e) => setShowEditDialog({ ...showEditDialog, departmentId: e.target.value })}
+                    displayEmpty
+                  >
+                    <MenuItem value="">Aucun département</MenuItem>
+                    {departments.map(dept => (
+                      <MenuItem key={dept.id} value={dept.id}>{dept.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -870,7 +884,7 @@ export default function UserManagement() {
             onClick={() => showEditDialog && handleEditUser({
               fullName: showEditDialog.fullName,
               role: showEditDialog.role,
-              department: showEditDialog.department,
+              departmentId: showEditDialog.departmentId,
               phone: showEditDialog.phone,
               position: showEditDialog.position,
               active: showEditDialog.active

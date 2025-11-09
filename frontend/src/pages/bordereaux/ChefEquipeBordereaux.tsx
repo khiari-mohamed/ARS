@@ -27,7 +27,7 @@ function ChefEquipeBordereaux() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedBordereau, setSelectedBordereau] = useState<any>(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
-  const [statsModalType, setStatsModalType] = useState<'en-cours' | 'traites' | 'retournes'>('en-cours');
+  const [statsModalType, setStatsModalType] = useState<'en-cours' | 'traites' | 'retournes' | 'non-affectes'>('en-cours');
   const [statsModalData, setStatsModalData] = useState<any[]>([]);
   
   const teamId = user?.teamId || user?.id || '';
@@ -162,23 +162,22 @@ function ChefEquipeBordereaux() {
     setShowStatusModal(true);
   };
 
-  const openStatsModal = (type: 'en-cours' | 'traites' | 'retournes') => {
-    if (!isGestionnaire) return;
-    
+  const openStatsModal = (type: 'en-cours' | 'traites' | 'retournes' | 'non-affectes') => {
     let data: any[] = [];
     switch (type) {
+      case 'non-affectes':
+        data = unassignedBordereaux;
+        break;
       case 'en-cours':
-        data = userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut));
+        data = isGestionnaire ? userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)) : teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut));
         break;
       case 'traites':
-        data = userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut));
+        data = isGestionnaire ? userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)) : teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
         break;
       case 'retournes':
         data = userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE');
         break;
     }
-    
-
     
     setStatsModalType(type);
     setStatsModalData(data);
@@ -192,7 +191,7 @@ function ChefEquipeBordereaux() {
       case 'en-cours':
         return [...teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)), ...userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut))];
       case 'traites':
-        return teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut));
+        return teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
       default:
         return [];
     }
@@ -282,7 +281,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div>
                   <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
-                    {userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                    {userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                   </div>
                   <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
                   <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
@@ -306,10 +305,10 @@ function ChefEquipeBordereaux() {
           </div>
         )}
         
-        {/* Chef d'équipe stats (unchanged) */}
+        {/* Chef d'équipe stats - WITH POPUP */}
         {!isGestionnaire && (
           <div className="chef-equipe-stats">
-            <div className="chef-equipe-stat-card">
+            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('non-affectes')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <div style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(255, 152, 0, 0.2)' }}>
                   <span style={{ fontSize: '32px' }}>📋</span>
@@ -317,10 +316,11 @@ function ChefEquipeBordereaux() {
                 <div>
                   <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>{unassignedBordereaux.length}</div>
                   <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Non affectés</div>
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
                 </div>
               </div>
             </div>
-            <div className="chef-equipe-stat-card">
+            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('en-cours')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
                   <span style={{ fontSize: '32px' }}>⏳</span>
@@ -330,19 +330,21 @@ function ChefEquipeBordereaux() {
                     {teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
                   </div>
                   <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
                 </div>
               </div>
             </div>
-            <div className="chef-equipe-stat-card">
+            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('traites')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
                   <span style={{ fontSize: '32px' }}>✅</span>
                 </div>
                 <div>
                   <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
-                    {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                    {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                   </div>
                   <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
                 </div>
               </div>
             </div>
@@ -362,8 +364,8 @@ function ChefEquipeBordereaux() {
           </div>
         )}
 
-        {/* Corbeille Globale - Chef d'équipe only */}
-        {!isGestionnaire && (
+        {/* Corbeille Globale - COMMENTED OUT */}
+        {false && !isGestionnaire && (
           <div className="chef-equipe-corbeille">
             <div className="chef-equipe-corbeille-header">
               <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -395,7 +397,7 @@ function ChefEquipeBordereaux() {
               className={`chef-equipe-tab ${activeTab === 'traites' ? 'active' : ''}`}
               onClick={() => setActiveTab('traites')}
             >
-              Traités ({teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length})
+              Traités ({teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
             </button>
           </div>
 
@@ -707,7 +709,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div className="chef-equipe-perf-card green">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
-                    {userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                    {userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                   </div>
                   <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>bordereaux traités par le gestionnaire</div>
                 </div>
@@ -719,7 +721,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div className="chef-equipe-perf-card purple">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
-                    {userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%
+                    {userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%
                   </div>
                   <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite du gestionnaire</div>
                 </div>
@@ -734,7 +736,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div className="chef-equipe-perf-card green">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
-                    {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}
+                    {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                   </div>
                   <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>bordereaux traités</div>
                 </div>
@@ -746,7 +748,7 @@ function ChefEquipeBordereaux() {
                 </div>
                 <div className="chef-equipe-perf-card purple">
                   <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
-                    {(unassignedBordereaux.length + teamBordereaux.length) > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / (unassignedBordereaux.length + teamBordereaux.length)) * 100) : 0}%
+                    {(unassignedBordereaux.length + teamBordereaux.length) > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / (unassignedBordereaux.length + teamBordereaux.length)) * 100) : 0}%
                   </div>
                   <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
                 </div>
@@ -1063,7 +1065,7 @@ function ChefEquipeBordereaux() {
               backgroundColor: '#f8f9fa'
             }}>
               <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
-                Dossiers {statsModalType === 'en-cours' ? 'En Cours' : statsModalType === 'traites' ? 'Traités' : 'Retournés'} ({statsModalData.length})
+                Dossiers {statsModalType === 'non-affectes' ? 'Non Affectés' : statsModalType === 'en-cours' ? 'En Cours' : statsModalType === 'traites' ? 'Traités' : 'Retournés'} ({statsModalData.length})
               </h2>
               <button 
                 onClick={() => setShowStatsModal(false)}
@@ -1085,7 +1087,7 @@ function ChefEquipeBordereaux() {
               {statsModalData.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
                   <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-                  <p>Aucun dossier {statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'}</p>
+                  <p>Aucun dossier {statsModalType === 'non-affectes' ? 'non affecté' : statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'}</p>
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>

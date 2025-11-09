@@ -1,0 +1,134 @@
+[
+  {
+    "clientId": "dbcbf88e-619d-453c-8afd-b13dc945722a",
+    "clientName": "Client STAR Assurances",
+    "status": "active",
+    "chargeCompte": {
+      "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+      "name": "Mohamed Ben Ali",
+      "email": "chef.sante@ars.tn",
+      "role": "CHEF_EQUIPE"
+    },
+    "chefEquipeFromChargeCompte": null,
+    "contracts": [
+      {
+        "contractId": "d2ddce1e-c691-4cad-8f7b-5e7f8de39bc2",
+        "assignedManager": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn",
+          "role": "CHEF_EQUIPE"
+        },
+        "chefEquipeFromManager": null,
+        "chefEquipeFromContract": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn"
+        }
+      }
+    ],
+    "gestionnaires": [],
+    "chefsEquipe": [
+      "787792f0-538a-4151-b8d4-08a0690ca67d"
+    ]
+  },
+  {
+    "clientId": "cdf4aa68-2c4c-45d1-8c55-1dba9b1535b3",
+    "clientName": "Client GAT Assurances",
+    "status": "active",
+    "chargeCompte": {
+      "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+      "name": "Mohamed Ben Ali",
+      "email": "chef.sante@ars.tn",
+      "role": "CHEF_EQUIPE"
+    },
+    "chefEquipeFromChargeCompte": null,
+    "contracts": [
+      {
+        "contractId": "ed38db9a-2c57-429f-9778-29f3783b2efc",
+        "assignedManager": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn",
+          "role": "CHEF_EQUIPE"
+        },
+        "chefEquipeFromManager": null,
+        "chefEquipeFromContract": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn"
+        }
+      }
+    ],
+    "gestionnaires": [],
+    "chefsEquipe": [
+      "787792f0-538a-4151-b8d4-08a0690ca67d"
+    ]
+  },
+  {
+    "clientId": "91c53263-40f4-4155-85ef-f618c7d6b32f",
+    "clientName": "Client COMAR",
+    "status": "active",
+    "chargeCompte": {
+      "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+      "name": "Mohamed Ben Ali",
+      "email": "chef.sante@ars.tn",
+      "role": "CHEF_EQUIPE"
+    },
+    "chefEquipeFromChargeCompte": null,
+    "contracts": [
+      {
+        "contractId": "8e256ac0-c4be-4dd4-89c7-23af5c44c370",
+        "assignedManager": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn",
+          "role": "CHEF_EQUIPE"
+        },
+        "chefEquipeFromManager": null,
+        "chefEquipeFromContract": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn"
+        }
+      }
+    ],
+    "gestionnaires": [],
+    "chefsEquipe": [
+      "787792f0-538a-4151-b8d4-08a0690ca67d"
+    ]
+  },
+  {
+    "clientId": "302480e9-903e-4950-9f84-f703615a71b5",
+    "clientName": "Client AMI Assurances",
+    "status": "active",
+    "chargeCompte": {
+      "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+      "name": "Mohamed Ben Ali",
+      "email": "chef.sante@ars.tn",
+      "role": "CHEF_EQUIPE"
+    },
+    "chefEquipeFromChargeCompte": null,
+    "contracts": [
+      {
+        "contractId": "272417cf-b157-40e4-8bec-34265e4ba219",
+        "assignedManager": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn",
+          "role": "CHEF_EQUIPE"
+        },
+        "chefEquipeFromManager": null,
+        "chefEquipeFromContract": {
+          "id": "787792f0-538a-4151-b8d4-08a0690ca67d",
+          "name": "Mohamed Ben Ali",
+          "email": "chef.sante@ars.tn"
+        }
+      }
+    ],
+    "gestionnaires": [],
+    "chefsEquipe": [
+      "787792f0-538a-4151-b8d4-08a0690ca67d"
+    ]
+  }
+]

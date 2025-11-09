@@ -78,7 +78,8 @@ export class ContractsService {
         },
         include: {
           client: true,
-          assignedManager: true
+          assignedManager: true,
+          teamLeader: true
         }
       });
       
@@ -129,7 +130,8 @@ export class ContractsService {
       where,
       include: {
         client: true,
-        assignedManager: true
+        assignedManager: true,
+        teamLeader: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -141,7 +143,8 @@ export class ContractsService {
       where: { id },
       include: {
         client: true,
-        assignedManager: true
+        assignedManager: true,
+        teamLeader: true
       }
     });
 
@@ -180,7 +183,8 @@ export class ContractsService {
       data: updateData,
       include: {
         client: true,
-        assignedManager: true
+        assignedManager: true,
+        teamLeader: true
       }
     });
 
@@ -201,9 +205,29 @@ export class ContractsService {
 
   // Delete contract
   async remove(id: string, userId: string) {
-    const contract = await this.prisma.contract.findUnique({ where: { id } });
+    const contract = await this.prisma.contract.findUnique({ 
+      where: { id },
+      include: {
+        bordereaux: true,
+        Reclamation: true,
+        history: true
+      }
+    });
     if (!contract) {
       throw new NotFoundException('Contract not found');
+    }
+
+    // Check for related records
+    if (contract.bordereaux.length > 0) {
+      throw new BadRequestException(`Cannot delete contract: ${contract.bordereaux.length} bordereau(x) linked to this contract`);
+    }
+    if (contract.Reclamation.length > 0) {
+      throw new BadRequestException(`Cannot delete contract: ${contract.Reclamation.length} reclamation(s) linked to this contract`);
+    }
+
+    // Delete contract history first
+    if (contract.history.length > 0) {
+      await this.prisma.contractHistory.deleteMany({ where: { contractId: id } });
     }
 
     // Remove file if exists
@@ -467,5 +491,55 @@ export class ContractsService {
     }
 
     return { alerts, count: alerts.length };
+  }
+
+  // Reassign contract to different Chef d'équipe
+  async reassignChef(contractId: string, newChefId: string, userId: string) {
+    const contract = await this.prisma.contract.findUnique({ 
+      where: { id: contractId },
+      include: { teamLeader: true }
+    });
+    if (!contract) {
+      throw new NotFoundException('Contract not found');
+    }
+
+    // Verify new chef exists and has CHEF_EQUIPE role
+    const newChef = await this.prisma.user.findUnique({ where: { id: newChefId } });
+    if (!newChef) {
+      throw new NotFoundException('Chef d\'équipe not found');
+    }
+    if (newChef.role !== 'CHEF_EQUIPE') {
+      throw new BadRequestException('User is not a Chef d\'équipe');
+    }
+
+    const oldChefId = contract.teamLeaderId;
+
+    // Update contract
+    const updated = await this.prisma.contract.update({
+      where: { id: contractId },
+      data: { teamLeaderId: newChefId },
+      include: {
+        client: true,
+        assignedManager: true,
+        teamLeader: true
+      }
+    });
+
+    // Log the reassignment
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CONTRACT_REASSIGN_CHEF',
+        details: {
+          contractId,
+          oldChefId,
+          newChefId,
+          oldChefName: contract.teamLeader?.fullName || 'N/A',
+          newChefName: newChef.fullName
+        }
+      }
+    });
+
+    return updated;
   }
 }
