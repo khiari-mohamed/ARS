@@ -27,7 +27,7 @@ const DonneursTab: React.FC = () => {
     name: '',
     bank: '',
     rib: '',
-    txtFormat: 'SWIFT',
+    txtFormat: 'BTK_COMAR',
     status: 'active' as 'active' | 'inactive'
   });
 
@@ -66,7 +66,7 @@ const DonneursTab: React.FC = () => {
       name: '',
       bank: '',
       rib: '',
-      txtFormat: 'SWIFT',
+      txtFormat: 'BTK_COMAR',
       status: 'active'
     });
     setDialog({open: true, donneur: null});
@@ -310,9 +310,9 @@ const DonneursTab: React.FC = () => {
                     onChange={(e) => setForm({...form, txtFormat: e.target.value})}
                     label="Structure fichier TXT associée"
                   >
-                    <MenuItem value="Structure 1">Structure 1 (Donneur 1)</MenuItem>
-                    <MenuItem value="Structure 2">Structure 2 (Donneur 2)</MenuItem>
-                    <MenuItem value="Structure 3">Structure 3 (Donneur 3)</MenuItem>
+                    <MenuItem value="BTK_COMAR">BTK COMAR (Format V1/V2)</MenuItem>
+                    <MenuItem value="BTK_ASTREE">BTK ASTREE (Format V1/V2)</MenuItem>
+                    <MenuItem value="ATTIJARI">ATTIJARI (Format 110104)</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>

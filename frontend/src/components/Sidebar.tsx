@@ -26,34 +26,34 @@ import { useNavigate } from 'react-router-dom';
 
 const sidebarLinks = [
   // SUPER_ADMIN: Full access to everything
-  { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+  { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'] },
   { to: "/home/super-admin", label: "Interface Super Admin", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN'] },
   
   // ADMINISTRATEUR: All modules + system parameters
   // COMMENTED OUT: Redundant user management - Use Super Admin interface instead
   // { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
   { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
-  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
+  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
   
   // RESPONSABLE_DEPARTEMENT: Read-only access to all modules like Super Admin
   { to: "/home/contracts", label: "Contrats", icon: <DescriptionIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
-  { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+  { to: "/home/bordereaux", label: "Bordereaux", icon: <AssignmentIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'] },
   { to: "/home/bs", label: "Bulletins de Soin", icon: <HealingIcon />, roles: [, 'ADMINISTRATEUR'] },
-  { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
-  { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
+  { to: "/home/reclamations", label: "Réclamations", icon: <ReportIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
+  { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
   { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'BO', 'BUREAU_ORDRE'] },
   { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'SCAN_TEAM'] },
-  { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
-  { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'CLIENT_SERVICE'] },
-  { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
+  { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+  { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'CLIENT_SERVICE'] },
+  { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
   
   // CHEF_EQUIPE: Team management, global inbox, team dashboard
   // COMMENTED OUT: Redundant Chef d'Équipe dashboard - Use main dashboard instead
   // { to: "/home/chef-equipe", label: "Chef d'Équipe", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN', 'CHEF_EQUIPE'] },
   
   // Common access
-  { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'FINANCE'] },
-  { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'BUREAU_ORDRE', 'SCAN_TEAM'] },
+  { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
+  { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'BUREAU_ORDRE', 'SCAN_TEAM'] },
 ];
 
 interface SidebarProps {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import React from "react";
 import GestionnaireBordereaux from './GestionnaireBordereaux';
 import ChefEquipeBordereaux from './ChefEquipeBordereaux';
+import GestionnaireSeniorBordereaux from './GestionnaireSeniorBordereaux';
 import {
   fetchBordereaux,
   fetchKPIs,
@@ -153,6 +154,10 @@ function BordereauxListPage() {
 
   if (userRole === 'CHEF_EQUIPE') {
     return <ChefEquipeBordereaux />;
+  }
+
+  if (userRole === 'GESTIONNAIRE_SENIOR') {
+    return <GestionnaireSeniorBordereaux />;
   }
 
   if (userRole === 'GESTIONNAIRE') {

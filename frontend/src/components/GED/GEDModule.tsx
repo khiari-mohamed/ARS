@@ -21,16 +21,16 @@ const GEDModule: React.FC = () => {
 
   // Role-based tab filtering
   const allTabs = [
-    { label: 'Dashboard', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+    { label: 'Dashboard', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'SCAN_TEAM'] },
     { label: 'Ingestion', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'SCAN_TEAM'] },
-    { label: 'Corbeille', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE'] },
+    { label: 'Corbeille', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'] },
     // COMMENTED OUT: Recherche tab temporarily hidden
-    // { label: 'Recherche', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+    // { label: 'Recherche', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'SCAN_TEAM'] },
     // COMMENTED OUT: Extra tabs not in core requirements
-    // { label: 'Workflows', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'] },
+    // { label: 'Workflows', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'] },
     // { label: 'Intégrations', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
     // { label: 'PaperStream', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'SCAN_TEAM'] },
-    { label: 'Rapports', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE'] }
+    { label: 'Rapports', roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'] }
   ];
 
   const availableTabs = allTabs.filter(tab => 

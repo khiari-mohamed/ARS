@@ -30,7 +30,7 @@ import {
   Refresh,
   Info
 } from '@mui/icons-material';
-import { fetchTeamWorkload, fetchSuperAdminAlerts, acknowledgeAlert } from '../../services/superAdminTeamService';
+import { LocalAPI } from '../../services/axios';
 import { getWorkloadPredictions } from '../../services/superAdminService';
 
 interface OverloadAlert {
@@ -68,25 +68,28 @@ const SuperAdminAlerts: React.FC = () => {
 
   const loadAlerts = async () => {
     try {
-      const [teamWorkloadData, alertsData] = await Promise.all([
-        fetchTeamWorkload(),
-        fetchSuperAdminAlerts()
-      ]);
+      // Use the new team-alerts endpoint
+      const response = await LocalAPI.get('/super-admin/team-alerts');
+      const alertsData = response.data;
 
-      setTeamWorkload(teamWorkloadData);
+      console.log('🚨 Team Alerts:', alertsData);
 
-      // Transform team workload data to overload alerts format
-      const overloadData = teamWorkloadData
-        .filter((member: any) => member.level === 'Critique' || member.level === 'Élevé')
-        .map((member: any) => ({
+      // Get team workload for display
+      const teamResponse = await LocalAPI.get('/super-admin/team-workload');
+      setTeamWorkload(teamResponse.data);
+
+      // Transform alerts to overload format
+      const overloadData = alertsData.alerts
+        .filter((alert: any) => alert.type === 'TEAM_OVERLOAD' || alert.type === 'TEAM_BUSY')
+        .map((alert: any) => ({
           team: {
-            id: member.id,
-            fullName: member.name,
-            role: member.role
+            id: alert.teamId,
+            fullName: alert.teamName,
+            role: alert.teamName.includes('Chef') ? 'CHEF_EQUIPE' : 'GESTIONNAIRE'
           },
-          count: parseInt(member.workload.split(' ')[0]),
-          alert: member.level === 'Critique' ? 'red' : 'orange',
-          reason: `Charge de travail élevée: ${member.workload}`
+          count: alert.workload || 0,
+          alert: alert.level === 'CRITICAL' ? 'red' : 'orange',
+          reason: alert.message
         }));
 
       setOverloadAlerts(overloadData);
@@ -135,32 +138,41 @@ const SuperAdminAlerts: React.FC = () => {
 
         <Grid container spacing={2} sx={{ mb: 2 }}>
           <Grid item xs={4}>
-            <Box textAlign="center">
+            <Box textAlign="center" p={2} bgcolor="error.light" borderRadius={2}>
               <Typography variant="h3" color="error.main">
                 {getCriticalCount()}
               </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Critiques
+              <Typography variant="body2" color="error.dark" fontWeight={600}>
+                🔴 Surchargés
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Équipes ≥90% capacité
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={4}>
-            <Box textAlign="center">
+            <Box textAlign="center" p={2} bgcolor="warning.light" borderRadius={2}>
               <Typography variant="h3" color="warning.main">
                 {getWarningCount()}
               </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Avertissements
+              <Typography variant="body2" color="warning.dark" fontWeight={600}>
+                🟠 Occupés
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Équipes 70-89% capacité
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={4}>
-            <Box textAlign="center">
+            <Box textAlign="center" p={2} bgcolor="success.light" borderRadius={2}>
               <Typography variant="h3" color="success.main">
                 {Math.max(0, (teamWorkload?.length || 0) - overloadAlerts.length)}
               </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Disponibles
+              <Typography variant="body2" color="success.dark" fontWeight={600}>
+                🟢 Normaux
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Équipes &lt;70% capacité
               </Typography>
             </Box>
           </Grid>
@@ -271,10 +283,24 @@ const SuperAdminAlerts: React.FC = () => {
 
   return (
     <Box p={3}>
-      <Typography variant="h4" mb={3} display="flex" alignItems="center" gap={1}>
-        <Warning color="error" />
-        Alertes Super Admin
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4" display="flex" alignItems="center" gap={1}>
+          <Warning color="error" />
+          Alertes Équipes
+        </Typography>
+        <Chip 
+          label="Règles: ≥90% Critique | 70-89% Avertissement" 
+          color="info" 
+          variant="outlined"
+        />
+      </Box>
+
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <Typography variant="body2">
+          <strong>Types d'alertes surveillées:</strong> Surcharge équipe (≥90%), Équipe occupée (70-89%), 
+          Files d'attente critiques, Dépassements SLA, Gestionnaires sans chef d'équipe
+        </Typography>
+      </Alert>
 
       {overloadAlerts.length === 0 && (
         <Alert severity="success" sx={{ mb: 2 }}>

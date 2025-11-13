@@ -27,6 +27,7 @@ const RoleBasedDashboard: React.FC = () => {
         navigate('/home/finance', { replace: true });
         return;
       case UserRole.CHEF_EQUIPE:
+      case UserRole.GESTIONNAIRE_SENIOR:
       case UserRole.GESTIONNAIRE:
         // Keep existing dashboard behavior for these roles
         return;
@@ -114,6 +115,16 @@ const RoleBasedDashboard: React.FC = () => {
     return (
       <React.Suspense fallback={<div>Chargement...</div>}>
         <ChefEquipeDashboard />
+      </React.Suspense>
+    );
+  }
+
+  // Gestionnaire Senior - Same view as Chef d'Équipe but shows ONLY their own data
+  if (userRole === UserRole.GESTIONNAIRE_SENIOR) {
+    const GestionnaireSeniorDashboard = React.lazy(() => import('../pages/dashboard/GestionnaireSeniorDashboard'));
+    return (
+      <React.Suspense fallback={<div>Chargement...</div>}>
+        <GestionnaireSeniorDashboard />
       </React.Suspense>
     );
   }

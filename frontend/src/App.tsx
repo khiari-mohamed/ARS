@@ -75,7 +75,7 @@ const App: React.FC = () => {
           } />
           
           <Route path="/home/finance" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.FINANCE]}>
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE]}>
               <FinanceTracker />
             </ProtectedRoute>
           } />
@@ -119,7 +119,7 @@ const App: React.FC = () => {
           } />
           
           <Route path="/home/alerts" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.FINANCE]}>
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE]}>
               <AlertsModule />
             </ProtectedRoute>
           } />

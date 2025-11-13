@@ -237,10 +237,7 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                           size="small"
                           variant="outlined"
                           startIcon={<Visibility />}
-                          onClick={() => {
-                            // Open bordereau details in view mode
-                            window.open(`/bordereaux/${bordereau.id}`, '_blank');
-                          }}
+                          onClick={() => handleCorrectBordereau(bordereau)}
                           sx={{ fontSize: '0.7rem' }}
                         >
                           Voir
@@ -313,16 +310,54 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                             />
                           </Box>
                         </Box>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="warning"
-                          startIcon={<AutoFixHigh />}
-                          onClick={() => handleReplaceDocument(doc.name)}
-                          sx={{ fontSize: '0.7rem', minWidth: 'auto' }}
-                        >
-                          Remplacer
-                        </Button>
+                        <Box display="flex" gap={1}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<Visibility />}
+                            onClick={async () => {
+                              try {
+                                const { LocalAPI } = await import('../../services/axios');
+                                const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${doc.id}`);
+                                
+                                if (response.data.success && response.data.pdfUrl) {
+                                  const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+                                  let pdfUrl = response.data.pdfUrl;
+                                  
+                                  // Extract uploads path
+                                  const uploadsIndex = pdfUrl.indexOf('/uploads/');
+                                  if (uploadsIndex !== -1) {
+                                    pdfUrl = pdfUrl.substring(uploadsIndex);
+                                  }
+                                  
+                                  const cleanedPdfUrl = pdfUrl.replace(/\/\/+/g, '/');
+                                  const fullPdfUrl = `${serverBaseUrl}${cleanedPdfUrl}`;
+                                  
+                                  window.open(fullPdfUrl, '_blank');
+                                } else {
+                                  alert(response.data.error || `PDF non disponible pour le document: ${doc.name}`);
+                                }
+                              } catch (error) {
+                                console.error('Failed to open PDF:', error);
+                                alert('❌ Erreur lors de l\'ouverture du PDF');
+                              }
+                            }}
+                            sx={{ fontSize: '0.7rem', minWidth: 'auto' }}
+                          >
+                            Voir PDF
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="warning"
+                            startIcon={<AutoFixHigh />}
+                            onClick={() => handleReplaceDocument(doc.name)}
+                            sx={{ fontSize: '0.7rem', minWidth: 'auto' }}
+                          >
+                            Remplacer
+                          </Button>
+                        </Box>
                       </Box>
                     ))}
                   </Paper>
