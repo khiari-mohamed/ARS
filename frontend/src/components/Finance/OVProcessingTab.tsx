@@ -293,6 +293,24 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         console.log('📋 Linking OV to bordereau:', selectedBordereauId);
       }
       
+      // Get first available client for validation
+      const clientsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/client`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      let clientId = 'default';
+      if (clientsResponse.ok) {
+        const clients = await clientsResponse.json();
+        if (clients && clients.length > 0) {
+          clientId = clients[0].id;
+          console.log('✅ Using clientId for validation:', clientId);
+        }
+      }
+      
+      formData.append('clientId', clientId);
+      
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/validate-excel`, {
         method: 'POST',
         body: formData,
@@ -310,11 +328,11 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       if (result.valid && result.data && result.data.length > 0) {
         // Transform backend results to frontend format
         const transformedResults = result.data.map((item: any) => ({
-          matricule: item.matricule,
-          name: `${item.nom} ${item.prenom}`,
-          society: item.societe,
-          rib: item.rib,
-          amount: item.montant,
+          matricule: item.matricule || '',
+          name: item.nom && item.prenom ? `${item.nom} ${item.prenom}` : 'Non trouvé',
+          society: item.societe || 'ARS TUNISIE',
+          rib: item.rib || 'N/A',
+          amount: item.montant || 0,
           status: item.status === 'VALIDE' ? 'ok' : item.status === 'ALERTE' ? 'warning' : 'error',
           notes: item.erreurs?.join(', ') || '',
           memberId: item.adherentId

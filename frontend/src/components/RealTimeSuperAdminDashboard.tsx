@@ -15,42 +15,25 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  TextField,
-  MenuItem,
-  Collapse,
-  Stack
+  DialogActions
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { fr } from 'date-fns/locale';
 import {
   Refresh,
   Download,
   Warning,
   CheckCircle,
   Error,
-  TrendingUp,
-  TrendingDown,
   People,
   Assignment,
-  Speed,
-  FilterList,
-  Clear
+  Speed
 } from '@mui/icons-material';
 import { 
   getRealTimeStats, 
-  exportDashboard, 
-  exportPerformanceReport,
-  fetchQueuesOverview,
-  fetchSystemHealth,
-  fetchSystemStats
+  exportDashboard,
+  fetchQueuesOverview
 } from '../services/superAdminService';
 import { LocalAPI } from '../services/axios';
 
@@ -61,6 +44,8 @@ interface RealTimeStats {
   alerts: any;
   teamWorkload: number;
   overloadedTeams: number;
+  busyTeams: number;
+  teamWorkloadDetails?: any[];
 }
 
 const RealTimeSuperAdminDashboard: React.FC = () => {
@@ -70,121 +55,28 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
   const [exporting, setExporting] = useState(false);
   const [exportDialog, setExportDialog] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [dossiers, setDossiers] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [stats, setStats] = useState<any>({});
-  
-  // Filter states for each table
-  const [showFilters1, setShowFilters1] = useState(false);
-  const [showFilters2, setShowFilters2] = useState(false);
-  const [showFilters3, setShowFilters3] = useState(false);
-  
-  const [filters1, setFilters1] = useState({
-    reference: '',
-    client: '',
-    type: '',
-    statut: '',
-    dateFrom: null as Date | null,
-    dateTo: null as Date | null
-  });
-  
-  const [filters2, setFilters2] = useState({
-    reference: '',
-    client: '',
-    statut: '',
-    dateFrom: null as Date | null,
-    dateTo: null as Date | null
-  });
-  
-  const [filters3, setFilters3] = useState({
-    reference: '',
-    client: '',
-    type: '',
-    statut: '',
-    gestionnaire: '',
-    dateFrom: null as Date | null,
-    dateTo: null as Date | null
-  });
-  
-  const [filteredDossiers1, setFilteredDossiers1] = useState<any[]>([]);
-  const [filteredDossiers2, setFilteredDossiers2] = useState<any[]>([]);
-  const [filteredDocuments, setFilteredDocuments] = useState<any[]>([]);
+  // Removed: dossiers, documents, stats, filters - tables commented out
 
   useEffect(() => {
     loadRealTimeData();
     const interval = setInterval(loadRealTimeData, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, []);
-  
-  useEffect(() => {
-    applyFilters();
-  }, [dossiers, documents, filters1, filters2, filters3]);
-  
-  const applyFilters = () => {
-    // Filter Table 1: Derniers Bordereaux
-    let filtered1 = dossiers.filter(d => {
-      if (filters1.reference && !d.reference?.toLowerCase().includes(filters1.reference.toLowerCase())) return false;
-      if (filters1.client && !d.client?.toLowerCase().includes(filters1.client.toLowerCase())) return false;
-      if (filters1.type && d.type !== filters1.type) return false;
-      if (filters1.statut && d.statut !== filters1.statut) return false;
-      if (filters1.dateFrom && new Date(d.dateReception) < filters1.dateFrom) return false;
-      if (filters1.dateTo && new Date(d.dateReception) > filters1.dateTo) return false;
-      return true;
-    });
-    setFilteredDossiers1(filtered1);
-    
-    // Filter Table 2: Bordereaux en cours
-    let filtered2 = dossiers.filter(d => {
-      if (filters2.reference && !d.reference?.toLowerCase().includes(filters2.reference.toLowerCase())) return false;
-      if (filters2.client && !d.client?.toLowerCase().includes(filters2.client.toLowerCase())) return false;
-      if (filters2.statut && d.statut !== filters2.statut) return false;
-      if (filters2.dateFrom && new Date(d.dateReception) < filters2.dateFrom) return false;
-      if (filters2.dateTo && new Date(d.dateReception) > filters2.dateTo) return false;
-      return true;
-    });
-    setFilteredDossiers2(filtered2);
-    
-    // Filter Table 3: Dossiers Individuels
-    let filtered3 = documents.filter(d => {
-      if (filters3.reference && !d.reference?.toLowerCase().includes(filters3.reference.toLowerCase())) return false;
-      if (filters3.client && !d.client?.toLowerCase().includes(filters3.client.toLowerCase())) return false;
-      if (filters3.type && d.type !== filters3.type) return false;
-      if (filters3.statut && d.statut !== filters3.statut) return false;
-      if (filters3.gestionnaire && !d.gestionnaire?.toLowerCase().includes(filters3.gestionnaire.toLowerCase())) return false;
-      if (filters3.dateFrom && new Date(d.uploadedAt || d.date) < filters3.dateFrom) return false;
-      if (filters3.dateTo && new Date(d.uploadedAt || d.date) > filters3.dateTo) return false;
-      return true;
-    });
-    setFilteredDocuments(filtered3);
-  };
-  
-  const clearFilters1 = () => {
-    setFilters1({ reference: '', client: '', type: '', statut: '', dateFrom: null, dateTo: null });
-  };
-  
-  const clearFilters2 = () => {
-    setFilters2({ reference: '', client: '', statut: '', dateFrom: null, dateTo: null });
-  };
-  
-  const clearFilters3 = () => {
-    setFilters3({ reference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: null, dateTo: null });
-  };
 
   const loadRealTimeData = async () => {
     try {
-      const [realTime, queues, dossiersResponse, documentsResponse, statsResponse] = await Promise.all([
+      const [realTime, queues, teamWorkload] = await Promise.all([
         getRealTimeStats(),
         fetchQueuesOverview(),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
-        LocalAPI.get('/bordereaux/chef-equipe/dashboard-stats-dossiers')
+        LocalAPI.get('/super-admin/team-workload')
       ]);
       
-      setRealTimeData(realTime);
+      console.log('📊 Real-Time Data:', realTime);
+      console.log('👥 Team Workload:', teamWorkload.data);
+      console.log('📋 Queues:', queues);
+      
+      setRealTimeData({ ...realTime, teamWorkloadDetails: teamWorkload.data });
       setQueuesData(queues);
-      setDossiers(dossiersResponse.data || []);
-      setDocuments(documentsResponse.data || []);
-      setStats(statsResponse.data || {});
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Failed to load real-time data:', error);
@@ -341,8 +233,8 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
                   <Typography variant="h4" component="div" color="error.main">
                     {realTimeData?.overloadedTeams || 0}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    / {realTimeData?.teamWorkload || 0} équipes
+                  <Typography variant="caption" color="warning.main">
+                    {realTimeData?.busyTeams || 0} occupées | {realTimeData?.teamWorkload || 0} total
                   </Typography>
                 </Box>
                 <Assignment color="error" sx={{ fontSize: 40 }} />
@@ -373,69 +265,138 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Queues Overview */}
+      {/* Queues Overview with Alert Rules */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            État des Files d'Attente
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">
+              État des Files d'Attente
+            </Typography>
+            <Chip 
+              label="Règles: >Seuil OU >24h = Critique" 
+              size="small" 
+              color="info"
+              variant="outlined"
+            />
+          </Box>
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
                   <TableCell>File</TableCell>
+                  <TableCell align="right">Total</TableCell>
                   <TableCell align="right">En Attente</TableCell>
                   <TableCell align="right">En Cours</TableCell>
-                  <TableCell align="right">Terminés</TableCell>
-                  <TableCell align="right">Échecs</TableCell>
-                  <TableCell align="right">Temps Moyen (min)</TableCell>
+                  <TableCell align="right">Plus Ancien (h)</TableCell>
+                  <TableCell align="center">Statut</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {queuesData.map((queue) => (
                   <TableRow key={queue.name}>
-                    <TableCell>{queue.name.replace('_', ' ')}</TableCell>
+                    <TableCell><strong>{queue.name}</strong></TableCell>
                     <TableCell align="right">
                       <Chip 
-                        label={queue.pending} 
-                        color={queue.pending > 10 ? 'warning' : 'default'} 
+                        label={queue.total} 
+                        color={queue.alertLevel === 'CRITICAL' ? 'error' : queue.alertLevel === 'WARNING' ? 'warning' : 'default'}
                         size="small" 
                       />
                     </TableCell>
+                    <TableCell align="right">{queue.pending}</TableCell>
+                    <TableCell align="right">{queue.processing}</TableCell>
                     <TableCell align="right">
                       <Chip 
-                        label={queue.processing} 
-                        color="info" 
-                        size="small" 
+                        label={`${queue.oldestAge}h`}
+                        color={queue.oldestAge > 24 ? 'error' : queue.oldestAge > 12 ? 'warning' : 'default'}
+                        size="small"
                       />
                     </TableCell>
-                    <TableCell align="right">
-                      <Chip 
-                        label={queue.completed} 
-                        color="success" 
-                        size="small" 
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Chip 
-                        label={queue.failed} 
-                        color={queue.failed > 0 ? 'error' : 'default'} 
-                        size="small" 
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      {Math.round(queue.avgProcessingTime / 60)}
+                    <TableCell align="center">
+                      {queue.alertLevel === 'CRITICAL' && <Error color="error" />}
+                      {queue.alertLevel === 'WARNING' && <Warning color="warning" />}
+                      {queue.alertLevel === 'NORMAL' && <CheckCircle color="success" />}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="caption">
+              <strong>Règles d'alerte:</strong> Critique si Total &gt; Seuil OU Plus ancien &gt; 24h | 
+              Avertissement si Total &gt; 70% Seuil OU Plus ancien &gt; 12h
+            </Typography>
+          </Alert>
         </CardContent>
       </Card>
 
-      {/* Derniers Bordereaux Ajoutés */}
+      {/* Team Workload with Calculation Rules */}
       <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">
+              Charge de Travail des Équipes
+            </Typography>
+            <Chip 
+              label="Règle: <70% Normal | 70-89% Occupé | ≥90% Surchargé" 
+              size="small" 
+              color="info"
+              variant="outlined"
+            />
+          </Box>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nom</TableCell>
+                  <TableCell>Rôle</TableCell>
+                  <TableCell align="right">Charge</TableCell>
+                  <TableCell align="right">Capacité</TableCell>
+                  <TableCell align="right">Utilisation</TableCell>
+                  <TableCell align="center">Statut</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(realTimeData as any)?.teamWorkloadDetails?.map((team: any) => (
+                  <TableRow key={team.id}>
+                    <TableCell>{team.name}</TableCell>
+                    <TableCell>{team.role}</TableCell>
+                    <TableCell align="right">{team.workload}</TableCell>
+                    <TableCell align="right">{team.capacity}</TableCell>
+                    <TableCell align="right">
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={team.utilizationRate}
+                          color={team.level === 'OVERLOADED' ? 'error' : team.level === 'BUSY' ? 'warning' : 'success'}
+                          sx={{ width: 60, height: 6 }}
+                        />
+                        <Typography variant="caption">{team.utilizationRate}%</Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip 
+                        label={team.level}
+                        color={team.color as any}
+                        size="small"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="caption">
+              <strong>Formule:</strong> Taux d'utilisation = (Bordereaux assignés / Capacité) × 100 | 
+              🟢 Normal (&lt;70%) | 🟠 Occupé (70-89%) | 🔴 Surchargé (≥90%)
+            </Typography>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      {/* Derniers Bordereaux Ajoutés - COMMENTÉ: Redondant avec dashboard */}
+      {/* <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box mb={2}>
             <Typography variant="h6" mb={2}>
@@ -552,10 +513,10 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             </Table>
           </TableContainer>
         </CardContent>
-      </Card>
+      </Card> */}
 
-      {/* Bordereaux en cours */}
-      <Card sx={{ mb: 3 }}>
+      {/* Bordereaux en cours - COMMENTÉ: Redondant avec dashboard */}
+      {/* <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box mb={2}>
             <Typography variant="h6" mb={2}>
@@ -662,10 +623,10 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             </Table>
           </TableContainer>
         </CardContent>
-      </Card>
+      </Card> */}
 
-      {/* Dossiers Individuels */}
-      <Card sx={{ mb: 3 }}>
+      {/* Dossiers Individuels - COMMENTÉ: Redondant avec dashboard */}
+      {/* <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box mb={2}>
             <Typography variant="h6" mb={1}>
@@ -781,7 +742,7 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             </Table>
           </TableContainer>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* System Performance */}
       <Grid container spacing={3} sx={{ mb: 3 }}>

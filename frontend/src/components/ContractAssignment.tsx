@@ -14,6 +14,7 @@ interface Contract {
 interface TeamLeader {
   id: string;
   fullName: string;
+  role: string;
   teamSize: number;
   activeContracts: number;
   currentWorkload: number;
@@ -82,7 +83,7 @@ const ContractAssignment: React.FC = () => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <h2>Affectation des Contrats aux Chefs d'Équipe</h2>
+      <h2>Affectation des Contrats aux Chefs d'Équipe & Gestionnaires Senior</h2>
       
       {message && (
         <div style={{
@@ -126,9 +127,9 @@ const ContractAssignment: React.FC = () => {
           </div>
         </div>
 
-        {/* Chefs d'équipe disponibles */}
+        {/* Chefs d'équipe et Gestionnaires Senior disponibles */}
         <div>
-          <h3>Chefs d'Équipe Disponibles</h3>
+          <h3>Chefs d'Équipe & Gestionnaires Senior Disponibles</h3>
           <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
             {teamLeaders.map(leader => (
               <div
@@ -141,9 +142,21 @@ const ContractAssignment: React.FC = () => {
                   backgroundColor: selectedTeamLeader === leader.id ? '#e8f5e8' : 'white'
                 }}
               >
-                <div style={{ fontWeight: 'bold' }}>{leader.fullName}</div>
+                <div style={{ fontWeight: 'bold' }}>
+                  {leader.fullName}
+                  <span style={{ 
+                    marginLeft: '8px', 
+                    fontSize: '10px', 
+                    padding: '2px 6px', 
+                    borderRadius: '3px',
+                    backgroundColor: leader.role === 'CHEF_EQUIPE' ? '#1976d2' : '#9c27b0',
+                    color: 'white'
+                  }}>
+                    {leader.role === 'CHEF_EQUIPE' ? 'Chef' : 'Senior'}
+                  </span>
+                </div>
                 <div style={{ fontSize: '12px', color: '#666' }}>
-                  Équipe: {leader.teamSize} gestionnaires | 
+                  {leader.role === 'CHEF_EQUIPE' ? `Équipe: ${leader.teamSize} gestionnaires` : 'Travail autonome'} | 
                   Contrats: {leader.activeContracts} | 
                   Charge: {leader.currentWorkload}/{leader.capacity}
                 </div>
@@ -173,18 +186,28 @@ const ContractAssignment: React.FC = () => {
             border: 'none',
             borderRadius: '4px',
             fontSize: '16px',
-            cursor: loading || !selectedContract || !selectedTeamLeader ? 'not-allowed' : 'pointer'
+            cursor: loading || !selectedContract || !selectedTeamLeader ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold'
           }}
         >
           {loading ? 'Affectation en cours...' : 'Affecter le Contrat'}
         </button>
+        {selectedContract && selectedTeamLeader && (
+          <div style={{ marginTop: '12px', fontSize: '13px', color: '#666', textAlign: 'center' }}>
+            Le contrat sera affecté à {teamLeaders.find(l => l.id === selectedTeamLeader)?.fullName}
+            {teamLeaders.find(l => l.id === selectedTeamLeader)?.role === 'GESTIONNAIRE_SENIOR' && 
+              ' (Gestionnaire Senior - travail autonome)'}
+          </div>
+        )}
       </div>
 
       {/* Légende */}
       <div style={{ marginTop: '20px', fontSize: '12px', color: '#666' }}>
-        <strong>Fonctionnement:</strong> Une fois un contrat affecté à un chef d'équipe, 
-        tous les bordereaux de ce contrat seront automatiquement dirigés vers cette équipe 
-        pour affectation aux gestionnaires.
+        <strong>Fonctionnement:</strong>
+        <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
+          <li><strong>Chef d'équipe:</strong> Tous les bordereaux du contrat seront automatiquement dirigés vers son équipe pour affectation aux gestionnaires.</li>
+          <li><strong>Gestionnaire Senior:</strong> Tous les bordereaux du contrat seront automatiquement assignés directement à ce gestionnaire senior (travail autonome).</li>
+        </ul>
       </div>
     </div>
   );

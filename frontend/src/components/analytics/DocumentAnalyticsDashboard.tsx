@@ -63,10 +63,31 @@ const DocumentAnalyticsDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [hierarchyIssues, setHierarchyIssues] = useState<any[]>([]);
+  const [filters, setFilters] = useState({
+    gestionnaire: '',
+    chefEquipe: '',
+    slaStatus: ''
+  });
+  const [faultyDataCount, setFaultyDataCount] = useState(0);
+  const [gestionnaires, setGestionnaires] = useState<any[]>([]);
+  const [chefs, setChefs] = useState<any[]>([]);
 
   useEffect(() => {
     loadDocumentAnalytics();
+    loadUserLists();
   }, [selectedType]);
+
+  const loadUserLists = async () => {
+    try {
+      const response = await LocalAPI.get('/super-admin/team-workload');
+      const users = response.data || [];
+      
+      setGestionnaires(users.filter((u: any) => u.role === 'GESTIONNAIRE' || u.role === 'GESTIONNAIRE_SENIOR'));
+      setChefs(users.filter((u: any) => u.role === 'CHEF_EQUIPE'));
+    } catch (error) {
+      console.error('Failed to load user lists:', error);
+    }
+  };
 
   const loadDocumentAnalytics = async () => {
     setLoading(true);
@@ -75,9 +96,18 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         LocalAPI.get('/super-admin/documents/comprehensive-stats', {
           params: { documentType: selectedType !== 'ALL' ? selectedType : undefined }
         }),
-        LocalAPI.get('/super-admin/assignments/document-level'),
+        LocalAPI.get('/super-admin/document-assignments', {
+          params: {
+            documentType: selectedType !== 'ALL' ? selectedType : undefined,
+            gestionnaire: filters.gestionnaire || undefined,
+            chefEquipe: filters.chefEquipe || undefined,
+            slaStatus: filters.slaStatus || undefined
+          }
+        }),
         LocalAPI.get('/super-admin/hierarchy/validation')
       ]);
+
+      console.log('📊 Document Assignments:', assignmentsResponse.data);
 
       // Process document type statistics
       const allDocumentTypes = [
@@ -90,8 +120,11 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         { type: 'CONVENTION_TIERS_PAYANT', displayName: 'Conventions tiers payant', slaApplicable: false }
       ];
 
+      console.log('📊 Stats Response:', statsResponse.data);
+
       const processedStats = allDocumentTypes.map(docType => {
         const stats = statsResponse.data[docType.type] || {};
+        console.log(`Processing ${docType.type}:`, stats);
         return {
           ...docType,
           total: stats.total || 0,
@@ -106,16 +139,15 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         };
       });
 
+      console.log('📊 Processed Stats:', processedStats);
       setDocumentStats(processedStats);
-      setAssignmentStats(assignmentsResponse.data || []);
+      setAssignmentStats(assignmentsResponse.data.assignments || []);
+      setFaultyDataCount(assignmentsResponse.data.withIssues || 0);
       setHierarchyIssues(hierarchyResponse.data.issues || []);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load document analytics:', error);
-      // FALLBACK DATA - COMMENTED OUT
-      // setDocumentStats([]);
-      // setAssignmentStats([]);
-      // setHierarchyIssues([]);
+      console.error('Error details:', error.response?.data || error.message);
       
       // Set empty arrays when API fails
       setDocumentStats([]);
@@ -162,14 +194,40 @@ const DocumentAnalyticsDashboard: React.FC = () => {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Typography variant="h5" gutterBottom display="flex" alignItems="center" gap={1}>
-        <Description />
-        Analytics Documents - Périmètre Complet ARS
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h5" display="flex" alignItems="center" gap={1}>
+          <Description />
+          Analytics Documents - Périmètre Complet ARS
+        </Typography>
+        <Chip 
+          label="Règle SLA: Date Limite = Date Réception + Délai Contrat" 
+          color="info" 
+          variant="outlined"
+        />
+      </Box>
+
+      {/* SLA Rules Info */}
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <Typography variant="body2">
+          <strong>Règles SLA:</strong> 🟢 À temps (&gt;24h restant) | 🟠 À risque (0-24h) | 🔴 En retard (&lt;0h)
+        </Typography>
+      </Alert>
+
+      {/* Faulty Data Alert */}
+      {faultyDataCount > 0 && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          <Typography variant="subtitle2">
+            ❌ Données défaillantes détectées
+          </Typography>
+          <Typography variant="body2">
+            {faultyDataCount} document(s) avec gestionnaire ou chef d'équipe manquant
+          </Typography>
+        </Alert>
+      )}
 
       {/* Hierarchy Issues Alert */}
       {hierarchyIssues.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
+        <Alert severity="warning" sx={{ mb: 2 }}>
           <Typography variant="subtitle2">
             ⚠️ Problèmes de hiérarchie détectés
           </Typography>
@@ -180,36 +238,102 @@ const DocumentAnalyticsDashboard: React.FC = () => {
       )}
 
       {/* Filter Controls */}
-      <Box sx={{ mb: 3 }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>Type de document</InputLabel>
-          <Select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            label="Type de document"
+      <Card sx={{ mb: 3, p: 2 }}>
+        <Typography variant="subtitle2" mb={2}>
+          🔍 Filtres Dynamiques
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Type de document</InputLabel>
+              <Select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                label="Type de document"
+              >
+                <MenuItem value="ALL">Tous les types</MenuItem>
+                <MenuItem value="BULLETIN_SOIN">Bulletins de soins</MenuItem>
+                <MenuItem value="COMPLEMENT_INFORMATION">Compléments</MenuItem>
+                <MenuItem value="ADHESION">Adhésions</MenuItem>
+                <MenuItem value="RECLAMATION">Réclamations</MenuItem>
+                <MenuItem value="CONTRAT_AVENANT">Contrats</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Gestionnaire</InputLabel>
+              <Select
+                value={filters.gestionnaire}
+                onChange={(e) => setFilters({ ...filters, gestionnaire: e.target.value })}
+                label="Gestionnaire"
+              >
+                <MenuItem value="">Tous</MenuItem>
+                <MenuItem value="NON ASSIGNÉ">❌ Non assigné</MenuItem>
+                {gestionnaires.map(g => (
+                  <MenuItem key={g.id} value={g.name}>{g.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Chef d'équipe</InputLabel>
+              <Select
+                value={filters.chefEquipe}
+                onChange={(e) => setFilters({ ...filters, chefEquipe: e.target.value })}
+                label="Chef d'équipe"
+              >
+                <MenuItem value="">Tous</MenuItem>
+                <MenuItem value="AUCUN CHEF">❌ Aucun chef</MenuItem>
+                {chefs.map(c => (
+                  <MenuItem key={c.id} value={c.name}>{c.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Statut SLA</InputLabel>
+              <Select
+                value={filters.slaStatus}
+                onChange={(e) => setFilters({ ...filters, slaStatus: e.target.value })}
+                label="Statut SLA"
+              >
+                <MenuItem value="">Tous</MenuItem>
+                <MenuItem value="ON_TIME">🟢 À temps</MenuItem>
+                <MenuItem value="AT_RISK">🟠 À risque</MenuItem>
+                <MenuItem value="OVERDUE">🔴 En retard</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+        <Box mt={2} display="flex" gap={1}>
+          <Button 
+            variant="contained" 
+            onClick={loadDocumentAnalytics}
+            size="small"
           >
-            <MenuItem value="ALL">Tous les types</MenuItem>
-            <MenuItem value="BULLETIN_SOIN">Bulletins de soins</MenuItem>
-            <MenuItem value="COMPLEMENT_INFORMATION">Compléments d'information</MenuItem>
-            <MenuItem value="ADHESION">Adhésions</MenuItem>
-            <MenuItem value="RECLAMATION">Réclamations</MenuItem>
-            <MenuItem value="CONTRAT_AVENANT">Contrats/Avenants</MenuItem>
-            <MenuItem value="DEMANDE_RESILIATION">Demandes de résiliation</MenuItem>
-            <MenuItem value="CONVENTION_TIERS_PAYANT">Conventions tiers payant</MenuItem>
-          </Select>
-        </FormControl>
-        <Button 
-          variant="outlined" 
-          onClick={loadDocumentAnalytics}
-          sx={{ ml: 2 }}
-        >
-          Actualiser
-        </Button>
-      </Box>
+            Appliquer les filtres
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={() => {
+              setFilters({ gestionnaire: '', chefEquipe: '', slaStatus: '' });
+              setSelectedType('ALL');
+            }}
+            size="small"
+          >
+            Réinitialiser
+          </Button>
+        </Box>
+      </Card>
 
-      {/* Document Type Statistics */}
+      {/* Document Type Statistics - Filter by selectedType */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {documentStats.map((stats) => (
+        {documentStats
+          .filter(stats => selectedType === 'ALL' || stats.type === selectedType)
+          .map((stats) => (
           <Grid item xs={12} md={6} lg={4} key={stats.type}>
             <Card>
               <CardContent>
@@ -304,33 +428,62 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {assignmentStats.slice(0, 10).map((assignment, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{assignment.reference}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={assignment.documentType} 
-                        size="small" 
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{assignment.assignedTo}</TableCell>
-                    <TableCell>{assignment.chefEquipe}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={assignment.status} 
-                        size="small" 
-                        color={getStatusColor(assignment.status) as any}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {getSlaStatusIcon(assignment.slaStatus)}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(assignment.assignedAt).toLocaleDateString('fr-FR')}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {assignmentStats.slice(0, 50).map((assignment: any, index) => {
+                  const hasFaultyData = assignment.hasIssue;
+                  return (
+                    <TableRow 
+                      key={index}
+                      sx={{ 
+                        bgcolor: hasFaultyData ? 'error.light' : 'inherit',
+                        '&:hover': { bgcolor: hasFaultyData ? 'error.main' : 'action.hover' }
+                      }}
+                    >
+                      <TableCell>
+                        {hasFaultyData && <Warning color="error" fontSize="small" sx={{ mr: 1 }} />}
+                        {assignment.reference}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={assignment.documentType} 
+                          size="small" 
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {assignment.gestionnaire === 'NON ASSIGNÉ' ? (
+                          <Chip label="NON ASSIGNÉ" size="small" color="error" />
+                        ) : (
+                          assignment.gestionnaire
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {assignment.chefEquipe === 'AUCUN CHEF' ? (
+                          <Chip label="AUCUN CHEF" size="small" color="error" />
+                        ) : (
+                          assignment.chefEquipe
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={assignment.statut} 
+                          size="small" 
+                          color={getStatusColor(assignment.statut) as any}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={assignment.slaStatus}
+                          size="small"
+                          color={assignment.slaColor as any}
+                          icon={getSlaStatusIcon(assignment.slaStatus)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {assignment.assignedAt ? new Date(assignment.assignedAt).toLocaleDateString('fr-FR') : 'N/A'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

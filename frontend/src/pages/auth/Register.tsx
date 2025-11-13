@@ -16,6 +16,14 @@ const roleOptions = [
   { label: 'Bureau d\'Ordre', value: UserRole.BO },
 ];
 
+const departmentOptions = [
+  { label: 'Bureau d\'Ordre', value: 'Bureau d\'Ordre' },
+  { label: 'Équipe Scan', value: 'Équipe Scan' },
+  { label: 'Équipe Santé', value: 'Équipe Santé' },
+  { label: 'Finance', value: 'Finance' },
+  { label: 'Service Client', value: 'Service Client' },
+];
+
 const passwordHelp =
   'Password must be at least 8 characters, include uppercase, lowercase, number, and special character.';
 
@@ -73,26 +81,11 @@ const Register = () => {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('');
   const [department, setDepartment] = useState('');
-  const [departments, setDepartments] = useState<any[]>([]);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  React.useEffect(() => {
-    const loadDepartments = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/super-admin/departments');
-        const data = await response.json();
-        console.log('Loaded departments:', data);
-        setDepartments(data);
-      } catch (error) {
-        console.error('Failed to load departments:', error);
-      }
-    };
-    loadDepartments();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -335,9 +328,9 @@ const Register = () => {
                 }}
               >
                 <option value="">Département (optionnel)</option>
-                {departments.map(dept => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
+                {departmentOptions.map(dept => (
+                  <option key={dept.value} value={dept.value}>
+                    {dept.label}
                   </option>
                 ))}
               </select>

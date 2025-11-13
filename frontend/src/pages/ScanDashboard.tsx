@@ -512,7 +512,28 @@ const ScanDashboard: React.FC = () => {
                       size="small"
                       variant="outlined"
                       color="success"
-                      onClick={() => setActiveDialog('scan-history')}
+                      onClick={async () => {
+                        try {
+                          const { LocalAPI } = await import('../services/axios');
+                          // Pre-load enhanced history data before opening dialog
+                          const historyPromises = scanQueue
+                            .filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut))
+                            .map(async (b: any) => {
+                              try {
+                                const historyRes = await LocalAPI.get(`/scan/bordereau/${b.id}/history`);
+                                return { ...b, enhancedHistory: historyRes.data };
+                              } catch (err) {
+                                return { ...b, enhancedHistory: null };
+                              }
+                            });
+                          const enhancedBordereaux = await Promise.all(historyPromises);
+                          setScanQueue(enhancedBordereaux);
+                          setActiveDialog('scan-history');
+                        } catch (error) {
+                          console.error('Failed to load enhanced history:', error);
+                          setActiveDialog('scan-history');
+                        }
+                      }}
                       sx={{ fontSize: '0.7rem' }}
                     >
                       📜 Historique
@@ -1540,11 +1561,11 @@ const ScanDashboard: React.FC = () => {
         documentTypeIcon={selectedDocumentType?.icon || ''}
       />
 
-      {/* Scan History Dialog - ALL scanned bordereaux with persistence */}
+      {/* Scan History Dialog - ENHANCED with comprehensive details */}
       <Dialog 
         open={activeDialog === 'scan-history'} 
         onClose={() => setActiveDialog(null)}
-        maxWidth="lg"
+        maxWidth="xl"
         fullWidth
       >
         <DialogTitle>
@@ -1564,6 +1585,9 @@ const ScanDashboard: React.FC = () => {
                   <TableCell>Référence</TableCell>
                   <TableCell>Client</TableCell>
                   <TableCell>Date Scan</TableCell>
+                  <TableCell>Scanné Par</TableCell>
+                  <TableCell>Documents</TableCell>
+                  <TableCell>Durée Scan</TableCell>
                   <TableCell>Statut Actuel</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
@@ -1572,47 +1596,90 @@ const ScanDashboard: React.FC = () => {
                 {scanQueue
                   .filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut))
                   .sort((a: any, b: any) => new Date(b.dateFinScan || b.updatedAt).getTime() - new Date(a.dateFinScan || a.updatedAt).getTime())
-                  .map((bordereau: any) => (
-                    <TableRow key={bordereau.id}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          {bordereau.reference}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {bordereau.client?.name || 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString() : 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={bordereau.statut}
-                          color="success"
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<Visibility />}
-                          onClick={() => handleViewBordereau(bordereau.id)}
-                          sx={{ fontSize: '0.7rem' }}
-                        >
-                          Voir
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  .map((bordereau: any) => {
+                    const history = bordereau.enhancedHistory;
+                    const scanUser = history?.timeline?.find((t: any) => t.action === 'SCAN_COMPLETED')?.user || history?.summary?.scanUser;
+                    const scanDuration = history?.summary?.totalDuration;
+                    const docCount = history?.summary?.documentsScanned || bordereau.documents?.length || 0;
+                    
+                    return (
+                      <TableRow key={bordereau.id}>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight="bold">
+                            {bordereau.reference}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {bordereau.client?.name || 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleString() : 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {scanUser?.fullName || scanUser?.username || 'N/A'}
+                          </Typography>
+                          {scanUser?.role && (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {scanUser.role}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Chip label={`${docCount} doc(s)`} size="small" color="info" />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {scanDuration ? `${Math.round(scanDuration)} min` : 'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={bordereau.statut}
+                            color="success"
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" gap={1}>
+                            <Tooltip title="Voir détails complets">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Visibility />}
+                                onClick={() => handleViewBordereau(bordereau.id)}
+                                sx={{ fontSize: '0.7rem' }}
+                              >
+                                Voir
+                              </Button>
+                            </Tooltip>
+                            {history && (
+                              <Tooltip title="Timeline détaillée">
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={() => {
+                                    setSelectedBordereau(bordereau);
+                                    setActiveDialog('detailed-history');
+                                  }}
+                                >
+                                  <Visibility fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 }
                 {scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut)).length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} align="center">
+                    <TableCell colSpan={8} align="center">
                       <Typography color="text.secondary" sx={{ py: 4 }}>
                         Aucun bordereau scanné dans l'historique
                       </Typography>
@@ -1625,6 +1692,78 @@ const ScanDashboard: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Detailed History Timeline Dialog */}
+      <Dialog 
+        open={activeDialog === 'detailed-history'} 
+        onClose={() => {
+          setActiveDialog('scan-history');
+          setSelectedBordereau(null);
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          📋 Timeline Détaillée - {selectedBordereau?.reference}
+        </DialogTitle>
+        <DialogContent>
+          {selectedBordereau?.enhancedHistory && (
+            <Box>
+              <Paper sx={{ p: 2, mb: 2, bgcolor: '#f5f5f5' }}>
+                <Typography variant="subtitle2" gutterBottom>Résumé</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2">Documents scannés: {selectedBordereau.enhancedHistory.summary?.documentsScanned || 0}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2">Durée totale: {selectedBordereau.enhancedHistory.summary?.totalDuration ? `${Math.round(selectedBordereau.enhancedHistory.summary.totalDuration)} min` : 'N/A'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2">Statut SLA: {selectedBordereau.enhancedHistory.summary?.slaStatus || 'N/A'}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2">Impact SLA: {selectedBordereau.enhancedHistory.summary?.slaImpact || 'N/A'}</Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+              
+              <Typography variant="subtitle2" gutterBottom>Timeline des Actions</Typography>
+              {selectedBordereau.enhancedHistory.timeline?.map((event: any, index: number) => (
+                <Paper key={index} sx={{ p: 2, mb: 1, borderLeft: '4px solid', borderColor: 'primary.main' }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="start">
+                    <Box flex={1}>
+                      <Typography variant="body2" fontWeight="bold">{event.action}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(event.timestamp).toLocaleString()}
+                      </Typography>
+                      {event.user && (
+                        <Typography variant="caption" display="block" color="primary">
+                          Par: {event.user.fullName || event.user.username} ({event.user.role})
+                        </Typography>
+                      )}
+                      {event.details && (
+                        <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                          {event.details}
+                        </Typography>
+                      )}
+                      {event.duration && (
+                        <Chip label={`${Math.round(event.duration)} min`} size="small" sx={{ mt: 0.5 }} />
+                      )}
+                    </Box>
+                    {getActivityIcon(event.action)}
+                  </Box>
+                </Paper>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setActiveDialog('scan-history');
+            setSelectedBordereau(null);
+          }}>Retour</Button>
         </DialogActions>
       </Dialog>
 
