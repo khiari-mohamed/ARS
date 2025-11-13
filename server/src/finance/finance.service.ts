@@ -33,7 +33,7 @@ export class FinanceService {
 
   private checkFinanceRole(user: User) {
     console.log('🔐 Checking role for user:', user?.role);
-    if (!['FINANCE', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'RESPONSABLE_DEPARTEMENT'].includes(user.role)) {
+    if (!['FINANCE', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'].includes(user.role)) {
       console.log('❌ Role check failed for:', user?.role);
       throw new ForbiddenException('Access denied');
     }

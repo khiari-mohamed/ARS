@@ -1642,4 +1642,96 @@ export class ScanService {
     
     return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
+
+  // Get comprehensive scan history for a bordereau
+  async getBordereauScanHistory(bordereauId: string) {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: {
+        client: { select: { name: true } },
+        documents: { select: { id: true, name: true, uploadedAt: true } },
+        currentHandler: { select: { fullName: true, email: true, role: true } }
+      }
+    });
+
+    if (!bordereau) {
+      throw new BadRequestException('Bordereau not found');
+    }
+
+    // Get audit logs with user information
+    const auditLogs = await this.prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { details: { path: ['bordereauId'], equals: bordereauId } },
+          { details: { path: ['reference'], equals: bordereau.reference } }
+        ]
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            role: true
+          }
+        }
+      },
+      orderBy: { timestamp: 'asc' }
+    });
+
+    // Build timeline with user info and duration
+    const timeline: any[] = [];
+    const scanStartTime = bordereau.dateDebutScan || bordereau.createdAt;
+    const scanEndTime = bordereau.dateFinScan || bordereau.updatedAt;
+
+    for (let i = 0; i < auditLogs.length; i++) {
+      const log = auditLogs[i];
+      const nextLog = auditLogs[i + 1];
+      
+      const duration = nextLog 
+        ? (nextLog.timestamp.getTime() - log.timestamp.getTime()) / (1000 * 60)
+        : null;
+
+      timeline.push({
+        action: log.action,
+        timestamp: log.timestamp,
+        user: log.user ? {
+          id: log.user.id,
+          username: log.user.email,
+          fullName: log.user.fullName,
+          role: log.user.role
+        } : null,
+        details: log.details,
+        duration: duration ? Math.round(duration) : null
+      });
+    }
+
+    // Calculate total scan duration
+    const totalDuration = scanStartTime && scanEndTime
+      ? (scanEndTime.getTime() - scanStartTime.getTime()) / (1000 * 60)
+      : null;
+
+    // Get scan user from currentHandler or first audit log
+    const scanUser = bordereau.currentHandler || auditLogs.find(l => l.user)?.user;
+
+    return {
+      bordereauId,
+      reference: bordereau.reference,
+      client: bordereau.client?.name,
+      timeline,
+      summary: {
+        documentsScanned: bordereau.documents.length,
+        totalDuration: totalDuration ? Math.round(totalDuration) : null,
+        scanStartTime,
+        scanEndTime,
+        slaStatus: bordereau.statut,
+        slaImpact: totalDuration && totalDuration > 60 ? 'At Risk' : 'On Track',
+        scanUser: scanUser ? {
+          fullName: scanUser.fullName,
+          email: scanUser.email,
+          role: scanUser.role
+        } : null
+      }
+    };
+  }
 }

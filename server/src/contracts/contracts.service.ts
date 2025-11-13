@@ -62,20 +62,29 @@ export class ContractsService {
         signature: dto.notes
       });
       
+      // Prepare contract data, omitting empty foreign keys
+      const contractData: any = {
+        clientId: dto.clientId,
+        clientName: dto.contractNumber,
+        delaiReglement: parseInt(dto.treatmentDelay.toString()),
+        delaiReclamation: parseInt(dto.claimsReplyDelay.toString()),
+        escalationThreshold: dto.warningThreshold ? parseInt(dto.warningThreshold.toString()) : null,
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
+        documentPath,
+        signature: dto.notes
+      };
+      
+      // Only add foreign keys if they have valid values
+      if (dto.accountOwnerId && dto.accountOwnerId.trim()) {
+        contractData.assignedManagerId = dto.accountOwnerId;
+      }
+      if (dto.teamLeaderId && dto.teamLeaderId.trim()) {
+        contractData.teamLeaderId = dto.teamLeaderId;
+      }
+      
       const contract = await this.prisma.contract.create({
-        data: {
-          clientId: dto.clientId,
-          clientName: dto.contractNumber, // Store contract number, not client name
-          delaiReglement: parseInt(dto.treatmentDelay.toString()),
-          delaiReclamation: parseInt(dto.claimsReplyDelay.toString()),
-          escalationThreshold: dto.warningThreshold ? parseInt(dto.warningThreshold.toString()) : null,
-          assignedManagerId: dto.accountOwnerId,
-          teamLeaderId: dto.teamLeaderId || null, // Assign chef d'équipe
-          startDate: new Date(dto.startDate),
-          endDate: new Date(dto.endDate),
-          documentPath,
-          signature: dto.notes
-        },
+        data: contractData,
         include: {
           client: true,
           assignedManager: true,

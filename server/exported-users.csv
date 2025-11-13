@@ -1,0 +1,15 @@
+id,email,fullName,role,password
+29e2d132-0e95-46af-87d9-c7b54c7bce04,admin@ars.tn,Super Admin,SUPER_ADMIN,***MASKED***
+787792f0-538a-4151-b8d4-08a0690ca67d,chef.sante@ars.tn,Mohamed Ben Ali,CHEF_EQUIPE,***MASKED***
+51afbd43-ee0f-46be-a728-efca94fc7df5,chef.finance@ars.tn,Fatma Trabelsi,CHEF_EQUIPE,***MASKED***
+7db5d27c-777b-42d6-97b2-1fde7e3418e5,gestionnaire1@ars.tn,Gestionnaire Santé 1,GESTIONNAIRE,***MASKED***
+268c86ec-49c5-47c6-b03e-700598922b85,gestionnaire2@ars.tn,Gestionnaire Santé 2,GESTIONNAIRE,***MASKED***
+10cb6615-2d91-41e3-a35c-ef2db2e0ca93,gestionnaire3@ars.tn,Gestionnaire Santé 3,GESTIONNAIRE,***MASKED***
+6fdbd0d7-0c4d-4895-b612-3d18184a848b,gestionnaire4@ars.tn,Gestionnaire Santé 4,GESTIONNAIRE,***MASKED***
+2160ac4f-bc0a-4efc-ac6a-d4b98f4203cc,gestionnaire5@ars.tn,Gestionnaire Santé 5,GESTIONNAIRE,***MASKED***
+27082e64-1958-4b40-86ad-804f691831f8,bo@ars.tn,Bureau Ordre,BUREAU_ORDRE,***MASKED***
+eefd6249-0770-4045-9814-13997cfc5a60,scan@ars.tn,Équipe Scan,EQUIPE_SCAN,***MASKED***
+4f9215ef-53b9-47ae-a09f-1150c47106d6,finance@ars.tn,Service Finance,FINANCE,***MASKED***
+48d12db9-88ce-4edd-bcb8-a313a70e0578,gestion@mail.com,gesttitt,GESTIONNAIRE,***MASKED***
+6365367b-89fd-4551-9389-2da595c72852,senior@mail.com,senior,GESTIONNAIRE_SENIOR,***MASKED***
+250e7de1-e99a-4d7a-9bea-22358cff83f2,adminsenior@ars.tn,senior,GESTIONNAIRE_SENIOR,***MASKED***

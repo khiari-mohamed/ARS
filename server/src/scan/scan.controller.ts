@@ -265,4 +265,10 @@ export class ScanController {
     return this.scanService.getReturnedBordereaux();
   }
 
+  @Get('bordereau/:id/history')
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT)
+  async getBordereauHistory(@Param('id') id: string) {
+    return this.scanService.getBordereauScanHistory(id);
+  }
+
 }

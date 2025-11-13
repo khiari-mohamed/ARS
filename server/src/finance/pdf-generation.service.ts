@@ -38,12 +38,6 @@ export class PdfGenerationService {
   async generateOVPdf(data: OVPdfData): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
-        // Debug logging
-        console.log('PDF Data:', {
-          virementsCount: data.virements?.length || 0,
-          montantTotal: data.montantTotal
-        });
-        
         // Validate data
         if (!data.virements || data.virements.length === 0) {
           throw new Error('No virements data provided for PDF generation');
@@ -51,23 +45,32 @@ export class PdfGenerationService {
         
         const doc = new PDFDocument({ 
           size: 'A4',
-          margins: { top: 50, bottom: 50, left: 50, right: 50 }
+          margins: { top: 50, bottom: 50, left: 50, right: 50 },
+          autoFirstPage: true
         });
         
         const chunks: Buffer[] = [];
         doc.on('data', chunk => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
-
-        // En-tête avec informations du donneur d'ordre
-        this.addHeader(doc, data);
         
-        // Tableau des virements
-        this.addVirementTable(doc, data);
+        let currentPage = 1;
+        let totalPages = 1;
         
-        // Total et signature
-        this.addFooter(doc, data);
+        // Header
+        this.addPageHeader(doc, data, currentPage, totalPages);
+        
+        // Table
+        this.addVirementTable(doc, data, null);
+        
+        // Footer info
+        this.addFooterInfo(doc, data);
+        
+        // Page footer
+        this.addPageFooter(doc, data, currentPage, totalPages);
 
+        // Prevent extra blank pages
+        doc.flushPages();
         doc.end();
       } catch (error) {
         reject(error);
@@ -75,178 +78,179 @@ export class PdfGenerationService {
     });
   }
 
-  private addHeader(doc: any, data: OVPdfData) {
-    // Add logos
+  private addPageHeader(doc: any, data: OVPdfData, pageNum: number, totalPages: number) {
+    const startY = 20;
+    
+    // Logos
     const logoPath1 = 'D:\\ARS\\frontend\\public\\Image1.png';
     const logoPath2 = 'D:\\ARS\\frontend\\public\\Image2.png';
     
     try {
       if (require('fs').existsSync(logoPath1)) {
-        doc.image(logoPath1, 50, 20, { width: 80, height: 60 });
+        doc.image(logoPath1, 50, startY, { width: 70, height: 50 });
       }
-    } catch (e) { console.log('Logo 1 not found'); }
+    } catch (e) {}
     
     try {
       if (require('fs').existsSync(logoPath2)) {
-        doc.image(logoPath2, doc.page.width - 130, 20, { width: 80, height: 60 });
+        doc.image(logoPath2, doc.page.width - 120, startY, { width: 70, height: 50 });
       }
-    } catch (e) { console.log('Logo 2 not found'); }
+    } catch (e) {}
     
-    // Title - centered, bold, exact positioning
-    doc.fontSize(16)
+    // Title
+    doc.fontSize(14)
        .font('Helvetica-Bold')
-       .text('ORDRE DE VIREMENT', 0, 90, { width: doc.page.width, align: 'center' });
+       .text('ORDRE DE VIREMENT', 0, startY + 55, { width: doc.page.width, align: 'center' });
     
-    let currentY = 130;
+    let currentY = startY + 80;
 
-    // DONNEUR D'ORDRE section - LEFT side
-    doc.fontSize(12)
-       .font('Helvetica-Bold')
-       .text('DONNEUR D\'ORDRE', 50, currentY);
+    // Only show full header on first page
+    if (pageNum === 1) {
+      // DONNEUR D'ORDRE - always ARS TUNISIE
+      doc.fontSize(10)
+         .font('Helvetica-Bold')
+         .text('DONNEUR D\'ORDRE', 50, currentY);
+      
+      // Date and file info - properly aligned vertically on right side
+      const ovReference = data.reference || `OV-${data.ordreVirementId.substring(0, 8)}`;
+      const fileName = `${ovReference}.TXT`;
+      const rightX = 350;
+      let rightY = currentY;
+      
+      doc.fontSize(9).font('Helvetica');
+      doc.text(`Tunis le : ${data.dateEmission.toLocaleDateString('fr-FR')}`, rightX, rightY, { width: 220, align: 'right' });
+      rightY += 14;
+      doc.text(`Fichier de Transmission : ${fileName}`, rightX, rightY, { width: 220, align: 'right' });
+      rightY += 14;
+      doc.text(`Référence OV : ${ovReference}`, rightX, rightY, { width: 220, align: 'right' });
+      
+      // Company name - always ARS TUNISIE (left side)
+      currentY += 8;
+      doc.fontSize(9)
+         .font('Helvetica-Bold')
+         .text('ARS TUNISIE', 50, currentY);
+      
+      currentY += 12;
+      const address = '89 Bis Avenue Habib Bourguiba 2080 Nouvelle Ariana';
+      doc.font('Helvetica').text(address, 50, currentY);
+      
+      currentY += 25;
+      
+      // Bank information - variable account
+      const agence = (data.donneurOrdre.agence || 'ARIANA').toUpperCase();
+      const banque = (data.donneurOrdre.banque || 'ATTIJARI BANK').toUpperCase();
+      
+      doc.fontSize(9)
+         .font('Helvetica')
+         .text('AGENCE :', 50, currentY)
+         .font('Helvetica-Bold')
+         .text(agence, 140, currentY);
+      
+      currentY += 12;
+      doc.font('Helvetica')
+         .text('BANQUE :', 50, currentY)
+         .font('Helvetica-Bold')
+         .text(banque, 140, currentY);
+      
+      currentY += 12;
+      doc.font('Helvetica')
+         .text('COMPTE N° :', 50, currentY)
+         .font('Helvetica-Bold')
+         .text(data.donneurOrdre.rib, 140, currentY);
+      
+      currentY += 20;
+      
+      // CodeBanque
+      const codeBank = data.donneurOrdre.rib.substring(0, 2);
+      doc.fontSize(8)
+         .font('Helvetica-Oblique')
+         .text(`CodeBanque ${codeBank}`, 0, currentY, { width: doc.page.width, align: 'center' });
+      
+      currentY += 15;
+      
+      // Instruction text
+      doc.fontSize(9)
+         .font('Helvetica')
+         .text('Par le débit de mon / notre compte indiqué ci-dessus, veuillez effectuer les virements suivants :', 50, currentY, { width: 495 });
+      
+      currentY += 25;
+    } else {
+      // Continuation pages - minimal header
+      currentY += 10;
+    }
     
-    // Date and file info - RIGHT side, exact alignment
-    const fileName = `ATT${Date.now().toString().slice(-5)}.TXT`;
-    doc.fontSize(11)
-       .font('Helvetica')
-       .text(`Tunis le : ${data.dateEmission.toLocaleDateString('fr-FR')}`, 350, currentY, { width: 195, align: 'right' })
-       .text(`Fichier de Transmission : ${fileName}`, 350, currentY + 15, { width: 195, align: 'right' });
-    
-    currentY += 25;
-    
-    // Company name and address - dynamic
-    doc.fontSize(11)
-       .font('Helvetica')
-       .text(data.donneurOrdre.nom, 50, currentY);
-    
-    currentY += 15;
-    const address = data.donneurOrdre.address || '89 Bis Avenue Habib Bourguiba 2080 Nouvelle Ariana';
-    doc.text(address, 50, currentY);
-    
-    currentY += 35;
-    
-    // Bank information - dynamic from donneurOrdre data
-    const agence = data.donneurOrdre.agence || 'ARIANA';
-    const banque = data.donneurOrdre.banque || 'ATTIJARI BANK';
-    
-    doc.fontSize(11)
-       .font('Helvetica')
-       .text('AGENCE DE :', 50, currentY)
-       .text(agence, 170, currentY);
-    
-    currentY += 15;
-    doc.text('BANQUE :', 50, currentY)
-       .text(banque, 170, currentY);
-    
-    currentY += 15;
-    doc.text('COMPTE N°:', 50, currentY)
-       .text(data.donneurOrdre.rib, 170, currentY);
-    
-    currentY += 25;
-    
-    // CodeBanque - centered
-    doc.fontSize(10)
-       .font('Helvetica-Oblique')
-       .text(`CodeBanque ${data.donneurOrdre.banque || '04'}`, 0, currentY, { width: doc.page.width, align: 'center' });
-    
-    doc.y = currentY + 20;
+    doc.y = currentY;
   }
+  
 
-  private addVirementTable(doc: any, data: OVPdfData) {
+
+  private addVirementTable(doc: any, data: OVPdfData, onNewPage: any): void {
     let currentY = doc.y;
-    
-    // Instruction text - exact positioning
-    doc.fontSize(11)
-       .font('Helvetica')
-       .text('Par le débit de mon / notre compte indiqué ci-dessus, veuillez effectuer les virements suivants :', 50, currentY, { width: 495 });
-    
-    currentY += 25;
-    
-    // Table setup
     const tableX = 50;
     const tableWidth = 495;
-    const colWidths = [80, 140, 200, 75]; // Code, Domiciliation, Noms, Montant
-    const rowHeight = 35;
+    const colWidths = [60, 180, 170, 85]; // Matricule, Nom, RIB, Montant
+    const rowHeight = 14;
     
-    // Header row with borders and background
-    doc.rect(tableX, currentY, tableWidth, rowHeight)
-       .fillAndStroke('#f5f5f5', '#FF0000');
+    // Draw table border
+    doc.rect(tableX, currentY, tableWidth, rowHeight).stroke();
     
-    // Header text
-    doc.fillColor('#000000')
-       .fontSize(11)
-       .font('Helvetica-Bold');
+    // Table header with borders
+    doc.fontSize(7).font('Helvetica-Bold');
     
     let colX = tableX;
-    const headers = ['Code Banque', 'Domiciliation', 'Noms et Prénoms des Bénéficiaires', 'Montant'];
+    const headers = ['MATRICULE', 'NOM ET PRÉNOM', 'RIB', 'MONTANT'];
     
     headers.forEach((header, i) => {
-      doc.rect(colX, currentY, colWidths[i], rowHeight).stroke('#FF0000');
-      doc.text(header, colX + 10, currentY + 12, { width: colWidths[i] - 20, align: 'center' });
+      // Vertical line before column
+      if (i > 0) {
+        doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
+      }
+      // Header text
+      doc.text(header, colX + 3, currentY + 4, { width: colWidths[i] - 6, align: i === 3 ? 'right' : 'left' });
       colX += colWidths[i];
     });
     
     currentY += rowHeight;
     
-    // Data rows
-    doc.fontSize(10).font('Helvetica');
-    const maxRows = Math.min(data.virements.length, 11);
+    // Data rows with borders
+    doc.fontSize(6).font('Helvetica');
     
-    for (let i = 0; i < maxRows; i++) {
+    for (let i = 0; i < data.virements.length; i++) {
       const virement = data.virements[i];
-      const bankCode = virement.rib.substring(0, 2);
-      const bankName = this.getBankName(bankCode);
-      const montantFormatted = this.formatAmount(virement.montant);
-      const beneficiaryName = `${virement.nom} ${virement.prenom} ${bankName}`.trim();
+      const montantFormatted = virement.montant.toFixed(3).replace('.', ',');
+      const beneficiaryName = `${virement.nom} ${virement.prenom}`.toUpperCase();
       
-      // Row background
-      doc.rect(tableX, currentY, tableWidth, rowHeight).fillAndStroke('#ffffff', '#FF0000');
+      // Draw row border
+      doc.rect(tableX, currentY, tableWidth, rowHeight).stroke();
       
-      // Cell data
       colX = tableX;
-      const rowData = [bankCode, virement.rib, beneficiaryName, montantFormatted];
-      const alignments = ['center', 'left', 'left', 'right'];
       
-      rowData.forEach((data, j) => {
-        doc.rect(colX, currentY, colWidths[j], rowHeight).stroke('#FF0000');
-        doc.fillColor('#000000')
-           .text(data, colX + 10, currentY + 12, { 
-             width: colWidths[j] - 20, 
-             align: alignments[j] 
-           });
-        colX += colWidths[j];
-      });
+      // Matricule
+      doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
+      doc.text(virement.matricule, colX + 3, currentY + 4, { width: colWidths[0] - 6, align: 'left' });
+      colX += colWidths[0];
+      
+      // Nom et Prénom
+      doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
+      doc.text(beneficiaryName, colX + 3, currentY + 4, { width: colWidths[1] - 6, align: 'left' });
+      colX += colWidths[1];
+      
+      // RIB
+      doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
+      doc.text(virement.rib, colX + 3, currentY + 4, { width: colWidths[2] - 6, align: 'left' });
+      colX += colWidths[2];
+      
+      // Montant
+      doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
+      doc.text(montantFormatted, colX + 3, currentY + 4, { width: colWidths[3] - 6, align: 'right' });
       
       currentY += rowHeight;
     }
     
-    // Total row
-    const totalAmount = data.virements.reduce((sum, v) => sum + v.montant, 0);
-    doc.rect(tableX, currentY, tableWidth, rowHeight).fillAndStroke('#fff9c4', '#FF0000');
-    
-    colX = tableX;
-    for (let i = 0; i < 3; i++) {
-      doc.rect(colX, currentY, colWidths[i], rowHeight).stroke('#FF0000');
-      colX += colWidths[i];
-    }
-    
-    // Total cell
-    doc.rect(colX, currentY, colWidths[3], rowHeight).stroke('#FF0000');
-    doc.fillColor('#000000')
-       .font('Helvetica-Bold')
-       .text(`Total: ${this.formatAmount(totalAmount)}`, colX + 10, currentY + 12, { 
-         width: colWidths[3] - 20, 
-         align: 'right' 
-       });
-    
-    doc.y = currentY + rowHeight + 15;
+    doc.y = currentY + 8;
   }
   
-  private formatAmount(amount: number): string {
-    return amount.toLocaleString('fr-FR', {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3
-    }).replace(',', ' ').replace('.', ',');
-  }
+
   
   private getBankName(bankCode: string): string {
     const bankMap: { [key: string]: string } = {
@@ -259,103 +263,102 @@ export class PdfGenerationService {
       '07': 'AMEN',
       '25': 'UIB',
       '11': 'STB',
-      '05': 'BNA',
+      '05': 'BANQUE DE TUNISIE',
       '28': 'ABC'
     };
-    return bankMap[bankCode] || 'BANK';
+    return bankMap[bankCode] || 'BANQUE DE TUNISIE';
   }
 
-  private addFooter(doc: any, data: OVPdfData) {
+  private addFooterInfo(doc: any, data: OVPdfData) {
     let currentY = doc.y;
     
-    // Amount in words - exact positioning
-    const amountInWords = this.convertAmountToWords(data.montantTotal);
-    doc.fontSize(11)
-       .font('Helvetica')
-       .text(amountInWords, 50, currentY);
-    
-    currentY += 20;
-    
-    // Transfer object - dynamic reference
-    const virementRef = data.reference || `bord ${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    doc.fontSize(11)
-       .font('Helvetica')
-       .text(`Objet du virement : ${virementRef}`, 50, currentY);
-    
-    // Total - right aligned like original
-    doc.fontSize(12)
+    // Total line
+    doc.fontSize(8)
        .font('Helvetica-Bold')
-       .text('Total', 480, currentY, { width: 65, align: 'right' });
+       .text('TOTAL', 50, currentY);
     
-    currentY += 15;
+    const totalFormatted = data.montantTotal.toFixed(3).replace('.', ',');
+    doc.text(totalFormatted, 430, currentY, { width: 115, align: 'right' });
     
-    // Total amount - right aligned
-    doc.fontSize(11)
+    currentY += 14;
+    
+    // Montant en toutes lettres
+    const amountInWords = this.convertAmountToWords(data.montantTotal);
+    doc.fontSize(7)
+       .font('Helvetica-Bold')
+       .text('MONTANT EN TOUTES LETTRES :', 50, currentY);
+    currentY += 10;
+    doc.font('Helvetica')
+       .text(amountInWords, 50, currentY, { width: 495 });
+    
+    currentY += 14;
+    
+    // Compact info section
+    const bordereauRef = data.bordereauReference || data.reference || `BR-${Date.now().toString().slice(-8)}`;
+    const contractNum = data.contractNumber || `CT-${Date.now().toString().slice(-8)}`;
+    const clientName = data.companyReference || 'ARS TUNISIE';
+    const userName = data.createdBy || 'SYSTEM USER';
+    
+    doc.fontSize(7)
        .font('Helvetica')
-       .text(data.montantTotal.toFixed(2).replace('.', ','), 480, currentY, { width: 65, align: 'right' });
+       .text(`Réf Bordereau : ${bordereauRef}`, 50, currentY);
     
-    currentY += 30;
+    currentY += 10;
+    doc.text(`N° Contrat : ${contractNum}`, 50, currentY);
     
-    // Contract and references - dynamic data
-    const contractNum = data.contractNumber || `A${Date.now().toString().slice(-8)}`;
-    const companyRef = data.companyReference || data.donneurOrdre.nom;
-    const bordereauRef = data.bordereauReference || virementRef;
+    currentY += 10;
+    doc.text(`Nom du Client : ${clientName}`, 50, currentY);
     
-    doc.fontSize(11)
-       .font('Helvetica')
-       .text(`Contrat N°: ${contractNum}`, 50, currentY);
+    currentY += 10;
+    doc.text(`Date Injection OV : ${data.dateEmission.toLocaleDateString('fr-FR')}`, 50, currentY);
     
-    currentY += 20;
-    doc.text(`Référence Compagnie D'assurance: ${companyRef}`, 50, currentY);
-    
-    currentY += 15;
-    doc.text(`Réf Bordereau de règlement Compagnie: ${bordereauRef}`, 50, currentY);
-    
-    currentY += 15;
-    doc.text(`Date Bordereau de Règlement  Compagnie : ${data.dateEmission.toLocaleDateString('fr-FR')}`, 50, currentY);
-    
+    currentY += 10;
+    doc.text(`Saisie par : ${userName}`, 50, currentY);
+  }
+  
+  private addPageFooter(doc: any, data: OVPdfData, currentPage: number, totalPages: number) {
     // Bottom logo
     const bottomLogoPath = 'D:\\ARS\\frontend\\public\\Image3.jpg';
     try {
       if (require('fs').existsSync(bottomLogoPath)) {
-        const bottomY = doc.page.height - 100;
-        doc.image(bottomLogoPath, 50, bottomY, { width: doc.page.width - 100, height: 40 });
+        const bottomY = doc.page.height - 80;
+        doc.image(bottomLogoPath, 50, bottomY, { width: doc.page.width - 100, height: 30 });
       }
-    } catch (e) { console.log('Bottom logo not found'); }
+    } catch (e) {}
     
-    // Footer - dynamic user info
-    const footerY = doc.page.height - 50;
-    const currentUser = data.createdBy || 'SYSTEM USER';
-    doc.fontSize(10)
+    // Page number
+    const footerY = doc.page.height - 40;
+    doc.fontSize(7)
        .font('Helvetica')
-       .text('Page 1 sur 1', 50, footerY)
-       .text(`Saisie par : ${currentUser}`, 350, footerY, { width: 195, align: 'right' });
+       .text(`Page ${currentPage} sur ${totalPages}`, 50, footerY)
+       .text(`Saisie par : ${data.createdBy || 'SYSTEM USER'}`, 350, footerY, { width: 195, align: 'right' });
   }
   
   private convertAmountToWords(amount: number): string {
     const integerPart = Math.floor(amount);
     const decimalPart = Math.round((amount - integerPart) * 1000);
     
-    // Simplified French number conversion
     let words = '';
     if (integerPart < 1000) {
       words = this.numberToFrenchWords(integerPart);
-    } else if (integerPart < 10000) {
+    } else if (integerPart < 1000000) {
       const thousands = Math.floor(integerPart / 1000);
       const remainder = integerPart % 1000;
-      words = `${this.numberToFrenchWords(thousands)} mille ${remainder > 0 ? this.numberToFrenchWords(remainder) : ''}`;
+      const thousandWord = thousands === 1 ? 'mille' : `${this.numberToFrenchWords(thousands)} mille`;
+      words = remainder > 0 ? `${thousandWord} ${this.numberToFrenchWords(remainder)}` : thousandWord;
     } else {
       words = integerPart.toString();
     }
     
-    return `${words.trim()} Dinars ${decimalPart} Millimes`;
+    // Capitalize first letter, proper French grammar
+    const capitalizedWords = words.charAt(0).toUpperCase() + words.slice(1);
+    return `${capitalizedWords} Dinars ${decimalPart} Millimes`;
   }
   
   private numberToFrenchWords(num: number): string {
     const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
     const teens = ['dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
     const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
-    const hundreds = ['', 'cent', 'deux cents', 'trois cents', 'quatre cents', 'cinq cents', 'six cents', 'sept cents', 'huit cents', 'neuf cents'];
     
     if (num === 0) return 'zéro';
     if (num < 10) return units[num];
@@ -363,15 +366,21 @@ export class PdfGenerationService {
     if (num < 100) {
       const ten = Math.floor(num / 10);
       const unit = num % 10;
-      return tens[ten] + (unit > 0 ? '-' + units[unit] : '');
+      if (ten === 7 || ten === 9) {
+        return tens[ten - 1] + '-' + teens[unit];
+      }
+      if (ten === 8 && unit === 0) return 'quatre-vingts';
+      return tens[ten] + (unit > 0 ? (unit === 1 && ten < 7 ? ' et un' : '-' + units[unit]) : '');
     }
     if (num < 1000) {
       const hundred = Math.floor(num / 100);
       const remainder = num % 100;
-      return hundreds[hundred] + (remainder > 0 ? ' ' + this.numberToFrenchWords(remainder) : '');
+      let result = hundred === 1 ? 'cent' : units[hundred] + ' cent';
+      if (hundred > 1 && remainder === 0) result += 's';
+      return result + (remainder > 0 ? ' ' + this.numberToFrenchWords(remainder) : '');
     }
     
-    return num.toString(); // Fallback for larger numbers
+    return num.toString();
   }
 
   async generateOVFromOrderId(ordreVirementId: string): Promise<Buffer> {

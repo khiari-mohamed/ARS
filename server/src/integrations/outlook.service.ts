@@ -4,7 +4,7 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class OutlookService { // Updated for TypeScript compilation
   private readonly logger = new Logger(OutlookService.name);
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null;
 
   constructor() {
     this.initializeTransporter();
@@ -12,6 +12,11 @@ export class OutlookService { // Updated for TypeScript compilation
 
   private async initializeTransporter() {
     try {
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        this.logger.warn('⚠️ SMTP credentials not configured - email notifications disabled');
+        return;
+      }
+
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gnet.tn',
         port: parseInt(process.env.SMTP_PORT || '465'),
@@ -26,9 +31,10 @@ export class OutlookService { // Updated for TypeScript compilation
       });
 
       await this.transporter.verify();
-      this.logger.log('✅ SMTP transporter initialized and verified');
+      this.logger.log('✅ SMTP transporter initialized and verified successfully');
     } catch (error) {
-      this.logger.error('❌ Failed to initialize SMTP transporter:', error.message);
+      this.logger.warn(`⚠️ SMTP initialization failed: ${error.message} - Email notifications will be disabled`);
+      this.transporter = null;
     }
   }
 
@@ -40,7 +46,7 @@ export class OutlookService { // Updated for TypeScript compilation
       }
 
       const mailOptions = {
-        from: 'noreply@arstunisia.com',
+        from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@arstunisia.com',
         to,
         subject,
         text,

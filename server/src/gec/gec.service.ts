@@ -15,7 +15,7 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class GecService {
   private readonly logger = new Logger(GecService.name);
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null;
   
   constructor(
     private prisma: PrismaService,
@@ -29,27 +29,33 @@ export class GecService {
   }
 
   private async initializeEmailTransporter() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gnet.tn',
-      port: parseInt(process.env.SMTP_PORT || '465'),
-      secure: process.env.SMTP_SECURE === 'true' || true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-    
     try {
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        this.logger.warn('⚠️ SMTP credentials not configured - email notifications disabled');
+        return;
+      }
+
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gnet.tn',
+        port: parseInt(process.env.SMTP_PORT || '465'),
+        secure: process.env.SMTP_SECURE === 'true' || true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+      
       await this.transporter.verify();
-      this.logger.log('✅ SMTP connection verified');
+      this.logger.log('✅ SMTP connection verified successfully');
     } catch (error) {
-      this.logger.error('❌ SMTP connection failed:', error.message);
+      this.logger.warn(`⚠️ SMTP connection failed: ${error.message} - Email notifications will be disabled`);
+      this.transporter = null;
     }
   }
 
@@ -154,9 +160,9 @@ export class GecService {
         // Try Outlook first, fallback to SMTP
         if (this.outlookService.isConnected()) {
           await this.outlookService.sendMail(dto.recipientEmail, subject, body);
-        } else {
+        } else if (this.transporter) {
           const mailOptions = {
-            from: 'noreply@arstunisia.com',
+            from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@arstunisia.com',
             to: dto.recipientEmail,
             subject: subject,
             html: body,
@@ -466,6 +472,11 @@ export class GecService {
   }
   
   private async sendRelanceEmail(courrier: any, recipientEmail: string, type: 'client' | 'prestataire') {
+    if (!this.transporter) {
+      this.logger.warn('SMTP not configured - relance email skipped');
+      return;
+    }
+
     const subject = `Relance - ${courrier.subject}`;
     const body = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -482,7 +493,7 @@ export class GecService {
     `;
     
     const mailOptions = {
-      from: process.env.SMTP_FROM || 'ARS Tunisia <noreply@arstunisia.com>',
+      from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@arstunisia.com',
       to: recipientEmail,
       subject,
       html: body
@@ -492,6 +503,11 @@ export class GecService {
   }
   
   private async sendNotificationEmail(recipientEmail: string, subject: string, message: string, courrier?: any) {
+    if (!this.transporter) {
+      this.logger.warn('SMTP not configured - notification email skipped');
+      return;
+    }
+
     const body = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #2563eb;">🔔 Notification ARS</h2>
@@ -510,7 +526,7 @@ export class GecService {
     `;
     
     const mailOptions = {
-      from: process.env.SMTP_FROM || 'ARS Tunisia <noreply@arstunisia.com>',
+      from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@arstunisia.com',
       to: recipientEmail,
       subject: `[ARS] ${subject}`,
       html: body
@@ -520,6 +536,11 @@ export class GecService {
   }
   
   private async sendEscalationEmail(recipientEmail: string, courrier: any) {
+    if (!this.transporter) {
+      this.logger.warn('SMTP not configured - escalation email skipped');
+      return;
+    }
+
     const subject = `🚨 Escalation SLA - ${courrier.subject}`;
     const body = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -540,7 +561,7 @@ export class GecService {
     `;
     
     const mailOptions = {
-      from: process.env.SMTP_FROM || 'ARS Tunisia <noreply@arstunisia.com>',
+      from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@arstunisia.com',
       to: recipientEmail,
       subject,
       html: body

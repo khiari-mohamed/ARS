@@ -512,7 +512,7 @@ export class ChefEquipeTableauBordController {
   }
 
   @Post('return-to-scan')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async returnToScan(@Body() body: { dossierId: string; reason: string }, @Req() req: any) {
     // First try to find as bordereau
     const bordereau = await this.prisma.bordereau.findUnique({
@@ -769,7 +769,7 @@ export class ChefEquipeTableauBordController {
 
   @Post('modify-dossier-status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async modifyDossierStatus(@Body() body: { dossierId: string; newStatus: string }, @Req() req: any) {
     const documentStatusMapping = {
       'Nouveau': 'UPLOADED',
@@ -792,7 +792,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (document) {
-      // Check if gestionnaire can modify this document
+      // Check if gestionnaire can modify this document (not for GESTIONNAIRE_SENIOR)
       if (req.user?.role === 'GESTIONNAIRE') {
         if (document.assignedToUserId !== req.user.id) {
           return { success: false, message: 'Accès refusé: Ce document ne vous est pas assigné' };
@@ -862,7 +862,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (bordereau) {
-      // Gestionnaires cannot modify bordereau status directly
+      // Regular Gestionnaires cannot modify bordereau status directly (but GESTIONNAIRE_SENIOR can)
       if (req.user?.role === 'GESTIONNAIRE') {
         return { success: false, message: 'Accès refusé: Les gestionnaires ne peuvent modifier que les documents individuels' };
       }
@@ -880,7 +880,7 @@ export class ChefEquipeTableauBordController {
 
   @Get('dossier-pdf/:dossierId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDossierPDF(@Param('dossierId') dossierId: string, @Req() req: any) {
     console.log(`🔍 Looking for document ID: ${dossierId}`);
     

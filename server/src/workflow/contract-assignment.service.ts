@@ -68,17 +68,18 @@ export class ContractAssignmentService {
         }
       });
 
-      // Log assignment
+      // Log assignment (using chef's ID since SYSTEM user doesn't exist)
       await this.prisma.auditLog.create({
         data: {
-          userId: 'SYSTEM',
+          userId: chefEquipe.id,
           action: 'CONTRACT_BASED_ASSIGNMENT',
           details: {
             bordereauId,
             reference: bordereau.reference,
             contractId: bordereau.contractId,
             assignedToTeamLeader: chefEquipe.id,
-            teamLeaderName: chefEquipe.fullName
+            teamLeaderName: chefEquipe.fullName,
+            autoAssigned: true
           }
         }
       });
@@ -116,8 +117,8 @@ export class ContractAssignmentService {
       }
     });
 
-    if (!teamLeader || teamLeader.role !== 'CHEF_EQUIPE') {
-      throw new Error('Invalid team leader');
+    if (!teamLeader || (teamLeader.role !== 'CHEF_EQUIPE' && teamLeader.role !== 'GESTIONNAIRE_SENIOR')) {
+      throw new Error('Invalid team leader - must be Chef d\'équipe or Gestionnaire Senior');
     }
 
     // Update contract
@@ -254,12 +255,12 @@ export class ContractAssignmentService {
   }
 
   /**
-   * Get team leaders available for contract assignment
+   * Get team leaders available for contract assignment (Chef d'équipe + Gestionnaire Senior)
    */
   async getAvailableTeamLeaders(): Promise<any[]> {
     const teamLeaders = await this.prisma.user.findMany({
       where: {
-        role: 'CHEF_EQUIPE',
+        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'] },
         active: true
       },
       include: {
@@ -286,6 +287,7 @@ export class ContractAssignmentService {
     return teamLeaders.map(leader => ({
       id: leader.id,
       fullName: leader.fullName,
+      role: leader.role,
       teamSize: leader.teamMembers.length,
       activeContracts: leader.contractsAsTeamLeader.length,
       currentWorkload: leader.bordereauxTeam.length,
