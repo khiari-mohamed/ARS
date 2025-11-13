@@ -92,10 +92,23 @@ export class SuperAdminController {
       this.prisma.user.count(),
       this.prisma.user.count({ where: { active: true } }),
       this.prisma.bordereau.count(),
-      this.prisma.bordereau.count({ where: { statut: { in: ['EN_COURS', 'SCAN_EN_COURS', 'ASSIGNE'] } } }),
+      this.prisma.bordereau.count({ 
+        where: { 
+          statut: { 
+            in: ['EN_COURS', 'SCAN_EN_COURS', 'ASSIGNE', 'A_SCANNER', 'SCANNE', 'A_AFFECTER'] as any 
+          } 
+        } 
+      }),
       this.prisma.document.count(),
       this.prisma.auditLog.count({ where: { action: { contains: 'ERROR' } } })
     ]);
+
+    console.log('📊 System Stats:', {
+      totalBordereaux,
+      processingBordereaux,
+      totalUsers,
+      activeUsers
+    });
 
     return {
       users: { total: totalUsers, active: activeUsers },
@@ -108,118 +121,110 @@ export class SuperAdminController {
   @Get('queues-overview')
   @Public()
   async getQueuesOverview() {
-    // Get real queue data from database
-    const [boQueue, scanQueue, processingQueue, validationQueue] = await Promise.all([
-      // BO Entry Queue
-      this.prisma.bordereau.groupBy({
-        by: ['statut'],
-        where: { statut: { in: ['EN_ATTENTE', 'A_SCANNER'] } },
-        _count: { statut: true }
-      }),
-      // Scan Queue
-      this.prisma.bordereau.groupBy({
-        by: ['statut'],
-        where: { statut: { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE'] } },
-        _count: { statut: true }
-      }),
-      // Processing Queue
-      this.prisma.bordereau.groupBy({
-        by: ['statut'],
-        where: { statut: { in: ['ASSIGNE', 'EN_COURS', 'TRAITE'] } },
-        _count: { statut: true }
-      }),
-      // Validation Queue
-      this.prisma.bordereau.groupBy({
-        by: ['statut'],
-        where: { statut: { in: ['TRAITE', 'CLOTURE', 'REJETE'] } },
-        _count: { statut: true }
-      })
-    ]);
+    const now = new Date();
 
-    const getQueueStats = (queueData: any[], statuses: string[]) => {
-      const stats = { pending: 0, processing: 0, completed: 0, failed: 0 };
-      queueData.forEach(item => {
-        if (statuses.includes(item.statut)) {
-          if (item.statut.includes('EN_COURS') || item.statut.includes('ASSIGNE')) {
-            stats.processing += item._count.statut;
-          } else if (item.statut.includes('TRAITE') || item.statut.includes('SCANNE') || item.statut.includes('VALIDE')) {
-            stats.completed += item._count.statut;
-          } else if (item.statut.includes('REJETE') || item.statut.includes('ERREUR')) {
-            stats.failed += item._count.statut;
-          } else {
-            stats.pending += item._count.statut;
-          }
-        }
-      });
-      return stats;
-    };
+    // RÈGLE: Files d'attente avec alertes si >50 items ou plus ancien >24h
+    const queues = [
+      { name: 'Bureau d\'Ordre', statuses: ['EN_ATTENTE', 'A_SCANNER'] as any[], threshold: 50 },
+      { name: 'Service SCAN', statuses: ['A_SCANNER', 'SCAN_EN_COURS'] as any[], threshold: 30 },
+      { name: 'Traitement', statuses: ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS'] as any[], threshold: 100 },
+      { name: 'Finance', statuses: ['TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS'] as any[], threshold: 50 }
+    ];
 
-    const results: any[] = [];
-    
-    if (boQueue.length > 0) {
-      results.push({
-        name: 'BO_ENTRY_QUEUE',
-        ...getQueueStats(boQueue, ['EN_ATTENTE', 'A_SCANNER']),
-        avgProcessingTime: await this.calculateAvgProcessingTime(['EN_ATTENTE', 'A_SCANNER'])
-      });
-    }
-    
-    if (scanQueue.length > 0) {
-      results.push({
-        name: 'SCAN_QUEUE',
-        ...getQueueStats(scanQueue, ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE']),
-        avgProcessingTime: await this.calculateAvgProcessingTime(['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE'])
-      });
-    }
-    
-    if (processingQueue.length > 0) {
-      results.push({
-        name: 'PROCESSING_QUEUE',
-        ...getQueueStats(processingQueue, ['ASSIGNE', 'EN_COURS', 'TRAITE']),
-        avgProcessingTime: await this.calculateAvgProcessingTime(['ASSIGNE', 'EN_COURS', 'TRAITE'])
-      });
-    }
-    
-    if (validationQueue.length > 0) {
-      results.push({
-        name: 'VALIDATION_QUEUE',
-        ...getQueueStats(validationQueue, ['TRAITE', 'CLOTURE', 'REJETE']),
-        avgProcessingTime: await this.calculateAvgProcessingTime(['TRAITE', 'CLOTURE', 'REJETE'])
-      });
-    }
-    
+    const results = await Promise.all(queues.map(async (queue) => {
+      const [pending, processing, completed, failed, oldest] = await Promise.all([
+        this.prisma.bordereau.count({
+          where: { statut: { in: queue.statuses.slice(0, 1) as any } }
+        }),
+        this.prisma.bordereau.count({
+          where: { statut: { in: queue.statuses.filter(s => s.includes('EN_COURS') || s.includes('ASSIGNE')) as any } }
+        }),
+        this.prisma.bordereau.count({
+          where: { statut: { in: queue.statuses.filter(s => s.includes('TRAITE') || s.includes('SCANNE')) as any } }
+        }),
+        this.prisma.bordereau.count({
+          where: { statut: { in: ['REJETE', 'EN_DIFFICULTE'] as any } }
+        }),
+        this.prisma.bordereau.findFirst({
+          where: { statut: { in: queue.statuses as any } },
+          orderBy: { dateReception: 'asc' },
+          select: { dateReception: true }
+        })
+      ]);
+
+      const total = pending + processing;
+      const oldestAge = oldest ? Math.floor((now.getTime() - oldest.dateReception.getTime()) / (1000 * 60 * 60)) : 0;
+      
+      // RÈGLE ALERTE: Rouge si >threshold OU plus ancien >24h
+      let alertLevel = 'NORMAL';
+      if (total > queue.threshold || oldestAge > 24) {
+        alertLevel = 'CRITICAL';
+      } else if (total > queue.threshold * 0.7 || oldestAge > 12) {
+        alertLevel = 'WARNING';
+      }
+
+      return {
+        name: queue.name,
+        pending,
+        processing,
+        completed,
+        failed,
+        total,
+        oldestAge,
+        alertLevel,
+        avgProcessingTime: await this.calculateAvgProcessingTime(queue.statuses)
+      };
+    }));
+
     return results;
   }
 
   @Get('team-workload')
   @Public()
   async getTeamWorkload() {
+    // Include ALL operational roles: Chef d'équipe, Gestionnaire Senior, Gestionnaire
     const users = await this.prisma.user.findMany({
       where: {
-        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE'] },
+        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'] },
         active: true
       },
       include: {
-        ownerBulletinSoins: {
-          where: { etat: { in: ['IN_PROGRESS', 'ASSIGNED'] } }
+        bordereauxCurrentHandler: {
+          where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
         }
-      }
+      },
+      orderBy: [
+        { role: 'asc' },  // Chef first, then Senior, then Gestionnaire
+        { fullName: 'asc' }
+      ]
     });
 
+    console.log(`👥 Found ${users.length} users for workload analysis`);
+
     return users.map(user => {
-      const workload = user.ownerBulletinSoins.length;
-      let level = 'Disponible';
-      if (workload > user.capacity * 0.8) level = 'Critique';
-      else if (workload > user.capacity * 0.6) level = 'Élevé';
-      else if (workload > user.capacity * 0.3) level = 'Modéré';
+      const workload = user.bordereauxCurrentHandler.length;
+      const utilizationRate = user.capacity > 0 ? (workload / user.capacity) * 100 : 0;
+      
+      // RÈGLE: <70% Normal, 70-89% Busy, ≥90% Overloaded
+      let level = 'NORMAL';
+      let color = 'success';
+      if (utilizationRate >= 90) {
+        level = 'OVERLOADED';
+        color = 'error';
+      } else if (utilizationRate >= 70) {
+        level = 'BUSY';
+        color = 'warning';
+      }
 
       return {
         id: user.id,
         name: user.fullName,
         role: user.role,
-        workload: `${workload} dossiers`,
+        workload,
+        capacity: user.capacity,
+        utilizationRate: Math.round(utilizationRate),
         level,
-        capacity: user.capacity
+        color
       };
     });
   }
@@ -729,6 +734,46 @@ export class SuperAdminController {
         capacity: user.capacity,
         utilizationRate: Math.round((user.ownerBulletinSoins.length / user.capacity) * 100)
       }))
+    };
+  }
+
+  @Get('calculation-rules')
+  @Public()
+  async getCalculationRules() {
+    return {
+      teamOverload: {
+        description: 'Règles de calcul pour équipe surchargée',
+        rules: [
+          { level: 'NORMAL', condition: 'Utilisation < 70%', color: 'green' },
+          { level: 'BUSY', condition: 'Utilisation 70-89%', color: 'orange' },
+          { level: 'OVERLOADED', condition: 'Utilisation ≥ 90%', color: 'red' }
+        ],
+        formula: '(Bordereaux assignés / Capacité) × 100'
+      },
+      queueAlerts: {
+        description: 'Règles d\'alerte pour files d\'attente',
+        rules: [
+          { level: 'CRITICAL', condition: 'Total > Seuil OU Plus ancien > 24h', color: 'red' },
+          { level: 'WARNING', condition: 'Total > 70% Seuil OU Plus ancien > 12h', color: 'orange' },
+          { level: 'NORMAL', condition: 'Sous les seuils', color: 'green' }
+        ],
+        thresholds: {
+          'Bureau d\'Ordre': 50,
+          'Service SCAN': 30,
+          'Traitement': 100,
+          'Finance': 50
+        }
+      },
+      teamAlerts: {
+        description: 'Types d\'alertes équipe',
+        types: [
+          { type: 'TEAM_OVERLOAD', trigger: 'Équipe ≥ 90% capacité', level: 'CRITICAL' },
+          { type: 'TEAM_BUSY', trigger: 'Équipe 70-89% capacité', level: 'WARNING' },
+          { type: 'QUEUE_CRITICAL', trigger: 'File > seuil ou >24h', level: 'CRITICAL' },
+          { type: 'SLA_BREACH', trigger: 'Dépassement délai SLA', level: 'CRITICAL' },
+          { type: 'HIERARCHY_ERROR', trigger: 'Gestionnaire sans chef', level: 'WARNING' }
+        ]
+      }
     };
   }
 
@@ -1340,7 +1385,8 @@ export class SuperAdminController {
           createdAt: { gte: startDate }
         },
         include: {
-          client: { select: { name: true } }
+          client: { select: { name: true } },
+          contract: { select: { delaiReglement: true } }
         }
       }),
       this.prisma.slaConfiguration.findMany({
@@ -1355,7 +1401,17 @@ export class SuperAdminController {
       overdue: 0,
       critical: 0,
       complianceRate: 0,
-      byClient: {} as Record<string, any>
+      byClient: {} as Record<string, any>,
+      slaRules: {
+        description: 'Règles de calcul SLA',
+        formula: 'Date Limite = Date Réception + Délai Contrat (jours)',
+        statuses: [
+          { status: 'ON_TIME', condition: 'Temps restant > 24h', color: 'green' },
+          { status: 'AT_RISK', condition: 'Temps restant 0-24h', color: 'orange' },
+          { status: 'OVERDUE', condition: 'Temps restant < 0h (0-48h)', color: 'red' },
+          { status: 'CRITICAL', condition: 'Dépassement > 48h', color: 'darkred' }
+        ]
+      }
     };
 
     bordereaux.forEach(bordereau => {
@@ -1380,15 +1436,16 @@ export class SuperAdminController {
         return;
       }
 
+      // RÈGLE SLA: Calcul basé sur heures restantes
       const hoursUntilDeadline = (limitDate.getTime() - now.getTime()) / (1000 * 60 * 60);
       
-      if (hoursUntilDeadline < -48) { // More than 2 days overdue
+      if (hoursUntilDeadline < -48) {
         compliance.critical++;
         compliance.byClient[clientName].critical++;
-      } else if (hoursUntilDeadline < 0) { // Overdue
+      } else if (hoursUntilDeadline < 0) {
         compliance.overdue++;
         compliance.byClient[clientName].overdue++;
-      } else if (hoursUntilDeadline < 24) { // At risk (less than 24h remaining)
+      } else if (hoursUntilDeadline < 24) {
         compliance.atRisk++;
         compliance.byClient[clientName].atRisk++;
       } else {
@@ -1505,13 +1562,229 @@ export class SuperAdminController {
       this.getTeamWorkload()
     ]);
 
+    // Count teams by level
+    const overloadedCount = teamWorkload.filter(t => t.level === 'OVERLOADED').length;
+    const busyCount = teamWorkload.filter(t => t.level === 'BUSY').length;
+    const totalTeams = teamWorkload.length;
+
+    console.log('📊 Team Stats:', {
+      total: totalTeams,
+      overloaded: overloadedCount,
+      busy: busyCount,
+      teams: teamWorkload.map(t => ({ name: t.name, level: t.level, utilization: t.utilizationRate }))
+    });
+
     return {
       timestamp: new Date().toISOString(),
       systemHealth,
       systemStats,
       alerts: alerts.summary,
-      teamWorkload: teamWorkload.length,
-      overloadedTeams: teamWorkload.filter(t => t.level === 'Critique').length
+      teamWorkload: totalTeams,
+      overloadedTeams: overloadedCount,
+      busyTeams: busyCount
+    };
+  }
+
+  @Get('team-alerts')
+  @Public()
+  async getTeamAlerts() {
+    const now = new Date();
+    const alerts: any[] = [];
+
+    // RÈGLE 1: Équipes surchargées (≥90% capacité)
+    const teams = await this.getTeamWorkload();
+    teams.forEach(team => {
+      if (team.level === 'OVERLOADED') {
+        alerts.push({
+          type: 'TEAM_OVERLOAD',
+          level: 'CRITICAL',
+          teamId: team.id,
+          teamName: team.name,
+          message: `${team.name} est surchargé (${team.utilizationRate}% de capacité)`,
+          workload: team.workload,
+          capacity: team.capacity,
+          timestamp: now
+        });
+      } else if (team.level === 'BUSY') {
+        alerts.push({
+          type: 'TEAM_BUSY',
+          level: 'WARNING',
+          teamId: team.id,
+          teamName: team.name,
+          message: `${team.name} approche la saturation (${team.utilizationRate}%)`,
+          workload: team.workload,
+          capacity: team.capacity,
+          timestamp: now
+        });
+      }
+    });
+
+    // RÈGLE 2: Files d'attente critiques
+    const queues = await this.getQueuesOverview();
+    queues.forEach(queue => {
+      if (queue.alertLevel === 'CRITICAL') {
+        alerts.push({
+          type: 'QUEUE_CRITICAL',
+          level: 'CRITICAL',
+          queueName: queue.name,
+          message: `File ${queue.name}: ${queue.total} items (seuil dépassé) ou plus ancien: ${queue.oldestAge}h`,
+          total: queue.total,
+          oldestAge: queue.oldestAge,
+          timestamp: now
+        });
+      } else if (queue.alertLevel === 'WARNING') {
+        alerts.push({
+          type: 'QUEUE_WARNING',
+          level: 'WARNING',
+          queueName: queue.name,
+          message: `File ${queue.name}: ${queue.total} items approche le seuil`,
+          total: queue.total,
+          timestamp: now
+        });
+      }
+    });
+
+    // RÈGLE 3: SLA en danger
+    const slaBreaches = await this.prisma.bordereau.count({
+      where: {
+        dateLimiteTraitement: { lt: now },
+        statut: { notIn: ['TRAITE', 'CLOTURE', 'PAYE'] }
+      }
+    });
+
+    if (slaBreaches > 0) {
+      alerts.push({
+        type: 'SLA_BREACH',
+        level: 'CRITICAL',
+        message: `${slaBreaches} bordereaux en dépassement SLA`,
+        count: slaBreaches,
+        timestamp: now
+      });
+    }
+
+    // RÈGLE 4: Gestionnaires sans chef d'équipe
+    const orphanedGestionnaires = await this.prisma.user.count({
+      where: {
+        role: 'GESTIONNAIRE',
+        active: true,
+        teamLeaderId: null
+      }
+    });
+
+    if (orphanedGestionnaires > 0) {
+      alerts.push({
+        type: 'HIERARCHY_ERROR',
+        level: 'WARNING',
+        message: `${orphanedGestionnaires} gestionnaires sans chef d'équipe`,
+        count: orphanedGestionnaires,
+        timestamp: now
+      });
+    }
+
+    return {
+      total: alerts.length,
+      critical: alerts.filter(a => a.level === 'CRITICAL').length,
+      warning: alerts.filter(a => a.level === 'WARNING').length,
+      alerts: alerts.sort((a, b) => {
+        if (a.level === 'CRITICAL' && b.level !== 'CRITICAL') return -1;
+        if (a.level !== 'CRITICAL' && b.level === 'CRITICAL') return 1;
+        return 0;
+      })
+    };
+  }
+
+  @Get('document-assignments')
+  @Public()
+  async getDocumentAssignments(@Query() params: any) {
+    const { documentType, gestionnaire, chefEquipe, slaStatus } = params;
+
+    const whereClause: any = {
+      assignedToUserId: { not: null }
+    };
+
+    if (documentType) whereClause.type = documentType;
+
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: whereClause,
+      include: {
+        client: { select: { name: true } },
+        currentHandler: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true,
+            teamLeader: {
+              select: {
+                id: true,
+                fullName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 500
+    });
+
+    const now = new Date();
+    const assignments = bordereaux.map(b => {
+      const gestionnaireName = b.currentHandler?.fullName || 'NON ASSIGNÉ';
+      const chefEquipeName = b.currentHandler?.teamLeader?.fullName || 'AUCUN CHEF';
+      
+      // RÈGLE SLA: Calcul du statut
+      let slaStatus = 'ON_TIME';
+      let slaColor = 'success';
+      if (b.dateLimiteTraitement) {
+        const hoursRemaining = (b.dateLimiteTraitement.getTime() - now.getTime()) / (1000 * 60 * 60);
+        if (hoursRemaining < 0) {
+          slaStatus = 'OVERDUE';
+          slaColor = 'error';
+        } else if (hoursRemaining < 24) {
+          slaStatus = 'AT_RISK';
+          slaColor = 'warning';
+        }
+      }
+
+      // Détection données défaillantes
+      const hasIssue = !b.currentHandler || !b.currentHandler.teamLeader;
+
+      return {
+        id: b.id,
+        reference: b.reference,
+        documentType: b.type,
+        clientName: b.client?.name || 'N/A',
+        gestionnaire: gestionnaireName,
+        gestionnaireId: b.currentHandler?.id,
+        chefEquipe: chefEquipeName,
+        chefEquipeId: b.currentHandler?.teamLeader?.id,
+        statut: b.statut,
+        assignedAt: b.updatedAt,
+        dateLimite: b.dateLimiteTraitement,
+        slaStatus,
+        slaColor,
+        hasIssue,
+        issueType: hasIssue ? (!b.currentHandler ? 'NO_GESTIONNAIRE' : 'NO_CHEF') : null
+      };
+    });
+
+    // Appliquer filtres
+    let filtered = assignments;
+    if (gestionnaire) {
+      filtered = filtered.filter(a => a.gestionnaire.toLowerCase().includes(gestionnaire.toLowerCase()));
+    }
+    if (chefEquipe) {
+      filtered = filtered.filter(a => a.chefEquipe.toLowerCase().includes(chefEquipe.toLowerCase()));
+    }
+    if (slaStatus) {
+      filtered = filtered.filter(a => a.slaStatus === slaStatus);
+    }
+
+    return {
+      total: filtered.length,
+      withIssues: filtered.filter(a => a.hasIssue).length,
+      slaBreaches: filtered.filter(a => a.slaStatus === 'OVERDUE').length,
+      atRisk: filtered.filter(a => a.slaStatus === 'AT_RISK').length,
+      assignments: filtered
     };
   }
 
@@ -1520,7 +1793,9 @@ export class SuperAdminController {
   async getComprehensiveDocumentStats(@Query() params: any) {
     const documentType = params.documentType;
     
-    // Use bordereau data since documents table doesn't have the required fields
+    console.log('📊 Fetching document stats for type:', documentType || 'ALL');
+    
+    // Count bordereaux by type field
     const documentTypes = [
       'BULLETIN_SOIN',
       'COMPLEMENT_INFORMATION', 
@@ -1536,36 +1811,34 @@ export class SuperAdminController {
     for (const type of documentTypes) {
       if (documentType && documentType !== type) continue;
       
-      // Get status distribution using bordereau data
-      const statusCounts = await this.prisma.bordereau.groupBy({
-        by: ['statut'],
-        _count: { statut: true }
-      });
+      // Count bordereaux by this specific type
+      const whereClause: any = { type: type as any };
       
-      const statusMap = statusCounts.reduce((acc, item) => {
-        if (item.statut && item._count && typeof item._count === 'object') {
-          acc[item.statut] = item._count.statut || 0;
-        }
-        return acc;
-      }, {} as Record<string, number>);
+      const [total, aScanner, enCoursScan, scanFinalise, enCoursTraitement, traite, regle, slaBreaches] = await Promise.all([
+        this.prisma.bordereau.count({ where: whereClause }),
+        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'A_SCANNER' as any } }),
+        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'SCAN_EN_COURS' as any } }),
+        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'SCANNE' as any } }),
+        this.prisma.bordereau.count({ where: { ...whereClause, statut: { in: ['EN_COURS', 'ASSIGNE'] as any } } }),
+        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'TRAITE' as any } }),
+        this.prisma.bordereau.count({ where: { ...whereClause, statut: { in: ['CLOTURE', 'PAYE'] as any } } }),
+        // SLA breaches only for applicable types
+        !['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'].includes(type)
+          ? this.prisma.bordereau.count({
+              where: {
+                ...whereClause,
+                dateLimiteTraitement: { lt: new Date() },
+                statut: { notIn: ['TRAITE', 'CLOTURE', 'PAYE'] as any }
+              }
+            })
+          : 0
+      ]);
       
-      // Calculate SLA breaches only for SLA-applicable documents
-      const slaApplicable = !['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'].includes(type);
-      let slaBreaches = 0;
-      
-      if (slaApplicable) {
-        slaBreaches = await this.prisma.bordereau.count({
-          where: {
-            dateLimiteTraitement: { lt: new Date() },
-            statut: { notIn: ['TRAITE', 'CLOTURE'] }
-          }
-        });
-      }
-      
-      // Calculate average processing time - simplified
+      // Calculate average processing time for this type - filter in code instead
       const processedDocs = await this.prisma.bordereau.findMany({
         where: {
-          statut: { in: ['TRAITE', 'CLOTURE'] }
+          ...whereClause,
+          statut: { in: ['TRAITE', 'CLOTURE', 'PAYE'] as any }
         },
         select: {
           dateReception: true,
@@ -1574,26 +1847,28 @@ export class SuperAdminController {
         take: 100
       });
       
-      const avgProcessingTime = processedDocs.length > 0 
-        ? processedDocs.reduce((sum, doc) => {
-            if (doc.dateCloture && doc.dateReception) {
-              return sum + (doc.dateCloture.getTime() - doc.dateReception.getTime()) / (1000 * 60 * 60);
-            }
-            return sum;
-          }, 0) / processedDocs.length
+      // Filter out null dates in code
+      const validDocs = processedDocs.filter(doc => doc.dateReception && doc.dateCloture);
+      
+      const avgProcessingTime = validDocs.length > 0 
+        ? validDocs.reduce((sum, doc) => {
+            return sum + (doc.dateCloture!.getTime() - doc.dateReception!.getTime()) / (1000 * 60 * 60);
+          }, 0) / validDocs.length
         : 0;
       
       stats[type] = {
-        total: Object.values(statusMap).reduce((sum: number, count: number) => sum + count, 0),
-        A_SCANNER: statusMap['A_SCANNER'] || 0,
-        EN_COURS_SCAN: statusMap['SCAN_EN_COURS'] || 0,
-        SCAN_FINALISE: statusMap['SCANNE'] || 0,
-        EN_COURS_TRAITEMENT: statusMap['EN_COURS'] || statusMap['ASSIGNE'] || 0,
-        TRAITE: statusMap['TRAITE'] || 0,
-        REGLE: statusMap['CLOTURE'] || 0,
+        total,
+        A_SCANNER: aScanner,
+        EN_COURS_SCAN: enCoursScan,
+        SCAN_FINALISE: scanFinalise,
+        EN_COURS_TRAITEMENT: enCoursTraitement,
+        TRAITE: traite,
+        REGLE: regle,
         slaBreaches,
         avgProcessingTime: Math.round(avgProcessingTime * 10) / 10
       };
+      
+      console.log(`📊 Stats for ${type}:`, stats[type]);
     }
     
     return stats;

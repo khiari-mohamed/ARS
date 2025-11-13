@@ -1617,4 +1617,263 @@ export class BordereauxController {
     };
     return typeMap[label] || 'BULLETIN_SOIN';
   }
+
+  // ============ GESTIONNAIRE SENIOR ENDPOINTS - SEPARATE FROM CHEF EQUIPE ============
+  
+  @Get('gestionnaire-senior/corbeille')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getGestionnaireSeniorCorbeille(@Req() req) {
+    const user = req.user;
+    console.log('🔍 Gestionnaire Senior corbeille - User:', user.id);
+    
+    // ONLY show bordereaux from contracts where they are teamLeader
+    const whereClause = {
+      archived: false,
+      contract: {
+        teamLeaderId: user.id
+      }
+    };
+    
+    const [nonAffectes, enCours, traites] = await Promise.all([
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'] },
+          assignedToUserId: null
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
+        },
+        orderBy: { dateReception: 'desc' }
+      }),
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] }
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
+        },
+        orderBy: { dateReception: 'desc' }
+      }),
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] },
+          updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
+        },
+        orderBy: { dateReception: 'desc' }
+      })
+    ]);
+
+    const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
+    
+    return {
+      nonAffectes: nonAffectes.map(b => BordereauResponseDto.fromEntity(b)),
+      enCours: enCours.map(b => BordereauResponseDto.fromEntity(b)),
+      traites: traites.map(b => BordereauResponseDto.fromEntity(b)),
+      stats: {
+        nonAffectes: nonAffectes.length,
+        enCours: enCours.length,
+        traites: traites.length
+      },
+      userRole: user.role
+    };
+  }
+
+  @Get('gestionnaire-senior/dashboard-stats')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getGestionnaireSeniorDashboardStats(@Req() req) {
+    const user = req.user;
+    
+    // Get ONLY data for contracts assigned to this user
+    const [clients, bordereaux, documents] = await Promise.all([
+      this.prisma.client.findMany({
+        where: {
+          contracts: {
+            some: { teamLeaderId: user.id }
+          }
+        },
+        select: { id: true, name: true }
+      }),
+      this.prisma.bordereau.findMany({
+        where: {
+          archived: false,
+          contract: { teamLeaderId: user.id }
+        },
+        include: { client: true, currentHandler: { select: { fullName: true } } }
+      }),
+      this.prisma.document.findMany({
+        where: {
+          bordereau: {
+            archived: false,
+            contract: { teamLeaderId: user.id }
+          }
+        },
+        include: { 
+          bordereau: { include: { client: true } },
+          assignedTo: { select: { fullName: true } }
+        }
+      })
+    ]);
+
+    const clientBreakdown = {};
+    clients.forEach(client => {
+      clientBreakdown[client.name] = 0;
+    });
+
+    const stats = {
+      prestation: { total: 0, breakdown: { ...clientBreakdown } },
+      adhesion: { total: 0, breakdown: { ...clientBreakdown } },
+      complement: { total: 0, breakdown: { ...clientBreakdown } },
+      resiliation: { total: 0, breakdown: { ...clientBreakdown } },
+      reclamation: { total: 0, breakdown: { ...clientBreakdown } },
+      avenant: { total: 0, breakdown: { ...clientBreakdown } }
+    };
+
+    documents.forEach(doc => {
+      const clientName = doc.bordereau?.client?.name;
+      if (!clientName || !clientBreakdown.hasOwnProperty(clientName)) return;
+      
+      switch (doc.type) {
+        case 'BULLETIN_SOIN':
+          stats.prestation.total++;
+          stats.prestation.breakdown[clientName]++;
+          break;
+        case 'COMPLEMENT_INFORMATION':
+          stats.complement.total++;
+          stats.complement.breakdown[clientName]++;
+          break;
+        case 'ADHESION':
+          stats.adhesion.total++;
+          stats.adhesion.breakdown[clientName]++;
+          break;
+        case 'CONTRAT_AVENANT':
+          stats.avenant.total++;
+          stats.avenant.breakdown[clientName]++;
+          break;
+        case 'DEMANDE_RESILIATION':
+          stats.resiliation.total++;
+          stats.resiliation.breakdown[clientName]++;
+          break;
+      }
+    });
+
+    bordereaux.forEach(bordereau => {
+      const clientName = bordereau.client?.name;
+      if (clientName && clientBreakdown.hasOwnProperty(clientName)) {
+        stats.prestation.total++;
+        stats.prestation.breakdown[clientName]++;
+      }
+    });
+
+    return stats;
+  }
+
+  @Get('gestionnaire-senior/dashboard-dossiers')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getGestionnaireSeniorDashboardDossiers(@Req() req) {
+    const user = req.user;
+    
+    const [documents, bordereaux] = await Promise.all([
+      this.prisma.document.findMany({
+        where: {
+          bordereau: {
+            archived: false,
+            contract: { teamLeaderId: user.id }
+          }
+        },
+        include: {
+          bordereau: { include: { client: true } },
+          assignedTo: { select: { fullName: true } }
+        },
+        orderBy: { uploadedAt: 'desc' },
+        take: 50
+      }),
+      this.prisma.bordereau.findMany({
+        where: {
+          archived: false,
+          contract: { teamLeaderId: user.id }
+        },
+        include: {
+          client: true,
+          currentHandler: { select: { fullName: true } },
+          documents: true
+        },
+        orderBy: { dateReception: 'desc' },
+        take: 50
+      })
+    ]);
+
+    const dossiers: any[] = [];
+
+    // Add documents with flags
+    documents.forEach(doc => {
+      dossiers.push({
+        id: doc.id,
+        reference: doc.name,
+        nom: doc.name,
+        societe: doc.bordereau?.client?.name || 'N/A',
+        client: doc.bordereau?.client?.name || 'N/A',
+        type: this.getDocumentTypeLabel(doc.type),
+        statut: this.getDocumentStatusLabel(doc.status ?? 'UPLOADED'),
+        date: doc.uploadedAt.toISOString().split('T')[0],
+        gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+        bordereauReference: doc.bordereau?.reference || 'N/A',
+        isDocument: true,
+        isBordereau: false
+      });
+    });
+
+    // Add bordereaux with flags and completion
+    bordereaux.forEach(bordereau => {
+      const totalDocs = bordereau.documents?.length || 0;
+      const traites = bordereau.documents?.filter(d => d.status === 'TRAITE').length || 0;
+      const enCours = bordereau.documents?.filter(d => d.status === 'EN_COURS').length || 0;
+      const completion = totalDocs > 0 ? Math.round((traites / totalDocs) * 100) : 0;
+      
+      const states: string[] = [];
+      if (traites > 0) states.push('Traité');
+      if (enCours > 0) states.push('En cours');
+      if (totalDocs - traites - enCours > 0) states.push('Nouveau');
+      
+      dossiers.push({
+        id: bordereau.id,
+        reference: bordereau.reference,
+        nom: `Bordereau ${bordereau.reference}`,
+        societe: bordereau.client?.name || 'N/A',
+        client: bordereau.client?.name || 'N/A',
+        type: 'Prestation',
+        statut: this.getStatutLabel(bordereau.statut),
+        date: bordereau.dateReception?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+        completionPercentage: completion,
+        dossierStates: states.length > 0 ? states : [this.getStatutLabel(bordereau.statut)],
+        priorite: 'Normale',
+        isDocument: false,
+        isBordereau: true
+      });
+    });
+
+    return dossiers;
+  }
+
+  @Get('gestionnaire-senior/gestionnaire-assignments')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getGestionnaireSeniorAssignments(@Req() req) {
+    // Gestionnaire Senior works alone - return empty array
+    return [];
+  }
 }

@@ -323,7 +323,7 @@ export class ChefEquipeDashboardController {
   }
 
   @Post('remove-document-from-bordereau')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async removeDocumentFromBordereau(@Body() body: { documentId: string }, @Req() req) {
     const document = await this.prisma.document.findUnique({
       where: { id: body.documentId },
@@ -362,7 +362,7 @@ export class ChefEquipeDashboardController {
   }
 
   @Post('upload-document-to-bordereau')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: './uploads',
@@ -383,9 +383,10 @@ export class ChefEquipeDashboardController {
   }))
   async uploadDocumentToBordereau(
     @UploadedFile() file: Express.Multer.File,
-    @Body('bordereauId') bordereauId: string,
+    @Body() body: any,
     @Req() req
   ) {
+    const bordereauId = body.bordereauId;
     if (!file) throw new BadRequestException('Aucun fichier uploadé');
     if (!bordereauId) throw new BadRequestException('ID bordereau requis');
 
@@ -416,7 +417,7 @@ export class ChefEquipeDashboardController {
       return baseFilter;
     }
     
-    if (user?.role === 'CHEF_EQUIPE') {
+    if (user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR') {
       return {
         ...baseFilter,
         contract: {
@@ -426,5 +427,235 @@ export class ChefEquipeDashboardController {
     }
     
     return baseFilter;
+  }
+}
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('bordereaux/gestionnaire-senior')
+export class GestionnaireSeniorDashboardController {
+  constructor(private readonly prisma: PrismaService) {}
+
+  @Get('dashboard-stats')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getDashboardStats(@Req() req) {
+    const docsByType = await this.prisma.document.groupBy({
+      by: ['type'],
+      where: {
+        bordereau: {
+          archived: false,
+          contract: { teamLeaderId: req.user.id }
+        }
+      },
+      _count: { id: true }
+    });
+
+    const stats = {
+      prestation: { total: 0, breakdown: {} },
+      adhesion: { total: 0, breakdown: {} },
+      complement: { total: 0, breakdown: {} },
+      resiliation: { total: 0, breakdown: {} },
+      reclamation: { total: 0, breakdown: {} },
+      avenant: { total: 0, breakdown: {} }
+    };
+
+    const typeMapping = {
+      'BULLETIN_SOIN': 'prestation',
+      'ADHESION': 'adhesion',
+      'COMPLEMENT_INFORMATION': 'complement',
+      'DEMANDE_RESILIATION': 'resiliation',
+      'RECLAMATION': 'reclamation',
+      'CONTRAT_AVENANT': 'avenant'
+    };
+
+    docsByType.forEach(group => {
+      const category = typeMapping[group.type] || 'prestation';
+      stats[category].total = group._count.id;
+    });
+
+    return stats;
+  }
+
+  @Get('dashboard-dossiers')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getDashboardDossiers(@Req() req) {
+    console.log('\n\n==============================================');
+    console.log('🚀🚀🚀 GESTIONNAIRE SENIOR ENDPOINT CALLED 🚀🚀🚀');
+    console.log('🔍 User ID:', req.user.id);
+    console.log('🔍 User Role:', req.user.role);
+    console.log('==============================================\n');
+    
+    // First get documents (current behavior for backward compatibility)
+    const documents = await this.prisma.document.findMany({
+      where: {
+        bordereau: {
+          archived: false,
+          contract: { teamLeaderId: req.user.id }
+        }
+      },
+      include: {
+        bordereau: {
+          include: {
+            client: { select: { name: true } }
+          }
+        },
+        assignedTo: { select: { fullName: true } }
+      },
+      orderBy: { uploadedAt: 'desc' },
+      take: 100
+    });
+
+    const result: any[] = [];
+    
+    // Add documents with explicit flags
+    documents.forEach(doc => {
+      result.push({
+        id: doc.id,
+        reference: doc.name,
+        nom: doc.name,
+        societe: doc.bordereau?.client?.name || 'N/A',
+        client: doc.bordereau?.client?.name || 'N/A',
+        type: this.mapDocType(doc.type),
+        statut: this.mapDocStatus(doc.status),
+        date: doc.uploadedAt.toISOString().split('T')[0],
+        gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+        bordereauReference: doc.bordereau?.reference || 'N/A',
+        isDocument: true,  // EXPLICIT FLAG
+        isBordereau: false  // EXPLICIT FLAG
+      });
+    });
+    
+    console.log('📄 Added', documents.length, 'documents with isDocument=true');
+    
+    // Now get bordereaux
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: {
+        archived: false,
+        contract: { teamLeaderId: req.user.id }
+      },
+      include: {
+        client: { select: { name: true } },
+        documents: {
+          include: {
+            assignedTo: { select: { fullName: true } }
+          }
+        }
+      },
+      orderBy: { dateReception: 'desc' },
+      take: 50
+    });
+
+    // Add bordereaux with document states
+    bordereaux.forEach(b => {
+      // Calculate completion and states from documents
+      const totalDocs = b.documents.length;
+      const traites = b.documents.filter(d => d.status === 'TRAITE').length;
+      const enCours = b.documents.filter(d => d.status === 'EN_COURS').length;
+      const completion = totalDocs > 0 ? Math.round((traites / totalDocs) * 100) : 0;
+      
+      // Build state array
+      const states: string[] = [];
+      if (traites > 0) states.push('Traité');
+      if (enCours > 0) states.push('En cours');
+      if (totalDocs - traites - enCours > 0) states.push('Nouveau');
+      
+      result.push({
+        id: b.id,
+        reference: b.reference,
+        nom: `Bordereau ${b.reference}`,
+        societe: b.client?.name || 'N/A',
+        client: b.client?.name || 'N/A',
+        type: 'Prestation',
+        statut: this.mapStatus(b.statut),
+        date: b.dateReception.toISOString().split('T')[0],
+        completionPercentage: completion,
+        dossierStates: states.length > 0 ? states : [this.mapStatus(b.statut)],
+        priorite: 'Normale',
+        isBordereau: true,
+        isDocument: false
+      });
+    });
+    
+    console.log('\n==============================================');
+    console.log('📦 Total Documents:', documents.length);
+    console.log('📦 Total Bordereaux:', bordereaux.length);
+    console.log('📦 Total Result Items:', result.length);
+    console.log('📦 Bordereaux in result:', result.filter(r => r.isBordereau).length);
+    console.log('📦 Documents in result:', result.filter(r => r.isDocument).length);
+    console.log('==============================================\n');
+
+    return result;
+  }
+
+  @Get('corbeille')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getCorbeille(@Req() req) {
+    const [traites, enCours, nonAffectes] = await Promise.all([
+      this.prisma.document.count({
+        where: {
+          status: 'TRAITE',
+          bordereau: {
+            archived: false,
+            contract: { teamLeaderId: req.user.id }
+          }
+        }
+      }),
+      this.prisma.document.count({
+        where: {
+          status: 'EN_COURS',
+          bordereau: {
+            archived: false,
+            contract: { teamLeaderId: req.user.id }
+          }
+        }
+      }),
+      this.prisma.document.count({
+        where: {
+          assignedToUserId: null,
+          bordereau: {
+            archived: false,
+            contract: { teamLeaderId: req.user.id }
+          }
+        }
+      })
+    ]);
+
+    return {
+      stats: { traites, enCours, nonAffectes }
+    };
+  }
+
+  private mapStatus(status: string): string {
+    const mapping = {
+      'EN_ATTENTE': 'Nouveau',
+      'SCANNE': 'Nouveau',
+      'EN_COURS': 'En cours',
+      'TRAITE': 'Traité',
+      'REJETE': 'Rejeté'
+    };
+    return mapping[status] || status;
+  }
+
+  private mapDocType(type: string): string {
+    const mapping = {
+      'BULLETIN_SOIN': 'Prestation',
+      'ADHESION': 'Adhésion',
+      'COMPLEMENT_INFORMATION': 'Complément',
+      'RECLAMATION': 'Réclamation',
+      'CONTRAT_AVENANT': 'Avenant',
+      'DEMANDE_RESILIATION': 'Résiliation'
+    };
+    return mapping[type] || type;
+  }
+
+  private mapDocStatus(status: string | null): string {
+    if (!status) return 'Nouveau';
+    const mapping = {
+      'UPLOADED': 'Nouveau',
+      'EN_COURS': 'En cours',
+      'TRAITE': 'Traité',
+      'REJETE': 'Rejeté',
+      'RETOUR_ADMIN': 'Retourné'
+    };
+    return mapping[status] || status;
   }
 }

@@ -232,19 +232,15 @@ export class ExcelValidationService {
     }
 
     try {
-      // EXACT SPEC: Excel input limited to Matricule/Contract Number + Montant
-      const matricule = row.getCell(1).text?.trim(); // Matricule or Contract Number
-      const montantStr = row.getCell(2).text?.trim().replace(',', '.'); // Montant
+      // EXACT SPEC: Excel input limited to Matricule + Montant (comma as decimal separator)
+      const matricule = row.getCell(1).text?.trim(); // Matricule
+      const montantStr = row.getCell(2).text?.trim().replace(',', '.').replace(/\s/g, ''); // Montant with comma support
       const montant = parseFloat(montantStr);
       
-      // EXACT SPEC: Fetch adherent data from database using matricule
+      // EXACT SPEC: Fetch adherent data from database using matricule only
       const adherent = matricule ? await this.prisma.adherent.findFirst({
         where: {
-          OR: [
-            { matricule: matricule },
-            { numeroContrat: matricule }
-          ],
-          clientId: clientId
+          matricule: matricule
         },
         include: {
           client: true

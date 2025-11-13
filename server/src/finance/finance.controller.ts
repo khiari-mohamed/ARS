@@ -45,10 +45,10 @@ function getUserFromRequest(req: any) {
   return { id: 'demo-user', role: 'SUPER_ADMIN', fullName: 'Demo User' };
 }
 
-// EXACT roles from specifications: Chef d'équipe, Finance, Super Admin, Responsable Département
+// EXACT roles from specifications: Chef d'équipe, Gestionnaire Senior, Finance, Super Admin, Responsable Département
 @Controller('finance')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+@Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
 export class FinanceController {
   constructor(
     private adherentService: AdherentService,
@@ -791,7 +791,7 @@ export class FinanceController {
   }
 
   @Put('ordres-virement/:id/recovery')
-  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async updateRecoveryInfo(
     @Param('id') id: string,
     @Body() body: {
@@ -808,7 +808,7 @@ export class FinanceController {
   }
 
   @Post('ordres-virement/create-manual')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async createManualOV(
     @Body() body: {
       reference: string;
@@ -824,7 +824,7 @@ export class FinanceController {
   }
 
   @Put('ordres-virement/:id/reinject')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async reinjectOV(
     @Param('id') id: string,
     @Req() req: any
@@ -858,7 +858,7 @@ export class FinanceController {
   // === BORDEREAUX TRAITÉS ENDPOINT ===
   // EXACT SPEC: Only bordereaux with status "TRAITÉ" appear in Finance module
   @Get('bordereaux-traites')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getBordereauxTraites(
     @Req() req: any,
     @Query() filters: {
@@ -881,7 +881,7 @@ export class FinanceController {
   // === UPDATE BORDEREAU TRAITÉ ENDPOINT ===
   // EXACT SPEC: Finance can update virement status, recovery info
   @Put('bordereaux-traites/:id')
-  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async updateBordereauTraite(
     @Param('id') id: string,
     @Body() body: {
@@ -901,7 +901,7 @@ export class FinanceController {
 
   // === CREATE OV FROM BORDEREAU TRAITÉ ===
   @Post('ordres-virement/from-bordereau/:bordereauId')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN)
   async createOVFromBordereau(
     @Param('bordereauId') bordereauId: string,
     @Body() body: { donneurOrdreId: string },
@@ -1019,7 +1019,7 @@ export class FinanceController {
   }
 
   @Put('validation/:id')
-  @Roles(UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async validateOV(
     @Param('id') id: string,
     @Body() body: { approved: boolean; comment?: string },
@@ -1031,7 +1031,7 @@ export class FinanceController {
 
   // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
   @Put('ordres-virement/:id/status')
-  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async updateOVStatus(
     @Param('id') id: string,
     @Body() body: {
@@ -1227,7 +1227,7 @@ export class FinanceController {
 
   // === GENERATE AND STORE PDF/TXT ENDPOINTS ===
   @Post('ordres-virement/:id/generate-pdf')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async generateAndStorePDF(
     @Param('id') id: string,
     @Req() req: any
@@ -1250,7 +1250,7 @@ export class FinanceController {
   }
 
   @Post('ordres-virement/:id/generate-txt')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async generateAndStoreTXT(
     @Param('id') id: string,
     @Req() req: any

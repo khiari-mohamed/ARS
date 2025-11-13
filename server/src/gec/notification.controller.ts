@@ -6,32 +6,37 @@ import * as nodemailer from 'nodemailer';
 export class NotificationController {
   // In-memory store for demo purposes
   private prefs: Record<string, any> = {};
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null;
 
   constructor(private readonly prisma: PrismaService) {
-    // Configure email transporter
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gnet.tn',
-      port: parseInt(process.env.SMTP_PORT || '465'),
-      secure: process.env.SMTP_SECURE === 'true' || true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-    
-    this.verifyConnection();
+    this.initializeTransporter();
   }
   
-  private async verifyConnection() {
+  private async initializeTransporter() {
     try {
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+        console.warn('⚠️ SMTP credentials not configured - email notifications disabled');
+        return;
+      }
+
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gnet.tn',
+        port: parseInt(process.env.SMTP_PORT || '465'),
+        secure: process.env.SMTP_SECURE === 'true' || true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+      
       await this.transporter.verify();
       console.log('✅ SMTP connection verified (NotificationController)');
     } catch (error) {
-      console.error('❌ SMTP connection failed (NotificationController):', error.message);
+      console.warn(`⚠️ SMTP connection failed (NotificationController): ${error.message} - Email notifications disabled`);
+      this.transporter = null;
     }
   }
 
@@ -211,8 +216,13 @@ export class NotificationController {
     html: string;
   }): Promise<boolean> {
     try {
+      if (!this.transporter) {
+        console.warn('⚠️ SMTP not configured - email skipped');
+        return false;
+      }
+
       await this.transporter.sendMail({
-        from: process.env.SMTP_FROM || 'ARS System <noreply@ars-system.com>',
+        from: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@arstunisia.com',
         to: options.to,
         subject: options.subject,
         html: options.html
