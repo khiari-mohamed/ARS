@@ -225,13 +225,13 @@ const ActiveAlerts: React.FC = () => {
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((alert: any) => (
                 <TableRow key={alert.bordereau.id}>
-                  <TableCell>{alert.bordereau.id}</TableCell>
+                  <TableCell>{alert.bordereau.reference || alert.bordereau.id}</TableCell>
                   <TableCell>
                     {alert.reason === 'SLA breach' ? 'Dépassement SLA' : 
                      alert.reason === 'Risk of delay' ? 'Risque de retard' : 
                      alert.reason}
                   </TableCell>
-                  <TableCell>Bordereau #{alert.bordereau.id}</TableCell>
+                  <TableCell>Bordereau {alert.bordereau.reference || `#${alert.bordereau.id}`}</TableCell>
                   <TableCell>
                     <Chip
                       label={alertLevelLabel(alert.alertLevel)}
@@ -304,7 +304,7 @@ const ActiveAlerts: React.FC = () => {
         <DialogContent>
           {detailDialog.alert && (
             <Box sx={{ mt: 2 }}>
-              <Typography><strong>ID:</strong> {detailDialog.alert.bordereau.id}</Typography>
+              <Typography><strong>Référence:</strong> {detailDialog.alert.bordereau.reference || detailDialog.alert.bordereau.id}</Typography>
               <Typography><strong>Raison:</strong> {detailDialog.alert.reason}</Typography>
               <Typography><strong>Niveau:</strong> {alertLevelLabel(detailDialog.alert.alertLevel)}</Typography>
               <Typography><strong>Client:</strong> {detailDialog.alert.bordereau.clientId}</Typography>

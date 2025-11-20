@@ -85,7 +85,8 @@ const AdvancedUserManagement: React.FC = () => {
     role: 'GESTIONNAIRE',
     department: '',
     phone: '',
-    teamLeaderId: ''
+    teamLeaderId: '',
+    capacity: 50
   });
 
   useEffect(() => {
@@ -159,7 +160,7 @@ const AdvancedUserManagement: React.FC = () => {
       await LocalAPI.post('/users', userData);
       await loadData();
       setTemplateDialogOpen(false);
-      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '' });
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50 });
     } catch (error) {
       console.error('Failed to create user:', error);
       alert('Erreur lors de la création de l\'utilisateur');
@@ -175,7 +176,8 @@ const AdvancedUserManagement: React.FC = () => {
       role: user.role || 'GESTIONNAIRE',
       department: user.department || '',
       phone: user.phone || '',
-      teamLeaderId: user.teamLeaderId || ''
+      teamLeaderId: user.teamLeaderId || '',
+      capacity: user.capacity || 50
     });
     setEditDialogOpen(true);
   };
@@ -185,13 +187,14 @@ const AdvancedUserManagement: React.FC = () => {
       const updateData = {
         fullName: newUserData.fullName,
         email: newUserData.email,
-        teamLeaderId: newUserData.role === 'GESTIONNAIRE' && newUserData.teamLeaderId ? newUserData.teamLeaderId : undefined
+        teamLeaderId: newUserData.role === 'GESTIONNAIRE' && newUserData.teamLeaderId ? newUserData.teamLeaderId : undefined,
+        capacity: newUserData.capacity
       };
       await LocalAPI.put(`/users/${selectedUser.id}`, updateData);
       await loadData();
       setEditDialogOpen(false);
       setSelectedUser(null);
-      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '' });
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50 });
     } catch (error) {
       console.error('Failed to update user:', error);
     }
@@ -695,6 +698,28 @@ const AdvancedUserManagement: React.FC = () => {
                 type="email"
                 value={newUserData.email}
                 onChange={(e) => setNewUserData(prev => ({ ...prev, email: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Capacité Maximale"
+                type="number"
+                value={newUserData.capacity}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, capacity: parseInt(e.target.value) || 50 }))}
+                helperText="Nombre maximum de dossiers assignables"
+                InputProps={{
+                  inputProps: { min: 10, max: 200 }
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Rôle"
+                value={newUserData.role}
+                disabled
+                helperText="Le rôle ne peut pas être modifié"
               />
             </Grid>
             {newUserData.role === 'GESTIONNAIRE' && (

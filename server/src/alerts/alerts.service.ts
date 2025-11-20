@@ -148,7 +148,8 @@ export class AlertsService {
         contract: true, 
         client: true,
         currentHandler: true,
-        team: true
+        team: true,
+        chargeCompte: true
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -579,11 +580,21 @@ export class AlertsService {
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
     }
-    return this.prisma.alertLog.findMany({
+    const alerts = await this.prisma.alertLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: { bordereau: true, document: true, user: true },
+      include: { 
+        bordereau: { 
+          include: { 
+            client: true
+          } 
+        }, 
+        document: true, 
+        user: true 
+      },
     });
+    
+    return alerts;
   }
 
   /**

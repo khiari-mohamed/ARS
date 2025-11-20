@@ -46,14 +46,14 @@ const PriorityList: React.FC<PriorityListProps> = ({ items, alerts, loading }) =
                   <PriorityHigh color={item.alertLevel === 'red' ? 'error' : 'warning'} />
                 </ListItemIcon>
                 <ListItemText
-                  primary={`Bordereau #${item.bordereau.id}`}
+                  primary={`Bordereau ${item.bordereau?.reference || `#${item.bordereau?.id}`}`}
                   secondary={
                     <Box>
                       <Typography variant="body2" color="text.secondary">
                         {item.reason}
                       </Typography>
                       <Typography variant="caption">
-                        SLA: {item.daysSinceReception} jours
+                        SLA: {item.daysSinceReception || 0} jours
                       </Typography>
                     </Box>
                   }

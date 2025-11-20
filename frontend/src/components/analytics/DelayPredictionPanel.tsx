@@ -94,30 +94,27 @@ const DelayPredictionPanel: React.FC<DelayPredictionPanelProps> = ({ prediction 
           />
         </Box>
 
-        <Box>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Recommandations IA
-          </Typography>
-          {recommendations.length > 0 ? (
-            recommendations.slice(0, 2).map((rec: any, index: number) => (
+        {recommendations.length > 0 && (
+          <Box>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Recommandations IA
+            </Typography>
+            {recommendations.slice(0, 2).map((rec: any, index: number) => (
               <Typography key={index} variant="body2" sx={{ mb: 1 }}>
                 • {rec.action || rec.reasoning || rec.description || rec}
               </Typography>
-            ))
-          ) : (
-            <Typography variant="body2">
-              Surveillance continue recommandée
-            </Typography>
-          )}
-        </Box>
+            ))}
+          </Box>
+        )}
 
-        {trendDirection && trendDirection !== 'stable' && (
+        {trendDirection && trendDirection !== 'unknown' && (
           <Box mt={2} p={1} bgcolor="info.light" borderRadius={1}>
             <Box display="flex" alignItems="center" gap={1}>
               <TrendingUp color="info" fontSize="small" />
               <Typography variant="caption" color="info.contrastText">
                 Tendance: {trendDirection === 'increasing' ? 'Croissante' : 
-                          trendDirection === 'decreasing' ? 'Décroissante' : trendDirection}
+                          trendDirection === 'decreasing' ? 'Décroissante' : 
+                          trendDirection === 'stable' ? 'Stable' : trendDirection}
               </Typography>
             </Box>
           </Box>
@@ -127,14 +124,6 @@ const DelayPredictionPanel: React.FC<DelayPredictionPanelProps> = ({ prediction 
           <Box mt={2} p={1} bgcolor="success.light" borderRadius={1}>
             <Typography variant="caption" color="success.contrastText">
               Prévisions disponibles pour {forecast.length} jours
-            </Typography>
-          </Box>
-        )}
-        
-        {trendDirection === 'stable' && (
-          <Box mt={2} p={1} bgcolor="grey.100" borderRadius={1}>
-            <Typography variant="caption" color="text.secondary">
-              Tendance stable - Aucune variation significative prévue
             </Typography>
           </Box>
         )}
