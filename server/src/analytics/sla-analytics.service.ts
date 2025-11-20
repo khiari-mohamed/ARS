@@ -277,14 +277,19 @@ export class SLAAnalyticsService {
       },
       include: {
         contract: true,
-        client: true
+        client: true,
+        currentHandler: {
+          select: {
+            fullName: true
+          }
+        }
       }
     });
 
     const alerts: any[] = [];
     
     for (const bordereau of bordereaux) {
-      const slaThreshold = bordereau.contract?.delaiReglement || 5;
+      const slaThreshold = bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
       const daysSinceReception = bordereau.dateReception 
         ? Math.floor((now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24))
         : 0;
@@ -305,7 +310,7 @@ export class SLAAnalyticsService {
           bordereauId: bordereau.id,
           reference: bordereau.reference,
           clientName: bordereau.client?.name,
-          assignedTo: 'Unknown',
+          assignedTo: bordereau.currentHandler?.fullName,
           alertLevel,
           message,
           daysSinceReception,
@@ -365,45 +370,48 @@ export class SLAAnalyticsService {
   }
 
   async getCapacityAnalysis(user: any) {
-    const teamMembers = user.role === 'CHEF_EQUIPE' 
-      ? await this.prisma.user.findMany({ where: { id: user.id } })
-      : [user];
+    // Get all active users with gestionnaire roles
+    const teamMembers = await this.prisma.user.findMany({
+      where: {
+        active: true,
+        role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'] }
+      }
+    });
 
     const analysis: any[] = [];
     
     for (const member of teamMembers) {
-      const [activeBordereaux, avgProcessingTime, weeklyTarget] = await Promise.all([
+      const [activeBordereaux, avgProcessingTime] = await Promise.all([
         this.prisma.bordereau.count({
           where: {
-            assignedToUserId: member.id,
+            currentHandlerId: member.id,
             dateCloture: null
           }
         }),
         this.prisma.bordereau.aggregate({
           _avg: { delaiReglement: true },
           where: {
-            assignedToUserId: member.id,
+            currentHandlerId: member.id,
             dateCloture: { not: null }
           }
-        }),
-        35 // 5 per day * 7 days
+        })
       ]);
 
-      const estimatedCompletionDays = avgProcessingTime._avg.delaiReglement || 3;
+      const weeklyTarget = member.capacity || 35; // Use user capacity or default
       const dailyCapacity = weeklyTarget / 7;
-      const daysToComplete = activeBordereaux / dailyCapacity;
+      const daysToComplete = activeBordereaux / Math.max(dailyCapacity, 1);
       
       analysis.push({
         userId: member.id,
         userName: member.fullName,
         activeBordereaux,
-        avgProcessingTime: estimatedCompletionDays,
+        avgProcessingTime: avgProcessingTime._avg.delaiReglement || 3,
         dailyCapacity,
         daysToComplete,
         capacityStatus: daysToComplete > 7 ? 'overloaded' : daysToComplete > 5 ? 'at_capacity' : 'available',
         recommendation: daysToComplete > 7 
-          ? `Reassign ${Math.ceil(activeBordereaux - (dailyCapacity * 7))} bordereaux`
-          : 'Capacity OK'
+          ? `Réassigner ${Math.ceil(activeBordereaux - (dailyCapacity * 7))} bordereaux`
+          : daysToComplete > 5 ? 'Surveiller la charge de travail' : 'Capacité disponible pour nouvelles tâches'
       });
     }
 

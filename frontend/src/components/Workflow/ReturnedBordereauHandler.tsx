@@ -22,13 +22,15 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Grid
+  Grid,
+  TextField
 } from '@mui/material';
 import {
   AutoFixHigh,
   Visibility,
   CheckCircle,
-  Warning
+  Warning,
+  Edit
 } from '@mui/icons-material';
 
 interface ReturnedBordereauHandlerProps {
@@ -41,10 +43,26 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
   const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false);
   const [selectedDocumentType, setSelectedDocumentType] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
+  const [modifyBordereau, setModifyBordereau] = useState<any>(null);
+  const [clients, setClients] = useState<any[]>([]);
+  const [newReference, setNewReference] = useState('');
+  const [newClientId, setNewClientId] = useState('');
 
   useEffect(() => {
     loadReturnedBordereaux();
+    loadClients();
   }, []);
+
+  const loadClients = async () => {
+    try {
+      const { LocalAPI } = await import('../../services/axios');
+      const response = await LocalAPI.get('/clients');
+      setClients(response.data || []);
+    } catch (error) {
+      console.error('Failed to load clients:', error);
+    }
+  };
 
   const loadReturnedBordereaux = async () => {
     try {
@@ -153,6 +171,35 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
     }
   };
 
+  const handleOpenModifyDialog = (bordereau: any) => {
+    setModifyBordereau(bordereau);
+    setNewReference(bordereau.reference);
+    setNewClientId(bordereau.clientId?.toString() || '');
+    setModifyDialogOpen(true);
+  };
+
+  const handleSaveModifications = async () => {
+    if (!modifyBordereau) return;
+    
+    try {
+      const { LocalAPI } = await import('../../services/axios');
+      const payload: any = {};
+      if (newReference !== modifyBordereau.reference) payload.reference = newReference;
+      if (newClientId && newClientId !== modifyBordereau.clientId?.toString()) {
+        payload.clientId = newClientId;
+      }
+      
+      await LocalAPI.patch(`/scan/bordereau/${modifyBordereau.id}/modify`, payload);
+      
+      alert('✅ Bordereau modifié avec succès');
+      setModifyDialogOpen(false);
+      setModifyBordereau(null);
+      await loadReturnedBordereaux();
+    } catch (error: any) {
+      alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
+    }
+  };
+
   if (loading) {
     return (
       <Card>
@@ -191,34 +238,44 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell>Type</TableCell>
                   <TableCell>Référence</TableCell>
                   <TableCell>Client</TableCell>
-                  <TableCell>Documents</TableCell>
+                  <TableCell>Document Retourné</TableCell>
                   <TableCell>Date Retour</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {returnedBordereaux.map((bordereau: any) => (
-                  <TableRow key={bordereau.id}>
+                {returnedBordereaux.map((item: any) => (
+                  <TableRow key={`${item.id}-${item.returnType}-${item.returnedDocument?.id || 'all'}`}>
+                    <TableCell>
+                      <Chip 
+                        label={item.returnType === 'BORDEREAU' ? '🔴 Bordereau' : '🟠 Document'}
+                        color={item.returnType === 'BORDEREAU' ? 'error' : 'warning'}
+                        size="small"
+                      />
+                    </TableCell>
                     <TableCell>
                       <Typography variant="body2" fontWeight="bold">
-                        {bordereau.reference}
+                        {item.reference}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {bordereau.client?.name || 'N/A'}
+                        {item.client?.name || 'N/A'}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">
-                        {bordereau.documents?.length || 0} doc(s)
-                      </Typography>
+                      {item.returnedDocument ? (
+                        <Chip label={item.returnedDocument.name} color="warning" size="small" />
+                      ) : (
+                        <Chip label={`${item.documents?.length || 0} doc(s)`} color="error" size="small" />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {new Date(bordereau.updatedAt).toLocaleDateString()}
+                        {new Date(item.updatedAt).toLocaleDateString()}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -228,19 +285,20 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                           variant="contained"
                           color="warning"
                           startIcon={<AutoFixHigh />}
-                          onClick={() => handleCorrectBordereau(bordereau)}
+                          onClick={() => handleCorrectBordereau(item)}
                           sx={{ fontSize: '0.7rem' }}
                         >
-                          Corriger
+                          {item.returnType === 'DOCUMENT' ? 'Corriger Document' : 'Corriger Bordereau'}
                         </Button>
                         <Button
                           size="small"
                           variant="outlined"
-                          startIcon={<Visibility />}
-                          onClick={() => handleCorrectBordereau(bordereau)}
+                          color="primary"
+                          startIcon={<Edit />}
+                          onClick={() => handleOpenModifyDialog(item)}
                           sx={{ fontSize: '0.7rem' }}
                         >
-                          Voir
+                          Modifier
                         </Button>
                       </Box>
                     </TableCell>
@@ -433,6 +491,72 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
             startIcon={<CheckCircle />}
           >
             ✅ Corrections Terminées
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modify Bordereau Dialog */}
+      <Dialog 
+        open={modifyDialogOpen} 
+        onClose={() => {
+          setModifyDialogOpen(false);
+          setModifyBordereau(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#e3f2fd', color: '#1565c0', borderBottom: '2px solid #2196f3' }}>
+          ✏️ Modifier Bordereau - {modifyBordereau?.reference}
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, mt: 2 }}>
+          {modifyBordereau && (
+            <Box>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Référence Bordereau"
+                    value={newReference}
+                    onChange={(e) => setNewReference(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Client</InputLabel>
+                    <Select
+                      value={newClientId}
+                      onChange={(e) => setNewClientId(e.target.value)}
+                      label="Client"
+                    >
+                      {clients.map((client) => (
+                        <MenuItem key={client.id} value={client.id.toString()}>
+                          {client.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#f5f5f5', borderTop: '1px solid #ddd' }}>
+          <Button 
+            onClick={() => {
+              setModifyDialogOpen(false);
+              setModifyBordereau(null);
+            }}
+            color="inherit"
+          >
+            Annuler
+          </Button>
+          <Button 
+            onClick={handleSaveModifications}
+            variant="contained"
+            color="primary"
+            startIcon={<CheckCircle />}
+          >
+            💾 Enregistrer
           </Button>
         </DialogActions>
       </Dialog>

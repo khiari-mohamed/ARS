@@ -435,10 +435,15 @@ function GestionnaireSeniorBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BS</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Traitement</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Règlement</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {statsModalData.map((bordereau, index) => (
+                      {statsModalData.map((bordereau, index) => {
+                        const dt = getDureeTraitement(bordereau);
+                        const dr = getDureeReglement(bordereau);
+                        return (
                         <tr key={bordereau.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                           <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{bordereau.reference}</td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{bordereau.client?.name || 'N/A'}</td>
@@ -466,8 +471,15 @@ function GestionnaireSeniorBordereaux() {
                               {bordereau.delaiReglement || 30} jours
                             </span>
                           </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            {dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}
+                          </td>
+                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                            {dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}
+                          </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

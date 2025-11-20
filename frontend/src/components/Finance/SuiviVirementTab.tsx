@@ -185,13 +185,17 @@ const SuiviVirementTab: React.FC = () => {
   };
 
   const getEtatChip = (etat: string) => {
+    // EXACT SPEC: Same logic as FinanceDashboard
     const config = {
-      'NON_EXECUTE': { label: 'Non Exécuté', color: 'default' as const },
-      'EN_COURS_EXECUTION': { label: 'En Cours', color: 'info' as const },
-      'EXECUTE_PARTIELLEMENT': { label: 'Partiel', color: 'warning' as const },
-      'REJETE': { label: 'Rejeté', color: 'error' as const },
-      'BLOQUE': { label: 'Bloqué', color: 'error' as const },
-      'EXECUTE': { label: 'Exécuté', color: 'success' as const }
+      'NON_EXECUTE': { label: '⏳ Virement non exécuté', color: 'default' as const },
+      'EN_COURS_EXECUTION': { label: '🔄 En cours d\'exécution', color: 'info' as const },
+      'EXECUTE_PARTIELLEMENT': { label: '⚠️ Exécuté partiellement', color: 'warning' as const },
+      'REJETE': { label: '❌ Rejeté', color: 'error' as const },
+      'BLOQUE': { label: '🚫 Bloqué', color: 'error' as const },
+      'EXECUTE': { label: '✅ Exécuté', color: 'success' as const },
+      'VIREMENT_DEPOSE': { label: '✅ Virement déposé', color: 'success' as const },
+      'VIREMENT_NON_VALIDE': { label: '❌ Non validé', color: 'error' as const },
+      'EN_COURS_VALIDATION': { label: '🔄 En validation', color: 'info' as const }
     };
     
     const { label, color } = config[etat as keyof typeof config] || { label: etat, color: 'default' as const };

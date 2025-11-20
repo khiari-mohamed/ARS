@@ -96,6 +96,11 @@ export class FinanceController {
     return this.adherentService.deleteAdherent(id);
   }
 
+  @Get('adherents/:id/rib-history')
+  async getAdherentRibHistory(@Param('id') id: string) {
+    return this.adherentService.getAdherentRibHistory(id);
+  }
+
   @Post('adherents/import')
   @UseInterceptors(FileInterceptor('file'))
   async importAdherents(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
@@ -112,31 +117,48 @@ export class FinanceController {
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet);
       
+      // Get first client or create one
+      let defaultClient = await this.prisma.client.findFirst();
+      if (!defaultClient) {
+        defaultClient = await this.prisma.client.create({
+          data: {
+            name: 'AIR LIQUIDE TUNISIE ACTIFS',
+            reglementDelay: 30,
+            reclamationDelay: 15
+          }
+        });
+      }
+      
       let imported = 0;
       let errors: string[] = [];
       
       for (const row of data as any[]) {
         try {
-          const adherentData = {
-            matricule: row['Matricule'] || row['matricule'],
-            nom: row['Nom'] || row['nom'],
-            prenom: row['Prénom'] || row['Prenom'] || row['prenom'],
-            clientId: row['Société'] || row['Societe'] || row['societe'] || 'default',
-            rib: String(row['RIB'] || row['rib'] || '').replace(/\D/g, ''),
-            codeAssure: row['Code Assuré'] || row['Code Assure'] || row['codeAssure'] || '',
-            numeroContrat: row['Numéro Contrat'] || row['Numero Contrat'] || row['numeroContrat'] || '',
-            statut: (row['Statut'] || row['statut'] || 'ACTIF').toUpperCase() === 'ACTIF' ? 'ACTIF' : 'INACTIF'
-          };
+          const matricule = row['Matricule. Assurance'] || row['Matricule'] || row['matricule'];
+          const fullName = row['ASSURE'] || row['Name'] || row['Nom'] || row['nom'] || '';
+          const rib = String(row['Banque'] || row['RIB'] || row['rib'] || '').replace(/\D/g, '');
           
-          if (!adherentData.matricule || !adherentData.rib) {
-            errors.push(`Ligne ignorée: matricule ou RIB manquant`);
+          if (!matricule || !rib) {
+            errors.push(`Ligne ignorée: matricule=${matricule}, rib=${rib}`);
             continue;
           }
+          
+          const nameParts = fullName.split(' ');
+          const adherentData = {
+            matricule: String(matricule),
+            nom: nameParts[0] || fullName,
+            prenom: nameParts.slice(1).join(' ') || '',
+            clientId: defaultClient.id,
+            rib: rib,
+            codeAssure: String(row['Code Assurée'] || row['Code Assuré'] || row['Code Assure'] || row['codeAssure'] || ''),
+            numeroContrat: String(row['ContratN'] || row['Numéro Contrat'] || row['Numero Contrat'] || row['numeroContrat'] || ''),
+            statut: 'ACTIF'
+          };
           
           await this.adherentService.createAdherent(adherentData, user.id);
           imported++;
         } catch (error: any) {
-          errors.push(`Erreur ligne ${imported + 1}: ${error.message}`);
+          errors.push(`Erreur: ${error.message}`);
         }
       }
       

@@ -3,12 +3,13 @@ import {
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, FormControl, InputLabel, Select, MenuItem, Chip, IconButton,
-  Alert, Stack, Box
+  Alert, Stack, Box, TablePagination
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import WarningIcon from '@mui/icons-material/Warning';
+import HistoryIcon from '@mui/icons-material/History';
 
 interface Adherent {
   id: string;
@@ -48,6 +49,9 @@ const AdherentsTab: React.FC = () => {
   const [importDialog, setImportDialog] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [historyDialog, setHistoryDialog] = useState<{open: boolean, adherentId: string | null, history: any[]}>({open: false, adherentId: null, history: []});
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 20;
 
   useEffect(() => {
     loadAdherents();
@@ -277,19 +281,24 @@ const AdherentsTab: React.FC = () => {
 
   const duplicateRibCount = adherents.filter(a => a.duplicateRib).length;
 
-  const handleDownloadTemplate = () => {
-    const template = [
-      ['Matricule', 'Société', 'Nom', 'Prénom', 'RIB', 'Code Assuré', 'Numéro Contrat', 'Statut'],
-      ['M001', 'ARS TUNISIE', 'Dupont', 'Jean', '12345678901234567890', 'ASS001', 'CONT001', 'ACTIF'],
-      ['M002', 'ARS TUNISIE', 'Martin', 'Marie', '09876543210987654321', 'ASS002', 'CONT002', 'ACTIF']
-    ];
+  const handleDownloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     
-    const csvContent = template.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'modele_adherents.csv';
-    link.click();
+    const data = adherents.map(a => ({
+      'Matricule': a.matricule,
+      'Société': a.society,
+      'Nom': a.name,
+      'Prénom': a.surname,
+      'RIB': a.rib,
+      'Code Assuré': a.codeAssure || '',
+      'Numéro Contrat': a.numeroContrat || '',
+      'Statut': a.status === 'active' ? 'ACTIF' : 'INACTIF'
+    }));
+    
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Adhérents');
+    XLSX.writeFile(workbook, `adherents_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleImportFile = async () => {
@@ -449,7 +458,7 @@ const AdherentsTab: React.FC = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredAdherents.map((adherent) => (
+            {filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((adherent) => (
               <TableRow 
                 key={adherent.id}
                 sx={{ 
@@ -477,10 +486,19 @@ const AdherentsTab: React.FC = () => {
                 <TableCell>{adherent.numeroContrat || '-'}</TableCell>
                 <TableCell>{getStatusChip(adherent.status)}</TableCell>
                 <TableCell>
-                  <IconButton size="small" onClick={() => handleEdit(adherent)}>
+                  <IconButton size="small" onClick={() => handleEdit(adherent)} title="Modifier">
                     <EditIcon />
                   </IconButton>
-                  <IconButton size="small" onClick={() => handleDelete(adherent.id)} color="error">
+                  <IconButton size="small" onClick={async () => {
+                    const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/${adherent.id}/rib-history`, {
+                      headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`}
+                    });
+                    const history = await res.json();
+                    setHistoryDialog({open: true, adherentId: adherent.id, history});
+                  }} color="info" title="Historique RIB">
+                    <HistoryIcon />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => handleDelete(adherent.id)} color="error" title="Supprimer">
                     <DeleteIcon />
                   </IconButton>
                 </TableCell>
@@ -488,6 +506,16 @@ const AdherentsTab: React.FC = () => {
             ))}
           </TableBody>
         </Table>
+        <TablePagination
+          component="div"
+          count={filteredAdherents.length}
+          page={page}
+          onPageChange={(e, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[20]}
+          labelRowsPerPage="Lignes par page:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+        />
       </Box>
 
       </Paper>
@@ -663,6 +691,43 @@ const AdherentsTab: React.FC = () => {
           >
             {importing ? 'Import en cours...' : 'Importer'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* History Dialog */}
+      <Dialog open={historyDialog.open} onClose={() => setHistoryDialog({open: false, adherentId: null, history: []})} maxWidth="md" fullWidth>
+        <DialogTitle>📜 Historique des modifications RIB</DialogTitle>
+        <DialogContent>
+          {historyDialog.history.length === 0 ? (
+            <Alert severity="info">Aucune modification de RIB</Alert>
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Ancien RIB</strong></TableCell>
+                  <TableCell><strong>Nouveau RIB</strong></TableCell>
+                  <TableCell><strong>Modifié par</strong></TableCell>
+                  <TableCell><strong>Date</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {historyDialog.history.map((h: any) => (
+                  <TableRow key={h.id}>
+                    <TableCell sx={{fontFamily: 'monospace', color: 'error.main'}}>{h.oldRib}</TableCell>
+                    <TableCell sx={{fontFamily: 'monospace', color: 'success.main'}}>{h.newRib}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{h.updatedBy?.fullName || 'Utilisateur inconnu'}</Typography>
+                      <Typography variant="caption" color="textSecondary">{h.updatedBy?.role || ''}</Typography>
+                    </TableCell>
+                    <TableCell>{new Date(h.updatedAt).toLocaleString('fr-FR')}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHistoryDialog({open: false, adherentId: null, history: []})}>Fermer</Button>
         </DialogActions>
       </Dialog>
     </Box>

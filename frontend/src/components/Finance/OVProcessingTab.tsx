@@ -280,6 +280,14 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
 
   const processFile = async (file: File) => {
     if (processing) return;
+    
+    // Check if PDF is uploaded first
+    if (!uploadedPdfFile) {
+      alert('⚠️ Veuillez d\'abord télécharger le document PDF avant le fichier Excel!');
+      setUploadedFile(null);
+      return;
+    }
+    
     setProcessing(true);
     try {
       const { financeService } = await import('../../services/financeService');
@@ -339,8 +347,10 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         }));
         setValidationResults(transformedResults);
         
-        // EXACT SPEC: Move to validation summary (Step 3)
-        setActiveStep(2);
+        // EXACT SPEC: Move to validation summary (Step 3) only if both files uploaded
+        if (uploadedPdfFile) {
+          setActiveStep(2);
+        }
         
         // Show validation summary
         if (result.summary) {

@@ -55,6 +55,7 @@ function ChefEquipeDashboard() {
     avenant: { total: 0, breakdown: {}, gestionnaireBreakdown: {} }
   });
   const [gestionnaireAssignments, setGestionnaireAssignments] = useState<GestionnaireAssignment[]>([]);
+  const [gestionnaireSeniorAssignments, setGestionnaireSeniorAssignments] = useState<GestionnaireAssignment[]>([]);
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
   const [documents, setDocuments] = useState<Dossier[]>([]);
   const [filteredDossiers, setFilteredDossiers] = useState<Dossier[]>([]);
@@ -75,6 +76,9 @@ function ChefEquipeDashboard() {
   const [showRetourScanModal, setShowRetourScanModal] = useState(false);
   const [retourScanReason, setRetourScanReason] = useState('');
   const [selectedDossierForRetour, setSelectedDossierForRetour] = useState<string | null>(null);
+  const [retourScanType, setRetourScanType] = useState<'bordereau' | 'documents'>('bordereau');
+  const [selectedDocumentsForRetour, setSelectedDocumentsForRetour] = useState<string[]>([]);
+  const [bordereauDocuments, setBordereauDocuments] = useState<any[]>([]);
   const [showAddDocumentModal, setShowAddDocumentModal] = useState(false);
   const [selectedBordereauForDoc, setSelectedBordereauForDoc] = useState<string | null>(null);
   const [uploadingDocument, setUploadingDocument] = useState(false);
@@ -181,11 +185,12 @@ function ChefEquipeDashboard() {
       console.log('  - /bordereaux/chef-equipe/gestionnaire-assignments-dossiers');
       
       // Load real data from backend using LocalAPI with auth
-      const [statsResponse, dossiersResponse, documentsResponse, assignmentsResponse] = await Promise.all([
+      const [statsResponse, dossiersResponse, documentsResponse, assignmentsResponse, seniorAssignmentsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
-        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers')
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments')
       ]);
       
       console.log('📊 Raw API Responses:');
@@ -307,6 +312,13 @@ function ChefEquipeDashboard() {
         console.log('👤 Unique gestionnaires:', uniqueGestionnaires);
       } else {
         console.warn('⚠️ No assignments data received');
+      }
+      
+      if (seniorAssignmentsResponse.data) {
+        console.log('⭐ Gestionnaire Senior assignments received:', seniorAssignmentsResponse.data.length, seniorAssignmentsResponse.data);
+        setGestionnaireSeniorAssignments(seniorAssignmentsResponse.data);
+      } else {
+        console.warn('⚠️ No senior assignments data received');
       }
     } catch (error: any) {
       console.error('❌ Error loading dashboard data:', error);
@@ -516,9 +528,21 @@ function ChefEquipeDashboard() {
     }
   };
 
-  const handleRetourScan = (dossierId: string) => {
+  const handleRetourScan = async (dossierId: string) => {
     setSelectedDossierForRetour(dossierId);
     setRetourScanReason('');
+    setRetourScanType('bordereau');
+    setSelectedDocumentsForRetour([]);
+    
+    // Load documents for this bordereau
+    try {
+      const response = await LocalAPI.get(`/bordereaux/${dossierId}`);
+      setBordereauDocuments(response.data.documents || []);
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      setBordereauDocuments([]);
+    }
+    
     setShowRetourScanModal(true);
   };
 
@@ -579,18 +603,30 @@ function ChefEquipeDashboard() {
       return;
     }
 
+    if (retourScanType === 'documents' && selectedDocumentsForRetour.length === 0) {
+      alert('Veuillez sélectionner au moins un document');
+      return;
+    }
+
     try {
       const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/return-to-scan', {
         dossierId: selectedDossierForRetour,
         reason: retourScanReason,
-        setAsReturnedToScan: true
+        setAsReturnedToScan: true,
+        returnType: retourScanType,
+        documentIds: retourScanType === 'documents' ? selectedDocumentsForRetour : undefined
       });
       
       if (response.data.success) {
-        alert('Dossier retourné vers l\'équipe Scan avec succès');
+        const message = retourScanType === 'bordereau' 
+          ? 'Bordereau complet retourné vers l\'équipe Scan avec succès'
+          : `${selectedDocumentsForRetour.length} document(s) retourné(s) vers l\'équipe Scan avec succès`;
+        alert(message);
         setShowRetourScanModal(false);
         setRetourScanReason('');
         setSelectedDossierForRetour(null);
+        setSelectedDocumentsForRetour([]);
+        setBordereauDocuments([]);
         loadDashboardData();
       } else {
         alert('Erreur lors du retour vers Scan');
@@ -864,6 +900,62 @@ function ChefEquipeDashboard() {
               </div>
             );
               })}
+          </div>
+        </div>
+
+        {/* Gestionnaire Senior Section */}
+        <div style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(76,175,80,0.2)', border: '2px solid #4caf50' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#2e7d32', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '24px' }}>⭐</span>
+              Gestionnaires Senior
+            </h3>
+            <div style={{ background: '#4caf50', color: 'white', padding: '6px 12px', borderRadius: '20px', fontSize: '14px', fontWeight: 'bold' }}>
+              {gestionnaireSeniorAssignments.length} Senior(s)
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+            {gestionnaireSeniorAssignments.map((assignment, index) => (
+              <div key={index} style={{ background: 'white', borderRadius: '8px', padding: '14px', border: '2px solid #4caf50', boxShadow: '0 2px 6px rgba(76,175,80,0.15)' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '10px', color: '#2e7d32', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '18px' }}>👤</span>
+                  {assignment.gestionnaire}
+                </div>
+                <div style={{ fontSize: '13px', color: '#388e3c', marginBottom: '8px', fontWeight: '600' }}>
+                  <strong>Total affectés:</strong> {assignment.totalAssigned}
+                </div>
+                <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                    <span style={{ color: '#4caf50', fontWeight: '500' }}>✓ Traités:</span>
+                    <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{assignment.traites || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                    <span style={{ color: '#ff9800', fontWeight: '500' }}>⏳ En cours:</span>
+                    <span style={{ fontWeight: 'bold', color: '#f57c00' }}>{assignment.enCours || 0}</span>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', marginBottom: '4px' }}>
+                      <span style={{ color: '#dc3545', fontWeight: '500' }}>↩ Retournés:</span>
+                      <span style={{ fontWeight: 'bold', color: '#c62828' }}>{assignment.retournes || 0}</span>
+                    </div>
+                    {assignment.returnedBy && (assignment.retournes || 0) > 0 && (
+                      <div style={{ fontSize: '11px', color: '#dc3545', fontWeight: 'bold', marginLeft: '16px', marginTop: '2px', background: '#ffebee', padding: '4px 8px', borderRadius: '4px' }}>
+                        → Retourné par: {assignment.returnedBy}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#388e3c', background: '#e8f5e9', padding: '6px 8px', borderRadius: '4px', marginTop: '8px' }}>
+                  <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
+                </div>
+              </div>
+            ))}
+            {gestionnaireSeniorAssignments.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px', color: '#66bb6a', fontSize: '14px', gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: '48px', marginBottom: '8px' }}>📋</div>
+                <p style={{ margin: 0 }}>Aucun Gestionnaire Senior pour le moment</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1642,8 +1734,10 @@ function ChefEquipeDashboard() {
             backgroundColor: 'white',
             borderRadius: '8px',
             padding: '24px',
-            maxWidth: '500px',
+            maxWidth: '600px',
             width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
             boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
           }}>
             <div style={{
@@ -1676,6 +1770,112 @@ function ChefEquipeDashboard() {
               </button>
             </div>
             
+            {/* Return Type Selection */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                marginBottom: '12px',
+                color: '#333'
+              }}>
+                Type de retour:
+              </label>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => {
+                    setRetourScanType('bordereau');
+                    setSelectedDocumentsForRetour([]);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: retourScanType === 'bordereau' ? '2px solid #d52b36' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    background: retourScanType === 'bordereau' ? '#fff5f5' : 'white',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: retourScanType === 'bordereau' ? 'bold' : 'normal',
+                    color: retourScanType === 'bordereau' ? '#d52b36' : '#333'
+                  }}
+                >
+                  📋 Bordereau complet
+                </button>
+                <button
+                  onClick={() => setRetourScanType('documents')}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: retourScanType === 'documents' ? '2px solid #d52b36' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    background: retourScanType === 'documents' ? '#fff5f5' : 'white',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: retourScanType === 'documents' ? 'bold' : 'normal',
+                    color: retourScanType === 'documents' ? '#d52b36' : '#333'
+                  }}
+                >
+                  📄 Documents spécifiques
+                </button>
+              </div>
+            </div>
+
+            {/* Document Selection (only if documents type selected) */}
+            {retourScanType === 'documents' && bordereauDocuments.length > 0 && (
+              <div style={{ marginBottom: '20px', padding: '12px', background: '#f8f9fa', borderRadius: '6px' }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '14px', 
+                  fontWeight: '500', 
+                  marginBottom: '12px',
+                  color: '#333'
+                }}>
+                  Sélectionner les documents à retourner:
+                </label>
+                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {bordereauDocuments.map((doc: any) => (
+                    <div key={doc.id} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '8px',
+                      marginBottom: '6px',
+                      background: 'white',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      setSelectedDocumentsForRetour(prev => 
+                        prev.includes(doc.id) 
+                          ? prev.filter(id => id !== doc.id)
+                          : [...prev, doc.id]
+                      );
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedDocumentsForRetour.includes(doc.id)}
+                        onChange={() => {}}
+                        style={{ marginRight: '8px', cursor: 'pointer' }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '500' }}>{doc.name}</div>
+                        <div style={{ fontSize: '11px', color: '#666' }}>{doc.type}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+                  {selectedDocumentsForRetour.length} document(s) sélectionné(s)
+                </div>
+              </div>
+            )}
+
+            {retourScanType === 'documents' && bordereauDocuments.length === 0 && (
+              <div style={{ marginBottom: '20px', padding: '12px', background: '#fff3cd', borderRadius: '6px', fontSize: '13px', color: '#856404' }}>
+                ⚠️ Aucun document disponible pour ce bordereau
+              </div>
+            )}
+            
             <div style={{ marginBottom: '20px' }}>
               <label style={{ 
                 display: 'block', 
@@ -1692,7 +1892,7 @@ function ChefEquipeDashboard() {
                 placeholder="Veuillez expliquer la raison du retour..."
                 style={{
                   width: '100%',
-                  minHeight: '120px',
+                  minHeight: '100px',
                   padding: '12px',
                   border: '1px solid #ddd',
                   borderRadius: '4px',
@@ -1726,14 +1926,14 @@ function ChefEquipeDashboard() {
               </button>
               <button
                 onClick={handleConfirmRetourScan}
-                disabled={!retourScanReason.trim()}
+                disabled={!retourScanReason.trim() || (retourScanType === 'documents' && selectedDocumentsForRetour.length === 0)}
                 style={{
-                  background: retourScanReason.trim() ? '#d52b36' : '#ccc',
+                  background: (retourScanReason.trim() && (retourScanType === 'bordereau' || selectedDocumentsForRetour.length > 0)) ? '#d52b36' : '#ccc',
                   color: 'white',
                   border: 'none',
                   padding: '10px 20px',
                   borderRadius: '4px',
-                  cursor: retourScanReason.trim() ? 'pointer' : 'not-allowed',
+                  cursor: (retourScanReason.trim() && (retourScanType === 'bordereau' || selectedDocumentsForRetour.length > 0)) ? 'pointer' : 'not-allowed',
                   fontSize: '14px',
                   fontWeight: 'bold'
                 }}

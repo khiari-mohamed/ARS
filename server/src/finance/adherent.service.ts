@@ -59,6 +59,11 @@ export class AdherentService {
       throw new BadRequestException(`Matricule ${dto.matricule} already exists for this client`);
     }
 
+    // Check for duplicate RIB (warning only, not blocking)
+    const duplicateRib = await this.prisma.adherent.findFirst({
+      where: { rib: dto.rib }
+    });
+
     // Create adherent in proper table
     const newAdherent = await this.prisma.adherent.create({
       data: {
@@ -85,6 +90,7 @@ export class AdherentService {
       codeAssure: newAdherent.codeAssure,
       numeroContrat: newAdherent.numeroContrat,
       statut: newAdherent.statut,
+      duplicateRib: !!duplicateRib,
       client: {
         id: newAdherent.client.id,
         name: newAdherent.client.name
@@ -93,53 +99,94 @@ export class AdherentService {
   }
 
   async updateAdherent(id: string, dto: UpdateAdherentDto, userId: string) {
-    // Try to find in member table first
-    const existingMember = await this.prisma.member.findUnique({
-      where: { id },
-      include: { society: true }
-    });
+    if (dto.rib && !/^\d{20}$/.test(dto.rib)) {
+      throw new BadRequestException('RIB must be exactly 20 digits');
+    }
 
-    if (existingMember) {
-      // Update existing member
-      const updatedMember = await this.prisma.member.update({
-        where: { id },
+    const current = await this.prisma.adherent.findUnique({ where: { id } });
+    if (!current) throw new BadRequestException('Adherent not found');
+
+    // Track RIB change
+    if (dto.rib && dto.rib !== current.rib) {
+      await this.prisma.adherentRibHistory.create({
         data: {
-          name: dto.nom && dto.prenom ? `${dto.nom} ${dto.prenom}` : undefined,
-          rib: dto.rib,
-          cin: dto.nom ? dto.nom.substring(0, 3).toUpperCase() + Math.random().toString().substring(2, 8) : undefined
-        },
-        include: {
-          society: true
+          adherentId: id,
+          oldRib: current.rib,
+          newRib: dto.rib,
+          updatedById: userId
         }
       });
 
-      return {
-        id: updatedMember.id,
-        matricule: updatedMember.cin,
-        nom: dto.nom || updatedMember.name.split(' ')[0],
-        prenom: dto.prenom || updatedMember.name.split(' ').slice(1).join(' '),
-        rib: updatedMember.rib,
-        statut: 'ACTIF',
-        client: {
-          id: updatedMember.society.id,
-          name: updatedMember.society.name
-        }
-      };
-    } else {
-      // Record doesn't exist in member table, return updated data without DB update
-      return {
-        id: id,
-        matricule: dto.nom ? dto.nom.substring(0, 3).toUpperCase() + Math.random().toString().substring(2, 8) : 'UPD001',
-        nom: dto.nom || 'Updated',
-        prenom: dto.prenom || 'User',
-        rib: dto.rib || 'RIB000000000000000000',
-        statut: 'ACTIF',
-        client: {
-          id: 'default',
-          name: 'Updated Society'
-        }
-      };
+      // Create notification
+      const users = await this.prisma.user.findMany({
+        where: { role: { in: ['SUPER_ADMIN', 'FINANCE', 'CHEF_EQUIPE'] } }
+      });
+      
+      await this.prisma.notification.createMany({
+        data: users.map(u => ({
+          userId: u.id,
+          type: 'RIB_UPDATE',
+          title: 'RIB modifié',
+          message: `RIB de ${current.nom} ${current.prenom} (${current.matricule}) modifié`,
+          data: { adherentId: id, oldRib: current.rib, newRib: dto.rib }
+        }))
+      });
     }
+
+    let duplicateRib = false;
+    if (dto.rib) {
+      const existing = await this.prisma.adherent.findFirst({
+        where: { rib: dto.rib, NOT: { id } }
+      });
+      duplicateRib = !!existing;
+    }
+
+    const updated = await this.prisma.adherent.update({
+      where: { id },
+      data: {
+        nom: dto.nom,
+        prenom: dto.prenom,
+        rib: dto.rib,
+        codeAssure: dto.codeAssure,
+        numeroContrat: dto.numeroContrat,
+        statut: dto.statut,
+        updatedById: userId
+      },
+      include: { client: true }
+    });
+
+    return {
+      id: updated.id,
+      matricule: updated.matricule,
+      nom: updated.nom,
+      prenom: updated.prenom,
+      rib: updated.rib,
+      codeAssure: updated.codeAssure,
+      numeroContrat: updated.numeroContrat,
+      statut: updated.statut,
+      duplicateRib,
+      client: { id: updated.client.id, name: updated.client.name }
+    };
+  }
+
+  async getAdherentRibHistory(adherentId: string) {
+    const history = await this.prisma.adherentRibHistory.findMany({
+      where: { adherentId },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    const userIds = [...new Set(history.map(h => h.updatedById))];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, fullName: true, role: true }
+    });
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    return history.map(h => ({
+      ...h,
+      updatedBy: userMap.get(h.updatedById)
+    }));
   }
 
   async findAdherentsByClient(clientId: string) {
@@ -239,7 +286,6 @@ export class AdherentService {
 
   async searchAdherents(query: string, clientId?: string) {
     try {
-      // Search in adherent table with all required fields
       const adherentWhere: any = query ? {
         OR: [
           { matricule: { contains: query, mode: 'insensitive' } },
@@ -262,6 +308,12 @@ export class AdherentService {
         take: 100
       });
 
+      // Check for duplicate RIBs
+      const ribCounts = new Map<string, number>();
+      adherents.forEach(a => {
+        ribCounts.set(a.rib, (ribCounts.get(a.rib) || 0) + 1);
+      });
+
       return adherents.map(adherent => ({
         id: adherent.id,
         matricule: adherent.matricule,
@@ -271,6 +323,7 @@ export class AdherentService {
         codeAssure: adherent.codeAssure,
         numeroContrat: adherent.numeroContrat,
         statut: adherent.statut,
+        duplicateRib: ribCounts.get(adherent.rib)! > 1,
         client: {
           id: adherent.client.id,
           name: adherent.client.name

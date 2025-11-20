@@ -1197,15 +1197,15 @@ Document généré automatiquement par ARS`;
     try {
       const where: any = {};
       
-      // EXACT SPEC: Chef d'équipe sees only their clients
-      if (user.role === 'CHEF_EQUIPE') {
+      // EXACT SPEC: Chef d'équipe and Gestionnaire Senior see only their clients
+      if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
         where.OR = [
-          // Manual entries created by this chef
+          // Manual entries created by this user
           {
             bordereauId: null,
             utilisateurSante: user.id
           },
-          // Bordereaux from contracts assigned to this chef's team
+          // Bordereaux from contracts assigned to this user's team
           {
             bordereau: {
               contract: {
@@ -1428,7 +1428,7 @@ Document généré automatiquement par ARS`;
       return baseFilter;
     }
     
-    if (user?.role === 'CHEF_EQUIPE') {
+    if (user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR') {
       return {
         ...baseFilter,
         contract: {

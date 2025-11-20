@@ -570,7 +570,7 @@ model BSLog {
 
 // EXACT fields from specifications
 model Adherent {
-  id            String         @id @default(uuid())
+  id            String                @id @default(uuid())
   matricule     String // Unique per société
   nom           String
   prenom        String
@@ -578,18 +578,32 @@ model Adherent {
   rib           String // 20 digits - compte bancaire personnel
   codeAssure    String? // Linked to Contract table field
   numeroContrat String? // Numéro de contrat
-  statut        String         @default("ACTIF") // actif/inactif
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  statut        String                @default("ACTIF") // actif/inactif
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   createdById   String? // Traceability - user who created
   updatedById   String? // Traceability - user who modified
-  client        Client         @relation(fields: [clientId], references: [id])
+  client        Client                @relation(fields: [clientId], references: [id])
   virementItems VirementItem[]
+  ribHistory    AdherentRibHistory[]
 
   @@unique([matricule, clientId]) // Matricule unique per société
   @@index([rib]) // RIB unique per adherent
   @@index([codeAssure])
   @@index([matricule, clientId])
+}
+
+model AdherentRibHistory {
+  id          String   @id @default(uuid())
+  adherentId  String
+  oldRib      String
+  newRib      String
+  updatedById String
+  updatedAt   DateTime @default(now())
+  adherent    Adherent @relation(fields: [adherentId], references: [id], onDelete: Cascade)
+
+  @@index([adherentId])
+  @@index([updatedAt])
 }
 
 model DonneurOrdre {
@@ -1095,6 +1109,7 @@ enum DocumentStatus {
   TRAITE
   REJETE
   RETOUR_ADMIN
+  RETOURNER_AU_SCAN
 }
 
 // Bordereau Status Flow:

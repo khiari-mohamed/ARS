@@ -384,6 +384,11 @@ const FinanceDashboard: React.FC = () => {
                   Affichage limité aux ordres de votre équipe
                 </Typography>
               )}
+              {user?.role === 'GESTIONNAIRE_SENIOR' && (
+                <Typography variant="caption" color="info.main" sx={{ fontStyle: 'italic' }}>
+                  Affichage limité à vos clients uniquement
+                </Typography>
+              )}
             </Box>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button

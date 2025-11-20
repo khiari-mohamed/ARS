@@ -167,6 +167,30 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
       }
 
       if (pdfResponse.ok && txtResponse.ok) {
+        // Auto-download PDF with auth
+        const pdfBlob = await fetch(
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/pdf`,
+          { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+        ).then(r => r.blob());
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        const pdfLink = document.createElement('a');
+        pdfLink.href = pdfUrl;
+        pdfLink.download = `OV_${ovReference}.pdf`;
+        pdfLink.click();
+        URL.revokeObjectURL(pdfUrl);
+
+        // Auto-download TXT with auth
+        const txtBlob = await fetch(
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/txt`,
+          { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+        ).then(r => r.blob());
+        const txtUrl = URL.createObjectURL(txtBlob);
+        const txtLink = document.createElement('a');
+        txtLink.href = txtUrl;
+        txtLink.download = `OV_${ovReference}.txt`;
+        txtLink.click();
+        URL.revokeObjectURL(txtUrl);
+
         setActiveStep(2); // Move to Step 6
       }
     } catch (error) {
