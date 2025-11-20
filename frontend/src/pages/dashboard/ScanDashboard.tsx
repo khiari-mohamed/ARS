@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Alert, Progress, Modal, Upload, message } from 'antd';
+import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Alert, Progress, Modal, Upload, message, Tabs } from 'antd';
 import { 
   ScanOutlined, 
   FileTextOutlined,
@@ -7,9 +7,11 @@ import {
   ExclamationCircleOutlined,
   RobotOutlined,
   UploadOutlined,
-  PlusOutlined
+  PlusOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import { useBSList } from '../../hooks/useBS';
+import { getReturnedBordereaux } from '../../services/scanService';
 
 interface BordereauItem {
   id: string;
@@ -26,6 +28,7 @@ const ScanDashboard: React.FC = () => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [processing, setProcessing] = useState(false);
   const [bordereauxData, setBordereauxData] = useState<BordereauItem[]>([]);
+  const [returnedItems, setReturnedItems] = useState<any[]>([]);
   const [manualUploadModal, setManualUploadModal] = useState(false);
   const [selectedBordereau, setSelectedBordereau] = useState<string | null>(null);
   
@@ -52,6 +55,22 @@ const ScanDashboard: React.FC = () => {
     const interval = setInterval(fetchBordereaux, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch returned items for correction
+  useEffect(() => {
+    const fetchReturned = async () => {
+      try {
+        const data = await getReturnedBordereaux();
+        setReturnedItems(data);
+      } catch (error) {
+        console.error('Failed to fetch returned items:', error);
+      }
+    };
+    
+    fetchReturned();
+    const interval = setInterval(fetchReturned, 30000);
+    return () => clearInterval(interval);
+  }, []);
   
   // CRITICAL: Deduplicate again before rendering to ensure no duplicates
   const bordereauxToScan = Array.from(
@@ -62,7 +81,7 @@ const ScanDashboard: React.FC = () => {
   console.log('📊 bordereauxToScan IDs:', bordereauxToScan.map(b => b.id));
 
   const pendingScan = bordereauxToScan.filter(b => b.scanStatus === 'NON_SCANNE');
-  const inProgress = bordereauxToScan.filter(b => b.scanStatus === 'SCAN_EN_COURS');
+  const inProgress = [...bordereauxToScan.filter(b => b.scanStatus === 'SCAN_EN_COURS'), ...returnedItems];
   const completed = bordereauxToScan.filter(b => b.scanStatus === 'SCAN_FINALISE');
   const totalBS = bordereauxToScan.reduce((sum, b) => sum + b.nombreBS, 0);
   const avgCompletion = bordereauxToScan.length > 0 
@@ -361,14 +380,95 @@ const ScanDashboard: React.FC = () => {
               </Button>
             }
           >
-            <Table
-              dataSource={bordereauxToScan}
-              columns={columns}
-              rowKey="id"
-              pagination={{ pageSize: 10 }}
-              size="small"
-              scroll={{ x: 800 }}
-            />
+            <Tabs defaultActiveKey="1">
+              <Tabs.TabPane tab="📋 Bordereaux à Scanner" key="1">
+                <Table
+                  dataSource={bordereauxToScan}
+                  columns={columns}
+                  rowKey="id"
+                  pagination={{ pageSize: 10 }}
+                  size="small"
+                  scroll={{ x: 800 }}
+                />
+              </Tabs.TabPane>
+              <Tabs.TabPane 
+                tab={
+                  <span>
+                    <WarningOutlined /> Retournés pour Correction ({returnedItems.length})
+                  </span>
+                } 
+                key="2"
+              >
+                <Alert
+                  type="warning"
+                  message="Documents retournés par le Chef d'Équipe"
+                  description="Ces bordereaux/documents nécessitent une correction avant traitement."
+                  style={{ marginBottom: 16 }}
+                  showIcon
+                />
+                <Table
+                  dataSource={returnedItems}
+                  columns={[
+                    {
+                      title: 'Type',
+                      dataIndex: 'returnType',
+                      key: 'returnType',
+                      render: (type: string) => (
+                        <Tag color={type === 'BORDEREAU' ? 'red' : 'orange'}>
+                          {type === 'BORDEREAU' ? '🔴 Bordereau complet' : '🟠 Document seul'}
+                        </Tag>
+                      )
+                    },
+                    {
+                      title: 'Référence',
+                      dataIndex: 'reference',
+                      key: 'reference',
+                    },
+                    {
+                      title: 'Client',
+                      dataIndex: ['client', 'name'],
+                      key: 'clientName',
+                    },
+                    {
+                      title: 'Document Retourné',
+                      dataIndex: 'returnedDocument',
+                      key: 'returnedDocument',
+                      render: (doc: any, record: any) => doc ? (
+                        <Tag color="orange">{doc.name}</Tag>
+                      ) : (
+                        <Tag color="red">{record.documents?.length || 0} doc(s)</Tag>
+                      )
+                    },
+                    {
+                      title: 'Date Retour',
+                      dataIndex: 'updatedAt',
+                      key: 'updatedAt',
+                      render: (date: string) => new Date(date).toLocaleString()
+                    },
+                    {
+                      title: 'Actions',
+                      key: 'actions',
+                      render: (_: any, record: any) => (
+                        <Space>
+                          <Button 
+                            type="primary" 
+                            icon={<UploadOutlined />}
+                            onClick={() => handleManualUpload(record.returnedDocument?.id || record.id)}
+                            size="small"
+                          >
+                            {record.returnType === 'DOCUMENT' ? 'Corriger Document' : 'Corriger Bordereau'}
+                          </Button>
+                        </Space>
+                      )
+                    }
+                  ]}
+                  rowKey={(record) => `${record.id}-${record.returnType}-${record.returnedDocument?.id || 'all'}`}
+                  pagination={{ pageSize: 10 }}
+                  size="small"
+                  scroll={{ x: 800 }}
+                />
+              </Tabs.TabPane>
+            </Tabs>
           </Card>
         </Col>
         
@@ -418,7 +518,7 @@ const ScanDashboard: React.FC = () => {
 
       {/* Manual Upload Modal */}
       <Modal
-        title="Upload Manuel de Documents"
+        title="Correction de Document"
         open={manualUploadModal}
         onCancel={() => {
           setManualUploadModal(false);
@@ -430,16 +530,16 @@ const ScanDashboard: React.FC = () => {
         {selectedBordereau && (
           <div>
             <Alert
-              message="Upload Progressif"
-              description="Vous pouvez uploader des documents en plusieurs fois pour le même bordereau. Le statut et la progression seront mis à jour automatiquement."
-              type="info"
+              message="Correction de Document Retourné"
+              description="Uploadez le document corrigé pour remplacer celui qui a été retourné par le Chef d'Équipe."
+              type="warning"
               style={{ marginBottom: 16 }}
             />
             
             <Upload.Dragger
-              name="files"
-              multiple
-              action={`/api/scan/manual/upload/${selectedBordereau}`}
+              name="file"
+              multiple={false}
+              action={`/api/scan/replace-document/${selectedBordereau}`}
               headers={{
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
               }}
@@ -450,7 +550,7 @@ const ScanDashboard: React.FC = () => {
                 <UploadOutlined />
               </p>
               <p className="ant-upload-text">
-                Cliquez ou glissez les fichiers ici pour les uploader
+                Cliquez ou glissez le document corrigé ici
               </p>
               <p className="ant-upload-hint">
                 Formats acceptés: PDF, JPG, PNG, TIFF

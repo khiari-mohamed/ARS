@@ -353,16 +353,10 @@ function GestionnaireSeniorDashboard() {
               </thead>
               <tbody>
                 {filteredDerniersTable.slice((derniersPage - 1) * derniersPerPage, derniersPage * derniersPerPage).map((dossier, index) => {
-                  // Use backend completionPercentage if available, otherwise calculate
+                  // Use dynamic completion percentage from backend
                   const completionPercentage = dossier.completionPercentage || 0;
+                  // Use dynamic states from backend
                   const dossierStates = dossier.dossierStates || [dossier.statut];
-                  
-                  // Group states by status and count
-                  const stateGroups: { [key: string]: number } = {};
-                  dossierStates.forEach((state: string) => {
-                    stateGroups[state] = (stateGroups[state] || 0) + 1;
-                  });
-                  
                   return (
                     <tr key={`recent-${dossier.id}`} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
@@ -378,11 +372,11 @@ function GestionnaireSeniorDashboard() {
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {Object.entries(stateGroups).map(([state, count]) => (
-                            <span key={state} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
-                              {state} {count}/{dossierStates.length}
+                          {dossierStates.length > 0 ? dossierStates.map((state, idx) => (
+                            <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                              {state}
                             </span>
-                          ))}
+                          )) : <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
@@ -477,16 +471,10 @@ function GestionnaireSeniorDashboard() {
               </thead>
               <tbody>
                 {filteredBordereauxTable.slice((bordereauxPage - 1) * bordereauxPerPage, bordereauxPage * bordereauxPerPage).map((dossier, index) => {
-                  // Use backend completionPercentage if available, otherwise calculate
+                  // Use dynamic completion percentage from backend
                   const completionPercentage = dossier.completionPercentage || 0;
+                  // Use dynamic states from backend
                   const dossierStates = dossier.dossierStates || [dossier.statut];
-                  
-                  // Group states by status and count
-                  const stateGroups: { [key: string]: number } = {};
-                  dossierStates.forEach((state: string) => {
-                    stateGroups[state] = (stateGroups[state] || 0) + 1;
-                  });
-                  
                   const getPriorityColor = (priorite?: string) => {
                     switch (priorite) {
                       case 'Très': case 'Élevée': return '#f44336';
@@ -511,9 +499,9 @@ function GestionnaireSeniorDashboard() {
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {Object.entries(stateGroups).map(([state, count]) => (
-                            <span key={state} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
-                              {state} {count}/{dossierStates.length}
+                          {dossierStates.map((state, idx) => (
+                            <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                              {state}
                             </span>
                           ))}
                         </div>

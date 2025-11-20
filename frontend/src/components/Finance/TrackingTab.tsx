@@ -415,6 +415,11 @@ const TrackingTab: React.FC = () => {
             Affichage limité aux bordereaux de votre équipe
           </Typography>
         )}
+        {user?.role === 'GESTIONNAIRE_SENIOR' && (
+          <Typography variant="caption" color="info.main" sx={{ fontStyle: 'italic', mb: 2, display: 'block' }}>
+            Affichage limité à vos clients uniquement
+          </Typography>
+        )}
         
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -637,17 +642,15 @@ const TrackingTab: React.FC = () => {
                             Modifier
                           </Button>
                         )}
-                        {/* EXACT SPEC: Chef d'équipe can only modify if VIREMENT_NON_VALIDE */}
-                        {user?.role === 'CHEF_EQUIPE' && record.statutVirement === 'VIREMENT_NON_VALIDE' && (
-                          <Button
-                            size="small"
-                            color="warning"
-                            startIcon={<EditIcon />}
-                            onClick={() => handleEditClick(record)}
-                          >
-                            Corriger
-                          </Button>
-                        )}
+                        {/* Corriger button - visible for all roles */}
+                        <Button
+                          size="small"
+                          color="warning"
+                          startIcon={<EditIcon />}
+                          onClick={() => handleEditClick(record)}
+                        >
+                          Corriger
+                        </Button>
                         {/* EXACT SPEC: Reinject only for REJETE status */}
                         {canReinject() && record.statutVirement === 'REJETE' && (
                           <Button

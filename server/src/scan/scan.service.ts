@@ -610,8 +610,37 @@ export class ScanService {
         data: { status: 'TRAITE' }
       });
 
+      // Create completion history record
+      await this.prisma.traitementHistory.create({
+        data: {
+          bordereauId,
+          userId: 'SYSTEM',
+          action: 'SCAN_COMPLETED',
+          fromStatus: 'SCAN_EN_COURS',
+          toStatus: finalStatus
+        }
+      }).catch(err => {
+        this.logger.warn('Failed to create completion history:', err);
+      });
+
+      // Create audit log for completion
+      await this.prisma.auditLog.create({
+        data: {
+          userId: 'SYSTEM',
+          action: 'SCAN_COMPLETED',
+          details: {
+            bordereauId,
+            reference: bordereau.reference,
+            finalStatus,
+            timestamp: new Date().toISOString()
+          }
+        }
+      }).catch(err => {
+        this.logger.warn('Failed to create completion audit log:', err);
+      });
+
       this.logger.log(`Scan completed for bordereau ${bordereau.reference}`);
-      return { success: true, bordereauId, status: 'SCANNE' };
+      return { success: true, bordereauId, status: finalStatus };
     } catch (error) {
       this.logger.error(`Failed to complete scan for bordereau ${bordereauId}:`, error);
       
@@ -926,7 +955,7 @@ export class ScanService {
 
   // Get bordereaux returned to scan for correction
   async getReturnedBordereaux() {
-    return this.prisma.bordereau.findMany({
+    const bordereaux = await this.prisma.bordereau.findMany({
       where: { 
         documentStatus: 'RETOURNER_AU_SCAN'
       },
@@ -951,6 +980,67 @@ export class ScanService {
       },
       orderBy: { updatedAt: 'desc' }
     });
+
+    // Get documents returned individually
+    const returnedDocuments = await this.prisma.document.findMany({
+      where: {
+        status: 'RETOURNER_AU_SCAN'
+      },
+      include: {
+        bordereau: {
+          include: {
+            client: {
+              select: {
+                name: true,
+                gestionnaires: {
+                  select: { id: true, fullName: true, role: true }
+                }
+              }
+            },
+            contract: {
+              select: {
+                delaiReglement: true,
+                delaiReclamation: true
+              }
+            },
+            documents: {
+              select: { id: true, name: true, type: true, status: true, uploadedAt: true }
+            }
+          }
+        }
+      },
+      orderBy: { uploadedAt: 'desc' }
+    });
+
+    // Combine both: full bordereaux and individual documents
+    const result = [
+      ...bordereaux.map(b => ({
+        ...b,
+        returnType: 'BORDEREAU',
+        scanStatus: 'SCAN_EN_COURS'
+      })),
+      ...returnedDocuments.map(doc => ({
+        id: doc.bordereauId,
+        reference: doc.bordereau?.reference || 'N/A',
+        clientId: doc.bordereau?.clientId,
+        client: doc.bordereau?.client,
+        contract: doc.bordereau?.contract,
+        documents: doc.bordereau?.documents || [],
+        dateReception: doc.bordereau?.dateReception,
+        updatedAt: doc.uploadedAt,
+        returnType: 'DOCUMENT',
+        returnedDocument: {
+          id: doc.id,
+          name: doc.name,
+          type: doc.type,
+          status: doc.status,
+          uploadedAt: doc.uploadedAt
+        },
+        scanStatus: 'SCAN_EN_COURS'
+      }))
+    ];
+
+    return result;
   }
 
   // Mark bordereau as scanning started
@@ -965,7 +1055,7 @@ export class ScanService {
       include: { client: true }
     });
 
-    // Log action
+    // Log action with proper persistence
     await this.prisma.auditLog.create({
       data: {
         userId,
@@ -973,9 +1063,23 @@ export class ScanService {
         details: {
           bordereauId,
           reference: bordereau.reference,
-          client: bordereau.client?.name
+          client: bordereau.client?.name,
+          timestamp: new Date().toISOString()
         }
       }
+    });
+
+    // Also create a persistent scan history record
+    await this.prisma.traitementHistory.create({
+      data: {
+        bordereauId,
+        userId,
+        action: 'SCAN_STARTED',
+        fromStatus: bordereau.statut,
+        toStatus: 'SCAN_EN_COURS'
+      }
+    }).catch(err => {
+      this.logger.warn('Failed to create traitement history:', err);
     });
 
     return bordereau;
@@ -1052,7 +1156,7 @@ export class ScanService {
 
 
 
-    // Log validation
+    // Log validation with proper persistence
     await this.prisma.auditLog.create({
       data: {
         userId,
@@ -1060,9 +1164,25 @@ export class ScanService {
         details: {
           bordereauId,
           reference: bordereau.reference,
-          documentsCount: bordereau.documents.length
+          documentsCount: bordereau.documents.length,
+          timestamp: new Date().toISOString(),
+          scanStartTime: bordereau.dateDebutScan?.toISOString(),
+          scanEndTime: new Date().toISOString()
         }
       }
+    });
+
+    // Also create a persistent scan history record
+    await this.prisma.traitementHistory.create({
+      data: {
+        bordereauId,
+        userId,
+        action: 'SCAN_COMPLETED',
+        fromStatus: 'SCAN_EN_COURS',
+        toStatus: 'SCANNE'
+      }
+    }).catch(err => {
+      this.logger.warn('Failed to create traitement history:', err);
     });
 
     return { 
@@ -1643,14 +1763,79 @@ export class ScanService {
     return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
   }
 
-  // Get comprehensive scan history for a bordereau
+  // Ensure scan history exists for a bordereau (create if missing)
+  async ensureScanHistoryExists(bordereauId: string) {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: {
+        traitementHistory: true,
+        currentHandler: true
+      }
+    });
+
+    if (!bordereau) return;
+
+    // If no traitement history exists but bordereau has scan dates, create history
+    if (bordereau.traitementHistory.length === 0 && bordereau.dateDebutScan) {
+      const userId = bordereau.currentHandler?.id || 'SYSTEM';
+      
+      try {
+        // Create scan started history
+        await this.prisma.traitementHistory.create({
+          data: {
+            bordereauId,
+            userId,
+            action: 'SCAN_STARTED',
+            fromStatus: 'A_SCANNER',
+            toStatus: 'SCAN_EN_COURS',
+            createdAt: bordereau.dateDebutScan
+          }
+        });
+
+        // Create scan completed history if finished
+        if (bordereau.dateFinScan && ['SCANNE', 'A_AFFECTER'].includes(bordereau.statut)) {
+          await this.prisma.traitementHistory.create({
+            data: {
+              bordereauId,
+              userId,
+              action: 'SCAN_COMPLETED',
+              fromStatus: 'SCAN_EN_COURS',
+              toStatus: bordereau.statut,
+              createdAt: bordereau.dateFinScan
+            }
+          });
+        }
+
+        this.logger.log(`Created missing scan history for bordereau ${bordereau.reference}`);
+      } catch (error) {
+        this.logger.warn(`Failed to create scan history for ${bordereauId}:`, error);
+      }
+    }
+  }
+
+  // Get comprehensive scan history for a bordereau with full persistence
   async getBordereauScanHistory(bordereauId: string) {
+    // Ensure history exists first
+    await this.ensureScanHistoryExists(bordereauId);
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
       include: {
         client: { select: { name: true } },
         documents: { select: { id: true, name: true, uploadedAt: true } },
-        currentHandler: { select: { fullName: true, email: true, role: true } }
+        currentHandler: { select: { fullName: true, email: true, role: true } },
+        traitementHistory: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                fullName: true,
+                role: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        }
       }
     });
 
@@ -1658,7 +1843,7 @@ export class ScanService {
       throw new BadRequestException('Bordereau not found');
     }
 
-    // Get audit logs with user information
+    // Get audit logs with user information (fallback)
     const auditLogs = await this.prisma.auditLog.findMany({
       where: {
         OR: [
@@ -1679,40 +1864,69 @@ export class ScanService {
       orderBy: { timestamp: 'asc' }
     });
 
-    // Build timeline with user info and duration
+    // Build timeline from traitement history (primary) and audit logs (fallback)
     const timeline: any[] = [];
-    const scanStartTime = bordereau.dateDebutScan || bordereau.createdAt;
-    const scanEndTime = bordereau.dateFinScan || bordereau.updatedAt;
-
-    for (let i = 0; i < auditLogs.length; i++) {
-      const log = auditLogs[i];
-      const nextLog = auditLogs[i + 1];
-      
-      const duration = nextLog 
-        ? (nextLog.timestamp.getTime() - log.timestamp.getTime()) / (1000 * 60)
+    
+    // Add traitement history events (these are persistent)
+    bordereau.traitementHistory.forEach((history, index) => {
+      const nextHistory = bordereau.traitementHistory[index + 1];
+      const duration = nextHistory 
+        ? (nextHistory.createdAt.getTime() - history.createdAt.getTime()) / (1000 * 60)
         : null;
 
       timeline.push({
-        action: log.action,
-        timestamp: log.timestamp,
-        user: log.user ? {
-          id: log.user.id,
-          username: log.user.email,
-          fullName: log.user.fullName,
-          role: log.user.role
+        action: history.action,
+        timestamp: history.createdAt,
+        user: history.user ? {
+          id: history.user.id,
+          username: history.user.email,
+          fullName: history.user.fullName,
+          role: history.user.role
         } : null,
-        details: log.details,
-        duration: duration ? Math.round(duration) : null
+        details: `${history.fromStatus} → ${history.toStatus}`,
+        duration: duration ? Math.round(duration) : null,
+        source: 'traitement_history'
       });
+    });
+
+    // Add audit log events if no traitement history exists
+    if (timeline.length === 0) {
+      for (let i = 0; i < auditLogs.length; i++) {
+        const log = auditLogs[i];
+        const nextLog = auditLogs[i + 1];
+        
+        const duration = nextLog 
+          ? (nextLog.timestamp.getTime() - log.timestamp.getTime()) / (1000 * 60)
+          : null;
+
+        timeline.push({
+          action: log.action,
+          timestamp: log.timestamp,
+          user: log.user ? {
+            id: log.user.id,
+            username: log.user.email,
+            fullName: log.user.fullName,
+            role: log.user.role
+          } : null,
+          details: log.details,
+          duration: duration ? Math.round(duration) : null,
+          source: 'audit_log'
+        });
+      }
     }
 
+    // Sort timeline by timestamp
+    timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
     // Calculate total scan duration
+    const scanStartTime = bordereau.dateDebutScan || bordereau.createdAt;
+    const scanEndTime = bordereau.dateFinScan || bordereau.updatedAt;
     const totalDuration = scanStartTime && scanEndTime
       ? (scanEndTime.getTime() - scanStartTime.getTime()) / (1000 * 60)
       : null;
 
-    // Get scan user from currentHandler or first audit log
-    const scanUser = bordereau.currentHandler || auditLogs.find(l => l.user)?.user;
+    // Get scan user from currentHandler or first timeline event
+    const scanUser = bordereau.currentHandler || timeline.find(t => t.user)?.user;
 
     return {
       bordereauId,
@@ -1731,7 +1945,142 @@ export class ScanService {
           email: scanUser.email,
           role: scanUser.role
         } : null
-      }
+      },
+      dataSource: timeline.length > 0 ? timeline[0].source : 'none',
+      persistenceStatus: 'enhanced'
     };
+  }
+
+  // Modify bordereau reference and client
+  async modifyBordereau(bordereauId: string, data: { reference?: string; clientId?: any }, userId: string) {
+    try {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+
+      if (!bordereau) {
+        throw new BadRequestException('Bordereau non trouvé');
+      }
+
+      const updateData: any = {};
+      if (data.reference) updateData.reference = data.reference;
+      
+      if (data.clientId) {
+        const clientIdStr = typeof data.clientId === 'string' ? data.clientId : data.clientId.toString();
+        const clientExists = await this.prisma.client.findUnique({ where: { id: clientIdStr } });
+        
+        if (!clientExists) {
+          throw new BadRequestException(`Client avec ID ${clientIdStr} n'existe pas`);
+        }
+        
+        updateData.clientId = clientIdStr;
+      }
+
+      const updatedBordereau = await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: updateData,
+        include: {
+          client: { select: { name: true } }
+        }
+      });
+
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action: 'BORDEREAU_MODIFIED',
+          details: {
+            bordereauId,
+            oldReference: bordereau.reference,
+            newReference: data.reference,
+            oldClientId: bordereau.clientId,
+            newClientId: data.clientId?.toString()
+          }
+        }
+      });
+
+      return { success: true, bordereau: updatedBordereau };
+    } catch (error) {
+      this.logger.error('Modify bordereau failed:', error);
+      throw error;
+    }
+  }
+
+  // Backfill scan history for all bordereaux that have scan dates but no history
+  async backfillAllScanHistory() {
+    try {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          OR: [
+            { dateDebutScan: { not: null } },
+            { dateFinScan: { not: null } },
+            { statut: { in: ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE'] } }
+          ]
+        },
+        include: {
+          traitementHistory: true,
+          currentHandler: true
+        }
+      });
+
+      let backfilledCount = 0;
+      
+      for (const bordereau of bordereaux) {
+        // Skip if already has scan history
+        const hasScanHistory = bordereau.traitementHistory.some(h => 
+          h.action.includes('SCAN')
+        );
+        
+        if (hasScanHistory) continue;
+
+        const userId = bordereau.currentHandler?.id || 'SYSTEM';
+        
+        try {
+          // Create scan started history if has dateDebutScan
+          if (bordereau.dateDebutScan) {
+            await this.prisma.traitementHistory.create({
+              data: {
+                bordereauId: bordereau.id,
+                userId,
+                action: 'SCAN_STARTED',
+                fromStatus: 'A_SCANNER',
+                toStatus: 'SCAN_EN_COURS',
+                createdAt: bordereau.dateDebutScan
+              }
+            });
+          }
+
+          // Create scan completed history if has dateFinScan or is completed
+          if (bordereau.dateFinScan || ['SCANNE', 'A_AFFECTER'].includes(bordereau.statut)) {
+            const completionDate = bordereau.dateFinScan || bordereau.updatedAt;
+            await this.prisma.traitementHistory.create({
+              data: {
+                bordereauId: bordereau.id,
+                userId,
+                action: 'SCAN_COMPLETED',
+                fromStatus: 'SCAN_EN_COURS',
+                toStatus: bordereau.statut,
+                createdAt: completionDate
+              }
+            });
+          }
+
+          backfilledCount++;
+          this.logger.log(`Backfilled scan history for ${bordereau.reference}`);
+        } catch (error) {
+          this.logger.warn(`Failed to backfill history for ${bordereau.reference}:`, error);
+        }
+      }
+
+      return {
+        success: true,
+        message: `Backfilled scan history for ${backfilledCount} bordereaux`,
+        backfilledCount,
+        totalChecked: bordereaux.length
+      };
+    } catch (error) {
+      this.logger.error('Backfill scan history failed:', error);
+      throw new BadRequestException(`Backfill failed: ${error.message}`);
+    }
   }
 }

@@ -118,6 +118,7 @@ const EnhancedDashboard: React.FC = () => {
   });
   const [societes, setSocietes] = useState<string[]>([]);
   const [superAdminGestionnaireAssignments, setSuperAdminGestionnaireAssignments] = useState<any[]>([]);
+  const [superAdminGestionnaireSeniorAssignments, setSuperAdminGestionnaireSeniorAssignments] = useState<any[]>([]);
   const [superAdminGestionnaires, setSuperAdminGestionnaires] = useState<string[]>([]);
   const [superAdminDerniersDossiers, setSuperAdminDerniersDossiers] = useState<any[]>([]);
   const [superAdminDossiersEnCours, setSuperAdminDossiersEnCours] = useState<any[]>([]);
@@ -490,10 +491,11 @@ const EnhancedDashboard: React.FC = () => {
       
       // Use chef-equipe endpoints but with super-admin access to get ALL data
       console.log('🔍 DEBUG: Fetching Super Admin data with superAdmin=true parameter');
-      const [statsResponse, dossiersResponse, assignmentsResponse, enCoursResponse, individuelsResponse] = await Promise.all([
+      const [statsResponse, dossiersResponse, assignmentsResponse, seniorAssignmentsResponse, enCoursResponse, individuelsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels?superAdmin=true')
       ]);
@@ -549,6 +551,13 @@ const EnhancedDashboard: React.FC = () => {
         // Extract unique gestionnaire names for filter
         const uniqueGestionnaires = [...new Set(assignmentsResponse.data.map((a: any) => a.gestionnaire))].sort() as string[];
         setSuperAdminGestionnaires(uniqueGestionnaires);
+      }
+      
+      if (seniorAssignmentsResponse.data) {
+        console.log('⭐ Gestionnaire Senior assignments received:', seniorAssignmentsResponse.data.length, seniorAssignmentsResponse.data);
+        setSuperAdminGestionnaireSeniorAssignments(seniorAssignmentsResponse.data);
+      } else {
+        console.warn('⚠️ No senior assignments data received');
       }
       
       if (enCoursResponse.data) {
@@ -1466,6 +1475,62 @@ const EnhancedDashboard: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Gestionnaire Senior Section */}
+              <div style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(76,175,80,0.2)', border: '2px solid #4caf50' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#2e7d32', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '24px' }}>⭐</span>
+                    Gestionnaires Senior
+                  </h3>
+                  <div style={{ background: '#4caf50', color: 'white', padding: '6px 12px', borderRadius: '20px', fontSize: '14px', fontWeight: 'bold' }}>
+                    {superAdminGestionnaireSeniorAssignments.length} Senior(s)
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                  {superAdminGestionnaireSeniorAssignments.map((assignment, index) => (
+                    <div key={index} style={{ background: 'white', borderRadius: '8px', padding: '14px', border: '2px solid #4caf50', boxShadow: '0 2px 6px rgba(76,175,80,0.15)' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '10px', color: '#2e7d32', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '18px' }}>👤</span>
+                        {assignment.gestionnaire}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#388e3c', marginBottom: '8px', fontWeight: '600' }}>
+                        <strong>Total affectés:</strong> {assignment.totalAssigned}
+                      </div>
+                      <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                          <span style={{ color: '#4caf50', fontWeight: '500' }}>✓ Traités:</span>
+                          <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{assignment.traites || 0}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                          <span style={{ color: '#ff9800', fontWeight: '500' }}>⏳ En cours:</span>
+                          <span style={{ fontWeight: 'bold', color: '#f57c00' }}>{assignment.enCours || 0}</span>
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', marginBottom: '4px' }}>
+                            <span style={{ color: '#dc3545', fontWeight: '500' }}>↩ Retournés:</span>
+                            <span style={{ fontWeight: 'bold', color: '#c62828' }}>{assignment.retournes || 0}</span>
+                          </div>
+                          {assignment.returnedBy && (assignment.retournes || 0) > 0 && (
+                            <div style={{ fontSize: '11px', color: '#dc3545', fontWeight: 'bold', marginLeft: '16px', marginTop: '2px', background: '#ffebee', padding: '4px 8px', borderRadius: '4px' }}>
+                              → Retourné par: {assignment.returnedBy}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#388e3c', background: '#e8f5e9', padding: '6px 8px', borderRadius: '4px', marginTop: '8px' }}>
+                        <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
+                      </div>
+                    </div>
+                  ))}
+                  {superAdminGestionnaireSeniorAssignments.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '24px', color: '#66bb6a', fontSize: '14px', gridColumn: '1 / -1' }}>
+                      <div style={{ fontSize: '48px', marginBottom: '8px' }}>📋</div>
+                      <p style={{ margin: 0 }}>Aucun Gestionnaire Senior pour le moment</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

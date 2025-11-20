@@ -31,13 +31,11 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
       const alertsData = alertsResponse.data;
       const capacityData = capacityResponse.data;
 
-      // Calculate SLA KPIs to match script results
-      const atRiskCount = 3; // From script: At Risk Items: 3
-      const criticalCount = 0; // From script: Critical Items: 0
-      const overdueCount = 0; // From script: Overdue Items: 0
-      const complianceRate = 100; // From script: SLA Compliance Rate: 100%
-      
-      const totalAtRisk = atRiskCount;
+      // Calculate real SLA KPIs from backend data
+      const atRiskCount = slaData.overview?.atRisk || 0;
+      const criticalCount = slaData.overview?.breached || 0;
+      const complianceRate = slaData.overview?.complianceRate || 0;
+      const totalAtRisk = atRiskCount + criticalCount;
 
       setSlaKpis({
         totalAtRisk,
@@ -46,33 +44,20 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
         complianceRate
       });
 
-      // Process at-risk bordereaux - show exactly 3 items as per script
-      const atRiskBordereaux: any[] = [];
-      
-      // Create 3 at-risk items as per script results
-      for (let i = 0; i < 3; i++) {
-        atRiskBordereaux.push({
-          id: `AT-RISK-${i + 1}`,
-          client: 'Client Inconnu',
-          daysRemaining: 2 - i, // 2, 1, 0 days remaining
-          status: 'warning',
-          workload: 'medium',
-          reference: `BORD-2024-${String(i + 1).padStart(4, '0')}`,
-          assignedTo: 'Non assigné'
-        });
-      }
+      // Get real at-risk bordereaux from SLA data
+      const atRiskBordereaux = slaData.alerts || [];
 
 
 
-      // Get real workload distribution from AI capacity analysis
-      const workloadDistribution = capacityData.length > 0 ? capacityData.map((user: any) => ({
-        team: user.userName || 'Utilisateur Inconnu',
-        workload: user.activeBordereaux || 0,
-        capacity: user.dailyCapacity * 7 || 35,
+      // Get real workload distribution from capacity analysis
+      const workloadDistribution = capacityData.map((user: any) => ({
+        team: user.userName,
+        workload: user.activeBordereaux,
+        capacity: user.dailyCapacity * 7,
         risk: user.capacityStatus === 'overloaded' ? 'high' : 
               user.capacityStatus === 'at_capacity' ? 'medium' : 'low',
-        recommendation: user.recommendation || 'Aucune action requise'
-      })) : [];
+        recommendation: user.recommendation
+      }));
 
       setData({
         atRiskBordereaux,
@@ -82,18 +67,9 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('Failed to load SLA risk data:', error);
-      setData({
-        atRiskBordereaux: [],
-        workloadDistribution: [],
-        slaBreaches: [],
-        predictions: []
-      });
-      setSlaKpis({
-        totalAtRisk: 0,
-        criticalCount: 0,
-        warningCount: 0,
-        complianceRate: 0
-      });
+      // Don't set fallback data - let the UI show the error state
+      setData(null);
+      setSlaKpis(null);
     } finally {
       setLoading(false);
     }
@@ -112,7 +88,15 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
     );
   }
 
-  if (!data) return <Typography>Aucune donnée SLA disponible</Typography>;
+  if (!data || !slaKpis) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
+        <Typography variant="h6" color="text.secondary">
+          Aucune donnée SLA disponible. Vérifiez que des bordereaux sont présents dans le système.
+        </Typography>
+      </Box>
+    );
+  }
 
   const getSLAStatusChip = (daysRemaining: number) => {
     if (daysRemaining < 0) return <Chip label="🔴 En retard" color="error" size="small" />;
@@ -235,28 +219,28 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
               </TableHead>
               <TableBody>
                 {data.atRiskBordereaux.map((item: any, index: number) => (
-                  <TableRow key={index} sx={{ bgcolor: item.status === 'critical' ? 'error.light' : item.status === 'warning' ? 'warning.light' : 'inherit' }}>
+                  <TableRow key={index} sx={{ bgcolor: item.alertLevel === 'critical' ? 'error.light' : item.alertLevel === 'warning' ? 'warning.light' : 'inherit' }}>
                     <TableCell>
-                      <Typography variant="subtitle2">{item.reference || item.id}</Typography>
+                      <Typography variant="subtitle2">{item.reference}</Typography>
                     </TableCell>
-                    <TableCell>{item.client}</TableCell>
-                    <TableCell>{item.assignedTo}</TableCell>
-                    <TableCell>{getSLAStatusChip(item.daysRemaining)}</TableCell>
+                    <TableCell>{item.clientName || 'Client non défini'}</TableCell>
+                    <TableCell>{item.assignedTo || 'Non assigné'}</TableCell>
+                    <TableCell>{getSLAStatusChip(item.slaThreshold - item.daysSinceReception)}</TableCell>
                     <TableCell>
-                      <Typography variant="body2" color={item.daysRemaining < 0 ? 'error' : item.daysRemaining <= 1 ? 'warning.main' : 'textPrimary'}>
-                        {item.daysRemaining < 0 ? `${Math.abs(item.daysRemaining)} jours de retard` : 
-                         item.daysRemaining === 0 ? 'Échéance aujourd\'hui' :
-                         `${item.daysRemaining} jour(s) restant(s)`}
+                      <Typography variant="body2" color={item.daysOverdue > 0 ? 'error' : item.daysSinceReception >= item.slaThreshold * 0.8 ? 'warning.main' : 'textPrimary'}>
+                        {item.daysOverdue > 0 ? `${item.daysOverdue} jours de retard` : 
+                         item.daysSinceReception >= item.slaThreshold ? 'Échéance aujourd\'hui' :
+                         `${Math.max(0, item.slaThreshold - item.daysSinceReception)} jour(s) restant(s)`}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       <Button 
-                        variant={item.daysRemaining <= 0 ? 'contained' : 'outlined'}
-                        color={item.daysRemaining <= 0 ? 'error' : 'primary'}
+                        variant={item.daysOverdue > 0 ? 'contained' : 'outlined'}
+                        color={item.daysOverdue > 0 ? 'error' : 'primary'}
                         size="small"
-                        onClick={() => handleReallocate(item.id)}
+                        onClick={() => handleReallocate(item.bordereauId)}
                       >
-                        {item.daysRemaining <= 0 ? 'Urgent' : 'Réallouer'}
+                        {item.daysOverdue > 0 ? 'Urgent' : 'Réallouer'}
                       </Button>
                     </TableCell>
                   </TableRow>

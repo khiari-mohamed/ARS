@@ -7,7 +7,8 @@ import {
   UseGuards,
   Req,
   UseInterceptors,
-  UploadedFile
+  UploadedFile,
+  Patch
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ScanService } from './scan.service';
@@ -269,6 +270,24 @@ export class ScanController {
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT)
   async getBordereauHistory(@Param('id') id: string) {
     return this.scanService.getBordereauScanHistory(id);
+  }
+
+  @Post('backfill-history')
+  @Roles(UserRole.SUPER_ADMIN)
+  async backfillScanHistory() {
+    return this.scanService.backfillAllScanHistory();
+  }
+
+  @Patch('bordereau/:id/modify')
+  @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
+  async modifyBordereau(
+    @Param('id') id: string,
+    @Body() data: { reference?: string; clientId?: number },
+    @Req() req: Request
+  ) {
+    const user = req['user'] as any;
+    const userId = user?.id || user?.userId || user?.sub;
+    return this.scanService.modifyBordereau(id, data, userId);
   }
 
 }

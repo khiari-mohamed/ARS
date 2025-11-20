@@ -538,7 +538,8 @@ const ScanDashboard: React.FC = () => {
                     >
                       📜 Historique
                     </Button>
-                    <Button
+                    {/* COMMENTED OUT: Corrections button - Now handled by ReturnedBordereauHandler component */}
+                    {/* <Button
                       size="small"
                       variant="outlined"
                       color="warning"
@@ -546,7 +547,7 @@ const ScanDashboard: React.FC = () => {
                       sx={{ fontSize: '0.7rem' }}
                     >
                       🔧 Corrections
-                    </Button>
+                    </Button> */}
                   </Box>
                 </CardContent>
               </Card>
@@ -1767,112 +1768,7 @@ const ScanDashboard: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Document Corrections Dialog */}
-      <Dialog 
-        open={activeDialog === 'document-corrections'} 
-        onClose={() => setActiveDialog(null)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>
-          🔧 Correction de Documents Scannés
-          <Chip 
-            label={`${scanQueue.filter((b: any) => b.documentStatus === 'RETOURNER_AU_SCAN').length} bordereaux retournés`}
-            color="warning"
-            size="small"
-            sx={{ ml: 2 }}
-          />
-        </DialogTitle>
-        <DialogContent>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Référence</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Date Scan</TableCell>
-                  <TableCell>Documents</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {scanQueue
-                  .filter((b: any) => b.documentStatus === 'RETOURNER_AU_SCAN')
-                  .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-                  .map((bordereau: any) => (
-                    <TableRow key={bordereau.id}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          {bordereau.reference}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {bordereau.client?.name || 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString() : 'N/A'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {bordereau.documents?.length || 0} doc(s)
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" gap={1}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="warning"
-                            onClick={async () => {
-                              try {
-                                // Load full bordereau details with documents
-                                const fullBordereau = await getBordereauForScan(bordereau.id);
-                                setSelectedBordereau(fullBordereau);
-                                setActiveDialog('document-correction-details');
-                              } catch (error) {
-                                console.error('Failed to load bordereau details:', error);
-                                alert('❌ Erreur lors du chargement des détails du bordereau');
-                              }
-                            }}
-                            sx={{ fontSize: '0.7rem' }}
-                          >
-                            🔧 Modifier
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<Visibility />}
-                            onClick={() => handleViewBordereau(bordereau.id)}
-                            sx={{ fontSize: '0.7rem' }}
-                          >
-                            Voir
-                          </Button>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                }
-                {scanQueue.filter((b: any) => b.documentStatus === 'RETOURNER_AU_SCAN').length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      <Typography color="text.secondary" sx={{ py: 4 }}>
-                        Aucun bordereau retourné pour correction
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setActiveDialog(null)}>Fermer</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Document Corrections Dialog - REMOVED: Now handled by ReturnedBordereauHandler component */}
 
       {/* Document Correction Details Dialog - EXACT SPECIFICATION */}
       <Dialog 

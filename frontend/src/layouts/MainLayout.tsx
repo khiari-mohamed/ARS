@@ -227,6 +227,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'OV_VALIDATED': return '✅';
       case 'OV_REJECTED': return '❌';
       case 'NOUVEAU_VIREMENT': return '💰';
+      case 'RIB_UPDATE': return '💳';
       case 'reclamation': 
         if (level === 'error') return '🚨';
         if (level === 'warning') return '⚠️';

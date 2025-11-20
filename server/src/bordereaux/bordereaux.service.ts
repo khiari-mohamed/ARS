@@ -414,10 +414,13 @@ export class BordereauxService {
   async getBordereauReadyForScan() {
     console.log('🔍 DEBUG: getBordereauReadyForScan called');
     
-    // Get UNIQUE bordereaux created by BO that are ready for scan
+    // Get UNIQUE bordereaux created by BO that are ready for scan OR returned for correction
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
-        statut: 'A_SCANNER', // Created by BO, ready for scan
+        OR: [
+          { statut: 'A_SCANNER' }, // Created by BO, ready for scan
+          { documentStatus: 'RETOURNER_AU_SCAN' } // Returned by Chef for correction
+        ],
         archived: false
       },
       include: {
@@ -442,7 +445,8 @@ export class BordereauxService {
     
     const result = uniqueBordereaux.map(b => ({
       ...BordereauResponseDto.fromEntity(b),
-      documentCount: b._count.documents
+      documentCount: b._count.documents,
+      scanStatus: b.documentStatus === 'RETOURNER_AU_SCAN' ? 'SCAN_EN_COURS' : b.scanStatus || 'NON_SCANNE'
     }));
     
     console.log('📤 Returning result with', result.length, 'items');

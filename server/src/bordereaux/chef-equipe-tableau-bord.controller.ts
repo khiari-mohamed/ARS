@@ -513,86 +513,90 @@ export class ChefEquipeTableauBordController {
 
   @Post('return-to-scan')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
-  async returnToScan(@Body() body: { dossierId: string; reason: string }, @Req() req: any) {
-    // First try to find as bordereau
-    const bordereau = await this.prisma.bordereau.findUnique({
-      where: { id: body.dossierId },
-      include: { documents: true }
-    });
-
-    if (bordereau) {
-      // Set documentStatus to RETOURNER_AU_SCAN instead of changing statut
-      await this.prisma.bordereau.update({
-        where: { id: body.dossierId },
-        data: { 
-          documentStatus: 'RETOURNER_AU_SCAN',
-          currentHandlerId: null
-        }
-      });
-
-      // Update all documents in the bordereau
+  async returnToScan(@Body() body: { dossierId: string; reason: string; documentIds?: string[] }, @Req() req: any) {
+    // If documentIds provided, return only specific documents
+    if (body.documentIds && body.documentIds.length > 0) {
+      // Return specific documents only
       await this.prisma.document.updateMany({
-        where: { bordereauId: body.dossierId },
+        where: { id: { in: body.documentIds } },
         data: { 
-          status: 'REJETE',
+          status: 'RETOURNER_AU_SCAN' as any,
           assignedToUserId: null
         }
       });
 
-      // Log the return for each document (only if user ID exists)
+      // CRITICAL FIX: Update bordereau statut to SCAN_EN_COURS for document-level returns
+      await this.prisma.bordereau.update({
+        where: { id: body.dossierId },
+        data: { 
+          statut: 'SCAN_EN_COURS',
+          documentStatus: 'RETOURNER_AU_SCAN'
+        }
+      });
+
+      // Log the return for each document
       if (req.user?.id) {
-        for (const doc of bordereau.documents) {
+        for (const docId of body.documentIds) {
           try {
             await this.prisma.documentAssignmentHistory.create({
               data: {
-                documentId: doc.id,
+                documentId: docId,
                 assignedByUserId: req.user.id,
                 action: 'RETURNED',
                 reason: body.reason
               }
             });
           } catch (error) {
-            console.log(`Failed to create history for document ${doc.id}:`, error.message);
+            console.log(`Failed to create history for document ${docId}:`, error.message);
           }
         }
       }
     } else {
-      // Try as document
-      const document = await this.prisma.document.findUnique({
-        where: { id: body.dossierId }
-      });
-      
-      if (!document) {
-        throw new Error('Dossier non trouvé');
-      }
-
-      // Check if gestionnaire can modify this document
-      if (req.user?.role === UserRole.GESTIONNAIRE && document.assignedToUserId !== req.user.id) {
-        throw new Error('Accès refusé: Ce dossier ne vous est pas assigné');
-      }
-      
-      await this.prisma.document.update({
+      // Return entire bordereau
+      const bordereau = await this.prisma.bordereau.findUnique({
         where: { id: body.dossierId },
-        data: { 
-          status: 'REJETE',
-          assignedToUserId: null
-        }
+        include: { documents: true }
       });
 
-      // Log the return (only if user ID exists)
-      if (req.user?.id) {
-        try {
-          await this.prisma.documentAssignmentHistory.create({
-            data: {
-              documentId: body.dossierId,
-              assignedByUserId: req.user.id,
-              action: 'RETURNED',
-              reason: body.reason
+      if (bordereau) {
+        // CRITICAL FIX: Set both documentStatus AND statut to SCAN_EN_COURS
+        await this.prisma.bordereau.update({
+          where: { id: body.dossierId },
+          data: { 
+            statut: 'SCAN_EN_COURS',
+            documentStatus: 'RETOURNER_AU_SCAN',
+            currentHandlerId: null
+          }
+        });
+
+        // Update all documents in the bordereau
+        await this.prisma.document.updateMany({
+          where: { bordereauId: body.dossierId },
+          data: { 
+            status: 'RETOURNER_AU_SCAN' as any,
+            assignedToUserId: null
+          }
+        });
+
+        // Log the return for each document
+        if (req.user?.id) {
+          for (const doc of bordereau.documents) {
+            try {
+              await this.prisma.documentAssignmentHistory.create({
+                data: {
+                  documentId: doc.id,
+                  assignedByUserId: req.user.id,
+                  action: 'RETURNED',
+                  reason: body.reason
+                }
+              });
+            } catch (error) {
+              console.log(`Failed to create history for document ${doc.id}:`, error.message);
             }
-          });
-        } catch (error) {
-          console.log(`Failed to create history for document ${body.dossierId}:`, error.message);
+          }
         }
+      } else {
+        throw new Error('Bordereau non trouvé');
       }
     }
 
@@ -1121,6 +1125,76 @@ export class ChefEquipeTableauBordController {
         dossierStates: this.getDocumentStates(doc)
       };
     });
+  }
+
+  @Get('gestionnaire-senior-assignments')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
+  async getGestionnaireSeniorAssignments(@Req() req: any) {
+    const accessFilter = this.buildAccessFilter(req.user);
+    
+    const seniorGestionnaires = await this.prisma.user.findMany({
+      where: { role: 'GESTIONNAIRE_SENIOR', active: true },
+      select: {
+        id: true,
+        fullName: true,
+        assignedDocuments: {
+          include: {
+            bordereau: { include: { client: true } }
+          },
+          where: {
+            bordereau: { archived: false }
+          }
+        }
+      }
+    });
+
+    const assignments = await Promise.all(
+      seniorGestionnaires.map(async (senior) => {
+        const docsByType = {};
+        senior.assignedDocuments.forEach(doc => {
+          const type = this.getDocumentTypeLabel(doc.type);
+          docsByType[type] = (docsByType[type] || 0) + 1;
+        });
+
+        const traites = senior.assignedDocuments.filter(doc => doc.status === 'TRAITE').length;
+        const enCours = senior.assignedDocuments.filter(doc => doc.status === 'EN_COURS').length;
+        const retournes = senior.assignedDocuments.filter(doc => doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN').length;
+
+        let returnedBy: string | null = null;
+        if (retournes > 0) {
+          const returnedDocs = senior.assignedDocuments.filter(doc => 
+            doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN'
+          );
+          
+          if (returnedDocs.length > 0) {
+            const history = await this.prisma.documentAssignmentHistory.findFirst({
+              where: {
+                documentId: { in: returnedDocs.map(d => d.id) },
+                action: 'RETURNED'
+              },
+              include: {
+                assignedBy: { select: { fullName: true } }
+              },
+              orderBy: { createdAt: 'desc' }
+            });
+            
+            returnedBy = history?.assignedBy?.fullName || senior.fullName;
+          }
+        }
+
+        return {
+          gestionnaire: senior.fullName,
+          totalAssigned: senior.assignedDocuments.length,
+          traites,
+          enCours,
+          retournes,
+          returnedBy,
+          documentsByType: docsByType
+        };
+      })
+    );
+
+    return assignments;
   }
 
   @Get('gestionnaire-assignments-dossiers')
