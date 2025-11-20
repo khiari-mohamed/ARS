@@ -89,7 +89,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
           >
             <Box sx={{ flex: 1 }}>
               <Typography variant={isMobile ? 'subtitle1' : 'h6'} gutterBottom>
-                Bordereau #{alert.bordereau.id}
+                Bordereau {alert.bordereau.reference || `#${alert.bordereau.id}`}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {alert.reason}
@@ -121,9 +121,9 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
               color={getSLAStatus() > 7 ? 'error' : getSLAStatus() > 5 ? 'warning' : 'success'}
               size="small"
             />
-            {alert.bordereau.clientId && (
+            {(alert.bordereau.client?.name || alert.bordereau.clientId) && (
               <Chip
-                label={`Client: ${alert.bordereau.clientId}`}
+                label={`Client: ${alert.bordereau.client?.name || alert.bordereau.clientId}`}
                 variant="outlined"
                 size="small"
               />
@@ -231,7 +231,7 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
         fullScreen={isMobile}
       >
         <DialogTitle>
-          Détails du Bordereau #{alert.bordereau.id}
+          Détails du Bordereau {alert.bordereau.reference || `#${alert.bordereau.id}`}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
@@ -261,22 +261,22 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
                   {getSLAStatus()} jours écoulés
                 </Typography>
               </Grid>
-              {alert.bordereau.clientId && (
+              {(alert.bordereau.client?.name || alert.bordereau.clientId) && (
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary">Client ID</Typography>
-                  <Typography variant="body1" gutterBottom>{alert.bordereau.clientId}</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">Client</Typography>
+                  <Typography variant="body1" gutterBottom>{alert.bordereau.client?.name || alert.bordereau.clientId}</Typography>
                 </Grid>
               )}
-              {alert.bordereau.teamId && (
+              {(alert.bordereau.team?.fullName || alert.bordereau.teamId) && (
                 <Grid item xs={12} sm={6}>
                   <Typography variant="subtitle2" color="text.secondary">Équipe</Typography>
-                  <Typography variant="body1" gutterBottom>{alert.bordereau.teamId}</Typography>
+                  <Typography variant="body1" gutterBottom>{alert.bordereau.team?.fullName || alert.bordereau.teamId}</Typography>
                 </Grid>
               )}
-              {alert.bordereau.assignedToUserId && (
+              {(alert.bordereau.currentHandler?.fullName || alert.bordereau.chargeCompte?.fullName || alert.bordereau.assignedToUserId) && (
                 <Grid item xs={12} sm={6}>
                   <Typography variant="subtitle2" color="text.secondary">Gestionnaire</Typography>
-                  <Typography variant="body1" gutterBottom>{alert.bordereau.assignedToUserId}</Typography>
+                  <Typography variant="body1" gutterBottom>{alert.bordereau.currentHandler?.fullName || alert.bordereau.chargeCompte?.fullName || alert.bordereau.assignedToUserId}</Typography>
                 </Grid>
               )}
               <Grid item xs={12}>

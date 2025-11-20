@@ -2,13 +2,29 @@ export interface Alert {
   id?: string;
   bordereau: {
     id: string;
-    reference: string;
+    reference?: string;
     statut: string;
     clientId?: string;
     teamId?: string;
     dateReception?: string;
     createdAt: string;
     assignedToUserId?: string;
+    client?: {
+      id: string;
+      name: string;
+    };
+    team?: {
+      id: string;
+      fullName: string;
+    };
+    currentHandler?: {
+      id: string;
+      fullName: string;
+    };
+    chargeCompte?: {
+      id: string;
+      fullName: string;
+    };
   };
   alertLevel: 'green' | 'orange' | 'red';
   alertType?: string;
@@ -184,7 +200,12 @@ export interface AlertHistoryEntry {
   };
   bordereau?: {
     id: string;
-    reference: string;
+    reference?: string;
+    clientId?: string;
+    client?: {
+      id: string;
+      name: string;
+    };
   };
 }
 

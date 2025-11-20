@@ -36,10 +36,10 @@ const ResolvedAlerts: React.FC = () => {
 
   const handleExport = () => {
     const csvContent = [
-      ['ID', 'Bordereau', 'Type', 'Niveau', 'Message', 'Résolu le', 'Temps de résolution'],
+      ['Client', 'Bordereau', 'Type', 'Niveau', 'Message', 'Résolu le', 'Temps de résolution'],
       ...resolvedAlerts.map((alert: AlertHistoryEntry) => [
-        alert.id,
-        alert.bordereauId || alert.bordereau?.id || '-',
+        alert.bordereau?.client?.name || alert.bordereau?.clientId || '-',
+        alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id || '-',
         alert.alertType,
         alertLevelLabel(alert.alertLevel),
         alert.message,
@@ -122,7 +122,7 @@ const ResolvedAlerts: React.FC = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>ID</TableCell>
+                <TableCell>Client</TableCell>
                 <TableCell>Bordereau</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Niveau</TableCell>
@@ -142,15 +142,15 @@ const ResolvedAlerts: React.FC = () => {
 
                   return (
                     <TableRow key={alert.id}>
-                      <TableCell>{alert.id}</TableCell>
+                      <TableCell>{alert.bordereau?.client?.name || alert.bordereau?.clientId || '-'}</TableCell>
                       <TableCell>
-                        {(alert.bordereauId || alert.bordereau?.id) ? (
+                        {(alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id) ? (
                           <Button
                             variant="text"
                             size="small"
                             onClick={() => window.open(`/bordereaux/${alert.bordereauId || alert.bordereau?.id}`, '_blank')}
                           >
-                            {alert.bordereauId || alert.bordereau?.id}
+                            {alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id}
                           </Button>
                         ) : '-'}
                       </TableCell>
