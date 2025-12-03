@@ -33,6 +33,7 @@ const TrackingTab: React.FC = () => {
   const [filteredRecords, setFilteredRecords] = useState<BordereauTraite[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBordereaux, setSelectedBordereaux] = useState<string[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
 
   const handleSelectBordereau = (id: string) => {
     setSelectedBordereaux(prev => 
@@ -78,6 +79,22 @@ const TrackingTab: React.FC = () => {
   const [documentViewer, setDocumentViewer] = useState<{open: boolean, url: string, title: string, type: 'pdf' | 'txt'}>({
     open: false, url: '', title: '', type: 'pdf'
   });
+  const [reinjectDialog, setReinjectDialog] = useState<{open: boolean, record: BordereauTraite | null}>({
+    open: false, record: null
+  });
+  const [reinjectFiles, setReinjectFiles] = useState<{excel: File | null, pdf: File | null}>({
+    excel: null, pdf: null
+  });
+
+  const loadClients = async () => {
+    try {
+      const { fetchClients } = await import('../../services/clientService');
+      const data = await fetchClients();
+      setClients(data);
+    } catch (error) {
+      console.error('Failed to load clients:', error);
+    }
+  };
 
   const loadBordereauxTraites = async () => {
     setLoading(true);
@@ -99,6 +116,7 @@ const TrackingTab: React.FC = () => {
   };
 
   useEffect(() => {
+    loadClients();
     loadBordereauxTraites();
   }, []);
   
@@ -249,29 +267,25 @@ const TrackingTab: React.FC = () => {
   };
 
   const handleCreateManualEntry = async () => {
-    try {
-      const financeService = await import('../../services/financeService');
-      await financeService.financeService.createManualOV({
-        reference: createForm.reference,
-        clientData: { name: createForm.clientName },
-        donneurOrdreId: createForm.donneurOrdreId || 'default',
-        montantTotal: createForm.montantTotal,
-        nombreAdherents: createForm.nombreAdherents
-      });
-      
-      await loadBordereauxTraites();
-      setCreateDialog(false);
-      setCreateForm({
-        reference: '',
-        clientName: '',
-        donneurOrdreId: '',
-        montantTotal: 0,
-        nombreAdherents: 0
-      });
-    } catch (error) {
-      console.error('Failed to create manual entry:', error);
-      alert('Erreur lors de la création de l\'entrée manuelle');
-    }
+    // EXACT SPEC: Manual OV must follow same workflow as bordereau OV
+    // Store manual OV data and redirect to OV Processing tab
+    const manualOVPdfPath = sessionStorage.getItem('manualOVPdfPath');
+    sessionStorage.setItem('manualOVData', JSON.stringify({
+      reference: createForm.reference,
+      clientName: createForm.clientName,
+      montantTotal: createForm.montantTotal,
+      nombreAdherents: createForm.nombreAdherents,
+      isManual: true,
+      uploadedPdfPath: manualOVPdfPath
+    }));
+    
+    setCreateDialog(false);
+    
+    // Redirect to OV Processing tab (tab index 2)
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('tab', '2');
+    currentUrl.searchParams.set('manual', 'true');
+    window.location.href = currentUrl.toString();
   };
 
   const canModifyStatus = () => {
@@ -338,13 +352,21 @@ const TrackingTab: React.FC = () => {
           </Button>
         </Box>
         <Stack direction="row" spacing={2} flexWrap="wrap">
-          <TextField
-            label="Société"
-            value={filters.society}
-            onChange={(e) => setFilters({...filters, society: e.target.value})}
-            size="small"
-            sx={{ minWidth: 150 }}
-          />
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Société / Client</InputLabel>
+            <Select
+              value={filters.society}
+              onChange={(e) => setFilters({...filters, society: e.target.value})}
+              label="Société / Client"
+            >
+              <MenuItem value="">Tous</MenuItem>
+              {clients.map((client) => (
+                <MenuItem key={client.id} value={client.name}>
+                  {client.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           
           <TextField
             label="Référence bordereau"
@@ -486,10 +508,13 @@ const TrackingTab: React.FC = () => {
                         : '-'
                       }
                     </TableCell>
-                    <TableCell>
-                      {/* EXACT SPEC: Don't display observation written by Responsable Département */}
-                      <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                        {record.statutVirement === 'VIREMENT_NON_VALIDE' ? '-' : (record.motifObservation || '-')}
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Typography variant="body2" sx={{ 
+                        wordBreak: 'break-word',
+                        whiteSpace: 'pre-wrap',
+                        fontSize: '0.875rem'
+                      }}>
+                        {record.motifObservation || '-'}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -651,6 +676,17 @@ const TrackingTab: React.FC = () => {
                         >
                           Corriger
                         </Button>
+                        {/* EXACT SPEC: Réinjecter for VIREMENT_NON_VALIDE - Chef Equipe and Super Admin only */}
+                        {record.statutVirement === 'VIREMENT_NON_VALIDE' && (user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN') && (
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="contained"
+                            onClick={() => setReinjectDialog({open: true, record})}
+                          >
+                            Réinjecter
+                          </Button>
+                        )}
                         {/* EXACT SPEC: Reinject only for REJETE status */}
                         {canReinject() && record.statutVirement === 'REJETE' && (
                           <Button
@@ -822,14 +858,20 @@ const TrackingTab: React.FC = () => {
               helperText="Référence unique de l'ordre de virement"
             />
             
-            <TextField
-              label="Client / Société"
-              value={createForm.clientName}
-              onChange={(e) => setCreateForm({...createForm, clientName: e.target.value})}
-              fullWidth
-              required
-              placeholder="Nom de la société ou client"
-            />
+            <FormControl fullWidth required>
+              <InputLabel>Client / Société *</InputLabel>
+              <Select
+                value={createForm.clientName}
+                label="Client / Société *"
+                onChange={(e) => setCreateForm({...createForm, clientName: e.target.value})}
+              >
+                {clients.map((client) => (
+                  <MenuItem key={client.id} value={client.name}>
+                    {client.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             
             <TextField
               label="Montant total (TND)"
@@ -863,6 +905,57 @@ const TrackingTab: React.FC = () => {
             startIcon={<AddIcon />}
           >
             Créer l'entrée
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reinject Dialog */}
+      <Dialog open={reinjectDialog.open} onClose={() => setReinjectDialog({open: false, record: null})} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>Réinjecter OV</Typography>
+          <Typography variant="caption" color="textSecondary">
+            {reinjectDialog.record?.referenceOV} - {reinjectDialog.record?.referenceBordereau}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2, mt: 1 }}>
+            Motif du rejet: {reinjectDialog.record?.motifObservation || 'Non spécifié'}
+          </Alert>
+          <Stack spacing={2}>
+            <Box sx={{ border: '2px dashed #1976d2', borderRadius: 1, p: 2, textAlign: 'center', cursor: 'pointer', bgcolor: '#f5f9ff' }} component="label">
+              <input type="file" accept=".xlsx,.xls" onChange={(e) => setReinjectFiles({...reinjectFiles, excel: e.target.files?.[0] || null})} style={{ display: 'none' }} />
+              <Typography variant="body2">{reinjectFiles.excel ? `✅ ${reinjectFiles.excel.name}` : '📄 Nouveau fichier Excel'}</Typography>
+            </Box>
+            <Box sx={{ border: '2px dashed #d32f2f', borderRadius: 1, p: 2, textAlign: 'center', cursor: 'pointer', bgcolor: '#fff5f5' }} component="label">
+              <input type="file" accept=".pdf" onChange={(e) => setReinjectFiles({...reinjectFiles, pdf: e.target.files?.[0] || null})} style={{ display: 'none' }} />
+              <Typography variant="body2">{reinjectFiles.pdf ? `✅ ${reinjectFiles.pdf.name}` : '📝 Nouveau fichier PDF'}</Typography>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReinjectDialog({open: false, record: null})} variant="outlined">Annuler</Button>
+          <Button 
+            onClick={async () => {
+              if (!reinjectFiles.excel || !reinjectFiles.pdf) {
+                alert('Les deux fichiers sont obligatoires!');
+                return;
+              }
+              try {
+                const { financeService } = await import('../../services/financeService');
+                await financeService.updateOVStatus(reinjectDialog.record!.id, { etatVirement: 'EN_COURS_VALIDATION' });
+                alert('OV réinjecté avec succès! Notification envoyée au Responsable.');
+                setReinjectDialog({open: false, record: null});
+                setReinjectFiles({excel: null, pdf: null});
+                await loadBordereauxTraites();
+              } catch (error) {
+                alert('Erreur lors de la réinjection');
+              }
+            }}
+            variant="contained" 
+            color="error"
+            disabled={!reinjectFiles.excel || !reinjectFiles.pdf}
+          >
+            Réinjecter et Envoyer
           </Button>
         </DialogActions>
       </Dialog>

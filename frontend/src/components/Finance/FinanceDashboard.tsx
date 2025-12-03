@@ -67,6 +67,7 @@ const FinanceDashboard: React.FC = () => {
   const [dashboard, setDashboard] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clients, setClients] = useState<any[]>([]);
   const [filters, setFilters] = useState({
     compagnie: '',
     client: '',
@@ -152,6 +153,16 @@ const FinanceDashboard: React.FC = () => {
   }, [recentOrdersFilters.compagnie, recentOrdersFilters.client, recentOrdersFilters.referenceBordereau, recentOrdersFilters.dateFrom, recentOrdersFilters.dateTo]);
 
   useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const { fetchClients } = await import('../../services/clientService');
+        const data = await fetchClients();
+        setClients(data);
+      } catch (error) {
+        console.error('Failed to load clients:', error);
+      }
+    };
+    loadClients();
     loadDashboard();
   }, []);
 
@@ -447,22 +458,38 @@ const FinanceDashboard: React.FC = () => {
               <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>Filtres : Compagnie d'assurance / Client / Référence Bordereau / Période</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={2.5}>
-                  <TextField
-                    fullWidth
-                    label="Compagnie d'assurance"
-                    value={recentOrdersFilters.compagnie}
-                    onChange={(e) => handleRecentOrdersFilterChange('compagnie', e.target.value)}
-                    size="small"
-                  />
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Compagnie d'assurance</InputLabel>
+                    <Select
+                      value={recentOrdersFilters.compagnie}
+                      onChange={(e) => handleRecentOrdersFilterChange('compagnie', e.target.value)}
+                      label="Compagnie d'assurance"
+                    >
+                      <MenuItem value="">Tous</MenuItem>
+                      {clients.map((client) => (
+                        <MenuItem key={client.id} value={client.name}>
+                          {client.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
                 <Grid item xs={12} md={2.5}>
-                  <TextField
-                    fullWidth
-                    label="Client"
-                    value={recentOrdersFilters.client}
-                    onChange={(e) => handleRecentOrdersFilterChange('client', e.target.value)}
-                    size="small"
-                  />
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Client</InputLabel>
+                    <Select
+                      value={recentOrdersFilters.client}
+                      onChange={(e) => handleRecentOrdersFilterChange('client', e.target.value)}
+                      label="Client"
+                    >
+                      <MenuItem value="">Tous</MenuItem>
+                      {clients.map((client) => (
+                        <MenuItem key={client.id} value={client.name}>
+                          {client.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Grid>
                 <Grid item xs={12} md={2}>
                   <TextField
@@ -549,13 +576,12 @@ const FinanceDashboard: React.FC = () => {
                       {ordre.dateExecution ? new Date(ordre.dateExecution).toLocaleDateString('fr-FR') : '-'}
                     </TableCell>
                     <TableCell sx={{ maxWidth: 200 }}>
-                      {/* EXACT SPEC: Don't display observation written by Responsable Département */}
                       <Typography variant="body2" sx={{ 
                         wordBreak: 'break-word',
                         whiteSpace: 'pre-wrap',
                         fontSize: '0.875rem'
                       }}>
-                        {ordre.statut === 'VIREMENT_NON_VALIDE' ? '-' : (ordre.motifObservation || '-')}
+                        {ordre.motifObservation || '-'}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -756,7 +782,7 @@ const FinanceDashboard: React.FC = () => {
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           Tableau de Bord Finance
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        {/* <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="outlined"
             startIcon={<FilterList />}
@@ -771,33 +797,47 @@ const FinanceDashboard: React.FC = () => {
           >
             Actualiser
           </Button>
-        </Box>
+        </Box> */}
       </Box>
       
       {/* EXACT SPEC: Filtres disponibles - Compagnie d'assurance, Client, Référence Bordereau, Période */}
-      {showFilters && (
+      {/* {showFilters && (
         <Paper sx={{ p: 2, mb: 3, bgcolor: '#f8f9fa' }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Filtres disponibles</Typography>
           <Grid container spacing={2}>
             <Grid item xs={12} md={2.5}>
-              <TextField
-                fullWidth
-                label="Compagnie d'assurance"
-                value={filters.compagnie}
-                onChange={(e) => handleFilterChange('compagnie', e.target.value)}
-                size="small"
-                placeholder="Filtrer par compagnie"
-              />
+              <FormControl fullWidth size="small">
+                <InputLabel>Compagnie d'assurance</InputLabel>
+                <Select
+                  value={filters.compagnie}
+                  onChange={(e) => handleFilterChange('compagnie', e.target.value)}
+                  label="Compagnie d'assurance"
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  {clients.map((client) => (
+                    <MenuItem key={client.id} value={client.name}>
+                      {client.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={2.5}>
-              <TextField
-                fullWidth
-                label="Client"
-                value={filters.client}
-                onChange={(e) => handleFilterChange('client', e.target.value)}
-                size="small"
-                placeholder="Filtrer par client"
-              />
+              <FormControl fullWidth size="small">
+                <InputLabel>Client</InputLabel>
+                <Select
+                  value={filters.client}
+                  onChange={(e) => handleFilterChange('client', e.target.value)}
+                  label="Client"
+                >
+                  <MenuItem value="">Tous</MenuItem>
+                  {clients.map((client) => (
+                    <MenuItem key={client.id} value={client.name}>
+                      {client.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} md={2}>
               <TextField
@@ -843,7 +883,7 @@ const FinanceDashboard: React.FC = () => {
             </Grid>
           </Grid>
         </Paper>
-      )}
+      )} */}
 
       {/* Error Alert */}
       {error && (

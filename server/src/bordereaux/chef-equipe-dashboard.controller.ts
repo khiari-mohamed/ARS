@@ -589,39 +589,55 @@ export class GestionnaireSeniorDashboardController {
   @Get('corbeille')
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async getCorbeille(@Req() req) {
-    const [traites, enCours, nonAffectes] = await Promise.all([
-      this.prisma.document.count({
-        where: {
-          status: 'TRAITE',
-          bordereau: {
-            archived: false,
-            contract: { teamLeaderId: req.user.id }
-          }
-        }
-      }),
-      this.prisma.document.count({
-        where: {
-          status: 'EN_COURS',
-          bordereau: {
-            archived: false,
-            contract: { teamLeaderId: req.user.id }
-          }
-        }
-      }),
-      this.prisma.document.count({
-        where: {
-          assignedToUserId: null,
-          bordereau: {
-            archived: false,
-            contract: { teamLeaderId: req.user.id }
-          }
-        }
-      })
-    ]);
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return { stats: { traites: 0, enCours: 0, nonAffectes: 0 }, totalDocuments: 0 };
+      }
 
-    return {
-      stats: { traites, enCours, nonAffectes }
-    };
+      // Find clients managed by this senior (chargeCompteId)
+      const clients = await this.prisma.client.findMany({
+        where: { chargeCompteId: userId },
+        select: { id: true, name: true }
+      });
+      
+      const clientIds = clients.map(c => c.id);
+      if (!clientIds.length) {
+        return { stats: { traites: 0, enCours: 0, nonAffectes: 0 }, totalDocuments: 0 };
+      }
+
+      // Get documents for those clients, exclude archived bordereaux
+      const docs = await this.prisma.document.findMany({
+        where: {
+          bordereau: { 
+            clientId: { in: clientIds }, 
+            archived: false 
+          }
+        },
+        select: { id: true, status: true, assignedToUserId: true }
+      });
+
+      const totalDocuments = docs.length;
+      const nonAffectes = docs.filter(d => !d.assignedToUserId).length;
+      const traites = docs.filter(d => (d.status || '').toUpperCase() === 'TRAITE').length;
+      
+      // enCours: assigned but not TRAITE
+      const enCours = docs.filter(d => {
+        const s = (d.status || '').toUpperCase();
+        if (s === 'TRAITE') return false;
+        if (!d.assignedToUserId) return false;
+        return true;
+      }).length;
+
+      return {
+        stats: { traites, enCours, nonAffectes },
+        totalDocuments,
+        clients: clients.map(c => c.name || c.id)
+      };
+    } catch (error) {
+      console.error('Error in getCorbeille (gestionnaire-senior):', error);
+      return { stats: { traites: 0, enCours: 0, nonAffectes: 0 }, totalDocuments: 0 };
+    }
   }
 
   private mapStatus(status: string): string {

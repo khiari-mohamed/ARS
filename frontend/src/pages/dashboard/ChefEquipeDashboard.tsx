@@ -528,6 +528,27 @@ function ChefEquipeDashboard() {
     }
   };
 
+  const handleMarkAsTraite = async (bordereauId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Traité ?')) return;
+    
+    try {
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+        dossierId: bordereauId,
+        newStatus: 'Traité'
+      });
+      
+      if (response.data.success) {
+        alert('Bordereau marqué comme Traité avec succès');
+        loadDashboardData();
+      } else {
+        alert('Erreur lors de la modification du statut');
+      }
+    } catch (error) {
+      console.error('Mark as traité error:', error);
+      alert('Erreur lors de la modification du statut');
+    }
+  };
+
   const handleRetourScan = async (dossierId: string) => {
     setSelectedDossierForRetour(dossierId);
     setRetourScanReason('');
@@ -903,8 +924,8 @@ function ChefEquipeDashboard() {
           </div>
         </div>
 
-        {/* Gestionnaire Senior Section */}
-        <div style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(76,175,80,0.2)', border: '2px solid #4caf50' }}>
+        {/* Gestionnaire Senior Section - Commented out as per requirement */}
+        {/* <div style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(76,175,80,0.2)', border: '2px solid #4caf50' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#2e7d32', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '24px' }}>⭐</span>
@@ -957,7 +978,7 @@ function ChefEquipeDashboard() {
               </div>
             )}
           </div>
-        </div>
+        </div> */}
 
         {/* Derniers Bordereaux Ajoutés Section */}
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
@@ -1142,8 +1163,8 @@ function ChefEquipeDashboard() {
                         </span>
                       </td>
                       <td style={{ padding: '12px 8px' }}>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          {/* <button onClick={() => handleModifyStatus(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button> */}
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {/* <button onClick={() => handleMarkAsTraite(dossier.id)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }} title="Marquer comme Traité">✓ Traité</button> */}
                           <button onClick={() => handleRetourScan(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#9c27b0', textDecoration: 'underline' }} title="Retour Scan">Retour Scan</button>
                           <button onClick={() => handleAddDocument(dossier.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4caf50', textDecoration: 'underline' }} title="Ajouter Document">+ Doc</button>
                         </div>
@@ -1285,6 +1306,7 @@ function ChefEquipeDashboard() {
                         >
                           Voir PDF
                         </button>
+                        <button onClick={() => handleMarkAsTraite(document.id)} style={{ background: '#4caf50', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }} title="Marquer comme Traité">✓ Traité</button>
                         {/* <button 
                           onClick={() => handleModifyStatus(document.id)}
                           style={{ 
@@ -1479,7 +1501,7 @@ function ChefEquipeDashboard() {
       )}
       
       {/* Status Modification Modal */}
-      {showStatusModal && currentDossier && (
+      {/* {showStatusModal && currentDossier && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -1603,7 +1625,7 @@ function ChefEquipeDashboard() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
       
       {/* Add Document Modal */}
       {showAddDocumentModal && (

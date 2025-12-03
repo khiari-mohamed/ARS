@@ -55,6 +55,8 @@ import ReturnedBordereauHandler from '../components/Workflow/ReturnedBordereauHa
 import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
 import { getBordereauForManualScan, uploadManualDocuments, finalizeScanProcess } from '../services/manualScanService';
 import { useAuthContext } from '../contexts/AuthContext';
+import ScanEntryForm from '../components/ScanEntryForm';
+import { Add } from '@mui/icons-material';
 
 const ScanDashboard: React.FC = () => {
   const { user } = useAuthContext();
@@ -76,13 +78,21 @@ const ScanDashboard: React.FC = () => {
   const [selectedDocumentType, setSelectedDocumentType] = useState<{type: string, label: string, icon: string} | null>(null);
   const [selectedProgressionType, setSelectedProgressionType] = useState<string | null>(null);
   const [availableClients, setAvailableClients] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [showEntryForm, setShowEntryForm] = useState(false);
 
   useEffect(() => {
     loadDashboard();
     loadAvailableClients();
-    const interval = setInterval(loadDashboard, 10000); // Refresh every 10 seconds
+    const interval = setInterval(() => {
+      // Don't refresh if scan history dialog is open to prevent data overwrite
+      if (activeDialog !== 'scan-history') {
+        loadDashboard();
+      }
+    }, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [activeDialog]);
 
   const loadAvailableClients = async () => {
     try {
@@ -385,6 +395,19 @@ const ScanDashboard: React.FC = () => {
             >
               Import
             </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<Add />}
+              onClick={() => setShowEntryForm(true)}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 140 },
+                fontSize: '0.75rem',
+                width: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              + Nouvelle Entrée
+            </Button>
             {/* COMMENTED OUT: SCAN MANUEL button as per requirements */}
             {/* <Button
               variant="contained"
@@ -512,31 +535,43 @@ const ScanDashboard: React.FC = () => {
                       size="small"
                       variant="outlined"
                       color="success"
+                      disabled={loadingHistory}
                       onClick={async () => {
+                        setLoadingHistory(true);
                         try {
                           const { LocalAPI } = await import('../services/axios');
-                          // Pre-load enhanced history data before opening dialog
-                          const historyPromises = scanQueue
-                            .filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut))
+                          // Load ALL bordereaux for complete history
+                          const allBordereauxRes = await LocalAPI.get('/bordereaux');
+                          const allBordereaux = Array.isArray(allBordereauxRes.data) ? allBordereauxRes.data : allBordereauxRes.data.items || [];
+                          // Pre-load enhanced history data AND documents before opening dialog
+                          const historyPromises = allBordereaux
                             .map(async (b: any) => {
                               try {
-                                const historyRes = await LocalAPI.get(`/scan/bordereau/${b.id}/history`);
-                                return { ...b, enhancedHistory: historyRes.data };
+                                const [historyRes, detailsRes] = await Promise.all([
+                                  LocalAPI.get(`/scan/bordereau/${b.id}/history`).catch(() => ({ data: null })),
+                                  LocalAPI.get(`/bordereaux/${b.id}`, { params: { include: 'documents' } })
+                                ]);
+                                console.log(`Loaded ${b.reference}: ${detailsRes.data.documents?.length || 0} documents`);
+                                return { ...b, enhancedHistory: historyRes.data, documents: detailsRes.data.documents || [] };
                               } catch (err) {
-                                return { ...b, enhancedHistory: null };
+                                console.error(`Error loading ${b.reference}:`, err);
+                                return { ...b, enhancedHistory: null, documents: [] };
                               }
                             });
                           const enhancedBordereaux = await Promise.all(historyPromises);
-                          setScanQueue(enhancedBordereaux);
+                          console.log('Total bordereaux loaded:', enhancedBordereaux.length);
+                          setHistoryData(enhancedBordereaux);
                           setActiveDialog('scan-history');
                         } catch (error) {
                           console.error('Failed to load enhanced history:', error);
-                          setActiveDialog('scan-history');
+                          alert('❌ Erreur lors du chargement de l\'historique');
+                        } finally {
+                          setLoadingHistory(false);
                         }
                       }}
                       sx={{ fontSize: '0.7rem' }}
                     >
-                      📜 Historique
+                      {loadingHistory ? '⏳ Chargement...' : '📜 Historique'}
                     </Button>
                     {/* COMMENTED OUT: Corrections button - Now handled by ReturnedBordereauHandler component */}
                     {/* <Button
@@ -1572,8 +1607,8 @@ const ScanDashboard: React.FC = () => {
         <DialogTitle>
           📜 Historique Complet des Scans
           <Chip 
-            label={`${scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut)).length} bordereaux`}
-            color="success"
+            label={`${historyData.length} bordereaux (tous statuts)`}
+            color="primary"
             size="small"
             sx={{ ml: 2 }}
           />
@@ -1594,14 +1629,13 @@ const ScanDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {scanQueue
-                  .filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut))
-                  .sort((a: any, b: any) => new Date(b.dateFinScan || b.updatedAt).getTime() - new Date(a.dateFinScan || a.updatedAt).getTime())
+                {historyData
+                  .sort((a: any, b: any) => new Date(b.dateFinScan || b.updatedAt || b.createdAt).getTime() - new Date(a.dateFinScan || a.updatedAt || a.createdAt).getTime())
                   .map((bordereau: any) => {
                     const history = bordereau.enhancedHistory;
                     const scanUser = history?.timeline?.find((t: any) => t.action === 'SCAN_COMPLETED')?.user || history?.summary?.scanUser;
                     const scanDuration = history?.summary?.totalDuration;
-                    const docCount = history?.summary?.documentsScanned || bordereau.documents?.length || 0;
+                    const docCount = bordereau.documents?.length || history?.summary?.documentsScanned || 0;
                     
                     return (
                       <TableRow key={bordereau.id}>
@@ -1678,11 +1712,11 @@ const ScanDashboard: React.FC = () => {
                     );
                   })
                 }
-                {scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER', 'ASSIGNE', 'EN_COURS', 'TRAITE', 'PRET_VIREMENT', 'VIREMENT_EN_COURS', 'VIREMENT_EXECUTE', 'CLOTURE', 'PAYE'].includes(b.statut)).length === 0 && (
+                {historyData.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={8} align="center">
                       <Typography color="text.secondary" sx={{ py: 4 }}>
-                        Aucun bordereau scanné dans l'historique
+                        {loadingHistory ? 'Chargement...' : 'Aucun bordereau scanné dans l\'historique'}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -2137,6 +2171,16 @@ const ScanDashboard: React.FC = () => {
           }}>Fermer</Button>
         </DialogActions>
       </Dialog>
+
+      {/* SCAN Entry Form */}
+      <ScanEntryForm
+        open={showEntryForm}
+        onClose={() => setShowEntryForm(false)}
+        onSuccess={() => {
+          setShowEntryForm(false);
+          loadDashboard();
+        }}
+      />
     </Box>
   );
 };

@@ -1626,68 +1626,42 @@ export class BordereauxController {
     const user = req.user;
     console.log('🔍 Gestionnaire Senior corbeille - User:', user.id);
     
-    // ONLY show bordereaux from contracts where they are teamLeader
+    // ONLY show documents from bordereaux where client.chargeCompteId = user.id
     const whereClause = {
-      archived: false,
-      contract: {
-        teamLeaderId: user.id
+      bordereau: {
+        archived: false,
+        client: {
+          chargeCompteId: user.id
+        }
       }
     };
     
     const [nonAffectes, enCours, traites] = await Promise.all([
-      this.prisma.bordereau.findMany({
+      this.prisma.document.count({
         where: {
           ...whereClause,
-          statut: { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'] },
           assignedToUserId: null
-        },
-        include: {
-          client: true,
-          contract: true,
-          currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
-        },
-        orderBy: { dateReception: 'desc' }
+        }
       }),
-      this.prisma.bordereau.findMany({
+      this.prisma.document.count({
         where: {
           ...whereClause,
-          statut: { in: ['ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] }
-        },
-        include: {
-          client: true,
-          contract: true,
-          currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
-        },
-        orderBy: { dateReception: 'desc' }
+          status: 'EN_COURS'
+        }
       }),
-      this.prisma.bordereau.findMany({
+      this.prisma.document.count({
         where: {
           ...whereClause,
-          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] },
-          updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-        },
-        include: {
-          client: true,
-          contract: true,
-          currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
-        },
-        orderBy: { dateReception: 'desc' }
+          status: 'TRAITE'
+        }
       })
     ]);
-
-    const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
     
     return {
-      nonAffectes: nonAffectes.map(b => BordereauResponseDto.fromEntity(b)),
-      enCours: enCours.map(b => BordereauResponseDto.fromEntity(b)),
-      traites: traites.map(b => BordereauResponseDto.fromEntity(b)),
       stats: {
-        nonAffectes: nonAffectes.length,
-        enCours: enCours.length,
-        traites: traites.length
+        nonAffectes,
+        enCours,
+        traites
       },
       userRole: user.role
     };
@@ -1698,20 +1672,16 @@ export class BordereauxController {
   async getGestionnaireSeniorDashboardStats(@Req() req) {
     const user = req.user;
     
-    // Get ONLY data for contracts assigned to this user
+    // Get ONLY data for clients where senior is chargeCompte
     const [clients, bordereaux, documents] = await Promise.all([
       this.prisma.client.findMany({
-        where: {
-          contracts: {
-            some: { teamLeaderId: user.id }
-          }
-        },
+        where: { chargeCompteId: user.id },
         select: { id: true, name: true }
       }),
       this.prisma.bordereau.findMany({
         where: {
           archived: false,
-          contract: { teamLeaderId: user.id }
+          client: { chargeCompteId: user.id }
         },
         include: { client: true, currentHandler: { select: { fullName: true } } }
       }),
@@ -1719,7 +1689,7 @@ export class BordereauxController {
         where: {
           bordereau: {
             archived: false,
-            contract: { teamLeaderId: user.id }
+            client: { chargeCompteId: user.id }
           }
         },
         include: { 
@@ -1771,14 +1741,6 @@ export class BordereauxController {
       }
     });
 
-    bordereaux.forEach(bordereau => {
-      const clientName = bordereau.client?.name;
-      if (clientName && clientBreakdown.hasOwnProperty(clientName)) {
-        stats.prestation.total++;
-        stats.prestation.breakdown[clientName]++;
-      }
-    });
-
     return stats;
   }
 
@@ -1792,23 +1754,24 @@ export class BordereauxController {
         where: {
           bordereau: {
             archived: false,
-            contract: { teamLeaderId: user.id }
+            client: { chargeCompteId: user.id }
           }
         },
         include: {
-          bordereau: { include: { client: true } },
+          bordereau: { include: { client: true, contract: true } },
           assignedTo: { select: { fullName: true } }
         },
         orderBy: { uploadedAt: 'desc' },
-        take: 50
+        take: 200
       }),
       this.prisma.bordereau.findMany({
         where: {
           archived: false,
-          contract: { teamLeaderId: user.id }
+          client: { chargeCompteId: user.id }
         },
         include: {
           client: true,
+          contract: true,
           currentHandler: { select: { fullName: true } },
           documents: true
         },
@@ -1842,12 +1805,24 @@ export class BordereauxController {
       const totalDocs = bordereau.documents?.length || 0;
       const traites = bordereau.documents?.filter(d => d.status === 'TRAITE').length || 0;
       const enCours = bordereau.documents?.filter(d => d.status === 'EN_COURS').length || 0;
+      const nouveau = bordereau.documents?.filter(d => !d.status || d.status === 'UPLOADED').length || 0;
       const completion = totalDocs > 0 ? Math.round((traites / totalDocs) * 100) : 0;
       
       const states: string[] = [];
-      if (traites > 0) states.push('Traité');
-      if (enCours > 0) states.push('En cours');
-      if (totalDocs - traites - enCours > 0) states.push('Nouveau');
+      const stateCounts: { [key: string]: number } = {};
+      
+      if (nouveau > 0) {
+        states.push('Nouveau');
+        stateCounts['Nouveau'] = nouveau;
+      }
+      if (enCours > 0) {
+        states.push('En cours');
+        stateCounts['En cours'] = enCours;
+      }
+      if (traites > 0) {
+        states.push('Traité');
+        stateCounts['Traité'] = traites;
+      }
       
       dossiers.push({
         id: bordereau.id,
@@ -1861,6 +1836,8 @@ export class BordereauxController {
         gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
         completionPercentage: completion,
         dossierStates: states.length > 0 ? states : [this.getStatutLabel(bordereau.statut)],
+        dossierStateCounts: stateCounts,
+        totalDocs,
         priorite: 'Normale',
         isDocument: false,
         isBordereau: true

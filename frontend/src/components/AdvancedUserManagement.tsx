@@ -626,6 +626,7 @@ const AdvancedUserManagement: React.FC = () => {
                   <MenuItem value="RESPONSABLE_DEPARTEMENT">Responsable Département</MenuItem>
                   <MenuItem value="ADMINISTRATEUR">Administrateur</MenuItem>
                   <MenuItem value="CHEF_EQUIPE">Chef d'Équipe</MenuItem>
+                  <MenuItem value="GESTIONNAIRE_SENIOR">Gestionnaire Senior</MenuItem>
                   <MenuItem value="GESTIONNAIRE">Gestionnaire</MenuItem>
                   <MenuItem value="BO">Bureau d'Ordre</MenuItem>
                   <MenuItem value="SCAN_TEAM">Équipe Scan</MenuItem>

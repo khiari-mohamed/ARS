@@ -52,6 +52,7 @@ const AdherentsTab: React.FC = () => {
   const [historyDialog, setHistoryDialog] = useState<{open: boolean, adherentId: string | null, history: any[]}>({open: false, adherentId: null, history: []});
   const [page, setPage] = useState(0);
   const rowsPerPage = 20;
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     loadAdherents();
@@ -345,15 +346,53 @@ const AdherentsTab: React.FC = () => {
         <Grid container justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Tableau des Adhérents ({filteredAdherents.length})
+            {selectedIds.length > 0 && ` - ${selectedIds.length} sélectionné(s)`}
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            size="large"
-          >
-            + Ajouter un adhérent
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            {selectedIds.length > 0 && (
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={async () => {
+                  if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${selectedIds.length} adhérent(s) ?`)) {
+                    let successCount = 0;
+                    let errorCount = 0;
+                    const errors: string[] = [];
+                    
+                    for (const id of selectedIds) {
+                      try {
+                        await handleDelete(id);
+                        successCount++;
+                      } catch (error: any) {
+                        errorCount++;
+                        errors.push(error.message || 'Erreur inconnue');
+                      }
+                    }
+                    
+                    setSelectedIds([]);
+                    await loadAdherents();
+                    
+                    if (errorCount > 0) {
+                      alert(`${successCount} supprimé(s), ${errorCount} échec(s)\n${errors[0]}`);
+                    } else {
+                      alert(`${successCount} adhérent(s) supprimé(s) avec succès!`);
+                    }
+                  }
+                }}
+              >
+                Supprimer ({selectedIds.length})
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              size="large"
+            >
+              + Ajouter un adhérent
+            </Button>
+          </Box>
         </Grid>
 
       {/* Duplicate RIB Alert */}
@@ -447,6 +486,19 @@ const AdherentsTab: React.FC = () => {
         <Table sx={{ minWidth: 800 }}>
           <TableHead>
             <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+              <TableCell padding="checkbox">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length === filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).length && filteredAdherents.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedIds(filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(a => a.id));
+                    } else {
+                      setSelectedIds([]);
+                    }
+                  }}
+                />
+              </TableCell>
               <TableCell><strong>Matricule (unique par société)</strong></TableCell>
               <TableCell><strong>Société</strong></TableCell>
               <TableCell><strong>Nom et Prénom</strong></TableCell>
@@ -462,10 +514,23 @@ const AdherentsTab: React.FC = () => {
               <TableRow 
                 key={adherent.id}
                 sx={{ 
-                  bgcolor: adherent.duplicateRib ? 'warning.light' : 'inherit',
+                  bgcolor: selectedIds.includes(adherent.id) ? 'action.selected' : adherent.duplicateRib ? 'warning.light' : 'inherit',
                   '&:hover': { bgcolor: adherent.duplicateRib ? 'warning.main' : 'action.hover' }
                 }}
               >
+                <TableCell padding="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(adherent.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds([...selectedIds, adherent.id]);
+                      } else {
+                        setSelectedIds(selectedIds.filter(id => id !== adherent.id));
+                      }
+                    }}
+                  />
+                </TableCell>
                 <TableCell>
                   <Typography variant="subtitle2">{adherent.matricule}</Typography>
                   {adherent.duplicateRib && (

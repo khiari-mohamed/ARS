@@ -269,17 +269,33 @@ export class AdherentService {
   }
 
   async deleteAdherent(id: string) {
-    // Delete from member table
-    const deletedMember = await this.prisma.member.delete({
+    // Check if adherent is used in any virement items
+    const virementItemsCount = await this.prisma.virementItem.count({
+      where: { adherentId: id }
+    });
+
+    if (virementItemsCount > 0) {
+      throw new BadRequestException(
+        `Impossible de supprimer cet adhérent car il est lié à ${virementItemsCount} virement(s). Veuillez d'abord supprimer ou modifier les virements associés.`
+      );
+    }
+
+    // Delete RIB history first
+    await this.prisma.adherentRibHistory.deleteMany({
+      where: { adherentId: id }
+    });
+
+    // Delete from adherent table
+    const deletedAdherent = await this.prisma.adherent.delete({
       where: { id },
       include: {
-        society: true
+        client: true
       }
     });
 
     return {
-      id: deletedMember.id,
-      matricule: deletedMember.cin,
+      id: deletedAdherent.id,
+      matricule: deletedAdherent.matricule,
       message: 'Adherent deleted successfully'
     };
   }
@@ -304,8 +320,7 @@ export class AdherentService {
       const adherents = await this.prisma.adherent.findMany({
         where: adherentWhere,
         include: { client: true },
-        orderBy: { matricule: 'asc' },
-        take: 100
+        orderBy: { matricule: 'asc' }
       });
 
       // Check for duplicate RIBs

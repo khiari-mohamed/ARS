@@ -130,16 +130,29 @@ export class FinanceController {
       }
       
       let imported = 0;
-      let errors: string[] = [];
+      let skipped = 0;
+      const errors: string[] = [];
       
-      for (const row of data as any[]) {
+      console.log(`📊 Total rows in Excel: ${data.length}`);
+      
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i] as any;
         try {
           const matricule = row['Matricule. Assurance'] || row['Matricule'] || row['matricule'];
           const fullName = row['ASSURE'] || row['Name'] || row['Nom'] || row['nom'] || '';
           const rib = String(row['Banque'] || row['RIB'] || row['rib'] || '').replace(/\D/g, '');
           
           if (!matricule || !rib) {
-            errors.push(`Ligne ignorée: matricule=${matricule}, rib=${rib}`);
+            skipped++;
+            errors.push(`Ligne ${i + 1} ignorée: matricule=${matricule || 'vide'}, rib=${rib || 'vide'}`);
+            console.log(`⚠️ Row ${i + 1} skipped: missing data`);
+            continue;
+          }
+          
+          if (rib.length !== 20) {
+            skipped++;
+            errors.push(`Ligne ${i + 1}: RIB invalide (${rib.length} chiffres au lieu de 20)`);
+            console.log(`⚠️ Row ${i + 1} skipped: invalid RIB length ${rib.length}`);
             continue;
           }
           
@@ -157,16 +170,23 @@ export class FinanceController {
           
           await this.adherentService.createAdherent(adherentData, user.id);
           imported++;
+          console.log(`✅ Row ${i + 1} imported: ${matricule}`);
         } catch (error: any) {
-          errors.push(`Erreur: ${error.message}`);
+          skipped++;
+          errors.push(`Ligne ${i + 1}: ${error.message}`);
+          console.log(`❌ Row ${i + 1} failed: ${error.message}`);
         }
       }
+      
+      console.log(`📊 Import summary: ${imported} imported, ${skipped} skipped, ${data.length} total`);
       
       return {
         success: true,
         imported,
+        skipped,
         total: data.length,
-        errors: errors.length > 0 ? errors : undefined
+        errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
+        message: `${imported} adhérent(s) importé(s) sur ${data.length}. ${skipped} ignoré(s).`
       };
     } catch (error) {
       throw new BadRequestException('Failed to process file: ' + error.message);
@@ -1132,6 +1152,9 @@ export class FinanceController {
     @Body() body: { bordereauId: string; documentType?: string; ordreVirementId?: string },
     @Req() req: any
   ) {
+    console.log('🚀 upload-pdf-document endpoint called!');
+    console.log('📦 Body:', body);
+    console.log('📄 File:', file ? { name: file.originalname, size: file.size } : 'NO FILE');
     const user = getUserFromRequest(req);
     
     if (!file) {
@@ -1218,6 +1241,12 @@ export class FinanceController {
           bordereau: { include: { client: true } },
           ordreVirement: true
         }
+      });
+      
+      // Update OrdreVirement with uploaded PDF path (for manual OV)
+      await this.prisma.ordreVirement.update({
+        where: { id: ordreVirement.id },
+        data: { uploadedPdfPath: `/uploads/ov-documents/${filename}` }
       });
       
       console.log('✅ PDF document uploaded to OVDocument table:', {
@@ -1373,6 +1402,89 @@ export class FinanceController {
     } catch (error) {
       console.error('❌ Error viewing OV document PDF:', error);
       res.status(500).json({ error: 'Failed to load PDF', details: error.message });
+    }
+  }
+
+  // === VIEW UPLOADED PDF FOR MANUAL OV ===
+  @Get('ordres-virement/:id/uploaded-pdf')
+  async viewUploadedPDF(
+    @Param('id') id: string,
+    @Res() res: Response
+  ) {
+    try {
+      const ov = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        select: { uploadedPdfPath: true }
+      });
+      
+      if (!ov?.uploadedPdfPath) {
+        throw new BadRequestException('No uploaded PDF found for this OV');
+      }
+      
+      const fs = require('fs');
+      const path = require('path');
+      const fullPath = path.join(process.cwd(), ov.uploadedPdfPath);
+      
+      if (!fs.existsSync(fullPath)) {
+        throw new BadRequestException('PDF file not found on disk');
+      }
+      
+      const pdfBuffer = fs.readFileSync(fullPath);
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="uploaded_ov_${id}.pdf"`,
+        'Content-Length': pdfBuffer.length
+      });
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error('❌ Error viewing uploaded PDF:', error);
+      res.status(500).json({ error: 'Failed to load PDF', details: error.message });
+    }
+  }
+  
+  // === UPLOAD MANUAL OV PDF (NO BORDEREAU) ===
+  @Post('upload-manual-ov-pdf')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadManualOVPdf(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any
+  ) {
+    console.log('🚀 upload-manual-ov-pdf endpoint called!');
+    
+    if (!file) {
+      throw new BadRequestException('PDF file is required');
+    }
+    
+    if (file.mimetype !== 'application/pdf') {
+      throw new BadRequestException('Only PDF files are allowed');
+    }
+    
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'manual-ov-pdfs');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const filename = `manual_ov_${Date.now()}_${file.originalname}`;
+      const filePath = path.join(uploadsDir, filename);
+      fs.writeFileSync(filePath, file.buffer);
+      
+      const relativePath = `/uploads/manual-ov-pdfs/${filename}`;
+      
+      console.log('✅ Manual OV PDF uploaded:', { filename, path: relativePath });
+      
+      return {
+        success: true,
+        message: 'PDF uploadé avec succès',
+        filePath: relativePath,
+        filename: file.originalname
+      };
+    } catch (error) {
+      console.error('❌ Failed to upload manual OV PDF:', error);
+      throw new BadRequestException('Failed to upload PDF: ' + error.message);
     }
   }
 

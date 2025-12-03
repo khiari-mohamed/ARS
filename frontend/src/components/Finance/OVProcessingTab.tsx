@@ -3,7 +3,8 @@ import {
   Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem,
   Button, Box, Stepper, Step, StepLabel, Alert, Table, TableHead,
   TableRow, TableCell, TableBody, Chip, LinearProgress, TextField,
-  Card, CardContent, Divider
+  Card, CardContent, Divider, Dialog, DialogTitle, DialogContent, DialogActions,
+  Stack
 } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -13,6 +14,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import AddIcon from '@mui/icons-material/Add';
 
 interface DonneurOrdre {
   id: string;
@@ -51,22 +53,89 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const [validationComment, setValidationComment] = useState('');
   const [canValidate, setCanValidate] = useState(false);
   const [selectedBordereauId, setSelectedBordereauId] = useState<string | null>(null);
+  const [isManualOV, setIsManualOV] = useState(false);
+  const [linkBordereauDialog, setLinkBordereauDialog] = useState(false);
+  const [bordereaux, setBordereaux] = useState<any[]>([]);
+  const [tempPdfFile, setTempPdfFile] = useState<File | null>(null);
+  const [showCreateBordereau, setShowCreateBordereau] = useState(false);
+  const [newBordereauData, setNewBordereauData] = useState({
+    reference: '',
+    clientId: '',
+    nombreBS: 1
+  });
+  const [clients, setClients] = useState<any[]>([]);
   
   // Read selected bordereau from sessionStorage on mount
   useEffect(() => {
-    const selectedBordereaux = sessionStorage.getItem('selectedBordereaux');
-    if (selectedBordereaux) {
-      try {
-        const ids = JSON.parse(selectedBordereaux);
-        if (ids && ids.length > 0) {
-          setSelectedBordereauId(ids[0]); // Use first selected bordereau
-          console.log('📋 Bordereau selected for OV:', ids[0]);
+    // Check if manual OV
+    const urlParams = new URLSearchParams(window.location.search);
+    const isManual = urlParams.get('manual') === 'true';
+    setIsManualOV(isManual);
+    
+    if (isManual) {
+      console.log('🔧 Manual OV mode detected');
+      // Load manual OV data
+      const manualData = sessionStorage.getItem('manualOVData');
+      if (manualData) {
+        const data = JSON.parse(manualData);
+        console.log('📝 Manual OV data loaded:', data);
+      }
+    } else {
+      // Normal flow: load selected bordereau
+      const selectedBordereaux = sessionStorage.getItem('selectedBordereaux');
+      if (selectedBordereaux) {
+        try {
+          const ids = JSON.parse(selectedBordereaux);
+          if (ids && ids.length > 0) {
+            setSelectedBordereauId(ids[0]);
+            console.log('📋 Bordereau selected for OV:', ids[0]);
+          }
+        } catch (error) {
+          console.error('Failed to parse selected bordereaux:', error);
         }
-      } catch (error) {
-        console.error('Failed to parse selected bordereaux:', error);
       }
     }
+    
+    // Load bordereaux list for manual OV
+    if (isManual) {
+      loadBordereaux();
+      loadClients();
+    }
   }, []);
+  
+  const loadBordereaux = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bordereaux`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Loaded bordereaux:', data.length);
+        setBordereaux(data);
+      } else {
+        console.error('Failed to load bordereaux:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to load bordereaux:', error);
+    }
+  };
+  
+  const loadClients = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/client`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Loaded clients:', data.length);
+        setClients(data);
+      } else {
+        console.error('Failed to load clients:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to load clients:', error);
+    }
+  };
   
   // Poll for validation status updates
   React.useEffect(() => {
@@ -159,11 +228,15 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         erreur: null
       }));
       
+      // Get manual OV PDF path from sessionStorage
+      const manualOVPdfPath = sessionStorage.getItem('manualOVPdfPath');
+      
       const ovData = {
         donneurOrdreId: selectedDonneur?.id || 'default',
         bordereauId: selectedBordereauId,
         virementData,
-        utilisateurSante: user?.id || 'demo-user'
+        utilisateurSante: user?.id || 'demo-user',
+        uploadedPdfPath: manualOVPdfPath || undefined
       };
       
       const ovRecord = await processOV(ovData);
@@ -239,21 +312,130 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const handlePdfUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setUploadedPdfFile(file);
-      uploadPdfDocument(file);
+      // EXACT SPEC: For manual OV, ask if user wants to link to bordereau
+      if (isManualOV) {
+        setTempPdfFile(file);
+        setLinkBordereauDialog(true);
+      } else {
+        // Normal flow: upload directly
+        setUploadedPdfFile(file);
+        uploadPdfDocument(file);
+      }
+    }
+  };
+  
+  const handleCreateNewBordereau = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/bordereau`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          reference: newBordereauData.reference,
+          clientId: newBordereauData.clientId,
+          nombreBS: newBordereauData.nombreBS,
+          statut: 'TRAITE',
+          dateReception: new Date().toISOString(),
+          delaiReglement: 30
+        })
+      });
+      
+      if (response.ok) {
+        const newBordereau = await response.json();
+        await loadBordereaux();
+        setSelectedBordereauId(newBordereau.id);
+        setShowCreateBordereau(false);
+        setNewBordereauData({ reference: '', clientId: '', nombreBS: 1 });
+        alert('Bordereau créé avec succès!');
+      } else {
+        throw new Error('Failed to create bordereau');
+      }
+    } catch (error) {
+      console.error('Failed to create bordereau:', error);
+      alert('Erreur lors de la création du bordereau');
+    }
+  };
+  
+  const handleLinkBordereauChoice = async (linkToBordereau: boolean, bordereauId?: string) => {
+    console.log('🔗 handleLinkBordereauChoice called:', { linkToBordereau, bordereauId, hasTempFile: !!tempPdfFile });
+    setLinkBordereauDialog(false);
+    
+    if (!tempPdfFile) {
+      console.error('❌ No temp PDF file found!');
+      return;
+    }
+    
+    if (linkToBordereau && bordereauId) {
+      console.log('📎 Linking PDF to bordereau:', bordereauId);
+      setSelectedBordereauId(bordereauId);
+      setUploadedPdfFile(tempPdfFile);
+      await uploadPdfDocument(tempPdfFile, bordereauId);
+    } else {
+      console.log('📦 Manual OV without bordereau - uploading PDF to server');
+      // Manual OV without bordereau - upload to server without bordereau link
+      setUploadedPdfFile(tempPdfFile);
+      await uploadManualOVPdf(tempPdfFile);
+      console.log('✅ PDF uploaded for manual OV (no bordereau link)');
+    }
+    
+    setTempPdfFile(null);
+  };
+  
+  const uploadManualOVPdf = async (file: File) => {
+    console.log('🚀 uploadManualOVPdf called with file:', file.name);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      console.log('📡 Calling backend endpoint: /finance/upload-manual-ov-pdf');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/upload-manual-ov-pdf`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      console.log('📡 Response status:', response.status);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Manual OV PDF uploaded successfully:', result);
+        // Store the file path in sessionStorage for later use
+        sessionStorage.setItem('manualOVPdfPath', result.filePath);
+        alert('PDF téléchargé avec succès!');
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Upload failed with status:', response.status, errorText);
+        throw new Error(`Failed to upload PDF: ${response.status}`);
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to upload manual OV PDF:', error);
+      alert('Erreur lors du téléchargement du PDF: ' + (error.message || 'Erreur inconnue'));
     }
   };
 
-  const uploadPdfDocument = async (file: File) => {
-    if (!selectedBordereauId) {
+  const uploadPdfDocument = async (file: File, bordereauId?: string) => {
+    const targetBordereauId = bordereauId || selectedBordereauId;
+    
+    // EXACT SPEC: For manual OV, bordereau link is optional
+    if (!isManualOV && !targetBordereauId) {
       alert('Aucun bordereau sélectionné pour lier le document PDF');
+      return;
+    }
+    
+    if (!targetBordereauId) {
+      // Manual OV without bordereau link - just mark as uploaded
+      console.log('✅ PDF uploaded for manual OV without bordereau link');
       return;
     }
 
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('bordereauId', selectedBordereauId);
+      formData.append('bordereauId', targetBordereauId);
       formData.append('documentType', 'BORDEREAU_DOCUMENT');
 
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/upload-pdf-document`, {
@@ -736,42 +918,36 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   >
                     Télécharger PDF
                   </Button>
-                  {/* EXACT SPEC: Chef d'équipe limited to Step 3 - Cannot create OV */}
-                  {user?.role === 'CHEF_EQUIPE' ? (
-                    <Button
-                      variant="contained"
-                      color="error"
-                      disabled
-                      startIcon={<CancelIcon />}
-                    >
-                      Création OV Interdite (Chef d'Équipe)
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="contained"
-                      onClick={async () => {
-                        if (!uploadedPdfFile) {
-                          alert('Le téléchargement du bordereau PDF est obligatoire!');
-                          return;
-                        }
-                        
-                        // EXACT SPEC: Create OV and notify RESPONSABLE_DEPARTEMENT
-                        await createOVRecord();
-                        
-                        alert('OV créé avec succès! Une notification a été envoyée au Responsable de Département pour validation.');
-                        
-                        if (validationStatus === 'pending') {
-                          alert('En attente de validation par le Responsable de Département...');
-                        } else if (validationStatus === 'approved') {
-                          setActiveStep(3);
-                        }
-                      }}
-                      disabled={processing || !uploadedFile || !uploadedPdfFile}
-                      startIcon={<CheckCircleIcon />}
-                    >
-                      Valider et Envoyer pour Validation
-                    </Button>
-                  )}
+                  {/* EXACT SPEC: Chef d'équipe can validate when re-injecting from Réinjecter button */}
+                  <Button
+                    variant="contained"
+                    onClick={async () => {
+                      if (!uploadedPdfFile) {
+                        alert('Le téléchargement du bordereau PDF est obligatoire!');
+                        return;
+                      }
+                      
+                      // EXACT SPEC: Create OV and notify RESPONSABLE_DEPARTEMENT
+                      const createdOvId = await createOVRecord();
+                      
+                      // Update status to EN_COURS_VALIDATION
+                      if (createdOvId) {
+                        const { financeService } = await import('../../services/financeService');
+                        await financeService.updateOVStatus(createdOvId, {
+                          etatVirement: 'EN_COURS_VALIDATION'
+                        });
+                      }
+                      
+                      alert('OV créé avec succès! Une notification a été envoyée au Responsable de Département pour validation.');
+                      
+                      // Redirect to dashboard to see updated status
+                      window.location.href = '/ARS/finance?tab=0';
+                    }}
+                    disabled={processing || !uploadedFile || !uploadedPdfFile}
+                    startIcon={<CheckCircleIcon />}
+                  >
+                    Valider et Envoyer pour Validation
+                  </Button>
                 </Box>
               </Box>
             </Paper>
@@ -1010,6 +1186,130 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           </Grid>
         )}
       </Grid>
+      
+      {/* EXACT SPEC: Link to Bordereau Dialog (Manual OV only) */}
+      <Dialog open={linkBordereauDialog} onClose={() => setLinkBordereauDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Lier le PDF à un bordereau ?</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+            Voulez-vous lier ce document PDF à un bordereau existant ou créer un nouveau bordereau ?
+          </Alert>
+          
+          {!showCreateBordereau ? (
+            <Box>
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Sélectionner un bordereau existant</InputLabel>
+                <Select
+                  value={selectedBordereauId || ''}
+                  label="Sélectionner un bordereau existant"
+                  onChange={(e) => setSelectedBordereauId(e.target.value || null)}
+                >
+                  <MenuItem value="">Aucun (ne pas lier)</MenuItem>
+                  {bordereaux.map((b) => (
+                    <MenuItem key={b.id} value={b.id}>
+                      {b.reference} - {b.client?.name || 'Client inconnu'}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              
+              <Button 
+                variant="outlined" 
+                fullWidth 
+                onClick={() => setShowCreateBordereau(true)}
+                startIcon={<AddIcon />}
+              >
+                + Créer un nouveau bordereau
+              </Button>
+            </Box>
+          ) : (
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+                Créer un nouveau bordereau
+              </Typography>
+              
+              <Stack spacing={2}>
+                <TextField
+                  label="Référence bordereau *"
+                  value={newBordereauData.reference}
+                  onChange={(e) => setNewBordereauData({...newBordereauData, reference: e.target.value})}
+                  fullWidth
+                  required
+                  placeholder="Ex: BORD-2024-001"
+                />
+                
+                <FormControl fullWidth required>
+                  <InputLabel>Client / Société *</InputLabel>
+                  <Select
+                    value={newBordereauData.clientId}
+                    label="Client / Société *"
+                    onChange={(e) => setNewBordereauData({...newBordereauData, clientId: e.target.value})}
+                  >
+                    {clients.map((client) => (
+                      <MenuItem key={client.id} value={client.id}>
+                        {client.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                
+                <TextField
+                  label="Nombre de BS"
+                  type="number"
+                  value={newBordereauData.nombreBS}
+                  onChange={(e) => setNewBordereauData({...newBordereauData, nombreBS: parseInt(e.target.value) || 1})}
+                  fullWidth
+                  inputProps={{ min: 1 }}
+                />
+                
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => {
+                      setShowCreateBordereau(false);
+                      setNewBordereauData({ reference: '', clientId: '', nombreBS: 1 });
+                    }}
+                    fullWidth
+                  >
+                    Annuler
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    onClick={handleCreateNewBordereau}
+                    disabled={!newBordereauData.reference || !newBordereauData.clientId}
+                    fullWidth
+                  >
+                    Créer
+                  </Button>
+                </Box>
+              </Stack>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setLinkBordereauDialog(false);
+            setShowCreateBordereau(false);
+            setNewBordereauData({ reference: '', clientId: '', nombreBS: 1 });
+          }} variant="outlined">
+            Annuler
+          </Button>
+          {!showCreateBordereau && (
+            <>
+              <Button onClick={() => handleLinkBordereauChoice(false)} variant="outlined">
+                Ne pas lier
+              </Button>
+              <Button 
+                onClick={() => handleLinkBordereauChoice(true, selectedBordereauId || undefined)} 
+                variant="contained"
+                disabled={!selectedBordereauId}
+              >
+                Lier au bordereau
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

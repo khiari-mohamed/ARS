@@ -303,7 +303,7 @@ function GestionnaireSeniorDashboard() {
         {corbeille && (
           <div style={{ background: 'white', borderRadius: '8px', padding: '20px', marginBottom: '24px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#333' }}>📥 Ma Corbeille</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
               <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px' }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Dossiers Traités</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4caf50' }}>{corbeille.traites || 0}</div>
@@ -312,10 +312,11 @@ function GestionnaireSeniorDashboard() {
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Dossiers En Cours</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff9800' }}>{corbeille.enCours || 0}</div>
               </div>
-              <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px' }}>
+              {/* Gestionnaire Senior works autonomously - no "Non Affectés" needed */}
+              {/* <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px' }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Dossiers Non Affectés</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f44336' }}>{corbeille.nonAffectes || 0}</div>
-              </div>
+              </div> */}
             </div>
           </div>
         )}
@@ -372,11 +373,15 @@ function GestionnaireSeniorDashboard() {
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {dossierStates.length > 0 ? dossierStates.map((state, idx) => (
-                            <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
-                              {state}
-                            </span>
-                          )) : <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
+                          {dossierStates.length > 0 ? dossierStates.map((state, idx) => {
+                            const count = (dossier as any).dossierStateCounts?.[state];
+                            const total = (dossier as any).totalDocs;
+                            return (
+                              <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                                {state} {count && total ? `${count}/${total}` : ''}
+                              </span>
+                            );
+                          }) : <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
@@ -499,11 +504,15 @@ function GestionnaireSeniorDashboard() {
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          {dossierStates.map((state, idx) => (
-                            <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
-                              {state}
-                            </span>
-                          ))}
+                          {dossierStates.map((state, idx) => {
+                            const count = (dossier as any).dossierStateCounts?.[state];
+                            const total = (dossier as any).totalDocs;
+                            return (
+                              <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                                {state} {count && total ? `${count}/${total}` : ''}
+                              </span>
+                            );
+                          })}
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>

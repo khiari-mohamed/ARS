@@ -408,7 +408,7 @@ export class FinanceService {
           donneurOrdre: ov.donneurOrdre?.nom || 'N/A',
           totalAmount: ov.montantTotal,
           dateTraitement: ov.dateTraitement ? ov.dateTraitement.toISOString() : null,
-          motifObservation: ov.motifObservation || null,
+          motifObservation: ov.validationComment || ov.motifObservation || null,
           demandeRecuperation: ov.demandeRecuperation || false,
           dateDemandeRecuperation: ov.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
           montantRecupere: ov.montantRecupere || false,
@@ -1329,7 +1329,7 @@ Document généré automatiquement par ARS`;
           dateDemandeRecuperation: ov.dateDemandeRecuperation,
           montantRecupere: ov.montantRecupere,
           dateMontantRecupere: ov.dateMontantRecupere,
-          motifObservation: ov.motifObservation || null // NEW: Full text display
+          motifObservation: ov.validationComment || ov.motifObservation || null // NEW: Full text display
         })),
         stats
       };
@@ -1381,7 +1381,8 @@ Document généré automatiquement par ARS`;
           ordresVirement: {
             include: {
               donneurOrdre: true
-            }
+            },
+            orderBy: { dateCreation: 'desc' }
           }
         },
         orderBy: { dateCloture: 'desc' }
@@ -1393,7 +1394,8 @@ Document généré automatiquement par ARS`;
       });
       
       const result = bordereaux.map(b => {
-        const ov = b.ordresVirement[0];
+        // Get the LATEST OV (most recent dateCreation)
+        const ov = b.ordresVirement.sort((a, b) => b.dateCreation.getTime() - a.dateCreation.getTime())[0];
         return {
           id: ov?.id || b.id,
           clientSociete: b.client.name,
@@ -1405,7 +1407,7 @@ Document généré automatiquement par ARS`;
           dateInjection: ov?.dateCreation ? ov.dateCreation.toISOString() : null,
           statutVirement: ov?.etatVirement || 'NON_EXECUTE',
           dateTraitementVirement: ov?.dateTraitement ? ov.dateTraitement.toISOString() : null,
-          motifObservation: ov?.motifObservation || null,
+          motifObservation: ov?.validationComment || ov?.motifObservation || null,
           demandeRecuperation: ov?.demandeRecuperation || false,
           dateDemandeRecuperation: ov?.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
           montantRecupere: ov?.montantRecupere || false,

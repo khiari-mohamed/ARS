@@ -41,7 +41,14 @@ const ClientListPage: React.FC = () => {
   const loadClients = async () => {
     setLoading(true);
     try {
-      const data = await fetchClients({ name: searchTerm, status: statusFilter });
+      const filters: any = { name: searchTerm, status: statusFilter };
+      
+      // Filter by assigned clients for CHEF_EQUIPE and GESTIONNAIRE
+      if (user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE') {
+        filters.gestionnaireId = user.id;
+      }
+      
+      const data = await fetchClients(filters);
       setClients(data);
       if (!selectedClient && data.length > 0) {
         setSelectedClient(data[0]);

@@ -88,6 +88,7 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
       
       if (response.ok) {
         const data = await response.json();
+        console.log('📋 OV Details loaded:', { id: data.id, bordereauId: data.bordereauId, uploadedPdfPath: data.uploadedPdfPath });
         setOvDetails(data);
       }
     } catch (error) {
@@ -248,46 +249,68 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
                 <Typography variant="h6" gutterBottom>
                   📄 PDF Uploadé
                 </Typography>
-                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
                   Document uploadé par le Chef d'équipe
                 </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<Visibility />}
-                  onClick={async () => {
-                    try {
-                      const { LocalAPI } = await import('../../services/axios');
-                      
-                      if (!ovDetails?.bordereauId) {
-                        alert('Aucun bordereau lié à cet OV');
-                        return;
+                <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                  <Typography variant="caption">
+                    DEBUG: bordereauId={ovDetails?.bordereauId || 'null'} | uploadedPdfPath={ovDetails?.uploadedPdfPath || 'null'}
+                  </Typography>
+                </Alert>
+                {ovDetails?.bordereauId || ovDetails?.uploadedPdfPath ? (
+                  <Button
+                    variant="outlined"
+                    startIcon={<Visibility />}
+                    onClick={async () => {
+                      try {
+                        const { LocalAPI } = await import('../../services/axios');
+                        
+                        // Check if manual OV with uploaded PDF
+                        if (ovDetails?.uploadedPdfPath) {
+                          const response = await LocalAPI.get(`/finance/ordres-virement/${ovId}/uploaded-pdf`, {
+                            responseType: 'blob'
+                          });
+                          const blob = new Blob([response.data], { type: 'application/pdf' });
+                          const blobUrl = URL.createObjectURL(blob);
+                          setPdfViewer({open: true, url: blobUrl, title: `PDF Uploadé - OV Manuel`});
+                          return;
+                        }
+                        
+                        if (!ovDetails?.bordereauId) {
+                          alert('Aucun document disponible');
+                          return;
+                        }
+                        
+                        // Fetch by bordereau to get ALL PDFs for this bordereau
+                        const response = await LocalAPI.get(`/finance/ov-documents/bordereau/${ovDetails.bordereauId}`);
+                        const ovDocuments = response.data;
+                        
+                        const pdfDoc = ovDocuments.find((doc: any) => doc.type === 'BORDEREAU_PDF');
+                        
+                        if (pdfDoc) {
+                          const docResponse = await LocalAPI.get(`/finance/ordres-virement/${pdfDoc.ordreVirementId}/documents/${pdfDoc.id}/pdf`, {
+                            responseType: 'blob'
+                          });
+                          const blob = new Blob([docResponse.data], { type: 'application/pdf' });
+                          const blobUrl = URL.createObjectURL(blob);
+                          setPdfViewer({open: true, url: blobUrl, title: `PDF Uploadé - ${pdfDoc.name}`});
+                        } else {
+                          alert('Aucun PDF uploadé trouvé');
+                        }
+                      } catch (error: any) {
+                        console.error('❌ Error loading uploaded PDF:', error);
+                        alert(`Erreur lors du chargement du PDF\n\n${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
                       }
-                      
-                      // Fetch by bordereau to get ALL PDFs for this bordereau
-                      const response = await LocalAPI.get(`/finance/ov-documents/bordereau/${ovDetails.bordereauId}`);
-                      const ovDocuments = response.data;
-                      
-                      const pdfDoc = ovDocuments.find((doc: any) => doc.type === 'BORDEREAU_PDF');
-                      
-                      if (pdfDoc) {
-                        const docResponse = await LocalAPI.get(`/finance/ordres-virement/${pdfDoc.ordreVirementId}/documents/${pdfDoc.id}/pdf`, {
-                          responseType: 'blob'
-                        });
-                        const blob = new Blob([docResponse.data], { type: 'application/pdf' });
-                        const blobUrl = URL.createObjectURL(blob);
-                        setPdfViewer({open: true, url: blobUrl, title: `PDF Uploadé - ${pdfDoc.name}`});
-                      } else {
-                        alert('Aucun PDF uploadé trouvé');
-                      }
-                    } catch (error: any) {
-                      console.error('❌ Error loading uploaded PDF:', error);
-                      alert(`Erreur lors du chargement du PDF\n\n${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
-                    }
-                  }}
-                  fullWidth
-                >
-                  Voir PDF Uploadé
-                </Button>
+                    }}
+                    fullWidth
+                  >
+                    Voir PDF Uploadé
+                  </Button>
+                ) : (
+                  <Alert severity="info" sx={{ py: 0.5 }}>
+                    Aucun document uploadé
+                  </Alert>
+                )}
               </CardContent>
             </Card>
           </Grid>

@@ -160,12 +160,17 @@ export class SuiviVirementService {
     // Update bordereau status based on virement state
     if (ordreVirement.bordereauId) {
       let nouveauStatutBordereau;
+      const updateData: any = {};
+      
       switch (nouvelEtat) {
         case 'EN_COURS_EXECUTION':
           nouveauStatutBordereau = 'VIREMENT_EN_COURS';
           break;
         case 'EXECUTE':
-          nouveauStatutBordereau = 'VIREMENT_EXECUTE';
+          // AUTOMATIC STATUS CHANGE: TRAITE → CLOTURE when virement is executed
+          nouveauStatutBordereau = 'CLOTURE';
+          updateData.dateCloture = new Date();
+          this.logger.log(`✅ AUTO-STATUS: Bordereau ${ordreVirement.bordereauId} changed TRAITE → CLOTURE (virement executed)`);
           break;
         case 'REJETE':
           nouveauStatutBordereau = 'VIREMENT_REJETE';
@@ -179,7 +184,10 @@ export class SuiviVirementService {
 
       await this.prisma.bordereau.update({
         where: { id: ordreVirement.bordereauId },
-        data: { statut: nouveauStatutBordereau as any }
+        data: { 
+          statut: nouveauStatutBordereau as any,
+          ...updateData
+        }
       });
     }
 
