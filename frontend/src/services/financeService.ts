@@ -545,7 +545,7 @@ class FinanceService {
 
   // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
   async updateOVStatus(id: string, statusData: {
-    etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE';
+    etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'EN_COURS_VALIDATION';
     motifObservation?: string;
     demandeRecuperation?: boolean;
     dateDemandeRecuperation?: string;

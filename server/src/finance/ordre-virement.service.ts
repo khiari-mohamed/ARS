@@ -9,6 +9,7 @@ export interface CreateOrdreVirementDto {
   bordereauId?: string;
   virementData: VirementData[];
   utilisateurSante: string;
+  uploadedPdfPath?: string;
 }
 
 export interface UpdateEtatVirementDto {
@@ -47,8 +48,9 @@ export class OrdreVirementService {
         utilisateurSante: dto.utilisateurSante,
         montantTotal,
         nombreAdherents,
-        etatVirement: 'NON_EXECUTE',
-        validationStatus: 'EN_ATTENTE_VALIDATION'
+        etatVirement: 'EN_COURS_VALIDATION',
+        validationStatus: 'EN_ATTENTE_VALIDATION',
+        uploadedPdfPath: dto.uploadedPdfPath
       }
     });
 

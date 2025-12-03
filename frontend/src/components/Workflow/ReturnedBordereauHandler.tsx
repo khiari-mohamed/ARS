@@ -48,10 +48,15 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
   const [clients, setClients] = useState<any[]>([]);
   const [newReference, setNewReference] = useState('');
   const [newClientId, setNewClientId] = useState('');
+  const [documentNameFilter, setDocumentNameFilter] = useState('');
+  const [documentStatusFilter, setDocumentStatusFilter] = useState('');
 
   useEffect(() => {
     loadReturnedBordereaux();
     loadClients();
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(loadReturnedBordereaux, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadClients = async () => {
@@ -67,8 +72,35 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
   const loadReturnedBordereaux = async () => {
     try {
       const { LocalAPI } = await import('../../services/axios');
-      const response = await LocalAPI.get('/scan/returned-bordereaux');
-      setReturnedBordereaux(response.data || []);
+      // Load bordereaux with SCAN_EN_COURS status and documentStatus RETOUR_SCAN
+      const response = await LocalAPI.get('/bordereaux', {
+        params: {
+          statut: 'SCAN_EN_COURS',
+          documentStatus: 'RETOUR_SCAN'
+        }
+      });
+      const bordereaux = Array.isArray(response.data) ? response.data : response.data.items || [];
+      
+      // Load documents for each bordereau
+      const bordereauxWithDocs = await Promise.all(
+        bordereaux.map(async (b: any) => {
+          try {
+            const detailsRes = await LocalAPI.get(`/bordereaux/${b.id}`, {
+              params: { include: 'documents,client' }
+            });
+            return {
+              ...b,
+              documents: detailsRes.data.documents || [],
+              client: detailsRes.data.client || b.client,
+              returnType: 'BORDEREAU'
+            };
+          } catch (err) {
+            return { ...b, documents: [], returnType: 'BORDEREAU' };
+          }
+        })
+      );
+      
+      setReturnedBordereaux(bordereauxWithDocs);
     } catch (error) {
       console.error('Failed to load returned bordereaux:', error);
     } finally {
@@ -334,10 +366,48 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                 Documents de ce bordereau:
               </Typography>
               
+              {/* Filters */}
+              <Paper sx={{ p: 2, mb: 2, bgcolor: '#f5f5f5' }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Filtrer par nom de document"
+                      placeholder="Ex: moadhcv.pdf"
+                      value={documentNameFilter}
+                      onChange={(e) => setDocumentNameFilter(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Filtrer par statut</InputLabel>
+                      <Select
+                        value={documentStatusFilter}
+                        onChange={(e) => setDocumentStatusFilter(e.target.value)}
+                        label="Filtrer par statut"
+                      >
+                        <MenuItem value="">Tous</MenuItem>
+                        <MenuItem value="UPLOADED">UPLOADED</MenuItem>
+                        <MenuItem value="SCANNE">SCANNE</MenuItem>
+                        <MenuItem value="RETOURNER_AU_SCAN">RETOURNER_AU_SCAN</MenuItem>
+                        <MenuItem value="TRAITE">TRAITE</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </Paper>
+              
               {selectedBordereau.documents && selectedBordereau.documents.length > 0 ? (
                 <Box sx={{ mb: 3 }}>
                   <Paper sx={{ p: 2, bgcolor: '#fafafa', border: '1px solid #e0e0e0' }}>
-                    {selectedBordereau.documents.map((doc: any, index: number) => (
+                    {selectedBordereau.documents
+                      .filter((doc: any) => {
+                        const nameMatch = !documentNameFilter || doc.name.toLowerCase().includes(documentNameFilter.toLowerCase());
+                        const statusMatch = !documentStatusFilter || doc.status === documentStatusFilter;
+                        return nameMatch && statusMatch;
+                      })
+                      .map((doc: any, index: number) => (
                       <Box key={doc.id} sx={{ 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -479,6 +549,8 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
               setCorrectionDialogOpen(false);
               setSelectedBordereau(null);
               setSelectedDocumentType('');
+              setDocumentNameFilter('');
+              setDocumentStatusFilter('');
             }}
             color="inherit"
           >

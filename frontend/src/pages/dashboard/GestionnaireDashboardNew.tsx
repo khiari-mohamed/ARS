@@ -426,6 +426,58 @@ function GestionnaireDashboardNew() {
     }
   };
 
+  const handleMarkAsTraite = async (bordereauId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Traité ?')) return;
+    
+    try {
+      console.log('Marking bordereau as Traité:', bordereauId);
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+        dossierId: bordereauId,
+        newStatus: 'Traité'
+      });
+      
+      console.log('Response:', response.data);
+      
+      if (response.data.success) {
+        alert('Bordereau marqué comme Traité avec succès');
+        loadDashboardData();
+      } else {
+        alert(response.data.message || 'Erreur lors de la modification du statut');
+      }
+    } catch (error: any) {
+      console.error('Mark as traité error:', error);
+      console.error('Error response:', error.response?.data);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Erreur lors de la modification du statut';
+      alert(errorMessage);
+    }
+  };
+
+  const handleMarkAsRetourne = async (bordereauId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Retourné ?')) return;
+    
+    try {
+      console.log('Marking bordereau as Retourné:', bordereauId);
+      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+        dossierId: bordereauId,
+        newStatus: 'Retourné'
+      });
+      
+      console.log('Response:', response.data);
+      
+      if (response.data.success) {
+        alert('Bordereau marqué comme Retourné avec succès');
+        loadDashboardData();
+      } else {
+        alert(response.data.message || 'Erreur lors de la modification du statut');
+      }
+    } catch (error: any) {
+      console.error('Mark as retourné error:', error);
+      console.error('Error response:', error.response?.data);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Erreur lors de la modification du statut';
+      alert(errorMessage);
+    }
+  };
+
   if (loading) {
     return (
       <div className="chef-equipe-container">
@@ -832,22 +884,7 @@ function GestionnaireDashboardNew() {
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                        {!isGestionnaire && (
-                          <button 
-                            onClick={() => handleViewPDF(dossier.id)} 
-                            style={{ 
-                              background: 'none', 
-                              border: 'none', 
-                              color: '#2196f3', 
-                              cursor: 'pointer', 
-                              fontSize: '18px',
-                              padding: '4px'
-                            }}
-                            title="Modifier le dossier"
-                          >
-                            ✏️
-                          </button>
-                        )}
+                        <span style={{ fontSize: '12px', color: '#999' }}>Vue seule</span>
                       </td>
                     </tr>
                   );
@@ -952,7 +989,7 @@ function GestionnaireDashboardNew() {
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px', color: '#666' }}>il y a 2 heures</td>
                       <td style={{ padding: '12px 8px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           <button 
                             onClick={() => handleViewPDF(document.id)}
                             style={{ 
@@ -970,22 +1007,40 @@ function GestionnaireDashboardNew() {
                             Voir PDF
                           </button>
                           {canModify ? (
-                            <button 
-                              onClick={() => handleModifyStatus(document.id)}
-                              style={{ 
-                                background: 'none', 
-                                border: 'none', 
-                                color: '#9c27b0', 
-                                cursor: 'pointer', 
-                                fontSize: '12px',
-                                textDecoration: 'underline',
-                                padding: '4px 8px',
-                                borderRadius: '4px'
-                              }}
-                              title="Modifier statut du dossier"
-                            >
-                              Modifier Statut
-                            </button>
+                            <>
+                              <button 
+                                onClick={() => handleMarkAsTraite(document.id)}
+                                style={{ 
+                                  background: '#4caf50', 
+                                  color: 'white', 
+                                  border: 'none', 
+                                  padding: '4px 8px', 
+                                  borderRadius: '4px', 
+                                  cursor: 'pointer', 
+                                  fontSize: '11px', 
+                                  fontWeight: 'bold'
+                                }}
+                                title="Marquer comme Traité"
+                              >
+                                ✓ Traité
+                              </button>
+                              <button 
+                                onClick={() => handleMarkAsRetourne(document.id)}
+                                style={{ 
+                                  background: '#f44336', 
+                                  color: 'white', 
+                                  border: 'none', 
+                                  padding: '4px 8px', 
+                                  borderRadius: '4px', 
+                                  cursor: 'pointer', 
+                                  fontSize: '11px', 
+                                  fontWeight: 'bold'
+                                }}
+                                title="Marquer comme Retourné"
+                              >
+                                ↩ Retourné
+                              </button>
+                            </>
                           ) : (
                             <span style={{ fontSize: '12px', color: '#ccc', padding: '4px 8px' }}>Lecture seule</span>
                           )}

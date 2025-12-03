@@ -227,26 +227,11 @@ export class ClientService {
       const userId = user.id || user.userId || user.sub;
       const userRole = user.role;
       
-      // Chef d'équipe: Only see clients assigned to them
-      if (userRole === 'CHEF_EQUIPE') {
-        where.OR = [
-          // Clients where they are the chargeCompte (direct assignment)
-          { chargeCompteId: userId },
-          // Clients with contracts where they are teamLeader
-          { contracts: { some: { teamLeaderId: userId } } },
-          // Clients with contracts where they are the assignedManager
-          { contracts: { some: { assignedManagerId: userId } } }
-        ];
-      }
-      
-      // Gestionnaire: Only see clients assigned to them or their team
-      if (userRole === 'GESTIONNAIRE') {
-        where.OR = [
-          // Clients in gestionnaires relation
-          { gestionnaires: { some: { id: userId } } },
-          // Clients where their chef is the chargeCompte
-          { chargeCompte: { teamMembers: { some: { id: userId } } } }
-        ];
+      // Chef d'équipe and Gestionnaire: Only see clients assigned to them
+      if (userRole === 'CHEF_EQUIPE' || userRole === 'GESTIONNAIRE') {
+        where.gestionnaires = {
+          some: { id: userId }
+        };
       }
     }
     
@@ -1012,19 +997,8 @@ export class ClientService {
       const userId = user.id || user.userId || user.sub;
       const userRole = user.role;
       
-      // Chef d'équipe: Only access clients assigned to them
-      if (userRole === 'CHEF_EQUIPE') {
-        const hasAccess = 
-          client.chargeCompteId === userId ||
-          client.contracts.some(c => c.teamLeaderId === userId || c.assignedManagerId === userId);
-        
-        if (!hasAccess) {
-          throw new NotFoundException('Client not found or access denied');
-        }
-      }
-      
-      // Gestionnaire: Only access clients assigned to them
-      if (userRole === 'GESTIONNAIRE') {
+      // Chef d'équipe and Gestionnaire: Only access clients assigned to them
+      if (userRole === 'CHEF_EQUIPE' || userRole === 'GESTIONNAIRE') {
         const gestionnaires = await this.prisma.client.findUnique({
           where: { id },
           include: { gestionnaires: true }

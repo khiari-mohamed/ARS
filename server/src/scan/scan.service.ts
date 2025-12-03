@@ -1715,12 +1715,12 @@ export class ScanService {
   // Complete corrections and reset documentStatus
   async completeCorrections(bordereauId: string, userId: string) {
     try {
-      // Reset documentStatus to NORMAL and set to A_SCANNER for re-scanning
+      // Reset documentStatus to NORMAL and set to SCAN_EN_COURS for validation
       const updatedBordereau = await this.prisma.bordereau.update({
         where: { id: bordereauId },
         data: { 
           documentStatus: 'NORMAL',
-          statut: 'A_SCANNER' // Now ready for re-scanning
+          statut: 'SCAN_EN_COURS' // Return to scan en cours for validation, not A_SCANNER
         }
       });
 
@@ -1739,7 +1739,7 @@ export class ScanService {
 
       return { 
         success: true, 
-        message: 'Corrections terminées - Bordereau prêt pour re-scan',
+        message: 'Corrections terminées - Bordereau en cours de scan pour validation',
         bordereau: updatedBordereau
       };
     } catch (error) {

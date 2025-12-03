@@ -10,10 +10,18 @@ interface AssignmentFilterParams {
 
 @Injectable()
 export class DocumentAssignmentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService
+  ) {}
 
   async assignDocumentsBulk(documentIds: string[], assignedToUserId: string, reason?: string) {
     const currentUserId = 'system'; // TODO: Get from auth context
+
+    // Get documents to find their bordereaux
+    const documents = await this.prisma.document.findMany({
+      where: { id: { in: documentIds } },
+      select: { bordereauId: true }
+    });
 
     // Update documents
     await this.prisma.document.updateMany({
@@ -40,7 +48,34 @@ export class DocumentAssignmentService {
       data: historyRecords
     });
 
+    // AUTOMATIC STATUS UPDATE: Check if all documents in bordereau are assigned
+    const uniqueBordereauIds = [...new Set(documents.map(d => d.bordereauId).filter(Boolean))] as string[];
+    for (const bordereauId of uniqueBordereauIds) {
+      if (bordereauId) {
+        await this.checkBordereauStatusAfterAssignment(bordereauId);
+      }
+    }
+
     return { success: true, assignedCount: documentIds.length };
+  }
+
+  private async checkBordereauStatusAfterAssignment(bordereauId: string): Promise<void> {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { documents: true }
+    });
+
+    if (!bordereau || bordereau.documents.length === 0) return;
+
+    const allAssigned = bordereau.documents.every(doc => doc.assignedToUserId !== null);
+
+    if (allAssigned && bordereau.statut === 'A_AFFECTER') {
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { statut: 'EN_COURS' }
+      });
+      console.log(`✅ AUTO-STATUS: Bordereau ${bordereau.reference} changed A_AFFECTER → EN_COURS`);
+    }
   }
 
   async assignDocument(documentId: string, assignedToUserId: string, reason?: string) {
@@ -71,6 +106,11 @@ export class DocumentAssignmentService {
         reason: reason || 'Assignation individuelle'
       }
     });
+
+    // AUTOMATIC STATUS UPDATE: Check if all documents in bordereau are assigned
+    if (document.bordereauId) {
+      await this.checkBordereauStatusAfterAssignment(document.bordereauId);
+    }
 
     return document;
   }
@@ -229,5 +269,44 @@ export class DocumentAssignmentService {
       unassigned,
       overdue
     };
+  }
+
+  /**
+   * Update document status and trigger automatic bordereau status check
+   */
+  async updateDocumentStatus(documentId: string, status: string): Promise<void> {
+    const document = await this.prisma.document.update({
+      where: { id: documentId },
+      data: { status: status as any }
+    });
+
+    // AUTOMATIC STATUS UPDATE: Check if all documents are processed
+    if (document.bordereauId && (status === 'TRAITE' || status === 'REJETE')) {
+      await this.checkBordereauStatusAfterProcessing(document.bordereauId);
+    }
+  }
+
+  private async checkBordereauStatusAfterProcessing(bordereauId: string): Promise<void> {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { documents: true }
+    });
+
+    if (!bordereau || bordereau.documents.length === 0) return;
+
+    const allProcessed = bordereau.documents.every(doc => 
+      doc.status === 'TRAITE' || doc.status === 'REJETE'
+    );
+
+    if (allProcessed && bordereau.statut === 'EN_COURS') {
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { 
+          statut: 'TRAITE',
+          dateCloture: new Date()
+        }
+      });
+      console.log(`✅ AUTO-STATUS: Bordereau ${bordereau.reference} changed EN_COURS → TRAITE`);
+    }
   }
 }

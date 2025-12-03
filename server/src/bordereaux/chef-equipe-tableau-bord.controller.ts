@@ -819,6 +819,11 @@ export class ChefEquipeTableauBordController {
         data: updateData
       });
 
+      // Auto-update bordereau status based on document states
+      if (document.bordereauId) {
+        await this.updateBordereauStatusBasedOnDocuments(document.bordereauId);
+      }
+
       // If gestionnaire returns a document, create history and notify chef d'équipe
       if (req.user?.role === 'GESTIONNAIRE' && body.newStatus === 'Retourné') {
         // Create assignment history
@@ -1435,5 +1440,42 @@ export class ChefEquipeTableauBordController {
     }
     
     return {};
+  }
+
+  private async updateBordereauStatusBasedOnDocuments(bordereauId: string): Promise<void> {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: { documents: true, ordresVirement: true }
+    });
+
+    if (!bordereau || bordereau.documents.length === 0) return;
+
+    const allAssigned = bordereau.documents.every(doc => doc.assignedToUserId);
+    const allTreatedOrRejected = bordereau.documents.every(doc => 
+      doc.status === 'TRAITE' || doc.status === 'REJETE'
+    );
+    const virementExecuted = bordereau.ordresVirement?.some(ov => ov.etatVirement === 'EXECUTE');
+
+    let newStatus: string | null = null;
+
+    // Rule 1: All documents assigned -> EN_COURS (from A_AFFECTER)
+    if (allAssigned && bordereau.statut === 'A_AFFECTER') {
+      newStatus = 'EN_COURS';
+    }
+    // Rule 2: All documents treated/rejected -> TRAITE (from EN_COURS)
+    else if (allTreatedOrRejected && bordereau.statut === 'EN_COURS') {
+      newStatus = 'TRAITE';
+    }
+    // Rule 3: Virement executed -> CLOTURE (from TRAITE or VIREMENT_EXECUTE)
+    else if (virementExecuted && (bordereau.statut === 'TRAITE' || bordereau.statut === 'VIREMENT_EXECUTE')) {
+      newStatus = 'CLOTURE';
+    }
+
+    if (newStatus) {
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { statut: newStatus as any }
+      });
+    }
   }
 }

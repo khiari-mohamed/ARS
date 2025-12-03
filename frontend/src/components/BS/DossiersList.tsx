@@ -13,8 +13,13 @@ import {
   Collapse,
   Badge,
   List,
-  Card
+  Card,
+  Input,
+  DatePicker,
+  Row,
+  Col
 } from 'antd';
+import dayjs from 'dayjs';
 import { 
   EyeOutlined, 
   UserOutlined, 
@@ -249,6 +254,7 @@ interface DossiersListProps {
 const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) => {
   const { user } = useAuth();
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
+  const [filteredDossiers, setFilteredDossiers] = useState<Dossier[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDossiers, setSelectedDossiers] = useState<string[]>([]);
   const [selectedBS, setSelectedBS] = useState<string[]>([]);
@@ -266,6 +272,17 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     current: 1,
     pageSize: 20,
     total: 0
+  });
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    reference: '',
+    client: '',
+    statut: '',
+    gestionnaire: '',
+    documentType: '',
+    dateDebut: null as any,
+    dateFin: null as any
   });
 
   useEffect(() => {
@@ -338,6 +355,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       );
       
       setDossiers(dossiersWithDocuments);
+      setFilteredDossiers(dossiersWithDocuments);
       setPagination({
         current: 1,
         pageSize: 5,
@@ -350,6 +368,88 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     } finally {
       setLoading(false);
     }
+  };
+
+  // Apply filters
+  useEffect(() => {
+    let filtered = [...dossiers];
+
+    if (filters.reference) {
+      filtered = filtered.filter(d => 
+        d.reference.toLowerCase().includes(filters.reference.toLowerCase())
+      );
+    }
+
+    if (filters.client) {
+      filtered = filtered.filter(d => 
+        d.client?.name?.toLowerCase().includes(filters.client.toLowerCase())
+      );
+    }
+
+    if (filters.statut) {
+      const statusMap: Record<string, string[]> = {
+        'EN_ATTENTE': ['EN_ATTENTE', 'En attente'],
+        'A_SCANNER': ['A_SCANNER', 'À scanner'],
+        'SCAN_EN_COURS': ['SCAN_EN_COURS', 'En cours de Scan', 'Scan en cours'],
+        'SCANNE': ['SCANNE', 'Scanné', 'Scan Finalisé'],
+        'A_AFFECTER': ['A_AFFECTER', 'À affecter'],
+        'ASSIGNE': ['ASSIGNE', 'Assigné'],
+        'EN_COURS': ['EN_COURS', 'En cours', 'En cours de traitement'],
+        'TRAITE': ['TRAITE', 'Traité'],
+        'CLOTURE': ['CLOTURE', 'Clôturé'],
+        'PRET_VIREMENT': ['PRET_VIREMENT', 'Prêt virement'],
+        'VIREMENT_EN_COURS': ['VIREMENT_EN_COURS', 'Virement en cours'],
+        'VIREMENT_EXECUTE': ['VIREMENT_EXECUTE', 'Virement exécuté'],
+        'PAYE': ['PAYE', 'Payé'],
+        'REJETE': ['REJETE', 'Rejeté'],
+        'Réglé': ['Réglé']
+      };
+      const matchValues = statusMap[filters.statut] || [filters.statut];
+      filtered = filtered.filter(d => matchValues.includes(d.statut));
+    }
+
+    if (filters.gestionnaire) {
+      filtered = filtered.filter(d => {
+        const assignedUsers = d.documentAssignments?.assignedTo || [];
+        return assignedUsers.some(name => 
+          name.toLowerCase().includes(filters.gestionnaire.toLowerCase())
+        );
+      });
+    }
+
+    if (filters.documentType) {
+      filtered = filtered.filter(d => {
+        const documents = d.documents || [];
+        return documents.some(doc => doc.type === filters.documentType);
+      });
+    }
+
+    if (filters.dateDebut) {
+      filtered = filtered.filter(d => 
+        dayjs(d.dateReception).isAfter(dayjs(filters.dateDebut).subtract(1, 'day'))
+      );
+    }
+
+    if (filters.dateFin) {
+      filtered = filtered.filter(d => 
+        dayjs(d.dateReception).isBefore(dayjs(filters.dateFin).add(1, 'day'))
+      );
+    }
+
+    setFilteredDossiers(filtered);
+    setPagination(prev => ({ ...prev, current: 1, total: filtered.length }));
+  }, [filters, dossiers]);
+
+  const handleClearFilters = () => {
+    setFilters({
+      reference: '',
+      client: '',
+      statut: '',
+      gestionnaire: '',
+      documentType: '',
+      dateDebut: null,
+      dateFin: null
+    });
   };
 
   const loadGestionnaires = async () => {
@@ -806,6 +906,124 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
 
   return (
     <div>
+      {/* Filters Section */}
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Réf. Dossier</Text>
+              <Input
+                placeholder="Référence"
+                value={filters.reference}
+                onChange={(e) => setFilters({ ...filters, reference: e.target.value })}
+                allowClear
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Client</Text>
+              <Input
+                placeholder="Nom du client"
+                value={filters.client}
+                onChange={(e) => setFilters({ ...filters, client: e.target.value })}
+                allowClear
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Statut</Text>
+              <Select
+                placeholder="Tous statuts"
+                value={filters.statut || undefined}
+                onChange={(value) => setFilters({ ...filters, statut: value || '' })}
+                allowClear
+                style={{ width: '100%' }}
+                options={[
+                  { value: 'EN_ATTENTE', label: 'En attente' },
+                  { value: 'A_SCANNER', label: 'À scanner' },
+                  { value: 'SCAN_EN_COURS', label: 'Scan en cours' },
+                  { value: 'SCANNE', label: 'Scanné' },
+                  { value: 'A_AFFECTER', label: 'À affecter' },
+                  { value: 'ASSIGNE', label: 'Assigné' },
+                  { value: 'EN_COURS', label: 'En cours' },
+                  { value: 'TRAITE', label: 'Traité' },
+                  { value: 'CLOTURE', label: 'Clôturé' },
+                  { value: 'PRET_VIREMENT', label: 'Prêt virement' },
+                  { value: 'VIREMENT_EN_COURS', label: 'Virement en cours' },
+                  { value: 'VIREMENT_EXECUTE', label: 'Virement exécuté' },
+                  { value: 'PAYE', label: 'Payé' },
+                  { value: 'REJETE', label: 'Rejeté' },
+                  { value: 'Réglé', label: 'Réglé' }
+                ]}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Gestionnaire</Text>
+              <Input
+                placeholder="Nom gestionnaire"
+                value={filters.gestionnaire}
+                onChange={(e) => setFilters({ ...filters, gestionnaire: e.target.value })}
+                allowClear
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Type Document</Text>
+              <Select
+                placeholder="Tous types"
+                value={filters.documentType || undefined}
+                onChange={(value) => setFilters({ ...filters, documentType: value || '' })}
+                allowClear
+                style={{ width: '100%' }}
+                options={[
+                  { value: 'BULLETIN_SOIN', label: 'Bulletin de soin' },
+                  { value: 'FACTURE', label: 'Facture' },
+                  { value: 'JUSTIFICATIF', label: 'Justificatif' },
+                  { value: 'CONTRAT', label: 'Contrat' },
+                  { value: 'AUTRE', label: 'Autre' }
+                ]}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Date début</Text>
+              <DatePicker
+                placeholder="jj/mm/aaaa"
+                value={filters.dateDebut}
+                onChange={(date) => setFilters({ ...filters, dateDebut: date })}
+                format="DD/MM/YYYY"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Date fin</Text>
+              <DatePicker
+                placeholder="jj/mm/aaaa"
+                value={filters.dateFin}
+                onChange={(date) => setFilters({ ...filters, dateFin: date })}
+                format="DD/MM/YYYY"
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div style={{ paddingTop: 20 }}>
+              <Button onClick={handleClearFilters} block>
+                Effacer
+              </Button>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+
       {/* Bulk Actions */}
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space wrap>
@@ -844,7 +1062,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       {/* Dossiers Table */}
       <Table
         columns={columns}
-        dataSource={dossiers}
+        dataSource={filteredDossiers}
         rowKey="id"
         loading={loading}
         expandable={{
@@ -922,29 +1140,16 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           placeholder="Sélectionner un statut"
           value={selectedStatus}
           onChange={setSelectedStatus}
-          options={(() => {
-            if (user?.role === 'GESTIONNAIRE') {
-              return [
-                { value: 'TRAITE', label: 'Traité' },
-                { value: 'RETOUR_ADMIN', label: '↩️ Retourné' }
-              ];
-            } else if (user?.role === 'CHEF_EQUIPE') {
-              return [
-                { value: 'TRAITE', label: 'Traité' }
-              ];
-            } else {
-              return [
-                { value: 'A_SCANNER', label: 'À scanner' },
-                { value: 'SCAN_EN_COURS', label: 'En cours de scan' },
-                { value: 'SCANNE', label: 'Scanné' },
-                { value: 'A_AFFECTER', label: 'À affecter' },
-                { value: 'ASSIGNE', label: 'Assigné' },
-                { value: 'EN_COURS', label: 'En cours de traitement' },
-                { value: 'TRAITE', label: 'Traité' },
-                { value: 'VIREMENT_EXECUTE', label: 'Virement exécuté' }
-              ];
-            }
-          })()}
+          options={[
+            { value: 'A_SCANNER', label: 'À scanner' },
+            { value: 'SCAN_EN_COURS', label: 'En cours de scan' },
+            { value: 'SCANNE', label: 'Scanné' },
+            { value: 'A_AFFECTER', label: 'À affecter' },
+            { value: 'ASSIGNE', label: 'Assigné' },
+            { value: 'EN_COURS', label: 'En cours de traitement' },
+            { value: 'TRAITE', label: 'Traité' },
+            { value: 'VIREMENT_EXECUTE', label: 'Virement exécuté' }
+          ]}
         />
       </Modal>
 
