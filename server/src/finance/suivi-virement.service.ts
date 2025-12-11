@@ -159,36 +159,22 @@ export class SuiviVirementService {
 
     // Update bordereau status based on virement state
     if (ordreVirement.bordereauId) {
-      let nouveauStatutBordereau;
       const updateData: any = {};
       
-      switch (nouvelEtat) {
-        case 'EN_COURS_EXECUTION':
-          nouveauStatutBordereau = 'VIREMENT_EN_COURS';
-          break;
-        case 'EXECUTE':
-          // AUTOMATIC STATUS CHANGE: TRAITE → CLOTURE when virement is executed
-          nouveauStatutBordereau = 'CLOTURE';
-          updateData.dateCloture = new Date();
-          this.logger.log(`✅ AUTO-STATUS: Bordereau ${ordreVirement.bordereauId} changed TRAITE → CLOTURE (virement executed)`);
-          break;
-        case 'REJETE':
-          nouveauStatutBordereau = 'VIREMENT_REJETE';
-          break;
-        case 'EXECUTE_PARTIELLEMENT':
-          nouveauStatutBordereau = 'PARTIEL';
-          break;
-        default:
-          nouveauStatutBordereau = 'PRET_VIREMENT';
+      // 🔥 NEW LOGIC: Bordereau stays TRAITE until virement is EXECUTE
+      // Only change to CLOTURE when virement is fully executed
+      if (nouvelEtat === 'EXECUTE') {
+        updateData.statut = 'CLOTURE';
+        updateData.dateCloture = new Date();
+        this.logger.log(`✅ AUTO-STATUS: Bordereau ${ordreVirement.bordereauId} changed TRAITE → CLOTURE (virement executed)`);
+        
+        await this.prisma.bordereau.update({
+          where: { id: ordreVirement.bordereauId },
+          data: updateData
+        });
       }
-
-      await this.prisma.bordereau.update({
-        where: { id: ordreVirement.bordereauId },
-        data: { 
-          statut: nouveauStatutBordereau as any,
-          ...updateData
-        }
-      });
+      // For all other virement states (NON_EXECUTE, EN_COURS_EXECUTION, REJETE, etc.)
+      // Bordereau status remains TRAITE - NO CHANGE
     }
 
     this.logger.log(`État virement ${ordreVirementId} changé de ${ancienEtat} vers ${nouvelEtat}`);

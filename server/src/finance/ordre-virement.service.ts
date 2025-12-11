@@ -421,25 +421,17 @@ export class OrdreVirementService {
   }
 
   private async updateBordereauStatus(bordereauId: string, etatVirement: string) {
-    let newStatus;
-    
-    switch (etatVirement) {
-      case 'EN_COURS_EXECUTION':
-        newStatus = 'VIREMENT_EN_COURS';
-        break;
-      case 'EXECUTE':
-        newStatus = 'VIREMENT_EXECUTE';
-        break;
-      case 'REJETE':
-        newStatus = 'VIREMENT_REJETE';
-        break;
-      default:
-        return; // No status change needed
+    // 🔥 NEW LOGIC: Only update bordereau status when virement is EXECUTE
+    // For all other states, bordereau remains TRAITE
+    if (etatVirement === 'EXECUTE') {
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { 
+          statut: 'CLOTURE',
+          dateCloture: new Date()
+        }
+      });
     }
-
-    await this.prisma.bordereau.update({
-      where: { id: bordereauId },
-      data: { statut: newStatus }
-    });
+    // For EN_COURS_EXECUTION, REJETE, etc. - NO STATUS CHANGE
   }
 }

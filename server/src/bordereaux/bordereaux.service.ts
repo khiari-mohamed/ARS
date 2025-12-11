@@ -62,15 +62,18 @@ export class BordereauxService {
         nextStatus = Statut.TRAITE;
         break;
       case 'TRAITE':
-        nextStatus = Statut.PRET_VIREMENT;
-        break;
+        // NO STATUS CHANGE - stays TRAITE until virement is EXECUTE
+        throw new BadRequestException('Bordereau stays TRAITE until virement is executed');
       case 'PRET_VIREMENT':
-        nextStatus = Statut.VIREMENT_EN_COURS;
-        updateData.dateDepotVirement = new Date();
-        break;
+        // NO STATUS CHANGE - stays TRAITE
+        throw new BadRequestException('Bordereau stays TRAITE until virement is executed');
       case 'VIREMENT_EN_COURS':
-        nextStatus = Statut.VIREMENT_EXECUTE;
-        updateData.dateExecutionVirement = new Date();
+        // NO STATUS CHANGE - stays TRAITE
+        throw new BadRequestException('Bordereau stays TRAITE until virement is executed');
+      case 'VIREMENT_EXECUTE':
+        // Only change from TRAITE to CLOTURE when virement is EXECUTE
+        nextStatus = Statut.CLOTURE;
+        updateData.dateCloture = new Date();
         break;
       case 'VIREMENT_EXECUTE':
         nextStatus = Statut.CLOTURE;
@@ -1918,18 +1921,18 @@ private async progressWorkflow(bordereauId: string, trigger: string): Promise<vo
         break;
         
       case 'PROCESSING_COMPLETED':
-        // Gestionnaire completed -> ready for payment
-        newStatus = Statut.PRET_VIREMENT;
+        // Gestionnaire completed -> stays TRAITE (no status change)
+        newStatus = Statut.TRAITE;
         break;
         
       case 'PAYMENT_INITIATED':
-        newStatus = Statut.VIREMENT_EN_COURS;
-        updateData.dateDepotVirement = new Date();
+        // NO STATUS CHANGE - stays TRAITE
         break;
         
       case 'PAYMENT_EXECUTED':
-        newStatus = Statut.VIREMENT_EXECUTE;
-        updateData.dateExecutionVirement = new Date();
+        // Only change to CLOTURE when virement is fully EXECUTE
+        newStatus = Statut.CLOTURE;
+        updateData.dateCloture = new Date();
         break;
         
       case 'CLOSED':

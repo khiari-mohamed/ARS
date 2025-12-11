@@ -128,15 +128,16 @@ export class FinanceIntegrationService {
 
       switch (status) {
         case 'EN_COURS':
-          bordereauStatus = 'VIREMENT_EN_COURS';
-          break;
+          // NO STATUS CHANGE - bordereau stays TRAITE
+          return; // Exit early, don't update
         case 'EXECUTE':
-          bordereauStatus = 'VIREMENT_EXECUTE';
+          bordereauStatus = 'CLOTURE'; // Only EXECUTE changes to CLOTURE
           updateData.dateExecutionVirement = new Date();
+          updateData.dateCloture = new Date();
           break;
         case 'REJETE':
-          bordereauStatus = 'VIREMENT_REJETE';
-          break;
+          // NO STATUS CHANGE - bordereau stays TRAITE
+          return; // Exit early, don't update
       }
 
       await this.prisma.bordereau.update({
