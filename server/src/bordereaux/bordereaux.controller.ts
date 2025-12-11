@@ -247,13 +247,15 @@ export class BordereauxController {
 
   @Post(':id/initiate-payment')
   async initiatePayment(@Param('id') id: string) {
-    const bordereau = await this.bordereauxService.update(id, { statut: 'VIREMENT_EN_COURS' as any });
+    // NO STATUS CHANGE - bordereau stays TRAITE
+    const bordereau = await this.bordereauxService.findOne(id);
     return { message: 'Payment initiated', bordereau };
   }
 
   @Post(':id/execute-payment')
   async executePayment(@Param('id') id: string) {
-    const bordereau = await this.bordereauxService.update(id, { statut: 'VIREMENT_EXECUTE' as any });
+    // NO STATUS CHANGE - bordereau stays TRAITE until virement is EXECUTE
+    const bordereau = await this.bordereauxService.findOne(id);
     return { message: 'Payment executed', bordereau };
   }
 
@@ -916,7 +918,7 @@ export class BordereauxController {
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] },
+          statut: { in: ['TRAITE', 'CLOTURE'] }, // NO VIREMENT_EXECUTE - bordereau stays TRAITE until CLOTURE
           updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
         },
         include: {

@@ -237,10 +237,12 @@ export class ExcelValidationService {
       const montantStr = row.getCell(2).text?.trim().replace(',', '.').replace(/\s/g, ''); // Montant with comma support
       const montant = parseFloat(montantStr);
       
-      // EXACT SPEC: Fetch adherent data from database using matricule only
+      // EXACT SPEC: Fetch adherent data from database using matricule AND clientId
+      // This prevents picking wrong adherent if two companies have same matricule
       const adherent = matricule ? await this.prisma.adherent.findFirst({
         where: {
-          matricule: matricule
+          matricule: matricule,
+          clientId: clientId  // ✅ CRITICAL: Check both matricule AND société
         },
         include: {
           client: true

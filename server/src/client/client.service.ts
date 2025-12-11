@@ -218,33 +218,59 @@ export class ClientService {
   // --- Role-based filtering in findAll ---
   async findAll(query: SearchClientDto, user?: any) {
     let where: any = {
-      name: query.name ? { contains: query.name, mode: 'insensitive' } : undefined,
-      status: query.status && query.status !== 'all' ? query.status : { not: 'deleted' },
+      AND: []
     };
+    
+    // Add name filter
+    if (query.name) {
+      where.AND.push({ name: { contains: query.name, mode: 'insensitive' } });
+    }
+    
+    // Add status filter
+    if (query.status && query.status !== 'all') {
+      where.AND.push({ status: query.status });
+    } else {
+      where.AND.push({ status: { not: 'deleted' } });
+    }
     
     // ROLE-BASED VISIBILITY RESTRICTION
     if (user) {
       const userId = user.id || user.userId || user.sub;
       const userRole = user.role;
       
-      // Chef d'équipe and Gestionnaire: Only see clients assigned to them
-      if (userRole === 'CHEF_EQUIPE' || userRole === 'GESTIONNAIRE') {
-        where.gestionnaires = {
-          some: { id: userId }
-        };
+      // Chef d'équipe, Gestionnaire, and Gestionnaire Senior: Only see clients assigned to them
+      if (userRole === 'CHEF_EQUIPE' || userRole === 'GESTIONNAIRE' || userRole === 'GESTIONNAIRE_SENIOR') {
+        where.AND.push({
+          OR: [
+            // Direct assignment as Chargé de Compte
+            { chargeCompteId: userId },
+            // Assignment through gestionnaires relation
+            { gestionnaires: { some: { id: userId } } },
+            // Assignment through contract as Team Leader
+            { contracts: { some: { teamLeaderId: userId } } },
+            // Assignment through contract as Assigned Manager
+            { contracts: { some: { assignedManagerId: userId } } }
+          ]
+        });
       }
     }
     
-    if (query.gestionnaireId) {
-      where.gestionnaires = {
-        some: { id: query.gestionnaireId }
-      };
+    // Add gestionnaire filter ONLY if user is SUPER_ADMIN or no role-based filter was applied
+    if (query.gestionnaireId && (!user || !['CHEF_EQUIPE', 'GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'].includes(user.role))) {
+      where.AND.push({
+        gestionnaires: { some: { id: query.gestionnaireId } }
+      });
+    }
+    
+    // Clean up empty AND array
+    if (where.AND.length === 0) {
+      delete where.AND;
     }
     
     return this.prisma.client.findMany({
       where,
       include: {
-        chargeCompte: true, // Chef d'équipe assigned to client
+        chargeCompte: true,
         contracts: true,
         bordereaux: true,
         reclamations: true,
@@ -988,6 +1014,7 @@ export class ClientService {
         bordereaux: true,
         reclamations: true,
         compagnieAssurance: true,
+        gestionnaires: true,
       },
     });
     if (!client) throw new NotFoundException('Client not found');
@@ -997,14 +1024,12 @@ export class ClientService {
       const userId = user.id || user.userId || user.sub;
       const userRole = user.role;
       
-      // Chef d'équipe and Gestionnaire: Only access clients assigned to them
-      if (userRole === 'CHEF_EQUIPE' || userRole === 'GESTIONNAIRE') {
-        const gestionnaires = await this.prisma.client.findUnique({
-          where: { id },
-          include: { gestionnaires: true }
-        });
-        
-        const hasAccess = gestionnaires?.gestionnaires.some(g => g.id === userId);
+      // Chef d'équipe, Gestionnaire, and Gestionnaire Senior: Only access clients assigned to them
+      if (userRole === 'CHEF_EQUIPE' || userRole === 'GESTIONNAIRE' || userRole === 'GESTIONNAIRE_SENIOR') {
+        const hasAccess = 
+          client.chargeCompteId === userId ||
+          client.gestionnaires?.some(g => g.id === userId) ||
+          client.contracts?.some(c => c.teamLeaderId === userId || c.assignedManagerId === userId);
         
         if (!hasAccess) {
           throw new NotFoundException('Client not found or access denied');

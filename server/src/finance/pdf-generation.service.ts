@@ -522,16 +522,17 @@ export class PdfGenerationService {
   
   private async updateFinanceStatistics(ordreVirement: any, deadlineValidation: any): Promise<void> {
     try {
-      // Update bordereau status to VIREMENT_EXECUTE
-      if (ordreVirement.bordereauId) {
-        await this.prisma.bordereau.update({
-          where: { id: ordreVirement.bordereauId },
-          data: {
-            statut: 'VIREMENT_EXECUTE',
-            dateExecutionVirement: new Date()
-          }
-        });
-      }
+      // NO STATUS CHANGE - bordereau stays TRAITE until virement is EXECUTE
+      // PDF generation should NOT change bordereau status
+      // if (ordreVirement.bordereauId) {
+      //   await this.prisma.bordereau.update({
+      //     where: { id: ordreVirement.bordereauId },
+      //     data: {
+      //       statut: 'VIREMENT_EXECUTE',
+      //       dateExecutionVirement: new Date()
+      //     }
+      //   });
+      // }
       
       // Log statistics for dashboard (as per cahier de charges requirements)
       if (ordreVirement.bordereauId) {

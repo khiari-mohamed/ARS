@@ -2,12 +2,12 @@ import axios from 'axios';
 
 export const LocalAPI = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
-  timeout: 10000,
+  timeout: 300000, // 5 minutes for large file uploads
 });
 
 export const ExternalAPI = axios.create({
   baseURL: process.env.REACT_APP_EXTERNAL_API_URL || 'http://localhost:3002',
-  timeout: 10000,
+  timeout: 300000, // 5 minutes for large file uploads
 });
 
 export const AIAPI = axios.create({

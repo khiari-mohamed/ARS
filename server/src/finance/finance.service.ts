@@ -73,14 +73,14 @@ export class FinanceService {
     if (!virement) throw new NotFoundException('Virement not found');
     if (virement.confirmed) throw new BadRequestException('Already confirmed');
 
-    // Update virement and bordereau - FIXED: Use actual execution date
+    // KEEP bordereau as TRAITE - only update dates, not status
     const now = new Date();
     await this.prisma.bordereau.update({
       where: { id: virement.bordereauId },
       data: {
         dateDepotVirement: virement.dateDepot,
-        dateExecutionVirement: now, // Use current date as actual execution
-        statut: 'VIREMENT_EXECUTE'
+        dateExecutionVirement: now
+        // NO status change - stays TRAITE
       },
     });
 
@@ -207,12 +207,13 @@ export class FinanceService {
       },
     });
     for (const v of virements) {
-      // Update bordereau as in manual confirmation
+      // NO STATUS CHANGE - only update dates, bordereau stays TRAITE
       await this.prisma.bordereau.update({
         where: { id: v.bordereauId },
         data: {
           dateDepotVirement: v.dateDepot,
-          dateExecutionVirement: v.dateExecution,
+          dateExecutionVirement: v.dateExecution
+          // NO status change
         },
       });
       await this.prisma.virement.update({
@@ -942,12 +943,13 @@ Montant total: ${estimatedAmount.toLocaleString('fr-FR')} TND
 
 Document généré automatiquement par ARS`;
 
-      await this.prisma.bordereau.updateMany({
-        where: {
-          id: { in: bordereaux.filter(b => b.statut === 'TRAITE').map(b => b.id) },
-        },
-        data: { statut: 'PRET_VIREMENT' }
-      });
+      // NO STATUS CHANGE - bordereau stays TRAITE
+      // await this.prisma.bordereau.updateMany({
+      //   where: {
+      //     id: { in: bordereaux.filter(b => b.statut === 'TRAITE').map(b => b.id) },
+      //   },
+      //   data: { statut: 'PRET_VIREMENT' }
+      // });
 
       console.log('✅ OV generated successfully for', bordereaux.length, 'bordereaux');
       return { 
@@ -1659,12 +1661,14 @@ Document généré automatiquement par ARS`;
         updateData.dateTraitement = new Date();
         updateData.dateEtatFinal = new Date();
         updateData.utilisateurFinance = user.id;
+        // NO bordereau status change - stays TRAITE until virement is EXECUTE
       } else {
         updateData.validationStatus = 'REJETE_VALIDATION';
         updateData.etatVirement = 'VIREMENT_NON_VALIDE';
         updateData.dateTraitement = new Date();
         updateData.dateEtatFinal = new Date();
         updateData.utilisateurFinance = user.id;
+        // NO bordereau status change
       }
       
       const updatedOV = await this.prisma.ordreVirement.update({
