@@ -1,23 +1,39 @@
-export const alertLevelColor = (level: 'green' | 'orange' | 'red'): string => {
-  switch (level) {
+export const alertLevelColor = (level: string): string => {
+  const normalized = level?.toLowerCase();
+  switch (normalized) {
     case 'red':
+    case 'critical':
+    case 'high':
       return '#f44336';
     case 'orange':
+    case 'warning':
+    case 'medium':
       return '#ff9800';
     case 'green':
+    case 'normal':
+    case 'low':
+    case 'info':
       return '#4caf50';
     default:
       return '#9e9e9e';
   }
 };
 
-export const alertLevelLabel = (level: 'green' | 'orange' | 'red'): string => {
-  switch (level) {
+export const alertLevelLabel = (level: string): string => {
+  const normalized = level?.toLowerCase();
+  switch (normalized) {
     case 'red':
+    case 'critical':
+    case 'high':
       return 'Critique';
     case 'orange':
+    case 'warning':
+    case 'medium':
       return 'Attention';
     case 'green':
+    case 'normal':
+    case 'low':
+    case 'info':
       return 'Normal';
     default:
       return 'Inconnu';

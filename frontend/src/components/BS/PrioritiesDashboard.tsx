@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Card, List, Select, Tag, Spin, Alert } from 'antd';
 import { usePriorities } from '../../hooks/useBS';
 
-// Type for a prioritized BS (adjust fields as needed)
-type PriorityBS = {
-  id: number;
-  numBs: string;
-  dueDate?: string;
-  nomAssure?: string;
-  etat?: string;
+// Type for a prioritized item (all document types)
+type PriorityItem = {
+  id: string;
+  type: 'BulletinSoin' | 'Document' | 'Bordereau' | 'Reclamation';
+  reference: string;
+  priority: number;
+  dueDate?: string | null;
+  status: string;
+  createdAt: string;
 };
 
 type Gestionnaire = { id: number; name: string };
@@ -55,7 +57,7 @@ export const PrioritiesDashboard: React.FC = () => {
   }, []);
 
   const { data: priorities, isLoading, error } = usePriorities(selected!) as {
-    data: PriorityBS[] | undefined;
+    data: PriorityItem[] | undefined;
     isLoading: boolean;
     error?: any;
   };
@@ -75,22 +77,30 @@ export const PrioritiesDashboard: React.FC = () => {
         loading={isLoading}
         dataSource={priorities || []}
         locale={{ emptyText: 'Aucune priorité IA pour ce gestionnaire.' }}
-        renderItem={(bs: PriorityBS) => (
-          <List.Item>
-            <span>
-              <b>BS #{bs.numBs}</b>
-              {bs.nomAssure && <> — {bs.nomAssure}</>}
-              {bs.etat && (
-                <Tag style={{ marginLeft: 8 }}>{bs.etat}</Tag>
-              )}
-              {bs.dueDate && (
-                <Tag color={new Date(bs.dueDate) < new Date() ? 'red' : 'orange'} style={{ marginLeft: 8 }}>
-                  {new Date(bs.dueDate) < new Date() ? 'En retard' : 'À traiter bientôt'} — {new Date(bs.dueDate).toLocaleDateString()}
+        renderItem={(item: PriorityItem) => {
+          const isOverdue = item.dueDate && new Date(item.dueDate) < new Date();
+          const isUrgent = item.dueDate && new Date(item.dueDate) < new Date(Date.now() + 24 * 60 * 60 * 1000);
+          
+          return (
+            <List.Item>
+              <span>
+                <Tag color={item.type === 'BulletinSoin' ? 'blue' : item.type === 'Document' ? 'green' : item.type === 'Bordereau' ? 'purple' : 'orange'}>
+                  {item.type}
                 </Tag>
-              )}
-            </span>
-          </List.Item>
-        )}
+                <b>{item.reference}</b>
+                <Tag style={{ marginLeft: 8 }} color={item.priority > 2 ? 'red' : item.priority > 1 ? 'orange' : 'default'}>
+                  Priorité {item.priority}
+                </Tag>
+                <Tag style={{ marginLeft: 8 }}>{item.status}</Tag>
+                {item.dueDate && (
+                  <Tag color={isOverdue ? 'red' : isUrgent ? 'orange' : 'default'} style={{ marginLeft: 8 }}>
+                    {isOverdue ? '🔴 En retard' : isUrgent ? '⚠️ Urgent' : '📅 À traiter'} — {new Date(item.dueDate).toLocaleDateString()}
+                  </Tag>
+                )}
+              </span>
+            </List.Item>
+          );
+        }}
       />
     </Card>
   );

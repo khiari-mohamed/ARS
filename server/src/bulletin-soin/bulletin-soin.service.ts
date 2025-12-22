@@ -351,239 +351,378 @@ export class BulletinSoinService {
     }
   }
 
-  // TEAM WORKLOAD: Get team workload statistics
+  // TEAM WORKLOAD: Get team workload statistics (ALL document types)
   async getTeamWorkloadStats() {
-    try {
-      const gestionnaires = await this.prisma.user.findMany({ 
-        where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true },
-        select: { id: true, fullName: true }
-      });
+    console.log('\n📊 === WORKLOAD STATS DEBUG START ===');
+    const gestionnaires = await this.prisma.user.findMany({ 
+      where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true },
+      select: { id: true, fullName: true }
+    });
+    console.log(`👥 Found ${gestionnaires.length} gestionnaires`);
 
-      const workloadStats = await Promise.all(
-        gestionnaires.map(async (g) => {
-          const allBS = await this.prisma.bulletinSoin.findMany({
-            where: { ownerId: g.id, deletedAt: null },
-            select: { etat: true, dueDate: true }
-          });
+    const workloadStats = await Promise.all(
+      gestionnaires.map(async (g) => {
+        console.log(`\n🔍 Calculating workload for: ${g.fullName}`);
+        const now = new Date();
+        
+        // Count BulletinSoin
+        const bsInProgress = await this.prisma.bulletinSoin.count({
+          where: { ownerId: g.id, etat: { in: ['IN_PROGRESS', 'EN_COURS'] }, deletedAt: null }
+        });
+        const bsValidated = await this.prisma.bulletinSoin.count({
+          where: { ownerId: g.id, etat: 'VALIDATED', deletedAt: null }
+        });
+        const bsRejected = await this.prisma.bulletinSoin.count({
+          where: { ownerId: g.id, etat: 'REJECTED', deletedAt: null }
+        });
+        const bsOverdue = await this.prisma.bulletinSoin.count({
+          where: { ownerId: g.id, dueDate: { lt: now }, etat: { notIn: ['VALIDATED', 'REJECTED'] }, deletedAt: null }
+        });
+        console.log(`  📄 BulletinSoin: ${bsInProgress} in progress, ${bsValidated} validated, ${bsRejected} rejected, ${bsOverdue} overdue`);
+        
+        // Count Documents (all types)
+        const docsInProgress = await this.prisma.document.count({
+          where: { assignedToUserId: g.id, status: { in: ['EN_COURS', 'UPLOADED'] } }
+        });
+        const docsCompleted = await this.prisma.document.count({
+          where: { assignedToUserId: g.id, status: { in: ['TRAITE', 'SCANNE'] } }
+        });
+        const docsRejected = await this.prisma.document.count({
+          where: { assignedToUserId: g.id, status: 'REJETE' }
+        });
+        console.log(`  📁 Documents: ${docsInProgress} in progress, ${docsCompleted} completed, ${docsRejected} rejected`);
+        
+        // Count Bordereaux
+        const bordereauxInProgress = await this.prisma.bordereau.count({
+          where: { currentHandlerId: g.id, statut: { in: ['EN_COURS', 'ASSIGNE', 'A_AFFECTER'] } }
+        });
+        const bordereauxCompleted = await this.prisma.bordereau.count({
+          where: { currentHandlerId: g.id, statut: { in: ['TRAITE', 'CLOTURE', 'PAYE'] } }
+        });
+        console.log(`  📋 Bordereaux: ${bordereauxInProgress} in progress, ${bordereauxCompleted} completed`);
+        
+        // Count Reclamations
+        const reclamationsInProgress = await this.prisma.reclamation.count({
+          where: { assignedToId: g.id, status: { in: ['OPEN', 'IN_PROGRESS', 'PENDING'] } }
+        });
+        const reclamationsCompleted = await this.prisma.reclamation.count({
+          where: { assignedToId: g.id, status: { in: ['RESOLVED', 'CLOSED'] } }
+        });
+        console.log(`  🎫 Reclamations: ${reclamationsInProgress} in progress, ${reclamationsCompleted} completed`);
+        
+        // Calculate totals
+        const activeWorkload = bsInProgress + docsInProgress + bordereauxInProgress + reclamationsInProgress;
+        const totalValidated = bsValidated + docsCompleted + bordereauxCompleted + reclamationsCompleted;
+        const totalRejected = bsRejected + docsRejected;
+        const total = activeWorkload + totalValidated + totalRejected;
+        
+        console.log(`  ✅ TOTAL ACTIVE WORKLOAD: ${activeWorkload} (BS:${bsInProgress} + Docs:${docsInProgress} + Bordereaux:${bordereauxInProgress} + Reclamations:${reclamationsInProgress})`);
+        
+        return {
+          id: g.id,
+          fullName: g.fullName,
+          workload: activeWorkload,
+          inProgress: bsInProgress + docsInProgress + bordereauxInProgress + reclamationsInProgress,
+          enCours: bsInProgress,
+          validated: totalValidated,
+          rejected: totalRejected,
+          total,
+          overdue: bsOverdue,
+          risk: activeWorkload > 10 ? 'HIGH' : activeWorkload > 5 ? 'MEDIUM' : 'LOW'
+        };
+      })
+    );
+    
+    console.log('\n📊 === WORKLOAD STATS DEBUG END ===\n');
 
-          const inProgress = allBS.filter(bs => bs.etat === 'IN_PROGRESS').length;
-          const enCours = allBS.filter(bs => bs.etat === 'EN_COURS').length;
-          const validated = allBS.filter(bs => bs.etat === 'VALIDATED').length;
-          const rejected = allBS.filter(bs => bs.etat === 'REJECTED').length;
-          const total = allBS.length;
-          
-          const now = new Date();
-          const overdue = allBS.filter(bs => 
-            bs.dueDate && bs.dueDate < now && bs.etat !== 'VALIDATED'
-          ).length;
-          
-          const activeWorkload = inProgress + enCours;
-          
-          return {
-            id: g.id,
-            fullName: g.fullName,
-            workload: activeWorkload,
-            inProgress,
-            enCours,
-            validated,
-            rejected,
-            total,
-            overdue,
-            risk: activeWorkload > 10 ? 'HIGH' : activeWorkload > 5 ? 'MEDIUM' : 'LOW'
-          };
-        })
-      );
-
-      return workloadStats;
-    } catch (error) {
-      console.error('Database error for team workload, using fallback:', error);
-      return [
-        {
-          id: '1',
-          fullName: 'Gestionnaire 1',
-          workload: 6,
-          inProgress: 4,
-          enCours: 2,
-          validated: 15,
-          rejected: 1,
-          total: 22,
-          overdue: 3,
-          risk: 'MEDIUM'
-        },
-        {
-          id: '2',
-          fullName: 'Gestionnaire 2',
-          workload: 2,
-          inProgress: 1,
-          enCours: 1,
-          validated: 12,
-          rejected: 0,
-          total: 14,
-          overdue: 0,
-          risk: 'LOW'
-        },
-        {
-          id: '3',
-          fullName: 'Gestionnaire 3',
-          workload: 8,
-          inProgress: 5,
-          enCours: 3,
-          validated: 18,
-          rejected: 2,
-          total: 28,
-          overdue: 1,
-          risk: 'MEDIUM'
-        },
-        {
-          id: '4',
-          fullName: 'Gestionnaire 4',
-          workload: 12,
-          inProgress: 8,
-          enCours: 4,
-          validated: 20,
-          rejected: 3,
-          total: 35,
-          overdue: 5,
-          risk: 'HIGH'
-        }
-      ];
-    }
+    return workloadStats;
   }
 
-  // AI SUGGESTION: Suggest daily priorities for a gestionnaire
+  // AI SUGGESTION: Suggest daily priorities for a gestionnaire (ALL document types)
   async suggestPriorities(gestionnaireId: string) {
-    try {
-      const bsList = await this.prisma.bulletinSoin.findMany({
-        where: { ownerId: gestionnaireId, etat: { not: 'VALIDATED' }, deletedAt: null },
-        orderBy: { dueDate: 'asc' },
-      });
-      return bsList;
-    } catch (error) {
-      console.error('Database error for priorities, using fallback:', error);
-      return [
-        {
-          id: 1,
-          numBs: 'BS-2024-001',
-          nomAssure: 'Dupont Jean',
-          etat: 'IN_PROGRESS',
-          dueDate: new Date('2024-01-19')
-        },
-        {
-          id: 2,
-          numBs: 'BS-2024-002',
-          nomAssure: 'Martin Paul',
-          etat: 'IN_PROGRESS',
-          dueDate: new Date('2024-01-21')
-        }
-      ];
-    }
+    console.log(`\n🎯 === PRIORITIES DEBUG START for gestionnaire: ${gestionnaireId} ===`);
+    const now = new Date();
+    
+    // Get BulletinSoin priorities
+    const bsList = await this.prisma.bulletinSoin.findMany({
+      where: { ownerId: gestionnaireId, etat: { notIn: ['VALIDATED', 'REJECTED'] }, deletedAt: null },
+      orderBy: { dueDate: 'asc' },
+      take: 10
+    });
+    console.log(`📄 Found ${bsList.length} BulletinSoin priorities`);
+    
+    // Get Document priorities (all statuses)
+    const docsList = await this.prisma.document.findMany({
+      where: { 
+        assignedToUserId: gestionnaireId
+      },
+      orderBy: [
+        { priority: 'desc' },
+        { uploadedAt: 'asc' }
+      ],
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        uploadedAt: true,
+        priority: true,
+        status: true
+      },
+      take: 10
+    });
+    console.log(`📁 Found ${docsList.length} Document priorities (all statuses)`);
+    
+    // Get Bordereau priorities (all statuses)
+    const bordereauxList = await this.prisma.bordereau.findMany({
+      where: { 
+        currentHandlerId: gestionnaireId
+      },
+      orderBy: [
+        { priority: 'desc' },
+        { dateReception: 'asc' }
+      ],
+      select: {
+        id: true,
+        reference: true,
+        type: true,
+        dateReception: true,
+        priority: true,
+        statut: true,
+        dateLimiteTraitement: true
+      },
+      take: 10
+    });
+    console.log(`📋 Found ${bordereauxList.length} Bordereau priorities (all statuses)`);
+    
+    // Get Reclamation priorities (all statuses)
+    const reclamationsList = await this.prisma.reclamation.findMany({
+      where: { 
+        assignedToId: gestionnaireId
+      },
+      orderBy: [
+        { priority: 'desc' },
+        { createdAt: 'asc' }
+      ],
+      select: {
+        id: true,
+        type: true,
+        severity: true,
+        status: true,
+        createdAt: true,
+        priority: true,
+        description: true
+      },
+      take: 10
+    });
+    console.log(`🎫 Found ${reclamationsList.length} Reclamation priorities (all statuses)`);
+    
+    // Combine and format all priorities
+    const allPriorities = [
+      ...bsList.map(bs => ({
+        id: bs.id,
+        type: 'BulletinSoin',
+        reference: bs.numBs,
+        priority: bs.priority || 1,
+        dueDate: bs.dueDate,
+        status: bs.etat,
+        createdAt: bs.dateCreation
+      })),
+      ...docsList.map(doc => ({
+        id: doc.id,
+        type: 'Document',
+        reference: doc.name,
+        priority: doc.priority || 1,
+        dueDate: null,
+        status: doc.status,
+        createdAt: doc.uploadedAt
+      })),
+      ...bordereauxList.map(bord => ({
+        id: bord.id,
+        type: 'Bordereau',
+        reference: bord.reference,
+        priority: bord.priority || 1,
+        dueDate: bord.dateLimiteTraitement,
+        status: bord.statut,
+        createdAt: bord.dateReception
+      })),
+      ...reclamationsList.map(rec => ({
+        id: rec.id,
+        type: 'Reclamation',
+        reference: rec.description?.substring(0, 50) || rec.type,
+        priority: rec.priority || 1,
+        dueDate: null,
+        status: rec.status,
+        createdAt: rec.createdAt
+      }))
+    ];
+    
+    // Sort by priority (high first), then by due date
+    allPriorities.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      if (a.dueDate && b.dueDate) return a.dueDate.getTime() - b.dueDate.getTime();
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+    
+    console.log(`✅ Total priorities: ${allPriorities.length}`);
+    console.log(`🎯 === PRIORITIES DEBUG END ===\n`);
+    
+    return allPriorities.slice(0, 20); // Return top 20 priorities
   }
 
   // ADVANCED AI REBALANCING
   async suggestRebalancing() {
-    try {
-      const stats = await this.getTeamWorkloadStats();
-      
-      if (stats.length < 2) {
-        return [];
-      }
-
-      const avgWorkload = stats.reduce((sum, s) => sum + s.workload, 0) / stats.length;
-      const workloadVariance = stats.reduce((sum, s) => sum + Math.pow(s.workload - avgWorkload, 2), 0) / stats.length;
-      
-      if (workloadVariance <= 2) {
-        return [];
-      }
-
-      const suggestions: { 
-        bsId: string; 
-        bsNumBs: string;
-        from: string; 
-        fromName: string; 
-        to: string; 
-        toName: string; 
-        reason: string;
-        priority: number;
-        impact: string;
-      }[] = [];
-
-      const sortedStats = [...stats].sort((a, b) => b.workload - a.workload);
-      const overloaded = sortedStats.filter(s => s.workload > avgWorkload + 1);
-      const underloaded = sortedStats.filter(s => s.workload < avgWorkload - 1);
-
-      for (const over of overloaded) {
-        if (underloaded.length === 0) break;
-
-        const candidateBS = await this.prisma.bulletinSoin.findMany({
-          where: { 
-            ownerId: over.id, 
-            etat: { in: ['IN_PROGRESS', 'EN_COURS'] }, 
-            deletedAt: null 
-          },
-          select: {
-            id: true,
-            numBs: true,
-            dateCreation: true,
-            dueDate: true,
-            etat: true,
-            priority: true,
-            totalPec: true
-          },
-          orderBy: [
-            { priority: 'asc' },
-            { dateCreation: 'asc' }
-          ],
-          take: 3
-        });
-
-        if (candidateBS.length === 0) continue;
-
-        const bsToMove = candidateBS[0];
-        
-        const target = underloaded
-          .filter(u => u.workload < over.workload - 2)
-          .sort((a, b) => {
-            if (a.workload !== b.workload) return a.workload - b.workload;
-            return a.overdue - b.overdue;
-          })[0];
-
-        if (!target) continue;
-
-        const workloadDiff = over.workload - target.workload;
-        const isOverdue = bsToMove.dueDate && bsToMove.dueDate < new Date();
-        const priority = isOverdue ? 1 : (workloadDiff > 4 ? 2 : 3);
-        
-        const impact = workloadDiff > 4 ? 'Élevé' : workloadDiff > 2 ? 'Moyen' : 'Faible';
-        
-        suggestions.push({
-          bsId: bsToMove.id,
-          bsNumBs: bsToMove.numBs,
-          from: over.id,
-          fromName: over.fullName,
-          to: target.id,
-          toName: target.fullName,
-          priority,
-          impact,
-          reason: `Optimisation: ${over.fullName} (${over.workload} BS, ${over.overdue} retards) → ${target.fullName} (${target.workload} BS). Impact: ${impact}.${isOverdue ? ' BS en retard prioritaire.' : ''}`
-        });
-
-        target.workload += 1;
-      }
-
-      return suggestions.sort((a, b) => a.priority - b.priority);
-      
-    } catch (error) {
-      console.error('AI Rebalancing error:', error);
+    console.log('\n🔄 === REBALANCING DEBUG START ===');
+    const stats = await this.getTeamWorkloadStats();
+    console.log('📊 Team Stats:', JSON.stringify(stats.map(s => ({ name: s.fullName, workload: s.workload, inProgress: s.inProgress, overdue: s.overdue })), null, 2));
+    
+    if (stats.length < 2) {
+      console.log('❌ Not enough gestionnaires (need at least 2):', stats.length);
       return [];
     }
+
+    const avgWorkload = stats.reduce((sum, s) => sum + s.workload, 0) / stats.length;
+    console.log('📈 Average Workload:', avgWorkload);
+    
+    const workloadVariance = stats.reduce((sum, s) => sum + Math.pow(s.workload - avgWorkload, 2), 0) / stats.length;
+    console.log('📉 Workload Variance:', workloadVariance);
+    
+    if (workloadVariance <= 2) {
+      console.log('✅ Workload is balanced (variance <= 2), no rebalancing needed');
+      console.log('🔄 === REBALANCING DEBUG END ===\n');
+      return [];
+    }
+    
+    console.log('⚠️ Workload imbalance detected! Generating suggestions...');
+
+    const suggestions: { 
+      bsId: string; 
+      bsNumBs: string;
+      from: string; 
+      fromName: string; 
+      to: string; 
+      toName: string; 
+      reason: string;
+      priority: number;
+      impact: string;
+    }[] = [];
+
+    const sortedStats = [...stats].sort((a, b) => b.workload - a.workload);
+    const overloaded = sortedStats.filter(s => s.workload > avgWorkload + 1);
+    const underloaded = sortedStats.filter(s => s.workload < avgWorkload - 1);
+    
+    console.log('🔴 Overloaded gestionnaires:', overloaded.map(s => `${s.fullName} (${s.workload})`));
+    console.log('🟢 Underloaded gestionnaires:', underloaded.map(s => `${s.fullName} (${s.workload})`));
+
+    for (const over of overloaded) {
+      console.log(`\n🔍 Processing overloaded: ${over.fullName} (${over.workload} items)`);
+      if (underloaded.length === 0) {
+        console.log('❌ No underloaded gestionnaires available');
+        break;
+      }
+
+      // Try to find Documents to rebalance (primary workload source)
+      const candidateDocs = await this.prisma.document.findMany({
+        where: { 
+          assignedToUserId: over.id, 
+          status: { in: ['EN_COURS', 'UPLOADED'] }
+        },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          uploadedAt: true,
+          priority: true,
+          status: true
+        },
+        orderBy: [
+          { priority: 'asc' },
+          { uploadedAt: 'asc' }
+        ],
+        take: 5
+      });
+      
+      console.log(`  📁 Found ${candidateDocs.length} candidate Documents for rebalancing`);
+
+      if (candidateDocs.length === 0) {
+        console.log('  ⚠️ No candidate Documents found, skipping');
+        continue;
+      }
+
+      const docToMove = candidateDocs[0];
+      console.log(`  📄 Selected Document to move: ${docToMove.name} (${docToMove.type})`);
+      
+      const target = underloaded
+        .filter(u => u.workload < over.workload - 2)
+        .sort((a, b) => {
+          if (a.workload !== b.workload) return a.workload - b.workload;
+          return a.overdue - b.overdue;
+        })[0];
+
+      if (!target) {
+        console.log('  ❌ No suitable target found (need workload difference > 2)');
+        continue;
+      }
+      
+      console.log(`  ✅ Target found: ${target.fullName} (${target.workload} items)`);
+
+      const workloadDiff = over.workload - target.workload;
+      const priority = workloadDiff > 4 ? 1 : (workloadDiff > 2 ? 2 : 3);
+      
+      const impact = workloadDiff > 4 ? 'Élevé' : workloadDiff > 2 ? 'Moyen' : 'Faible';
+      
+      suggestions.push({
+        bsId: docToMove.id,
+        bsNumBs: docToMove.name,
+        from: over.id,
+        fromName: over.fullName,
+        to: target.id,
+        toName: target.fullName,
+        priority,
+        impact,
+        reason: `Rééquilibrage: ${over.fullName} (${over.workload} documents) → ${target.fullName} (${target.workload} documents). Impact: ${impact}. Document: ${docToMove.name}`
+      });
+      
+      console.log(`  ✨ Suggestion created: ${docToMove.name} from ${over.fullName} → ${target.fullName}`);
+
+      target.workload += 1;
+    }
+    
+    console.log(`\n📝 Total suggestions generated: ${suggestions.length}`);
+    console.log('🔄 === REBALANCING DEBUG END ===\n');
+
+    return suggestions.sort((a, b) => a.priority - b.priority);
   }
 
   // APPLY REBALANCING: Execute a rebalancing suggestion
-  async applyRebalancing(bsId: string, toUserId: string) {
+  async applyRebalancing(documentId: string, toUserId: string) {
     try {
-      const bs = await this.prisma.bulletinSoin.findUnique({ where: { id: bsId } });
+      // Try Document first (primary workload source)
+      const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
+      
+      if (doc) {
+        const targetUser = await this.prisma.user.findUnique({ where: { id: toUserId } });
+        if (!targetUser) {
+          throw new NotFoundException('Target user not found');
+        }
+
+        const updatedDoc = await this.prisma.document.update({
+          where: { id: documentId },
+          data: { 
+            assignedToUserId: toUserId,
+            assignedAt: new Date(),
+            assignedByUserId: targetUser.id
+          }
+        });
+
+        return { success: true, message: `Document ${doc.name} transféré vers ${targetUser.fullName}` };
+      }
+      
+      // Fallback to BulletinSoin if not a Document
+      const bs = await this.prisma.bulletinSoin.findUnique({ where: { id: documentId } });
       if (!bs || bs.deletedAt) {
-        throw new NotFoundException('Bulletin de soin not found');
+        throw new NotFoundException('Document or Bulletin de soin not found');
       }
 
       const targetUser = await this.prisma.user.findUnique({ where: { id: toUserId } });
@@ -592,13 +731,13 @@ export class BulletinSoinService {
       }
 
       const updatedBS = await this.prisma.bulletinSoin.update({
-        where: { id: bsId },
+        where: { id: documentId },
         data: { ownerId: toUserId }
       });
 
       await this.prisma.bSLog.create({
         data: {
-          bsId: bsId,
+          bsId: documentId,
           userId: toUserId,
           action: `Rééquilibrage IA: BS transféré vers ${targetUser.fullName}`,
           timestamp: new Date(),
@@ -612,74 +751,71 @@ export class BulletinSoinService {
     }
   }
 
-  // AI SUGGESTION: Suggest best gestionnaire for assignment
+  // AI SUGGESTION: Suggest best gestionnaire for assignment (ALL document types)
   async suggestAssignment() {
-    try {
-      const gestionnaires = await this.prisma.user.findMany({ 
-        where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true },
-        select: { id: true, fullName: true }
+    const gestionnaires = await this.prisma.user.findMany({ 
+      where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true },
+      select: { id: true, fullName: true }
+    });
+    
+    if (gestionnaires.length === 0) {
+      return [];
+    }
+
+    const stats = await Promise.all(gestionnaires.map(async g => {
+      const now = new Date();
+      
+      // Count ALL active workload
+      const bsInProgress = await this.prisma.bulletinSoin.count({ 
+        where: { ownerId: g.id, etat: { in: ['IN_PROGRESS', 'EN_COURS'] }, deletedAt: null } 
+      });
+      const docsInProgress = await this.prisma.document.count({
+        where: { assignedToUserId: g.id, status: { in: ['EN_COURS', 'UPLOADED'] } }
+      });
+      const bordereauxInProgress = await this.prisma.bordereau.count({
+        where: { currentHandlerId: g.id, statut: { in: ['EN_COURS', 'ASSIGNE', 'A_AFFECTER'] } }
+      });
+      const reclamationsInProgress = await this.prisma.reclamation.count({
+        where: { assignedToId: g.id, status: { in: ['OPEN', 'IN_PROGRESS', 'PENDING'] } }
       });
       
-      if (gestionnaires.length === 0) {
-        return [{
-          id: 'mock-1',
-          fullName: 'Gestionnaire 1',
-          inProgress: 3,
-          overdue: 0,
-          avgProcessingHours: 2.5,
-          score: 0.85,
-          efficiency_score: 0.85
-        }];
-      }
-
-      const stats = await Promise.all(gestionnaires.map(async g => {
-        const inProgress = await this.prisma.bulletinSoin.count({ 
-          where: { ownerId: g.id, etat: { in: ['IN_PROGRESS', 'EN_COURS'] }, deletedAt: null } 
-        });
-        const overdue = await this.prisma.bulletinSoin.count({ 
-          where: { ownerId: g.id, dueDate: { lt: new Date() }, etat: { not: 'VALIDATED' }, deletedAt: null } 
-        });
-        const processed = await this.prisma.bulletinSoin.findMany({ 
-          where: { processedById: g.id, processedAt: { not: null }, deletedAt: null },
-          take: 50
-        });
-        
-        const avgTime = processed.length > 0 ? processed.reduce((sum, bs) => {
-          const processedAt = bs.processedAt ? new Date(bs.processedAt) : null;
-          const dateCreation = bs.dateCreation ? new Date(bs.dateCreation) : null;
-          if (!processedAt || !dateCreation) return sum;
-          return sum + ((processedAt.getTime() - dateCreation.getTime()) / 1000 / 60 / 60);
-        }, 0) / processed.length : null;
-        
-        const baseScore = Math.max(0, 1 - (inProgress * 0.1) - (overdue * 0.2));
-        const timeBonus = avgTime ? Math.max(0, 1 - (avgTime / 24)) : 0.5;
-        const efficiency_score = (baseScore + timeBonus) / 2;
-        
-        return { 
-          id: g.id, 
-          fullName: g.fullName, 
-          inProgress, 
-          overdue, 
-          avgProcessingHours: avgTime,
-          score: efficiency_score,
-          efficiency_score
-        };
-      }));
+      const totalInProgress = bsInProgress + docsInProgress + bordereauxInProgress + reclamationsInProgress;
       
-      stats.sort((a, b) => b.score - a.score);
-      return stats;
-    } catch (error) {
-      console.error('AI suggestion error:', error);
-      return [{
-        id: 'fallback-1',
-        fullName: 'Gestionnaire disponible',
-        inProgress: 2,
-        overdue: 0,
-        avgProcessingHours: 3.0,
-        score: 0.75,
-        efficiency_score: 0.75
-      }];
-    }
+      // Count overdue items
+      const bsOverdue = await this.prisma.bulletinSoin.count({ 
+        where: { ownerId: g.id, dueDate: { lt: now }, etat: { notIn: ['VALIDATED', 'REJECTED'] }, deletedAt: null } 
+      });
+      
+      // Calculate efficiency from processed BS
+      const processed = await this.prisma.bulletinSoin.findMany({ 
+        where: { processedById: g.id, processedAt: { not: null }, deletedAt: null },
+        take: 50
+      });
+      
+      const avgTime = processed.length > 0 ? processed.reduce((sum, bs) => {
+        const processedAt = bs.processedAt ? new Date(bs.processedAt) : null;
+        const dateCreation = bs.dateCreation ? new Date(bs.dateCreation) : null;
+        if (!processedAt || !dateCreation) return sum;
+        return sum + ((processedAt.getTime() - dateCreation.getTime()) / 1000 / 60 / 60);
+      }, 0) / processed.length : null;
+      
+      const baseScore = Math.max(0, 1 - (totalInProgress * 0.05) - (bsOverdue * 0.2));
+      const timeBonus = avgTime ? Math.max(0, 1 - (avgTime / 24)) : 0.5;
+      const efficiency_score = (baseScore + timeBonus) / 2;
+      
+      return { 
+        id: g.id, 
+        fullName: g.fullName, 
+        inProgress: totalInProgress, 
+        overdue: bsOverdue, 
+        avgProcessingHours: avgTime,
+        score: efficiency_score,
+        efficiency_score
+      };
+    }));
+    
+    stats.sort((a, b) => b.score - a.score);
+    return stats;
   }
 
   // Other methods (OCR, Expertise, Logs, etc.) - simplified versions

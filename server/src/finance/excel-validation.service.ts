@@ -42,12 +42,15 @@ export class ExcelValidationService {
     private txtParserService: TxtParserService
   ) {}
 
-  async validateExcelFile(fileBuffer: Buffer, clientId: string): Promise<ExcelValidationResult> {
+  async validateExcelFile(fileBuffer: Buffer, clientId: string | string[]): Promise<ExcelValidationResult> {
+    // Fix: Handle clientId as array (frontend sends it twice)
+    const actualClientId = Array.isArray(clientId) ? clientId[0] : clientId;
+    console.log('validateExcelFile called with clientId:', clientId, '-> using:', actualClientId);
     // Check if file is TXT format (starts with 110104)
     const content = fileBuffer.toString('utf-8');
     if (content.startsWith('110104')) {
       console.log('Detected TXT format file, parsing as TXT');
-      return this.parseTxtFile(fileBuffer, clientId);
+      return this.parseTxtFile(fileBuffer, actualClientId);
     }
     
     let worksheet: ExcelJS.Worksheet | undefined;
@@ -71,6 +74,10 @@ export class ExcelValidationService {
     
     console.log('Processing Excel worksheet with', worksheet.rowCount, 'rows');
 
+    // Detect column positions from header row
+    const columnMap = this.detectColumns(worksheet.getRow(1));
+    console.log('Detected columns:', columnMap);
+
     const results: VirementValidationItem[] = [];
     const errors: ValidationError[] = [];
     const matriculeMap = new Map<string, number>();
@@ -78,22 +85,28 @@ export class ExcelValidationService {
     // Process all rows
     const rowPromises: Promise<{item?: VirementValidationItem, error?: ValidationError}>[] = [];
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
-      rowPromises.push(this.processRow(worksheet.getRow(rowNumber), rowNumber, clientId));
+      rowPromises.push(this.processRow(worksheet.getRow(rowNumber), rowNumber, actualClientId, columnMap));
     }
     
     const rowResults = await Promise.all(rowPromises);
     
+    console.log(`Received ${rowResults.length} row results`);
     for (const result of rowResults) {
-      if (result.item) {
+      console.log(`Result:`, JSON.stringify(result));
+      if (result && result.item) {
+        console.log(`Adding item: matricule=${result.item.matricule}, status=${result.item.status}`);
         results.push(result.item);
       }
-      if (result.error) {
+      if (result && result.error) {
         errors.push(result.error);
       }
     }
+    
+    console.log(`Total items before consolidation: ${results.length}`);
 
     // Additionner les montants pour les adhérents qui apparaissent plusieurs fois
     const consolidatedResults = this.consolidateAmounts(results);
+    console.log(`Total items after consolidation: ${consolidatedResults.length}`);
 
     const summary = {
       total: consolidatedResults.length,
@@ -226,39 +239,108 @@ export class ExcelValidationService {
     };
   }
   
-  private async processRow(row: ExcelJS.Row, rowNumber: number, clientId: string): Promise<{item?: VirementValidationItem, error?: ValidationError}> {
+  private detectColumns(headerRow: ExcelJS.Row): { matricule: number; nom: number; prenom: number; rib: number; montant: number; societe: number } {
+    const map = { matricule: -1, nom: -1, prenom: -1, rib: -1, montant: -1, societe: -1 };
+    
+    headerRow.eachCell((cell, colNumber) => {
+      const header = (cell.text || cell.value?.toString() || '').toLowerCase().trim();
+      
+      if (header.includes('matricule') || header.includes('mat')) {
+        map.matricule = colNumber;
+      } else if (header.includes('prenom') || header.includes('prénom') || header.includes('firstname')) {
+        map.prenom = colNumber;
+      } else if (header.includes('nom') && !header.includes('prenom') && !header.includes('prénom')) {
+        map.nom = colNumber;
+      } else if (header.includes('rib') || header.includes('compte')) {
+        map.rib = colNumber;
+      } else if (header.includes('montant') || header.includes('amount')) {
+        map.montant = colNumber;
+      } else if (header.includes('societe') || header.includes('société') || header.includes('client')) {
+        map.societe = colNumber;
+      }
+    });
+    
+    return map;
+  }
+
+  private async processRow(row: ExcelJS.Row, rowNumber: number, clientId: string, columnMap: any): Promise<{item?: VirementValidationItem, error?: ValidationError}> {
     if (!row.hasValues) {
       return {};
     }
 
     try {
-      // EXACT SPEC: Excel input limited to Matricule + Montant (comma as decimal separator)
-      const matricule = row.getCell(1).text?.trim(); // Matricule
-      const montantStr = row.getCell(2).text?.trim().replace(',', '.').replace(/\s/g, ''); // Montant with comma support
-      const montant = parseFloat(montantStr);
+      // Use detected column positions
+      const matricule = columnMap.matricule > 0 ? (row.getCell(columnMap.matricule).text || row.getCell(columnMap.matricule).value?.toString() || '').trim() : '';
+      
+      // Handle montant - if column not detected, search all columns for first number
+      let montant: number = NaN;
+      let montantRaw = '';
+      
+      if (columnMap.montant > 0) {
+        montantRaw = (row.getCell(columnMap.montant).text || row.getCell(columnMap.montant).value?.toString() || '').trim();
+        montant = parseFloat(montantRaw.replace(',', '.').replace(/\s/g, ''));
+      } else {
+        // Search for montant in all columns
+        for (let colIndex = 2; colIndex <= 10; colIndex++) {
+          const cellRaw = (row.getCell(colIndex).text || row.getCell(colIndex).value?.toString() || '').trim();
+          const cellNum = parseFloat(cellRaw.replace(',', '.').replace(/\s/g, ''));
+          if (!isNaN(cellNum) && cellNum > 0 && cellNum < 1000000000) {
+            montantRaw = cellRaw;
+            montant = cellNum;
+            break;
+          }
+        }
+      }
+      
+      console.log(`Row ${rowNumber}: matricule="${matricule}", montantRaw="${montantRaw}", montant=${montant}`);
+      
+      // Skip empty rows (both matricule and montant empty)
+      if (!matricule && isNaN(montant)) {
+        console.log(`Row ${rowNumber}: Skipped (empty)`);
+        return {};
+      }
       
       // EXACT SPEC: Fetch adherent data from database using matricule AND clientId
       // This prevents picking wrong adherent if two companies have same matricule
-      const adherent = matricule ? await this.prisma.adherent.findFirst({
-        where: {
-          matricule: matricule,
-          clientId: clientId  // ✅ CRITICAL: Check both matricule AND société
-        },
-        include: {
-          client: true
+      let adherent: any = null;
+      if (matricule) {
+        // Try with clientId first
+        adherent = await this.prisma.adherent.findFirst({
+          where: {
+            matricule: matricule,
+            clientId: clientId
+          },
+          include: { client: true }
+        });
+        
+        // If not found and clientId is 'default', try without clientId filter
+        if (!adherent && clientId === 'default') {
+          adherent = await this.prisma.adherent.findFirst({
+            where: { matricule: matricule },
+            include: { client: true }
+          });
         }
-      }) : null;
-      
-      // Use adherent data if found, otherwise mark as error
-      const nom = adherent?.nom || '';
-      const prenom = adherent?.prenom || '';
-      const societe = adherent?.client?.name || 'ARS TUNISIE';
-      const rib = adherent?.rib || '';
-      
-      // Skip empty or invalid rows
-      if (!matricule && !nom && !prenom && !rib && isNaN(montant)) {
-        return {};
       }
+      
+      // Use adherent data if found, otherwise try Excel columns
+      const excelNom = columnMap.nom > 0 ? (row.getCell(columnMap.nom).text || row.getCell(columnMap.nom).value?.toString() || '').trim() : '';
+      const excelPrenom = columnMap.prenom > 0 ? (row.getCell(columnMap.prenom).text || row.getCell(columnMap.prenom).value?.toString() || '').trim() : '';
+      
+      // Handle RIB - convert scientific notation to full number
+      let excelRib = '';
+      if (columnMap.rib > 0) {
+        const ribCell = row.getCell(columnMap.rib);
+        if (ribCell.value) {
+          // Always use the TEXT value for RIB to avoid precision loss
+          excelRib = (ribCell.text || ribCell.value.toString()).trim().replace(/\s/g, '');
+        }
+      }
+      
+      // Priority: Excel first, then DB (if Excel column missing/empty)
+      const nom = excelNom || adherent?.nom || '';
+      const prenom = excelPrenom || adherent?.prenom || '';
+      const societe = adherent?.client?.name || 'ARS TUNISIE';
+      const rib = excelRib || adherent?.rib || '';
 
       const validationItem: VirementValidationItem = {
         matricule: matricule || '',
@@ -282,15 +364,16 @@ export class ExcelValidationService {
         validationItem.status = 'ERREUR';
       }
       
-      // EXACT SPEC: Validate adherent exists in database
-      if (!adherent) {
+      // EXACT SPEC: Validate adherent exists in database (optional - only warning if not found)
+      if (matricule && !adherent) {
         validationItem.erreurs.push('Adhérent non trouvé dans la base');
-        validationItem.status = 'ERREUR';
-      } else if (!adherent.rib || adherent.rib.length < 20) {
+        validationItem.status = 'ALERTE'; // Changed from ERREUR to ALERTE
+      } else if (adherent && (!adherent.rib || adherent.rib.length < 20)) {
         validationItem.erreurs.push('RIB invalide dans la base adhérents');
         validationItem.status = 'ALERTE';
       }
       
+      console.log(`Row ${rowNumber}: Processed - status=${validationItem.status}, errors=${validationItem.erreurs.length}`);
       return { item: validationItem };
 
     } catch (error) {

@@ -65,11 +65,14 @@ export class ExcelImportService {
     const valid: VirementData[] = [];
     const errors: ImportError[] = [];
     const matriculeAmounts: Map<string, number> = new Map();
+    const matriculeNames: Map<string, { nom: string; prenom: string }> = new Map();
 
-    // First pass: aggregate amounts by matricule
+    // First pass: aggregate amounts by matricule and extract names if present
     data.forEach((row, index) => {
       const matricule = this.extractMatricule(row);
       const montant = this.extractMontant(row);
+      const nom = this.extractNom(row);
+      const prenom = this.extractPrenom(row);
 
       if (!matricule) {
         errors.push({
@@ -94,6 +97,11 @@ export class ExcelImportService {
       // Aggregate amounts for same matricule
       const currentAmount = matriculeAmounts.get(matricule) || 0;
       matriculeAmounts.set(matricule, currentAmount + montant);
+      
+      // Store names if present in Excel
+      if (nom || prenom) {
+        matriculeNames.set(matricule, { nom: nom || '', prenom: prenom || '' });
+      }
     });
 
     // Second pass: validate matricules and create virement data
@@ -103,6 +111,7 @@ export class ExcelImportService {
     // Process valid adherents
     for (const adherent of validation.valid) {
       const montant = matriculeAmounts.get(adherent.matricule) || 0;
+      const excelNames = matriculeNames.get(adherent.matricule);
       
       let statut: 'VALIDE' | 'ERREUR' = 'VALIDE';
       let erreur: string | undefined;
@@ -115,11 +124,18 @@ export class ExcelImportService {
         statut = 'ERREUR';
         erreur = 'RIB utilisé par plusieurs adhérents';
       }
+      
+      // Use names from Excel if present, otherwise from database
+      const finalAdherent = excelNames ? {
+        ...adherent,
+        nom: excelNames.nom || adherent.nom,
+        prenom: excelNames.prenom || adherent.prenom
+      } : adherent;
 
       valid.push({
         matricule: adherent.matricule,
         montant,
-        adherent,
+        adherent: finalAdherent,
         statut,
         erreur
       });
@@ -179,6 +195,28 @@ export class ExcelImportService {
       }
     }
 
+    return null;
+  }
+
+  private extractNom(row: any): string | null {
+    const possibleKeys = ['nom', 'Nom', 'NOM', 'name', 'Name', 'NAME', 'lastname', 'LastName'];
+    
+    for (const key of possibleKeys) {
+      if (row[key] !== undefined && row[key] !== null && String(row[key]).trim()) {
+        return String(row[key]).trim();
+      }
+    }
+    return null;
+  }
+
+  private extractPrenom(row: any): string | null {
+    const possibleKeys = ['prenom', 'Prenom', 'PRENOM', 'prénom', 'Prénom', 'firstname', 'FirstName'];
+    
+    for (const key of possibleKeys) {
+      if (row[key] !== undefined && row[key] !== null && String(row[key]).trim()) {
+        return String(row[key]).trim();
+      }
+    }
     return null;
   }
 

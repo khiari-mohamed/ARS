@@ -155,7 +155,7 @@ function GestionnaireSeniorDashboard() {
     if (!currentDossier) return;
     
     try {
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+      const response = await LocalAPI.post('/bordereaux/gestionnaire-senior/modify-dossier-status', {
         dossierId: currentDossier.id,
         newStatus
       });
@@ -305,11 +305,11 @@ function GestionnaireSeniorDashboard() {
             <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#333' }}>📥 Ma Corbeille</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
               <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Dossiers Traités</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Bordereaux Traités</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4caf50' }}>{corbeille.traites || 0}</div>
               </div>
               <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Dossiers En Cours</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Bordereaux En Cours</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff9800' }}>{corbeille.enCours || 0}</div>
               </div>
               {/* Gestionnaire Senior works autonomously - no "Non Affectés" needed */}

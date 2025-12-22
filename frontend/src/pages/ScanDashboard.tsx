@@ -1554,6 +1554,17 @@ const ScanDashboard: React.FC = () => {
                   </Typography>
                 </FormControl>
               </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Date de Réception"
+                  value={selectedBordereau.dateReception ? new Date(selectedBordereau.dateReception).toISOString().split('T')[0] : ''}
+                  onChange={(e) => setSelectedBordereau({...selectedBordereau, dateReception: e.target.value})}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Modifiable en cas d'erreur du Bureau d'Ordre"
+                />
+              </Grid>
             </Grid>
           )}
         </DialogContent>
@@ -1564,10 +1575,10 @@ const ScanDashboard: React.FC = () => {
             onClick={async () => {
               try {
                 const { LocalAPI } = await import('../services/axios');
-                await LocalAPI.post(`/scan/bordereau/${selectedBordereau.id}/update-details`, {
-                  type: selectedBordereau.type,
+                await LocalAPI.patch(`/scan/bordereau/${selectedBordereau.id}/modify`, {
+                  reference: selectedBordereau.reference,
                   clientId: selectedBordereau.clientId,
-                  reference: selectedBordereau.reference
+                  dateReception: selectedBordereau.dateReception
                 });
                 
                 // Refresh bordereau data

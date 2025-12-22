@@ -102,22 +102,33 @@ const DocumentTypesTab: React.FC<Props> = ({ filters, dateRange }) => {
   ];
 
   // Prepare data for charts
-  const pieData = documentTypes.map(type => ({
-    name: type.label,
-    value: data.typesBreakdown?.[type.key] || 0,
-    color: type.color,
-    icon: type.icon,
-    slaApplicable: type.slaApplicable
-  })).filter(item => item.value > 0);
+  const pieData = documentTypes.map(type => {
+    const typeData = data.typesBreakdown?.[type.key];
+    const value = typeof typeData === 'object' ? typeData.total : (typeData || 0);
+    return {
+      name: type.label,
+      value,
+      color: type.color,
+      icon: type.icon,
+      slaApplicable: type.slaApplicable
+    };
+  }).filter(item => item.value > 0);
 
-  const barData = documentTypes.map(type => ({
-    name: type.label.split(' ')[0], // Shortened name for chart
-    total: data.typesBreakdown?.[type.key] || 0,
-    traites: data.statusByType?.[type.key]?.TRAITE || 0,
-    enCours: data.statusByType?.[type.key]?.EN_COURS || 0,
-    rejetes: data.statusByType?.[type.key]?.REJETE || 0,
-    slaApplicable: type.slaApplicable
-  })).filter(item => item.total > 0);
+  const barData = documentTypes.map(type => {
+    const typeData = data.typesBreakdown?.[type.key];
+    const total = typeof typeData === 'object' ? typeData.total : (typeData || 0);
+    const traites = typeof typeData === 'object' ? typeData.traite : (data.statusByType?.[type.key]?.TRAITE || 0);
+    const enCours = typeof typeData === 'object' ? typeData.enCours : (data.statusByType?.[type.key]?.EN_COURS || 0);
+    const rejetes = typeof typeData === 'object' ? typeData.rejete : (data.statusByType?.[type.key]?.REJETE || 0);
+    return {
+      name: type.label.split(' ')[0],
+      total,
+      traites,
+      enCours,
+      rejetes,
+      slaApplicable: type.slaApplicable
+    };
+  }).filter(item => item.total > 0);
 
   const slaApplicableTotal = pieData.filter(item => item.slaApplicable).reduce((sum, item) => sum + item.value, 0);
   const nonSlaTotal = pieData.filter(item => !item.slaApplicable).reduce((sum, item) => sum + item.value, 0);
@@ -190,8 +201,9 @@ const DocumentTypesTab: React.FC<Props> = ({ filters, dateRange }) => {
           <Typography variant="h6" sx={{ mb: 2 }}>Répartition par Type de Document</Typography>
           <Grid container spacing={2}>
             {documentTypes.map((type) => {
-              const count = data.typesBreakdown?.[type.key] || 0;
-              const statusData = data.statusByType?.[type.key] || {};
+              const typeData = data.typesBreakdown?.[type.key];
+              const count = typeof typeData === 'object' ? typeData.total : (typeData || 0);
+              const statusData = typeof typeData === 'object' ? typeData : (data.statusByType?.[type.key] || {});
               
               return (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={type.key}>
@@ -261,22 +273,32 @@ const DocumentTypesTab: React.FC<Props> = ({ filters, dateRange }) => {
       <Grid item xs={12} md={6}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Distribution des Types</Typography>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={350}>
             <PieChart>
               <Pie
                 data={pieData}
                 cx="50%"
-                cy="50%"
-                outerRadius={100}
+                cy="45%"
+                outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
-                label={({ name, percent }) => `${name.split(' ')[0]} ${(percent * 100).toFixed(0)}%`}
+                label={false}
               >
                 {pieData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
               <Tooltip />
+              <Legend 
+                layout="horizontal" 
+                verticalAlign="bottom" 
+                align="center"
+                wrapperStyle={{ paddingTop: '20px' }}
+                formatter={(value, entry: any) => {
+                  const percent = ((entry.payload.value / pieData.reduce((sum, item) => sum + item.value, 0)) * 100).toFixed(0);
+                  return `${value} ${percent}%`;
+                }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </Paper>

@@ -434,6 +434,26 @@ export class AnalyticsController {
     return this.analyticsService.getSLAComplianceByType(user, query);
   }
 
+  @Get('documents/types-breakdown')
+  async getDocumentTypesBreakdown(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    console.log('📊 getDocumentTypesBreakdown called');
+    return this.analyticsService.getDocumentTypesBreakdown(user, query);
+  }
+
+  @Get('documents/status-by-type')
+  async getDocumentStatusByType(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    console.log('📊 getDocumentStatusByType called');
+    return this.analyticsService.getDocumentStatusByType(user, query);
+  }
+
+  @Get('gestionnaires/daily-performance')
+  async getGestionnairesDailyPerformance(@Query() query: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getGestionnairesDailyPerformance(user, query);
+  }
+
 }
 ;
   

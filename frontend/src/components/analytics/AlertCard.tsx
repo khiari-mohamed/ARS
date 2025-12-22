@@ -13,7 +13,8 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Grid
+  Grid,
+  CircularProgress
 } from '@mui/material';
 import { useResponsive } from '../../hooks/useResponsive';
 import {
@@ -37,15 +38,111 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
   const [expanded, setExpanded] = useState(false);
   const [commentDialog, setCommentDialog] = useState(false);
   const [detailsDialog, setDetailsDialog] = useState(false);
+  const [resolveDialog, setResolveDialog] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<string>('');
+  const [loadingAI, setLoadingAI] = useState(false);
   const [comment, setComment] = useState('');
   const { isMobile } = useResponsive();
 
   const resolveMutation = useResolveAlert();
   const commentMutation = useAddAlertComment();
 
+  const handleResolveClick = () => {
+    setResolveDialog(true);
+    fetchAISuggestion();
+  };
+
+  const fetchAISuggestion = async () => {
+    setLoadingAI(true);
+    try {
+      const AI_URL = process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localhost:8002';
+      
+      // Get token first
+      const tokenResponse = await fetch(`${AI_URL}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          username: 'admin',
+          password: 'secret'
+        })
+      });
+      const tokenData = await tokenResponse.json();
+      
+      // Make authenticated request to alert resolution endpoint
+      const response = await fetch(`${AI_URL}/alert_resolution`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tokenData.access_token}`
+        },
+        body: JSON.stringify({
+          alert: {
+            alert_level: alert.alertLevel,
+            days_since_reception: alert.daysSinceReception ?? 0,
+            sla_threshold: alert.slaThreshold ?? 30,
+            reason: alert.reason
+          },
+          bordereau: {
+            id: alert.bordereau.id,
+            reference: alert.bordereau.reference,
+            nombreBS: 1,
+            delaiReglement: alert.slaThreshold ?? 30,
+            statut: alert.bordereau.statut,
+            client_name: alert.bordereau.client?.name,
+            assignedToUserId: alert.bordereau.assignedToUserId
+          }
+        })
+      });
+      const data = await response.json();
+      console.log('AI Response:', data);
+      
+      // Parse alert resolution response with clean formatting
+      let suggestion = 'Aucune suggestion disponible';
+      if (data.suggestions && data.suggestions.length > 0) {
+        const sug = data.suggestions[0];
+        const priority = data.priority || 'MEDIUM';
+        const priorityIcon = priority === 'CRITICAL' ? '🔴' : priority === 'HIGH' ? '🟠' : '🟡';
+        const priorityText = priority === 'CRITICAL' ? 'CRITIQUE' : priority === 'HIGH' ? 'HAUTE' : 'MOYENNE';
+        const confidence = Math.round((sug.confidence === 'high' ? 0.9 : sug.confidence === 'medium' ? 0.75 : 0.6) * 100);
+        
+        suggestion = `🤖 ANALYSE IA - RÉSOLUTION ALERTE
+───────────────────────────────────
+
+PRIORITÉ: ${priorityIcon} ${priorityText}
+
+🎯 RECOMMANDATION
+${sug.title}
+
+📋 ANALYSE
+${sug.description}
+
+💡 PLAN D'ACTION
+${sug.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}
+
+⏱️ TEMPS ESTIMÉ: ${sug.estimated_time}
+📊 CONFIANCE IA: ${confidence}%${data.suggestions.length > 1 ? `
+
+───────────────────────────────────
+📌 SUGGESTION ADDITIONNELLE
+${data.suggestions[1].title}
+• ${data.suggestions[1].steps[0]}` : ''}`;
+      } else if (data.error) {
+        suggestion = `❌ Erreur: ${data.error}`;
+      }
+      
+      setAiSuggestion(suggestion);
+    } catch (error) {
+      console.error('Failed to fetch AI suggestion:', error);
+      setAiSuggestion('Erreur lors de la récupération de la suggestion IA');
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
   const handleResolve = async () => {
     try {
       await resolveMutation.mutateAsync(alert.bordereau.id);
+      setResolveDialog(false);
       onResolved?.();
     } catch (error) {
       console.error('Failed to resolve alert:', error);
@@ -146,20 +243,20 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
                 size="small"
                 startIcon={<CheckCircle />}
                 color="success"
-                onClick={handleResolve}
+                onClick={handleResolveClick}
                 disabled={resolveMutation.isLoading}
                 fullWidth={isMobile}
               >
                 Résoudre
               </Button>
-              <Button
+              {/* <Button
                 size="small"
                 startIcon={<Comment />}
                 onClick={() => setCommentDialog(true)}
                 fullWidth={isMobile}
               >
                 Commenter
-              </Button>
+              </Button> */}
               <Button
                 size="small"
                 startIcon={<Visibility />}
@@ -184,10 +281,10 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
                 Informations Détaillées
               </Typography>
               <Typography variant="body2" mb={1}>
-                <strong>Équipe:</strong> {alert.bordereau.teamId || 'Non assignée'}
+                <strong>Équipe:</strong> {alert.bordereau.teamName || 'Non assignée'}
               </Typography>
               <Typography variant="body2" mb={1}>
-                <strong>Assigné à:</strong> {alert.assignedTo?.fullName || 'Non assigné'}
+                <strong>Assigné à:</strong> {alert.bordereau.assignedToName || 'Non assigné'}
               </Typography>
               <Typography variant="body2" mb={1}>
                 <strong>Date de réception:</strong> {
@@ -267,18 +364,14 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
                   <Typography variant="body1" gutterBottom>{alert.bordereau.client?.name || alert.bordereau.clientId}</Typography>
                 </Grid>
               )}
-              {(alert.bordereau.team?.fullName || alert.bordereau.teamId) && (
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary">Équipe</Typography>
-                  <Typography variant="body1" gutterBottom>{alert.bordereau.team?.fullName || alert.bordereau.teamId}</Typography>
-                </Grid>
-              )}
-              {(alert.bordereau.currentHandler?.fullName || alert.bordereau.chargeCompte?.fullName || alert.bordereau.assignedToUserId) && (
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" color="text.secondary">Gestionnaire</Typography>
-                  <Typography variant="body1" gutterBottom>{alert.bordereau.currentHandler?.fullName || alert.bordereau.chargeCompte?.fullName || alert.bordereau.assignedToUserId}</Typography>
-                </Grid>
-              )}
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Équipe</Typography>
+                <Typography variant="body1" gutterBottom>{alert.bordereau.teamName || 'Non assignée'}</Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle2" color="text.secondary">Gestionnaire</Typography>
+                <Typography variant="body1" gutterBottom>{alert.bordereau.assignedToName || 'Non assigné'}</Typography>
+              </Grid>
               <Grid item xs={12}>
                 <Typography variant="subtitle2" color="text.secondary">Niveau d'alerte</Typography>
                 <Chip
@@ -307,6 +400,67 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDetailsDialog(false)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Resolve Dialog with AI Suggestion */}
+      <Dialog 
+        open={resolveDialog} 
+        onClose={() => setResolveDialog(false)} 
+        maxWidth="md" 
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle>Résoudre l'Alerte</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Bordereau: {alert.bordereau.reference || alert.bordereau.id}
+            </Typography>
+            
+            <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+              <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                🤖 Suggestion IA
+              </Typography>
+              {loadingAI ? (
+                <Box display="flex" alignItems="center" gap={1}>
+                  <CircularProgress size={20} />
+                  <Typography>Analyse en cours...</Typography>
+                </Box>
+              ) : (
+                <Typography variant="body1">
+                  {aiSuggestion}
+                </Typography>
+              )}
+            </Box>
+
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Informations de l'alerte:
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                • Niveau: {alertLevelLabel(alert.alertLevel)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                • Raison: {alert.reason}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                • SLA: {alert.daysSinceReception} jours écoulés / {alert.slaThreshold} jours
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResolveDialog(false)}>Annuler</Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleResolve}
+            disabled={resolveMutation.isLoading}
+            startIcon={<CheckCircle />}
+          >
+            Résoudre Manuellement
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -36,17 +36,15 @@ const ResolvedAlerts: React.FC = () => {
 
   const handleExport = () => {
     const csvContent = [
-      ['Client', 'Bordereau', 'Type', 'Niveau', 'Message', 'Résolu le', 'Temps de résolution'],
+      ['Client', 'Bordereau', 'Type', 'Niveau', 'Message', 'Résolu par', 'Résolu le'],
       ...resolvedAlerts.map((alert: AlertHistoryEntry) => [
         alert.bordereau?.client?.name || alert.bordereau?.clientId || '-',
         alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id || '-',
         alert.alertType,
         alertLevelLabel(alert.alertLevel),
         alert.message,
-        alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleDateString() : '-',
-        alert.resolvedAt && alert.createdAt 
-          ? `${Math.round((new Date(alert.resolvedAt).getTime() - new Date(alert.createdAt).getTime()) / (1000 * 60 * 60 * 24))} jours`
-          : '-'
+        alert.user?.fullName || alert.userId || 'Système',
+        alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleDateString() : '-'
       ])
     ].map((row: any) => row.map(String).map((s: string) => `"${s.replace(/"/g, '""')}"`).join(',')).join('\n');
 
@@ -129,65 +127,49 @@ const ResolvedAlerts: React.FC = () => {
                 <TableCell>Message</TableCell>
                 <TableCell>Résolu par</TableCell>
                 <TableCell>Résolu le</TableCell>
-                <TableCell>Temps résolution</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {resolvedAlerts
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((alert: AlertHistoryEntry) => {
-                  const resolutionTime = alert.resolvedAt && alert.createdAt 
-                    ? Math.round((new Date(alert.resolvedAt).getTime() - new Date(alert.createdAt).getTime()) / (1000 * 60 * 60 * 24))
-                    : null;
-
-                  return (
-                    <TableRow key={alert.id}>
-                      <TableCell>{alert.bordereau?.client?.name || alert.bordereau?.clientId || '-'}</TableCell>
-                      <TableCell>
-                        {(alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id) ? (
-                          <Button
-                            variant="text"
-                            size="small"
-                            onClick={() => window.open(`/bordereaux/${alert.bordereauId || alert.bordereau?.id}`, '_blank')}
-                          >
-                            {alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id}
-                          </Button>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell>{alert.alertType}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={alertLevelLabel(alert.alertLevel)}
-                          sx={{
-                            backgroundColor: alertLevelColor(alert.alertLevel),
-                            color: '#fff',
-                          }}
+                .map((alert: AlertHistoryEntry) => (
+                  <TableRow key={alert.id}>
+                    <TableCell>{alert.bordereau?.client?.name || alert.bordereau?.clientId || '-'}</TableCell>
+                    <TableCell>
+                      {(alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id) ? (
+                        <Button
+                          variant="text"
                           size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                          {alert.message}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {alert.user?.fullName || alert.userId || 'Système'}
-                      </TableCell>
-                      <TableCell>
-                        {alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleDateString() : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {resolutionTime ? (
-                          <Chip 
-                            label={`${resolutionTime}j`}
-                            color={resolutionTime <= 1 ? 'success' : resolutionTime <= 3 ? 'warning' : 'error'}
-                            size="small"
-                          />
-                        ) : '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                          onClick={() => window.open(`/bordereaux/${alert.bordereauId || alert.bordereau?.id}`, '_blank')}
+                        >
+                          {alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id}
+                        </Button>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell>{alert.alertType}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={alertLevelLabel(alert.alertLevel)}
+                        sx={{
+                          backgroundColor: alertLevelColor(alert.alertLevel),
+                          color: '#fff',
+                        }}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                        {alert.message}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {alert.user?.fullName || alert.userId || 'Système'}
+                    </TableCell>
+                    <TableCell>
+                      {alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleDateString() : '-'}
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </TableContainer>

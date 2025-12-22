@@ -471,6 +471,131 @@ class SmartRoutingEngine:
         
         return reasoning
     
+    async def suggest_alert_resolution(self, alert_data: Dict, bordereau_data: Dict, db_manager) -> Dict:
+        """Generate AI-powered alert resolution suggestions"""
+        try:
+            days_since = alert_data.get('days_since_reception', 0)
+            sla_threshold = alert_data.get('sla_threshold', 30)
+            alert_level = alert_data.get('alert_level', 'yellow')
+            
+            suggestions = []
+            priority = 'MEDIUM'
+            
+            # Critical: SLA breach
+            if days_since >= sla_threshold:
+                priority = 'CRITICAL'
+                assignment = await self.suggest_optimal_assignment(bordereau_data, db_manager)
+                if assignment.get('recommended_assignment'):
+                    rec = assignment['recommended_assignment']
+                    suggestions.append({
+                        'title': f'Réaffecter à {rec["agent_name"]}',
+                        'description': f'Dépassement SLA critique - Agent expérimenté recommandé',
+                        'steps': [
+                            f'Réaffecter immédiatement à {rec["agent_name"]} ({rec["role"]})',
+                            f'Temps estimé de traitement: {rec["estimated_completion_hours"]}h',
+                            'Escalader au chef d\'équipe',
+                            'Notifier le client du retard',
+                            'Prioriser en traitement urgent'
+                        ],
+                        'estimated_time': f'{rec["estimated_completion_hours"]}h',
+                        'confidence': rec.get('confidence', 'high')
+                    })
+                else:
+                    suggestions.append({
+                        'title': 'Escalade Urgente Requise',
+                        'description': 'Dépassement SLA - Aucun agent optimal trouvé',
+                        'steps': [
+                            'Escalader immédiatement au chef d\'équipe',
+                            'Réaffecter manuellement à un gestionnaire senior',
+                            'Notifier le client',
+                            'Analyser les causes du retard'
+                        ],
+                        'estimated_time': '2-4h',
+                        'confidence': 'medium'
+                    })
+            
+            # High risk: Approaching SLA
+            elif days_since >= sla_threshold * 0.8:
+                priority = 'HIGH'
+                suggestions.append({
+                    'title': 'Risque de Dépassement SLA',
+                    'description': f'{days_since} jours écoulés sur {sla_threshold} jours SLA',
+                    'steps': [
+                        'Vérifier l\'état d\'avancement du traitement',
+                        'Contacter le gestionnaire assigné',
+                        'Identifier les blocages éventuels',
+                        'Préparer un plan de contingence',
+                        'Augmenter la fréquence de suivi'
+                    ],
+                    'estimated_time': '4-8h',
+                    'confidence': 'high'
+                })
+                
+                # Check if unassigned
+                if not bordereau_data.get('assignedToUserId'):
+                    suggestions.append({
+                        'title': 'Bordereau Non Assigné',
+                        'description': 'Le bordereau n\'est pas encore assigné à un gestionnaire',
+                        'steps': [
+                            'Assigner immédiatement à un gestionnaire disponible',
+                            'Définir une date limite de traitement',
+                            'Activer le suivi automatique'
+                        ],
+                        'estimated_time': '1-2h',
+                        'confidence': 'high'
+                    })
+            
+            # Medium risk: Normal monitoring
+            else:
+                suggestions.append({
+                    'title': 'Suivi Standard',
+                    'description': f'Bordereau en cours de traitement ({days_since}/{sla_threshold} jours)',
+                    'steps': [
+                        'Continuer le suivi régulier',
+                        'Vérifier l\'avancement hebdomadaire',
+                        'Maintenir la communication avec le gestionnaire'
+                    ],
+                    'estimated_time': f'{sla_threshold - days_since} jours restants',
+                    'confidence': 'medium'
+                })
+            
+            # Add complexity-based suggestion
+            bs_count = bordereau_data.get('nombreBS', 0)
+            if bs_count > 20:
+                suggestions.append({
+                    'title': 'Dossier Complexe Détecté',
+                    'description': f'Bordereau avec {bs_count} bulletins de soins',
+                    'steps': [
+                        'Diviser le traitement en lots si possible',
+                        'Allouer du temps supplémentaire',
+                        'Considérer l\'assistance d\'un second gestionnaire'
+                    ],
+                    'estimated_time': 'Variable selon complexité',
+                    'confidence': 'medium'
+                })
+            
+            return {
+                'priority': priority,
+                'suggestions': suggestions,
+                'confidence': 0.9 if priority == 'CRITICAL' else 0.85 if priority == 'HIGH' else 0.75,
+                'summary': f'{len(suggestions)} actions recommandées pour résoudre l\'alerte'
+            }
+            
+        except Exception as e:
+            logger.error(f"Alert resolution suggestion failed: {e}")
+            return {
+                'priority': 'MEDIUM',
+                'suggestions': [{
+                    'title': 'Erreur d\'Analyse',
+                    'description': 'Impossible de générer des suggestions',
+                    'steps': ['Vérifier manuellement le bordereau'],
+                    'estimated_time': 'N/A',
+                    'confidence': 'low'
+                }],
+                'confidence': 0.3,
+                'error': str(e)
+            }
+    
 
 
 class AutomatedDecisionEngine:

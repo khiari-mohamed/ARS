@@ -9,6 +9,7 @@ export interface CreateAdherentDto {
   rib: string;
   codeAssure?: string;
   numeroContrat?: string;
+  assurance?: string;
   statut?: string;
 }
 
@@ -18,6 +19,7 @@ export interface UpdateAdherentDto {
   rib?: string;
   codeAssure?: string;
   numeroContrat?: string;
+  assurance?: string;
   statut?: string;
 }
 
@@ -74,6 +76,7 @@ export class AdherentService {
         rib: dto.rib,
         codeAssure: dto.codeAssure,
         numeroContrat: dto.numeroContrat,
+        assurance: dto.assurance,
         statut: dto.statut || 'ACTIF'
       },
       include: {
@@ -89,6 +92,7 @@ export class AdherentService {
       rib: newAdherent.rib,
       codeAssure: newAdherent.codeAssure,
       numeroContrat: newAdherent.numeroContrat,
+      assurance: newAdherent.assurance,
       statut: newAdherent.statut,
       duplicateRib: !!duplicateRib,
       client: {
@@ -149,6 +153,7 @@ export class AdherentService {
         rib: dto.rib,
         codeAssure: dto.codeAssure,
         numeroContrat: dto.numeroContrat,
+        assurance: dto.assurance,
         statut: dto.statut,
         updatedById: userId
       },
@@ -163,6 +168,7 @@ export class AdherentService {
       rib: updated.rib,
       codeAssure: updated.codeAssure,
       numeroContrat: updated.numeroContrat,
+      assurance: updated.assurance,
       statut: updated.statut,
       duplicateRib,
       client: { id: updated.client.id, name: updated.client.name }
@@ -337,6 +343,7 @@ export class AdherentService {
         rib: adherent.rib,
         codeAssure: adherent.codeAssure,
         numeroContrat: adherent.numeroContrat,
+        assurance: adherent.assurance,
         statut: adherent.statut,
         duplicateRib: ribCounts.get(adherent.rib)! > 1,
         client: {

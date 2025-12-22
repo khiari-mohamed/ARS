@@ -19,7 +19,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Button
+  Button,
+  TablePagination
 } from '@mui/material';
 import {
   Description,
@@ -71,6 +72,8 @@ const DocumentAnalyticsDashboard: React.FC = () => {
   const [faultyDataCount, setFaultyDataCount] = useState(0);
   const [gestionnaires, setGestionnaires] = useState<any[]>([]);
   const [chefs, setChefs] = useState<any[]>([]);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
 
   useEffect(() => {
     loadDocumentAnalytics();
@@ -428,7 +431,7 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {assignmentStats.slice(0, 50).map((assignment: any, index) => {
+                {assignmentStats.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((assignment: any, index) => {
                   const hasFaultyData = assignment.hasIssue;
                   return (
                     <TableRow 
@@ -497,6 +500,23 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                 ⚠️ L'affectation doit se faire au niveau de chaque élément du bordereau
               </Typography>
             </Box>
+          )}
+          
+          {assignmentStats.length > 0 && (
+            <TablePagination
+              component="div"
+              count={assignmentStats.length}
+              page={page}
+              onPageChange={(e, newPage) => setPage(newPage)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[25, 50, 100, 200]}
+              labelRowsPerPage="Lignes par page:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+            />
           )}
         </CardContent>
       </Card>

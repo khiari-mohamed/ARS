@@ -17,8 +17,16 @@ export class AlertSchedulerService {
     private enhancedAlerts: EnhancedAlertsService
   ) {}
 
+  private isProcessingSLA = false;
+  
   @Cron(CronExpression.EVERY_10_MINUTES)
   async processSLAAlerts() {
+    if (this.isProcessingSLA) {
+      this.logger.debug('SLA alerts processing already in progress, skipping...');
+      return;
+    }
+    
+    this.isProcessingSLA = true;
     this.logger.log('Processing SLA alerts...');
     
     try {
@@ -106,6 +114,8 @@ export class AlertSchedulerService {
       this.logger.log(`Processed ${bordereaux.length} bordereaux for SLA alerts`);
     } catch (error) {
       this.logger.error('Failed to process SLA alerts:', error);
+    } finally {
+      this.isProcessingSLA = false;
     }
   }
 
@@ -153,48 +163,100 @@ export class AlertSchedulerService {
     }
   }
 
+  private isProcessingTeamOverload = false;
+  
+  // Manual trigger for testing
+  async triggerTeamOverloadCheck() {
+    return this.processTeamOverloadAlerts();
+  }
+  
   @Cron(CronExpression.EVERY_30_MINUTES)
   async processTeamOverloadAlerts() {
+    if (this.isProcessingTeamOverload) {
+      this.logger.debug('Team overload processing already in progress, skipping...');
+      return;
+    }
+    
+    this.isProcessingTeamOverload = true;
     this.logger.log('Processing team overload alerts...');
     
     try {
-      const teams = await this.prisma.user.findMany({
-        where: { role: 'CHEF_EQUIPE' },
-        include: {
-          bordereauxTeam: {
-            where: { statut: { notIn: ['CLOTURE'] } }
-          }
-        }
+      const chefs = await this.prisma.user.findMany({
+        where: { role: 'CHEF_EQUIPE' }
       });
 
-      for (const team of teams) {
-        const workload = team.bordereauxTeam.length;
-        const capacity = 50; // Should come from team settings
+      for (const chef of chefs) {
+        // Find gestionnaires using teamLeaderId relationship
+        const gestionnaires = await this.prisma.user.findMany({
+          where: { 
+            teamLeaderId: chef.id,
+            role: 'GESTIONNAIRE'
+          },
+          select: { id: true, capacity: true }
+        });
+        
+        const gestionnaireIds = gestionnaires.map(g => g.id);
+        
+        // Calculate total team capacity (chef + gestionnaires)
+        const chefCapacity = chef.capacity || 0;
+        const gestionnairesCapacity = gestionnaires.reduce((sum, g) => sum + (g.capacity || 0), 0);
+        const totalCapacity = chefCapacity + gestionnairesCapacity;
+        
+        this.logger.log(`Team ${chef.fullName}: Chef capacity=${chefCapacity}, ${gestionnaires.length} gestionnaires capacity=${gestionnairesCapacity}, TOTAL=${totalCapacity}`);
+        
+        if (totalCapacity === 0) continue;
+        
+        // Count open bordereaux for entire team
+        const workload = await this.prisma.bordereau.count({
+          where: {
+            statut: { notIn: ['CLOTURE', 'PAYE'] },
+            OR: [
+              { teamId: chef.id },
+              { currentHandlerId: { in: [chef.id, ...gestionnaireIds] } }
+            ]
+          }
+        });
+        
+        const utilizationRate = (workload / totalCapacity) * 100;
+        const teamSize = 1 + gestionnaires.length;
 
-        if (workload > capacity * 1.2) {
+        if (utilizationRate > 120) {
           await this.createOrUpdateAlert({
             alertType: 'TEAM_OVERLOAD',
             alertLevel: 'red',
-            message: `Équipe surchargée - ${team.fullName} - ${workload}/${capacity} (+${Math.round((workload / capacity - 1) * 100)}%)`,
-            userId: team.id,
-            metadata: { workload, capacity, overloadPercentage: Math.round((workload / capacity - 1) * 100) }
+            message: `Équipe surchargée - ${chef.fullName} - ${workload}/${totalCapacity} dossiers (+${Math.round((workload / totalCapacity - 1) * 100)}%)`,
+            userId: chef.id,
+            metadata: { workload, capacity: totalCapacity, teamSize, overloadPercentage: Math.round((workload / totalCapacity - 1) * 100) }
           });
-
-          // Notify super admin
-          await this.alertsService.notifyRole('SUPER_ADMIN', {
+        } else if (utilizationRate > 80) {
+          await this.createOrUpdateAlert({
             alertType: 'TEAM_OVERLOAD',
-            alertLevel: 'red',
-            reason: 'Team overload detected',
-            team,
-            workload,
-            capacity
+            alertLevel: 'orange',
+            message: `Charge élevée - ${chef.fullName} - ${workload}/${totalCapacity} dossiers (${Math.round(utilizationRate)}%)`,
+            userId: chef.id,
+            metadata: { workload, capacity: totalCapacity, teamSize, utilizationRate: Math.round(utilizationRate) }
+          });
+        } else {
+          // Resolve existing alerts when utilization is normal
+          await this.prisma.alertLog.updateMany({
+            where: {
+              userId: chef.id,
+              alertType: 'TEAM_OVERLOAD',
+              resolved: false
+            },
+            data: {
+              resolved: true,
+              resolvedAt: new Date()
+            }
           });
         }
       }
 
-      this.logger.log(`Processed ${teams.length} teams for overload alerts`);
+      this.logger.log(`Processed ${chefs.length} teams for overload alerts`);
     } catch (error) {
       this.logger.error('Failed to process team overload alerts:', error);
+    } finally {
+      this.isProcessingTeamOverload = false;
     }
   }
 
@@ -253,37 +315,58 @@ export class AlertSchedulerService {
     aiPrediction?: any;
   }) {
     try {
-      // Check if alert already exists
-      const existingAlert = await this.prisma.alertLog.findFirst({
-        where: {
-          bordereauId: alertData.bordereauId,
-          alertType: alertData.alertType,
-          resolved: false
-        }
+      // Build strict unique constraint - FIXED to prevent duplicates
+      const whereClause: any = {
+        alertType: alertData.alertType,
+        resolved: false
+      };
+      
+      // Ensure exact match for bordereau OR user OR neither
+      if (alertData.bordereauId) {
+        whereClause.bordereauId = alertData.bordereauId;
+      } else {
+        whereClause.bordereauId = null;
+      }
+      
+      if (alertData.userId) {
+        whereClause.userId = alertData.userId;
+      } else {
+        whereClause.userId = null;
+      }
+      
+      // Find existing alert with exact match
+      const existingAlert = await this.prisma.alertLog.findFirst({ 
+        where: whereClause,
+        orderBy: { createdAt: 'desc' }
       });
 
       if (existingAlert) {
-        // Update existing alert WITHOUT changing createdAt
-        await this.prisma.alertLog.update({
-          where: { id: existingAlert.id },
-          data: {
-            message: alertData.message,
-            alertLevel: alertData.alertLevel
-            // DO NOT update createdAt - keep original timestamp
-          }
-        });
+        // Only update if message or level changed
+        if (existingAlert.message !== alertData.message || existingAlert.alertLevel !== alertData.alertLevel) {
+          await this.prisma.alertLog.update({
+            where: { id: existingAlert.id },
+            data: {
+              message: alertData.message,
+              alertLevel: alertData.alertLevel
+            }
+          });
+          this.logger.debug(`Updated existing alert ${existingAlert.id} for ${alertData.alertType}`);
+        } else {
+          this.logger.debug(`Alert already exists and unchanged: ${existingAlert.id}`);
+        }
       } else {
-        // Create new alert only if it doesn't exist
-        await this.prisma.alertLog.create({
+        // Create new alert only if no existing one found
+        const newAlert = await this.prisma.alertLog.create({
           data: {
-            bordereauId: alertData.bordereauId,
-            userId: alertData.userId,
+            bordereauId: alertData.bordereauId || null,
+            userId: alertData.userId || null,
             alertType: alertData.alertType,
             alertLevel: alertData.alertLevel,
             message: alertData.message,
             notifiedRoles: this.getNotificationRoles(alertData.alertType, alertData.alertLevel)
           }
         });
+        this.logger.log(`✅ Created new alert ${newAlert.id} for ${alertData.alertType}`);
       }
     } catch (error) {
       this.logger.error('Failed to create/update alert:', error);
@@ -338,7 +421,8 @@ export class AlertSchedulerService {
   private getSlaThreshold(bordereau: any): number {
     if (bordereau.contract?.delaiReglement) return bordereau.contract.delaiReglement;
     if (bordereau.client?.reglementDelay) return bordereau.client.reglementDelay;
-    return 5; // Default 5 days
+    if (bordereau.delaiReglement) return bordereau.delaiReglement;
+    return 30;
   }
 
   private calculateComplexity(bordereau: any): number {

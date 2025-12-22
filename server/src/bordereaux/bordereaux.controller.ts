@@ -1628,44 +1628,85 @@ export class BordereauxController {
     const user = req.user;
     console.log('🔍 Gestionnaire Senior corbeille - User:', user.id);
     
-    // ONLY show documents from bordereaux where client.chargeCompteId = user.id
+    // ONLY show bordereaux where:
+    // 1. Client chargeCompteId = user.id OR
+    // 2. Contract teamLeaderId = user.id
     const whereClause = {
-      bordereau: {
-        archived: false,
-        client: {
-          chargeCompteId: user.id
-        }
-      }
+      archived: false,
+      OR: [
+        { client: { chargeCompteId: user.id } },
+        { contract: { teamLeaderId: user.id } }
+      ]
     };
     
     const [nonAffectes, enCours, traites] = await Promise.all([
-      this.prisma.document.count({
+      this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
+          statut: { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'] },
           assignedToUserId: null
-        }
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       }),
-      this.prisma.document.count({
+      this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          status: 'EN_COURS'
-        }
+          statut: { in: ['ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] }
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       }),
-      this.prisma.document.count({
+      this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          status: 'TRAITE'
-        }
+          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] },
+          updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        },
+        include: {
+          client: true,
+          contract: true,
+          currentHandler: { select: { fullName: true } },
+          BulletinSoin: { select: { id: true, etat: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       })
     ]);
+
+    console.log('📊 Gestionnaire Senior Results:', {
+      nonAffectes: nonAffectes.length,
+      enCours: enCours.length,
+      traites: traites.length
+    });
+
+    const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
     
     return {
+      nonAffectes: nonAffectes.map(b => BordereauResponseDto.fromEntity(b)),
+      enCours: enCours.map(b => BordereauResponseDto.fromEntity(b)),
+      traites: traites.map(b => BordereauResponseDto.fromEntity(b)),
       stats: {
-        nonAffectes,
-        enCours,
-        traites
+        nonAffectes: nonAffectes.length,
+        enCours: enCours.length,
+        traites: traites.length
       },
-      userRole: user.role
+      userRole: user.role,
+      restrictions: {
+        message: "Gestionnaire Senior - Accès limité à vos clients assignés (travail autonome)",
+        canViewGlobalStats: false,
+        canExportAll: false,
+        canAssignToOthers: false
+      }
     };
   }
 
@@ -1674,16 +1715,23 @@ export class BordereauxController {
   async getGestionnaireSeniorDashboardStats(@Req() req) {
     const user = req.user;
     
-    // Get ONLY data for clients where senior is chargeCompte
     const [clients, bordereaux, documents] = await Promise.all([
       this.prisma.client.findMany({
-        where: { chargeCompteId: user.id },
+        where: {
+          OR: [
+            { chargeCompteId: user.id },
+            { contracts: { some: { teamLeaderId: user.id } } }
+          ]
+        },
         select: { id: true, name: true }
       }),
       this.prisma.bordereau.findMany({
         where: {
           archived: false,
-          client: { chargeCompteId: user.id }
+          OR: [
+            { client: { chargeCompteId: user.id } },
+            { contract: { teamLeaderId: user.id } }
+          ]
         },
         include: { client: true, currentHandler: { select: { fullName: true } } }
       }),
@@ -1691,7 +1739,10 @@ export class BordereauxController {
         where: {
           bordereau: {
             archived: false,
-            client: { chargeCompteId: user.id }
+            OR: [
+              { client: { chargeCompteId: user.id } },
+              { contract: { teamLeaderId: user.id } }
+            ]
           }
         },
         include: { 
@@ -1756,7 +1807,10 @@ export class BordereauxController {
         where: {
           bordereau: {
             archived: false,
-            client: { chargeCompteId: user.id }
+            OR: [
+              { client: { chargeCompteId: user.id } },
+              { contract: { teamLeaderId: user.id } }
+            ]
           }
         },
         include: {
@@ -1769,7 +1823,10 @@ export class BordereauxController {
       this.prisma.bordereau.findMany({
         where: {
           archived: false,
-          client: { chargeCompteId: user.id }
+          OR: [
+            { client: { chargeCompteId: user.id } },
+            { contract: { teamLeaderId: user.id } }
+          ]
         },
         include: {
           client: true,

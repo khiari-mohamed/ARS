@@ -189,8 +189,10 @@ export class SuperAdminController {
         active: true
       },
       include: {
-        bordereauxCurrentHandler: {
-          where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
+        assignedDocuments: {
+          where: { 
+            status: { in: ['EN_COURS', 'SCANNE', 'UPLOADED'] as any }
+          }
         }
       },
       orderBy: [
@@ -202,7 +204,7 @@ export class SuperAdminController {
     console.log(`👥 Found ${users.length} users for workload analysis`);
 
     return users.map(user => {
-      const workload = user.bordereauxCurrentHandler.length;
+      const workload = user.assignedDocuments.length;
       const utilizationRate = user.capacity > 0 ? (workload / user.capacity) * 100 : 0;
       
       // RÈGLE: <70% Normal, 70-89% Busy, ≥90% Overloaded
@@ -215,6 +217,8 @@ export class SuperAdminController {
         level = 'BUSY';
         color = 'warning';
       }
+
+      console.log(`👤 ${user.fullName}: ${workload} documents assigned`);
 
       return {
         id: user.id,
@@ -1704,15 +1708,32 @@ export class SuperAdminController {
 
     if (documentType) whereClause.type = documentType;
 
-    const bordereaux = await this.prisma.bordereau.findMany({
+    // Query DOCUMENTS (not bordereaux)
+    const documents = await this.prisma.document.findMany({
       where: whereClause,
       include: {
-        client: { select: { name: true } },
-        currentHandler: {
+        bordereau: {
+          include: {
+            client: { select: { name: true } },
+            currentHandler: {
+              select: {
+                id: true,
+                fullName: true,
+                role: true,
+                teamLeader: {
+                  select: {
+                    id: true,
+                    fullName: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        assignedTo: {
           select: {
             id: true,
             fullName: true,
-            role: true,
             teamLeader: {
               select: {
                 id: true,
@@ -1722,20 +1743,19 @@ export class SuperAdminController {
           }
         }
       },
-      orderBy: { updatedAt: 'desc' },
-      take: 500
+      orderBy: { uploadedAt: 'desc' }
     });
 
     const now = new Date();
-    const assignments = bordereaux.map(b => {
-      const gestionnaireName = b.currentHandler?.fullName || 'NON ASSIGNÉ';
-      const chefEquipeName = b.currentHandler?.teamLeader?.fullName || 'AUCUN CHEF';
+    const assignments = documents.map(doc => {
+      const gestionnaireName = doc.assignedTo?.fullName || 'NON ASSIGNÉ';
+      const chefEquipeName = doc.assignedTo?.teamLeader?.fullName || 'AUCUN CHEF';
       
       // RÈGLE SLA: Calcul du statut
       let slaStatus = 'ON_TIME';
       let slaColor = 'success';
-      if (b.dateLimiteTraitement) {
-        const hoursRemaining = (b.dateLimiteTraitement.getTime() - now.getTime()) / (1000 * 60 * 60);
+      if (doc.bordereau?.dateLimiteTraitement) {
+        const hoursRemaining = (doc.bordereau.dateLimiteTraitement.getTime() - now.getTime()) / (1000 * 60 * 60);
         if (hoursRemaining < 0) {
           slaStatus = 'OVERDUE';
           slaColor = 'error';
@@ -1746,24 +1766,24 @@ export class SuperAdminController {
       }
 
       // Détection données défaillantes
-      const hasIssue = !b.currentHandler || !b.currentHandler.teamLeader;
+      const hasIssue = !doc.assignedTo || !doc.assignedTo.teamLeader;
 
       return {
-        id: b.id,
-        reference: b.reference,
-        documentType: b.type,
-        clientName: b.client?.name || 'N/A',
+        id: doc.id,
+        reference: doc.name,
+        documentType: doc.type,
+        clientName: doc.bordereau?.client?.name || 'N/A',
         gestionnaire: gestionnaireName,
-        gestionnaireId: b.currentHandler?.id,
+        gestionnaireId: doc.assignedTo?.id,
         chefEquipe: chefEquipeName,
-        chefEquipeId: b.currentHandler?.teamLeader?.id,
-        statut: b.statut,
-        assignedAt: b.updatedAt,
-        dateLimite: b.dateLimiteTraitement,
+        chefEquipeId: doc.assignedTo?.teamLeader?.id,
+        statut: doc.status || 'UPLOADED',
+        assignedAt: doc.assignedAt || doc.uploadedAt,
+        dateLimite: doc.bordereau?.dateLimiteTraitement,
         slaStatus,
         slaColor,
         hasIssue,
-        issueType: hasIssue ? (!b.currentHandler ? 'NO_GESTIONNAIRE' : 'NO_CHEF') : null
+        issueType: hasIssue ? (!doc.assignedTo ? 'NO_GESTIONNAIRE' : 'NO_CHEF') : null
       };
     });
 
@@ -1793,9 +1813,8 @@ export class SuperAdminController {
   async getComprehensiveDocumentStats(@Query() params: any) {
     const documentType = params.documentType;
     
-    console.log('📊 Fetching document stats for type:', documentType || 'ALL');
+    console.log('📊 Fetching DOCUMENT-LEVEL stats for type:', documentType || 'ALL');
     
-    // Count bordereaux by type field
     const documentTypes = [
       'BULLETIN_SOIN',
       'COMPLEMENT_INFORMATION', 
@@ -1811,48 +1830,54 @@ export class SuperAdminController {
     for (const type of documentTypes) {
       if (documentType && documentType !== type) continue;
       
-      // Count bordereaux by this specific type
+      // Count DOCUMENTS (not bordereaux) by type
       const whereClause: any = { type: type as any };
       
       const [total, aScanner, enCoursScan, scanFinalise, enCoursTraitement, traite, regle, slaBreaches] = await Promise.all([
-        this.prisma.bordereau.count({ where: whereClause }),
-        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'A_SCANNER' as any } }),
-        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'SCAN_EN_COURS' as any } }),
-        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'SCANNE' as any } }),
-        this.prisma.bordereau.count({ where: { ...whereClause, statut: { in: ['EN_COURS', 'ASSIGNE'] as any } } }),
-        this.prisma.bordereau.count({ where: { ...whereClause, statut: 'TRAITE' as any } }),
-        this.prisma.bordereau.count({ where: { ...whereClause, statut: { in: ['CLOTURE', 'PAYE'] as any } } }),
+        this.prisma.document.count({ where: whereClause }),
+        this.prisma.document.count({ where: { ...whereClause, status: 'UPLOADED' as any } }),
+        this.prisma.document.count({ where: { ...whereClause, status: 'EN_COURS' as any } }),
+        this.prisma.document.count({ where: { ...whereClause, status: 'SCANNE' as any } }),
+        this.prisma.document.count({ where: { ...whereClause, status: { in: ['EN_COURS', 'SCANNE'] as any } } }),
+        this.prisma.document.count({ where: { ...whereClause, status: 'TRAITE' as any } }),
+        this.prisma.document.count({ where: { ...whereClause, status: { in: ['TRAITE'] as any } } }),
         // SLA breaches only for applicable types
         !['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'].includes(type)
-          ? this.prisma.bordereau.count({
+          ? this.prisma.document.count({
               where: {
                 ...whereClause,
-                dateLimiteTraitement: { lt: new Date() },
-                statut: { notIn: ['TRAITE', 'CLOTURE', 'PAYE'] as any }
+                slaApplicable: true,
+                bordereau: {
+                  dateLimiteTraitement: { lt: new Date() },
+                  statut: { notIn: ['TRAITE', 'CLOTURE', 'PAYE'] as any }
+                }
               }
             })
           : 0
       ]);
       
-      // Calculate average processing time for this type - filter in code instead
-      const processedDocs = await this.prisma.bordereau.findMany({
+      // Calculate average processing time for documents
+      const processedDocs = await this.prisma.document.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['TRAITE', 'CLOTURE', 'PAYE'] as any }
+          status: 'TRAITE' as any
         },
-        select: {
-          dateReception: true,
-          dateCloture: true
+        include: {
+          bordereau: {
+            select: {
+              dateReception: true,
+              dateCloture: true
+            }
+          }
         },
         take: 100
       });
       
-      // Filter out null dates in code
-      const validDocs = processedDocs.filter(doc => doc.dateReception && doc.dateCloture);
+      const validDocs = processedDocs.filter(doc => doc.bordereau?.dateReception && doc.bordereau?.dateCloture);
       
       const avgProcessingTime = validDocs.length > 0 
         ? validDocs.reduce((sum, doc) => {
-            return sum + (doc.dateCloture!.getTime() - doc.dateReception!.getTime()) / (1000 * 60 * 60);
+            return sum + (doc.bordereau!.dateCloture!.getTime() - doc.bordereau!.dateReception!.getTime()) / (1000 * 60 * 60);
           }, 0) / validDocs.length
         : 0;
       
@@ -1868,7 +1893,7 @@ export class SuperAdminController {
         avgProcessingTime: Math.round(avgProcessingTime * 10) / 10
       };
       
-      console.log(`📊 Stats for ${type}:`, stats[type]);
+      console.log(`📊 Document stats for ${type}:`, stats[type]);
     }
     
     return stats;

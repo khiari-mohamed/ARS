@@ -102,37 +102,24 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
       console.log('🔍 Frontend SLA Response:', slaResponse.data);
       console.log('🔍 Frontend Bordereaux:', bordereaux);
 
-      // Get AI predictions with proper error handling
       let aiSLAPredictions = { predictions: [], risksCount: 0 };
       let aiAnomalies = { anomalies: [] };
       let aiTrends = { forecast: [], trend_direction: 'stable', model_performance: { mape: 15 } };
 
-      try {
-        const slaPredsResponse = await LocalAPI.get('/analytics/sla/predictions');
-        aiSLAPredictions = { predictions: slaPredsResponse.data, risksCount: slaPredsResponse.data.length };
-      } catch (error) {
-        console.warn('SLA predictions unavailable:', error);
+      const slaPredsResponse = await LocalAPI.get('/analytics/sla/predictions');
+      aiSLAPredictions = { predictions: slaPredsResponse.data, risksCount: slaPredsResponse.data.length };
+
+      if (capacityData.length > 0) {
+        aiAnomalies = await AIAnalyticsService.detectAnomalies(
+          capacityData.map((c: any) => ({
+            id: c.userId,
+            features: [c.activeBordereaux || 0, c.avgProcessingTime || 24, c.dailyCapacity || 8]
+          }))
+        );
       }
 
-      try {
-        if (capacityData.length > 0) {
-          aiAnomalies = await AIAnalyticsService.detectAnomalies(
-            capacityData.map((c: any) => ({
-              id: c.userId,
-              features: [c.activeBordereaux || 0, c.avgProcessingTime || 24, c.dailyCapacity || 8]
-            }))
-          );
-        }
-      } catch (error) {
-        console.warn('Anomaly detection unavailable:', error);
-      }
-
-      try {
-        if (forecastData.history?.length > 0) {
-          aiTrends = await AIAnalyticsService.forecastTrends(forecastData.history);
-        }
-      } catch (error) {
-        console.warn('Trend forecasting unavailable:', error);
+      if (forecastData.history?.length > 0) {
+        aiTrends = await AIAnalyticsService.forecastTrends(forecastData.history);
       }
 
       // Use real SLA predictions from AI
@@ -141,35 +128,23 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
       console.log('🔍 Frontend AI SLA Predictions:', aiSLAPredictions);
       console.log('🔍 Frontend Enhanced SLA Predictions:', enhancedSLAPredictions);
 
-      // Get AI recommendations from backend
-      let aiRecommendations = [];
-      try {
-        const aiRecsResponse = await LocalAPI.get('/analytics/ai-recommendations');
-        aiRecommendations = aiRecsResponse.data.recommendations.map((rec: string) => ({
-          type: 'process',
-          priority: 'medium',
-          title: rec,
-          description: 'Recommandation générée par l\'IA',
-          impact: 'Optimisation des processus',
-          actionRequired: false
-        }));
-      } catch (error) {
-        console.warn('AI recommendations unavailable:', error);
-        aiRecommendations = [];
-      }
+      const aiRecsResponse = await LocalAPI.get('/analytics/ai-recommendations');
+      const aiRecommendations = aiRecsResponse.data.recommendations.map((rec: string) => ({
+        type: 'process',
+        priority: 'medium',
+        title: rec,
+        description: 'Recommandation générée par l\'IA',
+        impact: 'Optimisation des processus',
+        actionRequired: false
+      }));
 
-      // Calculate forecast value with fallbacks
-      let nextWeekForecast = forecastData.nextWeekForecast || 150;
-      if (aiTrends && aiTrends.forecast && Array.isArray(aiTrends.forecast) && aiTrends.forecast.length > 0) {
-        try {
-          const weekTotal = aiTrends.forecast.slice(0, 7).reduce((sum: number, day: any) => 
-            sum + (day?.predicted_value || 0), 0
-          );
-          if (weekTotal > 0) {
-            nextWeekForecast = Math.round(weekTotal);
-          }
-        } catch (error) {
-          console.warn('Forecast calculation failed:', error);
+      let nextWeekForecast = forecastData.nextWeekForecast;
+      if (aiTrends?.forecast?.length > 0) {
+        const weekTotal = aiTrends.forecast.slice(0, 7).reduce((sum: number, day: any) => 
+          sum + (day?.predicted_value || 0), 0
+        );
+        if (weekTotal > 0) {
+          nextWeekForecast = Math.round(weekTotal);
         }
       }
 
@@ -193,140 +168,16 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
         confidence: aiTrends.model_performance?.mape ? Math.max(60, 100 - aiTrends.model_performance.mape) : 85
       });
 
+      setLoading(false);
+
     } catch (error: any) {
       console.error('Failed to load predictive data:', error);
-      setError(`Erreur de chargement: ${error.message || 'Service temporairement indisponible'}`);
-      
-      // Set minimal data instead of null to avoid complete failure
-      setData({
-        slaPredictions: [],
-        capacityAnalysis: [],
-        recommendations: [{
-          type: 'process',
-          priority: 'medium',
-          title: 'Service IA en cours de restauration',
-          description: 'Les analyses prédictives seront disponibles sous peu',
-          impact: 'Fonctionnalités limitées temporairement',
-          actionRequired: false
-        }],
-        forecast: {
-          nextWeekForecast: 150,
-          slope: 0,
-          history: []
-        }
-      });
-      
-      setAiInsights({
-        anomalies: [],
-        trendDirection: 'stable',
-        confidence: 0
-      });
-    } finally {
+      setError(`Erreur de chargement: ${error.message}`);
       setLoading(false);
     }
   };
 
-  const generateAIRecommendations = async (
-    sla: SLAPrediction[], 
-    capacity: CapacityAnalysis[], 
-    anomalies: any, 
-    trends: any
-  ): Promise<AIRecommendation[]> => {
-    const recommendations: AIRecommendation[] = [];
 
-    // SLA-based AI recommendations
-    const highRiskCount = sla.filter(s => s.risk === '🔴').length;
-    if (highRiskCount > 0) {
-      recommendations.push({
-        type: 'process',
-        priority: 'high',
-        title: '🤖 IA: Risque SLA Critique Détecté',
-        description: `${highRiskCount} bordereaux à risque critique selon l'analyse prédictive`,
-        impact: 'Probabilité élevée de non-conformité contractuelle',
-        actionRequired: true
-      });
-    }
-
-    // Capacity-based AI recommendations
-    const overloadedUsers = capacity.filter(c => c.capacityStatus === 'overloaded');
-    if (overloadedUsers.length > 0) {
-      try {
-        const reassignmentSuggestion = await AIAnalyticsService.getReassignmentRecommendations({
-          managers: capacity.map(c => ({
-            id: c.userId,
-            avg_time: c.avgProcessingTime,
-            norm_time: 3.0,
-            workload: c.activeBordereaux
-          }))
-        });
-        
-        recommendations.push({
-          type: 'reassignment',
-          priority: 'high',
-          title: '🤖 IA: Réassignation Optimale Suggérée',
-          description: `${overloadedUsers.length} gestionnaires surchargés détectés par l'IA`,
-          impact: reassignmentSuggestion.reassignment?.[0]?.recommendation || 'Réassignation recommandée',
-          actionRequired: true
-        });
-      } catch (error) {
-        console.warn('AI reassignment unavailable:', error);
-        recommendations.push({
-          type: 'reassignment',
-          priority: 'high',
-          title: '🤖 Réassignation Recommandée',
-          description: `${overloadedUsers.length} gestionnaires surchargés détectés`,
-          impact: 'Réassignation manuelle recommandée',
-          actionRequired: true
-        });
-      }
-    }
-
-    // Anomaly-based recommendations
-    if (anomalies.anomalies && anomalies.anomalies.length > 0) {
-      recommendations.push({
-        type: 'process',
-        priority: 'medium',
-        title: '🤖 IA: Anomalies Détectées',
-        description: `${anomalies.anomalies.length} anomalies dans les performances détectées`,
-        impact: 'Investigation recommandée pour optimiser les processus',
-        actionRequired: false
-      });
-    }
-
-    // Trend-based recommendations
-    if (trends.trend_direction === 'increasing') {
-      try {
-        const resourcePrediction = await AIAnalyticsService.predictRequiredResources({
-          sla_days: 5,
-          historical_rate: 7,
-          volume: (Array.isArray(trends.forecast) && trends.forecast.length > 0) ? trends.forecast[0]?.predicted_value || 300 : 300
-        });
-        
-        if (resourcePrediction.required_managers > capacity.length) {
-          recommendations.push({
-            type: 'staffing',
-            priority: 'medium',
-            title: '🤖 IA: Renforcement d\'Équipe Prévu',
-            description: `Tendance croissante détectée. ${resourcePrediction.required_managers} gestionnaires recommandés`,
-            impact: 'Anticipation des besoins en personnel basée sur les prévisions IA',
-            actionRequired: false
-          });
-        }
-      } catch (error) {
-        console.warn('AI resource prediction unavailable:', error);
-        recommendations.push({
-          type: 'staffing',
-          priority: 'medium',
-          title: '🤖 Analyse de Tendance',
-          description: 'Tendance croissante détectée dans les données',
-          impact: 'Surveillance des besoins en personnel recommandée',
-          actionRequired: false
-        });
-      }
-    }
-
-    return recommendations;
-  };
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
@@ -356,52 +207,32 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
   };
 
   const handleAIReassignment = async (bordereauId: string) => {
-    try {
-      const task = {
-        id: bordereauId,
-        urgency: 'high',
-        complexity: 'medium',
-        client_type: 'premium'
-      };
-      
-      const suggestion = await AIAnalyticsService.getSuggestedAssignment(task);
-      
-      if (suggestion.suggested_team) {
-        alert(`IA recommande: Assigner à l'équipe ${suggestion.suggested_team}`);
-      } else {
-        alert('Réassignation IA en cours...');
-      }
-    } catch (error) {
-      console.error('AI reassignment failed:', error);
-      alert('Réassignation marquée pour traitement manuel');
-    }
+    const task = {
+      id: bordereauId,
+      urgency: 'high',
+      complexity: 'medium',
+      client_type: 'premium'
+    };
+    
+    const suggestion = await AIAnalyticsService.getSuggestedAssignment(task);
+    alert(`IA recommande: Assigner à l'équipe ${suggestion.suggested_team}`);
   };
 
   const handlePriorityBoost = async (bordereauId: string) => {
-    try {
-      const decision = await AIAnalyticsService.makeAutomatedDecision(
-        { bordereau_id: bordereauId, current_priority: 'medium' },
-        'priority_boost'
-      );
-      
-      alert(`IA décision: ${decision.decision || 'Priorité augmentée'}`);
-    } catch (error) {
-      console.error('Priority boost failed:', error);
-      alert('Priorité augmentée manuellement');
-    }
+    const decision = await AIAnalyticsService.makeAutomatedDecision(
+      { bordereau_id: bordereauId, current_priority: 'medium' },
+      'priority_boost'
+    );
+    alert(`IA décision: ${decision.decision}`);
   };
 
   const handleApplyRecommendation = async (recommendation: AIRecommendation) => {
-    try {
-      if (recommendation.type === 'reassignment') {
-        alert('🤖 Application de la recommandation IA de réassignation...');
-      } else if (recommendation.type === 'staffing') {
-        alert('🤖 Recommandation de personnel transmise à la direction...');
-      } else {
-        alert('🤖 Recommandation IA appliquée avec succès!');
-      }
-    } catch (error) {
-      console.error('Apply recommendation failed:', error);
+    if (recommendation.type === 'reassignment') {
+      alert('🤖 Application de la recommandation IA de réassignation...');
+    } else if (recommendation.type === 'staffing') {
+      alert('🤖 Recommandation de personnel transmise à la direction...');
+    } else {
+      alert('🤖 Recommandation IA appliquée avec succès!');
     }
   };
 

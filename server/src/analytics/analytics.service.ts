@@ -136,18 +136,16 @@ export class AnalyticsService {
     try {
       this.checkAnalyticsRole(user);
       
-      // Get real user data
+      // Get all active users
       const users = await this.prisma.user.findMany({
         where: {
           active: true,
           role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] }
         },
-        include: {
-          bordereauxCurrentHandler: {
-            where: {
-              statut: { in: ['EN_COURS', 'ASSIGNE'] }
-            }
-          }
+        select: {
+          id: true,
+          fullName: true,
+          capacity: true
         }
       });
       
@@ -155,38 +153,54 @@ export class AnalyticsService {
         throw new Error('No user data available for capacity analysis');
       }
       
-      // Transform real data
-      const capacityAnalysis = users.map(user => {
-        const activeBordereaux = user.bordereauxCurrentHandler.length;
-        const avgProcessingTime = 2.5; // Default average
-        const dailyCapacity = 8; // Default capacity
-        const daysToComplete = activeBordereaux / dailyCapacity;
+      const capacityAnalysis: Array<{
+        userId: string;
+        userName: string;
+        activeBordereaux: number;
+        avgProcessingTime: number;
+        dailyCapacity: number;
+        daysToComplete: number;
+        capacityStatus: 'available' | 'at_capacity' | 'overloaded';
+        recommendation: string;
+      }> = [];
+      
+      for (const user of users) {
+        // Count assigned documents (not bordereaux) since documents are what's actually assigned
+        const activeDocuments = await this.prisma.document.count({
+          where: {
+            assignedToUserId: user.id
+          }
+        });
+        
+        const dailyCapacity = user.capacity || 20;
+        const utilizationRate = (activeDocuments / dailyCapacity) * 100;
+        const daysToComplete = activeDocuments > 0 ? activeDocuments / dailyCapacity : 0;
         
         let capacityStatus: 'available' | 'at_capacity' | 'overloaded';
         let recommendation: string;
         
-        if (daysToComplete <= 1) {
+        if (utilizationRate > 120) {
+          capacityStatus = 'overloaded';
+          recommendation = `Surcharge critique: ${activeDocuments} dossiers / ${dailyCapacity} capacité - +${Math.round((activeDocuments / dailyCapacity - 1) * 100)}%`;
+        } else if (utilizationRate > 80) {
+          capacityStatus = 'at_capacity';
+          recommendation = `Charge élevée: ${activeDocuments} dossiers / ${dailyCapacity} capacité - ${Math.round(utilizationRate)}%`;
+        } else {
           capacityStatus = 'available';
           recommendation = 'Capacité disponible pour nouvelles tâches';
-        } else if (daysToComplete <= 2) {
-          capacityStatus = 'at_capacity';
-          recommendation = 'Charge optimale, surveiller de près';
-        } else {
-          capacityStatus = 'overloaded';
-          recommendation = 'Réassignation recommandée - surcharge détectée';
         }
         
-        return {
+        capacityAnalysis.push({
           userId: user.id,
           userName: user.fullName,
-          activeBordereaux,
-          avgProcessingTime,
+          activeBordereaux: activeDocuments,
+          avgProcessingTime: 2.5,
           dailyCapacity,
           daysToComplete,
           capacityStatus,
           recommendation
-        };
-      });
+        });
+      }
       
       return capacityAnalysis;
       
@@ -307,11 +321,10 @@ export class AnalyticsService {
     //   where.createdAt = { gte: todayStart, lt: todayEnd };
     // }
     
-    const [bsPerDay, avgDelay, totalCount, processedCount, enAttenteCount] = await Promise.all([
-      this.prisma.bordereau.groupBy({
-        by: ['createdAt'],
-        _count: { id: true },
+    const [bordereaux, avgDelay, totalCount, processedCount, enAttenteCount] = await Promise.all([
+      this.prisma.bordereau.findMany({
         where,
+        select: { id: true, createdAt: true }
       }),
       this.prisma.bordereau.aggregate({
         _avg: { delaiReglement: true },
@@ -331,6 +344,20 @@ export class AnalyticsService {
         }
       })
     ]);
+    
+    // Group by date (not timestamp)
+    const dateMap = new Map<string, number>();
+    for (const b of bordereaux) {
+      const date = new Date(b.createdAt).toISOString().split('T')[0];
+      dateMap.set(date, (dateMap.get(date) || 0) + 1);
+    }
+    
+    const bsPerDay = Array.from(dateMap.entries())
+      .map(([date, count]) => ({
+        createdAt: new Date(date),
+        _count: { id: count }
+      }))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     
     return {
       bsPerDay,
@@ -369,20 +396,50 @@ export class AnalyticsService {
 
   async getAlerts(user: any) {
     this.checkAnalyticsRole(user);
-    const critical = await this.prisma.bordereau.findMany({
-      where: { delaiReglement: { gt: 5 } },
+    
+    // Get all bordereaux with dateReception
+    const allBordereaux = await this.prisma.bordereau.findMany({
+      select: {
+        id: true,
+        reference: true,
+        dateReception: true,
+        delaiReglement: true,
+        statut: true,
+        clientId: true,
+        assignedToUserId: true
+      }
     });
-    const warning = await this.prisma.bordereau.findMany({
-      where: { delaiReglement: { gt: 3, lte: 5 } },
-    });
-    const ok = await this.prisma.bordereau.findMany({
-      where: { delaiReglement: { lte: 3 } },
-    });
-    const colorize = (arr: any[], level: string) => arr.map(item => ({ ...item, statusLevel: level }));
+    
+    const now = new Date();
+    const critical: any[] = [];
+    const warning: any[] = [];
+    const ok: any[] = [];
+    
+    for (const bordereau of allBordereaux) {
+      if (!bordereau.dateReception) continue;
+      
+      // Calculate days since reception
+      const daysSinceReception = Math.floor(
+        (now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      
+      // Get SLA threshold (default 30 days)
+      const slaThreshold = bordereau.delaiReglement || 30;
+      
+      // Categorize based on days since reception vs SLA threshold
+      if (daysSinceReception > slaThreshold) {
+        critical.push({ ...bordereau, statusLevel: 'red', daysSinceReception, slaThreshold });
+      } else if (daysSinceReception > slaThreshold - 2) {
+        warning.push({ ...bordereau, statusLevel: 'orange', daysSinceReception, slaThreshold });
+      } else {
+        ok.push({ ...bordereau, statusLevel: 'green', daysSinceReception, slaThreshold });
+      }
+    }
+    
     return {
-      critical: colorize(critical, 'red'),
-      warning: colorize(warning, 'orange'),
-      ok: colorize(ok, 'green'),
+      critical,
+      warning,
+      ok
     };
   }
 
@@ -792,81 +849,40 @@ export class AnalyticsService {
     try {
       this.checkAnalyticsRole(user);
       
-      // Get historical data for AI forecasting with better date handling
-      const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const historicalData = await this.prisma.bordereau.groupBy({
-        by: ['createdAt'],
-        _count: { id: true },
-        where: {
-          createdAt: { gte: last30Days }
-        },
+      console.log('📊 Getting forecast with REAL data...');
+      
+      // Get ALL historical data (not just 30 days) for better AI predictions
+      const historicalBordereaux = await this.prisma.bordereau.findMany({
+        select: { createdAt: true },
         orderBy: { createdAt: 'asc' }
       });
       
-      if (historicalData.length < 2) {
-        // Generate minimal historical data for AI to work with
-        const baseData: { date: string; value: number }[] = [];
-        for (let i = 6; i >= 0; i--) {
-          const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-          baseData.push({
-            date: date.toISOString().split('T')[0],
-            value: Math.max(1, Math.floor(Math.random() * 50) + 20) // 20-70 range
-          });
-        }
-        
-        // Call AI with generated data
-        const token = await this.getAIToken();
-        const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, baseData, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          timeout: 15000
-        });
-        
-        const forecast = aiResponse.data.forecast || [];
-        const nextWeekForecast = forecast.reduce((sum: number, day: any) => sum + (day.predicted_value || 0), 0);
-        
-        return {
-          nextWeekForecast: Math.round(nextWeekForecast) || 150,
-          slope: this.sanitizeNumber(this.calculateTrendSlope(forecast)),
-          history: Array.isArray(forecast) ? forecast.map((day: any, index: number) => ({
-            day: index + 1,
-            count: Math.round(day?.predicted_value || 25)
-          })) : [],
-          aiGenerated: true,
-          modelPerformance: aiResponse.data.model_performance,
-          trendDirection: aiResponse.data.trend_direction || 'stable',
-          dataSource: 'generated'
-        };
-      }
+      console.log(`📈 Found ${historicalBordereaux.length} total bordereaux for forecasting`);
       
-      // Transform real data for AI microservice with proper date formatting
-      const forecastData = historicalData.map(d => {
-        const dateStr = d.createdAt instanceof Date ? 
-          d.createdAt.toISOString().split('T')[0] : 
-          new Date(d.createdAt).toISOString().split('T')[0];
-        return {
-          date: dateStr,
-          value: Math.max(0, d._count.id || 0)
-        };
+      // Group by date to get daily counts
+      const dailyCounts = new Map<string, number>();
+      historicalBordereaux.forEach(b => {
+        const dateStr = new Date(b.createdAt).toISOString().split('T')[0];
+        dailyCounts.set(dateStr, (dailyCounts.get(dateStr) || 0) + 1);
       });
       
-      // Ensure we have enough data points
-      if (forecastData.length < 7) {
-        const lastValue = forecastData[forecastData.length - 1]?.value || 25;
-        while (forecastData.length < 7) {
-          const lastDate = new Date(forecastData[forecastData.length - 1].date);
-          lastDate.setDate(lastDate.getDate() + 1);
-          forecastData.push({
-            date: lastDate.toISOString().split('T')[0],
-            value: Math.max(1, lastValue + Math.floor(Math.random() * 10) - 5)
-          });
-        }
+      // Convert to array and sort by date
+      const forecastData = Array.from(dailyCounts.entries())
+        .map(([date, value]) => ({ date, value }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      
+      console.log(`📅 Prepared ${forecastData.length} days of data for AI`);
+      console.log(`📊 Sample data: ${JSON.stringify(forecastData.slice(0, 5))}`);
+      console.log(`📊 Total volume: ${forecastData.reduce((sum, d) => sum + d.value, 0)} bordereaux`);
+      
+      if (forecastData.length === 0) {
+        throw new Error('No historical data available for forecasting');
       }
       
-      // Call AI microservice for forecasting
+      // Call AI microservice with REAL data
       const token = await this.getAIToken();
+      console.log('🤖 Calling AI forecast with real data...');
+      
       const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, forecastData, {
         headers: {
           'Content-Type': 'application/json',
@@ -875,27 +891,48 @@ export class AnalyticsService {
         timeout: 15000
       });
       
+      console.log('✅ AI forecast response received');
+      
       const forecast = aiResponse.data.forecast || [];
-      const nextWeekForecast = forecast.reduce((sum: number, day: any) => sum + (day.predicted_value || 0), 0);
+      let nextWeekForecast = forecast.reduce((sum: number, day: any) => sum + (day.predicted_value || 0), 0);
+      
+      console.log(`📈 AI raw prediction: ${Math.round(nextWeekForecast)} bordereaux for next week`);
+      console.log(`📊 Trend direction: ${aiResponse.data.trend_direction}`);
+      
+      // Fallback: If AI predicts 0 or unrealistic values, use historical average
+      if (nextWeekForecast < 1 || nextWeekForecast > historicalBordereaux.length * 2) {
+        const totalBordereaux = forecastData.reduce((sum, d) => sum + d.value, 0);
+        const avgPerDay = totalBordereaux / forecastData.length;
+        nextWeekForecast = Math.round(avgPerDay * 7);
+        console.log(`⚠️ AI prediction unrealistic, using historical average: ${nextWeekForecast} bordereaux/week`);
+      }
       
       // Transform AI response to expected format
       const history = forecast.map((day: any, index: number) => ({
         day: index + 1,
-        count: Math.round(day.predicted_value || 25)
+        count: Math.round(day.predicted_value || 0)
       }));
       
+      // Calculate monthly forecast
+      const monthlyForecast = Math.round(nextWeekForecast * 4.3);
+      
+      console.log(`✅ Final prediction: ${nextWeekForecast} per week, ${monthlyForecast} per month`);
+      
       return {
-        nextWeekForecast: Math.round(nextWeekForecast) || 150,
+        nextWeekForecast: Math.round(nextWeekForecast),
+        nextMonthForecast: monthlyForecast,
         slope: this.sanitizeNumber(this.calculateTrendSlope(forecast)),
         history: Array.isArray(history) ? history : [],
         aiGenerated: true,
         modelPerformance: aiResponse.data.model_performance,
         trendDirection: aiResponse.data.trend_direction || 'stable',
-        dataSource: 'real'
+        dataSource: 'real',
+        dataPoints: forecastData.length,
+        avgPerDay: Math.round((forecastData.reduce((sum, d) => sum + d.value, 0) / forecastData.length) * 10) / 10
       };
       
     } catch (error) {
-      console.error('AI Forecast failed:', error);
+      console.error('❌ AI Forecast failed:', error);
       throw new Error(`AI forecasting failed: ${error.message}`);
     }
   }
@@ -1807,8 +1844,8 @@ export class AnalyticsService {
       console.log(`📁 Found ${departments.length} departments`);
       
       if (departments.length === 0) {
-        console.log('❌ No departments found');
-        return [];
+        console.log('⚠️  No departments - using role-based grouping');
+        return this.getPerformanceByRole(user, filters);
       }
       
       // Don't apply date filters for department performance - show all time data
@@ -1892,6 +1929,173 @@ export class AnalyticsService {
       console.error('Error getting department performance:', error);
       return [];
     }
+  }
+
+  private async getPerformanceByRole(user: any, filters: any = {}): Promise<any[]> {
+    const roles = ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SCAN_TEAM', 'BO', 'FINANCE'];
+    const roleNames: Record<string, string> = {
+      'GESTIONNAIRE': 'Gestionnaires',
+      'CHEF_EQUIPE': 'Chefs d\'Équipe',
+      'SCAN_TEAM': 'Équipe Scan',
+      'BO': 'Bureau d\'Ordre',
+      'FINANCE': 'Finance'
+    };
+    
+    const result: Array<{ department: string; slaCompliance: number; avgTime: number; workload: number }> = [];
+    
+    for (const role of roles) {
+      const users = await this.prisma.user.findMany({
+        where: { role, active: true },
+        select: { id: true }
+      });
+      
+      if (users.length === 0) continue;
+      
+      const userIds = users.map(u => u.id);
+      const totalProcessed = await this.prisma.bordereau.count({
+        where: { assignedToUserId: { in: userIds } }
+      });
+      
+      if (totalProcessed === 0) continue;
+      
+      const slaCompliant = await this.prisma.bordereau.count({
+        where: {
+          assignedToUserId: { in: userIds },
+          delaiReglement: { lte: 3 }
+        }
+      });
+      
+      const avgDelayResult = await this.prisma.bordereau.aggregate({
+        where: { assignedToUserId: { in: userIds } },
+        _avg: { delaiReglement: true }
+      });
+      
+      result.push({
+        department: roleNames[role],
+        slaCompliance: Math.round((slaCompliant / totalProcessed) * 100),
+        avgTime: Number((avgDelayResult._avg.delaiReglement || 0).toFixed(1)),
+        workload: totalProcessed
+      });
+    }
+    
+    return result;
+  }
+
+  async getDocumentTypesBreakdown(user: any, query: any) {
+    this.checkAnalyticsRole(user);
+    console.log('📊 getDocumentTypesBreakdown called');
+    
+    const DOCUMENT_TYPES = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION', 'CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
+    const result: any = {};
+    let total = 0;
+    
+    for (const type of DOCUMENT_TYPES) {
+      const count = await this.prisma.document.count({ where: { type: type as any } });
+      
+      if (count > 0) {
+        const statusCounts = await this.prisma.document.groupBy({
+          by: ['status'],
+          _count: true,
+          where: { type: type as any },
+        });
+
+        const traite = statusCounts.find(s => s.status === 'TRAITE')?._count || 0;
+        const enCours = statusCounts.filter(s => ['EN_COURS', 'SCANNE', 'UPLOADED'].includes(s.status || '')).reduce((sum, s) => sum + s._count, 0);
+        const rejete = statusCounts.find(s => s.status === 'REJETE')?._count || 0;
+
+        result[type] = { total: count, traite, enCours, rejete };
+        total += count;
+        console.log(`   ${type}: ${count} documents`);
+      } else {
+        result[type] = { total: 0, traite: 0, enCours: 0, rejete: 0 };
+      }
+    }
+    
+    console.log('✅ Total:', total);
+    return result;
+  }
+
+  async getDocumentStatusByType(user: any, query: any) {
+    this.checkAnalyticsRole(user);
+    console.log('📊 getDocumentStatusByType called');
+    
+    const DOCUMENT_TYPES = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION', 'CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
+    const result: any = {};
+    
+    for (const type of DOCUMENT_TYPES) {
+      const statusCounts = await this.prisma.document.groupBy({
+        by: ['status'],
+        _count: true,
+        where: { type: type as any },
+      });
+
+      if (statusCounts.length > 0) {
+        result[type] = {};
+        statusCounts.forEach(item => {
+          result[type][item.status || 'UNKNOWN'] = item._count;
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  async getGestionnairesDailyPerformance(user: any, query: any): Promise<Array<{ id: string; name: string; documentsProcessed: number; documentsLast24h: number }>> {
+    this.checkAnalyticsRole(user);
+    
+    console.log('📊 getGestionnairesDailyPerformance query:', query);
+    
+    const gestionnaires = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'] },
+        active: true
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true
+      }
+    });
+    
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const result: Array<{ id: string; name: string; documentsProcessed: number; documentsLast24h: number }> = [];
+    
+    for (const gest of gestionnaires) {
+      let documentsProcessed = await this.prisma.document.count({
+        where: { assignedToUserId: gest.id }
+      });
+      
+      // Apply date filter if provided
+      if (query.fromDate || query.toDate) {
+        const dateWhere: any = { assignedToUserId: gest.id };
+        if (query.fromDate) dateWhere.uploadedAt = { gte: new Date(query.fromDate) };
+        if (query.toDate) {
+          if (dateWhere.uploadedAt) {
+            dateWhere.uploadedAt.lte = new Date(query.toDate);
+          } else {
+            dateWhere.uploadedAt = { lte: new Date(query.toDate) };
+          }
+        }
+        documentsProcessed = await this.prisma.document.count({ where: dateWhere });
+        console.log(`📅 ${gest.fullName}: filtered count = ${documentsProcessed}`);
+      }
+      
+      const documentsLast24h = await this.prisma.document.count({
+        where: {
+          assignedToUserId: gest.id,
+          uploadedAt: { gte: last24h }
+        }
+      });
+      
+      result.push({
+        id: gest.id,
+        name: gest.fullName || gest.email,
+        documentsProcessed,
+        documentsLast24h
+      });
+    }
+    
+    return result.sort((a, b) => b.documentsProcessed - a.documentsProcessed);
   }
 
   async getSLAComplianceByType(user: any, query: any) {

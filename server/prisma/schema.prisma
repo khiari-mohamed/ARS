@@ -578,6 +578,7 @@ model Adherent {
   rib           String // 20 digits - compte bancaire personnel
   codeAssure    String? // Linked to Contract table field
   numeroContrat String? // Numéro de contrat
+  assurance     String? // Insurance company name (e.g., PGH & FILIALES)
   statut        String                @default("ACTIF") // actif/inactif
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt

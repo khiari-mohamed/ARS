@@ -48,6 +48,7 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
   const [clients, setClients] = useState<any[]>([]);
   const [newReference, setNewReference] = useState('');
   const [newClientId, setNewClientId] = useState('');
+  const [newDateReception, setNewDateReception] = useState('');
   const [documentNameFilter, setDocumentNameFilter] = useState('');
   const [documentStatusFilter, setDocumentStatusFilter] = useState('');
 
@@ -76,7 +77,7 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
       const response = await LocalAPI.get('/bordereaux', {
         params: {
           statut: 'SCAN_EN_COURS',
-          documentStatus: 'RETOUR_SCAN'
+          documentStatus: 'RETOURNER_AU_SCAN'
         }
       });
       const bordereaux = Array.isArray(response.data) ? response.data : response.data.items || [];
@@ -207,6 +208,7 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
     setModifyBordereau(bordereau);
     setNewReference(bordereau.reference);
     setNewClientId(bordereau.clientId?.toString() || '');
+    setNewDateReception(bordereau.dateReception ? new Date(bordereau.dateReception).toISOString().split('T')[0] : '');
     setModifyDialogOpen(true);
   };
 
@@ -219,6 +221,12 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
       if (newReference !== modifyBordereau.reference) payload.reference = newReference;
       if (newClientId && newClientId !== modifyBordereau.clientId?.toString()) {
         payload.clientId = newClientId;
+      }
+      if (newDateReception) {
+        const originalDate = modifyBordereau.dateReception ? new Date(modifyBordereau.dateReception).toISOString().split('T')[0] : '';
+        if (newDateReception !== originalDate) {
+          payload.dateReception = newDateReception;
+        }
       }
       
       await LocalAPI.patch(`/scan/bordereau/${modifyBordereau.id}/modify`, payload);
@@ -607,6 +615,16 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                       ))}
                     </Select>
                   </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="Date de Réception"
+                    value={newDateReception}
+                    onChange={(e) => setNewDateReception(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                  />
                 </Grid>
               </Grid>
             </Box>

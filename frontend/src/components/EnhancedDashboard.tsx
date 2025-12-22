@@ -239,7 +239,7 @@ const EnhancedDashboard: React.FC = () => {
       
       if (response.data.success && response.data.pdfUrl) {
         // Construct direct file URL
-        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         let pdfUrl = response.data.pdfUrl;
         
         console.log('🔍 DEBUG: Original pdfUrl from server:', pdfUrl);
@@ -322,7 +322,7 @@ const EnhancedDashboard: React.FC = () => {
     try {
       const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossier-pdf/' + dossier.id);
       if (response.data.success && response.data.pdfUrl) {
-        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         const fullPdfUrl = `${serverBaseUrl}${response.data.pdfUrl}`;
         window.open(fullPdfUrl, '_blank');
       } else {
@@ -849,7 +849,7 @@ const EnhancedDashboard: React.FC = () => {
           .find(d => d.id === dossierId);
         
         // Use the direct URL from server
-        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         const pdfUrl = response.data.pdfUrl;
         
         console.log('🔍 Original PDF URL:', pdfUrl);
@@ -2620,10 +2620,20 @@ const EnhancedDashboard: React.FC = () => {
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
-                  {aiInsights.recommendations.map((rec: any, index: number) => (
+                  {aiInsights.recommendations.map((rec: any, index: number) => {
+                    // Handle both string and object recommendations
+                    const isString = typeof rec === 'string';
+                    const recText = isString ? rec : (rec.recommendation || rec.description || rec.title || '');
+                    const priorityColor = isString ? '#10b981' : (rec.priority === 'HIGH' ? '#dc2626' : rec.priority === 'MEDIUM' ? '#f59e0b' : '#10b981');
+                    const priorityBg = isString ? '#d1fae5' : (rec.priority === 'HIGH' ? '#fee2e2' : rec.priority === 'MEDIUM' ? '#fef3c7' : '#d1fae5');
+                    const typeIcon = isString ? (recText.includes('📈') ? '📈' : recText.includes('👥') ? '👥' : recText.includes('⏰') ? '⏰' : recText.includes('🔍') ? '🔍' : '💡') : (rec.type === 'SLA_IMPROVEMENT' ? '⏰' : rec.type === 'CAPACITY_PLANNING' ? '👥' : rec.type === 'PERFORMANCE_IMPROVEMENT' ? '📈' : rec.type === 'PROCESS_OPTIMIZATION' ? '⚙️' : '💡');
+                    const title = isString ? 'Recommandation IA' : (rec.title || rec.type || 'Recommandation');
+                    const description = isString ? recText : (rec.description || rec.recommendation || 'Aucune description disponible');
+                    const recommendation = isString ? '' : (rec.recommendation && rec.recommendation !== rec.description ? rec.recommendation : '');
+                    return (
                     <div key={index} style={{ 
                       padding: '1.5rem', 
-                      border: '1px solid #e5e7eb', 
+                      border: `2px solid ${priorityColor}20`, 
                       borderRadius: '10px', 
                       backgroundColor: '#fafbfc',
                       transition: 'all 0.2s ease',
@@ -2632,26 +2642,43 @@ const EnhancedDashboard: React.FC = () => {
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 8px 25px -8px rgba(99, 102, 241, 0.15)';
-                      e.currentTarget.style.borderColor = '#6366f1';
+                      e.currentTarget.style.boxShadow = `0 8px 25px -8px ${priorityColor}40`;
+                      e.currentTarget.style.borderColor = priorityColor;
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = 'translateY(0)';
                       e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      e.currentTarget.style.borderColor = `${priorityColor}20`;
                     }}>
-                      <div style={{ position: 'absolute', top: '1rem', right: '1rem', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></div>
+                      <div style={{ position: 'absolute', top: '1rem', right: '1rem', padding: '0.25rem 0.75rem', backgroundColor: priorityBg, color: priorityColor, borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                        {rec.priority}
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.75rem' }}>
-                          <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.1rem' }}>{(rec.teamId || 'G').charAt(0)}</span>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: priorityBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.75rem' }}>
+                          <span style={{ fontSize: '1.5rem' }}>{typeIcon}</span>
                         </div>
-                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>{rec.teamId || 'Général'}</h4>
+                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>{title}</h4>
                       </div>
-                      <div style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                        <p style={{ margin: 0, color: '#4b5563', lineHeight: '1.5' }}>{rec.recommendation}</p>
+                      <div style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '1rem' }}>
+                        <p style={{ margin: 0, color: '#374151', lineHeight: '1.5', fontWeight: '500' }}>{description}</p>
+                        {recommendation && (
+                          <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', fontSize: '0.9rem' }}>{recommendation}</p>
+                        )}
                       </div>
+                      {!isString && rec.action && (
+                        <div style={{ padding: '0.75rem', backgroundColor: '#f0f9ff', borderRadius: '6px', marginBottom: '0.75rem', borderLeft: '3px solid #3b82f6' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#1e40af', fontWeight: '600', marginBottom: '0.25rem' }}>🎯 ACTION RECOMMANDÉE:</div>
+                          <div style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>{rec.action}</div>
+                        </div>
+                      )}
+                      {!isString && rec.impact && (
+                        <div style={{ padding: '0.75rem', backgroundColor: '#f0fdf4', borderRadius: '6px', borderLeft: '3px solid #10b981' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#065f46', fontWeight: '600', marginBottom: '0.25rem' }}>✨ IMPACT ATTENDU:</div>
+                          <div style={{ fontSize: '0.85rem', color: '#064e3b' }}>{rec.impact}</div>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  );})}
                 </div>
               </div>
             </div>

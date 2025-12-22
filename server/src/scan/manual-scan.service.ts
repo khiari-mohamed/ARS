@@ -7,6 +7,7 @@ export interface ManualScanDto {
   files: Express.Multer.File[];
   userId: string;
   notes?: string;
+  fileTypes?: string[];
 }
 
 @Injectable()
@@ -79,7 +80,8 @@ export class ManualScanService {
       data: {
         statut: 'SCAN_EN_COURS',
         dateDebutScan: new Date(),
-        currentHandlerId: userId
+        currentHandlerId: userId,
+        documentStatus: 'NORMAL' // Ensure it's not marked as returned
       }
     });
 
@@ -104,7 +106,13 @@ export class ManualScanService {
   }
 
   async uploadScanDocuments(dto: ManualScanDto) {
-    const { bordereauId, files, userId, notes } = dto;
+    const { bordereauId, files, userId, notes, fileTypes } = dto;
+
+    console.log('🔍 DEBUG SERVICE: uploadScanDocuments called');
+    console.log('📄 Files count:', files.length);
+    console.log('🏷️ FileTypes received:', fileTypes);
+    console.log('🏷️ FileTypes type:', typeof fileTypes);
+    console.log('🏷️ FileTypes is array:', Array.isArray(fileTypes));
 
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
@@ -127,7 +135,8 @@ export class ManualScanService {
         data: {
           statut: 'SCAN_EN_COURS',
           dateDebutScan: new Date(),
-          currentHandlerId: userId
+          currentHandlerId: userId,
+          documentStatus: 'NORMAL' // Ensure it's not marked as returned
         }
       });
     }
@@ -136,7 +145,8 @@ export class ManualScanService {
     const errors: Array<{fileName: string; error: string}> = [];
 
     // Process each file
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       try {
         // Validate file
         const validation = this.validateFile(file);
@@ -151,11 +161,22 @@ export class ManualScanService {
         // Save file to disk
         const filePath = await this.saveFile(file, bordereauId);
 
+        // Get document type from fileTypes array or fallback to auto-detection
+        const providedType = fileTypes && fileTypes[i] ? fileTypes[i] : null;
+        console.log(`📄 File ${i}: ${file.originalname}`);
+        console.log(`🏷️ Provided type: ${providedType}`);
+        
+        const documentType = providedType
+          ? this.mapToDocumentType(providedType)
+          : this.mapToDocumentType(this.getDocumentType(file.originalname));
+        
+        console.log(`✅ Final mapped type: ${documentType}`);
+
         // Create document record
         const document = await this.prisma.document.create({
           data: {
             name: file.originalname,
-            type: this.mapToDocumentType(this.getDocumentType(file.originalname)),
+            type: documentType,
             path: filePath,
             uploadedById: userId,
             bordereauId,
@@ -203,7 +224,13 @@ export class ManualScanService {
   }
 
   async uploadAdditionalDocuments(dto: ManualScanDto) {
-    const { bordereauId, files, userId, notes } = dto;
+    const { bordereauId, files, userId, notes, fileTypes } = dto;
+
+    console.log('🔍 DEBUG SERVICE: uploadAdditionalDocuments called');
+    console.log('📄 Files count:', files.length);
+    console.log('🏷️ FileTypes received:', fileTypes);
+    console.log('🏷️ FileTypes type:', typeof fileTypes);
+    console.log('🏷️ FileTypes is array:', Array.isArray(fileTypes));
 
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
@@ -214,6 +241,8 @@ export class ManualScanService {
       throw new BadRequestException('Bordereau not found');
     }
 
+    console.log('📊 Bordereau status:', bordereau.statut);
+
     if (bordereau.statut !== 'SCAN_EN_COURS') {
       throw new BadRequestException(`Cannot upload additional documents. Bordereau status is ${bordereau.statut}, expected SCAN_EN_COURS`);
     }
@@ -222,7 +251,8 @@ export class ManualScanService {
     const errors: Array<{fileName: string; error: string}> = [];
 
     // Process each file
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       try {
         // Validate file
         const validation = this.validateFile(file);
@@ -237,11 +267,22 @@ export class ManualScanService {
         // Save file to disk
         const filePath = await this.saveFile(file, bordereauId);
 
+        // Get document type from fileTypes array or fallback to auto-detection
+        const providedType = fileTypes && fileTypes[i] ? fileTypes[i] : null;
+        console.log(`📄 File ${i}: ${file.originalname}`);
+        console.log(`🏷️ Provided type: ${providedType}`);
+        
+        const documentType = providedType
+          ? this.mapToDocumentType(providedType)
+          : this.mapToDocumentType(this.getDocumentType(file.originalname));
+        
+        console.log(`✅ Final mapped type: ${documentType}`);
+
         // Create document record
         const document = await this.prisma.document.create({
           data: {
             name: file.originalname,
-            type: this.mapToDocumentType(this.getDocumentType(file.originalname)),
+            type: documentType,
             path: filePath,
             uploadedById: userId,
             bordereauId,
@@ -258,12 +299,15 @@ export class ManualScanService {
         });
 
       } catch (error: any) {
+        console.error(`❌ Error uploading ${file.originalname}:`, error.message, error.stack);
         errors.push({
           fileName: file.originalname,
           error: error.message
         });
       }
     }
+
+    console.log(`📊 Upload result: ${uploadedDocuments.length} success, ${errors.length} failed`);
 
     // Log additional upload action
     await this.prisma.auditLog.create({
@@ -322,7 +366,8 @@ export class ManualScanService {
       where: { id: bordereauId },
       data: {
         statut: 'SCANNE',
-        dateFinScan: new Date()
+        dateFinScan: new Date(),
+        documentStatus: 'NORMAL' // Ensure it's not marked as returned
       }
     });
 
@@ -596,15 +641,24 @@ export class ManualScanService {
   private mapToDocumentType(oldType?: string): any {
     if (!oldType) return 'BULLETIN_SOIN';
     
+    console.log(`🔄 Mapping type: ${oldType}`);
+    
     const mapping: Record<string, string> = {
       'BS': 'BULLETIN_SOIN',
       'BULLETIN_SOIN': 'BULLETIN_SOIN',
+      'COMPLEMENT_INFORMATION': 'COMPLEMENT_INFORMATION',
+      'ADHESION': 'ADHESION',
+      'RECLAMATION': 'RECLAMATION',
+      'CONTRAT_AVENANT': 'CONTRAT_AVENANT',
+      'DEMANDE_RESILIATION': 'DEMANDE_RESILIATION',
+      'CONVENTION_TIERS_PAYANT': 'CONVENTION_TIERS_PAYANT',
       'FACTURE': 'COMPLEMENT_INFORMATION',
       'CONTRAT': 'CONTRAT_AVENANT',
-      'RECLAMATION': 'RECLAMATION',
       'DOCUMENT': 'BULLETIN_SOIN'
     };
     
-    return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
+    const result = mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
+    console.log(`✅ Mapped to: ${result}`);
+    return result;
   }
 }

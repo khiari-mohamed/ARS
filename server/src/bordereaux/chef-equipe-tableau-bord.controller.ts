@@ -227,12 +227,18 @@ export class ChefEquipeTableauBordController {
       if (scanneDocuments > 0) states.push(`Scanné ${scanneDocuments}/${totalDocuments}`);
       if (uploadedDocuments > 0) states.push(`Nouveau ${uploadedDocuments}/${totalDocuments}`);
       
-      // For gestionnaires, show their name if they have documents in this bordereau
-      let gestionnaireDisplay = bordereau.currentHandler?.fullName || 'Non assigné';
-      if (req.user?.role === 'GESTIONNAIRE' && bordereau.documents.length > 0) {
-        const assignedDoc = bordereau.documents.find(doc => doc.assignedTo?.id === req.user.id);
-        if (assignedDoc) {
-          gestionnaireDisplay = assignedDoc.assignedTo.fullName;
+      // Show gestionnaire who has documents assigned, not currentHandler
+      let gestionnaireDisplay = 'Non assigné';
+      if (bordereau.documents.length > 0) {
+        // Get unique gestionnaires from assigned documents
+        const assignedGestionnaires = [...new Set(
+          bordereau.documents
+            .filter(doc => doc.assignedTo)
+            .map(doc => doc.assignedTo.fullName)
+        )];
+        
+        if (assignedGestionnaires.length > 0) {
+          gestionnaireDisplay = assignedGestionnaires.join(', ');
         }
       }
       
@@ -789,7 +795,23 @@ export class ChefEquipeTableauBordController {
       'Traité': 'TRAITE'
     };
 
-    // First try to find as document
+    // For GESTIONNAIRE_SENIOR, try bordereau first (they work with bordereaux)
+    if (req.user?.role === 'GESTIONNAIRE_SENIOR') {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: body.dossierId }
+      });
+
+      if (bordereau) {
+        // Update bordereau status
+        await this.prisma.bordereau.update({
+          where: { id: body.dossierId },
+          data: { statut: bordereauxStatusMapping[body.newStatus] as any }
+        });
+        return { success: true, message: 'Statut du bordereau modifié avec succès' };
+      }
+    }
+
+    // For regular gestionnaires and others, try to find as document
     const document = await this.prisma.document.findUnique({
       where: { id: body.dossierId },
       include: { assignedTo: true, bordereau: { include: { client: true } } }
@@ -1135,69 +1157,74 @@ export class ChefEquipeTableauBordController {
   @Get('gestionnaire-senior-assignments')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireSeniorAssignments(@Req() req: any) {
-    const accessFilter = this.buildAccessFilter(req.user);
-    
     const seniorGestionnaires = await this.prisma.user.findMany({
       where: { role: 'GESTIONNAIRE_SENIOR', active: true },
       select: {
         id: true,
-        fullName: true,
-        assignedDocuments: {
-          include: {
-            bordereau: { include: { client: true } }
-          },
-          where: {
-            bordereau: { archived: false }
-          }
-        }
+        fullName: true
       }
     });
-
-    const assignments = await Promise.all(
-      seniorGestionnaires.map(async (senior) => {
-        const docsByType = {};
-        senior.assignedDocuments.forEach(doc => {
-          const type = this.getDocumentTypeLabel(doc.type);
-          docsByType[type] = (docsByType[type] || 0) + 1;
-        });
-
-        const traites = senior.assignedDocuments.filter(doc => doc.status === 'TRAITE').length;
-        const enCours = senior.assignedDocuments.filter(doc => doc.status === 'EN_COURS').length;
-        const retournes = senior.assignedDocuments.filter(doc => doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN').length;
-
-        let returnedBy: string | null = null;
-        if (retournes > 0) {
-          const returnedDocs = senior.assignedDocuments.filter(doc => 
-            doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN'
-          );
-          
-          if (returnedDocs.length > 0) {
-            const history = await this.prisma.documentAssignmentHistory.findFirst({
-              where: {
-                documentId: { in: returnedDocs.map(d => d.id) },
-                action: 'RETURNED'
-              },
-              include: {
-                assignedBy: { select: { fullName: true } }
-              },
-              orderBy: { createdAt: 'desc' }
-            });
-            
-            returnedBy = history?.assignedBy?.fullName || senior.fullName;
+    
+    const assignments: any[] = [];
+    
+    for (const senior of seniorGestionnaires) {
+      // Get documents from bordereaux where contract.teamLeaderId = senior.id
+      const documents = await this.prisma.document.findMany({
+        where: {
+          bordereau: {
+            archived: false,
+            contract: {
+              teamLeaderId: senior.id
+            }
           }
+        },
+        include: {
+          bordereau: { include: { client: true } }
         }
+      });
 
-        return {
-          gestionnaire: senior.fullName,
-          totalAssigned: senior.assignedDocuments.length,
-          traites,
-          enCours,
-          retournes,
-          returnedBy,
-          documentsByType: docsByType
-        };
-      })
-    );
+      const docsByType = {};
+      documents.forEach(doc => {
+        const type = this.getDocumentTypeLabel(doc.type);
+        docsByType[type] = (docsByType[type] || 0) + 1;
+      });
+
+      const traites = documents.filter(doc => doc.status === 'TRAITE').length;
+      const enCours = documents.filter(doc => doc.status === 'EN_COURS').length;
+      const retournes = documents.filter(doc => doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN').length;
+
+      let returnedBy: string | null = null;
+      if (retournes > 0) {
+        const returnedDocs = documents.filter(doc => 
+          doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN'
+        );
+        
+        if (returnedDocs.length > 0) {
+          const history = await this.prisma.documentAssignmentHistory.findFirst({
+            where: {
+              documentId: { in: returnedDocs.map(d => d.id) },
+              action: 'RETURNED'
+            },
+            include: {
+              assignedBy: { select: { fullName: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+          });
+          
+          returnedBy = history?.assignedBy?.fullName || senior.fullName;
+        }
+      }
+
+      assignments.push({
+        gestionnaire: senior.fullName,
+        totalAssigned: documents.length,
+        traites,
+        enCours,
+        retournes,
+        returnedBy,
+        documentsByType: docsByType
+      });
+    }
 
     return assignments;
   }

@@ -49,7 +49,7 @@ const AIDashboard: React.FC = () => {
             )}
             
             <Typography variant="body2" color="text.secondary" paragraph>
-              Classification automatique des documents ARS (bordereaux, bulletins de soins, factures) avec analyse du contenu et assignation intelligente.
+              Classification automatique des bordereaux depuis la base de données ars_db. Le système analyse tous les bordereaux existants et les classe par statut (EN_COURS, CLOTURE, etc.).
             </Typography>
             
             <Button
@@ -69,34 +69,7 @@ const AIDashboard: React.FC = () => {
                   });
                   const tokenData = await tokenResponse.json();
                   
-                  const trainingDataResponse = await fetch('/api/dashboard/document-training-data', {
-                    headers: {
-                      'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                  });
-                  const trainingData = await trainingDataResponse.json();
-                  
-                  if (!trainingData.documents || trainingData.documents.length < 20) {
-                    throw new Error(`Données insuffisantes: ${trainingData.documents?.length || 0} documents trouvés (minimum 20 requis)`);
-                  }
-                  
-                  const trainResult = await fetch(`${process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localhost:8002'}/document_classification/train`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${tokenData.access_token}`
-                    },
-                    body: JSON.stringify({
-                      documents: trainingData.documents,
-                      labels: trainingData.labels,
-                      model_type: 'ensemble'
-                    })
-                  });
-                  
-                  if (!trainResult.ok) {
-                    throw new Error('Entraînement du modèle échoué');
-                  }
-                  
+                  // Fetch and classify documents directly from ars_db database
                   const result = await fetch(`${process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localhost:8002'}/document_classification/classify`, {
                     method: 'POST',
                     headers: {
@@ -104,65 +77,35 @@ const AIDashboard: React.FC = () => {
                       'Authorization': `Bearer ${tokenData.access_token}`
                     },
                     body: JSON.stringify({
-                      documents: [
-                        'Bordereau de remboursement ARS pour soins dentaires - Patient: Martin Dupont - Montant: 150€',
-                        'Facture médicale consultation généraliste - Acte CCAM: C001 - Remboursement ARS demandé',
-                        'Bulletin de soins ARS - Prestations hospitalières - Séjour du 15/01 au 18/01'
-                      ],
-                      batch_mode: true
+                      fetch_from_db: true,  // Fetch documents from database
+                      limit: 50  // Classify 50 documents from database
                     })
                   });
                   const data = await result.json();
                   
                   if (data.classifications && data.classifications.length > 0) {
-                    // Step 2: Analyze content with sentiment analysis
-                    const sentimentResult = await fetch(`${process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localhost:8002'}/sentiment_analysis`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${tokenData.access_token}`
-                      },
-                      body: JSON.stringify({
-                        text: 'Bordereau de remboursement ARS pour soins dentaires - Patient: Martin Dupont - Montant: 150€'
-                      })
+                    // Count classifications by predicted class
+                    const classCounts: {[key: string]: number} = {};
+                    data.classifications.forEach((c: any) => {
+                      classCounts[c.predicted_class] = (classCounts[c.predicted_class] || 0) + 1;
                     });
-                    const sentimentData = await sentimentResult.json();
                     
-                    // Step 3: Get intelligent assignment
-                    const assignmentResult = await fetch(`${process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localhost:8002'}/smart_routing/suggest_assignment`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${tokenData.access_token}`
-                      },
-                      body: JSON.stringify({
-                        bordereau_data: {
-                          id: 'BORD-2024-001',
-                          reference: 'BORD-2024-001',
-                          nombreBS: 15,
-                          delaiReglement: 30,
-                          days_remaining: 10,
-                          statut: 'EN_COURS',
-                          client_name: 'ASSURANCES SALIM'
-                        }
-                      })
-                    });
-                    const assignmentData = await assignmentResult.json();
+                    const classificationSummary = Object.entries(classCounts)
+                      .map(([className, count]) => `• ${className}: ${count} documents`)
+                      .join('\n');
                     
-                    const classificationSummary = data.classifications.map((c: any, i: number) => 
-                      `• Document ${i+1}: ${c.predicted_class} (${(c.confidence*100).toFixed(1)}% confiance)`
-                    ).join('\n');
+                    const accuracyInfo = data.accuracy ? `\n\n📊 Précision: ${data.accuracy.toFixed(1)}%` : '';
                     
-                    const sentimentSummary = `\n\n📊 Analyse du contenu:\n• Sentiment: ${sentimentData.sentiment} (${(sentimentData.confidence*100).toFixed(1)}% confiance)\n• Score: ${sentimentData.score}`;
+                    const dataSourceInfo = `\n\n💾 Source: ${data.data_source || 'ars_db'}\n📁 Documents traités: ${data.total_documents}`;
                     
-                    const assignmentSummary = assignmentData.recommended_assignment ? 
-                      `\n\n🎯 Assignation intelligente:\n• Agent recommandé: ${assignmentData.recommended_assignment.agent_name}\n• Score: ${assignmentData.recommended_assignment.total_score.toFixed(2)}\n• Confiance: ${assignmentData.recommended_assignment.confidence}` :
-                      '\n\n🎯 Assignation intelligente: Aucun agent disponible';
+                    const predictedClassesInfo = data.predicted_classes ? `\n\n🏷️ Classes détectées: ${data.predicted_classes.join(', ')}` : '';
                     
-                    const fullSummary = `✅ Traitement IA complet terminé:\n\n🔍 Classification:\n${classificationSummary}${sentimentSummary}${assignmentSummary}`;
+                    const fullSummary = `✅ Classification IA terminée:\n\n🔍 Résultats:\n${classificationSummary}${accuracyInfo}${dataSourceInfo}${predictedClassesInfo}`;
                     
-                    setPopup({open: true, title: '✅ IA ARS - Classification + Analyse + Assignation', message: fullSummary, type: 'success'});
-                    setDocumentAI({...documentAI, loading: false, data: {...data, sentiment: sentimentData, assignment: assignmentData}});
+                    setPopup({open: true, title: '✅ IA ARS - Classification Documents Base de Données', message: fullSummary, type: 'success'});
+                    setDocumentAI({...documentAI, loading: false, data: data});
+                  } else if (data.database_empty) {
+                    throw new Error('Base de données vide - Aucun bordereau trouvé dans ars_db');
                   } else {
                     throw new Error('Aucune classification retournée');
                   }
@@ -174,7 +117,7 @@ const AIDashboard: React.FC = () => {
               disabled={documentAI.loading}
               sx={{ mr: 2 }}
             >
-              {documentAI.loading ? '🔄 IA en cours: Classification + Analyse + Assignation...' : '🤖 Classification + Analyse + Assignation'}
+              {documentAI.loading ? '🔄 IA en cours: Lecture et Classification Base de Données...' : '🤖 Classifier Documents (Base de Données)'}
             </Button>
             
             <Button
@@ -230,16 +173,35 @@ const AIDashboard: React.FC = () => {
               💬 Générer Suggestion
             </Button>
             
-            {documentAI.data && (
+            {documentAI.data && documentAI.data.classifications && (
               <Box mt={2}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    💡 Recommandations IA:
+                  </Typography>
+                  {(() => {
+                    const classCounts: {[key: string]: number} = {};
+                    documentAI.data.classifications.forEach((c: any) => {
+                      classCounts[c.predicted_class] = (classCounts[c.predicted_class] || 0) + 1;
+                    });
+                    const recommendations = [];
+                    if (classCounts['SCAN_EN_COURS'] > 5) recommendations.push(`• ${classCounts['SCAN_EN_COURS']} bordereaux en scan - Prioriser la numérisation`);
+                    if (classCounts['EN_COURS'] > 10) recommendations.push(`• ${classCounts['EN_COURS']} bordereaux en cours - Vérifier les affectations`);
+                    if (classCounts['TRAITE'] > 0) recommendations.push(`• ${classCounts['TRAITE']} bordereaux traités - Prêts pour clôture`);
+                    if (classCounts['CLOTURE'] > 0) recommendations.push(`• ${classCounts['CLOTURE']} bordereaux clôturés - Archivage possible`);
+                    const lowConfidence = documentAI.data.classifications.filter((c: any) => c.confidence < 0.7).length;
+                    if (lowConfidence > 0) recommendations.push(`• ${lowConfidence} classifications incertaines - Révision manuelle recommandée`);
+                    return recommendations.map((r, i) => <div key={i}>{r}</div>);
+                  })()}
+                </Alert>
                 <Typography variant="subtitle2" gutterBottom>
-                  Résultats de Classification:
+                  Aperçu des Classifications (10 premiers):
                 </Typography>
                 <List dense>
-                  {documentAI.data.classifications?.map((classification: any, index: number) => (
+                  {documentAI.data.classifications.slice(0, 10).map((classification: any, index: number) => (
                     <ListItem key={index}>
                       <ListItemIcon>
-                        <CheckCircle color={classification.confidence_level === 'high' ? 'success' : 'warning'} />
+                        <CheckCircle color={classification.confidence >= 0.8 ? 'success' : 'warning'} />
                       </ListItemIcon>
                       <ListItemText
                         primary={`Classe: ${classification.predicted_class}`}
@@ -248,6 +210,11 @@ const AIDashboard: React.FC = () => {
                     </ListItem>
                   ))}
                 </List>
+                {documentAI.data.classifications.length > 10 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    ... et {documentAI.data.classifications.length - 10} autres documents
+                  </Typography>
+                )}
               </Box>
             )}
           </CardContent>
@@ -259,31 +226,71 @@ const AIDashboard: React.FC = () => {
           <CardContent>
             <Typography variant="h6" gutterBottom>
               <Speed sx={{ mr: 1, verticalAlign: 'middle' }} />
-              Performance du Modèle
+              Insights & Actions
             </Typography>
             
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="h4" color="primary">
-                    92.5%
+            {documentAI.data ? (
+              <Box>
+                <Grid container spacing={2} mb={2}>
+                  <Grid item xs={6}>
+                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: documentAI.data.accuracy >= 90 ? '#e8f5e9' : '#fff3e0' }}>
+                      <Typography variant="h4" color={documentAI.data.accuracy >= 90 ? 'success.main' : 'warning.main'}>
+                        {documentAI.data.accuracy?.toFixed(1)}%
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Précision IA
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Paper sx={{ p: 2, textAlign: 'center', bgcolor: '#e3f2fd' }}>
+                      <Typography variant="h4" color="primary">
+                        {documentAI.data.total_documents}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Documents Analysés
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                <Alert severity="success" sx={{ mb: 1 }}>
+                  <Typography variant="body2">
+                    ✅ Modèle entraîné sur données réelles ARS
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Précision
+                </Alert>
+                <Alert severity="info">
+                  <Typography variant="body2" fontWeight="bold" gutterBottom>
+                    🎯 Actions Recommandées:
                   </Typography>
-                </Paper>
+                  {(() => {
+                    const actions = [];
+                    const classCounts: {[key: string]: number} = {};
+                    documentAI.data.classifications.forEach((c: any) => {
+                      classCounts[c.predicted_class] = (classCounts[c.predicted_class] || 0) + 1;
+                    });
+                    if (classCounts['SCAN_EN_COURS'] > 0) actions.push(`Accélérer scan de ${classCounts['SCAN_EN_COURS']} bordereaux`);
+                    if (classCounts['EN_COURS'] > 15) actions.push(`Répartir ${classCounts['EN_COURS']} dossiers en cours`);
+                    if (classCounts['TRAITE'] > 0) actions.push(`Clôturer ${classCounts['TRAITE']} dossiers traités`);
+                    return actions.slice(0, 3).map((a, i) => <div key={i}>• {a}</div>);
+                  })()}
+                </Alert>
+              </Box>
+            ) : (
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography variant="h4" color="primary">--</Typography>
+                    <Typography variant="body2" color="text.secondary">Précision</Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={6}>
+                  <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Typography variant="h4" color="success.main">--</Typography>
+                    <Typography variant="body2" color="text.secondary">Documents</Typography>
+                  </Paper>
+                </Grid>
               </Grid>
-              <Grid item xs={6}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="h4" color="success.main">
-                    1,247
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Documents Traités
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
+            )}
           </CardContent>
         </Card>
       </Grid>

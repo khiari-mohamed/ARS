@@ -10,7 +10,11 @@ import {
   ListItemIcon,
   LinearProgress,
   TextField,
-  Chip
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { 
   Upload, 
@@ -26,24 +30,68 @@ interface Props {
 
 const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [fileTypes, setFileTypes] = useState<Record<number, string>>({});
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
 
+  const documentTypes = [
+    { value: 'BULLETIN_SOIN', label: '🏥 Bulletin de Soins', icon: '🏥' },
+    { value: 'COMPLEMENT_INFORMATION', label: '📋 Complément Info', icon: '📋' },
+    { value: 'ADHESION', label: '👥 Adhésion', icon: '👥' },
+    { value: 'RECLAMATION', label: '⚠️ Réclamation', icon: '⚠️' },
+    { value: 'CONTRAT_AVENANT', label: '📄 Contrat/Avenant', icon: '📄' },
+    { value: 'DEMANDE_RESILIATION', label: '❌ Demande Résiliation', icon: '❌' },
+    { value: 'CONVENTION_TIERS_PAYANT', label: '🤝 Convention Tiers', icon: '🤝' }
+  ];
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
+    const startIndex = uploadedFiles.length;
     setUploadedFiles(prev => [...prev, ...files]);
+    
+    // Initialize default type for new files
+    const newTypes: Record<number, string> = {};
+    files.forEach((_, index) => {
+      newTypes[startIndex + index] = 'BULLETIN_SOIN'; // Default type
+    });
+    setFileTypes(prev => ({ ...prev, ...newTypes }));
   };
 
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    setFileTypes(prev => {
+      const newTypes = { ...prev };
+      delete newTypes[index];
+      // Reindex remaining files
+      const reindexed: Record<number, string> = {};
+      Object.keys(newTypes).forEach(key => {
+        const oldIndex = parseInt(key);
+        if (oldIndex > index) {
+          reindexed[oldIndex - 1] = newTypes[oldIndex];
+        } else {
+          reindexed[oldIndex] = newTypes[oldIndex];
+        }
+      });
+      return reindexed;
+    });
   };
 
   const handleUpload = async () => {
     if (uploadedFiles.length === 0) return;
 
+    // Validate all files have types assigned
+    const missingTypes = uploadedFiles.some((_, index) => !fileTypes[index]);
+    if (missingTypes) {
+      alert('⚠️ Veuillez sélectionner un type pour tous les documents');
+      return;
+    }
+
+    // DEBUG: Log file types before upload
+    console.log('🔍 DEBUG: File types before upload:', fileTypes);
+    console.log('🔍 DEBUG: Files:', uploadedFiles.map((f, i) => `${i}: ${f.name} -> ${fileTypes[i]}`));
+
     setUploading(true);
     try {
-      // NEW: Validate multiple scan capability before upload
       const { validateMultipleScanCapability, uploadAdditionalDocuments, uploadManualDocuments } = await import('../services/manualScanService');
       
       const validation = await validateMultipleScanCapability(bordereau.id);
@@ -55,16 +103,26 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
 
       let response;
       if (validation.canScanMultiple) {
-        // Use additional upload for multiple scans
-        response = await uploadAdditionalDocuments(bordereau.id, uploadedFiles, notes);
+        // Use additional upload with document types
+        console.log('📤 Uploading additional documents with types:', fileTypes);
+        response = await uploadAdditionalDocuments(bordereau.id, uploadedFiles, notes, fileTypes);
       } else {
-        // Use regular upload for first scan
-        response = await uploadManualDocuments(bordereau.id, uploadedFiles);
+        // Use regular upload with document types
+        console.log('📤 Uploading documents with types:', fileTypes);
+        response = await uploadManualDocuments(bordereau.id, uploadedFiles, fileTypes);
       }
 
       if (response.success) {
         const scanType = validation.canScanMultiple ? 'supplémentaire' : 'initial';
-        alert(`✅ Documents uploadés avec succès!\n\n📄 ${response.uploadedDocuments?.length || uploadedFiles.length} document(s) ajouté(s)\n🔄 Scan ${scanType} effectué\n📊 Total documents: ${validation.documentsCount + uploadedFiles.length}`);
+        const typeSummary = Object.values(fileTypes).reduce((acc: Record<string, number>, type) => {
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {});
+        const summaryText = Object.entries(typeSummary)
+          .map(([type, count]) => `  • ${documentTypes.find(t => t.value === type)?.icon || '📄'} ${type}: ${count}`)
+          .join('\n');
+        
+        alert(`✅ Documents uploadés avec succès!\n\n📄 ${response.uploadedDocuments?.length || uploadedFiles.length} document(s) ajouté(s)\n🔄 Scan ${scanType} effectué\n\n📊 Répartition par type:\n${summaryText}\n\n📁 Total documents: ${validation.documentsCount + uploadedFiles.length}`);
         onComplete();
       } else {
         alert(`❌ Erreur lors de l'upload: ${response.message || 'Erreur inconnue'}`);
@@ -132,14 +190,37 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
           </Typography>
           <List dense>
             {uploadedFiles.map((file, index) => (
-              <ListItem key={index}>
+              <ListItem 
+                key={index}
+                sx={{ 
+                  border: '1px solid #e0e0e0', 
+                  borderRadius: 1, 
+                  mb: 1,
+                  bgcolor: '#fafafa'
+                }}
+              >
                 <ListItemIcon>
                   <Description />
                 </ListItemIcon>
                 <ListItemText
                   primary={file.name}
                   secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
+                  sx={{ flex: '0 0 40%' }}
                 />
+                <FormControl size="small" sx={{ minWidth: 200, mr: 2 }}>
+                  <InputLabel>Type de document</InputLabel>
+                  <Select
+                    value={fileTypes[index] || ''}
+                    onChange={(e) => setFileTypes(prev => ({ ...prev, [index]: e.target.value }))}
+                    label="Type de document"
+                  >
+                    {documentTypes.map(type => (
+                      <MenuItem key={type.value} value={type.value}>
+                        {type.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <Button
                   size="small"
                   color="error"
@@ -150,6 +231,9 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
               </ListItem>
             ))}
           </List>
+          <Alert severity="info" sx={{ mt: 1 }}>
+            💡 Sélectionnez le type pour chaque document avant l'upload
+          </Alert>
         </Box>
       )}
 

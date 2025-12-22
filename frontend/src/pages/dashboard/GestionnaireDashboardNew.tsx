@@ -13,6 +13,20 @@ interface DossierStats {
   avenant: { total: number; breakdown: { [key: string]: number }; };
 }
 
+interface GestionnaireAssignment {
+  gestionnaire: string;
+  totalAssigned: number;
+  documentsAssigned?: number;
+  bordereauxAssigned?: number;
+  documentsReturned?: number;
+  traites?: number;
+  enCours?: number;
+  retournes?: number;
+  returnedBy?: string | null;
+  documentsByType: { [key: string]: number };
+  bordereauxByType?: { [key: string]: number };
+}
+
 interface Dossier {
   id: string;
   reference: string;
@@ -73,6 +87,9 @@ function GestionnaireDashboardNew() {
   const [derniersBordereauxPage, setDerniersBordereauxPage] = useState(1);
   const [bordereauxEnCoursPage, setBordereauxEnCoursPage] = useState(1);
   const [dossiersIndividuelsPage, setDossiersIndividuelsPage] = useState(1);
+  const [gestionnaireAssignments, setGestionnaireAssignments] = useState<GestionnaireAssignment[]>([]);
+  const [gestionnaireFilter, setGestionnaireFilter] = useState('Tous');
+  const [availableGestionnaires, setAvailableGestionnaires] = useState<string[]>([]);
 
   // Table-specific filters
   const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
@@ -151,7 +168,7 @@ function GestionnaireDashboardNew() {
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-assignments-dossiers')
+        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers')
       ]);
       
       console.log('📊 Raw API Responses (correct endpoints):');
@@ -232,6 +249,17 @@ function GestionnaireDashboardNew() {
         setDocuments(allDocuments);
       } else {
         console.log('⚠️ No documents data received');
+      }
+      
+      if (assignmentsResponse.data) {
+        console.log('👥 Gestionnaire assignments received:', assignmentsResponse.data.length, assignmentsResponse.data);
+        setGestionnaireAssignments(assignmentsResponse.data);
+        
+        const uniqueGestionnaires = [...new Set(assignmentsResponse.data.map((a: any) => a.gestionnaire))].sort() as string[];
+        setAvailableGestionnaires(uniqueGestionnaires);
+        console.log('👤 Unique gestionnaires:', uniqueGestionnaires);
+      } else {
+        console.warn('⚠️ No assignments data received');
       }
     } catch (error: any) {
       console.error('❌ Error loading gestionnaire dashboard data:', error);
@@ -344,7 +372,7 @@ function GestionnaireDashboardNew() {
       if (response.data.success && response.data.hasDocument) {
         const dossier = filteredDossiers.find(d => d.id === dossierId);
         
-        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         setCurrentPDFUrl(`${serverBaseUrl}${response.data.pdfUrl}`);
         setCurrentDossier(dossier);
         setShowPDFModal(true);
@@ -681,6 +709,61 @@ function GestionnaireDashboardNew() {
             <span style={{ fontSize: '14px', color: '#666' }}>
               {selectedDossiers.length > 0 ? `${selectedDossiers.length} dossier(s) sélectionné(s)` : 'Mes dossiers assignés uniquement'}
             </span>
+          </div>
+        </div>
+
+        {/* Gestionnaire Assignments Section */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Affectations par Gestionnaire</h3>
+            <select 
+              value={gestionnaireFilter} 
+              onChange={(e) => setGestionnaireFilter(e.target.value)}
+              style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+            >
+              <option value="Tous">Tous les gestionnaires</option>
+              {availableGestionnaires.map(gest => (
+                <option key={gest} value={gest}>{gest}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+            {gestionnaireAssignments
+              .filter(assignment => gestionnaireFilter === 'Tous' || assignment.gestionnaire === gestionnaireFilter)
+              .map((assignment, index) => (
+              <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057' }}>
+                  👤 {assignment.gestionnaire}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
+                  <strong>Total affectés:</strong> {assignment.totalAssigned}
+                </div>
+                <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#28a745' }}>✓ Traités:</span>
+                    <span style={{ fontWeight: 'bold' }}>{assignment.traites || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#ffc107' }}>⏳ En cours:</span>
+                    <span style={{ fontWeight: 'bold' }}>{assignment.enCours || 0}</span>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ color: '#dc3545' }}>↩ Retournés:</span>
+                      <span style={{ fontWeight: 'bold' }}>{assignment.retournes || 0}</span>
+                    </div>
+                    {assignment.returnedBy && (assignment.retournes || 0) > 0 && (
+                      <div style={{ fontSize: '11px', color: '#dc3545', fontWeight: 'bold', marginLeft: '16px', marginTop: '2px' }}>
+                        → Retourné par: {assignment.returnedBy}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                  <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

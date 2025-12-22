@@ -325,7 +325,8 @@ export class ChefEquipeActionsService {
         statut: newStatus as any,
         assignedToUserId: null,
         currentHandlerId: null,
-        teamId: null
+        teamId: null,
+        documentStatus: returnTo === 'SCAN' ? 'RETOURNER_AU_SCAN' : 'NORMAL'
       }
     });
 

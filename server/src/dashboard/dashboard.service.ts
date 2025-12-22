@@ -35,7 +35,6 @@ export class DashboardService {
         this.prisma.bordereau.findMany({ where, include: { client: true, virement: true, documents: true } }),
         this.prisma.reclamation.findMany({ 
           where: { 
-            ...where,
             status: { in: ['OPEN', 'IN_PROGRESS', 'PENDING'] }
           }
         }),

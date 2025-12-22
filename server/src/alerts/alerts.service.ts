@@ -64,7 +64,7 @@ export class AlertsService {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      timeout: 5000
+      timeout: 100000
     });
     
     return response.data.access_token;
@@ -147,7 +147,14 @@ export class AlertsService {
         virement: true, 
         contract: true, 
         client: true,
-        currentHandler: true,
+        currentHandler: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true,
+            teamLeaderId: true
+          }
+        },
         team: true,
         chargeCompte: true
       },
@@ -201,8 +208,18 @@ export class AlertsService {
         }
       }
       
+      // Only show assignedToName if currentHandler is a GESTIONNAIRE with matching teamLeaderId
+      let assignedToName = 'Non assigné';
+      if (b.currentHandler && b.currentHandler.role === 'GESTIONNAIRE' && b.currentHandler.teamLeaderId === b.teamId) {
+        assignedToName = b.currentHandler.fullName;
+      }
+      
       return {
-        bordereau: b,
+        bordereau: {
+          ...b,
+          teamName: b.team?.fullName || 'Non assigné',
+          assignedToName
+        },
         alertLevel: level,
         reason,
         slaThreshold: this.getSlaThreshold(b),
@@ -215,7 +232,8 @@ export class AlertsService {
     // Trigger escalations for critical alerts
     await this.processAlertEscalations(alerts);
     
-    return alerts;
+    // ONLY return actual alerts (red/orange), not green ones
+    return alerts.filter(a => a.alertLevel === 'red' || a.alertLevel === 'orange');
   }
 
   private calculateDeadline(bordereau: any): string {
@@ -244,7 +262,8 @@ export class AlertsService {
   private getSlaThreshold(bordereau: any): number {
     if (bordereau.contract?.delaiReglement) return bordereau.contract.delaiReglement;
     if (bordereau.client?.reglementDelay) return bordereau.client.reglementDelay;
-    return 5; // Default 5 days
+    if (bordereau.delaiReglement) return bordereau.delaiReglement;
+    return 30; // Default 30 days
   }
 
   private calculateComplexity(bordereau: any): number {
@@ -288,11 +307,8 @@ export class AlertsService {
   async getTeamOverloadAlerts(user: any) {
     this.checkAlertsRole(user);
     
-    // Get all teams (users with role CHEF_EQUIPE)
-    const teams = await this.prisma.user.findMany({ 
-      where: { 
-        role: 'CHEF_EQUIPE'
-      },
+    const chefs = await this.prisma.user.findMany({ 
+      where: { role: 'CHEF_EQUIPE' },
       select: {
         id: true,
         fullName: true,
@@ -305,46 +321,66 @@ export class AlertsService {
     
     const overloads: any[] = [];
     
-    for (const team of teams) {
-      // Count open bordereaux assigned to this team
+    for (const chef of chefs) {
+      // Find gestionnaires using teamLeaderId relationship
+      const gestionnaires = await this.prisma.user.findMany({
+        where: { 
+          teamLeaderId: chef.id,
+          role: 'GESTIONNAIRE'
+        },
+        select: { id: true, capacity: true }
+      });
+      
+      const gestionnaireIds = gestionnaires.map(g => g.id);
+      
+      const chefCapacity = chef.capacity || 0;
+      const gestionnairesCapacity = gestionnaires.reduce((sum, g) => sum + (g.capacity || 0), 0);
+      const totalCapacity = chefCapacity + gestionnairesCapacity;
+      
+      if (totalCapacity === 0) continue;
+      
       const count = await this.prisma.bordereau.count({ 
         where: { 
           statut: { notIn: ['CLOTURE', 'PAYE'] },
-          teamId: team.id
+          OR: [
+            { teamId: chef.id },
+            { currentHandlerId: { in: [chef.id, ...gestionnaireIds] } }
+          ]
         }
       });
       
-      const capacity = team.capacity || 20; // Default capacity
-      const utilizationRate = (count / capacity) * 100;
+      const utilizationRate = (count / totalCapacity) * 100;
+      const teamSize = 1 + gestionnaires.length;
       
-      // Only alert if over 80% capacity
+      this.logger.log(`Team ${chef.fullName}: ${count} dossiers, ${totalCapacity} capacity (Chef: ${chefCapacity}, ${gestionnaires.length} gestionnaires: ${gestionnairesCapacity}), ${Math.round(utilizationRate)}% utilization`);
+      
       if (utilizationRate > 120) {
         overloads.push({ 
           team: {
-            id: team.id,
-            fullName: team.fullName,
-            email: team.email,
-            role: team.role,
-            createdAt: team.createdAt,
+            id: chef.id,
+            fullName: chef.fullName,
+            email: chef.email,
+            role: chef.role,
+            createdAt: chef.createdAt,
             password: ''
           }, 
           count, 
           alert: 'red', 
-          reason: `Surcharge critique: ${count} dossiers ouverts` 
+          reason: `Surcharge critique: ${count} dossiers / ${totalCapacity} capacité (${teamSize} membres) - +${Math.round((count / totalCapacity - 1) * 100)}%` 
         });
       } else if (utilizationRate > 80) {
         overloads.push({ 
           team: {
-            id: team.id,
-            fullName: team.fullName,
-            email: team.email,
-            role: team.role,
-            createdAt: team.createdAt,
+            id: chef.id,
+            fullName: chef.fullName,
+            email: chef.email,
+            role: chef.role,
+            createdAt: chef.createdAt,
             password: ''
           }, 
           count, 
           alert: 'orange', 
-          reason: `Charge élevée: ${count} dossiers ouverts (${Math.round(utilizationRate)}%)` 
+          reason: `Charge élevée: ${count} dossiers / ${totalCapacity} capacité (${teamSize} membres) - ${Math.round(utilizationRate)}%` 
         });
       }
     }
@@ -388,20 +424,45 @@ export class AlertsService {
     this.checkAlertsRole(user);
     
     try {
-      // Get historical data for AI analysis
+      // Get ALL historical data for AI analysis (no time limit)
       const historicalData = await this.prisma.bordereau.findMany({
-        where: {
-          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-        },
         include: { client: true, contract: true },
         orderBy: { createdAt: 'asc' }
       });
+      
+      this.logger.log(`📊 AI analyzing ${historicalData.length} bordereaux for predictions`);
 
-      // Prepare data for AI trend forecasting
-      const trendData = historicalData.map(b => ({
-        date: b.createdAt.toISOString().split('T')[0],
-        value: this.calculateProcessingTime(b)
-      }));
+      // Prepare data for AI trend forecasting - count bordereaux per day
+      const dailyCounts = historicalData.reduce((acc, b) => {
+        const date = b.createdAt.toISOString().split('T')[0];
+        acc[date] = (acc[date] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Fill missing dates with 0 to ensure continuous data
+      const sortedDates = Object.keys(dailyCounts).sort();
+      if (sortedDates.length > 0) {
+        const startDate = new Date(sortedDates[0]);
+        const endDate = new Date(sortedDates[sortedDates.length - 1]);
+        const currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+          const dateStr = currentDate.toISOString().split('T')[0];
+          if (!dailyCounts[dateStr]) {
+            dailyCounts[dateStr] = 0;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+      
+      const trendData = Object.entries(dailyCounts)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, count]) => ({
+          date,
+          value: count
+        }));
+      
+      this.logger.log(`📊 Prepared ${trendData.length} days of historical data for AI analysis`);
 
       // Try AI service first
       let forecast: any = {};
@@ -410,15 +471,15 @@ export class AlertsService {
       try {
         const token = await this.getAIServiceToken();
         
-        // Get trend forecast
-        const forecastResponse = await axios.post(`${AI_MICROSERVICE_URL}/trend_forecast`, {
-          historical_data: trendData,
-          forecast_days: 7
-        }, {
+        // Get trend forecast - send data in correct format
+        const forecastResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, trendData, {
           headers: { 'Authorization': `Bearer ${token}` },
           timeout: 10000
         });
         forecast = forecastResponse.data;
+        
+        this.logger.log(`🤖 AI Forecast: ${JSON.stringify(forecast.forecast?.slice(0, 3))}`);
+        this.logger.log(`📈 Trend: ${forecast.trend_direction}, Weekly prediction: ${this.calculateWeeklyPrediction(forecast.forecast || [])}`);
         
         // Get recommendations
         const workload = await this.getCurrentWorkload();
@@ -433,25 +494,40 @@ export class AlertsService {
         });
         
       } catch (aiError) {
-        this.logger.warn('AI service unavailable, using fallback:', aiError.message);
-        // forecast = { 
-        //   forecast: [],
-        //   trend_direction: 'stable',
-        //   model_performance: { trend_strength: 0.5 }
-        // };
-        forecast = { forecast: [], trend_direction: 'unknown', model_performance: {} };
+        this.logger.error('AI service unavailable:', aiError.message);
+        throw new Error(`AI microservice unavailable: ${aiError.message}`);
       }
 
+      // Calculate confidence based on data quality and model performance
+      const dataQuality = Math.min(1.0, trendData.length / 30); // More data = higher confidence
+      const modelConfidence = forecast.model_performance?.trend_strength || 0.5;
+      // Boost confidence if we have recent data
+      const recencyBoost = trendData.length >= 14 ? 0.1 : 0;
+      const finalConfidence = Math.min(0.95, (dataQuality * 0.4 + modelConfidence * 0.6) + recencyBoost);
+      
+      const weeklyPrediction = this.calculateWeeklyPrediction(forecast.forecast || []);
+      
+      // Generate actionable insights
+      const insights = this.generatePredictionInsights(
+        weeklyPrediction,
+        forecast.trend_direction,
+        trendData,
+        finalConfidence
+      );
+      
       return {
         forecast: forecast.forecast || [],
         trend_direction: forecast.trend_direction || 'stable',
         recommendations: recommendationsResponse.data.decisions || [],
-        ai_confidence: forecast.model_performance?.trend_strength || 0.5,
-        next_week_prediction: this.calculateWeeklyPrediction(forecast.forecast || [])
+        ai_confidence: finalConfidence,
+        next_week_prediction: weeklyPrediction,
+        insights: insights,
+        data_points_analyzed: trendData.length,
+        forecast_reliability: this.assessForecastReliability(forecast.forecast || [], trendData)
       };
     } catch (error) {
       this.logger.error('AI delay prediction failed:', error.response?.data || error.message);
-      return this.getFallbackPredictions();
+      throw error;
     }
   }
 
@@ -470,38 +546,117 @@ export class AlertsService {
   }
 
   private async getTeamCapacity(): Promise<any> {
-    const teams = await this.prisma.user.count({
-      where: { role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] } }
+    const teams = await this.prisma.user.findMany({
+      where: { role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] } },
+      select: { capacity: true }
     });
-    return { total_capacity: teams * 10 }; // Assume 10 bordereaux per person
+    const totalCapacity = teams.reduce((sum, t) => sum + (t.capacity || 0), 0);
+    return { total_capacity: totalCapacity };
   }
 
   private calculateWeeklyPrediction(forecast: any[]): number {
     if (!forecast || forecast.length === 0) return 0;
-    const total = forecast.reduce((sum, f) => sum + (f.predicted_value || 0), 0);
-    return Math.max(0, Math.round(total));
+    
+    // Use a balanced approach: average of predicted_value and upper_bound
+    // This gives more realistic predictions while accounting for uncertainty
+    const avgDaily = forecast.reduce((sum, f) => {
+      const predicted = f.predicted_value || 0;
+      const upper = f.upper_bound || 0;
+      // Use 70% of upper bound + 30% of predicted for better accuracy
+      const estimate = Math.max(predicted, upper * 0.7 + predicted * 0.3);
+      return sum + estimate;
+    }, 0) / forecast.length;
+    
+    const weeklyPrediction = Math.round(avgDaily * 7);
+    this.logger.log(`📊 Calculated weekly prediction: ${weeklyPrediction} (avg daily: ${avgDaily.toFixed(2)})`);
+    
+    return Math.max(0, weeklyPrediction);
   }
 
-  // private getFallbackPredictions() {
-  //   return {
-  //     forecast: [],
-  //     trend_direction: 'stable',
-  //     recommendations: [{
-  //       action: 'monitor_workload',
-  //       priority: 'medium',
-  //       reasoning: 'AI service unavailable - manual monitoring recommended'
-  //     }],
-  //     ai_confidence: 0.5,
-  //     next_week_prediction: 0
-  //   };
-  // }
-  private getFallbackPredictions() {
+  private generatePredictionInsights(weeklyPrediction: number, trendDirection: string, historicalData: any[], confidence: number): Array<{type: string; icon: string; message: string; action: string}> {
+    const insights: Array<{type: string; icon: string; message: string; action: string}> = [];
+    const avgHistorical = historicalData.reduce((sum, d) => sum + d.value, 0) / historicalData.length;
+    const percentChange = ((weeklyPrediction / 7 - avgHistorical) / avgHistorical) * 100;
+
+    // Workload insight
+    if (weeklyPrediction > avgHistorical * 7 * 1.2) {
+      insights.push({
+        type: 'warning',
+        icon: '⚠️',
+        message: `Charge prévue +${Math.round(percentChange)}% supérieure à la moyenne`,
+        action: 'Prévoir des ressources supplémentaires'
+      });
+    } else if (weeklyPrediction < avgHistorical * 7 * 0.8) {
+      insights.push({
+        type: 'info',
+        icon: '📉',
+        message: `Charge prévue ${Math.round(Math.abs(percentChange))}% inférieure à la moyenne`,
+        action: 'Opportunité pour formation ou maintenance'
+      });
+    } else {
+      insights.push({
+        type: 'success',
+        icon: '✅',
+        message: 'Charge prévue dans les normes habituelles',
+        action: 'Maintenir les ressources actuelles'
+      });
+    }
+
+    // Trend insight
+    if (trendDirection === 'increasing') {
+      insights.push({
+        type: 'warning',
+        icon: '📈',
+        message: 'Tendance croissante détectée',
+        action: 'Anticiper une augmentation continue'
+      });
+    } else if (trendDirection === 'decreasing') {
+      insights.push({
+        type: 'info',
+        icon: '📉',
+        message: 'Tendance décroissante observée',
+        action: 'Charge de travail en diminution'
+      });
+    }
+
+    // Confidence insight
+    if (confidence < 0.6) {
+      insights.push({
+        type: 'warning',
+        icon: '⚡',
+        message: 'Prévision basée sur données limitées',
+        action: 'Surveiller de près les variations'
+      });
+    }
+
+    return insights;
+  }
+
+  private assessForecastReliability(forecast: any[], historicalData: any[]) {
+    const dataPoints = historicalData.length;
+    const forecastVariance = forecast.length > 0 
+      ? forecast.reduce((sum, f) => sum + (f.upper_bound - f.lower_bound), 0) / forecast.length
+      : 0;
+
+    let reliability = 'medium';
+    let score = 0.5;
+
+    if (dataPoints >= 30 && forecastVariance < 10) {
+      reliability = 'high';
+      score = 0.85;
+    } else if (dataPoints < 14 || forecastVariance > 20) {
+      reliability = 'low';
+      score = 0.35;
+    }
+
     return {
-      forecast: [],
-      trend_direction: 'unknown',
-      recommendations: [],
-      ai_confidence: 0,
-      next_week_prediction: 0
+      level: reliability,
+      score: score,
+      reason: dataPoints < 14 
+        ? 'Données historiques insuffisantes' 
+        : forecastVariance > 20 
+        ? 'Forte variabilité dans les prévisions'
+        : 'Prévisions basées sur données solides'
     };
   }
 
@@ -594,7 +749,26 @@ export class AlertsService {
       },
     });
     
-    return alerts;
+    return alerts.map(alert => {
+      let resolutionTime: number | null = null;
+      if (alert.resolved && alert.resolvedAt) {
+        // Calculate from bordereau dateReception to resolution
+        const startTime = alert.bordereau?.dateReception 
+          ? new Date(alert.bordereau.dateReception).getTime()
+          : new Date(alert.createdAt).getTime();
+        const endTime = new Date(alert.resolvedAt).getTime();
+        const hours = Math.round((endTime - startTime) / (1000 * 60 * 60));
+        resolutionTime = hours > 0 ? hours : null;
+      }
+      
+      return {
+        ...alert,
+        clientName: alert.bordereau?.client?.name || null,
+        bordereauReference: alert.bordereau?.reference || null,
+        resolvedBy: alert.user?.fullName || (alert.userId ? 'Utilisateur' : null),
+        resolutionTime
+      };
+    });
   }
 
   /**
@@ -612,7 +786,7 @@ export class AlertsService {
       }
     });
     
-    // Mark related alert logs as resolved
+    // Mark related alert logs as resolved with user info
     await this.prisma.alertLog.updateMany({
       where: { 
         bordereauId: bordereauId,
@@ -620,7 +794,8 @@ export class AlertsService {
       },
       data: { 
         resolved: true, 
-        resolvedAt: new Date() 
+        resolvedAt: new Date(),
+        userId: user.id
       }
     });
     
@@ -735,15 +910,10 @@ export class AlertsService {
       whereClause.userId = { in: teamMembers.map(m => m.id) };
     }
     
-    // Get total active alerts
-    const totalAlerts = await this.prisma.alertLog.count({
-      where: { resolved: false, ...whereClause }
-    });
-    
-    // Get critical alerts
-    const criticalAlerts = await this.prisma.alertLog.count({
-      where: { resolved: false, alertLevel: 'red', ...whereClause }
-    });
+    // Get actual alerts from dashboard (only red/orange)
+    const dashboardAlerts = await this.getAlertsDashboard({}, user);
+    const totalAlerts = dashboardAlerts.length;
+    const criticalAlerts = dashboardAlerts.filter(a => a.alertLevel === 'red').length;
     
     // Get resolved today
     const resolvedToday = await this.prisma.alertLog.count({
@@ -781,9 +951,7 @@ export class AlertsService {
       const daysSinceReception = b.dateReception 
         ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) 
         : 0;
-      let slaThreshold = 5;
-      if (b.contract?.delaiReglement) slaThreshold = b.contract.delaiReglement;
-      else if (b.client?.reglementDelay) slaThreshold = b.client.reglementDelay;
+      const slaThreshold = this.getSlaThreshold(b);
       
       if (b.statut === 'CLOTURE' || daysSinceReception <= slaThreshold) {
         compliantCount++;
@@ -926,9 +1094,7 @@ export class AlertsService {
         const daysSinceReception = b.dateReception 
           ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) 
           : 0;
-        let slaThreshold = 5;
-        if (b.contract?.delaiReglement) slaThreshold = b.contract.delaiReglement;
-        else if (b.client?.reglementDelay) slaThreshold = b.client.reglementDelay;
+        const slaThreshold = this.getSlaThreshold(b);
         
         if (b.statut === 'CLOTURE' || daysSinceReception <= slaThreshold) {
           compliantCount++;

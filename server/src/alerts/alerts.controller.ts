@@ -10,6 +10,7 @@ import {
   Param,
 } from '@nestjs/common';
 import { AlertsService } from './alerts.service';
+import { AlertSchedulerService } from './alert-scheduler.service';
 import { AlertsQueryDto } from './dto/alerts-query.dto';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -36,7 +37,10 @@ import { UserRole } from '../auth/user-role.enum';
 // @UseGuards(JwtAuthGuard, RolesGuard) - Temporarily disabled for alerts module
 @Controller('alerts')
 export class AlertsController {
-  constructor(private readonly alertsService: AlertsService) {}
+  constructor(
+    private readonly alertsService: AlertsService,
+    private readonly scheduler: AlertSchedulerService
+  ) {}
 
   @Get('dashboard')
   async getAlertsDashboard(@Query() query: AlertsQueryDto, @Req() req: any) {
@@ -264,5 +268,11 @@ export class AlertsController {
     const user = getUserFromRequest(req);
     // Export logic here - would generate PDF/Excel
     return { success: true, message: `Export in ${format} format initiated` };
+  }
+  
+  @Post('test/team-overload')
+  async testTeamOverload(@Req() req: any) {
+    await this.scheduler.triggerTeamOverloadCheck();
+    return { success: true, message: 'Team overload check triggered - check logs' };
   }
 }

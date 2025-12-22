@@ -861,6 +861,10 @@ export class BordereauxService {
         lt: new Date(today.getTime() - (filters.delaiReglement || 30) * 24 * 60 * 60 * 1000)
       };
     }
+    if (filters.documentStatus) {
+      where.documentStatus = filters.documentStatus;
+      console.log('🔍 Backend: Filtering by documentStatus:', filters.documentStatus);
+    }
     
     // Handle pagination
     const page = filters.page ? parseInt(filters.page) : 1;

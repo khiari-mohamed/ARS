@@ -1952,7 +1952,7 @@ export class ScanService {
   }
 
   // Modify bordereau reference and client
-  async modifyBordereau(bordereauId: string, data: { reference?: string; clientId?: any }, userId: string) {
+  async modifyBordereau(bordereauId: string, data: { reference?: string; clientId?: any; dateReception?: string }, userId: string) {
     try {
       const bordereau = await this.prisma.bordereau.findUnique({
         where: { id: bordereauId },
@@ -1965,6 +1965,7 @@ export class ScanService {
 
       const updateData: any = {};
       if (data.reference) updateData.reference = data.reference;
+      if (data.dateReception) updateData.dateReception = new Date(data.dateReception);
       
       if (data.clientId) {
         const clientIdStr = typeof data.clientId === 'string' ? data.clientId : data.clientId.toString();

@@ -586,6 +586,77 @@ export class GestionnaireSeniorDashboardController {
     return result;
   }
 
+  @Post('modify-dossier-status')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async modifyDossierStatusSenior(@Body() body: { dossierId: string; newStatus: string }) {
+    const { dossierId, newStatus } = body;
+    
+    const documentStatusMapping = {
+      'Nouveau': 'UPLOADED',
+      'En cours': 'EN_COURS',
+      'Traité': 'TRAITE',
+      'Rejeté': 'REJETE',
+      'Retourné': 'RETOUR_ADMIN'
+    };
+
+    const bordereauxStatusMapping = {
+      'Nouveau': 'EN_ATTENTE',
+      'En cours': 'EN_COURS',
+      'Traité': 'TRAITE'
+    };
+
+    // First check if it's a bordereau (gestionnaire senior works with bordereaux)
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: dossierId }
+    });
+
+    if (bordereau) {
+      // Update bordereau status
+      await this.prisma.bordereau.update({
+        where: { id: dossierId },
+        data: { 
+          statut: bordereauxStatusMapping[newStatus] as any,
+          dateCloture: newStatus === 'Traité' ? new Date() : null
+        }
+      });
+      return { success: true, message: 'Statut du bordereau modifié avec succès' };
+    }
+
+    // If not a bordereau, try as document
+    const document = await this.prisma.document.findUnique({
+      where: { id: dossierId }
+    });
+
+    if (!document) {
+      return { success: false, message: 'Bordereau ou document non trouvé' };
+    }
+
+    const mappedStatus = documentStatusMapping[newStatus] || newStatus;
+
+    await this.prisma.document.update({
+      where: { id: dossierId },
+      data: { status: mappedStatus as any }
+    });
+
+    // Auto-update bordereau status when all documents are treated
+    if (document.bordereauId && mappedStatus === 'TRAITE') {
+      const allDocs = await this.prisma.document.findMany({
+        where: { bordereauId: document.bordereauId },
+        select: { status: true }
+      });
+      
+      const allTreated = allDocs.every(d => d.status === 'TRAITE');
+      if (allTreated) {
+        await this.prisma.bordereau.update({
+          where: { id: document.bordereauId },
+          data: { statut: 'TRAITE', dateCloture: new Date() }
+        });
+      }
+    }
+
+    return { success: true, message: 'Statut du document modifié avec succès' };
+  }
+
   @Get('corbeille')
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async getCorbeille(@Req() req) {

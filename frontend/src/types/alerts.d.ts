@@ -6,6 +6,8 @@ export interface Alert {
     statut: string;
     clientId?: string;
     teamId?: string;
+    teamName?: string;
+    assignedToName?: string;
     dateReception?: string;
     createdAt: string;
     assignedToUserId?: string;
@@ -85,6 +87,18 @@ export interface DelayPrediction {
   next_week_prediction: number;
   nextWeekForecast?: number;
   recommendation?: string;
+  insights?: Array<{
+    type: string;
+    icon: string;
+    message: string;
+    action: string;
+  }>;
+  data_points_analyzed?: number;
+  forecast_reliability?: {
+    level: string;
+    score: number;
+    reason: string;
+  };
 }
 
 export interface TeamOverload {

@@ -20,6 +20,7 @@ interface Adherent {
   rib: string;
   codeAssure?: string;
   numeroContrat?: string;
+  assurance?: string;
   status: 'active' | 'inactive';
   duplicateRib?: boolean;
 }
@@ -43,6 +44,7 @@ const AdherentsTab: React.FC = () => {
     rib: '',
     codeAssure: '',
     numeroContrat: '',
+    assurance: '',
     status: 'active' as 'active' | 'inactive'
   });
   const [contracts, setContracts] = useState<any[]>([]);
@@ -108,6 +110,7 @@ const AdherentsTab: React.FC = () => {
         rib: member.rib || `RIB${String(index + 1).padStart(17, '0')}`,
         codeAssure: member.codeAssure || '',
         numeroContrat: member.numeroContrat || '',
+        assurance: member.assurance || '',
         status: member.statut === 'ACTIF' || member.status === 'active' ? 'active' : 'inactive',
         duplicateRib: false
       }));
@@ -163,6 +166,7 @@ const AdherentsTab: React.FC = () => {
       rib: '',
       codeAssure: '',
       numeroContrat: '',
+      assurance: '',
       status: 'active'
     });
     setDialog({open: true, adherent: null});
@@ -177,6 +181,7 @@ const AdherentsTab: React.FC = () => {
       rib: adherent.rib,
       codeAssure: adherent.codeAssure || '',
       numeroContrat: adherent.numeroContrat || '',
+      assurance: adherent.assurance || '',
       status: adherent.status
     });
     setDialog({open: true, adherent});
@@ -202,6 +207,7 @@ const AdherentsTab: React.FC = () => {
         rib: form.rib,
         codeAssure: form.codeAssure,
         numeroContrat: form.numeroContrat,
+        assurance: form.assurance,
         statut: form.status === 'active' ? 'ACTIF' : 'INACTIF'
       };
       
@@ -293,6 +299,7 @@ const AdherentsTab: React.FC = () => {
       'RIB': a.rib,
       'Code Assuré': a.codeAssure || '',
       'Numéro Contrat': a.numeroContrat || '',
+      'Assurance': a.assurance || '',
       'Statut': a.status === 'active' ? 'ACTIF' : 'INACTIF'
     }));
     
@@ -505,6 +512,7 @@ const AdherentsTab: React.FC = () => {
               <TableCell><strong>RIB (20 chiffres)</strong></TableCell>
               <TableCell><strong>Code assuré</strong></TableCell>
               <TableCell><strong>Numéro de contrat</strong></TableCell>
+              <TableCell><strong>Assurance</strong></TableCell>
               <TableCell><strong>Statut actif/inactif</strong></TableCell>
               <TableCell><strong>Actions</strong></TableCell>
             </TableRow>
@@ -549,6 +557,7 @@ const AdherentsTab: React.FC = () => {
                 </TableCell>
                 <TableCell>{adherent.codeAssure || '-'}</TableCell>
                 <TableCell>{adherent.numeroContrat || '-'}</TableCell>
+                <TableCell>{adherent.assurance || '-'}</TableCell>
                 <TableCell>{getStatusChip(adherent.status)}</TableCell>
                 <TableCell>
                   <IconButton size="small" onClick={() => handleEdit(adherent)} title="Modifier">
@@ -687,6 +696,16 @@ const AdherentsTab: React.FC = () => {
                 onChange={(e) => setForm({...form, numeroContrat: e.target.value})}
                 fullWidth
                 required
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Assurance"
+                value={form.assurance}
+                onChange={(e) => setForm({...form, assurance: e.target.value})}
+                fullWidth
+                placeholder="Ex: PGH & FILIALES"
+                helperText="Nom de la compagnie d'assurance"
               />
             </Grid>
             <Grid item xs={12}>

@@ -16,15 +16,25 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [performanceKpis, setPerformanceKpis] = useState<any>(null);
+  const [gestionnaireFilter, setGestionnaireFilter] = useState('');
+  const [gestDateRange, setGestDateRange] = useState({ fromDate: '', toDate: '' });
+  const [appliedDateRange, setAppliedDateRange] = useState({ fromDate: '', toDate: '' });
 
   const loadPerformanceData = async () => {
     try {
       setLoading(true);
       
-      const [performanceResponse, slaResponse, kpiResponse] = await Promise.all([
+      const gestParams: any = {};
+      if (appliedDateRange.fromDate) gestParams.fromDate = appliedDateRange.fromDate;
+      if (appliedDateRange.toDate) gestParams.toDate = appliedDateRange.toDate;
+      
+      console.log('📅 Gestionnaire date params:', gestParams);
+      
+      const [performanceResponse, slaResponse, kpiResponse, gestionnairesDailyResponse] = await Promise.all([
         LocalAPI.get('/analytics/performance/by-user', { params: dateRange }),
         LocalAPI.get('/analytics/sla-compliance-by-user'),
-        LocalAPI.get('/analytics/kpis/daily', { params: dateRange })
+        LocalAPI.get('/analytics/kpis/daily', { params: dateRange }),
+        LocalAPI.get('/analytics/gestionnaires/daily-performance', { params: gestParams })
       ]);
 
       const performanceData = performanceResponse.data;
@@ -53,6 +63,9 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       const deptPerformanceResponse = await LocalAPI.get('/analytics/performance/by-department', { params: dateRange });
       const departmentPerformance = deptPerformanceResponse.data || [];
       
+      console.log('📊 Department Performance Data:', departmentPerformance);
+      console.log('📊 Number of departments:', departmentPerformance.length);
+      
 
 
       // Process team ranking from SLA data with real user names
@@ -70,7 +83,8 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       setData({
         departmentPerformance,
         teamRanking,
-        userPerformance: slaData.slice(0, 10)
+        userPerformance: slaData.slice(0, 10),
+        gestionnairesDailyPerformance: gestionnairesDailyResponse.data
       });
     } catch (error) {
       console.error('Failed to load performance data:', error);
@@ -82,7 +96,11 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
 
   useEffect(() => {
     loadPerformanceData();
-  }, [filters, dateRange]);
+  }, [filters, dateRange, appliedDateRange]);
+
+  const handleApplyDateFilter = () => {
+    setAppliedDateRange(gestDateRange);
+  };
 
   if (loading) {
     return (
@@ -163,8 +181,8 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
         </Grid>
       )}
 
-      {/* Department Performance Chart */}
-      <Grid item xs={12} md={8}>
+      {/* Department Performance Chart - COMMENTED OUT */}
+      {/* <Grid item xs={12} md={8}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Performance par Département</Typography>
           <ResponsiveContainer width="100%" height={300}>
@@ -178,6 +196,107 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
               <Bar dataKey="workload" fill="#ff9800" name="Charge" />
             </BarChart>
           </ResponsiveContainer>
+        </Paper>
+      </Grid> */}
+
+      {/* Daily Gestionnaire Performance */}
+      <Grid item xs={12}>
+        <Paper elevation={2} sx={{ p: 3 }}>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>Performance Quotidienne des Gestionnaires</Typography>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end', bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
+              <Box sx={{ flex: 1, minWidth: 200 }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>Nom</Typography>
+                <input
+                  type="text"
+                  placeholder="Rechercher..."
+                  value={gestionnaireFilter}
+                  onChange={(e) => setGestionnaireFilter(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
+                />
+              </Box>
+              <Box sx={{ minWidth: 150 }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>Date début</Typography>
+                <input
+                  type="date"
+                  value={gestDateRange.fromDate}
+                  onChange={(e) => setGestDateRange({ ...gestDateRange, fromDate: e.target.value })}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
+                />
+              </Box>
+              <Box sx={{ minWidth: 150 }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>Date fin</Typography>
+                <input
+                  type="date"
+                  value={gestDateRange.toDate}
+                  onChange={(e) => setGestDateRange({ ...gestDateRange, toDate: e.target.value })}
+                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
+                />
+              </Box>
+              <button
+                onClick={handleApplyDateFilter}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor: '#1976d2',
+                  color: 'white',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                Appliquer
+              </button>
+            </Box>
+          </Box>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Gestionnaire</TableCell>
+                  <TableCell align="right">Total Documents</TableCell>
+                  <TableCell align="right">Dernières 24h</TableCell>
+                  <TableCell align="right" width="200px">Progression</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.gestionnairesDailyPerformance
+                  ?.filter((gest: any) => 
+                    gest.name.toLowerCase().includes(gestionnaireFilter.toLowerCase())
+                  )
+                  .map((gest: any) => {
+                  const maxDocs = Math.max(...data.gestionnairesDailyPerformance.map((g: any) => g.documentsProcessed), 1);
+                  const percentage = (gest.documentsProcessed / maxDocs) * 100;
+                  return (
+                    <TableRow key={gest.id}>
+                      <TableCell>{gest.name}</TableCell>
+                      <TableCell align="right">{gest.documentsProcessed}</TableCell>
+                      <TableCell align="right">
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            fontWeight: 'bold',
+                            color: gest.documentsLast24h > 0 ? 'success.main' : 'text.secondary'
+                          }}
+                        >
+                          {gest.documentsLast24h}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Box sx={{ width: '100%', bgcolor: 'grey.200', borderRadius: 1, height: 8 }}>
+                            <Box sx={{ width: `${percentage}%`, bgcolor: 'primary.main', borderRadius: 1, height: 8 }} />
+                          </Box>
+                          <Typography variant="caption" sx={{ minWidth: 40 }}>{Math.round(percentage)}%</Typography>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       </Grid>
 
@@ -211,8 +330,8 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
         </Paper>
       </Grid>
       
-      {/* Department Performance Table */}
-      <Grid item xs={12}>
+      {/* Department Performance Table - COMMENTED OUT */}
+      {/* <Grid item xs={12}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Détail par Département</Typography>
           <Box sx={{ overflowX: 'auto', width: '100%' }}>
@@ -255,7 +374,7 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
             </Table>
           </Box>
         </Paper>
-      </Grid>
+      </Grid> */}
     </Grid>
   );
 };

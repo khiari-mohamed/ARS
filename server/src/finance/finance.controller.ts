@@ -139,8 +139,10 @@ export class FinanceController {
         const row = data[i] as any;
         try {
           const matricule = row['Matricule. Assurance'] || row['Matricule'] || row['matricule'];
-          const fullName = row['ASSURE'] || row['Name'] || row['Nom'] || row['nom'] || '';
+          const assuranceCompany = row['ASSURE'] || row['Assurance'] || '';
+          const fullName = row['Name'] || row['Nom'] || row['nom'] || '';
           const rib = String(row['Banque'] || row['RIB'] || row['rib'] || '').replace(/\D/g, '');
+          
           
           if (!matricule || !rib) {
             skipped++;
@@ -165,6 +167,7 @@ export class FinanceController {
             rib: rib,
             codeAssure: String(row['Code Assurée'] || row['Code Assuré'] || row['Code Assure'] || row['codeAssure'] || ''),
             numeroContrat: String(row['ContratN'] || row['Numéro Contrat'] || row['Numero Contrat'] || row['numeroContrat'] || ''),
+            assurance: assuranceCompany,
             statut: 'ACTIF'
           };
           

@@ -191,33 +191,38 @@ class DatabaseManager:
     async def get_live_workload(self) -> List[Dict]:
         """Fetch live workload data"""
         query = """
-        SELECT b."assignedToUserId" as team_id, COUNT(*) as workload_count
+        SELECT b."assignedToUserId" as team_id, b.statut, COUNT(*) as workload_count
         FROM "Bordereau" b 
-        WHERE b.statut IN ('EN_COURS', 'ASSIGNE', 'A_AFFECTER')
+        WHERE b.statut::text IN ('EN_COURS', 'ASSIGNE', 'A_AFFECTER', 'RECU', 'SCANNE')
         AND b."assignedToUserId" IS NOT NULL
-        GROUP BY b."assignedToUserId"
+        GROUP BY b."assignedToUserId", b.statut
         """
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch(query)
-                return [{"teamId": row["team_id"], "_count": {"id": row["workload_count"]}} for row in rows]
+                return [{"teamId": row["team_id"], "status": row["statut"], "_count": {"id": row["workload_count"]}} for row in rows]
         except Exception as e:
             logger.error(f"Error fetching workload: {e}")
             return []
     
     async def get_sla_items(self) -> List[Dict]:
-        """Fetch SLA tracking items"""
+        """Fetch SLA tracking items with days remaining calculation"""
         query = """
         SELECT b.id, b."dateReception" as start_date, 
                (b."dateReception" + INTERVAL '1 day' * b."delaiReglement") as deadline,
                CASE WHEN b."dateCloture" IS NOT NULL THEN 100 ELSE 
-                    CASE WHEN b.statut = 'EN_COURS' THEN 50 ELSE 10 END 
+                    CASE WHEN b.statut::text = 'EN_COURS' THEN 50 ELSE 10 END 
                END as current_progress,
                100 as total_required,
                b."delaiReglement" as sla_days,
-               b.statut, b.priority
+               b.statut::text as statut, b.priority,
+               CASE 
+                   WHEN b."dateCloture" IS NULL THEN 
+                       b."delaiReglement" - EXTRACT(EPOCH FROM (NOW() - b."dateReception"))/86400
+                   ELSE 0
+               END as days_remaining
         FROM "Bordereau" b 
-        WHERE b.statut NOT IN ('CLOTURE')
+        WHERE b.statut::text NOT IN ('CLOTURE', 'ANNULE')
         ORDER BY b."dateReception" DESC
         """
         try:
@@ -226,6 +231,56 @@ class DatabaseManager:
                 return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"Error fetching SLA items: {e}")
+            return []
+    
+    async def get_bordereaux_for_training(self, limit: int = 1000) -> List[Dict]:
+        """Get real bordereaux with diverse statuses for AI training"""
+        # First check what statuses exist
+        count_query = "SELECT statut::text, COUNT(*) FROM \"Bordereau\" GROUP BY statut"
+        
+        query = """
+        SELECT 
+            b.id,
+            b.reference,
+            b.statut::text as status,
+            b."nombreBS" as nombre_bs,
+            b."delaiReglement" as delai,
+            b."dateReception",
+            b."dateCloture",
+            c.name as client_name,
+            u."fullName" as assigned_to,
+            CONCAT(
+                'Bordereau ', b.reference, 
+                ' Client: ', COALESCE(c.name, 'Unknown'),
+                ' Nombre BS: ', COALESCE(b."nombreBS", 0),
+                ' Statut: ', b.statut::text,
+                ' Délai: ', COALESCE(b."delaiReglement", 30), ' jours',
+                CASE WHEN b."dateCloture" IS NOT NULL 
+                    THEN ' Clôturé le ' || TO_CHAR(b."dateCloture", 'DD/MM/YYYY')
+                    ELSE ' En cours depuis ' || TO_CHAR(b."dateReception", 'DD/MM/YYYY')
+                END
+            ) as document_content
+        FROM "Bordereau" b
+        LEFT JOIN "Client" c ON b."clientId" = c.id
+        LEFT JOIN "User" u ON b."assignedToUserId" = u.id
+        ORDER BY b."createdAt" DESC
+        LIMIT $1
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                # Check status distribution
+                status_counts = await conn.fetch(count_query)
+                logger.info(f"Status distribution in DB: {dict(status_counts)}")
+                
+                rows = await conn.fetch(query, limit)
+                result = [dict(row) for row in rows]
+                logger.info(f"Fetched {len(result)} bordereaux for training")
+                if result:
+                    statuses = set(r['status'] for r in result)
+                    logger.info(f"Unique statuses found: {statuses}")
+                return result
+        except Exception as e:
+            logger.error(f"Error fetching bordereaux for training: {e}")
             return []
     
     async def get_performance_data(self, period: str = "current_month") -> List[Dict]:
@@ -471,8 +526,8 @@ async def get_db_manager():
     """Get database manager instance"""
     global db_manager
     if db_manager is None:
-        # Use actual ARS database connection string
-        connection_string = "postgresql://postgres:23044943@localhost:5432/arsdb"
+        # Use actual ARS database connection string - SAME AS BACKEND
+        connection_string = "postgresql://postgres:23044943@localhost:5432/ars_db"
         db_manager = DatabaseManager(connection_string)
         await db_manager.initialize()
     return db_manager

@@ -40,10 +40,10 @@ export class ManualScanController {
 
   @Post('upload/:bordereauId')
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
-  @UseInterceptors(FilesInterceptor('files', 100, {
+  @UseInterceptors(FilesInterceptor('files', 1000, {
     limits: {
       fileSize: 50 * 1024 * 1024, // 50MB per file
-      files: 100 // Max 100 files
+      files: 1000 // Max 1000 files
     },
     fileFilter: (req, file, callback) => {
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
@@ -58,17 +58,37 @@ export class ManualScanController {
     @Param('bordereauId') bordereauId: string,
     @UploadedFiles() files: Express.Multer.File[],
     @Body('notes') notes: string,
+    @Body('fileTypes') fileTypes: string | string[],
     @Request() req: any
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files uploaded');
     }
 
+    // DEBUG: Log received data
+    console.log('📥 Backend received:');
+    console.log('  Files:', files.length);
+    console.log('  FileTypes raw:', fileTypes);
+    console.log('  FileTypes type:', typeof fileTypes);
+    console.log('  Body:', req.body);
+
+    // Parse fileTypes - handle both string and array from FormData
+    let parsedFileTypes: string[] = [];
+    if (Array.isArray(fileTypes)) {
+      parsedFileTypes = fileTypes;
+    } else if (typeof fileTypes === 'string') {
+      parsedFileTypes = [fileTypes];
+    } else if (fileTypes) {
+      parsedFileTypes = [String(fileTypes)];
+    }
+    console.log('  Parsed fileTypes:', parsedFileTypes);
+
     const dto: ManualScanDto = {
       bordereauId,
       files,
       userId: req.user.id,
-      notes
+      notes,
+      fileTypes: parsedFileTypes
     };
 
     return this.manualScanService.uploadScanDocuments(dto);
@@ -76,10 +96,10 @@ export class ManualScanController {
 
   @Post('upload-additional/:bordereauId')
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
-  @UseInterceptors(FilesInterceptor('files', 100, {
+  @UseInterceptors(FilesInterceptor('files', 1000, {
     limits: {
       fileSize: 50 * 1024 * 1024, // 50MB per file
-      files: 100 // Max 100 files
+      files: 1000 // Max 1000 files
     },
     fileFilter: (req, file, callback) => {
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
@@ -94,17 +114,37 @@ export class ManualScanController {
     @Param('bordereauId') bordereauId: string,
     @UploadedFiles() files: Express.Multer.File[],
     @Body('notes') notes: string,
+    @Body('fileTypes') fileTypes: string | string[],
     @Request() req: any
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files uploaded');
     }
 
+    // DEBUG: Log received data
+    console.log('📥 Backend received (additional):');
+    console.log('  Files:', files.length);
+    console.log('  FileTypes raw:', fileTypes);
+    console.log('  FileTypes type:', typeof fileTypes);
+    console.log('  Body:', req.body);
+
+    // Parse fileTypes - handle both string and array from FormData
+    let parsedFileTypes: string[] = [];
+    if (Array.isArray(fileTypes)) {
+      parsedFileTypes = fileTypes;
+    } else if (typeof fileTypes === 'string') {
+      parsedFileTypes = [fileTypes];
+    } else if (fileTypes) {
+      parsedFileTypes = [String(fileTypes)];
+    }
+    console.log('  Parsed fileTypes:', parsedFileTypes);
+
     const dto: ManualScanDto = {
       bordereauId,
       files,
       userId: req.user.id,
-      notes
+      notes,
+      fileTypes: parsedFileTypes
     };
 
     return this.manualScanService.uploadAdditionalDocuments(dto);
