@@ -54,29 +54,37 @@ export class OrdreVirementService {
       }
     });
 
-    // Create virement items - skip if adherent doesn't exist
+    // Create virement items - store Excel data in erreur field as JSON
     for (const item of validItems) {
-      try {
-        // Check if adherent exists or create a mock one
-        let adherentId = item.adherent.id;
-        if (adherentId.startsWith('mock-')) {
-          // Skip creating VirementItem for mock adherents
-          continue;
-        }
-        
-        await this.prisma.virementItem.create({
-          data: {
-            ordreVirementId: ordreVirement.id,
-            adherentId: adherentId,
-            montant: item.montant,
-            statut: item.statut,
-            erreur: item.erreur
-          }
-        });
-      } catch (error) {
-        console.log(`Skipping VirementItem creation for ${item.adherent.id}:`, error.message);
-        // Continue processing other items
+      // Skip if adherent doesn't exist in DB (mock ID)
+      if (item.adherent.id.startsWith('mock-')) {
+        continue;
       }
+      
+      // Verify adherent exists in DB
+      const adherentExists = await this.prisma.adherent.findUnique({
+        where: { id: item.adherent.id }
+      });
+      
+      if (!adherentExists) {
+        continue;
+      }
+      
+      await this.prisma.virementItem.create({
+        data: {
+          ordreVirementId: ordreVirement.id,
+          adherentId: item.adherent.id,
+          montant: item.montant,
+          statut: item.statut,
+          erreur: JSON.stringify({
+            matricule: item.adherent.matricule,
+            nom: item.adherent.nom,
+            prenom: item.adherent.prenom,
+            rib: item.adherent.rib,
+            societe: item.adherent.assurance || item.adherent.client?.name
+          })
+        }
+      });
     }
 
     // Generate files
@@ -421,13 +429,12 @@ export class OrdreVirementService {
   }
 
   private async updateBordereauStatus(bordereauId: string, etatVirement: string) {
-    // 🔥 NEW LOGIC: Only update bordereau status when virement is EXECUTE
-    // For all other states, bordereau remains TRAITE
+    // EXACT SPEC: When virement is EXECUTE, bordereau status changes to VIREMENT_EXECUTE
     if (etatVirement === 'EXECUTE') {
       await this.prisma.bordereau.update({
         where: { id: bordereauId },
         data: { 
-          statut: 'CLOTURE',
+          statut: 'VIREMENT_EXECUTE',
           dateCloture: new Date()
         }
       });

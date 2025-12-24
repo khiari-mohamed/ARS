@@ -715,21 +715,11 @@ function GestionnaireDashboardNew() {
         {/* Gestionnaire Assignments Section */}
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Affectations par Gestionnaire</h3>
-            <select 
-              value={gestionnaireFilter} 
-              onChange={(e) => setGestionnaireFilter(e.target.value)}
-              style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-            >
-              <option value="Tous">Tous les gestionnaires</option>
-              {availableGestionnaires.map(gest => (
-                <option key={gest} value={gest}>{gest}</option>
-              ))}
-            </select>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Mes Affectations</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
             {gestionnaireAssignments
-              .filter(assignment => gestionnaireFilter === 'Tous' || assignment.gestionnaire === gestionnaireFilter)
+              .filter(assignment => assignment.gestionnaire === user?.fullName)
               .map((assignment, index) => (
               <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6' }}>
                 <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057' }}>

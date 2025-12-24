@@ -18,6 +18,7 @@ import ScannerIcon from '@mui/icons-material/Scanner';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
+import ArchiveIcon from '@mui/icons-material/Archive';
 import LogoutIcon from '@mui/icons-material/Logout';
 import UserBadge from './UserBadge';
 import arsLogo from '../assets/ars-logo.png';
@@ -28,6 +29,7 @@ const sidebarLinks = [
   // SUPER_ADMIN: Full access to everything
   { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'] },
   { to: "/home/super-admin", label: "Interface Super Admin", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN'] },
+  { to: "/home/archives", label: "Archives", icon: <ArchiveIcon />, roles: ['SUPER_ADMIN'] },
   
   // ADMINISTRATEUR: All modules + system parameters
   // COMMENTED OUT: Redundant user management - Use Super Admin interface instead

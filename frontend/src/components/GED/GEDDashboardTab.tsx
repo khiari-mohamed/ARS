@@ -26,31 +26,57 @@ const GEDDashboardTab: React.FC = () => {
         const docsResponse = await LocalAPI.get('/documents/search');
         const docs = docsResponse.data || [];
         
+        console.log('📊 [GED Dashboard] Loaded documents:', docs.length);
+        
+        // Calculate PaperStream stats from documents with batchId
+        const paperStreamDocs = docs.filter((d: any) => d.batchId);
+        const psProcessed = paperStreamDocs.length;
+        const psQuarantined = paperStreamDocs.filter((d: any) => d.ingestStatus === 'QUARANTINED').length;
+        const psSuccess = psProcessed - psQuarantined;
+        const psSuccessRate = psProcessed > 0 ? ((psSuccess / psProcessed) * 100) : 0;
+        
         // Only load PaperStream status for authorized roles
-        let psStatus = null;
+        let psStatus = {
+          status: psProcessed > 0 ? 'active' : 'inactive',
+          watcherActive: psProcessed > 0,
+          totalProcessed: psProcessed,
+          totalQuarantined: psQuarantined,
+          successRate: psSuccessRate
+        };
+        
         if (['SUPER_ADMIN', 'SCAN_TEAM', 'CHEF_EQUIPE'].includes(user?.role || '')) {
           try {
             const paperStreamResponse = await LocalAPI.get('/documents/paperstream/status');
-            psStatus = paperStreamResponse.data;
+            // Merge real-time status with calculated stats
+            psStatus = { ...paperStreamResponse.data, ...psStatus };
           } catch (err) {
-            console.log('PaperStream status not available for this role');
+            console.log('PaperStream API not available, using calculated stats');
           }
         }
         
         // Calculate SLA compliance from real data
         const now = new Date();
         const slaThreshold = 48; // hours
+        const warningThreshold = 36; // hours
         let onTime = 0, atRisk = 0, overdue = 0;
         
         docs.forEach((doc: any) => {
           const hours = (now.getTime() - new Date(doc.uploadedAt).getTime()) / (1000 * 60 * 60);
-          if (doc.status === 'TRAITE') {
+          
+          // If document is already processed (TRAITE), it's on time
+          if (doc.status === 'TRAITE' || doc.status === 'SCANNE') {
             onTime++;
-          } else if (hours > slaThreshold) {
+          } 
+          // If document is not processed and older than SLA threshold, it's overdue
+          else if (hours > slaThreshold) {
             overdue++;
-          } else if (hours > 36) {
+          } 
+          // If document is approaching SLA threshold, it's at risk
+          else if (hours > warningThreshold) {
             atRisk++;
-          } else {
+          } 
+          // Otherwise it's on time
+          else {
             onTime++;
           }
         });
@@ -58,6 +84,16 @@ const GEDDashboardTab: React.FC = () => {
         const totalDocs = docs.length;
         const inProgress = docs.filter((d: any) => d.status === 'EN_COURS' || d.status === 'UPLOADED').length;
         const slaCompliancePercent = totalDocs > 0 ? ((onTime / totalDocs) * 100) : 0;
+        
+        console.log('📊 [GED Dashboard] Stats calculated:', {
+          totalDocs,
+          inProgress,
+          overdue,
+          onTime,
+          atRisk,
+          slaCompliance: slaCompliancePercent.toFixed(1),
+          paperStream: psStatus
+        });
         
         setStats({
           totalDocs,

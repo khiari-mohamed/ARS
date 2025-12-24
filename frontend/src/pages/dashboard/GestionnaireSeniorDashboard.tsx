@@ -2,6 +2,7 @@
 // Uses separate API endpoints: /bordereaux/gestionnaire-senior/*
 import { useEffect, useState, useMemo } from "react";
 import { LocalAPI } from '../../services/axios';
+import { useAuth } from '../../contexts/AuthContext';
 import "../../styles/chef-equipe.css";
 
 interface DossierStats {
@@ -58,6 +59,8 @@ function GestionnaireSeniorDashboard() {
   const [currentDossier, setCurrentDossier] = useState<any>(null);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [seniorAssignments, setSeniorAssignments] = useState<any[]>([]);
+  const { user } = useAuth();
   const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
   const [filterBordereaux, setFilterBordereaux] = useState({ reference: '', client: '', statut: '', dateFrom: '', dateTo: '' });
   const [filterDocuments, setFilterDocuments] = useState({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' });
@@ -211,10 +214,11 @@ function GestionnaireSeniorDashboard() {
     try {
       setLoading(true);
       
-      const [statsResponse, dossiersResponse, corbeilleResponse] = await Promise.all([
+      const [statsResponse, dossiersResponse, corbeilleResponse, seniorAssignmentsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/gestionnaire-senior/dashboard-stats'),
         LocalAPI.get('/bordereaux/gestionnaire-senior/dashboard-dossiers'),
-        LocalAPI.get('/bordereaux/gestionnaire-senior/corbeille')
+        LocalAPI.get('/bordereaux/gestionnaire-senior/corbeille'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments')
       ]);
       
       console.log('📊 Stats Response:', statsResponse.data);
@@ -243,6 +247,10 @@ function GestionnaireSeniorDashboard() {
           enCours: corbeilleResponse.data.stats.enCours || 0,
           nonAffectes: corbeilleResponse.data.stats.nonAffectes || 0
         });
+      }
+      if (seniorAssignmentsResponse.data) {
+        console.log('⭐ Senior assignments received:', seniorAssignmentsResponse.data);
+        setSeniorAssignments(seniorAssignmentsResponse.data);
       }
     } catch (error: any) {
       console.error('❌ Error loading dashboard data:', error);
@@ -297,6 +305,61 @@ function GestionnaireSeniorDashboard() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* My Senior Assignment Stats */}
+        <div style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(76,175,80,0.2)', border: '2px solid #4caf50' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#2e7d32', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '24px' }}>⭐</span>
+              Mes Affectations Senior
+            </h3>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+            {seniorAssignments
+              .filter(assignment => assignment.gestionnaire === user?.fullName)
+              .map((assignment, index) => (
+              <div key={index} style={{ background: 'white', borderRadius: '8px', padding: '14px', border: '2px solid #4caf50', boxShadow: '0 2px 6px rgba(76,175,80,0.15)' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '10px', color: '#2e7d32', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '18px' }}>👤</span>
+                  {assignment.gestionnaire}
+                </div>
+                <div style={{ fontSize: '13px', color: '#388e3c', marginBottom: '8px', fontWeight: '600' }}>
+                  <strong>Total affectés:</strong> {assignment.totalAssigned}
+                </div>
+                <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                    <span style={{ color: '#4caf50', fontWeight: '500' }}>✓ Traités:</span>
+                    <span style={{ fontWeight: 'bold', color: '#2e7d32' }}>{assignment.traites || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                    <span style={{ color: '#ff9800', fontWeight: '500' }}>⏳ En cours:</span>
+                    <span style={{ fontWeight: 'bold', color: '#f57c00' }}>{assignment.enCours || 0}</span>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', marginBottom: '4px' }}>
+                      <span style={{ color: '#dc3545', fontWeight: '500' }}>↩ Retournés:</span>
+                      <span style={{ fontWeight: 'bold', color: '#c62828' }}>{assignment.retournes || 0}</span>
+                    </div>
+                    {assignment.returnedBy && (assignment.retournes || 0) > 0 && (
+                      <div style={{ fontSize: '11px', color: '#dc3545', fontWeight: 'bold', marginLeft: '16px', marginTop: '2px', background: '#ffebee', padding: '4px 8px', borderRadius: '4px' }}>
+                        → Retourné par: {assignment.returnedBy}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#388e3c', background: '#e8f5e9', padding: '6px 8px', borderRadius: '4px', marginTop: '8px' }}>
+                  <strong>Par type:</strong> {Object.entries(assignment.documentsByType || {}).map(([type, count]) => `${type}: ${count}`).join(', ') || 'Aucun'}
+                </div>
+              </div>
+            ))}
+            {seniorAssignments.filter(a => a.gestionnaire === user?.fullName).length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px', color: '#66bb6a', fontSize: '14px', gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: '48px', marginBottom: '8px' }}>📋</div>
+                <p style={{ margin: 0 }}>Aucune affectation pour le moment</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Corbeille Stats */}

@@ -8,6 +8,7 @@ export interface TxtVirementData {
   nom: string;
   prenom: string;
   matricule: string;
+  societe?: string; // Société field (company/client name)
 }
 
 export interface OVTxtData {
@@ -26,8 +27,13 @@ export class TxtGenerationService {
   constructor(private prisma: PrismaService) {}
 
   async generateOVTxt(data: OVTxtData): Promise<string> {
-    // Application automatique du format selon le donneur d'ordre sélectionné
-    const formatType = data.donneurOrdre.formatTxtType || 'BTK_COMAR';
+    // Auto-detect format from RIB if not specified
+    let formatType = data.donneurOrdre.formatTxtType || 'BTK_COMAR';
+    
+    // Auto-detect Attijari from RIB (starts with 04)
+    if (data.donneurOrdre.rib.startsWith('04')) {
+      formatType = 'ATTIJARI';
+    }
     
     switch (formatType) {
       case 'BTK_COMAR':
@@ -35,53 +41,168 @@ export class TxtGenerationService {
       case 'BTK_ASTREE':
         return this.generateBTKAstreeFormat(data);
       case 'ATTIJARI':
-        return this.generateAttijariFormat(data);
+        return this.generateStructure1OLD(data); // Use OLD format for Attijari
       default:
         return this.generateBTKComarFormat(data);
     }
   }
 
   private generateBTKComarFormat(data: OVTxtData): string {
-    // BTK COMAR Format - V1 (header) + V2 (detail lines)
+    // EXACT BANK FORMAT - 280 CHARS PER LINE - NO V1/V2 PREFIXES
     const lines: string[] = [];
     const dateStr = this.formatDateBTK(data.dateCreation);
     
-    // Calculate totals
-    const totalAmount = data.virements.reduce((sum, v) => sum + v.montant, 0);
+    // Validate RIB length and format
+    if (!/^\d{20}$/.test(data.donneurOrdre.rib)) {
+      throw new Error('RIB donneur d\'ordre doit être exactement 20 chiffres');
+    }
+    
+    // Calculate totals with precision
+    const totalAmountMillimes = data.virements
+      .reduce((sum, v) => sum + Math.round(v.montant * 1000), 0);
     const numberOfOperations = data.virements.length;
     
-    // V1 Header line - EXACT format from example
-    let headerLine = 'V1  ';
-    headerLine += data.donneurOrdre.rib.padEnd(20, ' '); // RIB donneur (20 chars)
-    headerLine += dateStr; // Date YYYYMMDD (8 chars)
-    headerLine += '00000000000000'; // Zeros (14 chars)
-    headerLine += data.reference.padEnd(5, ' '); // Reference (5 chars)
-    headerLine += dateStr; // Date again (8 chars)
-    headerLine += '0001   '; // Code + spaces (7 chars)
-    headerLine += numberOfOperations.toString().padStart(7, '0'); // Nb operations (7 chars)
-    headerLine += '   788TND'; // Currency code (10 chars)
-    headerLine += Math.round(totalAmount * 1000).toString().padStart(15, '0'); // Total millimes (15 chars)
-    headerLine += ' '.repeat(180); // Padding to 280 chars
+    // Validate number of operations (max 999 for 2-digit rang field)
+    if (numberOfOperations > 999) {
+      throw new Error('Nombre maximum de virements dépassé (max 999)');
+    }
+    
+    // Extract and validate bank code from RIB (first 2 digits)
+    const codeBanque = data.donneurOrdre.rib.substring(0, 2);
+    if (!/^\d{2}$/.test(codeBanque)) {
+      throw new Error('Code banque invalide (doit être 2 chiffres)');
+    }
+    
+    // HEADER LINE - EXACT 280 CHARS FORMAT
+    let headerLine = '';
+    
+    // 1. Sens (1 num) = '1'
+    headerLine += '1';
+    
+    // 2. Code valeur (2 num) = '10'
+    headerLine += '10';
+    
+    // 3. Nature remettant (1 num) = '1'
+    headerLine += '1';
+    
+    // 4. Code remettant (2 num) = code banque
+    headerLine += codeBanque;
+    
+    // 5. Code centre régional/agence (3 chars) = 3 BLANKS
+    headerLine += '   ';
+    
+    // 6. Date opération (8 num) AAAAMMJJ
+    headerLine += dateStr;
+    
+    // 7. Numéro du lot (4 num) = '0001'
+    headerLine += '0001';
+    
+    // 8. Code enregistrement (2 num) = '11'
+    headerLine += '11';
+    
+    // 9. Code devise (3 alphanum) = '788'
+    headerLine += '788';
+    
+    // 10. Rang (2 num) = '00'
+    headerLine += '00';
+    
+    // 11. Montant total virements (15 num) - millimes, padded LEFT with zeros
+    headerLine += totalAmountMillimes.toString().padStart(15, '0');
+    
+    // 12. Nombre total virements (10 num) - padded LEFT with zeros
+    headerLine += numberOfOperations.toString().padStart(10, '0');
+    
+    // 13. Zone libre (227 chars) - SPACES
+    headerLine += ' '.repeat(227);
+    
+    // VERIFY: Total must be exactly 280 chars
+    if (headerLine.length !== 280) {
+      throw new Error(`HEADER LENGTH ERROR: ${headerLine.length} instead of 280`);
+    }
+    
     lines.push(headerLine);
 
-    // V2 Detail lines
+    // DETAIL LINES - EXACT 280 CHARS FORMAT (V2 equivalent)
     data.virements.forEach((virement, index) => {
-      const montantMillimes = Math.round(virement.montant * 1000);
+      // Validate beneficiary RIB
+      if (!/^\d{20}$/.test(virement.rib)) {
+        throw new Error(`RIB bénéficiaire invalide pour ${virement.nom} ${virement.prenom}`);
+      }
       
-      let line = 'V2  ';
-      line += data.donneurOrdre.rib.padEnd(20, ' '); // RIB donneur (20 chars)
-      line += virement.rib.padEnd(20, ' '); // RIB beneficiaire (20 chars)
-      line += (virement.nom + ' ' + virement.prenom).substring(0, 30).padEnd(30, ' '); // Nom (30 chars)
-      line += '000000000000000'; // Zeros (15 chars)
-      line += data.reference.padEnd(5, ' '); // Reference (5 chars)
-      line += dateStr; // Date (8 chars)
-      line += '0001'; // Code (4 chars)
-      line += (index + 1).toString().padStart(7, '0'); // Sequence (7 chars)
-      line += '000'; // Code (3 chars)
-      line += `HIKMA MEDECEF${data.reference} du ${this.formatDateDisplay(data.dateCreation)} OV GM n ${data.reference}`.substring(0, 140).padEnd(140, ' '); // Motif (140 chars)
-      line += ' '.repeat(24); // Padding (24 chars)
-      line += montantMillimes.toString().padStart(15, '0'); // Montant millimes (15 chars)
-      line += ' '.repeat(6); // Final padding
+      const montantMillimes = Math.round(virement.montant * 1000);
+      const codeBanqueBenef = virement.rib.substring(0, 2);
+      
+      let line = '';
+      
+      // 1. Sens (1 num) = '1'
+      line += '1';
+      
+      // 2. Code valeur (2 num) = '10'
+      line += '10';
+      
+      // 3. Nature remettant (1 num) = '1'
+      line += '1';
+      
+      // 4. Code remettant (2 num) = code banque émetteur
+      line += codeBanque;
+      
+      // 5. Code centre/agence (3 chars) = 3 BLANKS
+      line += '   ';
+      
+      // 6. Date opération (8 num) AAAAMMJJ
+      line += dateStr;
+      
+      // 7. Numéro du lot (4 num) = '0001'
+      line += '0001';
+      
+      // 8. Code enregistrement (2 num) = '22' (detail)
+      line += '22';
+      
+      // 9. Code devise (3 alphanum) = '788'
+      line += '788';
+      
+      // 10. Rang (2 num) = sequence number padded to 3 digits, take last 2
+      const rang = (index + 1).toString().padStart(3, '0').slice(-2);
+      line += rang;
+      
+      // 11. Montant virement (15 num) - millimes
+      line += montantMillimes.toString().padStart(15, '0');
+      
+      // 12. RIB émetteur (20 num)
+      line += data.donneurOrdre.rib;
+      
+      // 13. RIB bénéficiaire (20 num)
+      line += virement.rib;
+      
+      // 14. Beneficiary name (nom + prenom) - NOT company name (30 alphanum)
+      const beneficiaryName = (virement.nom + ' ' + virement.prenom)
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, '')
+        .substring(0, 30)
+        .padEnd(30, ' ');
+      line += beneficiaryName;
+      
+      // 15. Référence (20 alphanum) - no special chars
+      const ref = `MAT${virement.matricule}`.replace(/[^A-Z0-9]/g, '').substring(0, 20).padEnd(20, ' ');
+      line += ref;
+      
+      // 16. Société (35 alphanum) - Company/Client name from virement
+      const societeText = virement.societe || data.donneurOrdre.nom;
+      const societe = societeText
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, '')
+        .substring(0, 35)
+        .padEnd(35, ' ');
+      line += societe;
+      
+      // 17. Zone libre (112 chars) - SPACES to reach exactly 280 chars
+      line += ' '.repeat(112);
+      
+      // VERIFY: Total must be exactly 280 chars
+      if (line.length !== 280) {
+        throw new Error(`DETAIL LINE ${index + 1} LENGTH ERROR: ${line.length} instead of 280`);
+      }
+      
       lines.push(line);
     });
 
@@ -89,153 +210,113 @@ export class TxtGenerationService {
   }
 
   private generateBTKAstreeFormat(data: OVTxtData): string {
-    // BTK ASTREE Format - Same structure as COMAR but different reference format
-    const lines: string[] = [];
-    const dateStr = this.formatDateBTK(data.dateCreation);
-    
-    const totalAmount = data.virements.reduce((sum, v) => sum + v.montant, 0);
-    const numberOfOperations = data.virements.length;
-    
-    // V1 Header
-    let headerLine = 'V1  ';
-    headerLine += data.donneurOrdre.rib.padEnd(20, ' ');
-    headerLine += dateStr;
-    headerLine += '00000000000000';
-    headerLine += data.reference.padEnd(5, ' ');
-    headerLine += dateStr;
-    headerLine += '0001   ';
-    headerLine += numberOfOperations.toString().padStart(7, '0');
-    headerLine += '   788TND';
-    headerLine += Math.round(totalAmount * 1000).toString().padStart(15, '0');
-    headerLine += ' '.repeat(180);
-    lines.push(headerLine);
-
-    // V2 Detail lines
-    data.virements.forEach((virement, index) => {
-      const montantMillimes = Math.round(virement.montant * 1000);
-      
-      let line = 'V2  ';
-      line += data.donneurOrdre.rib.padEnd(20, ' ');
-      line += virement.rib.padEnd(20, ' ');
-      line += (virement.nom + ' ' + virement.prenom).substring(0, 30).padEnd(30, ' ');
-      line += '000000000000000';
-      line += data.reference.padEnd(5, ' ');
-      line += dateStr;
-      line += '0001';
-      line += (index + 1).toString().padStart(7, '0');
-      line += '000';
-      line += `BORD ASTREE AOUT 2025 - LAB du ${this.formatDateDisplay(data.dateCreation)} OV GM n ${data.reference}`.substring(0, 140).padEnd(140, ' ');
-      line += ' '.repeat(24);
-      line += montantMillimes.toString().padStart(15, '0');
-      line += ' '.repeat(6);
-      lines.push(line);
-    });
-
-    return lines.join('\n');
+    // EXACT BANK FORMAT - Same as BTK COMAR
+    return this.generateBTKComarFormat(data);
   }
 
   private generateAttijariFormat(data: OVTxtData): string {
-    // ATTIJARI Format - Code 110104
-    const lines: string[] = [];
-    const dateStr = this.formatDateBTK(data.dateCreation);
-    
-    const totalAmount = data.virements.reduce((sum, v) => sum + v.montant, 0);
-    const numberOfOperations = data.virements.length;
-    
-    // Header line
-    let headerLine = '110104   ';
-    headerLine += dateStr; // Date YYYYMMDD
-    headerLine += '000111788000000000'; // Code fixe
-    headerLine += Math.round(totalAmount * 1000).toString().padStart(12, '0'); // Total millimes
-    headerLine += numberOfOperations.toString().padStart(12, '0'); // Nb operations
-    headerLine += ' '.repeat(237); // Padding
-    lines.push(headerLine);
-
-    // Detail lines
-    data.virements.forEach((virement, index) => {
-      const montantMillimes = Math.round(virement.montant * 1000);
-      
-      let line = '110104   ';
-      line += dateStr;
-      line += '00012178800000000001'; // Code fixe
-      line += montantMillimes.toString().padStart(12, '0');
-      line += '000000004001007404700411649'; // RIB emetteur
-      line += 'ARS EX  "AON TUNISIE S.A."    ';
-      
-      // Bank code from RIB
-      const bankCode = virement.rib.substring(0, 2).padStart(2, '0');
-      line += bankCode + '   ';
-      
-      line += virement.rib.padEnd(20, '0');
-      line += (virement.nom + ' ' + virement.prenom).substring(0, 30).padEnd(30, ' ');
-      line += '00000000000000000';
-      line += montantMillimes.toString().padStart(6, '0');
-      line += '000';
-      line += `OMV ${data.reference}`.substring(0, 52).padEnd(52, ' ');
-      line += dateStr;
-      line += '00000000010';
-      line += ' '.repeat(38);
-      lines.push(line);
-    });
-
-    return lines.join('\n');
+    // EXACT BANK FORMAT - Same as BTK (all banks use same format)
+    return this.generateBTKComarFormat(data);
   }
 
   private generateStructure1OLD(data: OVTxtData): string {
-    // Structure 1: Format AMEN BANK - Exact format from example
+    // ATTIJARI BANK FORMAT - Exact format from company example
     const lines: string[] = [];
     const dateStr = this.formatDateAmen(data.dateCreation);
     
-    // Calculate totals
-    const totalAmount = data.virements.reduce((sum, v) => sum + v.montant, 0);
-    const totalAmountMillimes = Math.round(totalAmount * 1000);
+    const totalAmountMillimes = data.virements
+      .reduce((sum, v) => sum + Math.round(v.montant * 1000), 0);
     const numberOfOperations = data.virements.length;
     
-    // Header line - exact format: 110104   20250709000111788000000000083998230000000073
-    let headerLine = '110104   '; // Code banque + 3 espaces
-    headerLine += dateStr; // Date YYYYMMDD
-    headerLine += '000111788000000000'; // Numéro lot fixe
-    headerLine += totalAmountMillimes.toString().padStart(12, '0'); // Montant total en millimes
-    headerLine += numberOfOperations.toString().padStart(12, '0'); // Nombre d'opérations
-    headerLine += ' '.repeat(237); // Espaces jusqu'à 280 caractères total
+    const codeBanque = data.donneurOrdre.rib.substring(0, 2);
+    
+    // HEADER LINE
+    let headerLine = '1';
+    headerLine += '10';
+    headerLine += '1';
+    headerLine += codeBanque;
+    headerLine += '   ';
+    headerLine += dateStr;
+    headerLine += '0001';
+    headerLine += '11';
+    headerLine += '788';
+    headerLine += '00';
+    headerLine += totalAmountMillimes.toString().padStart(15, '0');
+    headerLine += numberOfOperations.toString().padStart(10, '0');
+    headerLine += ' '.repeat(227);
+    
     lines.push(headerLine);
 
-    // Detail lines - exact format from example
+    // DETAIL LINES - Attijari format
     data.virements.forEach((virement, index) => {
       const montantMillimes = Math.round(virement.montant * 1000);
-      const sequenceNumber = (index + 1).toString().padStart(5, '0');
+      const codeBanqueBenef = virement.rib.substring(0, 2);
+      const sequenceNumber = (index + 1).toString().padStart(4, '0');
       
-      let line = '110104   '; // Code banque + 3 espaces (9 chars)
-      line += dateStr; // Date YYYYMMDD (8 chars)
-      line += '0001'; // Code fixe (4 chars)
-      line += sequenceNumber; // Numéro séquence (5 chars)
-      line += '788000000000'; // Code opération fixe (12 chars)
-      line += montantMillimes.toString().padStart(12, '0'); // Montant en millimes (12 chars)
-      line += '000000004001007404700411649'; // RIB émetteur fixe (27 chars)
-      line += 'ARS EX  "AON TUNISIE S.A."    '; // Nom émetteur fixe (30 chars)
+      let line = '1';
+      line += '10';
+      line += '1';
+      line += codeBanque;
+      line += '   ';
+      line += dateStr;
+      line += '0001';
+      line += '2';
+      line += '1788';
+      line += '00000000000';
+      line += montantMillimes.toString().padStart(9, '0');
+      line += '000000';
+      line += data.donneurOrdre.rib;
       
-      // Code banque bénéficiaire (2 chars)
-      const bankCode = virement.rib.substring(0, 2).padStart(2, '0');
-      line += bankCode;
+      // Company name (30 chars) - donneurOrdre
+      const companyName = data.donneurOrdre.nom
+        .toUpperCase()
+        .replace(/[^A-Z0-9 "]/g, '')
+        .substring(0, 30)
+        .padEnd(30, ' ');
+      line += companyName;
       
-      line += '   '; // 3 espaces
+      // Bank code + spaces (5 chars)
+      line += codeBanqueBenef;
+      line += '   ';
       
       // RIB bénéficiaire (20 chars)
-      const beneficiaryRib = virement.rib.padEnd(20, '0');
-      line += beneficiaryRib;
+      line += virement.rib;
       
-      // Nom bénéficiaire (30 chars) - remove spaces like in example
-      const beneficiaryName = (virement.nom + ' ' + virement.prenom).replace(/\s+/g, '').substring(0, 30).padEnd(30, ' ');
-      line += beneficiaryName;
+      // Beneficiary name (30 chars) - Person name from Excel
+      const benefName = `${virement.nom} ${virement.prenom}`
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, '')
+        .substring(0, 30)
+        .padEnd(30, ' ');
+      line += benefName;
       
-      line += '00000000000000001'; // Référence interne fixe (17 chars)
-      line += montantMillimes.toString().padStart(6, '0'); // Montant court (6 chars)
-      line += '000'; // 3 zeros
-      line += 'AIRBUS BORD 18-25'; // Référence fixe (17 chars)
-      line += ' '.repeat(28); // 28 espaces
-      line += dateStr; // Date répétée (8 chars)
-      line += '00000000010'; // Code fin fixe (11 chars)
-      line += ' '.repeat(38); // Espaces finaux (38 chars)
+      // Reference number (17 chars)
+      line += '00000000000000001';
+      
+      // Short amount (6 chars)
+      const shortAmount = sequenceNumber.substring(0, 3) + '000';
+      line += shortAmount;
+      
+      // Bordereau reference (11 chars)
+      const bordRef = data.reference.replace(/[^A-Z0-9]/g, '').substring(0, 11).padEnd(11, ' ');
+      line += bordRef;
+      
+      // Société (35 chars) - Company from Excel
+      const societe = (virement.societe || data.donneurOrdre.nom)
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, '')
+        .substring(0, 35)
+        .padEnd(35, ' ');
+      line += societe;
+      
+      // Date repeated (8 chars)
+      line += dateStr;
+      
+      // Final code (11 chars)
+      line += '00000000010';
+      
+      // Spaces to 280
+      line += ' '.repeat(38);
       
       lines.push(line);
     });
@@ -432,7 +513,11 @@ export class TxtGenerationService {
         donneurOrdre: true,
         items: {
           include: {
-            adherent: true
+            adherent: {
+              include: {
+                client: true
+              }
+            }
           }
         }
       }
@@ -448,56 +533,53 @@ export class TxtGenerationService {
       items: ordreVirement.items
     });
 
-    // If no items, get real adherents from database
     if (!ordreVirement.items || ordreVirement.items.length === 0) {
-      console.log('No items found in ordre virement, fetching adherents from database...');
-      
-      // Get adherents from database
-      const adherents = await this.prisma.adherent.findMany({
-        take: 10, // Limit for performance
-        include: {
-          client: true
-        }
-      });
-      
-      if (adherents.length > 0) {
-        console.log(`Found ${adherents.length} adherents, creating items for TXT`);
-        // Create items from real adherents
-        ordreVirement.items = adherents.map((adherent, index) => ({
-          id: `generated-${index}`,
-          ordreVirementId: ordreVirement.id,
-          adherentId: adherent.id,
-          montant: Math.round((Math.random() * 500 + 30) * 1000) / 1000, // Random amounts between 30-530 TND
-          statut: 'VALIDE',
-          erreur: null,
-          createdAt: new Date(),
-          adherent: adherent
-        }));
-      } else {
-        throw new Error('No adherents found in database for TXT generation');
-      }
+      throw new Error('No items found in ordre virement');
     }
 
     const virements = ordreVirement.items
-      .filter(item => item.statut === 'VALIDE') // Only valid items
-      .map((item, index) => ({
-        reference: `${ordreVirement.reference}-${(index + 1).toString().padStart(3, '0')}`,
-        montant: item.montant,
-        rib: item.adherent.rib || '00000000000000000000', // Default RIB if missing
-        nom: item.adherent.nom || 'NOM_INCONNU',
-        prenom: item.adherent.prenom || 'PRENOM_INCONNU',
-        matricule: item.adherent.matricule || `MAT${(index + 1).toString().padStart(6, '0')}`
-      }));
+      .filter(item => item.statut === 'VALIDE')
+      .map((item: any, index) => {
+        let excelData: any = null;
+        try {
+          excelData = item.erreur ? JSON.parse(item.erreur) : null;
+        } catch (e) {
+          // erreur is not JSON, ignore
+        }
+        const adherent = item.adherent;
+        
+        // Priority: DB adherent first, fallback to Excel data
+        return {
+          reference: `${ordreVirement.reference}-${(index + 1).toString().padStart(3, '0')}`,
+          montant: item.montant,
+          rib: adherent?.rib || excelData?.rib || '00000000000000000000',
+          nom: adherent?.nom || excelData?.nom || 'NOM_INCONNU',
+          prenom: adherent?.prenom || excelData?.prenom || 'PRENOM_INCONNU',
+          matricule: adherent?.matricule || excelData?.matricule || `MAT${(index + 1).toString().padStart(6, '0')}`,
+          societe: adherent?.client?.name || adherent?.assurance || excelData?.societe || ordreVirement.donneurOrdre.nom
+        };
+      });
 
     if (virements.length === 0) {
       throw new Error('No valid virements found for TXT generation');
     }
 
+    // Validate donneur d'ordre data
+    if (!ordreVirement.donneurOrdre) {
+      throw new Error('Donneur d\'ordre manquant');
+    }
+    if (!ordreVirement.donneurOrdre.nom) {
+      throw new Error('Nom du donneur d\'ordre manquant');
+    }
+    if (!ordreVirement.donneurOrdre.rib || ordreVirement.donneurOrdre.rib.length < 20) {
+      throw new Error('RIB du donneur d\'ordre invalide ou manquant');
+    }
+
     const txtData: OVTxtData = {
       donneurOrdre: {
-        nom: ordreVirement.donneurOrdre?.nom || 'ARS EX "AON TUNISIE S.A."',
-        rib: ordreVirement.donneurOrdre?.rib || '4001007404700411649',
-        formatTxtType: ordreVirement.donneurOrdre?.formatTxtType || 'STRUCTURE_1'
+        nom: ordreVirement.donneurOrdre.nom,
+        rib: ordreVirement.donneurOrdre.rib,
+        formatTxtType: ordreVirement.donneurOrdre.formatTxtType || 'BTK_COMAR'
       },
       virements,
       dateCreation: ordreVirement.dateCreation,

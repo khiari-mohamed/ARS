@@ -15,6 +15,7 @@ import GedViewer from './pages/ged/GedViewer';
 import GecManager from './pages/gec/GecManager';
 import ReclamationsModule from './pages/reclamations/ReclamationsModule';
 import ReclamationDetail from './components/reclamations/ReclamationDetail';
+import { BordereauxArchive } from './pages/archives';
 // COMMENTED OUT: Redundant user management import - Use Super Admin interface instead
 // import UserManagement from './pages/users/UserManagement';
 
@@ -58,6 +59,12 @@ const App: React.FC = () => {
           <Route path="/home/super-admin" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN]}>
               <SuperAdminDashboard />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/home/archives" element={
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN]}>
+              <BordereauxArchive />
             </ProtectedRoute>
           } />
           

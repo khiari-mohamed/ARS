@@ -883,6 +883,9 @@ export class BordereauxService {
     const include: any = {
       client: true,
       contract: true,
+      _count: {
+        select: { documents: true }
+      }
     };
     
     // FIXED: Include virement data when withVirement filter is present

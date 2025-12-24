@@ -161,12 +161,11 @@ export class SuiviVirementService {
     if (ordreVirement.bordereauId) {
       const updateData: any = {};
       
-      // 🔥 NEW LOGIC: Bordereau stays TRAITE until virement is EXECUTE
-      // Only change to CLOTURE when virement is fully executed
+      // EXACT SPEC: When virement is EXECUTE, bordereau status changes to VIREMENT_EXECUTE
       if (nouvelEtat === 'EXECUTE') {
-        updateData.statut = 'CLOTURE';
+        updateData.statut = 'VIREMENT_EXECUTE';
         updateData.dateCloture = new Date();
-        this.logger.log(`✅ AUTO-STATUS: Bordereau ${ordreVirement.bordereauId} changed TRAITE → CLOTURE (virement executed)`);
+        this.logger.log(`✅ AUTO-STATUS: Bordereau ${ordreVirement.bordereauId} changed TRAITE → VIREMENT_EXECUTE (virement executed)`);
         
         await this.prisma.bordereau.update({
           where: { id: ordreVirement.bordereauId },

@@ -131,20 +131,40 @@ export class GedService {
     return doc;
   }
     async getDocumentStats(user: User) {
-    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE'].includes(user.role)) {
+    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to view stats');
     }
     
     const where: any = {};
     if (user.role === 'GESTIONNAIRE') {
+      // Get bordereaux assigned to this user
       const bordereaux = await this.prisma.bordereau.findMany({
         where: {
-          documents: { some: { assignedToUserId: user.id } },
+          OR: [
+            { assignedToUserId: user.id },
+            { currentHandlerId: user.id },
+            { chargeCompteId: user.id }
+          ],
           archived: false
         },
-        select: { id: true }
+        select: { id: true, reference: true }
       });
       where.bordereauId = { in: bordereaux.map(b => b.id) };
+      console.log(`📊 [GED Stats] Found ${bordereaux.length} bordereaux for user ${user.id}:`, bordereaux.map(b => b.reference));
+    } else if (user.role === 'GESTIONNAIRE_SENIOR') {
+      // Get bordereaux where client or contract is assigned to this user
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          archived: false,
+          OR: [
+            { client: { chargeCompteId: user.id } },
+            { contract: { teamLeaderId: user.id } }
+          ]
+        },
+        select: { id: true, reference: true }
+      });
+      where.bordereauId = { in: bordereaux.map(b => b.id) };
+      console.log(`📊 [GED Stats] Found ${bordereaux.length} bordereaux for gestionnaire senior ${user.id}:`, bordereaux.map(b => b.reference));
     } else if (user.role === 'CHEF_EQUIPE') {
       where.bordereau = {
         contract: { teamLeaderId: user.id },
@@ -375,18 +395,36 @@ export class GedService {
       where.bordereau = { ...where.bordereau, prestataire: { name: { contains: query.prestataire, mode: 'insensitive' } } };
     }
     
-    // Role-based filtering - CRITICAL FIX for GESTIONNAIRE
+    // Role-based filtering for GESTIONNAIRE
     if (user.role === 'GESTIONNAIRE') {
-      // GESTIONNAIRE sees all documents from bordereaux that have at least one document assigned to them
+      // GESTIONNAIRE sees all documents from bordereaux assigned to them
       const bordereaux = await this.prisma.bordereau.findMany({
         where: {
-          documents: { some: { assignedToUserId: user.id } },
+          OR: [
+            { assignedToUserId: user.id },
+            { currentHandlerId: user.id },
+            { chargeCompteId: user.id }
+          ],
           archived: false
         },
         select: { id: true }
       });
       where.bordereauId = { in: bordereaux.map(b => b.id) };
       console.log(`📊 [GED] Filtering documents from ${bordereaux.length} bordereaux assigned to gestionnaire`);
+    } else if (user.role === 'GESTIONNAIRE_SENIOR') {
+      // GESTIONNAIRE_SENIOR sees documents from bordereaux where client or contract is assigned to them
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          archived: false,
+          OR: [
+            { client: { chargeCompteId: user.id } },
+            { contract: { teamLeaderId: user.id } }
+          ]
+        },
+        select: { id: true }
+      });
+      where.bordereauId = { in: bordereaux.map(b => b.id) };
+      console.log(`📊 [GED] Filtering documents from ${bordereaux.length} bordereaux for gestionnaire senior`);
     } else if (user.role === 'CHEF_EQUIPE') {
       where.bordereau = {
         ...where.bordereau,
@@ -444,8 +482,17 @@ export class GedService {
     if (!doc) throw new NotFoundException('Document not found');
     
     // Access control based on role
-    if (user.role === 'GESTIONNAIRE') {
-      if (doc.uploadedById !== user.id && doc.bordereau?.assignedToUserId !== user.id) {
+    if (user.role === 'GESTIONNAIRE' || user.role === 'GESTIONNAIRE_SENIOR') {
+      // Check if document belongs to a bordereau assigned to this user
+      if (doc.bordereauId) {
+        const bordereau = await this.prisma.bordereau.findUnique({
+          where: { id: doc.bordereauId },
+          select: { assignedToUserId: true }
+        });
+        if (!bordereau || bordereau.assignedToUserId !== user.id) {
+          throw new ForbiddenException('You do not have access to this document');
+        }
+      } else {
         throw new ForbiddenException('You do not have access to this document');
       }
     } else if (user.role === 'CHEF_EQUIPE') {
@@ -526,7 +573,7 @@ export class GedService {
 
   // Advanced Search Integration
   async performAdvancedSearch(query: any, user: User) {
-    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE'].includes(user.role)) {
+    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to perform advanced search');
     }
     return this.advancedSearchService.search(query);
@@ -570,7 +617,7 @@ export class GedService {
   }
 
   async startWorkflow(documentId: string, workflowId: string, user: User) {
-    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE'].includes(user.role)) {
+    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to start workflows');
     }
 
@@ -611,7 +658,7 @@ export class GedService {
       where: {
         status: 'EN_COURS',
         // For GESTIONNAIRE role, only show documents assigned to them
-        ...(user.role === 'GESTIONNAIRE' && { uploadedById: userId })
+        ...((user.role === 'GESTIONNAIRE' || user.role === 'GESTIONNAIRE_SENIOR') && { uploadedById: userId })
       },
       include: {
         uploader: true,
@@ -1085,8 +1132,25 @@ export class GedService {
 
   // Analytics and Reporting
   async getGEDAnalytics(period: string, user: User) {
-    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR'].includes(user.role)) {
+    if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE_SENIOR'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to view analytics');
+    }
+
+    // Build where clause for role-based filtering
+    const docWhere: any = { bordereauId: { not: null } };
+    
+    if (user.role === 'GESTIONNAIRE_SENIOR') {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          archived: false,
+          OR: [
+            { client: { chargeCompteId: user.id } },
+            { contract: { teamLeaderId: user.id } }
+          ]
+        },
+        select: { id: true }
+      });
+      docWhere.bordereauId = { in: bordereaux.map(b => b.id) };
     }
 
     // Get SLA compliance by client
@@ -1098,11 +1162,7 @@ export class GedService {
           }
         }
       },
-      where: {
-        bordereauId: {
-          not: null
-        }
-      }
+      where: docWhere
     });
 
     // Calculate SLA compliance by client

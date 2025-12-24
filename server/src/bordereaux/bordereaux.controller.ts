@@ -918,7 +918,7 @@ export class BordereauxController {
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['TRAITE', 'CLOTURE'] }, // NO VIREMENT_EXECUTE - bordereau stays TRAITE until CLOTURE
+          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] }, // Include VIREMENT_EXECUTE
           updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
         },
         include: {

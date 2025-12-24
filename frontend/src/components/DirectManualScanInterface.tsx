@@ -31,6 +31,7 @@ interface Props {
 const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [fileTypes, setFileTypes] = useState<Record<number, string>>({});
+  const [bulkType, setBulkType] = useState<string>('BULLETIN_SOIN');
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
 
@@ -49,10 +50,10 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
     const startIndex = uploadedFiles.length;
     setUploadedFiles(prev => [...prev, ...files]);
     
-    // Initialize default type for new files
+    // Initialize with bulk type for new files
     const newTypes: Record<number, string> = {};
     files.forEach((_, index) => {
-      newTypes[startIndex + index] = 'BULLETIN_SOIN'; // Default type
+      newTypes[startIndex + index] = bulkType; // Use bulk type as default
     });
     setFileTypes(prev => ({ ...prev, ...newTypes }));
   };
@@ -74,6 +75,14 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
       });
       return reindexed;
     });
+  };
+
+  const applyBulkType = () => {
+    const newTypes: Record<number, string> = {};
+    uploadedFiles.forEach((_, index) => {
+      newTypes[index] = bulkType;
+    });
+    setFileTypes(newTypes);
   };
 
   const handleUpload = async () => {
@@ -176,7 +185,7 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
           Cliquez pour sélectionner des documents (multiple)
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Formats: PDF, JPEG, PNG, TIFF (max 50MB par fichier)
+          Formats: PDF, JPEG, PNG, TIFF (max 5GB par fichier, 1000 fichiers max)
         </Typography>
         <Typography variant="body2" color="primary" sx={{ mt: 1, fontWeight: 'bold' }}>
           ✅ Téléversement multiple de PDF autorisé
@@ -185,6 +194,38 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
 
       {uploadedFiles.length > 0 && (
         <Box mb={2}>
+          <Box sx={{ mb: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1, border: '1px solid #2196f3' }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+              🎯 Sélection en Masse (Bulk)
+            </Typography>
+            <Box display="flex" gap={2} alignItems="center">
+              <FormControl size="small" sx={{ minWidth: 250 }}>
+                <InputLabel>Type pour tous les documents</InputLabel>
+                <Select
+                  value={bulkType}
+                  onChange={(e) => setBulkType(e.target.value)}
+                  label="Type pour tous les documents"
+                >
+                  {documentTypes.map(type => (
+                    <MenuItem key={type.value} value={type.value}>
+                      {type.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={applyBulkType}
+                sx={{ minWidth: 180 }}
+              >
+                Appliquer à tous ({uploadedFiles.length})
+              </Button>
+            </Box>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              💡 Sélectionnez un type et cliquez sur "Appliquer à tous" pour définir le même type pour tous les documents. Vous pouvez ensuite modifier individuellement si nécessaire.
+            </Alert>
+          </Box>
           <Typography variant="subtitle1" gutterBottom>
             Documents sélectionnés ({uploadedFiles.length})
           </Typography>

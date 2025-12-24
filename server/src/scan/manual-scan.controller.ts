@@ -42,7 +42,7 @@ export class ManualScanController {
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
   @UseInterceptors(FilesInterceptor('files', 1000, {
     limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB per file
+      fileSize: 5 * 1024 * 1024 * 1024, // 5GB per file (matches nginx config)
       files: 1000 // Max 1000 files
     },
     fileFilter: (req, file, callback) => {
@@ -98,7 +98,7 @@ export class ManualScanController {
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
   @UseInterceptors(FilesInterceptor('files', 1000, {
     limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB per file
+      fileSize: 5 * 1024 * 1024 * 1024, // 5GB per file (matches nginx config)
       files: 1000 // Max 1000 files
     },
     fileFilter: (req, file, callback) => {

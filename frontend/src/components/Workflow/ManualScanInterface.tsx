@@ -30,7 +30,11 @@ import {
   LinearProgress,
   Stepper,
   Step,
-  StepLabel
+  StepLabel,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { 
   Scanner, 
@@ -77,10 +81,13 @@ const startManualScan = async (bordereauId: string) => {
   return data;
 };
 
-const uploadDocuments = async (bordereauId: string, files: File[], notes?: string) => {
+const uploadDocuments = async (bordereauId: string, files: File[], notes?: string, fileTypes?: Record<number, string>) => {
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
   if (notes) formData.append('notes', notes);
+  if (fileTypes) {
+    Object.values(fileTypes).forEach(type => formData.append('fileTypes', type));
+  }
   
   const { data } = await LocalAPI.post(`/scan/manual/upload/${bordereauId}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
@@ -103,6 +110,8 @@ export const ManualScanInterface: React.FC = () => {
   const [selectedBordereau, setSelectedBordereau] = useState<ScanQueueItem | null>(null);
   const [scanStep, setScanStep] = useState<'select' | 'upload' | 'validate'>('select');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [fileTypes, setFileTypes] = useState<Record<number, string>>({});
+  const [bulkType, setBulkType] = useState<string>('BULLETIN_SOIN');
   const [notes, setNotes] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -127,8 +136,8 @@ export const ManualScanInterface: React.FC = () => {
   });
 
   const uploadMutation = useMutation(
-    ({ bordereauId, files, notes }: { bordereauId: string; files: File[]; notes?: string }) =>
-      uploadDocuments(bordereauId, files, notes),
+    ({ bordereauId, files, notes, fileTypes }: { bordereauId: string; files: File[]; notes?: string; fileTypes?: Record<number, string> }) =>
+      uploadDocuments(bordereauId, files, notes, fileTypes),
     {
       onSuccess: () => {
         setScanStep('validate');
@@ -165,13 +174,29 @@ export const ManualScanInterface: React.FC = () => {
   }, []);
 
   const handleFileUpload = (files: File[]) => {
+    const startIndex = uploadedFiles.length;
     setUploadedFiles(prev => [...prev, ...files]);
+    
+    // Initialize with bulk type for new files
+    const newTypes: Record<number, string> = {};
+    files.forEach((_, index) => {
+      newTypes[startIndex + index] = bulkType;
+    });
+    setFileTypes(prev => ({ ...prev, ...newTypes }));
   };
 
   // Simple file input handler (replacing dropzone temporarily)
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     handleFileUpload(files);
+  };
+
+  const applyBulkType = () => {
+    const newTypes: Record<number, string> = {};
+    uploadedFiles.forEach((_, index) => {
+      newTypes[index] = bulkType;
+    });
+    setFileTypes(newTypes);
   };
 
   const getRootProps = () => ({
@@ -187,10 +212,18 @@ export const ManualScanInterface: React.FC = () => {
 
   const handleUpload = () => {
     if (selectedBordereau && uploadedFiles.length > 0) {
+      // Validate all files have types
+      const missingTypes = uploadedFiles.some((_, index) => !fileTypes[index]);
+      if (missingTypes) {
+        alert('⚠️ Veuillez sélectionner un type pour tous les documents');
+        return;
+      }
+      
       uploadMutation.mutate({
         bordereauId: selectedBordereau.id,
         files: uploadedFiles,
-        notes
+        notes,
+        fileTypes
       });
     }
   };
@@ -341,25 +374,76 @@ export const ManualScanInterface: React.FC = () => {
                 Cliquez pour sélectionner des fichiers
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                Formats acceptés: PDF, JPEG, PNG, TIFF (max 10MB par fichier)
+                Formats acceptés: PDF, JPEG, PNG, TIFF (max 5GB par fichier, 1000 fichiers max)
               </Typography>
             </Box>
 
             {uploadedFiles.length > 0 && (
               <Box mb={2}>
+                <Box sx={{ mb: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1, border: '1px solid #2196f3' }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                    🎯 Sélection en Masse (Bulk)
+                  </Typography>
+                  <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
+                    <FormControl size="small" sx={{ minWidth: 250 }}>
+                      <InputLabel>Type pour tous les documents</InputLabel>
+                      <Select
+                        value={bulkType}
+                        onChange={(e) => setBulkType(e.target.value)}
+                        label="Type pour tous les documents"
+                      >
+                        <MenuItem value="BULLETIN_SOIN">🏥 Bulletin de Soins</MenuItem>
+                        <MenuItem value="COMPLEMENT_INFORMATION">📋 Complément Info</MenuItem>
+                        <MenuItem value="ADHESION">👥 Adhésion</MenuItem>
+                        <MenuItem value="RECLAMATION">⚠️ Réclamation</MenuItem>
+                        <MenuItem value="CONTRAT_AVENANT">📄 Contrat/Avenant</MenuItem>
+                        <MenuItem value="DEMANDE_RESILIATION">❌ Demande Résiliation</MenuItem>
+                        <MenuItem value="CONVENTION_TIERS_PAYANT">🤝 Convention Tiers</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={applyBulkType}
+                      sx={{ minWidth: 180 }}
+                    >
+                      Appliquer à tous ({uploadedFiles.length})
+                    </Button>
+                  </Box>
+                  <Alert severity="info" sx={{ mt: 1, fontSize: '0.85rem' }}>
+                    💡 Sélectionnez un type et cliquez sur "Appliquer à tous" pour définir le même type pour tous les documents. Vous pouvez ensuite modifier individuellement.
+                  </Alert>
+                </Box>
                 <Typography variant="subtitle1" gutterBottom>
                   Fichiers sélectionnés ({uploadedFiles.length})
                 </Typography>
                 <List dense>
                   {uploadedFiles.map((file, index) => (
-                    <ListItem key={index}>
+                    <ListItem key={index} sx={{ border: '1px solid #e0e0e0', borderRadius: 1, mb: 1, bgcolor: '#fafafa' }}>
                       <ListItemIcon>
                         <Description />
                       </ListItemIcon>
                       <ListItemText
                         primary={file.name}
                         secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
+                        sx={{ flex: '0 0 40%' }}
                       />
+                      <FormControl size="small" sx={{ minWidth: 200, mr: 2 }}>
+                        <InputLabel>Type</InputLabel>
+                        <Select
+                          value={fileTypes[index] || ''}
+                          onChange={(e) => setFileTypes(prev => ({ ...prev, [index]: e.target.value }))}
+                          label="Type"
+                        >
+                          <MenuItem value="BULLETIN_SOIN">🏥 Bulletin de Soins</MenuItem>
+                          <MenuItem value="COMPLEMENT_INFORMATION">📋 Complément Info</MenuItem>
+                          <MenuItem value="ADHESION">👥 Adhésion</MenuItem>
+                          <MenuItem value="RECLAMATION">⚠️ Réclamation</MenuItem>
+                          <MenuItem value="CONTRAT_AVENANT">📄 Contrat/Avenant</MenuItem>
+                          <MenuItem value="DEMANDE_RESILIATION">❌ Demande Résiliation</MenuItem>
+                          <MenuItem value="CONVENTION_TIERS_PAYANT">🤝 Convention Tiers</MenuItem>
+                        </Select>
+                      </FormControl>
                       <Button
                         size="small"
                         color="error"

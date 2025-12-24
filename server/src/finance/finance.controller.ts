@@ -1129,6 +1129,18 @@ export class FinanceController {
         }
       });
       
+      // EXACT SPEC: Auto-update bordereau status when virement is EXECUTE
+      if (body.etatVirement === 'EXECUTE' && updatedOV.bordereauId) {
+        await this.prisma.bordereau.update({
+          where: { id: updatedOV.bordereauId },
+          data: {
+            statut: 'VIREMENT_EXECUTE',
+            dateCloture: new Date()
+          }
+        });
+        console.log('✅ AUTO-STATUS: Bordereau status updated to VIREMENT_EXECUTE');
+      }
+      
       console.log('✅ OV status updated:', {
         id,
         oldStatus: 'previous',
@@ -1188,7 +1200,7 @@ export class FinanceController {
         throw new BadRequestException('No users found in system');
       }
       
-      // Find or create OrdreVirement for this bordereau
+      // Find existing OrdreVirement for this bordereau
       let ordreVirement = await this.prisma.ordreVirement.findFirst({
         where: { bordereauId: body.bordereauId },
         orderBy: { createdAt: 'desc' }
@@ -1200,24 +1212,23 @@ export class FinanceController {
         });
       }
       
+      // DON'T create temporary OV - just store the PDF without OV link
+      // The actual OV will be created later through the normal flow
       if (!ordreVirement) {
-        // Create temporary OV if none exists
-        const donneurs = await this.prisma.donneurOrdre.findMany({ where: { statut: 'ACTIF' }, take: 1 });
-        if (donneurs.length === 0) {
-          throw new BadRequestException('No active donneur d\'ordre found');
-        }
-        
-        ordreVirement = await this.prisma.ordreVirement.create({
-          data: {
-            reference: `OV-${bordereau.reference}`,
-            donneurOrdreId: donneurs[0].id,
-            bordereauId: body.bordereauId,
-            utilisateurSante: user.id,
-            montantTotal: 0,
-            nombreAdherents: 0,
-            etatVirement: 'NON_EXECUTE'
+        console.log('⚠️ No OV exists yet for this bordereau - PDF will be linked when OV is created');
+        // Return success but indicate no OV was linked yet
+        return {
+          success: true,
+          message: 'Document PDF téléchargé (sera lié à l\'OV lors de sa création)',
+          document: {
+            id: 'pending',
+            name: file.originalname,
+            bordereauReference: bordereau.reference,
+            clientName: bordereau.client.name,
+            uploadedAt: new Date(),
+            ordreVirementId: null
           }
-        });
+        };
       }
       
       // Save file to disk

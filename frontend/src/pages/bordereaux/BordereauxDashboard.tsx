@@ -497,6 +497,7 @@ const BordereauxDashboard: React.FC = () => {
               <option value="EN_COURS">En cours</option>
               <option value="TRAITE">Traité</option>
               <option value="FINALISE">Finalisé</option>
+              <option value="EN_RETARD">En retard</option>
             </select>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
@@ -794,7 +795,7 @@ const BordereauxDashboard: React.FC = () => {
                         </td>
                         <td className="px-3 py-3">
                           <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
-                            {bordereau.nombreBS}
+                            {bordereau._count?.documents || 0}
                           </span>
                         </td>
                         <td className="px-3 py-3">
