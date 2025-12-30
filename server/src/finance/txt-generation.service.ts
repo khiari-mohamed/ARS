@@ -35,16 +35,24 @@ export class TxtGenerationService {
       formatType = 'ATTIJARI';
     }
     
+    let result = '';
     switch (formatType) {
       case 'BTK_COMAR':
-        return this.generateBTKComarFormat(data);
+        result = this.generateBTKComarFormat(data);
+        break;
       case 'BTK_ASTREE':
-        return this.generateBTKAstreeFormat(data);
+        result = this.generateBTKAstreeFormat(data);
+        break;
       case 'ATTIJARI':
-        return this.generateStructure1OLD(data); // Use OLD format for Attijari
+        result = this.generateStructure1OLD(data);
+        break;
       default:
-        return this.generateBTKComarFormat(data);
+        result = this.generateBTKComarFormat(data);
+        break;
     }
+    
+    // Ensure no HTML entities in output
+    return result.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
   }
 
   private generateBTKComarFormat(data: OVTxtData): string {
@@ -220,107 +228,82 @@ export class TxtGenerationService {
   }
 
   private generateStructure1OLD(data: OVTxtData): string {
-    // ATTIJARI BANK FORMAT - Exact format from company example
     const lines: string[] = [];
     const dateStr = this.formatDateAmen(data.dateCreation);
+    let totalAmountMillimes = 0;
+    const detailLines: string[] = [];
     
-    const totalAmountMillimes = data.virements
-      .reduce((sum, v) => sum + Math.round(v.montant * 1000), 0);
-    const numberOfOperations = data.virements.length;
-    
-    const codeBanque = data.donneurOrdre.rib.substring(0, 2);
-    
-    // HEADER LINE
-    let headerLine = '1';
-    headerLine += '10';
-    headerLine += '1';
-    headerLine += codeBanque;
-    headerLine += '   ';
-    headerLine += dateStr;
-    headerLine += '0001';
-    headerLine += '11';
-    headerLine += '788';
-    headerLine += '00';
-    headerLine += totalAmountMillimes.toString().padStart(15, '0');
-    headerLine += numberOfOperations.toString().padStart(10, '0');
-    headerLine += ' '.repeat(227);
-    
-    lines.push(headerLine);
-
-    // DETAIL LINES - Attijari format
     data.virements.forEach((virement, index) => {
       const montantMillimes = Math.round(virement.montant * 1000);
-      const codeBanqueBenef = virement.rib.substring(0, 2);
-      const sequenceNumber = (index + 1).toString().padStart(4, '0');
+      totalAmountMillimes += montantMillimes;
       
-      let line = '1';
-      line += '10';
-      line += '1';
-      line += codeBanque;
-      line += '   ';
+      const emitterRib = data.donneurOrdre.rib.replace(/\D/g, '').substring(0, 20).padStart(20, '0');
+      const benefRib = virement.rib.replace(/\D/g, '').substring(0, 20).padStart(20, '0');
+      const benefName = (virement.nom + ' ' + virement.prenom).toUpperCase().replace(/[^A-Z0-9 ]/g, '').substring(0, 30).padEnd(30, ' ');
+      const matricule = virement.matricule.replace(/[^A-Z0-9]/g, '').substring(0, 20).padStart(20, '0');
+      const sequenceNum = (index + 1).toString().padStart(7, '0');
+      const donneurNom = data.donneurOrdre.nom.replace(/&quot;/g, '"').replace(/&amp;/g, '&').substring(0, 30).padEnd(30, ' ');
+      
+      let line = '';
+      // Fields 1-5: Sens(1) + CodeValeur(2) + Nature(1) + CodeRemettant(2) + CodeCentre(3) = 9 chars
+      line += '110104   ';
+      // Field 6: Date (8)
       line += dateStr;
+      // Field 7: Numéro lot (4)
       line += '0001';
-      line += '2';
-      line += '1788';
-      line += '00000000000';
-      line += montantMillimes.toString().padStart(9, '0');
-      line += '000000';
-      line += data.donneurOrdre.rib;
-      
-      // Company name (30 chars) - donneurOrdre
-      const companyName = data.donneurOrdre.nom
-        .toUpperCase()
-        .replace(/[^A-Z0-9 "]/g, '')
-        .substring(0, 30)
-        .padEnd(30, ' ');
-      line += companyName;
-      
-      // Bank code + spaces (5 chars)
-      line += codeBanqueBenef;
+      // Field 8: Code enregistrement (2)
+      line += '21';
+      // Field 9: Code devise (3)
+      line += '788';
+      // Field 10: Rang (2)
+      line += '00';
+      // Field 11: Montant (15)
+      line += montantMillimes.toString().padStart(15, '0');
+      // Field 12: Numéro virement (7)
+      line += sequenceNum;
+      // Field 13: RIB donneur (20)
+      line += emitterRib;
+      // Field 14: Nom donneur (30)
+      line += donneurNom;
+      // Field 15: Code institution destinataire (2)
+      line += benefRib.substring(0, 2);
+      // Field 16: Code centre destinataire (3)
       line += '   ';
-      
-      // RIB bénéficiaire (20 chars)
-      line += virement.rib;
-      
-      // Beneficiary name (30 chars) - Person name from Excel
-      const benefName = `${virement.nom} ${virement.prenom}`
-        .toUpperCase()
-        .replace(/[^A-Z0-9 ]/g, '')
-        .substring(0, 30)
-        .padEnd(30, ' ');
+      // Field 17: RIB bénéficiaire (20)
+      line += benefRib;
+      // Field 18: Nom bénéficiaire (30)
       line += benefName;
-      
-      // Reference number (17 chars)
-      line += '00000000000000001';
-      
-      // Short amount (6 chars)
-      const shortAmount = sequenceNumber.substring(0, 3) + '000';
-      line += shortAmount;
-      
-      // Bordereau reference (11 chars)
-      const bordRef = data.reference.replace(/[^A-Z0-9]/g, '').substring(0, 11).padEnd(11, ' ');
-      line += bordRef;
-      
-      // Société (35 chars) - Company from Excel
-      const societe = (virement.societe || data.donneurOrdre.nom)
-        .toUpperCase()
-        .replace(/[^A-Z0-9 ]/g, '')
-        .substring(0, 35)
-        .padEnd(35, ' ');
-      line += societe;
-      
-      // Date repeated (8 chars)
+      // Field 19: Référence dossier (20)
+      line += matricule;
+      // Field 20: Code enreg complémentaire (1)
+      line += '0';
+      // Field 21: Nombre enreg complémentaires (2)
+      line += '00';
+      // Field 22: Motif (45)
+      line += 'PGH20-2025GAN FRIGAN'.padEnd(45, ' ');
+      // Field 23: Date compensation (8)
       line += dateStr;
+      // Field 24: Motif rejet (8)
+      line += '00000000';
+      // Field 25: Situation donneur (1)
+      line += '0';
+      // Field 26: Type compte (1)
+      line += '1';
+      // Field 27: Nature compte (1)
+      line += '0';
+      // Field 28: Dossier change (1)
+      line += ' ';
+      // Field 29: Zone libre (37)
+      line += ' '.repeat(37);
       
-      // Final code (11 chars)
-      line += '00000000010';
-      
-      // Spaces to 280
-      line += ' '.repeat(38);
-      
-      lines.push(line);
+      detailLines.push(line);
     });
-
+    
+    // Header line
+    let headerLine = '110104   ' + dateStr + '0001' + '11' + '788' + '00' + totalAmountMillimes.toString().padStart(15, '0') + data.virements.length.toString().padStart(10, '0');
+    headerLine = headerLine.padEnd(280, ' ');
+    lines.push(headerLine);
+    lines.push(...detailLines);
     return lines.join('\n');
   }
 
@@ -548,15 +531,19 @@ export class TxtGenerationService {
         }
         const adherent = item.adherent;
         
-        // Priority: DB adherent first, fallback to Excel data
+        // CRITICAL: Must have real adherent data from DB, reject if missing
+        if (!adherent || !adherent.nom || !adherent.rib) {
+          throw new Error(`Adherent data missing for item ${index + 1}. Matricule: ${adherent?.matricule || 'unknown'}. Please ensure all adherents exist in database.`);
+        }
+        
         return {
           reference: `${ordreVirement.reference}-${(index + 1).toString().padStart(3, '0')}`,
           montant: item.montant,
-          rib: adherent?.rib || excelData?.rib || '00000000000000000000',
-          nom: adherent?.nom || excelData?.nom || 'NOM_INCONNU',
-          prenom: adherent?.prenom || excelData?.prenom || 'PRENOM_INCONNU',
-          matricule: adherent?.matricule || excelData?.matricule || `MAT${(index + 1).toString().padStart(6, '0')}`,
-          societe: adherent?.client?.name || adherent?.assurance || excelData?.societe || ordreVirement.donneurOrdre.nom
+          rib: adherent.rib,
+          nom: adherent.nom,
+          prenom: adherent.prenom || '',
+          matricule: adherent.matricule,
+          societe: adherent.client?.name || adherent.assurance || ordreVirement.donneurOrdre.nom
         };
       });
 
@@ -575,9 +562,16 @@ export class TxtGenerationService {
       throw new Error('RIB du donneur d\'ordre invalide ou manquant');
     }
 
+    // CRITICAL: Decode HTML entities from database before processing
+    const donneurNom = ordreVirement.donneurOrdre.nom
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+
     const txtData: OVTxtData = {
       donneurOrdre: {
-        nom: ordreVirement.donneurOrdre.nom,
+        nom: donneurNom,
         rib: ordreVirement.donneurOrdre.rib,
         formatTxtType: ordreVirement.donneurOrdre.formatTxtType || 'BTK_COMAR'
       },

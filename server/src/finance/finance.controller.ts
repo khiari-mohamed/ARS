@@ -304,9 +304,17 @@ export class FinanceController {
   @Get('ordres-virement/:id/txt')
   async viewOVTXT(@Param('id') id: string, @Res() res: Response, @Req() req: any) {
     const user = getUserFromRequest(req);
-    const txtContent = await this.financeService.getOVTXTContent(id, user as any);
+    let txtContent = await this.financeService.getOVTXTContent(id, user as any);
+    
+    // Decode HTML entities to ensure plain text output
+    txtContent = txtContent
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+    
     res.set({
-      'Content-Type': 'text/plain',
+      'Content-Type': 'text/plain; charset=utf-8',
       'Content-Disposition': `inline; filename="ordre_virement_${id}.txt"`,
       'Content-Length': Buffer.byteLength(txtContent, 'utf8')
     });
@@ -1212,23 +1220,34 @@ export class FinanceController {
         });
       }
       
-      // DON'T create temporary OV - just store the PDF without OV link
-      // The actual OV will be created later through the normal flow
+      // If no OV exists, we MUST create one first (ordreVirementId is required)
       if (!ordreVirement) {
-        console.log('⚠️ No OV exists yet for this bordereau - PDF will be linked when OV is created');
-        // Return success but indicate no OV was linked yet
-        return {
-          success: true,
-          message: 'Document PDF téléchargé (sera lié à l\'OV lors de sa création)',
-          document: {
-            id: 'pending',
-            name: file.originalname,
-            bordereauReference: bordereau.reference,
-            clientName: bordereau.client.name,
-            uploadedAt: new Date(),
-            ordreVirementId: null
+        console.log('⚠️ No OV exists - creating temporary OV for PDF upload');
+        
+        // Get active donneur d'ordre
+        const donneurOrdre = await this.prisma.donneurOrdre.findFirst({
+          where: { statut: 'ACTIF' }
+        });
+        
+        if (!donneurOrdre) {
+          throw new BadRequestException('No active donneur d\'ordre found');
+        }
+        
+        // Create OV
+        ordreVirement = await this.prisma.ordreVirement.create({
+          data: {
+            reference: `OV-${bordereau.reference}`,
+            donneurOrdreId: donneurOrdre.id,
+            bordereauId: body.bordereauId,
+            utilisateurSante: anyUser.id,
+            montantTotal: 0, // Will be updated later
+            nombreAdherents: 0,
+            etatVirement: 'EN_COURS_VALIDATION',
+            validationStatus: 'EN_ATTENTE_VALIDATION'
           }
-        };
+        });
+        
+        console.log('✅ Created OV:', ordreVirement.id);
       }
       
       // Save file to disk
@@ -1241,7 +1260,7 @@ export class FinanceController {
       const filePath = path.join(uploadsDir, filename);
       fs.writeFileSync(filePath, file.buffer);
       
-      // Create OVDocument record (separate from Document table)
+      // Create OVDocument record
       const ovDocument = await this.prisma.oVDocument.create({
         data: {
           name: file.originalname,
@@ -1257,7 +1276,7 @@ export class FinanceController {
         }
       });
       
-      // Update OrdreVirement with uploaded PDF path (for manual OV)
+      // Update OrdreVirement with uploaded PDF path
       await this.prisma.ordreVirement.update({
         where: { id: ordreVirement.id },
         data: { uploadedPdfPath: `/uploads/ov-documents/${filename}` }
@@ -1265,7 +1284,7 @@ export class FinanceController {
       
       console.log('✅ PDF document uploaded to OVDocument table:', {
         ovDocumentId: ovDocument.id,
-        ordreVirementId: ordreVirement.id,
+        ordreVirementId: ordreVirement?.id || 'null (will be linked later)',
         bordereauId: body.bordereauId,
         filename: file.originalname,
         filePath,
@@ -1274,14 +1293,16 @@ export class FinanceController {
       
       return {
         success: true,
-        message: 'Document PDF téléchargé et lié au bordereau avec succès',
+        message: ordreVirement 
+          ? 'Document PDF téléchargé et lié au bordereau avec succès'
+          : 'Document PDF téléchargé (sera lié à l\'OV lors de sa création)',
         document: {
           id: ovDocument.id,
           name: ovDocument.name,
           bordereauReference: bordereau.reference,
           clientName: bordereau.client.name,
           uploadedAt: ovDocument.uploadedAt,
-          ordreVirementId: ordreVirement.id
+          ordreVirementId: ordreVirement?.id || null
         }
       };
     } catch (error) {
@@ -1426,30 +1447,82 @@ export class FinanceController {
     @Res() res: Response
   ) {
     try {
+      console.log('🔍 Fetching uploaded PDF for OV:', id);
+      
+      // First check OVDocument table (for PDFs uploaded via upload-pdf-document)
+      const ovDocument = await this.prisma.oVDocument.findFirst({
+        where: { 
+          ordreVirementId: id,
+          type: 'BORDEREAU_PDF'
+        },
+        orderBy: { uploadedAt: 'desc' }
+      });
+      
+      if (ovDocument) {
+        console.log('✅ Found PDF in OVDocument table:', ovDocument.path);
+        const fs = require('fs');
+        if (fs.existsSync(ovDocument.path)) {
+          const pdfBuffer = fs.readFileSync(ovDocument.path);
+          res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="${ovDocument.name}"`,
+            'Content-Length': pdfBuffer.length
+          });
+          return res.send(pdfBuffer);
+        }
+      }
+      
+      // Fallback: check uploadedPdfPath field (for manual OV uploads)
       const ov = await this.prisma.ordreVirement.findUnique({
         where: { id },
-        select: { uploadedPdfPath: true }
+        select: { uploadedPdfPath: true, bordereauId: true }
       });
       
-      if (!ov?.uploadedPdfPath) {
-        throw new BadRequestException('No uploaded PDF found for this OV');
+      if (ov?.uploadedPdfPath) {
+        console.log('✅ Found PDF in uploadedPdfPath:', ov.uploadedPdfPath);
+        const fs = require('fs');
+        const path = require('path');
+        const fullPath = path.join(process.cwd(), ov.uploadedPdfPath);
+        
+        if (fs.existsSync(fullPath)) {
+          const pdfBuffer = fs.readFileSync(fullPath);
+          res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="uploaded_ov_${id}.pdf"`,
+            'Content-Length': pdfBuffer.length
+          });
+          return res.send(pdfBuffer);
+        }
       }
       
-      const fs = require('fs');
-      const path = require('path');
-      const fullPath = path.join(process.cwd(), ov.uploadedPdfPath);
-      
-      if (!fs.existsSync(fullPath)) {
-        throw new BadRequestException('PDF file not found on disk');
+      // If OV has bordereau, check OVDocument by bordereau
+      if (ov?.bordereauId) {
+        console.log('🔍 Checking OVDocument by bordereauId:', ov.bordereauId);
+        const bordereauDoc = await this.prisma.oVDocument.findFirst({
+          where: { 
+            bordereauId: ov.bordereauId,
+            type: 'BORDEREAU_PDF'
+          },
+          orderBy: { uploadedAt: 'desc' }
+        });
+        
+        if (bordereauDoc) {
+          console.log('✅ Found PDF via bordereau:', bordereauDoc.path);
+          const fs = require('fs');
+          if (fs.existsSync(bordereauDoc.path)) {
+            const pdfBuffer = fs.readFileSync(bordereauDoc.path);
+            res.set({
+              'Content-Type': 'application/pdf',
+              'Content-Disposition': `inline; filename="${bordereauDoc.name}"`,
+              'Content-Length': pdfBuffer.length
+            });
+            return res.send(pdfBuffer);
+          }
+        }
       }
       
-      const pdfBuffer = fs.readFileSync(fullPath);
-      res.set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="uploaded_ov_${id}.pdf"`,
-        'Content-Length': pdfBuffer.length
-      });
-      res.send(pdfBuffer);
+      console.error('❌ No uploaded PDF found for OV:', id);
+      throw new BadRequestException('No uploaded PDF found for this OV');
     } catch (error) {
       console.error('❌ Error viewing uploaded PDF:', error);
       res.status(500).json({ error: 'Failed to load PDF', details: error.message });
@@ -1508,6 +1581,15 @@ export class FinanceController {
     try {
       console.log('🔍 Fetching OV documents for bordereauId:', bordereauId);
       
+      // Check ALL OVDocuments in database
+      const allDocs = await this.prisma.oVDocument.findMany({
+        select: { id: true, name: true, bordereauId: true, ordreVirementId: true }
+      });
+      console.log(`📊 Total OVDocuments in database: ${allDocs.length}`);
+      if (allDocs.length > 0) {
+        console.log('📄 Sample documents:', allDocs.slice(0, 5));
+      }
+      
       const documents = await this.prisma.oVDocument.findMany({
         where: { bordereauId },
         include: {
@@ -1517,7 +1599,7 @@ export class FinanceController {
         orderBy: { uploadedAt: 'desc' }
       });
       
-      console.log(`✅ Found ${documents.length} documents:`, documents.map(d => ({
+      console.log(`✅ Found ${documents.length} documents for bordereau ${bordereauId}:`, documents.map(d => ({
         id: d.id,
         name: d.name,
         type: d.type,

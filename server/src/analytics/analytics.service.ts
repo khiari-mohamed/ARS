@@ -2068,12 +2068,18 @@ export class AnalyticsService {
       // Apply date filter if provided
       if (query.fromDate || query.toDate) {
         const dateWhere: any = { assignedToUserId: gest.id };
-        if (query.fromDate) dateWhere.uploadedAt = { gte: new Date(query.fromDate) };
+        if (query.fromDate) {
+          const fromDate = new Date(query.fromDate);
+          fromDate.setHours(0, 0, 0, 0);
+          dateWhere.uploadedAt = { gte: fromDate };
+        }
         if (query.toDate) {
+          const toDate = new Date(query.toDate);
+          toDate.setHours(23, 59, 59, 999); // End of day
           if (dateWhere.uploadedAt) {
-            dateWhere.uploadedAt.lte = new Date(query.toDate);
+            dateWhere.uploadedAt.lte = toDate;
           } else {
-            dateWhere.uploadedAt = { lte: new Date(query.toDate) };
+            dateWhere.uploadedAt = { lte: toDate };
           }
         }
         documentsProcessed = await this.prisma.document.count({ where: dateWhere });

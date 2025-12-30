@@ -126,6 +126,6 @@ export class OVGeneratorService {
       montant: totalMontant.toFixed(2)
     });
 
-    return await workbook.xlsx.writeBuffer() as Buffer;
+    return await workbook.xlsx.writeBuffer() as unknown as Buffer;
   }
 }

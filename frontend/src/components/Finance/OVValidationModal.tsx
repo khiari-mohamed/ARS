@@ -30,6 +30,7 @@ import {
   Visibility,
   GetApp
 } from '@mui/icons-material';
+import { TxtFormatValidator } from './TxtFormatValidator';
 
 interface OVValidationModalProps {
   open: boolean;
@@ -56,6 +57,8 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
   const [finalStatus, setFinalStatus] = useState<'deposited' | 'not_validated' | null>(null);
   const [finalizationComplete, setFinalizationComplete] = useState(false);
   const [pdfViewer, setPdfViewer] = useState<{open: boolean, url: string, title: string}>({open: false, url: '', title: ''});
+  const [showTxtValidator, setShowTxtValidator] = useState(false);
+  const [txtContent, setTxtContent] = useState('');
 
   const steps = [
     'Étape 4: Validation de l\'upload',
@@ -149,7 +152,10 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
       );
       
       if (pdfResponse.ok) {
+        console.log('✅ PDF generated successfully');
         setPdfGenerated(true);
+      } else {
+        console.error('❌ PDF generation failed:', await pdfResponse.text());
       }
 
       // Generate TXT
@@ -164,11 +170,15 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
       );
       
       if (txtResponse.ok) {
+        console.log('✅ TXT generated successfully');
         setTxtGenerated(true);
+      } else {
+        console.error('❌ TXT generation failed:', await txtResponse.text());
+        alert('Erreur lors de la génération du fichier TXT');
       }
 
       if (pdfResponse.ok && txtResponse.ok) {
-        // Auto-download PDF with auth
+        // Auto-download PDF
         const pdfBlob = await fetch(
           `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/pdf`,
           { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
@@ -180,7 +190,7 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
         pdfLink.click();
         URL.revokeObjectURL(pdfUrl);
 
-        // Auto-download TXT with auth
+        // Auto-download TXT and show validator
         const txtBlob = await fetch(
           `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/txt`,
           { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
@@ -192,11 +202,23 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
         txtLink.click();
         URL.revokeObjectURL(txtUrl);
 
+        // Fetch TXT content for validation (only for ATTIJARI format)
+        const txtContentResponse = await fetch(
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/txt`,
+          { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+        ).then(r => r.text());
+        
+        // Check if it's ATTIJARI format (starts with 110104)
+        if (txtContentResponse.trim().startsWith('110104')) {
+          setTxtContent(txtContentResponse);
+          setShowTxtValidator(true);
+        }
+
         setActiveStep(2); // Move to Step 6
       }
     } catch (error) {
-      console.error('File generation failed:', error);
-      alert('Erreur lors de la génération des fichiers');
+      console.error('❌ File generation failed:', error);
+      alert('Erreur lors de la génération des fichiers: ' + (error as any).message);
     } finally {
       setLoading(false);
     }
@@ -265,38 +287,44 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
                       try {
                         const { LocalAPI } = await import('../../services/axios');
                         
-                        // Check if manual OV with uploaded PDF
-                        if (ovDetails?.uploadedPdfPath) {
+                        // For Excel-injected OVs, check bordereau documents first
+                        if (ovDetails?.bordereauId) {
+                          try {
+                            const response = await LocalAPI.get(`/finance/ov-documents/bordereau/${ovDetails.bordereauId}`);
+                            const ovDocuments = response.data;
+                            
+                            const pdfDoc = ovDocuments.find((doc: any) => 
+                              doc.name?.toLowerCase().endsWith('.pdf')
+                            );
+                            
+                            if (pdfDoc) {
+                              const docResponse = await LocalAPI.get(`/finance/ordres-virement/${pdfDoc.ordreVirementId}/documents/${pdfDoc.id}/pdf`, {
+                                responseType: 'blob'
+                              });
+                              const blob = new Blob([docResponse.data], { type: 'application/pdf' });
+                              const blobUrl = URL.createObjectURL(blob);
+                              setPdfViewer({open: true, url: blobUrl, title: `PDF Uploadé - ${pdfDoc.name}`});
+                              return;
+                            }
+                          } catch (bordereauError) {
+                            console.log('No bordereau documents found, trying uploaded PDF...');
+                          }
+                        }
+                        
+                        // Fallback: try uploaded PDF endpoint (for manual OVs)
+                        try {
                           const response = await LocalAPI.get(`/finance/ordres-virement/${ovId}/uploaded-pdf`, {
                             responseType: 'blob'
                           });
                           const blob = new Blob([response.data], { type: 'application/pdf' });
                           const blobUrl = URL.createObjectURL(blob);
-                          setPdfViewer({open: true, url: blobUrl, title: `PDF Uploadé - OV Manuel`});
+                          setPdfViewer({open: true, url: blobUrl, title: `PDF Uploadé`});
                           return;
+                        } catch (uploadedPdfError) {
+                          console.log('No uploaded PDF found');
                         }
                         
-                        if (!ovDetails?.bordereauId) {
-                          alert('Aucun document disponible');
-                          return;
-                        }
-                        
-                        // Fetch by bordereau to get ALL PDFs for this bordereau
-                        const response = await LocalAPI.get(`/finance/ov-documents/bordereau/${ovDetails.bordereauId}`);
-                        const ovDocuments = response.data;
-                        
-                        const pdfDoc = ovDocuments.find((doc: any) => doc.type === 'BORDEREAU_PDF');
-                        
-                        if (pdfDoc) {
-                          const docResponse = await LocalAPI.get(`/finance/ordres-virement/${pdfDoc.ordreVirementId}/documents/${pdfDoc.id}/pdf`, {
-                            responseType: 'blob'
-                          });
-                          const blob = new Blob([docResponse.data], { type: 'application/pdf' });
-                          const blobUrl = URL.createObjectURL(blob);
-                          setPdfViewer({open: true, url: blobUrl, title: `PDF Uploadé - ${pdfDoc.name}`});
-                        } else {
-                          alert('Aucun PDF uploadé trouvé');
-                        }
+                        alert('Aucun PDF uploadé trouvé');
                       } catch (error: any) {
                         console.error('❌ Error loading uploaded PDF:', error);
                         alert(`Erreur lors du chargement du PDF\n\n${error.response?.data?.message || error.message || 'Erreur inconnue'}`);
@@ -307,9 +335,14 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
                     Voir PDF Uploadé
                   </Button>
                 ) : (
-                  <Alert severity="info" sx={{ py: 0.5 }}>
-                    Aucun document uploadé
-                  </Alert>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Visibility />}
+                    onClick={() => alert('Aucun PDF uploadé trouvé')}
+                    fullWidth
+                  >
+                    Voir PDF Uploadé
+                  </Button>
                 )}
               </CardContent>
             </Card>
@@ -686,6 +719,13 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* TXT Format Validator */}
+      <TxtFormatValidator
+        open={showTxtValidator}
+        onClose={() => setShowTxtValidator(false)}
+        generatedContent={txtContent}
+      />
     </Dialog>
   );
 };

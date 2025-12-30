@@ -1,4 +1,41 @@
-ai-microservice/ai_learning.db
+# Database files
 *.db
-ai-microservice/app.log
+*.sqlite
+*.sqlite3
+
+# AI/ML models and data
+ai-microservice/ai_learning.db
+ai-microservice/*.db
+
+# Uploads
+server/uploads/
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
 *.log
+npm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
