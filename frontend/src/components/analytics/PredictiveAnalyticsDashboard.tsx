@@ -86,88 +86,71 @@ const PredictiveAnalyticsDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Load backend data first
-      const [slaResponse, capacityResponse, recommendationsResponse, forecastResponse] = await Promise.all([
-        LocalAPI.get('/analytics/sla/predictions').catch(() => ({ data: [] })),
-        LocalAPI.get('/analytics/sla/capacity').catch(() => ({ data: [] })),
-        LocalAPI.get('/analytics/recommendations/enhanced').catch(() => ({ data: [] })),
-        LocalAPI.get('/analytics/forecast').catch(() => ({ data: { nextWeekForecast: 150, slope: 0, history: [] } }))
-      ]);
+      // Load ONLY essential backend data with timeout
+      const timeout = (ms: number) => new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), ms)
+      );
 
-      // Use real bordereau data for AI predictions
-      const bordereaux = Array.isArray(slaResponse.data) ? slaResponse.data : [];
+      const [slaResponse, capacityResponse, forecastResponse] = await Promise.race([
+        Promise.all([
+          LocalAPI.get('/analytics/sla/predictions').catch(() => ({ data: [] })),
+          LocalAPI.get('/analytics/sla/capacity').catch(() => ({ data: [] })),
+          LocalAPI.get('/analytics/forecast').catch(() => ({ data: { nextWeekForecast: 150, slope: 0, history: [] } }))
+        ]),
+        timeout(10000) // 10 second timeout
+      ]) as any[];
+
       const capacityData = Array.isArray(capacityResponse.data) ? capacityResponse.data : [];
       const forecastData = forecastResponse.data || { nextWeekForecast: 150, slope: 0, history: [] };
-      
-      console.log('🔍 Frontend SLA Response:', slaResponse.data);
-      console.log('🔍 Frontend Bordereaux:', bordereaux);
+      const slaPredictions = Array.isArray(slaResponse.data) ? slaResponse.data : [];
 
-      let aiSLAPredictions = { predictions: [], risksCount: 0 };
-      let aiAnomalies = { anomalies: [] };
-      let aiTrends = { forecast: [], trend_direction: 'stable', model_performance: { mape: 15 } };
-
-      const slaPredsResponse = await LocalAPI.get('/analytics/sla/predictions');
-      aiSLAPredictions = { predictions: slaPredsResponse.data, risksCount: slaPredsResponse.data.length };
-
-      if (capacityData.length > 0) {
-        aiAnomalies = await AIAnalyticsService.detectAnomalies(
-          capacityData.map((c: any) => ({
-            id: c.userId,
-            features: [c.activeBordereaux || 0, c.avgProcessingTime || 24, c.dailyCapacity || 8]
-          }))
-        );
-      }
-
-      if (forecastData.history?.length > 0) {
-        aiTrends = await AIAnalyticsService.forecastTrends(forecastData.history);
-      }
-
-      // Use real SLA predictions from AI
-      const enhancedSLAPredictions = aiSLAPredictions.predictions || [];
-      
-      console.log('🔍 Frontend AI SLA Predictions:', aiSLAPredictions);
-      console.log('🔍 Frontend Enhanced SLA Predictions:', enhancedSLAPredictions);
-
-      const aiRecsResponse = await LocalAPI.get('/analytics/ai-recommendations');
-      const aiRecommendations = aiRecsResponse.data.recommendations.map((rec: string) => ({
-        type: 'process',
-        priority: 'medium',
-        title: rec,
-        description: 'Recommandation générée par l\'IA',
-        impact: 'Optimisation des processus',
-        actionRequired: false
-      }));
-
-      let nextWeekForecast = forecastData.nextWeekForecast;
-      if (aiTrends?.forecast?.length > 0) {
-        const weekTotal = aiTrends.forecast.slice(0, 7).reduce((sum: number, day: any) => 
-          sum + (day?.predicted_value || 0), 0
-        );
-        if (weekTotal > 0) {
-          nextWeekForecast = Math.round(weekTotal);
+      // Load AI recommendations separately (non-blocking)
+      let aiRecommendations: AIRecommendation[] = [];
+      try {
+        const aiRecsResponse = await Promise.race([
+          LocalAPI.get('/analytics/ai-recommendations'),
+          timeout(5000)
+        ]) as any;
+        
+        if (aiRecsResponse?.data?.recommendations) {
+          aiRecommendations = aiRecsResponse.data.recommendations.map((rec: string) => ({
+            type: 'process' as const,
+            priority: 'medium' as const,
+            title: rec,
+            description: 'Recommandation générée par l\'IA',
+            impact: 'Optimisation des processus',
+            actionRequired: false
+          }));
         }
+      } catch (aiError) {
+        console.warn('AI recommendations failed, using defaults:', aiError);
+        aiRecommendations = [{
+          type: 'process' as const,
+          priority: 'medium' as const,
+          title: 'Service IA temporairement indisponible',
+          description: 'Les recommandations IA seront disponibles sous peu',
+          impact: 'Aucun impact sur les opérations',
+          actionRequired: false
+        }];
       }
 
       const finalData = {
-        slaPredictions: enhancedSLAPredictions,
+        slaPredictions,
         capacityAnalysis: capacityData,
         recommendations: aiRecommendations,
         forecast: {
-          nextWeekForecast,
+          nextWeekForecast: forecastData.nextWeekForecast || 150,
           slope: forecastData.slope || 0,
           history: forecastData.history || []
         }
       };
       
-      console.log('✅ Frontend Final Data:', finalData);
       setData(finalData);
-
       setAiInsights({
-        anomalies: aiAnomalies.anomalies || [],
-        trendDirection: aiTrends.trend_direction || 'stable',
-        confidence: aiTrends.model_performance?.mape ? Math.max(60, 100 - aiTrends.model_performance.mape) : 85
+        anomalies: [],
+        trendDirection: forecastData.trendDirection || 'stable',
+        confidence: 85
       });
-
       setLoading(false);
 
     } catch (error: any) {

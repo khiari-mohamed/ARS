@@ -6,7 +6,7 @@ const AI_BASE_URL = process.env.REACT_APP_AI_MICROSERVICE_URL || 'http://localho
 // Create axios instance with authentication
 const aiApi = axios.create({
   baseURL: AI_BASE_URL,
-  timeout: 30000,
+  timeout: 300000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -69,7 +69,7 @@ async function ensureAuthenticated(): Promise<void> {
       
       const response = await axios.post(`${AI_BASE_URL}/token`, formData, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        timeout: 5000
+        timeout: 60000
       });
       
       currentToken = response.data.access_token;
@@ -227,7 +227,7 @@ class AIService {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        timeout: 5000
+        timeout: 60000
       });
 
       currentToken = response.data.access_token;
@@ -483,7 +483,7 @@ class AIService {
   // Health check
   async healthCheck() {
     try {
-      const response = await axios.get(`${AI_BASE_URL}/health`, { timeout: 3000 });
+      const response = await axios.get(`${AI_BASE_URL}/health`, { timeout: 30000 });
       return response.data;
     } catch (error) {
       console.error('AI service health check failed:', error);

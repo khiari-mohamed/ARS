@@ -195,7 +195,7 @@ function GestionnaireBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Client</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Référence</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Date Réception</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>BS</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Documents</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Date Scan</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Délai</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Durée Traitement</th>
@@ -213,7 +213,7 @@ function GestionnaireBordereaux() {
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.client?.name || 'N/A'}</td>
                             <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc' }}>{b.reference}</td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.dateReception ? new Date(b.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}><span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{b.nombreBS || 0} BS</span></td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px' }}><span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{b.nombreBS || 0} documents</span></td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.dateFinScan ? new Date(b.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}><span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{b.delaiReglement || 0}j</span></td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}</td>

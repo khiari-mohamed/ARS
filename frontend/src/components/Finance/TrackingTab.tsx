@@ -827,6 +827,19 @@ const TrackingTab: React.FC = () => {
           <Button onClick={() => setEditDialog({open: false, record: null})}>
             Annuler
           </Button>
+          {/* EXACT SPEC: Réinjecter button always visible inside Corriger popup */}
+          {(user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN') && (
+            <Button 
+              onClick={() => {
+                setEditDialog({open: false, record: null});
+                setReinjectDialog({open: true, record: editDialog.record});
+              }}
+              variant="contained"
+              color="error"
+            >
+              Réinjecter
+            </Button>
+          )}
           <Button onClick={handleSaveEdit} variant="contained" disabled={!canModifyStatus()}>
             Sauvegarder
           </Button>

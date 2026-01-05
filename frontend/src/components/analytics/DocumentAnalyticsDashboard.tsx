@@ -53,9 +53,13 @@ interface AssignmentStats {
   reference: string;
   assignedTo: string;
   chefEquipe: string;
+  gestionnaire: string;
   status: string;
+  statut: string;
   assignedAt: Date;
   slaStatus: 'ON_TIME' | 'AT_RISK' | 'OVERDUE';
+  slaColor: string;
+  hasIssue: boolean;
 }
 
 const DocumentAnalyticsDashboard: React.FC = () => {
@@ -431,7 +435,13 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {assignmentStats.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((assignment: any, index) => {
+                {assignmentStats
+                  .filter(assignment => {
+                    // Hide documents with NO assignment at all
+                    return !(assignment.gestionnaire === 'NON ASSIGNÉ' && assignment.chefEquipe === 'AUCUN CHEF');
+                  })
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((assignment: any, index) => {
                   const hasFaultyData = assignment.hasIssue;
                   return (
                     <TableRow 

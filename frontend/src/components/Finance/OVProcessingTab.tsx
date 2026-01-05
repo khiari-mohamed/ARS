@@ -420,19 +420,21 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const uploadPdfDocument = async (file: File, bordereauId?: string) => {
     const targetBordereauId = bordereauId || selectedBordereauId;
     
-    // EXACT SPEC: For manual OV, bordereau link is optional
+    // EXACT FIX: For manual OV, bordereau link is optional
     if (!isManualOV && !targetBordereauId) {
       alert('Aucun bordereau sélectionné pour lier le document PDF');
       return;
     }
     
     if (!targetBordereauId) {
-      // Manual OV without bordereau link - just mark as uploaded
-      console.log('✅ PDF uploaded for manual OV without bordereau link');
+      // Manual OV without bordereau link - just mark as uploaded locally
+      console.log('✅ PDF uploaded locally (no OV created yet)');
       return;
     }
 
     try {
+      // EXACT FIX: Only upload PDF to link with bordereau
+      // DO NOT create OV here - OV is created ONLY in "Valider et Envoyer" button
       const formData = new FormData();
       formData.append('file', file);
       formData.append('bordereauId', targetBordereauId);
@@ -448,8 +450,8 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ PDF document uploaded and linked to bordereau:', selectedBordereauId);
-        alert(`Document PDF téléchargé et lié au bordereau avec succès!\nBordereau: ${result.document?.bordereauReference || selectedBordereauId}`);
+        console.log('✅ PDF document uploaded and linked to bordereau (NO OV created yet):', selectedBordereauId);
+        alert(`Document PDF téléchargé et lié au bordereau avec succès!\nBordereau: ${result.document?.bordereauReference || selectedBordereauId}\n\n⚠️ L'OV sera créé uniquement après avoir cliqué sur "Valider et Envoyer".`);
       } else {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || 'Failed to upload PDF document');

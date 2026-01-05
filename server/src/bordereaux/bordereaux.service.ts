@@ -852,14 +852,11 @@ export class BordereauxService {
       console.log('🗄️ Backend: Filtering by archived (string):', true);
     }
     if (filters.assigned === false) where.assignedToUserId = null;
-    if (filters.overdue === true) {
-      // Calculate overdue bordereaux
-      const today = new Date();
-      // This is a simplified approach - in production you might want to use raw SQL
-      where.dateReception = {
-        ...where.dateReception,
-        lt: new Date(today.getTime() - (filters.delaiReglement || 30) * 24 * 60 * 60 * 1000)
-      };
+    // Handle overdue filter (SLA breach)
+    if (filters.overdue === 'true' || filters.overdue === true) {
+      console.log('🚨 Backend: Filtering by overdue (SLA breach)');
+      // Note: This will be post-filtered after query since SLA calculation requires delaiReglement per bordereau
+      // We'll filter in-memory after fetching
     }
     if (filters.documentStatus) {
       where.documentStatus = filters.documentStatus;
@@ -879,10 +876,11 @@ export class BordereauxService {
       orderBy.dateReception = 'desc'; // Default sort
     }
     
-    // Build include clause - CRITICAL: Include virement data when requested
+    // Build include clause - ALWAYS include documents for accurate count
     const include: any = {
       client: true,
       contract: true,
+      documents: { select: { id: true } },
       _count: {
         select: { documents: true }
       }
@@ -891,7 +889,13 @@ export class BordereauxService {
     // FIXED: Include virement data when withVirement filter is present
     if (filters.withVirement === 'true' || filters.withVirement === true) {
       include.virement = true;
-      console.log('🔗 Backend: Including virement data in query');
+      include.ordresVirement = {
+        where: { etatVirement: 'EXECUTE' },
+        select: { dateTraitement: true, dateEtatFinal: true },
+        orderBy: { dateEtatFinal: 'desc' },
+        take: 1
+      };
+      console.log('🔗 Backend: Including virement and ordresVirement data in query');
     }
     
     // NEW: Include bulletinSoins when requested for dossiers list
@@ -933,7 +937,13 @@ export class BordereauxService {
       ]);
       
       return {
-        items: bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau)),
+        items: bordereaux.map(bordereau => {
+          const dto = BordereauResponseDto.fromEntity(bordereau);
+          // CRITICAL FIX: Override nombreBS with actual document count
+          const docCount = (bordereau as any).documents?.length || (bordereau as any)._count?.documents || bordereau.nombreBS;
+          dto.nombreBS = docCount;
+          return dto;
+        }),
         total
       };
     }
@@ -947,8 +957,30 @@ export class BordereauxService {
     });
     console.log('📊 Backend: Found', bordereaux.length, 'bordereaux');
     console.log('📊 Backend: Sample results:', bordereaux.slice(0, 2).map(b => `${b.reference}: ${b.statut} (archived: ${b.archived}) (virement: ${b.virement ? 'YES' : 'NO'})`));
-    const result = bordereaux.map(bordereau => BordereauResponseDto.fromEntity(bordereau));
-    console.log('📊 Backend: Mapped results with dureeTraitement:', result.slice(0, 2).map(b => `${b.reference}: dureeTraitement=${b.dureeTraitement}, dureeReglement=${b.dureeReglement}`));
+    
+    // Post-filter for overdue if requested
+    let filteredBordereaux = bordereaux;
+    if (filters.overdue === 'true' || filters.overdue === true) {
+      console.log('🚨 Backend: Applying overdue post-filter');
+      const today = new Date();
+      filteredBordereaux = bordereaux.filter(b => {
+        if (!b.dateReception || !b.delaiReglement) return false;
+        const reception = new Date(b.dateReception);
+        const elapsed = Math.floor((today.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24));
+        const remaining = b.delaiReglement - elapsed;
+        return remaining < 0; // Only include overdue
+      });
+      console.log('🚨 Backend: Filtered to', filteredBordereaux.length, 'overdue bordereaux');
+    }
+    
+    const result = filteredBordereaux.map(bordereau => {
+      const dto = BordereauResponseDto.fromEntity(bordereau);
+      // CRITICAL FIX: Override nombreBS with actual document count
+      const docCount = (bordereau as any).documents?.length || (bordereau as any)._count?.documents || bordereau.nombreBS;
+      dto.nombreBS = docCount;
+      return dto;
+    });
+    console.log('📊 Backend: Mapped results with dureeTraitement:', result.slice(0, 2).map(b => `${b.reference}: dureeTraitement=${b.dureeTraitement}, dureeReglement=${b.dureeReglement}, nombreBS=${b.nombreBS}`));
     return result;
   }
 
@@ -1032,7 +1064,11 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     });
     
     if (!bordereau) throw new NotFoundException('Bordereau not found');
-    return BordereauResponseDto.fromEntity(bordereau);
+    const dto = BordereauResponseDto.fromEntity(bordereau);
+    // CRITICAL FIX: Override nombreBS with actual document count
+    const docCount = (bordereau as any).documents?.length || bordereau.nombreBS;
+    dto.nombreBS = docCount;
+    return dto;
   }
 
   async update(id: string, updateBordereauDto: UpdateBordereauDto): Promise<BordereauResponseDto> {
@@ -1186,7 +1222,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
           available_agents: gestionnaires.map(g => ({ id: g.id, name: g.fullName, workload: g.bordereaux.length }))
         }, {
           headers: { 'Authorization': `Bearer ${await this.getAITokenForAssignment()}` },
-          timeout: 5000
+          timeout: 300000
         });
         
         const recommendedAgent = gestionnaires.find(g => g.id === data.recommended_assignment?.agent_id);
@@ -1725,14 +1761,17 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
   // Add this method to handle document uploads
 
 
-  async uploadDocument(bordereauId: string, documentData: any): Promise<PrismaDocument> {
+  async uploadDocument(bordereauId: string, documentData: any, uploaderRole?: string): Promise<PrismaDocument> {
     // documentData.file is the uploaded file (Express.Multer.File)
     const file = documentData.file;
     if (!file) throw new BadRequestException('No file uploaded');
     if (!documentData.uploadedById) throw new BadRequestException('uploadedById is required');
 
     // Validate bordereau and user exist
-    const bordereau = await this.prisma.bordereau.findUnique({ where: { id: bordereauId } });
+    const bordereau = await this.prisma.bordereau.findUnique({ 
+      where: { id: bordereauId },
+      include: { currentHandler: true, contract: { include: { teamLeader: true } } }
+    });
     if (!bordereau) throw new NotFoundException('Bordereau not found');
     const user = await this.prisma.user.findUnique({ where: { id: documentData.uploadedById } });
     if (!user) throw new NotFoundException('Uploader user not found');
@@ -1749,6 +1788,13 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
     // Store relative path in DB
     const relativePath = path.relative(path.join(__dirname, '../..'), filePath);
 
+    // GESTIONNAIRE_SENIOR FIX: Check if uploader or contract team leader is GESTIONNAIRE_SENIOR
+    const isGestionnaireSenior = uploaderRole === 'GESTIONNAIRE_SENIOR' || 
+                                  user.role === 'GESTIONNAIRE_SENIOR' || 
+                                  bordereau.currentHandler?.role === 'GESTIONNAIRE_SENIOR' ||
+                                  bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR';
+    const documentStatus = isGestionnaireSenior ? 'EN_COURS' : 'UPLOADED';
+
     // Create document in DB
     const document = await this.prisma.document.create({
       data: {
@@ -1757,6 +1803,7 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
         path: relativePath,
         uploadedById: documentData.uploadedById,
         bordereauId,
+        status: documentStatus
       },
     });
     // Log the upload action
@@ -1788,7 +1835,7 @@ async analyzeReclamationsAI(): Promise<any> {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
       },
-      timeout: 10000
+      timeout: 300000
     });
     return data;
   } catch (error) {
@@ -1821,7 +1868,7 @@ async getReclamationSuggestions(id: string): Promise<any> {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
       },
-      timeout: 10000
+      timeout: 300000
     });
     return data;
   } catch (error) {
@@ -1857,7 +1904,7 @@ async getTeamRecommendations(): Promise<any> {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
       },
-      timeout: 10000
+      timeout: 300000
     });
     return data;
   } catch (error) {
@@ -2270,7 +2317,7 @@ async getPredictResourcesAI(payload: any): Promise<any> {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
       },
-      timeout: 10000
+      timeout: 300000
     });
     return data;
   } catch (error) {
@@ -2316,7 +2363,7 @@ async analyzeComplaintsAI(): Promise<{ message: string; analysis?: any }> {
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
       },
-      timeout: 15000
+      timeout: 300000
     });
 
     const analysis = aiResponse.data;
@@ -2386,7 +2433,7 @@ async getAIRecommendations(): Promise<{ message: string; recommendations?: any[]
         'Authorization': `Bearer ${await this.getAIToken()}`,
         'Content-Type': 'application/json'
       },
-      timeout: 10000
+      timeout: 300000
     });
 
     const priorities = aiResponse.data.priorities || [];
@@ -2451,7 +2498,7 @@ private async getAIToken(): Promise<string> {
       }),
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        timeout: 5000
+        timeout: 300000
       }
     );
     return response.data.access_token;
@@ -2522,7 +2569,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
             'Authorization': `Bearer ${await this.getAIToken()}`,
             'Content-Type': 'application/json'
           },
-          timeout: 15000
+          timeout: 300000
         });
 
         const predictions = aiResponse.data.sla_predictions || [];
@@ -2671,7 +2718,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
             'Authorization': `Bearer ${await this.getAIToken()}`,
             'Content-Type': 'application/json'
           },
-          timeout: 15000
+          timeout: 300000
         });
 
         const aiAnomalies = aiResponse.data.anomalies || [];
@@ -2780,7 +2827,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
             'Authorization': `Bearer ${await this.getAIToken()}`,
             'Content-Type': 'application/json'
           },
-          timeout: 10000
+          timeout: 300000
         });
 
         const aiRecommendation = aiResponse.data;
@@ -2870,7 +2917,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
             'Authorization': `Bearer ${await this.getAIToken()}`,
             'Content-Type': 'application/json'
           },
-          timeout: 10000
+          timeout: 300000
         });
 
         const prediction = aiResponse.data.prediction;
@@ -2967,7 +3014,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
             'Authorization': `Bearer ${await this.getAIToken()}`,
             'Content-Type': 'application/json'
           },
-          timeout: 10000
+          timeout: 300000
         });
 
         const requiredGestionnaires = aiResponse.data.required_managers || Math.ceil(activeBordereaux / 5);

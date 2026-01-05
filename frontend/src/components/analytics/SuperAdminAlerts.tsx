@@ -85,7 +85,7 @@ const SuperAdminAlerts: React.FC = () => {
           team: {
             id: alert.teamId,
             fullName: alert.teamName,
-            role: alert.teamName.includes('Chef') ? 'CHEF_EQUIPE' : 'GESTIONNAIRE'
+            role: '' // Will be filled from teamWorkload
           },
           count: alert.workload || 0,
           alert: alert.level === 'CRITICAL' ? 'red' : 'orange',
@@ -191,10 +191,15 @@ const SuperAdminAlerts: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {overloadAlerts.map((alert, index) => (
+                {overloadAlerts.map((alert, index) => {
+                  // Find the actual user data from teamWorkload to get correct role
+                  const teamMember = teamWorkload.find(t => t.name === alert.team.fullName);
+                  const actualRole = teamMember?.role || alert.team.role;
+                  
+                  return (
                   <TableRow key={index}>
                     <TableCell>{alert.team.fullName}</TableCell>
-                    <TableCell>{alert.team.role}</TableCell>
+                    <TableCell>{actualRole}</TableCell>
                     <TableCell>{alert.count} dossiers</TableCell>
                     <TableCell>
                       <Chip
@@ -213,7 +218,8 @@ const SuperAdminAlerts: React.FC = () => {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -263,7 +269,7 @@ const SuperAdminAlerts: React.FC = () => {
             {delayPredictions.recommendations.slice(0, 3).map((rec: any, index: number) => (
               <Alert key={index} severity="info" sx={{ mb: 1 }}>
                 <Typography variant="body2">
-                  {rec.reasoning || rec.action || 'Recommandation disponible'}
+                  {rec.message || rec.reasoning || rec.action || rec.recommendation || JSON.stringify(rec)}
                 </Typography>
               </Alert>
             ))}
@@ -331,7 +337,7 @@ const SuperAdminAlerts: React.FC = () => {
                 <strong>Équipe:</strong> {selectedAlert.team.fullName}
               </Typography>
               <Typography variant="body1" mb={2}>
-                <strong>Rôle:</strong> {selectedAlert.team.role}
+                <strong>Rôle:</strong> {teamWorkload.find(t => t.name === selectedAlert.team.fullName)?.role || 'N/A'}
               </Typography>
               <Typography variant="body1" mb={2}>
                 <strong>Charge actuelle:</strong> {selectedAlert.count} dossiers ouverts

@@ -377,15 +377,48 @@ export class BordereauxController {
     return this.bordereauxService.getDocuments(id);
   }
 
+  @Post('chef-equipe/upload-document-to-bordereau')
+  @UseInterceptors(FileInterceptor('file'))
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async uploadDocumentToBordereau(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() data: { bordereauId: string; userId?: string },
+    @Req() req
+  ) {
+    const user = req.user;
+    const validUserId = data.userId || user.id;
+    
+    console.log('📤 Upload Document - User Role:', user.role);
+    console.log('📤 Upload Document - Bordereau ID:', data.bordereauId);
+    
+    const documentData = {
+      file,
+      uploadedById: validUserId,
+      name: file.originalname,
+      type: 'BULLETIN_SOIN'
+    };
+    
+    const document = await this.bordereauxService.uploadDocument(data.bordereauId, documentData, user.role);
+    
+    console.log('✅ Document created with status:', document.status);
+    
+    return {
+      success: true,
+      document,
+      message: 'Document uploadé avec succès'
+    };
+  }
+
   @Post(':id/documents')
   @UseInterceptors(FileInterceptor('file'))
   uploadDocument(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body() documentData: any
+    @Body() documentData: any,
+    @Req() req
   ) {
     const data = { ...documentData, file };
-    return this.bordereauxService.uploadDocument(id, data);
+    return this.bordereauxService.uploadDocument(id, data, req.user?.role);
   }
 
   @Patch(':id/update-status')
@@ -898,7 +931,14 @@ export class BordereauxController {
           client: true,
           contract: true,
           currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } },
+          ordresVirement: {
+            where: { etatVirement: 'EXECUTE' },
+            select: { dateTraitement: true, dateEtatFinal: true },
+            orderBy: { dateEtatFinal: 'desc' },
+            take: 1
+          }
         },
         orderBy: { dateReception: 'desc' }
       }),
@@ -911,23 +951,36 @@ export class BordereauxController {
           client: true,
           contract: true,
           currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } },
+          ordresVirement: {
+            where: { etatVirement: 'EXECUTE' },
+            select: { dateTraitement: true, dateEtatFinal: true },
+            orderBy: { dateEtatFinal: 'desc' },
+            take: 1
+          }
         },
         orderBy: { dateReception: 'desc' }
       }),
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] }, // Include VIREMENT_EXECUTE
-          updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] }
         },
         include: {
           client: true,
           contract: true,
           currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } },
+          ordresVirement: {
+            where: { etatVirement: 'EXECUTE' },
+            select: { dateTraitement: true, dateEtatFinal: true },
+            orderBy: { dateEtatFinal: 'desc' },
+            take: 1
+          }
         },
-        orderBy: { dateReception: 'desc' }
+        orderBy: { updatedAt: 'desc' }
       })
     ]);
 
@@ -937,12 +990,29 @@ export class BordereauxController {
       traites: traites.length
     });
 
+    // Debug ordresVirement data
+    traites.forEach(b => {
+      if (b.statut === 'VIREMENT_EXECUTE') {
+        console.log('🔍 VIREMENT_EXECUTE:', b.reference, 'ordresVirement:', b.ordresVirement, 'dateExecutionVirement:', b.dateExecutionVirement);
+      }
+    });
+
     const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
     
+    // Map and add document count
+    const mapWithDocCount = (bordereaux: any[]) => bordereaux.map(b => {
+      const dto = BordereauResponseDto.fromEntity(b);
+      return {
+        ...dto,
+        documentsCount: b.documents?.length || 0,  // Add actual document count
+        nombreBS: b.documents?.length || b.nombreBS  // Override nombreBS with actual count
+      };
+    });
+    
     return {
-      nonAffectes: nonAffectes.map(b => BordereauResponseDto.fromEntity(b)),
-      enCours: enCours.map(b => BordereauResponseDto.fromEntity(b)),
-      traites: traites.map(b => BordereauResponseDto.fromEntity(b)),
+      nonAffectes: mapWithDocCount(nonAffectes),
+      enCours: mapWithDocCount(enCours),
+      traites: mapWithDocCount(traites),
       stats: {
         nonAffectes: nonAffectes.length,
         enCours: enCours.length,
@@ -987,34 +1057,76 @@ export class BordereauxController {
   async getGestionnaireCorbeille(@Req() req) {
     const user = req.user;
     
-    // Gestionnaire only sees their assigned bordereaux
-    const filters = user.role === UserRole.GESTIONNAIRE ? {
-      assignedToUserId: user.id
-    } : {}; // Other roles can see all (for debugging/management)
+    // Gestionnaire only sees bordereaux with documents assigned to them
+    const whereClause = user.role === UserRole.GESTIONNAIRE ? {
+      archived: false,
+      documents: {
+        some: { assignedToUserId: user.id }
+      }
+    } : { archived: false };
     
     const [enCours, traites, retournes] = await Promise.all([
-      this.bordereauxService.findAll({ 
-        ...filters,
-        statut: ['ASSIGNE', 'EN_COURS']
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['ASSIGNE', 'EN_COURS'] }
+        },
+        include: {
+          client: { select: { name: true } },
+          contract: { select: { delaiReglement: true } },
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       }),
-      this.bordereauxService.findAll({ 
-        ...filters,
-        statut: ['TRAITE', 'CLOTURE']
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] }
+        },
+        include: {
+          client: { select: { name: true } },
+          contract: { select: { delaiReglement: true } },
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       }),
-      this.bordereauxService.findAll({ 
-        ...filters,
-        statut: ['REJETE', 'EN_DIFFICULTE']
+      this.prisma.bordereau.findMany({
+        where: {
+          ...whereClause,
+          statut: { in: ['REJETE', 'EN_DIFFICULTE'] }
+        },
+        include: {
+          client: { select: { name: true } },
+          contract: { select: { delaiReglement: true } },
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } }
+        },
+        orderBy: { dateReception: 'desc' }
       })
     ]);
 
+    const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
+    
+    // Map and add document count
+    const mapWithDocCount = (bordereaux: any[]) => bordereaux.map(b => {
+      const dto = BordereauResponseDto.fromEntity(b);
+      return {
+        ...dto,
+        documentsCount: b.documents?.length || 0,
+        nombreBS: b.documents?.length || b.nombreBS
+      };
+    });
+
     return {
-      enCours: Array.isArray(enCours) ? enCours : enCours.items || [],
-      traites: Array.isArray(traites) ? traites : traites.items || [],
-      retournes: Array.isArray(retournes) ? retournes : retournes.items || [],
+      enCours: mapWithDocCount(enCours),
+      traites: mapWithDocCount(traites),
+      retournes: mapWithDocCount(retournes),
       stats: {
-        enCours: Array.isArray(enCours) ? enCours.length : enCours.items?.length || 0,
-        traites: Array.isArray(traites) ? traites.length : traites.items?.length || 0,
-        retournes: Array.isArray(retournes) ? retournes.length : retournes.items?.length || 0
+        enCours: enCours.length,
+        traites: traites.length,
+        retournes: retournes.length
       },
       userRole: user.role,
       restrictions: user.role === UserRole.GESTIONNAIRE ? {
@@ -1628,75 +1740,69 @@ export class BordereauxController {
     const user = req.user;
     console.log('🔍 Gestionnaire Senior corbeille - User:', user.id);
     
-    // ONLY show bordereaux where:
-    // 1. Client chargeCompteId = user.id OR
-    // 2. Contract teamLeaderId = user.id
+    // GESTIONNAIRE SENIOR works with contract.teamLeaderId
+    // NO "nonAffectes" - everything goes directly to EN_COURS
     const whereClause = {
       archived: false,
-      OR: [
-        { client: { chargeCompteId: user.id } },
-        { contract: { teamLeaderId: user.id } }
-      ]
+      contract: {
+        teamLeaderId: user.id
+      }
     };
     
-    const [nonAffectes, enCours, traites] = await Promise.all([
+    const [enCours, traites] = await Promise.all([
+      // EN_COURS: All bordereaux not TRAITE (includes all statuses except TRAITE/CLOTURE)
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'] },
-          assignedToUserId: null
+          statut: { notIn: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] }
         },
         include: {
           client: true,
           contract: true,
           currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } }  // Include documents for count
         },
         orderBy: { dateReception: 'desc' }
       }),
+      // TRAITES: ALL completed bordereaux (no limit)
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['ASSIGNE', 'EN_COURS', 'EN_DIFFICULTE'] }
+          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] }
         },
         include: {
           client: true,
           contract: true,
           currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
+          BulletinSoin: { select: { id: true, etat: true } },
+          documents: { select: { id: true } }  // Include documents for count
         },
-        orderBy: { dateReception: 'desc' }
-      }),
-      this.prisma.bordereau.findMany({
-        where: {
-          ...whereClause,
-          statut: { in: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] },
-          updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-        },
-        include: {
-          client: true,
-          contract: true,
-          currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } }
-        },
-        orderBy: { dateReception: 'desc' }
+        orderBy: { updatedAt: 'desc' }
       })
     ]);
 
     console.log('📊 Gestionnaire Senior Results:', {
-      nonAffectes: nonAffectes.length,
       enCours: enCours.length,
       traites: traites.length
     });
 
     const { BordereauResponseDto } = await import('./dto/bordereau-response.dto');
     
+    // Map and add document count
+    const mapWithDocCount = (bordereaux: any[]) => bordereaux.map(b => {
+      const dto = BordereauResponseDto.fromEntity(b);
+      return {
+        ...dto,
+        documentsCount: b.documents?.length || 0,  // Add actual document count
+        nombreBS: b.documents?.length || b.nombreBS  // Override nombreBS with actual count
+      };
+    });
+    
     return {
-      nonAffectes: nonAffectes.map(b => BordereauResponseDto.fromEntity(b)),
-      enCours: enCours.map(b => BordereauResponseDto.fromEntity(b)),
-      traites: traites.map(b => BordereauResponseDto.fromEntity(b)),
+      enCours: mapWithDocCount(enCours),
+      traites: mapWithDocCount(traites),
       stats: {
-        nonAffectes: nonAffectes.length,
         enCours: enCours.length,
         traites: traites.length
       },

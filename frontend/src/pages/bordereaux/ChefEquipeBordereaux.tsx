@@ -179,6 +179,18 @@ function ChefEquipeBordereaux() {
         break;
     }
     
+    console.log('🔍 Opening stats modal:', type, 'Data count:', data.length);
+    if (type === 'traites' && data.length > 0) {
+      console.log('📊 Sample traites data:', data.slice(0, 2).map(b => ({
+        ref: b.reference,
+        statut: b.statut,
+        dateExecutionVirement: b.dateExecutionVirement,
+        virement: b.virement,
+        dureeReglement: b.dureeReglement,
+        dureeReglementStatus: b.dureeReglementStatus
+      })));
+    }
+    
     setStatsModalType(type);
     setStatsModalData(data);
     setShowStatsModal(true);
@@ -946,7 +958,7 @@ function ChefEquipeBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BS</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Documents</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Actions</th>
                       </tr>
@@ -985,7 +997,7 @@ function ChefEquipeBordereaux() {
                               fontSize: '12px',
                               fontWeight: 'bold'
                             }}>
-                              {bordereau.nombreBS || 0} BS
+                              {bordereau.documentsCount || bordereau.nombreBS || 0} BS
                             </span>
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>
@@ -1098,9 +1110,12 @@ function ChefEquipeBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BS</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Documents</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Traitement</th>
+                        {statsModalData.some(b => b.statut === 'VIREMENT_EXECUTE') && (
+                          <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Traitement Virement</th>
+                        )}
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Règlement</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Actions</th>
                       </tr>
@@ -1109,13 +1124,21 @@ function ChefEquipeBordereaux() {
                       {statsModalData.map((bordereau, index) => {
                         const dt = getDureeTraitement(bordereau);
                         const dr = getDureeReglement(bordereau);
+                        const isVirementExecute = bordereau.statut === 'VIREMENT_EXECUTE';
+                        const dateTraitementVirement = bordereau.dateExecutionVirement || bordereau.virement?.dateExecution;
+                        
+                        // Use backend-calculated dureeReglement for VIREMENT_EXECUTE
+                        const dureeReglementDays = dr.days;
+                        const dureeReglementOnTime = dr.isOnTime;
+                        
                         return (
                         <tr key={bordereau.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                           <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{bordereau.reference}</td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{bordereau.client?.name || 'N/A'}</td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                             <span style={{
-                              background: bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? '#4caf50' : 
+                              background: bordereau.statut === 'VIREMENT_EXECUTE' ? '#9c27b0' :
+                                         bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? '#4caf50' : 
                                          bordereau.statut === 'RETOURNE' ? '#f44336' : '#2196f3',
                               color: 'white',
                               padding: '4px 8px',
@@ -1141,8 +1164,34 @@ function ChefEquipeBordereaux() {
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                             {dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}
                           </td>
+                          {statsModalData.some(b => b.statut === 'VIREMENT_EXECUTE') && (
+                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>
+                              {isVirementExecute && dateTraitementVirement ? (
+                                <span style={{ background: '#e1bee7', color: '#6a1b9a', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>
+                                  {new Date(dateTraitementVirement).toLocaleDateString('fr-FR')}
+                                </span>
+                              ) : (
+                                <span style={{ color: '#999', fontSize: '12px' }}>-</span>
+                              )}
+                            </td>
+                          )}
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}
+                            {isVirementExecute && dureeReglementDays !== null ? (
+                              <span style={{ 
+                                background: dureeReglementOnTime ? '#c8e6c9' : '#ffcdd2', 
+                                color: dureeReglementOnTime ? '#1b5e20' : '#b71c1c', 
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '12px', 
+                                fontWeight: 'bold' 
+                              }}>
+                                ✓ Réglé ({dureeReglementDays}j)
+                              </span>
+                            ) : dr.days === null ? (
+                              <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>
+                            ) : (
+                              <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>
+                            )}
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                             <button

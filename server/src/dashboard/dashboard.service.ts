@@ -752,7 +752,7 @@ export class DashboardService {
           
           const tokenResponse = await axios.post(`${AI_MICROSERVICE_URL}/token`, formData, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 5000
+            timeout: 300000
           });
           
           console.log(`✅ Dashboard AI authenticated with ${cred.username}`);
@@ -789,7 +789,7 @@ export class DashboardService {
         try {
           return await axios.post(`${AI_MICROSERVICE_URL}${endpoint}`, data, {
             headers: { 'Authorization': `Bearer ${token}` },
-            timeout: 8000
+            timeout: 300000
           });
         } catch (error: any) {
           if (error.response?.status === 401 || error.response?.status === 403) {
@@ -797,7 +797,7 @@ export class DashboardService {
             const newToken = await this.getAIToken();
             return await axios.post(`${AI_MICROSERVICE_URL}${endpoint}`, data, {
               headers: { 'Authorization': `Bearer ${newToken}` },
-              timeout: 8000
+              timeout: 300000
             });
           }
           throw error;
@@ -858,7 +858,7 @@ export class DashboardService {
       
       const response = await axios.post(`${AI_MICROSERVICE_URL}/sla_prediction`, analysisData, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 10000
+        timeout: 300000
       });
       
       return response.data.sla_predictions || [];
@@ -882,7 +882,7 @@ export class DashboardService {
       
       const response = await axios.post(`${AI_MICROSERVICE_URL}/reassignment`, payload, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 8000
+        timeout: 300000
       });
       
       return response.data.reassignment || [];
@@ -914,7 +914,7 @@ export class DashboardService {
       
       const response = await axios.post(`${AI_MICROSERVICE_URL}/automated_decisions`, payload, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 8000
+        timeout: 300000
       });
       
       return (response.data.decisions || []).map(decision => ({
@@ -1827,7 +1827,7 @@ export class DashboardService {
         workload: workloadData.map(w => ({ teamId: w.assignedToUserId, _count: { id: w._count.id } }))
       }, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 8000
+        timeout: 300000
       });
       
       const aiRecommendations = response.data.recommendations || [];

@@ -594,7 +594,7 @@ const EnhancedDashboard: React.FC = () => {
       const [dashboardResponse, departmentsResponse, documentStatsResponse, documentStatusResponse] = await Promise.all([
         LocalAPI.get('/dashboard/role-based', { 
           params: filters,
-          timeout: 30000
+          timeout: 300000
         }),
         LocalAPI.get('/super-admin/departments').catch(() => ({ data: [] })),
         LocalAPI.get('/dashboard/documents/all-types', { params: filters }).catch(() => ({ data: {} })),
@@ -667,7 +667,7 @@ const EnhancedDashboard: React.FC = () => {
         
         setAiInsights({
           health: healthCheck,
-          recommendations: recommendations.recommendations || [],
+          recommendations: recommendations?.recommendations || [],
           lastUpdated: new Date()
         });
       } else {
@@ -684,6 +684,15 @@ const EnhancedDashboard: React.FC = () => {
         recommendations: [],
         lastUpdated: new Date()
       });
+    } finally {
+      // Ensure aiInsights is never null
+      if (!aiInsights) {
+        setAiInsights({
+          health: { status: 'unavailable', message: 'Not initialized' },
+          recommendations: [],
+          lastUpdated: new Date()
+        });
+      }
     }
   }, [dashboardData]);
 

@@ -34,7 +34,7 @@ function getUserFromRequest(req: any) {
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
 
-// @UseGuards(JwtAuthGuard, RolesGuard) - Temporarily disabled for alerts module
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('alerts')
 export class AlertsController {
   constructor(
@@ -44,7 +44,7 @@ export class AlertsController {
 
   @Get('dashboard')
   async getAlertsDashboard(@Query() query: AlertsQueryDto, @Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user; // Use actual authenticated user from JWT
     // Validate input
     if (query.fromDate && isNaN(Date.parse(query.fromDate))) throw new Error('Invalid fromDate');
     if (query.toDate && isNaN(Date.parse(query.toDate))) throw new Error('Invalid toDate');
@@ -53,55 +53,55 @@ export class AlertsController {
 
   @Get('team-overload')
   async getTeamOverloadAlerts(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getTeamOverloadAlerts(user);
   }
 
   @Get('reclamations')
   async getReclamationAlerts(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getReclamationAlerts(user);
   }
 
   @Get('delay-predictions')
   async getDelayPredictions(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getDelayPredictions(user);
   }
 
   @Get('priority-list')
   async getPriorityList(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getPriorityList(user);
   }
 
   @Get('comparative-analytics')
   async getComparativeAnalytics(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getComparativeAnalytics(user);
   }
 
   @Get('history')
   async getAlertHistory(@Query() query: AlertHistoryQuery, @Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getAlertHistory(query, user);
   }
 
   @Get('resolve')
   async resolveAlert(@Query('alertId') alertId: string, @Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.resolveAlert(alertId, user);
   }
 
   @Get('kpi')
   async getAlertsKPI(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getAlertsKPI(user);
   }
 
   @Get('realtime')
   async getRealTimeAlerts(@Req() req: any) {
-    const user = getUserFromRequest(req);
+    const user = req.user;
     return this.alertsService.getRealTimeAlerts(user);
   }
 

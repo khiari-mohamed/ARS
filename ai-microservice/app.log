@@ -45070,3 +45070,2046 @@ cwd: None
 2025-12-23 11:19:47,743 - monitoring - INFO - Completed automated_decisions in 0.00s
 2025-12-23 11:19:48,881 - monitoring - INFO - Starting recommendations endpoint call
 2025-12-23 11:19:48,891 - monitoring - INFO - Completed recommendations in 0.01s
+2025-12-31 13:40:49,569 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 13:40:49,572 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 13:40:49,581 - generative_ai - INFO - Generative AI database initialized
+2025-12-31 13:40:54,594 - startup_learning - INFO - Initializing AI learning system...
+2025-12-31 13:40:54,596 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 13:40:54,596 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 13:40:54,597 - startup_learning - INFO - Found 0 saved models
+2025-12-31 13:40:54,597 - startup_learning - INFO - AI learning system initialized successfully
+2025-12-31 13:40:54,616 - ars_ocr_ged - INFO - ARS GED database initialized
+2025-12-31 13:41:01,878 - ars_ocr_ged - WARNING - Watch folder does not exist: \\scanshare\inbox
+2025-12-31 13:41:01,879 - ars_ocr_ged - WARNING - ARS document processing service failed to start
+2025-12-31 13:41:02,017 - monitoring - INFO - Starting ARS AI microservice with advanced analytics on port 8002
+2025-12-31 13:41:41,267 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:41:49,308 - database - INFO - Database connection pool initialized
+2025-12-31 13:41:51,302 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:41:53,093 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:41:53,187 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:41:58,843 - monitoring - INFO - Completed sla_prediction in 17.58s
+2025-12-31 13:41:59,122 - monitoring - INFO - Completed sla_prediction in 7.82s
+2025-12-31 13:42:20,262 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:42:29,683 - monitoring - INFO - Completed sla_prediction in 9.42s
+2025-12-31 13:42:30,060 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:30,562 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:30,702 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:30,841 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:31,576 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:31,748 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:31,811 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:31,874 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:31,924 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:31,984 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:32,046 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:32,108 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:32,186 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:32,233 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:32,341 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:32,419 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:32,467 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:42:34,376 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:34,483 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:35,324 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:35,356 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:42:37,155 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:37,296 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:38,231 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:38,385 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:38,526 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:38,712 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:38,784 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:38,846 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:38,917 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:39,760 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:42:40,008 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:42:41,392 - monitoring - INFO - Completed sla_prediction in 8.93s
+2025-12-31 13:42:41,913 - monitoring - INFO - Completed sla_prediction in 6.56s
+2025-12-31 13:43:02,934 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:03,887 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:04,122 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:04,341 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:04,404 - monitoring - INFO - Completed sla_prediction in 24.40s
+2025-12-31 13:43:07,294 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:07,361 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:07,542 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:07,697 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:07,871 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:07,935 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:08,774 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,136 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,324 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,450 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,577 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,641 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,733 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,810 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,891 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:09,982 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:10,026 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:10,046 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:10,153 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:10,173 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:10,217 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:43:12,041 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:12,199 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:14,294 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:43:16,041 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:16,902 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:17,048 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:18,040 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:18,198 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:18,946 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:19,149 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:19,303 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:19,461 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:19,604 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:43:22,320 - monitoring - INFO - Completed sla_prediction in 12.10s
+2025-12-31 13:43:22,487 - monitoring - INFO - Completed sla_prediction in 8.19s
+2025-12-31 13:43:26,999 - monitoring - INFO - Completed sla_prediction in 7.40s
+2025-12-31 13:43:28,269 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:30,005 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:31,008 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:31,819 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:34,127 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:34,878 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:35,733 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:42,345 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:43:44,153 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:43:49,644 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:49,956 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:50,247 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:50,480 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:50,650 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:43:56,568 - monitoring - INFO - Completed sla_prediction in 14.22s
+2025-12-31 13:43:56,902 - monitoring - INFO - Completed sla_prediction in 12.75s
+2025-12-31 13:44:01,076 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:44:12,242 - monitoring - INFO - Completed sla_prediction in 11.17s
+2025-12-31 13:44:12,478 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:13,101 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:13,163 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:44:15,333 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:15,737 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,373 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,497 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,560 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,605 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,652 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,699 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,745 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:44:16,932 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:44:18,695 - monitoring - INFO - Completed sla_prediction in 5.53s
+2025-12-31 13:44:18,960 - monitoring - INFO - Completed sla_prediction in 2.03s
+2025-12-31 13:44:21,661 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:44:21,700 - monitoring - INFO - Completed automated_decisions in 0.04s
+2025-12-31 13:44:22,055 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:44:22,085 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:44:26,007 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:44:26,584 - monitoring - INFO - Completed recommendations in 0.58s
+2025-12-31 13:45:45,759 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:45:47,429 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:45:47,461 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 13:45:49,056 - monitoring - INFO - Completed sla_prediction in 3.30s
+2025-12-31 13:45:49,764 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:45:51,705 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:45:54,095 - monitoring - INFO - Completed sla_prediction in 4.33s
+2025-12-31 13:45:54,142 - monitoring - INFO - Completed sla_prediction in 2.44s
+2025-12-31 13:45:54,548 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:45:54,563 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 13:45:54,874 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:45:54,889 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 13:46:03,472 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:46:03,502 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 13:46:03,630 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:46:11,763 - monitoring - INFO - Completed sla_prediction in 8.13s
+2025-12-31 13:46:13,476 - monitoring - ERROR - Token authentication error: 401: Incorrect username or password
+2025-12-31 13:46:14,100 - connection_middleware - WARNING - Error response 401 for http://localhost:8002/token
+2025-12-31 13:46:14,194 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:46:15,646 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:46:15,677 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:46:37,230 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:46:37,680 - monitoring - INFO - Completed recommendations in 0.45s
+2025-12-31 13:46:46,458 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:46:51,736 - monitoring - INFO - Completed recommendations in 5.28s
+2025-12-31 13:46:51,785 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:46:57,340 - monitoring - ERROR - Token authentication error: 401: Incorrect username or password
+2025-12-31 13:46:57,607 - monitoring - INFO - Completed sla_prediction in 5.82s
+2025-12-31 13:46:57,683 - connection_middleware - WARNING - Error response 401 for http://localhost:8002/token
+2025-12-31 13:46:58,636 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:46:58,668 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:47:03,748 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:47:03,764 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 13:47:03,874 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:47:06,980 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:47:08,417 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:47:10,629 - monitoring - INFO - Completed sla_prediction in 6.76s
+2025-12-31 13:47:10,673 - monitoring - INFO - Completed sla_prediction in 3.69s
+2025-12-31 13:47:10,707 - monitoring - INFO - Completed sla_prediction in 2.29s
+2025-12-31 13:47:11,302 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:47:11,315 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 13:47:12,209 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:47:12,240 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:47:14,049 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:47:14,360 - monitoring - INFO - Completed recommendations in 0.31s
+2025-12-31 13:47:36,417 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:47:36,620 - monitoring - INFO - Completed recommendations in 0.20s
+2025-12-31 13:47:50,780 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:47:50,793 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 13:47:50,856 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:47:52,792 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:47:54,590 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:47:56,694 - monitoring - INFO - Completed sla_prediction in 5.84s
+2025-12-31 13:47:56,851 - monitoring - INFO - Completed sla_prediction in 2.26s
+2025-12-31 13:47:56,944 - monitoring - INFO - Completed sla_prediction in 4.15s
+2025-12-31 13:47:58,345 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:47:58,360 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 13:47:58,579 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:47:58,610 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:48:07,269 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:48:07,306 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:48:12,676 - monitoring - INFO - Completed sla_prediction in 5.37s
+2025-12-31 13:48:13,274 - monitoring - ERROR - Token authentication error: 401: Incorrect username or password
+2025-12-31 13:48:16,616 - connection_middleware - WARNING - Error response 401 for http://localhost:8002/token
+2025-12-31 13:48:19,032 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:48:19,048 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 13:48:22,319 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:48:22,722 - monitoring - INFO - Completed recommendations in 0.40s
+2025-12-31 13:48:29,866 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:48:32,133 - monitoring - INFO - Completed recommendations in 2.27s
+2025-12-31 13:48:32,164 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:48:34,927 - monitoring - INFO - Completed sla_prediction in 2.76s
+2025-12-31 13:48:37,508 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:48:39,381 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:48:39,427 - monitoring - INFO - Completed reassignment in 0.05s
+2025-12-31 13:48:39,460 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:48:42,372 - monitoring - INFO - Completed sla_prediction in 4.86s
+2025-12-31 13:48:42,412 - monitoring - INFO - Completed sla_prediction in 2.95s
+2025-12-31 13:48:43,620 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:48:43,634 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 13:48:43,650 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:48:43,682 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 13:48:46,946 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:48:47,243 - monitoring - INFO - Completed recommendations in 0.30s
+2025-12-31 13:49:00,976 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:49:02,039 - monitoring - INFO - Completed recommendations in 1.06s
+2025-12-31 13:49:02,783 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:49:03,222 - monitoring - INFO - Completed recommendations in 0.44s
+2025-12-31 13:49:03,397 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:49:03,647 - monitoring - INFO - Completed recommendations in 0.25s
+2025-12-31 13:49:04,582 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:49:04,859 - monitoring - INFO - Completed recommendations in 0.28s
+2025-12-31 13:49:21,421 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:49:21,608 - monitoring - INFO - Completed recommendations in 0.19s
+2025-12-31 13:49:38,200 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:49:38,744 - monitoring - INFO - Completed recommendations in 0.54s
+2025-12-31 13:49:45,399 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:49:47,196 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:49:47,210 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 13:49:47,321 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:49:49,132 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:49:51,146 - monitoring - INFO - Completed sla_prediction in 5.75s
+2025-12-31 13:49:51,272 - monitoring - INFO - Completed sla_prediction in 3.95s
+2025-12-31 13:49:51,304 - monitoring - INFO - Completed sla_prediction in 2.17s
+2025-12-31 13:49:52,051 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:49:52,081 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 13:49:53,076 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:49:53,106 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:49:55,038 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:49:55,242 - monitoring - INFO - Completed recommendations in 0.20s
+2025-12-31 13:50:00,173 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 13:50:20,977 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:50:21,199 - monitoring - INFO - Completed recommendations in 0.22s
+2025-12-31 13:50:26,686 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:50:26,876 - monitoring - INFO - Completed recommendations in 0.19s
+2025-12-31 13:50:35,839 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:50:37,729 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:50:37,759 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 13:50:39,683 - monitoring - INFO - Completed sla_prediction in 3.84s
+2025-12-31 13:50:40,372 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:50:42,227 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:50:44,293 - monitoring - INFO - Completed sla_prediction in 3.92s
+2025-12-31 13:50:44,330 - monitoring - INFO - Completed sla_prediction in 2.10s
+2025-12-31 13:50:44,792 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:50:44,822 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:50:44,950 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:50:44,980 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 13:50:46,599 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:50:46,878 - monitoring - INFO - Completed recommendations in 0.28s
+2025-12-31 13:50:54,555 - monitoring - INFO - AI service health check
+2025-12-31 13:51:19,212 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:51:19,508 - monitoring - INFO - Completed recommendations in 0.30s
+2025-12-31 13:51:25,422 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:51:27,294 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:51:27,324 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 13:51:27,388 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:51:29,481 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:51:31,323 - monitoring - INFO - Completed sla_prediction in 5.90s
+2025-12-31 13:51:31,401 - monitoring - INFO - Completed sla_prediction in 4.01s
+2025-12-31 13:51:31,463 - monitoring - INFO - Completed sla_prediction in 1.98s
+2025-12-31 13:51:32,437 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:51:33,138 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:51:33,169 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 13:51:34,266 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:51:34,297 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:51:36,310 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:51:36,559 - monitoring - INFO - Completed recommendations in 0.25s
+2025-12-31 13:52:09,513 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:52:09,780 - monitoring - INFO - Completed recommendations in 0.27s
+2025-12-31 13:52:16,640 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:52:18,463 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:52:18,494 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 13:52:19,169 - monitoring - INFO - Completed sla_prediction in 2.53s
+2025-12-31 13:52:22,309 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:52:24,016 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:52:27,657 - monitoring - INFO - Completed sla_prediction in 5.35s
+2025-12-31 13:52:30,823 - monitoring - INFO - Completed sla_prediction in 6.81s
+2025-12-31 13:52:31,199 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:52:31,228 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 13:52:31,526 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:52:31,556 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:52:33,029 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:52:33,214 - monitoring - INFO - Completed recommendations in 0.19s
+2025-12-31 13:53:05,129 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:53:05,250 - monitoring - INFO - Completed recommendations in 0.12s
+2025-12-31 13:53:19,054 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:53:28,002 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:53:31,784 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:53:31,815 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 13:53:32,647 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:53:32,676 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 13:53:32,724 - monitoring - INFO - Completed sla_prediction in 4.72s
+2025-12-31 13:53:34,227 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:53:34,290 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:53:34,385 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:53:34,464 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:53:34,548 - monitoring - INFO - Completed sla_prediction in 15.49s
+2025-12-31 13:53:36,086 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:53:36,100 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 13:53:38,522 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:53:38,866 - monitoring - INFO - Completed recommendations in 0.34s
+2025-12-31 13:54:10,453 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:54:10,702 - monitoring - INFO - Completed recommendations in 0.25s
+2025-12-31 13:54:24,359 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:54:36,538 - monitoring - INFO - Completed sla_prediction in 12.18s
+2025-12-31 13:54:38,213 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:54:39,827 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:54:39,858 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:54:46,019 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:54:48,008 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:54:48,052 - monitoring - INFO - Completed reassignment in 0.04s
+2025-12-31 13:54:48,398 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:54:50,288 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:54:52,509 - monitoring - INFO - Completed sla_prediction in 6.49s
+2025-12-31 13:54:52,724 - monitoring - INFO - Completed sla_prediction in 4.33s
+2025-12-31 13:54:53,081 - monitoring - INFO - Completed sla_prediction in 2.79s
+2025-12-31 13:54:55,008 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:54:55,036 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 13:54:55,441 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:54:55,471 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:55:01,938 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:55:01,949 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 13:55:05,762 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:55:07,947 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:55:10,607 - monitoring - INFO - Completed sla_prediction in 4.85s
+2025-12-31 13:55:15,774 - monitoring - ERROR - Token authentication error: 401: Incorrect username or password
+2025-12-31 13:55:15,918 - connection_middleware - WARNING - Error response 401 for http://localhost:8002/token
+2025-12-31 13:55:19,688 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:55:20,964 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:55:20,993 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:55:49,601 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:55:49,930 - monitoring - INFO - Completed recommendations in 0.33s
+2025-12-31 13:55:50,655 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:55:50,794 - monitoring - INFO - Completed recommendations in 0.14s
+2025-12-31 13:55:56,178 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:55:57,397 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:55:59,209 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:56:01,115 - monitoring - INFO - Completed recommendations in 4.94s
+2025-12-31 13:56:01,665 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:56:04,018 - monitoring - INFO - Completed sla_prediction in 6.62s
+2025-12-31 13:56:04,059 - monitoring - INFO - Completed sla_prediction in 4.85s
+2025-12-31 13:56:04,553 - monitoring - INFO - Completed sla_prediction in 2.89s
+2025-12-31 13:56:05,201 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:56:05,213 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 13:56:05,387 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:56:05,402 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 13:56:06,250 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:56:06,280 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:56:08,356 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:56:08,637 - monitoring - INFO - Completed recommendations in 0.28s
+2025-12-31 13:56:40,823 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:56:41,084 - monitoring - INFO - Completed recommendations in 0.26s
+2025-12-31 13:56:44,659 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:56:46,491 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 13:56:46,522 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 13:56:46,585 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:56:48,538 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:56:51,131 - monitoring - INFO - Completed sla_prediction in 6.47s
+2025-12-31 13:56:51,207 - monitoring - INFO - Completed sla_prediction in 4.62s
+2025-12-31 13:56:51,240 - monitoring - INFO - Completed sla_prediction in 2.70s
+2025-12-31 13:56:51,663 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:56:52,432 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 13:56:52,447 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 13:56:52,462 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:56:53,306 - monitoring - INFO - Completed recommendations in 0.84s
+2025-12-31 13:56:53,416 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:56:53,431 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 13:56:55,264 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:56:55,499 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 13:57:27,540 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:57:27,932 - monitoring - INFO - Completed recommendations in 0.39s
+2025-12-31 13:57:35,963 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:57:43,612 - monitoring - INFO - Completed sla_prediction in 7.65s
+2025-12-31 13:57:51,039 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:57:51,054 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 13:57:53,772 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:57:53,956 - monitoring - INFO - Completed recommendations in 0.18s
+2025-12-31 13:57:56,017 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:57:56,326 - monitoring - INFO - Completed recommendations in 0.31s
+2025-12-31 13:58:31,765 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:58:31,875 - monitoring - INFO - Completed recommendations in 0.11s
+2025-12-31 13:58:47,448 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:59:08,506 - monitoring - INFO - Completed sla_prediction in 21.06s
+2025-12-31 13:59:08,639 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:59:08,698 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:59:10,385 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:59:10,900 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:59:25,175 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 13:59:26,858 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:59:29,481 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:59:30,825 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 13:59:31,295 - monitoring - INFO - Completed sla_prediction in 6.12s
+2025-12-31 13:59:34,070 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 13:59:34,101 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 13:59:34,164 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:59:34,680 - monitoring - INFO - Completed recommendations in 0.52s
+2025-12-31 13:59:49,945 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:59:51,878 - monitoring - INFO - Completed recommendations in 1.93s
+2025-12-31 13:59:52,282 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:59:52,506 - monitoring - INFO - Completed recommendations in 0.22s
+2025-12-31 13:59:55,276 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 13:59:55,521 - monitoring - INFO - Completed recommendations in 0.24s
+2025-12-31 14:00:02,359 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:00:07,689 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 14:00:07,785 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:00:07,814 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:00:10,955 - monitoring - INFO - Completed sla_prediction in 8.60s
+2025-12-31 14:00:18,274 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:00:18,351 - monitoring - INFO - Completed automated_decisions in 0.08s
+2025-12-31 14:00:36,948 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:00:37,223 - monitoring - INFO - Completed recommendations in 0.28s
+2025-12-31 14:00:53,245 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:00:53,507 - monitoring - INFO - Completed recommendations in 0.26s
+2025-12-31 14:00:54,555 - monitoring - INFO - AI service health check
+2025-12-31 14:01:16,699 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:01:16,947 - monitoring - INFO - Completed recommendations in 0.25s
+2025-12-31 14:01:36,495 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:01:36,523 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:01:39,231 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:01:41,688 - monitoring - INFO - Completed sla_prediction in 2.46s
+2025-12-31 14:01:48,450 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:01:49,441 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:01:52,577 - monitoring - INFO - Completed sla_prediction in 4.13s
+2025-12-31 14:01:52,866 - monitoring - INFO - Completed sla_prediction in 3.43s
+2025-12-31 14:01:53,184 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:01:53,220 - monitoring - INFO - Completed automated_decisions in 0.04s
+2025-12-31 14:01:53,443 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:01:53,468 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 14:02:03,374 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:02:03,738 - monitoring - INFO - Completed recommendations in 0.36s
+2025-12-31 14:02:11,881 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:02:12,127 - monitoring - INFO - Completed recommendations in 0.25s
+2025-12-31 14:03:08,118 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:03:21,021 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:03:22,701 - monitoring - INFO - Completed sla_prediction in 14.58s
+2025-12-31 14:03:22,917 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:03:24,883 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:03:24,914 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:03:52,543 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:03:52,821 - monitoring - INFO - Completed recommendations in 0.28s
+2025-12-31 14:04:05,816 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:04:05,925 - monitoring - INFO - Completed recommendations in 0.11s
+2025-12-31 14:04:20,428 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:04:34,194 - monitoring - INFO - Completed sla_prediction in 13.77s
+2025-12-31 14:04:43,174 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:45,202 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:46,870 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:46,891 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:04:49,997 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:50,059 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:50,167 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:50,217 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:54,449 - monitoring - INFO - Completed sla_prediction in 7.56s
+2025-12-31 14:04:54,528 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:54,530 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:54,607 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:04:55,716 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:55,729 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:55,732 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:04:55,825 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:05:04,216 - monitoring - INFO - Completed sla_prediction in 9.61s
+2025-12-31 14:05:11,590 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:05:11,625 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:05:17,068 - monitoring - INFO - Completed sla_prediction in 5.44s
+2025-12-31 14:05:33,739 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:05:37,042 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:05:38,707 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:05:41,293 - monitoring - INFO - Completed sla_prediction in 7.55s
+2025-12-31 14:05:44,362 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:05:44,456 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:05:48,673 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:05:48,698 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 14:05:50,382 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:05:50,484 - monitoring - INFO - Completed recommendations in 0.10s
+2025-12-31 14:06:22,384 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:06:22,603 - monitoring - INFO - Completed recommendations in 0.22s
+2025-12-31 14:06:26,050 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:06:26,281 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 14:06:39,140 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:06:41,102 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:06:41,128 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:06:43,513 - monitoring - INFO - Completed sla_prediction in 4.37s
+2025-12-31 14:06:47,251 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:06:49,102 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:06:52,068 - monitoring - INFO - Completed sla_prediction in 4.82s
+2025-12-31 14:06:52,539 - monitoring - INFO - Completed sla_prediction in 3.44s
+2025-12-31 14:06:52,719 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:06:52,740 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 14:06:53,153 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:06:53,181 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:06:55,354 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:06:55,653 - monitoring - INFO - Completed recommendations in 0.30s
+2025-12-31 14:07:22,779 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:07:22,944 - monitoring - INFO - Completed recommendations in 0.17s
+2025-12-31 14:07:27,782 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:07:27,916 - monitoring - INFO - Completed recommendations in 0.13s
+2025-12-31 14:07:49,010 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:07:55,051 - monitoring - INFO - Completed sla_prediction in 6.00s
+2025-12-31 14:08:02,581 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:08:05,203 - monitoring - INFO - Completed recommendations in 2.62s
+2025-12-31 14:08:05,561 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:08:05,599 - monitoring - INFO - Completed automated_decisions in 0.04s
+2025-12-31 14:08:13,703 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:08:15,628 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:08:15,651 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 14:08:18,749 - monitoring - INFO - Completed sla_prediction in 5.05s
+2025-12-31 14:08:27,789 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:08:31,804 - monitoring - INFO - Completed sla_prediction in 4.01s
+2025-12-31 14:08:34,226 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:08:35,926 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:08:39,756 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:08:39,783 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:08:40,078 - monitoring - INFO - Completed sla_prediction in 5.85s
+2025-12-31 14:08:40,721 - monitoring - INFO - Completed sla_prediction in 4.80s
+2025-12-31 14:08:44,525 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:08:44,538 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:08:47,691 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:08:53,105 - monitoring - INFO - Completed sla_prediction in 5.41s
+2025-12-31 14:09:04,685 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:09:06,623 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:09:06,953 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:09:13,553 - monitoring - INFO - Completed sla_prediction in 8.87s
+2025-12-31 14:09:14,930 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:09:15,146 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:09:29,871 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:09:30,205 - monitoring - INFO - Completed recommendations in 0.33s
+2025-12-31 14:09:51,914 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:09:52,099 - monitoring - INFO - Completed recommendations in 0.19s
+2025-12-31 14:10:00,253 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 14:10:08,774 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:10:08,805 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:10:08,840 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:10:11,146 - monitoring - INFO - Completed sla_prediction in 2.31s
+2025-12-31 14:10:12,570 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:10:14,142 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:10:17,119 - monitoring - INFO - Completed sla_prediction in 4.55s
+2025-12-31 14:10:17,274 - monitoring - INFO - Completed sla_prediction in 3.13s
+2025-12-31 14:10:17,477 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:10:17,508 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:10:17,915 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:10:17,945 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:10:20,983 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:10:21,297 - monitoring - INFO - Completed recommendations in 0.31s
+2025-12-31 14:10:54,358 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:10:54,544 - monitoring - INFO - Completed recommendations in 0.19s
+2025-12-31 14:10:54,559 - monitoring - INFO - AI service health check
+2025-12-31 14:11:15,838 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:11:20,934 - monitoring - INFO - Completed sla_prediction in 5.10s
+2025-12-31 14:11:26,311 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:11:26,342 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:11:26,451 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:11:26,465 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 14:11:26,512 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:11:28,258 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:11:29,918 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:11:32,817 - monitoring - INFO - Completed sla_prediction in 6.30s
+2025-12-31 14:11:32,899 - monitoring - INFO - Completed sla_prediction in 4.64s
+2025-12-31 14:11:33,448 - monitoring - INFO - Completed sla_prediction in 3.53s
+2025-12-31 14:11:33,685 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:11:33,700 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 14:11:34,759 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:11:34,791 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:11:41,158 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:11:41,172 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 14:11:41,236 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:11:43,091 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:11:44,982 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:11:49,024 - monitoring - INFO - Completed sla_prediction in 7.79s
+2025-12-31 14:11:49,136 - monitoring - INFO - Completed sla_prediction in 6.05s
+2025-12-31 14:11:49,949 - monitoring - INFO - Completed sla_prediction in 4.97s
+2025-12-31 14:11:50,029 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:11:50,059 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:11:50,295 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:11:52,780 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:11:54,029 - monitoring - INFO - Completed recommendations in 1.25s
+2025-12-31 14:11:54,075 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:11:54,120 - monitoring - INFO - Completed automated_decisions in 0.05s
+2025-12-31 14:11:54,592 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:11:55,354 - monitoring - INFO - Completed recommendations in 0.76s
+2025-12-31 14:11:56,916 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:11:57,197 - monitoring - INFO - Completed recommendations in 0.28s
+2025-12-31 14:11:57,967 - monitoring - INFO - Starting document_classification_classify endpoint call
+2025-12-31 14:11:57,992 - monitoring - INFO - Fetching documents from ars_db database (limit: 50)
+2025-12-31 14:11:58,165 - database - INFO - Status distribution in DB: {'VIREMENT_EXECUTE': 2, 'A_SCANNER': 1, 'REJETE': 2, 'ASSIGNE': 1, 'A_AFFECTER': 3, 'TRAITE': 75, 'SCANNE': 4}
+2025-12-31 14:11:58,227 - database - INFO - Fetched 50 bordereaux for training
+2025-12-31 14:11:58,242 - database - INFO - Unique statuses found: {'SCANNE', 'VIREMENT_EXECUTE', 'REJETE', 'TRAITE', 'A_AFFECTER', 'ASSIGNE', 'A_SCANNER'}
+2025-12-31 14:11:58,289 - monitoring - INFO - Fetched 50 documents from database with statuses: {'SCANNE', 'VIREMENT_EXECUTE', 'REJETE', 'TRAITE', 'A_AFFECTER', 'ASSIGNE', 'A_SCANNER'}
+2025-12-31 14:11:58,322 - monitoring - INFO - Model not trained. Training with database data...
+2025-12-31 14:11:58,351 - database - INFO - Status distribution in DB: {'VIREMENT_EXECUTE': 2, 'A_SCANNER': 1, 'REJETE': 2, 'ASSIGNE': 1, 'A_AFFECTER': 3, 'TRAITE': 75, 'SCANNE': 4}
+2025-12-31 14:11:58,383 - database - INFO - Fetched 88 bordereaux for training
+2025-12-31 14:11:58,401 - database - INFO - Unique statuses found: {'SCANNE', 'VIREMENT_EXECUTE', 'REJETE', 'TRAITE', 'A_AFFECTER', 'ASSIGNE', 'A_SCANNER'}
+2025-12-31 14:11:58,442 - monitoring - INFO - Training model with 88 documents, statuses: {'SCANNE', 'VIREMENT_EXECUTE', 'REJETE', 'TRAITE', 'A_AFFECTER', 'ASSIGNE', 'A_SCANNER'}
+2025-12-31 14:11:58,462 - advanced_ml_models - INFO - Training on 88 documents - adapting model parameters
+2025-12-31 14:12:28,336 - monitoring - INFO - Model trained successfully: {'model_type': 'ensemble', 'accuracy': 0.8333333333333334, 'n_classes': 7, 'classes': ['ASSIGNE', 'A_AFFECTER', 'A_SCANNER', 'REJETE', 'SCANNE', 'TRAITE', 'VIREMENT_EXECUTE'], 'training_samples': 70, 'test_samples': 18, 'feature_count': 421, 'data_size': 88, 'adaptive_params': {'max_features': 880, 'n_estimators': 50, 'max_depth': 3}, 'feature_importance_stats': {'mean': 0.0023752969121140144, 'std': 0.019289161426637242, 'max': 0.2538338694806688}}
+2025-12-31 14:12:28,356 - monitoring - INFO - Classifying 50 documents from ars_db
+2025-12-31 14:12:29,246 - monitoring - INFO - Classification completed: 50 results from ars_db
+2025-12-31 14:12:29,282 - monitoring - INFO - Classification accuracy: 96.0%
+2025-12-31 14:12:29,385 - monitoring - INFO - Completed document_classification_classify in 31.42s
+2025-12-31 14:12:39,793 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:12:41,646 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:12:41,674 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:12:44,114 - monitoring - INFO - Completed sla_prediction in 4.32s
+2025-12-31 14:12:45,568 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:12:47,303 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:12:51,225 - monitoring - INFO - Completed sla_prediction in 5.66s
+2025-12-31 14:12:51,519 - monitoring - INFO - Completed sla_prediction in 4.22s
+2025-12-31 14:12:52,849 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:12:52,876 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:12:53,880 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:12:53,911 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:12:57,373 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:12:57,403 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:12:57,452 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:12:59,203 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:13:01,192 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:13:03,671 - monitoring - INFO - Completed sla_prediction in 6.22s
+2025-12-31 14:13:03,695 - monitoring - INFO - Completed sla_prediction in 4.49s
+2025-12-31 14:13:03,704 - monitoring - INFO - Completed sla_prediction in 2.51s
+2025-12-31 14:13:04,190 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:13:04,206 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 14:13:05,203 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:13:05,217 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 14:13:12,018 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:13:12,047 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:13:12,111 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:13:13,960 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:13:15,838 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:13:21,112 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:13:21,126 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:13:21,173 - monitoring - INFO - Completed sla_prediction in 9.06s
+2025-12-31 14:13:21,236 - monitoring - INFO - Completed sla_prediction in 7.28s
+2025-12-31 14:13:21,344 - monitoring - INFO - Completed sla_prediction in 5.51s
+2025-12-31 14:13:23,524 - connection_middleware - ERROR - Response cleanup error: No response returned.
+2025-12-31 14:13:24,919 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:13:26,622 - monitoring - INFO - Completed recommendations in 1.70s
+2025-12-31 14:13:26,999 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:13:27,031 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:13:28,858 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:13:29,073 - monitoring - INFO - Completed recommendations in 0.21s
+2025-12-31 14:14:09,759 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:14:11,677 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:14:11,689 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 14:14:12,547 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:14:14,452 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:14:16,560 - monitoring - INFO - Completed sla_prediction in 6.80s
+2025-12-31 14:14:17,651 - monitoring - INFO - Completed sla_prediction in 5.10s
+2025-12-31 14:14:18,510 - monitoring - INFO - Completed sla_prediction in 4.06s
+2025-12-31 14:14:18,853 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:14:18,883 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:14:19,870 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:14:19,899 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:14:21,978 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:14:22,275 - monitoring - INFO - Completed recommendations in 0.30s
+2025-12-31 14:15:32,358 - startup_learning - INFO - Cleaning up AI learning system...
+2025-12-31 14:15:32,368 - startup_learning - INFO - AI learning system cleanup completed
+2025-12-31 14:15:32,386 - ars_ocr_ged - INFO - ARS document processing service stopped
+2025-12-31 14:19:40,750 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 14:19:40,750 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 14:19:40,755 - generative_ai - INFO - Generative AI database initialized
+2025-12-31 14:19:44,928 - startup_learning - INFO - Initializing AI learning system...
+2025-12-31 14:19:44,929 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 14:19:44,929 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 14:19:44,929 - startup_learning - INFO - Found 0 saved models
+2025-12-31 14:19:44,930 - startup_learning - INFO - AI learning system initialized successfully
+2025-12-31 14:19:44,953 - ars_ocr_ged - INFO - ARS GED database initialized
+2025-12-31 14:19:52,213 - ars_ocr_ged - WARNING - Watch folder does not exist: \\scanshare\inbox
+2025-12-31 14:19:52,214 - ars_ocr_ged - WARNING - ARS document processing service failed to start
+2025-12-31 14:19:52,227 - monitoring - INFO - Starting ARS AI microservice with advanced analytics on port 8002
+2025-12-31 14:21:54,619 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:21:56,656 - database - INFO - Database connection pool initialized
+2025-12-31 14:21:59,232 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:22:01,591 - monitoring - INFO - Completed recommendations in 6.97s
+2025-12-31 14:22:01,638 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:22:01,640 - monitoring - INFO - Completed reassignment in 0.00s
+2025-12-31 14:22:01,685 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:22:03,499 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:22:05,845 - monitoring - INFO - Completed sla_prediction in 6.61s
+2025-12-31 14:22:06,571 - monitoring - INFO - Completed sla_prediction in 4.89s
+2025-12-31 14:22:07,086 - monitoring - INFO - Completed sla_prediction in 3.59s
+2025-12-31 14:22:07,834 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:22:08,115 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:22:08,129 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:22:08,177 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:22:08,214 - monitoring - INFO - Completed automated_decisions in 0.04s
+2025-12-31 14:22:08,658 - monitoring - INFO - Completed recommendations in 0.82s
+2025-12-31 14:22:11,082 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:22:11,426 - monitoring - INFO - Completed recommendations in 0.34s
+2025-12-31 14:22:48,869 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:22:48,877 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 14:22:48,926 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:22:51,503 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:22:53,291 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:22:55,297 - monitoring - INFO - Completed sla_prediction in 6.37s
+2025-12-31 14:22:55,688 - monitoring - INFO - Completed sla_prediction in 4.18s
+2025-12-31 14:22:56,248 - monitoring - INFO - Completed sla_prediction in 2.96s
+2025-12-31 14:22:57,566 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:22:57,597 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:22:57,612 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:22:58,129 - monitoring - INFO - Completed recommendations in 0.56s
+2025-12-31 14:22:58,145 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:22:58,175 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:22:59,867 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:23:00,163 - monitoring - INFO - Completed recommendations in 0.30s
+2025-12-31 14:23:39,110 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:23:40,998 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:23:41,029 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:23:41,281 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:23:43,157 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:23:45,055 - monitoring - INFO - Completed sla_prediction in 5.94s
+2025-12-31 14:23:45,211 - monitoring - INFO - Completed sla_prediction in 3.93s
+2025-12-31 14:23:45,247 - monitoring - INFO - Completed sla_prediction in 2.09s
+2025-12-31 14:23:46,116 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:23:46,132 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 14:23:46,555 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:23:46,603 - monitoring - INFO - Completed automated_decisions in 0.05s
+2025-12-31 14:23:47,865 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:23:48,021 - monitoring - INFO - Completed recommendations in 0.16s
+2025-12-31 14:23:53,136 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:23:53,374 - monitoring - INFO - Completed recommendations in 0.24s
+2025-12-31 14:24:27,600 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:24:29,776 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:24:29,844 - monitoring - INFO - Completed reassignment in 0.07s
+2025-12-31 14:24:30,070 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:24:31,571 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:24:33,280 - monitoring - INFO - Completed sla_prediction in 5.68s
+2025-12-31 14:24:33,525 - monitoring - INFO - Completed sla_prediction in 3.45s
+2025-12-31 14:24:33,652 - monitoring - INFO - Completed sla_prediction in 2.08s
+2025-12-31 14:24:34,229 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:24:34,258 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:24:35,851 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:24:35,881 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:24:37,560 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:24:38,085 - monitoring - INFO - Completed recommendations in 0.52s
+2025-12-31 14:25:59,600 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:25:59,631 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:25:59,664 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:26:01,968 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:26:03,737 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:26:05,591 - monitoring - INFO - Completed sla_prediction in 5.93s
+2025-12-31 14:26:05,872 - monitoring - INFO - Completed sla_prediction in 3.90s
+2025-12-31 14:26:05,888 - monitoring - INFO - Completed sla_prediction in 2.15s
+2025-12-31 14:26:06,843 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:26:06,853 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:26:07,047 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:26:07,077 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:26:12,896 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:26:12,926 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:26:15,082 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:26:16,961 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:26:18,685 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:26:22,735 - monitoring - INFO - Completed sla_prediction in 7.65s
+2025-12-31 14:26:22,814 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:26:22,876 - monitoring - INFO - Completed sla_prediction in 5.91s
+2025-12-31 14:26:22,938 - monitoring - INFO - Completed sla_prediction in 4.25s
+2025-12-31 14:26:23,687 - monitoring - INFO - Completed recommendations in 0.87s
+2025-12-31 14:26:23,827 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:26:23,874 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:26:23,904 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:26:25,156 - monitoring - INFO - Completed recommendations in 1.33s
+2025-12-31 14:26:25,987 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:26:26,017 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:26:26,390 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:26:26,593 - monitoring - INFO - Completed recommendations in 0.20s
+2025-12-31 14:26:29,097 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:26:29,286 - monitoring - INFO - Completed recommendations in 0.19s
+2025-12-31 14:27:06,767 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:27:09,940 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:27:09,971 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:27:10,066 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:27:12,226 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:27:15,440 - monitoring - INFO - Completed sla_prediction in 8.67s
+2025-12-31 14:27:15,818 - monitoring - INFO - Completed sla_prediction in 5.75s
+2025-12-31 14:27:16,098 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:27:16,415 - monitoring - INFO - Completed sla_prediction in 4.19s
+2025-12-31 14:27:17,419 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:27:17,450 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:27:17,621 - monitoring - INFO - Completed recommendations in 1.52s
+2025-12-31 14:27:18,075 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:27:18,105 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:27:19,952 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:27:20,214 - monitoring - INFO - Completed recommendations in 0.26s
+2025-12-31 14:27:57,771 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:27:59,715 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:27:59,731 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 14:27:59,763 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:28:01,531 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:28:03,874 - monitoring - INFO - Completed sla_prediction in 6.10s
+2025-12-31 14:28:03,910 - monitoring - INFO - Completed sla_prediction in 4.15s
+2025-12-31 14:28:03,968 - monitoring - INFO - Completed sla_prediction in 2.44s
+2025-12-31 14:28:04,625 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:28:04,640 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 14:28:05,474 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:28:05,490 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 14:28:07,266 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:28:07,438 - monitoring - INFO - Completed recommendations in 0.17s
+2025-12-31 14:28:10,248 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:28:10,467 - monitoring - INFO - Completed recommendations in 0.22s
+2025-12-31 14:28:46,625 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:28:48,609 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:28:48,640 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:28:48,812 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:28:51,080 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:28:53,618 - monitoring - INFO - Completed sla_prediction in 6.99s
+2025-12-31 14:28:53,977 - monitoring - INFO - Completed sla_prediction in 5.17s
+2025-12-31 14:28:54,040 - monitoring - INFO - Completed sla_prediction in 2.96s
+2025-12-31 14:28:54,634 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:28:54,663 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:28:55,945 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:28:55,974 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:28:58,497 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:28:58,853 - monitoring - INFO - Completed recommendations in 0.36s
+2025-12-31 14:29:10,538 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:29:10,772 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 14:29:37,597 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:29:39,361 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:29:39,390 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:29:39,832 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:29:41,688 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:29:43,774 - monitoring - INFO - Completed sla_prediction in 6.18s
+2025-12-31 14:29:44,185 - monitoring - INFO - Completed sla_prediction in 4.35s
+2025-12-31 14:29:44,258 - monitoring - INFO - Completed sla_prediction in 2.57s
+2025-12-31 14:29:44,894 - monitoring - INFO - AI service health check
+2025-12-31 14:29:46,090 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:29:46,203 - monitoring - INFO - Completed priorities in 0.11s
+2025-12-31 14:29:46,572 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:29:46,678 - monitoring - INFO - Completed automated_decisions in 0.11s
+2025-12-31 14:29:57,685 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:29:57,833 - monitoring - INFO - Completed recommendations in 0.15s
+2025-12-31 14:30:01,345 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 14:30:10,654 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:30:10,887 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 14:30:33,290 - startup_learning - INFO - Cleaning up AI learning system...
+2025-12-31 14:30:33,306 - startup_learning - INFO - AI learning system cleanup completed
+2025-12-31 14:30:33,336 - ars_ocr_ged - INFO - ARS document processing service stopped
+2025-12-31 14:34:36,727 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 14:34:36,729 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 14:34:36,742 - generative_ai - INFO - Generative AI database initialized
+2025-12-31 14:34:45,811 - startup_learning - INFO - Initializing AI learning system...
+2025-12-31 14:34:45,813 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 14:34:45,814 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 14:34:45,814 - startup_learning - INFO - Found 0 saved models
+2025-12-31 14:34:45,815 - startup_learning - INFO - AI learning system initialized successfully
+2025-12-31 14:34:45,837 - ars_ocr_ged - INFO - ARS GED database initialized
+2025-12-31 14:34:53,119 - ars_ocr_ged - WARNING - Watch folder does not exist: \\scanshare\inbox
+2025-12-31 14:34:53,120 - ars_ocr_ged - WARNING - ARS document processing service failed to start
+2025-12-31 14:34:53,275 - monitoring - INFO - Starting ARS AI microservice with advanced analytics on port 8002
+2025-12-31 14:35:02,701 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:35:04,385 - database - INFO - Database connection pool initialized
+2025-12-31 14:35:04,947 - monitoring - INFO - Completed recommendations in 2.25s
+2025-12-31 14:35:23,164 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:35:23,396 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 14:35:44,819 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:35:44,850 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:35:45,535 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:35:47,330 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:35:49,105 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:35:51,903 - monitoring - INFO - Completed sla_prediction in 4.57s
+2025-12-31 14:35:51,943 - monitoring - INFO - Completed sla_prediction in 6.41s
+2025-12-31 14:35:52,338 - monitoring - INFO - Completed sla_prediction in 3.23s
+2025-12-31 14:35:52,698 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:35:52,728 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:35:53,914 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:35:53,932 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 14:35:55,724 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:35:56,238 - monitoring - INFO - Completed recommendations in 0.51s
+2025-12-31 14:36:10,355 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:36:10,557 - monitoring - INFO - Completed recommendations in 0.20s
+2025-12-31 14:36:35,209 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:36:35,225 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 14:36:35,273 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:36:37,461 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:36:39,379 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:36:41,764 - monitoring - INFO - Completed sla_prediction in 6.49s
+2025-12-31 14:36:42,046 - monitoring - INFO - Completed sla_prediction in 4.58s
+2025-12-31 14:36:42,093 - monitoring - INFO - Completed sla_prediction in 2.71s
+2025-12-31 14:36:42,688 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:36:42,701 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:36:43,762 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:36:43,792 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:36:46,804 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:36:47,429 - monitoring - INFO - Completed recommendations in 0.62s
+2025-12-31 14:37:10,194 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:37:10,411 - monitoring - INFO - Completed recommendations in 0.22s
+2025-12-31 14:37:21,759 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:37:21,790 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:37:21,854 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:37:23,863 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:37:25,522 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:37:28,179 - monitoring - INFO - Completed sla_prediction in 6.33s
+2025-12-31 14:37:28,214 - monitoring - INFO - Completed sla_prediction in 4.35s
+2025-12-31 14:37:28,242 - monitoring - INFO - Completed sla_prediction in 2.72s
+2025-12-31 14:37:28,761 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:37:28,791 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:37:29,479 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:37:29,511 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:37:31,104 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:37:31,355 - monitoring - INFO - Completed recommendations in 0.25s
+2025-12-31 14:38:10,742 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:38:12,617 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:38:12,647 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:38:12,694 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:38:14,528 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:38:16,937 - monitoring - INFO - Completed sla_prediction in 6.19s
+2025-12-31 14:38:16,984 - monitoring - INFO - Completed sla_prediction in 4.29s
+2025-12-31 14:38:17,017 - monitoring - INFO - Completed sla_prediction in 2.49s
+2025-12-31 14:38:17,596 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:38:17,627 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:38:18,473 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:38:18,502 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:38:20,317 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:38:20,645 - monitoring - INFO - Completed recommendations in 0.33s
+2025-12-31 14:38:24,427 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:38:24,646 - monitoring - INFO - Completed recommendations in 0.22s
+2025-12-31 14:38:56,207 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:38:58,008 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:38:58,037 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:38:58,103 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:39:00,005 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:39:02,253 - monitoring - INFO - Completed sla_prediction in 6.05s
+2025-12-31 14:39:02,284 - monitoring - INFO - Completed sla_prediction in 4.18s
+2025-12-31 14:39:02,329 - monitoring - INFO - Completed sla_prediction in 2.32s
+2025-12-31 14:39:02,957 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:39:02,971 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:39:03,812 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:39:03,840 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:39:05,998 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:39:06,295 - monitoring - INFO - Completed recommendations in 0.30s
+2025-12-31 14:39:25,364 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:39:25,630 - monitoring - INFO - Completed recommendations in 0.27s
+2025-12-31 14:39:42,144 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:39:42,175 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:39:42,237 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:39:44,703 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:39:46,511 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:39:48,428 - monitoring - INFO - Completed sla_prediction in 6.19s
+2025-12-31 14:39:48,752 - monitoring - INFO - Completed sla_prediction in 4.05s
+2025-12-31 14:39:48,783 - monitoring - INFO - Completed sla_prediction in 2.27s
+2025-12-31 14:39:49,834 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:39:49,863 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:39:50,145 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:39:50,176 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:39:54,404 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:39:54,574 - monitoring - INFO - Completed recommendations in 0.17s
+2025-12-31 14:40:00,296 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 14:40:10,497 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:40:10,667 - monitoring - INFO - Completed recommendations in 0.17s
+2025-12-31 14:40:35,182 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:40:37,517 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:40:39,216 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:40:40,991 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:40:41,004 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 14:40:41,066 - monitoring - INFO - Completed sla_prediction in 5.88s
+2025-12-31 14:40:41,572 - monitoring - INFO - Completed sla_prediction in 2.36s
+2025-12-31 14:40:41,611 - monitoring - INFO - Completed sla_prediction in 4.09s
+2025-12-31 14:40:41,909 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:40:41,964 - monitoring - INFO - Completed priorities in 0.06s
+2025-12-31 14:40:43,748 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:40:43,778 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:40:46,564 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:40:47,087 - monitoring - INFO - Completed recommendations in 0.52s
+2025-12-31 14:41:26,633 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:41:28,519 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:41:28,549 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:41:29,505 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:41:31,172 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:41:33,328 - monitoring - INFO - Completed sla_prediction in 6.70s
+2025-12-31 14:41:33,392 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:41:34,060 - monitoring - INFO - Completed sla_prediction in 2.89s
+2025-12-31 14:41:34,262 - monitoring - INFO - Completed sla_prediction in 4.76s
+2025-12-31 14:41:34,279 - monitoring - INFO - Completed recommendations in 0.89s
+2025-12-31 14:41:35,558 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:41:35,590 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:41:35,622 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:41:35,652 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:41:37,272 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:41:37,584 - monitoring - INFO - Completed recommendations in 0.31s
+2025-12-31 14:42:17,159 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:42:18,959 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:42:18,973 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 14:42:19,037 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:42:20,924 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:42:23,261 - monitoring - INFO - Completed sla_prediction in 6.10s
+2025-12-31 14:42:23,283 - monitoring - INFO - Completed sla_prediction in 4.25s
+2025-12-31 14:42:23,293 - monitoring - INFO - Completed sla_prediction in 2.37s
+2025-12-31 14:42:23,843 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:42:23,873 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:42:25,041 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:42:25,073 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:42:26,657 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:42:27,281 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:42:27,595 - monitoring - INFO - Completed recommendations in 0.94s
+2025-12-31 14:42:27,657 - monitoring - INFO - Completed recommendations in 0.38s
+2025-12-31 14:43:09,531 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:43:18,570 - monitoring - INFO - Completed sla_prediction in 9.04s
+2025-12-31 14:43:18,685 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:43:18,710 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 14:43:18,729 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:43:20,476 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:43:22,761 - monitoring - INFO - Completed sla_prediction in 4.03s
+2025-12-31 14:43:22,795 - monitoring - INFO - Completed sla_prediction in 2.32s
+2025-12-31 14:43:25,396 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:43:25,444 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:43:25,474 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:43:25,677 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:43:25,692 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 14:43:25,865 - monitoring - INFO - Completed recommendations in 0.47s
+2025-12-31 14:43:27,582 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:43:27,956 - monitoring - INFO - Completed recommendations in 0.37s
+2025-12-31 14:44:05,376 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:44:05,406 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:44:05,440 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:44:08,003 - monitoring - INFO - Completed sla_prediction in 2.56s
+2025-12-31 14:44:08,042 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:44:09,938 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:44:12,453 - monitoring - INFO - Completed sla_prediction in 4.41s
+2025-12-31 14:44:12,486 - monitoring - INFO - Completed sla_prediction in 2.55s
+2025-12-31 14:44:14,452 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:44:14,482 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:44:14,516 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:44:14,655 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:44:14,686 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:44:14,920 - monitoring - INFO - Completed recommendations in 0.40s
+2025-12-31 14:44:16,987 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:44:17,268 - monitoring - INFO - Completed recommendations in 0.28s
+2025-12-31 14:44:45,762 - monitoring - INFO - AI service health check
+2025-12-31 14:44:54,580 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:44:56,456 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:44:56,472 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 14:44:56,520 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:44:58,383 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:45:00,756 - monitoring - INFO - Completed sla_prediction in 6.18s
+2025-12-31 14:45:00,792 - monitoring - INFO - Completed sla_prediction in 4.27s
+2025-12-31 14:45:00,808 - monitoring - INFO - Completed sla_prediction in 2.42s
+2025-12-31 14:45:01,228 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:45:01,244 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 14:45:01,915 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:45:01,931 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 14:45:03,823 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:45:04,090 - monitoring - INFO - Completed recommendations in 0.27s
+2025-12-31 14:45:22,514 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:45:22,716 - monitoring - INFO - Completed recommendations in 0.20s
+2025-12-31 14:45:41,840 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:45:43,476 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:45:43,507 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:45:43,963 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:45:45,780 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:45:47,703 - monitoring - INFO - Completed sla_prediction in 5.86s
+2025-12-31 14:45:48,062 - monitoring - INFO - Completed sla_prediction in 4.10s
+2025-12-31 14:45:48,126 - monitoring - INFO - Completed sla_prediction in 2.35s
+2025-12-31 14:45:48,691 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:45:48,722 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:45:49,568 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:45:49,583 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 14:45:51,248 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:45:51,592 - monitoring - INFO - Completed recommendations in 0.34s
+2025-12-31 14:46:10,185 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 14:46:10,420 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 14:46:31,147 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:46:32,893 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:46:32,924 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:46:33,081 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:46:34,782 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:46:36,674 - monitoring - INFO - Completed sla_prediction in 5.53s
+2025-12-31 14:46:37,126 - monitoring - INFO - Completed sla_prediction in 4.04s
+2025-12-31 14:46:37,251 - monitoring - INFO - Completed sla_prediction in 2.47s
+2025-12-31 14:46:38,223 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:46:38,253 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:46:38,471 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:46:38,502 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:50:00,209 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 14:50:25,561 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:50:25,592 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:50:27,093 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:50:27,123 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:53:12,119 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:53:12,133 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 14:53:13,582 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:53:13,613 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:53:36,188 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:53:36,217 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:53:37,651 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:53:37,682 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:54:32,115 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:54:36,338 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:54:36,367 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:54:36,384 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:54:38,369 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:54:41,616 - monitoring - INFO - Completed sla_prediction in 9.50s
+2025-12-31 14:54:42,069 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:54:42,100 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:54:42,364 - monitoring - INFO - Completed sla_prediction in 5.98s
+2025-12-31 14:54:42,395 - monitoring - INFO - Completed sla_prediction in 4.03s
+2025-12-31 14:54:44,908 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:54:44,936 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:54:45,486 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:54:45,516 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:54:45,609 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:54:45,640 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:54:45,762 - monitoring - INFO - AI service health check
+2025-12-31 14:54:50,659 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 14:54:50,689 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 14:54:50,769 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:54:52,933 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:54:54,648 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 14:54:56,411 - monitoring - INFO - Completed sla_prediction in 5.64s
+2025-12-31 14:54:56,693 - monitoring - INFO - Completed sla_prediction in 3.76s
+2025-12-31 14:54:56,758 - monitoring - INFO - Completed sla_prediction in 2.11s
+2025-12-31 14:54:57,384 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:54:57,414 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:54:58,491 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 14:54:58,523 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 14:56:56,477 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:56:56,507 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 14:56:57,697 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 14:56:57,727 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:00:00,619 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 15:04:45,778 - monitoring - INFO - AI service health check
+2025-12-31 15:10:00,307 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 15:14:45,778 - monitoring - INFO - AI service health check
+2025-12-31 15:17:41,463 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:17:41,490 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:17:42,995 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:17:43,020 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:18:19,990 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:18:20,067 - monitoring - INFO - Completed priorities in 0.08s
+2025-12-31 15:18:21,695 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:18:21,725 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:19:36,263 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:19:36,292 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:19:36,330 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:19:40,114 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 15:19:40,145 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 15:19:40,179 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:19:42,197 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:19:46,443 - monitoring - INFO - Completed sla_prediction in 10.11s
+2025-12-31 15:19:47,162 - monitoring - INFO - Completed sla_prediction in 6.98s
+2025-12-31 15:19:47,197 - monitoring - INFO - Completed sla_prediction in 5.00s
+2025-12-31 15:19:47,383 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:19:47,411 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:19:48,972 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:19:49,001 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:19:49,345 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 15:19:49,378 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 15:19:54,403 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 15:19:54,416 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 15:19:54,452 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:19:56,624 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:19:58,658 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:20:00,966 - monitoring - INFO - Completed sla_prediction in 6.51s
+2025-12-31 15:20:01,294 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 15:20:01,545 - monitoring - INFO - Completed sla_prediction in 4.92s
+2025-12-31 15:20:01,655 - monitoring - INFO - Completed sla_prediction in 3.00s
+2025-12-31 15:20:04,214 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:20:04,244 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:20:04,278 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:20:04,306 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:20:04,732 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 15:20:04,760 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 15:20:05,884 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:20:05,914 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:20:18,257 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:20:18,286 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:20:19,256 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:20:21,451 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 15:20:21,480 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 15:20:21,545 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:20:23,701 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:20:27,182 - monitoring - INFO - Completed sla_prediction in 7.93s
+2025-12-31 15:20:27,262 - monitoring - INFO - Completed sla_prediction in 5.72s
+2025-12-31 15:20:27,326 - monitoring - INFO - Completed sla_prediction in 3.62s
+2025-12-31 15:20:27,920 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:20:27,949 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:20:28,512 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:20:28,542 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:20:29,797 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 15:20:29,812 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 15:20:34,566 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 15:20:34,594 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 15:20:34,804 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:20:37,509 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:20:39,477 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:20:41,396 - monitoring - INFO - Completed sla_prediction in 6.59s
+2025-12-31 15:20:41,800 - monitoring - INFO - Completed sla_prediction in 4.29s
+2025-12-31 15:20:41,862 - monitoring - INFO - Completed sla_prediction in 2.38s
+2025-12-31 15:20:42,424 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:20:42,453 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:20:43,661 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 15:20:43,693 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 15:21:17,694 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:21:17,704 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 15:21:18,769 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:21:18,814 - monitoring - INFO - Completed priorities in 0.04s
+2025-12-31 15:21:28,896 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:21:28,926 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:21:29,683 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:21:29,724 - monitoring - INFO - Completed priorities in 0.04s
+2025-12-31 15:23:28,219 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:23:28,262 - monitoring - INFO - Completed priorities in 0.04s
+2025-12-31 15:23:29,648 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:23:29,679 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:24:45,779 - monitoring - INFO - AI service health check
+2025-12-31 15:28:06,668 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:28:06,775 - monitoring - INFO - Completed priorities in 0.11s
+2025-12-31 15:28:08,270 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:28:08,299 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:30:00,468 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 15:30:15,761 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:30:15,790 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:30:17,494 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:30:17,525 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:31:42,434 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:31:42,449 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 15:31:43,838 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:31:43,869 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:34:45,765 - monitoring - INFO - AI models active
+2025-12-31 15:34:45,781 - monitoring - INFO - AI service health check
+2025-12-31 15:35:49,753 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:35:49,781 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:35:50,763 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:35:50,794 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:40:00,682 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 15:40:36,108 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:40:36,138 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:40:37,232 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:40:37,263 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:41:26,897 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:41:26,927 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:41:27,864 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:41:27,879 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 15:41:58,881 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:41:58,909 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:41:59,974 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:42:00,006 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:42:17,537 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:42:20,594 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:42:22,888 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 15:42:22,920 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 15:42:22,968 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:42:26,187 - monitoring - INFO - Completed sla_prediction in 8.65s
+2025-12-31 15:42:26,736 - monitoring - INFO - Completed sla_prediction in 6.14s
+2025-12-31 15:42:26,777 - monitoring - INFO - Completed sla_prediction in 3.81s
+2025-12-31 15:42:28,130 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:42:28,159 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:42:28,319 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 15:42:28,342 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 15:42:32,356 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 15:42:32,368 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 15:42:32,447 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:42:34,384 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:42:36,959 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 15:42:38,850 - monitoring - INFO - Completed sla_prediction in 6.40s
+2025-12-31 15:42:38,915 - monitoring - INFO - Completed sla_prediction in 4.53s
+2025-12-31 15:42:39,289 - monitoring - INFO - Completed sla_prediction in 2.33s
+2025-12-31 15:42:39,369 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:42:39,398 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:42:40,429 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 15:42:40,459 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 15:43:38,021 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:43:38,050 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:43:39,255 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 15:43:39,285 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 15:44:11,792 - startup_learning - INFO - Cleaning up AI learning system...
+2025-12-31 15:44:11,802 - startup_learning - INFO - AI learning system cleanup completed
+2025-12-31 15:44:11,820 - ars_ocr_ged - INFO - ARS document processing service stopped
+2025-12-31 19:19:03,516 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 19:19:03,518 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 19:19:03,524 - generative_ai - INFO - Generative AI database initialized
+2025-12-31 19:19:08,118 - startup_learning - INFO - Initializing AI learning system...
+2025-12-31 19:19:08,119 - learning_engine - INFO - ARS learning database initialized successfully
+2025-12-31 19:19:08,120 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2025-12-31 19:19:08,120 - startup_learning - INFO - Found 0 saved models
+2025-12-31 19:19:08,120 - startup_learning - INFO - AI learning system initialized successfully
+2025-12-31 19:19:08,134 - ars_ocr_ged - INFO - ARS GED database initialized
+2025-12-31 19:19:15,381 - ars_ocr_ged - WARNING - Watch folder does not exist: \\scanshare\inbox
+2025-12-31 19:19:15,382 - ars_ocr_ged - WARNING - ARS document processing service failed to start
+2025-12-31 19:19:15,397 - monitoring - INFO - Starting ARS AI microservice with advanced analytics on port 8002
+2025-12-31 19:20:00,685 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 19:22:50,618 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:22:51,290 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:22:51,314 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 19:22:51,401 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:22:53,433 - monitoring - INFO - Completed sla_prediction in 2.03s
+2025-12-31 19:22:54,546 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:22:55,764 - monitoring - INFO - Completed sla_prediction in 1.22s
+2025-12-31 19:22:56,139 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:22:56,233 - monitoring - INFO - Completed priorities in 0.09s
+2025-12-31 19:22:56,385 - database - INFO - Database connection pool initialized
+2025-12-31 19:23:10,838 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:23:10,868 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:23:11,010 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:13,883 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:17,091 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:20,143 - monitoring - INFO - Completed sla_prediction in 29.53s
+2025-12-31 19:23:21,208 - monitoring - INFO - Completed sla_prediction in 10.20s
+2025-12-31 19:23:21,797 - monitoring - INFO - Completed sla_prediction in 7.91s
+2025-12-31 19:23:22,094 - monitoring - INFO - Completed sla_prediction in 5.00s
+2025-12-31 19:23:23,728 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:23:23,759 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:23:25,421 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:23:26,320 - monitoring - INFO - Completed automated_decisions in 0.90s
+2025-12-31 19:23:28,139 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:23:28,289 - monitoring - INFO - Completed automated_decisions in 0.15s
+2025-12-31 19:23:32,048 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:23:32,097 - monitoring - INFO - Completed priorities in 0.05s
+2025-12-31 19:23:33,367 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:35,065 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:23:35,095 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:23:35,157 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:36,976 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:40,154 - monitoring - INFO - Completed sla_prediction in 6.79s
+2025-12-31 19:23:40,217 - monitoring - INFO - Completed sla_prediction in 5.06s
+2025-12-31 19:23:40,277 - monitoring - INFO - Completed sla_prediction in 3.30s
+2025-12-31 19:23:40,624 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:23:40,689 - monitoring - INFO - Completed priorities in 0.06s
+2025-12-31 19:23:41,088 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:23:41,119 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:23:42,356 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:23:42,380 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 19:23:50,347 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:23:50,376 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:23:50,441 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:52,630 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:54,704 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:23:56,619 - monitoring - INFO - Completed sla_prediction in 6.18s
+2025-12-31 19:23:56,853 - monitoring - INFO - Completed sla_prediction in 4.22s
+2025-12-31 19:23:56,914 - monitoring - INFO - Completed sla_prediction in 2.21s
+2025-12-31 19:23:57,478 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:23:57,507 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:23:58,545 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:23:58,584 - monitoring - INFO - Completed automated_decisions in 0.04s
+2025-12-31 19:24:03,777 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:24:03,807 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:24:05,000 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:24:08,858 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:24:10,703 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:24:12,427 - monitoring - INFO - Completed sla_prediction in 7.43s
+2025-12-31 19:24:12,588 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:24:12,614 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:24:14,374 - monitoring - INFO - Completed sla_prediction in 5.52s
+2025-12-31 19:24:14,499 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:24:14,609 - monitoring - INFO - Completed sla_prediction in 3.91s
+2025-12-31 19:24:17,559 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:24:17,858 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:24:17,891 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:24:18,311 - monitoring - INFO - Completed recommendations in 3.81s
+2025-12-31 19:24:18,462 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:24:18,477 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 19:24:18,530 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:24:18,679 - monitoring - INFO - Completed automated_decisions in 0.15s
+2025-12-31 19:24:19,410 - monitoring - INFO - Completed recommendations in 1.85s
+2025-12-31 19:24:22,075 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:24:22,170 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:24:22,574 - monitoring - INFO - Completed recommendations in 0.50s
+2025-12-31 19:24:22,606 - monitoring - INFO - Completed recommendations in 0.44s
+2025-12-31 19:24:50,923 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:24:50,981 - monitoring - INFO - Completed priorities in 0.06s
+2025-12-31 19:24:53,013 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:24:53,044 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:25:35,670 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:25:35,701 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:25:37,078 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:25:37,107 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:25:45,479 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:25:45,510 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:25:47,715 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:25:47,735 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 19:27:28,507 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:27:28,522 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 19:27:29,397 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:27:29,432 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:29:08,084 - monitoring - INFO - AI service health check
+2025-12-31 19:30:24,967 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:30:24,997 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:30:26,603 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:30:26,631 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:38:20,183 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:38:20,214 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:38:22,023 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:38:22,052 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:39:08,093 - monitoring - INFO - AI service health check
+2025-12-31 19:39:51,849 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:39:51,864 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 19:39:53,794 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:39:53,823 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:40:00,388 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 19:42:01,898 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:42:01,925 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:42:03,396 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:42:03,426 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:42:17,271 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:42:17,300 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:42:18,162 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:42:18,178 - monitoring - INFO - Completed priorities in 0.02s
+2025-12-31 19:43:58,404 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:43:58,415 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 19:43:59,853 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:43:59,883 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:49:08,109 - monitoring - INFO - AI service health check
+2025-12-31 19:49:17,077 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:49:17,106 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:49:17,936 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:49:17,965 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:49:24,798 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:49:24,827 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:49:26,221 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:49:26,252 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:49:57,254 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:49:57,285 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:49:58,845 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:49:58,874 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:50:00,192 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 19:51:00,665 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:51:02,790 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:51:02,811 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 19:51:04,450 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:51:06,613 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:51:08,780 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:51:08,808 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:51:10,387 - monitoring - INFO - Completed sla_prediction in 9.72s
+2025-12-31 19:51:11,048 - monitoring - INFO - Completed sla_prediction in 6.60s
+2025-12-31 19:51:12,907 - monitoring - INFO - Completed sla_prediction in 6.29s
+2025-12-31 19:51:14,853 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:51:14,884 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:51:15,058 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:51:15,087 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:51:15,343 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:51:15,378 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 19:51:19,749 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:51:19,778 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:51:20,507 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:51:22,499 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:51:24,310 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:51:26,825 - monitoring - INFO - Completed sla_prediction in 6.32s
+2025-12-31 19:51:26,951 - monitoring - INFO - Completed sla_prediction in 4.45s
+2025-12-31 19:51:26,985 - monitoring - INFO - Completed sla_prediction in 2.67s
+2025-12-31 19:51:27,686 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:51:27,715 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:51:29,327 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:51:29,356 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 19:53:25,602 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:53:28,425 - monitoring - INFO - Completed sla_prediction in 2.82s
+2025-12-31 19:53:28,465 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:53:28,472 - monitoring - INFO - Completed reassignment in 0.01s
+2025-12-31 19:53:28,520 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:53:30,420 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:53:32,731 - monitoring - INFO - Completed sla_prediction in 4.21s
+2025-12-31 19:53:32,793 - monitoring - INFO - Completed sla_prediction in 2.37s
+2025-12-31 19:53:35,131 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:53:35,175 - monitoring - INFO - Completed priorities in 0.04s
+2025-12-31 19:53:35,319 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:53:35,334 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 19:53:40,618 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:53:40,649 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:53:40,684 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:53:43,000 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:53:44,475 - monitoring - INFO - Completed sla_prediction in 3.79s
+2025-12-31 19:53:44,553 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:53:47,088 - monitoring - INFO - Completed sla_prediction in 4.09s
+2025-12-31 19:53:48,399 - monitoring - INFO - Completed sla_prediction in 3.84s
+2025-12-31 19:53:50,041 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:53:50,072 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:53:50,105 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:53:50,134 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:53:50,601 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:53:50,632 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 19:53:51,709 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:53:51,737 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:55:50,978 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:55:52,696 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:55:52,726 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:55:52,838 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:55:54,710 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:55:55,164 - monitoring - INFO - Completed sla_prediction in 4.19s
+2025-12-31 19:55:55,397 - monitoring - INFO - Completed sla_prediction in 2.56s
+2025-12-31 19:55:55,444 - monitoring - INFO - Completed sla_prediction in 0.73s
+2025-12-31 19:55:56,006 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:55:56,036 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 19:55:56,861 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:55:56,891 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 19:56:01,087 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 19:56:01,116 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 19:56:01,210 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:56:03,065 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:56:04,843 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 19:56:08,685 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:56:08,805 - monitoring - INFO - Completed sla_prediction in 7.59s
+2025-12-31 19:56:08,947 - monitoring - INFO - Completed sla_prediction in 4.10s
+2025-12-31 19:56:09,056 - monitoring - INFO - Completed sla_prediction in 5.99s
+2025-12-31 19:56:10,352 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 19:56:10,366 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 19:56:10,895 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:56:11,099 - monitoring - INFO - Completed recommendations in 2.41s
+2025-12-31 19:56:11,821 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 19:56:11,835 - monitoring - INFO - Completed automated_decisions in 0.01s
+2025-12-31 19:56:12,618 - monitoring - INFO - Completed recommendations in 1.72s
+2025-12-31 19:56:13,133 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:56:13,428 - monitoring - INFO - Completed recommendations in 0.30s
+2025-12-31 19:56:14,114 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 19:56:14,427 - monitoring - INFO - Completed recommendations in 0.31s
+2025-12-31 19:59:08,110 - monitoring - INFO - AI service health check
+2025-12-31 20:00:00,906 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 20:09:08,111 - monitoring - INFO - AI service health check
+2025-12-31 20:10:00,291 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 20:11:31,524 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:11:34,949 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 20:11:34,979 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 20:11:35,152 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:11:37,243 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:11:40,205 - monitoring - INFO - Completed sla_prediction in 8.68s
+2025-12-31 20:11:40,788 - monitoring - INFO - Completed sla_prediction in 5.64s
+2025-12-31 20:11:40,820 - monitoring - INFO - Completed sla_prediction in 3.58s
+2025-12-31 20:11:41,727 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:11:41,757 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 20:11:41,837 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 20:11:41,867 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 20:11:45,339 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 20:11:45,355 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 20:11:45,405 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:11:47,324 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:11:49,406 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:11:51,888 - monitoring - INFO - Completed sla_prediction in 6.48s
+2025-12-31 20:11:51,933 - monitoring - INFO - Completed sla_prediction in 4.61s
+2025-12-31 20:11:52,030 - monitoring - INFO - Completed sla_prediction in 2.62s
+2025-12-31 20:11:52,686 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:11:52,716 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 20:11:53,876 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 20:11:53,905 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 20:11:55,796 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:11:55,827 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 20:11:57,127 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:11:57,154 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 20:17:06,698 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:17:06,729 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 20:17:07,622 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:17:07,636 - monitoring - INFO - Completed priorities in 0.01s
+2025-12-31 20:19:08,082 - monitoring - INFO - AI models active
+2025-12-31 20:19:08,113 - monitoring - INFO - AI service health check
+2025-12-31 20:20:00,263 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 20:20:04,137 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:20:04,508 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:20:05,253 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:20:05,303 - monitoring - INFO - Completed forecast_trends in 1.17s
+2025-12-31 20:20:07,700 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:20:07,724 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:20:07,753 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:20:07,777 - monitoring - INFO - Completed forecast_trends in 0.08s
+2025-12-31 20:20:07,812 - monitoring - INFO - Starting advanced_clustering endpoint call
+2025-12-31 20:20:56,362 - monitoring - INFO - Completed advanced_clustering in 48.55s
+2025-12-31 20:20:56,766 - monitoring - INFO - Starting advanced_clustering endpoint call
+2025-12-31 20:21:05,427 - monitoring - INFO - Completed advanced_clustering in 8.66s
+2025-12-31 20:21:07,555 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:21:15,507 - monitoring - INFO - Completed anomaly_detection in 7.95s
+2025-12-31 20:21:15,960 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:21:23,526 - monitoring - INFO - Completed anomaly_detection in 7.57s
+2025-12-31 20:21:25,398 - monitoring - INFO - Starting generate_executive_report endpoint call
+2025-12-31 20:21:25,851 - monitoring - INFO - Starting generate_executive_report endpoint call
+2025-12-31 20:21:36,242 - monitoring - INFO - Completed generate_executive_report in 10.84s
+2025-12-31 20:21:49,263 - monitoring - INFO - Completed generate_executive_report in 23.41s
+2025-12-31 20:21:50,363 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:21:50,394 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:21:50,423 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:21:50,450 - monitoring - INFO - Completed forecast_trends in 0.09s
+2025-12-31 20:21:52,623 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:21:52,669 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:21:52,706 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:21:52,736 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:21:52,763 - monitoring - INFO - Completed forecast_trends in 0.09s
+2025-12-31 20:21:53,120 - monitoring - INFO - Completed recommendations in 0.50s
+2025-12-31 20:21:54,405 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:21:54,667 - monitoring - INFO - Completed recommendations in 0.26s
+2025-12-31 20:22:17,962 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:22:17,999 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:22:18,032 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:22:18,056 - monitoring - INFO - Completed forecast_trends in 0.09s
+2025-12-31 20:22:19,350 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:22:19,370 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:22:19,414 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:22:19,429 - monitoring - INFO - Completed forecast_trends in 0.08s
+2025-12-31 20:22:20,503 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:22:20,722 - monitoring - INFO - Completed recommendations in 0.22s
+2025-12-31 20:22:24,283 - monitoring - INFO - Starting generate_executive_report endpoint call
+2025-12-31 20:22:24,330 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:22:32,242 - monitoring - INFO - Completed anomaly_detection in 7.91s
+2025-12-31 20:22:32,275 - monitoring - INFO - Starting advanced_clustering endpoint call
+2025-12-31 20:22:39,699 - monitoring - INFO - Completed advanced_clustering in 7.43s
+2025-12-31 20:22:51,563 - monitoring - INFO - Completed generate_executive_report in 27.28s
+2025-12-31 20:22:55,021 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:22:56,691 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:22:56,728 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:22:56,742 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:22:56,753 - monitoring - INFO - Completed forecast_trends in 0.06s
+2025-12-31 20:22:57,095 - monitoring - INFO - Completed sla_prediction in 2.07s
+2025-12-31 20:22:59,210 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:22:59,237 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:22:59,264 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:22:59,287 - monitoring - INFO - Completed forecast_trends in 0.08s
+2025-12-31 20:22:59,631 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:23:01,594 - monitoring - INFO - Completed sla_prediction in 1.96s
+2025-12-31 20:23:03,014 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:23:04,664 - monitoring - INFO - Completed sla_prediction in 1.65s
+2025-12-31 20:23:07,130 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:23:09,203 - monitoring - INFO - Completed sla_prediction in 2.07s
+2025-12-31 20:23:09,562 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:23:09,575 - monitoring - INFO - Completed anomaly_detection in 0.01s
+2025-12-31 20:23:09,983 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:23:10,013 - monitoring - INFO - Completed anomaly_detection in 0.03s
+2025-12-31 20:23:10,607 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:23:10,625 - monitoring - INFO - Data stats: 7 days, 78.0 total, 11.14 avg/day
+2025-12-31 20:23:10,642 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2025-12-31 20:23:10,669 - monitoring - INFO - Completed forecast_trends in 0.06s
+2025-12-31 20:23:10,833 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:23:10,861 - monitoring - INFO - Data stats: 7 days, 81.0 total, 11.57 avg/day
+2025-12-31 20:23:10,876 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2025-12-31 20:23:10,903 - monitoring - INFO - Completed forecast_trends in 0.07s
+2025-12-31 20:23:11,891 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:23:12,157 - monitoring - INFO - Completed recommendations in 0.27s
+2025-12-31 20:23:13,188 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:23:13,438 - monitoring - INFO - Completed recommendations in 0.25s
+2025-12-31 20:29:08,113 - monitoring - INFO - AI service health check
+2025-12-31 20:39:08,113 - monitoring - INFO - AI service health check
+2025-12-31 20:40:00,319 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2025-12-31 20:40:21,577 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:40:24,998 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:40:27,340 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:40:29,384 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 20:40:29,412 - monitoring - INFO - Completed reassignment in 0.03s
+2025-12-31 20:40:30,455 - monitoring - INFO - Completed sla_prediction in 8.88s
+2025-12-31 20:40:31,283 - monitoring - INFO - Completed sla_prediction in 6.29s
+2025-12-31 20:40:31,426 - monitoring - INFO - Completed sla_prediction in 4.09s
+2025-12-31 20:40:32,454 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:40:32,477 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:40:32,533 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:40:32,565 - monitoring - INFO - Completed forecast_trends in 0.11s
+2025-12-31 20:40:32,615 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:40:32,642 - monitoring - INFO - Completed priorities in 0.03s
+2025-12-31 20:40:32,838 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 20:40:32,861 - monitoring - INFO - Completed automated_decisions in 0.02s
+2025-12-31 20:40:36,642 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:40:36,675 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:40:36,704 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:40:36,735 - monitoring - INFO - Completed forecast_trends in 0.09s
+2025-12-31 20:40:36,797 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:40:36,831 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:40:36,861 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:40:36,889 - monitoring - INFO - Completed forecast_trends in 0.09s
+2025-12-31 20:40:38,218 - monitoring - INFO - Starting reassignment endpoint call
+2025-12-31 20:40:38,233 - monitoring - INFO - Completed reassignment in 0.02s
+2025-12-31 20:40:38,280 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:40:40,338 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:40:42,257 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:40:47,283 - monitoring - INFO - Completed sla_prediction in 9.00s
+2025-12-31 20:40:47,363 - monitoring - INFO - Completed sla_prediction in 7.02s
+2025-12-31 20:40:47,399 - monitoring - INFO - Completed sla_prediction in 5.14s
+2025-12-31 20:40:48,228 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:40:48,265 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:40:48,306 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:40:48,334 - monitoring - INFO - Completed forecast_trends in 0.11s
+2025-12-31 20:40:48,413 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:40:48,710 - monitoring - INFO - Starting priorities endpoint call
+2025-12-31 20:40:48,756 - monitoring - INFO - Completed priorities in 0.05s
+2025-12-31 20:40:50,332 - monitoring - INFO - Starting automated_decisions endpoint call
+2025-12-31 20:40:50,363 - monitoring - INFO - Completed automated_decisions in 0.03s
+2025-12-31 20:40:50,393 - monitoring - INFO - Completed recommendations in 1.98s
+2025-12-31 20:40:55,853 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:40:56,115 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:41:03,243 - monitoring - INFO - Completed anomaly_detection in 7.13s
+2025-12-31 20:41:03,304 - monitoring - INFO - Starting generate_executive_report endpoint call
+2025-12-31 20:41:03,368 - monitoring - INFO - Starting advanced_clustering endpoint call
+2025-12-31 20:41:11,990 - monitoring - INFO - Completed advanced_clustering in 8.62s
+2025-12-31 20:41:12,146 - monitoring - INFO - Completed recommendations in 16.29s
+2025-12-31 20:41:25,227 - monitoring - INFO - Completed generate_executive_report in 21.92s
+2025-12-31 20:41:25,413 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:41:27,105 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:41:27,124 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:41:27,157 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:41:27,182 - monitoring - INFO - Completed forecast_trends in 0.08s
+2025-12-31 20:41:30,162 - monitoring - INFO - Completed sla_prediction in 4.75s
+2025-12-31 20:41:31,644 - monitoring - INFO - Starting generate_executive_report endpoint call
+2025-12-31 20:41:31,721 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:41:40,019 - monitoring - INFO - Completed anomaly_detection in 8.30s
+2025-12-31 20:41:40,064 - monitoring - INFO - Starting advanced_clustering endpoint call
+2025-12-31 20:41:47,937 - monitoring - INFO - Completed advanced_clustering in 7.87s
+2025-12-31 20:42:00,886 - monitoring - INFO - Completed generate_executive_report in 29.24s
+2025-12-31 20:42:01,120 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:42:01,159 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2025-12-31 20:42:01,198 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2025-12-31 20:42:01,229 - monitoring - INFO - Completed forecast_trends in 0.11s
+2025-12-31 20:42:02,339 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:42:04,265 - monitoring - INFO - Completed sla_prediction in 1.93s
+2025-12-31 20:42:04,328 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:42:06,310 - monitoring - INFO - Completed sla_prediction in 1.98s
+2025-12-31 20:42:07,361 - monitoring - INFO - Starting sla_prediction endpoint call
+2025-12-31 20:42:10,031 - monitoring - INFO - Completed sla_prediction in 2.67s
+2025-12-31 20:42:10,708 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:42:10,734 - monitoring - INFO - Completed anomaly_detection in 0.03s
+2025-12-31 20:42:10,781 - monitoring - INFO - Starting anomaly_detection endpoint call
+2025-12-31 20:42:10,811 - monitoring - INFO - Completed anomaly_detection in 0.03s
+2025-12-31 20:42:11,500 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:42:11,520 - monitoring - INFO - Data stats: 7 days, 75.0 total, 10.71 avg/day
+2025-12-31 20:42:11,551 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2025-12-31 20:42:11,563 - monitoring - INFO - Completed forecast_trends in 0.06s
+2025-12-31 20:42:11,817 - monitoring - INFO - Starting forecast_trends endpoint call
+2025-12-31 20:42:11,852 - monitoring - INFO - Data stats: 7 days, 75.0 total, 10.71 avg/day
+2025-12-31 20:42:11,882 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2025-12-31 20:42:11,893 - monitoring - INFO - Completed forecast_trends in 0.08s
+2025-12-31 20:42:13,257 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:42:13,490 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 20:42:14,571 - monitoring - INFO - Starting recommendations endpoint call
+2025-12-31 20:42:14,804 - monitoring - INFO - Completed recommendations in 0.23s
+2025-12-31 20:43:06,596 - startup_learning - INFO - Cleaning up AI learning system...
+2025-12-31 20:43:06,608 - startup_learning - INFO - AI learning system cleanup completed
+2025-12-31 20:43:06,626 - ars_ocr_ged - INFO - ARS document processing service stopped
+2026-01-04 08:44:26,420 - learning_engine - INFO - ARS learning database initialized successfully
+2026-01-04 08:44:26,422 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2026-01-04 08:44:26,428 - generative_ai - INFO - Generative AI database initialized
+2026-01-04 08:44:33,839 - startup_learning - INFO - Initializing AI learning system...
+2026-01-04 08:44:33,841 - learning_engine - INFO - ARS learning database initialized successfully
+2026-01-04 08:44:33,841 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2026-01-04 08:44:33,841 - startup_learning - INFO - Found 0 saved models
+2026-01-04 08:44:33,841 - startup_learning - INFO - AI learning system initialized successfully
+2026-01-04 08:44:33,864 - ars_ocr_ged - INFO - ARS GED database initialized
+2026-01-04 08:44:41,870 - ars_ocr_ged - WARNING - Watch folder does not exist: \\scanshare\inbox
+2026-01-04 08:44:41,871 - ars_ocr_ged - WARNING - ARS document processing service failed to start
+2026-01-04 08:44:43,256 - monitoring - INFO - Starting ARS AI microservice with advanced analytics on port 8002
+2026-01-04 08:45:18,578 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 08:45:18,905 - monitoring - INFO - Starting reassignment endpoint call
+2026-01-04 08:45:18,935 - monitoring - INFO - Completed reassignment in 0.03s
+2026-01-04 08:45:20,337 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 08:45:22,170 - monitoring - INFO - Completed sla_prediction in 1.83s
+2026-01-04 08:45:22,219 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 08:45:24,039 - monitoring - INFO - Completed sla_prediction in 1.82s
+2026-01-04 08:45:24,149 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 08:45:24,179 - database - ERROR - Error fetching workload: 'NoneType' object has no attribute 'acquire'
+2026-01-04 08:45:24,210 - database - ERROR - Error fetching SLA items: 'NoneType' object has no attribute 'acquire'
+2026-01-04 08:45:24,241 - monitoring - INFO - Completed recommendations in 0.09s
+2026-01-04 08:45:24,490 - database - INFO - Database connection pool initialized
+2026-01-04 08:45:27,039 - monitoring - INFO - Starting priorities endpoint call
+2026-01-04 08:45:27,070 - monitoring - INFO - Completed priorities in 0.03s
+2026-01-04 08:45:27,227 - monitoring - INFO - Completed sla_prediction in 8.65s
+2026-01-04 08:45:28,317 - monitoring - INFO - Starting automated_decisions endpoint call
+2026-01-04 08:45:28,336 - monitoring - INFO - Completed automated_decisions in 0.02s
+2026-01-04 08:45:29,858 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 08:45:30,327 - monitoring - INFO - Completed recommendations in 0.47s
+2026-01-04 08:45:35,854 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 08:45:36,086 - monitoring - INFO - Completed recommendations in 0.23s
+2026-01-04 08:50:00,253 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 08:54:33,802 - monitoring - INFO - AI service health check
+2026-01-04 09:00:00,339 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 09:04:33,805 - monitoring - INFO - AI service health check
+2026-01-04 09:10:00,506 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 09:14:33,805 - monitoring - INFO - AI service health check
+2026-01-04 09:20:00,219 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 09:24:33,808 - monitoring - INFO - AI service health check
+2026-01-04 09:30:00,679 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 09:33:50,405 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:33:52,743 - monitoring - INFO - Starting reassignment endpoint call
+2026-01-04 09:33:52,757 - monitoring - INFO - Completed reassignment in 0.01s
+2026-01-04 09:33:52,804 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:33:54,803 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:33:58,351 - monitoring - INFO - Completed sla_prediction in 7.95s
+2026-01-04 09:33:58,459 - monitoring - INFO - Completed sla_prediction in 5.66s
+2026-01-04 09:33:58,492 - monitoring - INFO - Completed sla_prediction in 3.69s
+2026-01-04 09:33:59,090 - monitoring - INFO - Starting priorities endpoint call
+2026-01-04 09:33:59,114 - monitoring - INFO - Completed priorities in 0.03s
+2026-01-04 09:33:59,880 - monitoring - INFO - Starting automated_decisions endpoint call
+2026-01-04 09:33:59,917 - monitoring - INFO - Completed automated_decisions in 0.04s
+2026-01-04 09:34:02,482 - monitoring - INFO - Starting reassignment endpoint call
+2026-01-04 09:34:02,496 - monitoring - INFO - Completed reassignment in 0.01s
+2026-01-04 09:34:02,529 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:34:05,078 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:34:07,022 - monitoring - INFO - Completed sla_prediction in 4.49s
+2026-01-04 09:34:07,059 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:34:09,351 - monitoring - INFO - Completed sla_prediction in 4.27s
+2026-01-04 09:34:09,399 - monitoring - INFO - Completed sla_prediction in 2.34s
+2026-01-04 09:34:10,080 - monitoring - INFO - Starting priorities endpoint call
+2026-01-04 09:34:10,108 - monitoring - INFO - Completed priorities in 0.03s
+2026-01-04 09:34:10,265 - monitoring - INFO - Starting automated_decisions endpoint call
+2026-01-04 09:34:10,295 - monitoring - INFO - Completed automated_decisions in 0.03s
+2026-01-04 09:34:33,809 - monitoring - INFO - AI service health check
+2026-01-04 09:37:07,683 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:37:09,808 - monitoring - INFO - Starting reassignment endpoint call
+2026-01-04 09:37:09,837 - monitoring - INFO - Completed reassignment in 0.03s
+2026-01-04 09:37:10,277 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:37:12,303 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:37:14,073 - monitoring - INFO - Completed sla_prediction in 6.39s
+2026-01-04 09:37:14,400 - monitoring - INFO - Completed sla_prediction in 4.12s
+2026-01-04 09:37:14,447 - monitoring - INFO - Completed sla_prediction in 2.14s
+2026-01-04 09:37:15,073 - monitoring - INFO - Starting priorities endpoint call
+2026-01-04 09:37:15,087 - monitoring - INFO - Completed priorities in 0.01s
+2026-01-04 09:37:15,383 - monitoring - INFO - Starting automated_decisions endpoint call
+2026-01-04 09:37:15,414 - monitoring - INFO - Completed automated_decisions in 0.03s
+2026-01-04 09:37:18,006 - monitoring - INFO - Starting reassignment endpoint call
+2026-01-04 09:37:18,036 - monitoring - INFO - Completed reassignment in 0.03s
+2026-01-04 09:37:18,069 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:37:21,838 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:37:23,504 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:37:25,454 - monitoring - INFO - Completed sla_prediction in 7.39s
+2026-01-04 09:37:25,785 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 09:37:26,456 - monitoring - INFO - Completed sla_prediction in 4.62s
+2026-01-04 09:37:26,505 - monitoring - INFO - Completed sla_prediction in 3.00s
+2026-01-04 09:37:27,870 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 09:37:28,103 - monitoring - INFO - Completed recommendations in 2.32s
+2026-01-04 09:37:28,394 - monitoring - INFO - Starting priorities endpoint call
+2026-01-04 09:37:28,426 - monitoring - INFO - Completed priorities in 0.03s
+2026-01-04 09:37:28,769 - monitoring - INFO - Starting automated_decisions endpoint call
+2026-01-04 09:37:28,783 - monitoring - INFO - Completed automated_decisions in 0.01s
+2026-01-04 09:37:29,675 - monitoring - INFO - Completed recommendations in 1.80s
+2026-01-04 09:37:30,719 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 09:37:31,125 - monitoring - INFO - Completed recommendations in 0.41s
+2026-01-04 09:37:31,388 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 09:37:31,684 - monitoring - INFO - Completed recommendations in 0.30s
+2026-01-04 09:38:04,452 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 09:38:04,749 - monitoring - INFO - Completed recommendations in 0.30s
+2026-01-04 09:38:11,114 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:38:13,786 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:38:19,451 - learning_engine - ERROR - Adding to lexicon failed: disk I/O error
+2026-01-04 09:38:20,651 - monitoring - INFO - Completed sla_prediction in 9.54s
+2026-01-04 09:38:20,692 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 09:38:22,632 - monitoring - INFO - Starting reassignment endpoint call
+2026-01-04 09:38:22,647 - monitoring - INFO - Completed reassignment in 0.02s
+2026-01-04 09:38:23,567 - monitoring - INFO - Completed sla_prediction in 9.78s
+2026-01-04 09:38:23,613 - monitoring - INFO - Completed sla_prediction in 2.92s
+2026-01-04 09:38:24,673 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 09:38:24,709 - monitoring - INFO - Starting priorities endpoint call
+2026-01-04 09:38:24,720 - monitoring - INFO - Completed priorities in 0.01s
+2026-01-04 09:38:24,889 - monitoring - INFO - Starting automated_decisions endpoint call
+2026-01-04 09:38:24,920 - monitoring - INFO - Completed automated_decisions in 0.03s
+2026-01-04 09:38:25,060 - monitoring - INFO - Completed recommendations in 0.39s
+2026-01-04 09:38:26,858 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 09:38:27,166 - monitoring - INFO - Completed recommendations in 0.31s
+2026-01-04 09:40:00,133 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 09:44:33,801 - monitoring - INFO - AI models active
+2026-01-04 09:44:33,809 - monitoring - INFO - AI service health check
+2026-01-04 09:50:00,376 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 09:54:33,810 - monitoring - INFO - AI service health check
+2026-01-04 10:00:00,245 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 10:04:33,810 - monitoring - INFO - AI service health check
+2026-01-04 10:14:33,811 - monitoring - INFO - AI service health check
+2026-01-04 10:20:00,274 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-01-04 10:20:25,436 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:20:25,797 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:20:26,492 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:20:26,525 - monitoring - INFO - Completed forecast_trends in 1.09s
+2026-01-04 10:20:28,517 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:20:28,555 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:20:28,580 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:20:28,609 - monitoring - INFO - Completed forecast_trends in 0.09s
+2026-01-04 10:20:28,641 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:20:28,677 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:20:28,704 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:20:28,717 - monitoring - INFO - Completed forecast_trends in 0.08s
+2026-01-04 10:20:30,215 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:20:30,252 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:20:30,279 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:20:30,307 - monitoring - INFO - Completed forecast_trends in 0.09s
+2026-01-04 10:20:30,340 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:20:31,773 - monitoring - INFO - Completed recommendations in 1.43s
+2026-01-04 10:20:34,618 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:20:34,728 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:21:19,854 - monitoring - INFO - Completed anomaly_detection in 45.13s
+2026-01-04 10:21:19,964 - monitoring - INFO - Starting advanced_clustering endpoint call
+2026-01-04 10:21:28,128 - monitoring - INFO - Starting generate_executive_report endpoint call
+2026-01-04 10:21:28,780 - monitoring - INFO - Completed advanced_clustering in 8.82s
+2026-01-04 10:21:30,227 - monitoring - INFO - Completed recommendations in 55.61s
+2026-01-04 10:21:31,288 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:21:33,049 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:21:33,068 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:21:33,084 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:21:33,099 - monitoring - INFO - Completed forecast_trends in 0.05s
+2026-01-04 10:21:33,471 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:21:43,783 - monitoring - INFO - Completed generate_executive_report in 15.66s
+2026-01-04 10:21:44,702 - monitoring - INFO - Completed sla_prediction in 13.41s
+2026-01-04 10:21:44,739 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:21:44,768 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:21:44,798 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:21:44,810 - monitoring - INFO - Completed forecast_trends in 0.07s
+2026-01-04 10:21:45,465 - monitoring - INFO - Completed sla_prediction in 11.99s
+2026-01-04 10:21:46,136 - monitoring - INFO - Starting advanced_clustering endpoint call
+2026-01-04 10:21:55,079 - monitoring - INFO - Completed advanced_clustering in 8.94s
+2026-01-04 10:21:55,514 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:22:01,522 - monitoring - INFO - Completed anomaly_detection in 6.01s
+2026-01-04 10:22:01,909 - monitoring - INFO - Starting generate_executive_report endpoint call
+2026-01-04 10:22:02,283 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:22:04,514 - monitoring - INFO - Completed sla_prediction in 2.23s
+2026-01-04 10:22:15,268 - monitoring - INFO - Completed generate_executive_report in 13.36s
+2026-01-04 10:22:17,592 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:22:19,565 - monitoring - INFO - Completed sla_prediction in 1.97s
+2026-01-04 10:22:19,844 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:22:19,859 - monitoring - INFO - Completed anomaly_detection in 0.02s
+2026-01-04 10:22:20,171 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:22:20,186 - monitoring - INFO - Completed anomaly_detection in 0.02s
+2026-01-04 10:22:20,514 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:22:20,532 - monitoring - INFO - Data stats: 7 days, 74.0 total, 10.57 avg/day
+2026-01-04 10:22:20,546 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2026-01-04 10:22:20,575 - monitoring - INFO - Completed forecast_trends in 0.06s
+2026-01-04 10:22:20,933 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:22:20,967 - monitoring - INFO - Data stats: 7 days, 74.0 total, 10.57 avg/day
+2026-01-04 10:22:20,997 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2026-01-04 10:22:21,011 - monitoring - INFO - Completed forecast_trends in 0.08s
+2026-01-04 10:22:21,600 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:22:21,882 - monitoring - INFO - Completed recommendations in 0.28s
+2026-01-04 10:22:22,536 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:22:22,755 - monitoring - INFO - Completed recommendations in 0.22s
+2026-01-04 10:22:41,983 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:22:44,237 - monitoring - INFO - Completed sla_prediction in 2.25s
+2026-01-04 10:22:44,378 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:22:44,411 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:22:44,428 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:22:44,456 - monitoring - INFO - Completed forecast_trends in 0.08s
+2026-01-04 10:22:45,297 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:22:47,258 - monitoring - INFO - Completed sla_prediction in 1.96s
+2026-01-04 10:22:47,430 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:22:47,444 - monitoring - INFO - Completed anomaly_detection in 0.01s
+2026-01-04 10:22:48,036 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:22:48,070 - monitoring - INFO - Data stats: 7 days, 76.0 total, 10.86 avg/day
+2026-01-04 10:22:48,100 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2026-01-04 10:22:48,114 - monitoring - INFO - Completed forecast_trends in 0.08s
+2026-01-04 10:22:49,021 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:22:49,255 - monitoring - INFO - Completed recommendations in 0.23s
+2026-01-04 10:24:33,811 - monitoring - INFO - AI service health check
+2026-01-04 10:25:05,207 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:25:05,241 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:25:05,285 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:25:05,299 - monitoring - INFO - Completed forecast_trends in 0.09s
+2026-01-04 10:25:07,319 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:25:07,353 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:25:07,396 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:25:07,410 - monitoring - INFO - Completed forecast_trends in 0.09s
+2026-01-04 10:25:07,445 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:25:07,476 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:25:07,507 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:25:07,520 - monitoring - INFO - Completed forecast_trends in 0.07s
+2026-01-04 10:25:09,392 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:25:09,428 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:25:09,441 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:25:09,472 - monitoring - INFO - Completed forecast_trends in 0.08s
+2026-01-04 10:25:09,487 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:25:09,752 - monitoring - INFO - Completed recommendations in 0.27s
+2026-01-04 10:25:12,503 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:25:12,566 - monitoring - INFO - Starting generate_executive_report endpoint call
+2026-01-04 10:25:12,644 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:25:18,665 - monitoring - INFO - Completed anomaly_detection in 6.02s
+2026-01-04 10:25:18,697 - monitoring - INFO - Starting advanced_clustering endpoint call
+2026-01-04 10:25:26,654 - monitoring - INFO - Completed advanced_clustering in 7.96s
+2026-01-04 10:25:26,994 - monitoring - INFO - Completed recommendations in 14.49s
+2026-01-04 10:25:37,554 - monitoring - INFO - Completed generate_executive_report in 24.99s
+2026-01-04 10:25:39,704 - monitoring - INFO - Starting generate_executive_report endpoint call
+2026-01-04 10:25:39,767 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:25:46,063 - monitoring - INFO - Completed anomaly_detection in 6.30s
+2026-01-04 10:25:46,095 - monitoring - INFO - Starting advanced_clustering endpoint call
+2026-01-04 10:25:54,056 - monitoring - INFO - Completed advanced_clustering in 7.96s
+2026-01-04 10:26:05,359 - monitoring - INFO - Completed generate_executive_report in 25.66s
+2026-01-04 10:27:07,099 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:27:08,830 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:27:08,864 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:27:08,895 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:27:08,922 - monitoring - INFO - Completed forecast_trends in 0.09s
+2026-01-04 10:27:10,013 - monitoring - INFO - Completed sla_prediction in 2.91s
+2026-01-04 10:27:10,495 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:27:10,512 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:27:10,590 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:27:10,620 - monitoring - INFO - Completed forecast_trends in 0.12s
+2026-01-04 10:27:11,243 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:27:12,973 - monitoring - INFO - Completed sla_prediction in 1.73s
+2026-01-04 10:27:13,553 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:27:15,533 - monitoring - INFO - Completed sla_prediction in 1.98s
+2026-01-04 10:27:16,866 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:27:18,921 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:27:18,935 - monitoring - INFO - Completed anomaly_detection in 0.01s
+2026-01-04 10:27:18,981 - monitoring - INFO - Completed sla_prediction in 2.12s
+2026-01-04 10:27:19,700 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:27:19,718 - monitoring - INFO - Data stats: 7 days, 77.0 total, 11.00 avg/day
+2026-01-04 10:27:19,750 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2026-01-04 10:27:19,779 - monitoring - INFO - Completed forecast_trends in 0.08s
+2026-01-04 10:27:19,812 - monitoring - INFO - Starting anomaly_detection endpoint call
+2026-01-04 10:27:19,826 - monitoring - INFO - Completed anomaly_detection in 0.01s
+2026-01-04 10:27:20,306 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:27:20,324 - monitoring - INFO - Data stats: 7 days, 79.0 total, 11.29 avg/day
+2026-01-04 10:27:20,339 - monitoring - INFO - Sparse data (7 days) - using simple average forecasting
+2026-01-04 10:27:20,368 - monitoring - INFO - Completed forecast_trends in 0.06s
+2026-01-04 10:27:21,103 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:27:21,366 - monitoring - INFO - Completed recommendations in 0.26s
+2026-01-04 10:27:22,240 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:27:22,278 - monitoring - INFO - Completed recommendations in 0.04s
+2026-01-04 10:28:49,981 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:28:51,877 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:28:51,910 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:28:51,942 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:28:51,955 - monitoring - INFO - Completed forecast_trends in 0.08s
+2026-01-04 10:28:52,189 - monitoring - INFO - Completed sla_prediction in 2.21s
+2026-01-04 10:28:53,014 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:28:53,309 - monitoring - INFO - Completed recommendations in 0.29s
+2026-01-04 10:29:02,341 - startup_learning - INFO - Cleaning up AI learning system...
+2026-01-04 10:29:02,355 - startup_learning - INFO - AI learning system cleanup completed
+2026-01-04 10:29:02,371 - ars_ocr_ged - INFO - ARS document processing service stopped
+2026-01-04 10:29:46,877 - learning_engine - INFO - ARS learning database initialized successfully
+2026-01-04 10:29:46,879 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2026-01-04 10:29:46,883 - generative_ai - INFO - Generative AI database initialized
+2026-01-04 10:29:51,395 - startup_learning - INFO - Initializing AI learning system...
+2026-01-04 10:29:51,396 - learning_engine - INFO - ARS learning database initialized successfully
+2026-01-04 10:29:51,397 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2026-01-04 10:29:51,397 - startup_learning - INFO - Found 0 saved models
+2026-01-04 10:29:51,397 - startup_learning - INFO - AI learning system initialized successfully
+2026-01-04 10:29:51,417 - ars_ocr_ged - INFO - ARS GED database initialized
+2026-01-04 10:29:59,130 - ars_ocr_ged - WARNING - Watch folder does not exist: \\scanshare\inbox
+2026-01-04 10:29:59,130 - ars_ocr_ged - WARNING - ARS document processing service failed to start
+2026-01-04 10:30:00,335 - monitoring - INFO - Starting ARS AI microservice with advanced analytics on port 8002
+2026-01-04 10:30:42,069 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:30:42,536 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:30:42,604 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:30:42,685 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:30:42,715 - monitoring - INFO - Completed forecast_trends in 0.18s
+2026-01-04 10:30:44,067 - database - INFO - Database connection pool initialized
+2026-01-04 10:30:46,679 - monitoring - INFO - Starting forecast_trends endpoint call
+2026-01-04 10:30:46,713 - monitoring - INFO - Data stats: 8 days, 89.0 total, 11.12 avg/day
+2026-01-04 10:30:46,725 - monitoring - INFO - Sparse data (8 days) - using simple average forecasting
+2026-01-04 10:30:46,754 - monitoring - INFO - Completed forecast_trends in 0.07s
+2026-01-04 10:30:46,898 - monitoring - INFO - Completed sla_prediction in 4.83s
+2026-01-04 10:30:48,312 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-01-04 10:30:49,715 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:30:50,228 - monitoring - INFO - Completed sla_prediction in 1.92s
+2026-01-04 10:30:50,492 - monitoring - INFO - Completed recommendations in 0.78s
+2026-01-04 10:30:51,481 - monitoring - INFO - Starting recommendations endpoint call
+2026-01-04 10:30:51,680 - monitoring - INFO - Completed recommendations in 0.20s
+2026-01-04 10:33:07,116 - startup_learning - INFO - Cleaning up AI learning system...
+2026-01-04 10:33:07,131 - startup_learning - INFO - AI learning system cleanup completed
+2026-01-04 10:33:07,176 - ars_ocr_ged - INFO - ARS document processing service stopped

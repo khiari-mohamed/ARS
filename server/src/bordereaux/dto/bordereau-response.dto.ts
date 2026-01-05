@@ -59,7 +59,7 @@ export class BordereauResponseDto {
       dateReceptionSante: bordereau.dateReceptionSante || null,
       dateCloture: bordereau.dateCloture || null,
       dateDepotVirement: bordereau.dateDepotVirement || null,
-      dateExecutionVirement: bordereau.dateExecutionVirement || null,
+      dateExecutionVirement: bordereau.ordresVirement?.[0]?.dateEtatFinal || bordereau.ordresVirement?.[0]?.dateTraitement || bordereau.dateExecutionVirement || null,
       dateReceptionBO: bordereau.dateReceptionBO || null,
       createdAt: bordereau.createdAt,
       updatedAt: bordereau.updatedAt,
@@ -138,9 +138,10 @@ export class BordereauResponseDto {
       }
       
       // Calculate Durée de règlement (date de règlement - date BO)
-      if (bordereau.dateReceptionBO && bordereau.dateExecutionVirement) {
+      const dateExecutionVirement = bordereau.ordresVirement?.[0]?.dateEtatFinal || bordereau.ordresVirement?.[0]?.dateTraitement || bordereau.dateExecutionVirement;
+      if (bordereau.dateReceptionBO && dateExecutionVirement) {
         const dateBO = new Date(bordereau.dateReceptionBO);
-        const dateReglement = new Date(bordereau.dateExecutionVirement);
+        const dateReglement = new Date(dateExecutionVirement);
         response.dureeReglement = Math.floor(
           (dateReglement.getTime() - dateBO.getTime()) / (1000 * 60 * 60 * 24)
         );

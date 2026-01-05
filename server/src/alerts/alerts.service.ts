@@ -39,7 +39,7 @@ export class AlertsService {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        timeout: 10000
+        timeout: 300000
       });
       
       return response.data;
@@ -123,6 +123,8 @@ export class AlertsService {
   async getAlertsDashboard(query: AlertsQueryDto, user: any) {
     this.checkAlertsRole(user);
     
+    this.logger.log(`🔍 Alerts Dashboard - User: ${user.id} Role: ${user.role}`);
+    
     const where: any = {};
     if (query.teamId) where.teamId = query.teamId;
     if (query.userId) where.currentHandlerId = query.userId;
@@ -136,8 +138,13 @@ export class AlertsService {
     // Role-based filtering
     if (user.role === 'GESTIONNAIRE') {
       where.currentHandlerId = user.id;
-    } else if (user.role === 'CHEF_EQUIPE') {
-      where.teamId = user.id;
+      this.logger.log(`🎯 Filtering for GESTIONNAIRE: ${user.id}`);
+    } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+      // Filter by contract.teamLeaderId for Chef d'équipe
+      where.contract = {
+        teamLeaderId: user.id
+      };
+      this.logger.log(`🎯 Filtering for CHEF_EQUIPE/GESTIONNAIRE_SENIOR by contract.teamLeaderId: ${user.id}`);
     }
     
     const bordereaux = await this.prisma.bordereau.findMany({
@@ -160,6 +167,11 @@ export class AlertsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    
+    this.logger.log(`📊 Found ${bordereaux.length} bordereaux after filtering`);
+    if (bordereaux.length > 0) {
+      this.logger.log(`📊 Sample: ${bordereaux[0].reference}, contract.teamLeaderId: ${bordereaux[0].contract?.teamLeaderId}`);
+    }
 
     // Prepare data for AI SLA prediction
     const aiItems = bordereaux.map(b => ({
@@ -208,9 +220,9 @@ export class AlertsService {
         }
       }
       
-      // Only show assignedToName if currentHandler is a GESTIONNAIRE with matching teamLeaderId
+      // Show assignedToName from currentHandler
       let assignedToName = 'Non assigné';
-      if (b.currentHandler && b.currentHandler.role === 'GESTIONNAIRE' && b.currentHandler.teamLeaderId === b.teamId) {
+      if (b.currentHandler) {
         assignedToName = b.currentHandler.fullName;
       }
       
@@ -474,7 +486,7 @@ export class AlertsService {
         // Get trend forecast - send data in correct format
         const forecastResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, trendData, {
           headers: { 'Authorization': `Bearer ${token}` },
-          timeout: 10000
+          timeout: 300000
         });
         forecast = forecastResponse.data;
         
@@ -490,7 +502,7 @@ export class AlertsService {
           decision_type: 'resource_allocation'
         }, {
           headers: { 'Authorization': `Bearer ${token}` },
-          timeout: 10000
+          timeout: 300000
         });
         
       } catch (aiError) {
@@ -902,12 +914,16 @@ export class AlertsService {
     // Role-based filtering
     if (user.role === 'GESTIONNAIRE') {
       whereClause.userId = user.id;
-    } else if (user.role === 'CHEF_EQUIPE') {
+    } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+      // Get team members (gestionnaires) for this chef
       const teamMembers = await this.prisma.user.findMany({
-        where: { role: 'GESTIONNAIRE' },
+        where: { 
+          teamLeaderId: user.id,
+          role: 'GESTIONNAIRE'
+        },
         select: { id: true }
       });
-      whereClause.userId = { in: teamMembers.map(m => m.id) };
+      whereClause.userId = { in: [user.id, ...teamMembers.map(m => m.id)] };
     }
     
     // Get actual alerts from dashboard (only red/orange)
@@ -990,13 +1006,16 @@ export class AlertsService {
     // Role-based filtering
     if (user.role === 'GESTIONNAIRE') {
       where.userId = user.id;
-    } else if (user.role === 'CHEF_EQUIPE') {
+    } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
       // Get alerts for team members
       const teamMembers = await this.prisma.user.findMany({
-        where: { role: 'GESTIONNAIRE' },
+        where: { 
+          teamLeaderId: user.id,
+          role: 'GESTIONNAIRE'
+        },
         select: { id: true }
       });
-      where.userId = { in: teamMembers.map(m => m.id) };
+      where.userId = { in: [user.id, ...teamMembers.map(m => m.id)] };
     }
     
     return this.prisma.alertLog.findMany({

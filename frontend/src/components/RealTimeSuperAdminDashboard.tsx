@@ -28,7 +28,8 @@ import {
   Error,
   People,
   Assignment,
-  Speed
+  Speed,
+  Info
 } from '@mui/icons-material';
 import { 
   getRealTimeStats, 
@@ -117,6 +118,22 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
       case 'critical': case 'OVERLOADED': case 'CRITICAL': return <Error color="error" />;
       default: return <Speed />;
     }
+  };
+
+  const formatAge = (hours: number) => {
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = hours % 24;
+      return `${days}j ${remainingHours}h`;
+    }
+    return `${hours}h`;
+  };
+
+  const getAgeColor = (hours: number) => {
+    if (hours > 168) return 'error'; // > 7 days
+    if (hours > 72) return 'warning'; // > 3 days
+    if (hours > 24) return 'info'; // > 1 day
+    return 'default';
   };
 
   if (loading) {
@@ -268,65 +285,161 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
       {/* Queues Overview with Alert Rules */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">
-              État des Files d'Attente
+          <Box mb={3}>
+            <Typography variant="h6" gutterBottom>
+              📋 Cycle de Vie des Bordereaux - Suivi par Étape
             </Typography>
-            <Chip 
-              label="Règles: >Seuil OU >24h = Critique" 
-              size="small" 
-              color="info"
-              variant="outlined"
-            />
+            <Typography variant="body2" color="text.secondary">
+              Flux: Bureau d'Ordre → Équipe Scan → Équipe Métier (Traitement) → Finance (Virement)
+            </Typography>
           </Box>
+          
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              <strong>Lecture du tableau:</strong><br/>
+              • <strong>Total Bloqués</strong> = Nombre de bordereaux coincés à cette étape<br/>
+              • <strong>Pas Commencés</strong> = Bordereaux en attente (personne ne travaille dessus)<br/>
+              • <strong>En Traitement</strong> = Bordereaux en cours (quelqu'un travaille dessus)<br/>
+              • <strong>Attente Max</strong> = Depuis combien de temps le plus ancien attend
+            </Typography>
+          </Alert>
+
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>File</TableCell>
-                  <TableCell align="right">Total</TableCell>
-                  <TableCell align="right">En Attente</TableCell>
-                  <TableCell align="right">En Cours</TableCell>
-                  <TableCell align="right">Plus Ancien (h)</TableCell>
-                  <TableCell align="center">Statut</TableCell>
+                  <TableCell><strong>Étape du Cycle</strong></TableCell>
+                  <TableCell align="right"><strong>Total Bloqués</strong></TableCell>
+                  <TableCell align="right"><strong>Pas Commencés</strong></TableCell>
+                  <TableCell align="right"><strong>En Traitement</strong></TableCell>
+                  <TableCell align="right"><strong>Attente Maximum</strong></TableCell>
+                  <TableCell align="center"><strong>Urgence</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {queuesData.map((queue) => (
-                  <TableRow key={queue.name}>
-                    <TableCell><strong>{queue.name}</strong></TableCell>
-                    <TableCell align="right">
-                      <Chip 
-                        label={queue.total} 
-                        color={queue.alertLevel === 'CRITICAL' ? 'error' : queue.alertLevel === 'WARNING' ? 'warning' : 'default'}
-                        size="small" 
-                      />
+                {queuesData.map((queue) => {
+                  const getQueueInfo = (name: string) => {
+                    const info: Record<string, { icon: string; desc: string; detail: string; seuil: number }> = {
+                      "Bureau d'Ordre": { 
+                        icon: '📥', 
+                        desc: 'Étape 1: Bureau d\'Ordre', 
+                        detail: 'Enregistrement initial du bordereau',
+                        seuil: 50 
+                      },
+                      "Service SCAN": { 
+                        icon: '🖨️', 
+                        desc: 'Étape 2: Équipe Scan', 
+                        detail: 'Numérisation des documents',
+                        seuil: 30 
+                      },
+                      "Traitement": { 
+                        icon: '⚙️', 
+                        desc: 'Étape 3: Équipe Métier', 
+                        detail: 'Traitement par gestionnaires',
+                        seuil: 100 
+                      },
+                      "Finance": { 
+                        icon: '💰', 
+                        desc: 'Étape 4: Service Finance', 
+                        detail: 'Préparation et exécution virement',
+                        seuil: 50 
+                      }
+                    };
+                    return info[name] || { icon: '', desc: name, detail: '', seuil: 50 };
+                  };
+                  
+                  const queueInfo = getQueueInfo(queue.name);
+                  
+                  return (
+                  <TableRow key={queue.name} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                    <TableCell>
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>
+                          {queueInfo.icon} {queueInfo.desc}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {queueInfo.detail}
+                        </Typography>
+                      </Box>
                     </TableCell>
-                    <TableCell align="right">{queue.pending}</TableCell>
-                    <TableCell align="right">{queue.processing}</TableCell>
                     <TableCell align="right">
-                      <Chip 
-                        label={`${queue.oldestAge}h`}
-                        color={queue.oldestAge > 24 ? 'error' : queue.oldestAge > 12 ? 'warning' : 'default'}
-                        size="small"
-                      />
+                      <Box>
+                        <Typography variant="h6" color={queue.alertLevel === 'CRITICAL' ? 'error.main' : queue.alertLevel === 'WARNING' ? 'warning.main' : 'text.primary'}>
+                          {queue.total}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          bordereaux
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">{queue.pending}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">{queue.processing}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Box>
+                        <Chip 
+                          label={formatAge(queue.oldestAge)}
+                          color={getAgeColor(queue.oldestAge) as any}
+                          size="small"
+                        />
+                        {queue.alertLevel === 'CRITICAL' && (
+                          <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+                            ⚠️ Délai dépassé!
+                          </Typography>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell align="center">
-                      {queue.alertLevel === 'CRITICAL' && <Error color="error" />}
-                      {queue.alertLevel === 'WARNING' && <Warning color="warning" />}
-                      {queue.alertLevel === 'NORMAL' && <CheckCircle color="success" />}
+                      <Box display="flex" flexDirection="column" alignItems="center" gap={0.5}>
+                        {queue.alertLevel === 'CRITICAL' && (
+                          <>
+                            <Error color="error" />
+                            <Typography variant="caption" color="error" fontWeight={600}>🔴 CRITIQUE</Typography>
+                          </>
+                        )}
+                        {queue.alertLevel === 'WARNING' && (
+                          <>
+                            <Warning color="warning" />
+                            <Typography variant="caption" color="warning.main" fontWeight={600}>🟠 ATTENTION</Typography>
+                          </>
+                        )}
+                        {queue.alertLevel === 'INFO' && (
+                          <>
+                            <Info color="info" />
+                            <Typography variant="caption" color="info.main" fontWeight={600}>🔵 SURVEILLER</Typography>
+                          </>
+                        )}
+                        {queue.alertLevel === 'NORMAL' && (
+                          <>
+                            <CheckCircle color="success" />
+                            <Typography variant="caption" color="success.main" fontWeight={600}>🟢 NORMAL</Typography>
+                          </>
+                        )}
+                      </Box>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
-          <Alert severity="info" sx={{ mt: 2 }}>
-            <Typography variant="caption">
-              <strong>Règles d'alerte:</strong> Critique si Total &gt; Seuil OU Plus ancien &gt; 24h | 
-              Avertissement si Total &gt; 70% Seuil OU Plus ancien &gt; 12h
-            </Typography>
-          </Alert>
+          {queuesData.some(q => q.alertLevel === 'CRITICAL') && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>🚨 ALERTE CRITIQUE:</strong> Des bordereaux ont dépassé leur délai contractuel ou les files sont surchargées. Action immédiate requise.
+              </Typography>
+            </Alert>
+          )}
+          {queuesData.some(q => q.alertLevel === 'WARNING') && !queuesData.some(q => q.alertLevel === 'CRITICAL') && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>⚠️ ATTENTION:</strong> Certains bordereaux approchent de leur délai contractuel (≥80% consommé).
+              </Typography>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
@@ -395,354 +508,6 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Derniers Bordereaux Ajoutés - COMMENTÉ: Redondant avec dashboard */}
-      {/* <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box mb={2}>
-            <Typography variant="h6" mb={2}>
-              Derniers Bordereaux Ajoutés ({filteredDossiers1.length})
-            </Typography>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%' }}>
-                <TextField
-                  size="small"
-                  label="Référence"
-                  value={filters1.reference}
-                  onChange={(e) => setFilters1({ ...filters1, reference: e.target.value })}
-                  sx={{ width: 150 }}
-                />
-                <TextField
-                  size="small"
-                  label="Client"
-                  value={filters1.client}
-                  onChange={(e) => setFilters1({ ...filters1, client: e.target.value })}
-                  sx={{ width: 150 }}
-                />
-                <TextField
-                  size="small"
-                  select
-                  label="Type"
-                  value={filters1.type}
-                  onChange={(e) => setFilters1({ ...filters1, type: e.target.value })}
-                  sx={{ width: 120 }}
-                >
-                  <MenuItem value="">Tous</MenuItem>
-                  <MenuItem value="BULLETIN_SOIN">Prestation</MenuItem>
-                  <MenuItem value="ADHESION">Adhésion</MenuItem>
-                  <MenuItem value="RECLAMATION">Réclamation</MenuItem>
-                </TextField>
-                <TextField
-                  size="small"
-                  select
-                  label="Statut"
-                  value={filters1.statut}
-                  onChange={(e) => setFilters1({ ...filters1, statut: e.target.value })}
-                  sx={{ width: 120 }}
-                >
-                  <MenuItem value="">Tous</MenuItem>
-                  <MenuItem value="EN_ATTENTE">En Attente</MenuItem>
-                  <MenuItem value="SCANNE">Scanné</MenuItem>
-                  <MenuItem value="EN_COURS">En Cours</MenuItem>
-                  <MenuItem value="TRAITE">Traité</MenuItem>
-                  <MenuItem value="REJETE">Rejeté</MenuItem>
-                </TextField>
-                <DatePicker
-                  label="Date début"
-                  value={filters1.dateFrom}
-                  onChange={(date) => setFilters1({ ...filters1, dateFrom: date })}
-                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
-                />
-                <DatePicker
-                  label="Date fin"
-                  value={filters1.dateTo}
-                  onChange={(date) => setFilters1({ ...filters1, dateTo: date })}
-                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
-                />
-                <Button size="small" onClick={clearFilters1} startIcon={<Clear />} variant="outlined">
-                  Effacer
-                </Button>
-              </Stack>
-            </LocalizationProvider>
-          </Box>
-          
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Référence</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>% Finalisation</TableCell>
-                  <TableCell>États Dossiers</TableCell>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredDossiers1.slice(0, 10).map((dossier) => (
-                  <TableRow key={dossier.id}>
-                    <TableCell>{dossier.reference}</TableCell>
-                    <TableCell>{dossier.client}</TableCell>
-                    <TableCell>{dossier.type}</TableCell>
-                    <TableCell>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={dossier.completionPercentage || 0}
-                          sx={{ width: 40, height: 6 }}
-                        />
-                        <Typography variant="caption">
-                          {dossier.completionPercentage || 0}%
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {(dossier.dossierStates || [dossier.statut]).map((state: string, idx: number) => (
-                        <Chip key={idx} label={state} size="small" sx={{ mr: 0.5 }} />
-                      ))}
-                    </TableCell>
-                    <TableCell>{dossier.date}</TableCell>
-                    <TableCell>
-                      <IconButton size="small">
-                        ✏️
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card> */}
-
-      {/* Bordereaux en cours - COMMENTÉ: Redondant avec dashboard */}
-      {/* <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box mb={2}>
-            <Typography variant="h6" mb={2}>
-              Bordereaux ({filteredDossiers2.length} total)
-            </Typography>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%' }}>
-                <TextField
-                  size="small"
-                  label="Référence"
-                  value={filters2.reference}
-                  onChange={(e) => setFilters2({ ...filters2, reference: e.target.value })}
-                  sx={{ width: 150 }}
-                />
-                <TextField
-                  size="small"
-                  label="Client"
-                  value={filters2.client}
-                  onChange={(e) => setFilters2({ ...filters2, client: e.target.value })}
-                  sx={{ width: 150 }}
-                />
-                <TextField
-                  size="small"
-                  select
-                  label="Statut"
-                  value={filters2.statut}
-                  onChange={(e) => setFilters2({ ...filters2, statut: e.target.value })}
-                  sx={{ width: 120 }}
-                >
-                  <MenuItem value="">Tous</MenuItem>
-                  <MenuItem value="ASSIGNE">Assigné</MenuItem>
-                  <MenuItem value="EN_COURS">En Cours</MenuItem>
-                  <MenuItem value="TRAITE">Traité</MenuItem>
-                  <MenuItem value="A_AFFECTER">À Affecter</MenuItem>
-                </TextField>
-                <DatePicker
-                  label="Date début"
-                  value={filters2.dateFrom}
-                  onChange={(date) => setFilters2({ ...filters2, dateFrom: date })}
-                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
-                />
-                <DatePicker
-                  label="Date fin"
-                  value={filters2.dateTo}
-                  onChange={(date) => setFilters2({ ...filters2, dateTo: date })}
-                  slotProps={{ textField: { size: 'small', sx: { width: 140 } } }}
-                />
-                <Button size="small" onClick={clearFilters2} startIcon={<Clear />} variant="outlined">
-                  Effacer
-                </Button>
-              </Stack>
-            </LocalizationProvider>
-          </Box>
-          
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Référence</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Statut</TableCell>
-                  <TableCell>% Finalisation</TableCell>
-                  <TableCell>États Dossiers</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredDossiers2.slice(0, 10).map((dossier) => (
-                  <TableRow key={`en-cours-${dossier.id}`}>
-                    <TableCell>{dossier.reference}</TableCell>
-                    <TableCell>{dossier.client}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={dossier.statut} 
-                        color={dossier.statut === 'Traité' ? 'success' : 'primary'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={dossier.completionPercentage || 0}
-                          sx={{ width: 40, height: 6 }}
-                        />
-                        <Typography variant="caption">
-                          {dossier.completionPercentage || 0}%
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {(dossier.dossierStates || [dossier.statut]).map((state: string, idx: number) => (
-                        <Chip key={idx} label={state} size="small" sx={{ mr: 0.5 }} />
-                      ))}
-                    </TableCell>
-                    <TableCell>
-                      <IconButton size="small">
-                        ✏️
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card> */}
-
-      {/* Dossiers Individuels - COMMENTÉ: Redondant avec dashboard */}
-      {/* <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box mb={2}>
-            <Typography variant="h6" mb={1}>
-              Dossiers Individuels ({filteredDocuments.length})
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              Affichage par dossier (non par bordereau)
-            </Typography>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%' }}>
-                <TextField
-                  size="small"
-                  label="Réf. Dossier"
-                  value={filters3.reference}
-                  onChange={(e) => setFilters3({ ...filters3, reference: e.target.value })}
-                  sx={{ width: 140 }}
-                />
-                <TextField
-                  size="small"
-                  label="Client"
-                  value={filters3.client}
-                  onChange={(e) => setFilters3({ ...filters3, client: e.target.value })}
-                  sx={{ width: 130 }}
-                />
-                <TextField
-                  size="small"
-                  select
-                  label="Type"
-                  value={filters3.type}
-                  onChange={(e) => setFilters3({ ...filters3, type: e.target.value })}
-                  sx={{ width: 110 }}
-                >
-                  <MenuItem value="">Tous</MenuItem>
-                  <MenuItem value="BULLETIN_SOIN">Prestation</MenuItem>
-                  <MenuItem value="ADHESION">Adhésion</MenuItem>
-                  <MenuItem value="RECLAMATION">Réclamation</MenuItem>
-                </TextField>
-                <TextField
-                  size="small"
-                  select
-                  label="Statut"
-                  value={filters3.statut}
-                  onChange={(e) => setFilters3({ ...filters3, statut: e.target.value })}
-                  sx={{ width: 110 }}
-                >
-                  <MenuItem value="">Tous</MenuItem>
-                  <MenuItem value="Nouveau">Nouveau</MenuItem>
-                  <MenuItem value="En cours">En cours</MenuItem>
-                  <MenuItem value="Traité">Traité</MenuItem>
-                  <MenuItem value="Rejeté">Rejeté</MenuItem>
-                </TextField>
-                <TextField
-                  size="small"
-                  label="Gestionnaire"
-                  value={filters3.gestionnaire}
-                  onChange={(e) => setFilters3({ ...filters3, gestionnaire: e.target.value })}
-                  sx={{ width: 130 }}
-                />
-                <DatePicker
-                  label="Date début"
-                  value={filters3.dateFrom}
-                  onChange={(date) => setFilters3({ ...filters3, dateFrom: date })}
-                  slotProps={{ textField: { size: 'small', sx: { width: 130 } } }}
-                />
-                <DatePicker
-                  label="Date fin"
-                  value={filters3.dateTo}
-                  onChange={(date) => setFilters3({ ...filters3, dateTo: date })}
-                  slotProps={{ textField: { size: 'small', sx: { width: 130 } } }}
-                />
-                <Button size="small" onClick={clearFilters3} startIcon={<Clear />} variant="outlined">
-                  Effacer
-                </Button>
-              </Stack>
-            </LocalizationProvider>
-          </Box>
-          
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Réf. Dossier</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Statut Dossier</TableCell>
-                  <TableCell>Gestionnaire</TableCell>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredDocuments.slice(0, 20).map((document) => (
-                  <TableRow key={document.id}>
-                    <TableCell>{document.reference}</TableCell>
-                    <TableCell>{document.client}</TableCell>
-                    <TableCell>{document.type}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={document.statut} 
-                        color={document.statut === 'Traité' ? 'success' : document.statut === 'En cours' ? 'warning' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{document.gestionnaire || 'Non assigné'}</TableCell>
-                    <TableCell>{document.date}</TableCell>
-                    <TableCell>
-                      <Button size="small" variant="text">Voir PDF</Button>
-                      <Button size="small" variant="text">Modifier Statut</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card> */}
 
       {/* System Performance */}
       <Grid container spacing={3} sx={{ mb: 3 }}>

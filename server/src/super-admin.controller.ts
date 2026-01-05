@@ -132,43 +132,66 @@ export class SuperAdminController {
     ];
 
     const results = await Promise.all(queues.map(async (queue) => {
-      const [pending, processing, completed, failed, oldest] = await Promise.all([
-        this.prisma.bordereau.count({
-          where: { statut: { in: queue.statuses.slice(0, 1) as any } }
-        }),
-        this.prisma.bordereau.count({
-          where: { statut: { in: queue.statuses.filter(s => s.includes('EN_COURS') || s.includes('ASSIGNE')) as any } }
-        }),
-        this.prisma.bordereau.count({
-          where: { statut: { in: queue.statuses.filter(s => s.includes('TRAITE') || s.includes('SCANNE')) as any } }
-        }),
-        this.prisma.bordereau.count({
-          where: { statut: { in: ['REJETE', 'EN_DIFFICULTE'] as any } }
-        }),
-        this.prisma.bordereau.findFirst({
-          where: { statut: { in: queue.statuses as any } },
-          orderBy: { dateReception: 'asc' },
-          select: { dateReception: true }
-        })
-      ]);
+      // Count ALL bordereaux in this stage
+      const allInStage = await this.prisma.bordereau.findMany({
+        where: { statut: { in: queue.statuses as any } },
+        include: { contract: { select: { delaiReglement: true } } }
+      });
 
-      const total = pending + processing;
+      // Count pending (waiting statuses)
+      const pendingStatuses = queue.statuses.filter(s => 
+        s.includes('ATTENTE') || s.includes('A_SCANNER') || s.includes('SCANNE') || 
+        s.includes('A_AFFECTER') || s.includes('TRAITE') || s.includes('PRET_VIREMENT')
+      );
+      const pending = allInStage.filter(b => pendingStatuses.includes(b.statut)).length;
+
+      // Count processing (in progress statuses)
+      const processingStatuses = queue.statuses.filter(s => 
+        s.includes('EN_COURS') || s.includes('ASSIGNE')
+      );
+      const processing = allInStage.filter(b => processingStatuses.includes(b.statut)).length;
+
+      // Find oldest with contract
+      const oldest = allInStage.length > 0 ? allInStage.reduce((oldest, current) => 
+        current.dateReception < oldest.dateReception ? current : oldest
+      ) : null;
+
+      const total = allInStage.length;
       const oldestAge = oldest ? Math.floor((now.getTime() - oldest.dateReception.getTime()) / (1000 * 60 * 60)) : 0;
       
-      // RÈGLE ALERTE: Rouge si >threshold OU plus ancien >24h
+      // RÈGLE ALERTE BASÉE SUR CONTRAT: Utilise delaiReglement du contrat
       let alertLevel = 'NORMAL';
-      if (total > queue.threshold || oldestAge > 24) {
-        alertLevel = 'CRITICAL';
-      } else if (total > queue.threshold * 0.7 || oldestAge > 12) {
-        alertLevel = 'WARNING';
+      
+      if (oldest?.contract?.delaiReglement) {
+        const contractDeadlineHours = oldest.contract.delaiReglement * 24;
+        const timeElapsedPercent = (oldestAge / contractDeadlineHours) * 100;
+
+        if (timeElapsedPercent >= 100 || total > queue.threshold * 1.5) {
+          alertLevel = 'CRITICAL'; // Deadline passed
+        } else if (timeElapsedPercent >= 80 || total > queue.threshold) {
+          alertLevel = 'WARNING'; // 80% consumed
+        } else if (timeElapsedPercent >= 60 || total > queue.threshold * 0.7) {
+          alertLevel = 'INFO'; // 60% consumed
+        }
+      } else {
+        // Fallback: volume-based only
+        if (total > queue.threshold * 1.5) {
+          alertLevel = 'CRITICAL';
+        } else if (total > queue.threshold) {
+          alertLevel = 'WARNING';
+        } else if (total > queue.threshold * 0.7) {
+          alertLevel = 'INFO';
+        }
       }
+
+      console.log(`📊 Queue ${queue.name}: Total=${total}, Pending=${pending}, Processing=${processing}`);
 
       return {
         name: queue.name,
         pending,
         processing,
-        completed,
-        failed,
+        completed: 0,
+        failed: 0,
         total,
         oldestAge,
         alertLevel,
@@ -182,32 +205,45 @@ export class SuperAdminController {
   @Get('team-workload')
   @Public()
   async getTeamWorkload() {
-    // Include ALL operational roles: Chef d'équipe, Gestionnaire Senior, Gestionnaire
     const users = await this.prisma.user.findMany({
       where: {
-        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'] },
+        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'RESPONSABLE_DEPARTEMENT'] },
         active: true
       },
-      include: {
-        assignedDocuments: {
-          where: { 
-            status: { in: ['EN_COURS', 'SCANNE', 'UPLOADED'] as any }
-          }
-        }
-      },
       orderBy: [
-        { role: 'asc' },  // Chef first, then Senior, then Gestionnaire
+        { role: 'asc' },
         { fullName: 'asc' }
       ]
     });
 
     console.log(`👥 Found ${users.length} users for workload analysis`);
 
-    return users.map(user => {
-      const workload = user.assignedDocuments.length;
-      const utilizationRate = user.capacity > 0 ? (workload / user.capacity) * 100 : 0;
+    const workloadData = await Promise.all(users.map(async (user) => {
+      // Count documents assigned directly
+      const documentsAssigned = await this.prisma.document.count({
+        where: { assignedToUserId: user.id }
+      });
+
+      // For SENIOR/RESPONSABLE: count documents via contracts
+      let documentsViaContracts = 0;
+      if (user.role === 'GESTIONNAIRE_SENIOR' || user.role === 'RESPONSABLE_DEPARTEMENT' || user.role === 'CHEF_EQUIPE') {
+        documentsViaContracts = await this.prisma.document.count({
+          where: {
+            bordereau: {
+              contract: {
+                OR: [
+                  { assignedManagerId: user.id },
+                  { teamLeaderId: user.id }
+                ]
+              }
+            }
+          }
+        });
+      }
+
+      const workload = Math.max(documentsAssigned, documentsViaContracts);
+      const utilizationRate = user.capacity > 0 ? Math.round((workload / user.capacity) * 100) : 0;
       
-      // RÈGLE: <70% Normal, 70-89% Busy, ≥90% Overloaded
       let level = 'NORMAL';
       let color = 'success';
       if (utilizationRate >= 90) {
@@ -218,7 +254,7 @@ export class SuperAdminController {
         color = 'warning';
       }
 
-      console.log(`👤 ${user.fullName}: ${workload} documents assigned`);
+      console.log(`👤 ${user.fullName}: ${workload} docs (direct: ${documentsAssigned}, via contracts: ${documentsViaContracts})`);
 
       return {
         id: user.id,
@@ -226,11 +262,13 @@ export class SuperAdminController {
         role: user.role,
         workload,
         capacity: user.capacity,
-        utilizationRate: Math.round(utilizationRate),
+        utilizationRate,
         level,
         color
       };
-    });
+    }));
+
+    return workloadData;
   }
 
   @Get('alerts')
@@ -1702,19 +1740,41 @@ export class SuperAdminController {
   async getDocumentAssignments(@Query() params: any) {
     const { documentType, gestionnaire, chefEquipe, slaStatus } = params;
 
-    const whereClause: any = {
-      assignedToUserId: { not: null }
-    };
-
+    const whereClause: any = {};
     if (documentType) whereClause.type = documentType;
 
-    // Query DOCUMENTS (not bordereaux)
+    // Query ALL DOCUMENTS with their relationships
     const documents = await this.prisma.document.findMany({
       where: whereClause,
       include: {
         bordereau: {
           include: {
             client: { select: { name: true } },
+            contract: {
+              select: {
+                assignedManager: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    role: true,
+                    teamLeader: {
+                      select: {
+                        id: true,
+                        fullName: true,
+                        role: true
+                      }
+                    }
+                  }
+                },
+                teamLeader: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    role: true
+                  }
+                }
+              }
+            },
             currentHandler: {
               select: {
                 id: true,
@@ -1723,7 +1783,8 @@ export class SuperAdminController {
                 teamLeader: {
                   select: {
                     id: true,
-                    fullName: true
+                    fullName: true,
+                    role: true
                   }
                 }
               }
@@ -1734,10 +1795,12 @@ export class SuperAdminController {
           select: {
             id: true,
             fullName: true,
+            role: true,
             teamLeader: {
               select: {
                 id: true,
-                fullName: true
+                fullName: true,
+                role: true
               }
             }
           }
@@ -1747,26 +1810,58 @@ export class SuperAdminController {
     });
 
     const now = new Date();
+    
+    console.log(`🔍 Processing ${documents.length} documents for assignments`);
+    
     const assignments = documents.map(doc => {
-      const gestionnaireName = doc.assignedTo?.fullName || 'NON ASSIGNÉ';
-      const chefEquipeName = doc.assignedTo?.teamLeader?.fullName || 'AUCUN CHEF';
+      let gestionnaire: any = null;
+      let chefEquipe: any = null;
+      
+      // Priority 1: assignedTo is GESTIONNAIRE
+      if (doc.assignedTo?.role === 'GESTIONNAIRE') {
+        gestionnaire = doc.assignedTo;
+        chefEquipe = doc.assignedTo.teamLeader?.role === 'CHEF_EQUIPE' ? doc.assignedTo.teamLeader : null;
+      }
+      // Priority 2: assignedTo is CHEF_EQUIPE - use contract.teamLeader as chef
+      else if (doc.assignedTo?.role === 'CHEF_EQUIPE') {
+        chefEquipe = doc.assignedTo;
+        // No gestionnaire assigned yet
+      }
+      // Priority 3: currentHandler is GESTIONNAIRE
+      else if (doc.bordereau?.currentHandler?.role === 'GESTIONNAIRE') {
+        gestionnaire = doc.bordereau.currentHandler;
+        chefEquipe = doc.bordereau.currentHandler.teamLeader?.role === 'CHEF_EQUIPE' ? doc.bordereau.currentHandler.teamLeader : null;
+      }
+      // Priority 4: contract.assignedManager is GESTIONNAIRE
+      else if (doc.bordereau?.contract?.assignedManager?.role === 'GESTIONNAIRE') {
+        gestionnaire = doc.bordereau.contract.assignedManager;
+        chefEquipe = doc.bordereau.contract.assignedManager.teamLeader?.role === 'CHEF_EQUIPE' ? doc.bordereau.contract.assignedManager.teamLeader : null;
+      }
+      
+      // Fallback: Check contract.teamLeader for chef
+      if (!chefEquipe && doc.bordereau?.contract?.teamLeader?.role === 'CHEF_EQUIPE') {
+        chefEquipe = doc.bordereau.contract.teamLeader;
+      }
+      
+      const gestionnaireName = gestionnaire?.fullName || 'NON ASSIGNÉ';
+      const chefEquipeName = chefEquipe?.fullName || 'AUCUN CHEF';
       
       // RÈGLE SLA: Calcul du statut
-      let slaStatus = 'ON_TIME';
+      let slaStatusValue = 'ON_TIME';
       let slaColor = 'success';
       if (doc.bordereau?.dateLimiteTraitement) {
         const hoursRemaining = (doc.bordereau.dateLimiteTraitement.getTime() - now.getTime()) / (1000 * 60 * 60);
         if (hoursRemaining < 0) {
-          slaStatus = 'OVERDUE';
+          slaStatusValue = 'OVERDUE';
           slaColor = 'error';
         } else if (hoursRemaining < 24) {
-          slaStatus = 'AT_RISK';
+          slaStatusValue = 'AT_RISK';
           slaColor = 'warning';
         }
       }
 
       // Détection données défaillantes
-      const hasIssue = !doc.assignedTo || !doc.assignedTo.teamLeader;
+      const hasIssue = !gestionnaire || !chefEquipe;
 
       return {
         id: doc.id,
@@ -1774,26 +1869,34 @@ export class SuperAdminController {
         documentType: doc.type,
         clientName: doc.bordereau?.client?.name || 'N/A',
         gestionnaire: gestionnaireName,
-        gestionnaireId: doc.assignedTo?.id,
+        gestionnaireId: gestionnaire?.id,
         chefEquipe: chefEquipeName,
-        chefEquipeId: doc.assignedTo?.teamLeader?.id,
+        chefEquipeId: chefEquipe?.id,
         statut: doc.status || 'UPLOADED',
         assignedAt: doc.assignedAt || doc.uploadedAt,
         dateLimite: doc.bordereau?.dateLimiteTraitement,
-        slaStatus,
+        slaStatus: slaStatusValue,
         slaColor,
         hasIssue,
-        issueType: hasIssue ? (!doc.assignedTo ? 'NO_GESTIONNAIRE' : 'NO_CHEF') : null
+        issueType: hasIssue ? (!gestionnaire ? 'NO_GESTIONNAIRE' : 'NO_CHEF') : null
       };
     });
 
     // Appliquer filtres
     let filtered = assignments;
     if (gestionnaire) {
-      filtered = filtered.filter(a => a.gestionnaire.toLowerCase().includes(gestionnaire.toLowerCase()));
+      if (gestionnaire === 'NON ASSIGNÉ') {
+        filtered = filtered.filter(a => a.gestionnaire === 'NON ASSIGNÉ');
+      } else {
+        filtered = filtered.filter(a => a.gestionnaire.toLowerCase().includes(gestionnaire.toLowerCase()));
+      }
     }
     if (chefEquipe) {
-      filtered = filtered.filter(a => a.chefEquipe.toLowerCase().includes(chefEquipe.toLowerCase()));
+      if (chefEquipe === 'AUCUN CHEF') {
+        filtered = filtered.filter(a => a.chefEquipe === 'AUCUN CHEF');
+      } else {
+        filtered = filtered.filter(a => a.chefEquipe.toLowerCase().includes(chefEquipe.toLowerCase()));
+      }
     }
     if (slaStatus) {
       filtered = filtered.filter(a => a.slaStatus === slaStatus);

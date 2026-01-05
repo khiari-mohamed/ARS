@@ -234,7 +234,11 @@ export class ManualScanService {
 
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
-      include: { client: true }
+      include: { 
+        client: true, 
+        contract: { include: { teamLeader: true } },
+        currentHandler: true
+      }
     });
 
     if (!bordereau) {
@@ -246,6 +250,13 @@ export class ManualScanService {
     if (bordereau.statut !== 'SCAN_EN_COURS') {
       throw new BadRequestException(`Cannot upload additional documents. Bordereau status is ${bordereau.statut}, expected SCAN_EN_COURS`);
     }
+
+    // GESTIONNAIRE_SENIOR FIX: Check if contract team leader OR current handler is GESTIONNAIRE_SENIOR
+    const isGestionnaireSenior = 
+      bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR' ||
+      bordereau.currentHandler?.role === 'GESTIONNAIRE_SENIOR';
+    const documentStatus = isGestionnaireSenior ? 'EN_COURS' : 'UPLOADED';
+    console.log('🔍 Is Gestionnaire Senior:', isGestionnaireSenior, '- Document status:', documentStatus);
 
     const uploadedDocuments: Array<{id: string; name: string; type: string; size: number}> = [];
     const errors: Array<{fileName: string; error: string}> = [];
@@ -278,7 +289,7 @@ export class ManualScanService {
         
         console.log(`✅ Final mapped type: ${documentType}`);
 
-        // Create document record
+        // Create document record with GESTIONNAIRE_SENIOR status fix
         const document = await this.prisma.document.create({
           data: {
             name: file.originalname,
@@ -286,7 +297,7 @@ export class ManualScanService {
             path: filePath,
             uploadedById: userId,
             bordereauId,
-            status: 'UPLOADED',
+            status: documentStatus,
             hash: this.generateFileHash(file.buffer)
           }
         });

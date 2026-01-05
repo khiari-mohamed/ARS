@@ -35,29 +35,6 @@ const ForecastingTab: React.FC<Props> = ({ filters, dateRange }) => {
         LocalAPI.get('/analytics/recommendations'),
         LocalAPI.get('/analytics/current-staff')
       ]);
-      
-      // Get advanced analytics with error handling
-      let clusteringResponse = { clusters: [] };
-      let anomalyResponse = { anomalies: [] };
-      let reportResponse = { executive_summary: null };
-      
-      try {
-        clusteringResponse = await getAdvancedClustering();
-      } catch (error) {
-        console.warn('Advanced clustering failed:', error);
-      }
-      
-      try {
-        anomalyResponse = await getSophisticatedAnomalyDetection();
-      } catch (error) {
-        console.warn('Anomaly detection failed:', error);
-      }
-      
-      try {
-        reportResponse = await generateExecutiveReport({ report_type: 'performance', time_period: '7d' });
-      } catch (error) {
-        console.warn('Executive report failed:', error);
-      }
 
       const forecastData = forecastResponse.data;
       const trendsData = trendsResponse.data;
@@ -84,21 +61,11 @@ const ForecastingTab: React.FC<Props> = ({ filters, dateRange }) => {
 
       // Get AI recommendations from backend
       const aiRecommendationsResponse = await LocalAPI.get('/analytics/ai-recommendations');
-      const aiRecommendations = aiRecommendationsResponse.data.recommendations;
+      const aiRecommendations = aiRecommendationsResponse.data.recommendations || [];
 
       // Get resource planning from backend
       const resourcePlanningResponse = await LocalAPI.get('/analytics/resource-planning');
       const resourcePlanning = resourcePlanningResponse.data;
-
-      // Set advanced analytics data
-      setAdvancedAnalytics({
-        clustering: clusteringResponse,
-        anomalies: anomalyResponse,
-        criticalClusters: clusteringResponse.clusters?.filter((c: any) => c.severity === 'critical') || [],
-        highAnomalies: anomalyResponse.anomalies?.filter((a: any) => a.severity === 'high') || []
-      });
-      
-      setExecutiveReport(reportResponse.executive_summary);
 
       setData({
         forecast: {
@@ -113,11 +80,43 @@ const ForecastingTab: React.FC<Props> = ({ filters, dateRange }) => {
         resourcePlanning,
         trends: forecastData.history || []
       });
+      
+      // Load advanced analytics in background (non-blocking)
+      loadAdvancedAnalytics();
+      
     } catch (error) {
       console.error('Failed to load forecast data:', error);
-      throw error;
+      // Set minimal data to prevent infinite loading
+      setData({
+        forecast: { nextWeek: 0, nextMonth: 0, recommendedStaff: 0, currentStaff: 0, accuracy: 0 },
+        plannedVsActual: [],
+        aiRecommendations: [],
+        resourcePlanning: [],
+        trends: []
+      });
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const loadAdvancedAnalytics = async () => {
+    try {
+      const [clusteringResponse, anomalyResponse, reportResponse] = await Promise.all([
+        getAdvancedClustering().catch(() => ({ clusters: [] })),
+        getSophisticatedAnomalyDetection().catch(() => ({ anomalies: [] })),
+        generateExecutiveReport({ report_type: 'performance', time_period: '7d' }).catch(() => ({ executive_summary: null }))
+      ]);
+      
+      setAdvancedAnalytics({
+        clustering: clusteringResponse,
+        anomalies: anomalyResponse,
+        criticalClusters: clusteringResponse.clusters?.filter((c: any) => c.severity === 'critical') || [],
+        highAnomalies: anomalyResponse.anomalies?.filter((a: any) => a.severity === 'high') || []
+      });
+      
+      setExecutiveReport(reportResponse.executive_summary);
+    } catch (error) {
+      console.warn('Advanced analytics failed:', error);
     }
   };
 

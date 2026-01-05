@@ -248,9 +248,7 @@ const ActiveAlerts: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    {alert.bordereau.userId ? 
-                      users.find((u: any) => u.id === alert.bordereau.userId)?.fullName || alert.bordereau.userId 
-                      : 'Non assigné'}
+                    {alert.bordereau.assignedToName || 'Non assigné'}
                   </TableCell>
                   <TableCell>
                     {new Date(alert.bordereau.createdAt).toLocaleDateString()}

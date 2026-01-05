@@ -1220,34 +1220,35 @@ export class FinanceController {
         });
       }
       
-      // If no OV exists, we MUST create one first (ordreVirementId is required)
+      // EXACT FIX: Store PDF to disk, return path for later OV creation
+      // NO OVDocument record created (avoids premature OV creation)
       if (!ordreVirement) {
-        console.log('⚠️ No OV exists - creating temporary OV for PDF upload');
+        console.log('⚠️ No OV exists yet - storing PDF temporarily');
         
-        // Get active donneur d'ordre
-        const donneurOrdre = await this.prisma.donneurOrdre.findFirst({
-          where: { statut: 'ACTIF' }
-        });
-        
-        if (!donneurOrdre) {
-          throw new BadRequestException('No active donneur d\'ordre found');
+        // Save file to disk
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
         }
         
-        // Create OV
-        ordreVirement = await this.prisma.ordreVirement.create({
-          data: {
-            reference: `OV-${bordereau.reference}`,
-            donneurOrdreId: donneurOrdre.id,
-            bordereauId: body.bordereauId,
-            utilisateurSante: anyUser.id,
-            montantTotal: 0, // Will be updated later
-            nombreAdherents: 0,
-            etatVirement: 'EN_COURS_VALIDATION',
-            validationStatus: 'EN_ATTENTE_VALIDATION'
-          }
-        });
+        const filename = `TEMP_${body.bordereauId}_${Date.now()}_${file.originalname}`;
+        const filePath = path.join(uploadsDir, filename);
+        fs.writeFileSync(filePath, file.buffer);
         
-        console.log('✅ Created OV:', ordreVirement.id);
+        console.log('✅ PDF stored temporarily at:', filePath);
+        
+        return {
+          success: true,
+          message: 'Document PDF téléchargé avec succès. L\'OV sera créé lors de la validation.',
+          document: {
+            name: file.originalname,
+            bordereauReference: bordereau.reference,
+            clientName: bordereau.client.name,
+            uploadedAt: new Date(),
+            ordreVirementId: null,
+            tempFilePath: filePath  // Return path for later use
+          }
+        };
       }
       
       // Save file to disk
@@ -1406,34 +1407,50 @@ export class FinanceController {
     @Res() res: Response
   ) {
     try {
-      console.log('📝 Fetching PDF document:', { ovId: id, docId });
-      
       const document = await this.prisma.oVDocument.findUnique({
         where: { id: docId }
       });
       
       if (!document) {
-        console.error('❌ Document not found in database:', docId);
         throw new BadRequestException('Document not found');
       }
       
-      console.log('📄 Document found:', { name: document.name, path: document.path });
-      
       const fs = require('fs');
-      if (fs.existsSync(document.path)) {
-        console.log('✅ PDF file exists on disk, reading...');
-        const pdfBuffer = fs.readFileSync(document.path);
-        console.log('✅ PDF loaded, size:', pdfBuffer.length, 'bytes');
-        res.set({
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `inline; filename="${document.name}"`,
-          'Content-Length': pdfBuffer.length
-        });
-        res.send(pdfBuffer);
+      const path = require('path');
+      
+      let filePath = document.path;
+      console.log('🔍 DB path:', filePath);
+      
+      const pathsToTry: string[] = [];
+      
+      if (path.isAbsolute(filePath)) {
+        pathsToTry.push(filePath);
+        if (filePath.startsWith('/')) {
+          const rel = filePath.replace(/^\/home\/[^\/]+\//, '');
+          pathsToTry.push(path.join(process.cwd(), rel));
+        }
       } else {
-        console.error('❌ PDF file not found on disk:', document.path);
-        throw new BadRequestException(`PDF file not found on disk: ${document.path}`);
+        pathsToTry.push(path.join(process.cwd(), filePath));
       }
+      
+      pathsToTry.push(path.join(process.cwd(), '..', 'uploads', 'ov-documents', path.basename(filePath)));
+      pathsToTry.push(path.join(process.cwd(), 'uploads', 'ov-documents', path.basename(filePath)));
+      
+      for (const tryPath of pathsToTry) {
+        if (fs.existsSync(tryPath)) {
+          console.log('✅ Found:', tryPath);
+          const pdfBuffer = fs.readFileSync(tryPath);
+          res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="${document.name}"`,
+            'Content-Length': pdfBuffer.length
+          });
+          return res.send(pdfBuffer);
+        }
+      }
+      
+      console.log('❌ Not found in:', pathsToTry);
+      throw new BadRequestException(`PDF file not found: ${document.name}`);
     } catch (error) {
       console.error('❌ Error viewing OV document PDF:', error);
       res.status(500).json({ error: 'Failed to load PDF', details: error.message });
@@ -1449,7 +1466,54 @@ export class FinanceController {
     try {
       console.log('🔍 Fetching uploaded PDF for OV:', id);
       
-      // First check OVDocument table (for PDFs uploaded via upload-pdf-document)
+      // Get OV to find bordereau
+      const ov = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        select: { uploadedPdfPath: true, bordereauId: true }
+      });
+      
+      if (!ov) {
+        throw new BadRequestException('Ordre de virement not found');
+      }
+      
+      console.log('📝 OV found:', { id, bordereauId: ov.bordereauId, uploadedPdfPath: ov.uploadedPdfPath });
+      
+      // PRIORITY 1: Check for temporary PDF files by bordereauId (uploaded BEFORE OV creation)
+      if (ov.bordereauId) {
+        console.log('🔍 PRIORITY 1: Checking for temporary PDF files by bordereauId:', ov.bordereauId);
+        const fs = require('fs');
+        const path = require('path');
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+        
+        if (fs.existsSync(uploadsDir)) {
+          const files = fs.readdirSync(uploadsDir);
+          const tempFile = files.find(f => f.startsWith(`TEMP_${ov.bordereauId}_`));
+          
+          console.log('📄 PRIORITY 1 Result:', tempFile ? `Found: ${tempFile}` : 'Not found');
+          
+          if (tempFile) {
+            const filePath = path.join(uploadsDir, tempFile);
+            const fileExists = fs.existsSync(filePath);
+            console.log('💾 File exists on disk:', fileExists);
+            
+            if (fileExists) {
+              console.log('✅ SUCCESS: Returning PDF from PRIORITY 1 (temporary file)');
+              const pdfBuffer = fs.readFileSync(filePath);
+              res.set({
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': `inline; filename="${tempFile}"`,
+                'Content-Length': pdfBuffer.length
+              });
+              return res.send(pdfBuffer);
+            }
+          }
+        }
+      } else {
+        console.log('⚠️ PRIORITY 1: Skipped (no bordereauId)');
+      }
+      
+      // PRIORITY 2: Check OVDocument by ordreVirementId (PDF uploaded AFTER OV creation)
+      console.log('🔍 PRIORITY 2: Checking OVDocument by ordreVirementId:', id);
       const ovDocument = await this.prisma.oVDocument.findFirst({
         where: { 
           ordreVirementId: id,
@@ -1458,10 +1522,15 @@ export class FinanceController {
         orderBy: { uploadedAt: 'desc' }
       });
       
+      console.log('📄 PRIORITY 2 Result:', ovDocument ? `Found: ${ovDocument.name} at ${ovDocument.path}` : 'Not found');
+      
       if (ovDocument) {
-        console.log('✅ Found PDF in OVDocument table:', ovDocument.path);
         const fs = require('fs');
-        if (fs.existsSync(ovDocument.path)) {
+        const fileExists = fs.existsSync(ovDocument.path);
+        console.log('💾 File exists on disk:', fileExists);
+        
+        if (fileExists) {
+          console.log('✅ SUCCESS: Returning PDF from PRIORITY 2 (ordreVirementId)');
           const pdfBuffer = fs.readFileSync(ovDocument.path);
           res.set({
             'Content-Type': 'application/pdf',
@@ -1469,22 +1538,22 @@ export class FinanceController {
             'Content-Length': pdfBuffer.length
           });
           return res.send(pdfBuffer);
+        } else {
+          console.log('⚠️ PRIORITY 2: File found in DB but missing on disk');
         }
       }
       
-      // Fallback: check uploadedPdfPath field (for manual OV uploads)
-      const ov = await this.prisma.ordreVirement.findUnique({
-        where: { id },
-        select: { uploadedPdfPath: true, bordereauId: true }
-      });
-      
-      if (ov?.uploadedPdfPath) {
-        console.log('✅ Found PDF in uploadedPdfPath:', ov.uploadedPdfPath);
+      // PRIORITY 3: Check uploadedPdfPath field (for manual OV uploads)
+      if (ov.uploadedPdfPath) {
+        console.log('🔍 PRIORITY 3: Checking uploadedPdfPath:', ov.uploadedPdfPath);
         const fs = require('fs');
         const path = require('path');
         const fullPath = path.join(process.cwd(), ov.uploadedPdfPath);
+        const fileExists = fs.existsSync(fullPath);
+        console.log('💾 File exists on disk:', fileExists);
         
-        if (fs.existsSync(fullPath)) {
+        if (fileExists) {
+          console.log('✅ SUCCESS: Returning PDF from PRIORITY 3 (uploadedPdfPath)');
           const pdfBuffer = fs.readFileSync(fullPath);
           res.set({
             'Content-Type': 'application/pdf',
@@ -1492,36 +1561,14 @@ export class FinanceController {
             'Content-Length': pdfBuffer.length
           });
           return res.send(pdfBuffer);
+        } else {
+          console.log('⚠️ PRIORITY 3: Path exists in DB but file missing on disk');
         }
+      } else {
+        console.log('⚠️ PRIORITY 3: Skipped (no uploadedPdfPath)');
       }
       
-      // If OV has bordereau, check OVDocument by bordereau
-      if (ov?.bordereauId) {
-        console.log('🔍 Checking OVDocument by bordereauId:', ov.bordereauId);
-        const bordereauDoc = await this.prisma.oVDocument.findFirst({
-          where: { 
-            bordereauId: ov.bordereauId,
-            type: 'BORDEREAU_PDF'
-          },
-          orderBy: { uploadedAt: 'desc' }
-        });
-        
-        if (bordereauDoc) {
-          console.log('✅ Found PDF via bordereau:', bordereauDoc.path);
-          const fs = require('fs');
-          if (fs.existsSync(bordereauDoc.path)) {
-            const pdfBuffer = fs.readFileSync(bordereauDoc.path);
-            res.set({
-              'Content-Type': 'application/pdf',
-              'Content-Disposition': `inline; filename="${bordereauDoc.name}"`,
-              'Content-Length': pdfBuffer.length
-            });
-            return res.send(pdfBuffer);
-          }
-        }
-      }
-      
-      console.error('❌ No uploaded PDF found for OV:', id);
+      console.error('❌ ALL PRIORITIES FAILED - No uploaded PDF found for OV:', id);
       throw new BadRequestException('No uploaded PDF found for this OV');
     } catch (error) {
       console.error('❌ Error viewing uploaded PDF:', error);

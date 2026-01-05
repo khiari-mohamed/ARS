@@ -25,7 +25,8 @@ function GestionnaireSeniorBordereaux() {
       
       console.log('📊 Gestionnaire Senior corbeille data:', data);
       
-      setUnassignedBordereaux(data.nonAffectes || []);
+      // Gestionnaire Senior has NO nonAffectes - everything goes to enCours
+      setUnassignedBordereaux([]);
       setTeamBordereaux([...data.enCours || [], ...data.traites || []]);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -38,10 +39,10 @@ function GestionnaireSeniorBordereaux() {
     let data: any[] = [];
     switch (type) {
       case 'non-affectes':
-        data = unassignedBordereaux;
+        data = [];
         break;
       case 'en-cours':
-        data = teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut));
+        data = teamBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
         break;
       case 'traites':
         data = teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
@@ -56,9 +57,10 @@ function GestionnaireSeniorBordereaux() {
   const getTabData = () => {
     switch (activeTab) {
       case 'non-affectes':
-        return unassignedBordereaux.filter(b => !b.assignedToUserId);
+        return [];
       case 'en-cours':
-        return teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut));
+        // For Gestionnaire Senior, show ALL enCours bordereaux (backend already filtered)
+        return teamBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
       case 'traites':
         return teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
       default:
@@ -142,7 +144,7 @@ function GestionnaireSeniorBordereaux() {
               </div>
               <div>
                 <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>
-                  {teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
+                  {teamBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                 </div>
                 <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
                 <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
@@ -178,7 +180,7 @@ function GestionnaireSeniorBordereaux() {
               className={`chef-equipe-tab ${activeTab === 'en-cours' ? 'active' : ''}`}
               onClick={() => setActiveTab('en-cours')}
             >
-              En cours ({teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length})
+              En cours ({teamBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
             </button>
             <button 
               className={`chef-equipe-tab ${activeTab === 'traites' ? 'active' : ''}`}
@@ -433,7 +435,7 @@ function GestionnaireSeniorBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>BS</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Documents</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Traitement</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Règlement</th>

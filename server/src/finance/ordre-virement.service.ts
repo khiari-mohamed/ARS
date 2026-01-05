@@ -39,6 +39,24 @@ export class OrdreVirementService {
     const montantTotal = validItems.reduce((sum, item) => sum + item.montant, 0);
     const nombreAdherents = validItems.length;
 
+    // EXACT FIX: Find and link temporary PDF if bordereauId exists
+    let uploadedPdfPath = dto.uploadedPdfPath;
+    if (dto.bordereauId && !uploadedPdfPath) {
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+      
+      if (fs.existsSync(uploadsDir)) {
+        const files = fs.readdirSync(uploadsDir);
+        const tempFile = files.find(f => f.startsWith(`TEMP_${dto.bordereauId}_`));
+        
+        if (tempFile) {
+          uploadedPdfPath = `/uploads/ov-documents/${tempFile}`;
+          this.logger.log(`✅ Linked temporary PDF: ${tempFile}`);
+        }
+      }
+    }
+
     // Create ordre virement
     const ordreVirement = await this.prisma.ordreVirement.create({
       data: {
@@ -50,9 +68,33 @@ export class OrdreVirementService {
         nombreAdherents,
         etatVirement: 'EN_COURS_VALIDATION',
         validationStatus: 'EN_ATTENTE_VALIDATION',
-        uploadedPdfPath: dto.uploadedPdfPath
+        uploadedPdfPath
       }
     });
+
+    // EXACT FIX: Create OVDocument record for temporary PDF
+    if (uploadedPdfPath && dto.bordereauId) {
+      const fs = require('fs');
+      const path = require('path');
+      const fullPath = path.join(process.cwd(), uploadedPdfPath);
+      
+      if (fs.existsSync(fullPath)) {
+        const anyUser = await this.prisma.user.findFirst();
+        if (anyUser) {
+          await this.prisma.oVDocument.create({
+            data: {
+              name: path.basename(fullPath),
+              type: 'BORDEREAU_PDF',
+              path: fullPath,
+              uploadedById: anyUser.id,
+              bordereauId: dto.bordereauId,
+              ordreVirementId: ordreVirement.id
+            }
+          });
+          this.logger.log(`✅ Created OVDocument record for uploaded PDF`);
+        }
+      }
+    }
 
     // Create virement items - store Excel data in erreur field as JSON
     for (const item of validItems) {

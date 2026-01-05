@@ -64,7 +64,7 @@ const WorkforceEstimator: React.FC = () => {
     try {
       const response = await LocalAPI.get('/analytics/workforce-estimator', {
         params: { period },
-        timeout: 15000
+        timeout: 300000
       });
       setData(response.data);
     } catch (error) {

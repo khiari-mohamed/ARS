@@ -202,7 +202,7 @@ export class ChefEquipeActionsService {
         where: { id: gestionnaireId }
       });
 
-      if (!gestionnaire || gestionnaire.role !== 'GESTIONNAIRE' || !gestionnaire.active) {
+      if (!gestionnaire || (gestionnaire.role !== 'GESTIONNAIRE' && gestionnaire.role !== 'GESTIONNAIRE_SENIOR') || !gestionnaire.active) {
         throw new BadRequestException('Invalid or inactive gestionnaire');
       }
 
@@ -231,6 +231,14 @@ export class ChefEquipeActionsService {
           dateReceptionSante: new Date()
         }
       });
+
+      // GESTIONNAIRE_SENIOR FIX: Update all documents to EN_COURS status
+      if (gestionnaire?.role === 'GESTIONNAIRE_SENIOR') {
+        await tx.document.updateMany({
+          where: { bordereauId },
+          data: { status: 'EN_COURS' }
+        });
+      }
 
       // Create assignment history
       await tx.traitementHistory.create({

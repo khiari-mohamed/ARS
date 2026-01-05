@@ -276,11 +276,25 @@ export class SLAAnalyticsService {
         dateCloture: null,
       },
       include: {
-        contract: true,
+        contract: {
+          include: {
+            teamLeader: {
+              select: {
+                fullName: true,
+                role: true
+              }
+            }
+          }
+        },
         client: true,
-        currentHandler: {
-          select: {
-            fullName: true
+        documents: {
+          include: {
+            assignedTo: {
+              select: {
+                fullName: true,
+                role: true
+              }
+            }
           }
         }
       }
@@ -306,11 +320,30 @@ export class SLAAnalyticsService {
       }
       
       if (alertLevel) {
+        let assignedTo = 'Non assigné';
+        
+        // Priority 1: Get gestionnaire from documents
+        const gestionnaires = bordereau.documents
+          .filter(d => d.assignedTo && d.assignedTo.role === 'GESTIONNAIRE')
+          .map(d => d.assignedTo!.fullName);
+        
+        if (gestionnaires.length > 0) {
+          const counts = gestionnaires.reduce((acc, name) => {
+            acc[name] = (acc[name] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          assignedTo = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+        } 
+        // Priority 2: Get GESTIONNAIRE_SENIOR from contract teamLeader
+        else if (bordereau.contract?.teamLeader && bordereau.contract.teamLeader.role === 'GESTIONNAIRE_SENIOR') {
+          assignedTo = bordereau.contract.teamLeader.fullName;
+        }
+        
         alerts.push({
           bordereauId: bordereau.id,
           reference: bordereau.reference,
           clientName: bordereau.client?.name,
-          assignedTo: bordereau.currentHandler?.fullName,
+          assignedTo,
           alertLevel,
           message,
           daysSinceReception,

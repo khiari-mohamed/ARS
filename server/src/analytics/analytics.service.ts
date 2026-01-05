@@ -89,7 +89,7 @@ export class AnalyticsService {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          timeout: 15000
+          timeout: 300000
         });
         
         // Transform AI response back to expected format
@@ -293,7 +293,7 @@ export class AnalyticsService {
 
   async getDailyKpis(query: AnalyticsKpiDto, user: any) {
     this.checkAnalyticsRole(user);
-    const where: any = {};
+    const where: any = { archived: false }; // Exclude archived by default
     
     if (user.role === 'GESTIONNAIRE') {
       where.assignedToUserId = user.id;
@@ -533,7 +533,7 @@ export class AnalyticsService {
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded'
             },
-            timeout: 3000
+            timeout: 300000
           });
           
           console.log(`✅ AI Token obtained with ${cred.username}`);
@@ -571,7 +571,7 @@ export class AnalyticsService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 10000
+        timeout: 300000
       });
       
       console.log('✅ AI Performance Service response received');
@@ -626,7 +626,7 @@ export class AnalyticsService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 15000
+        timeout: 300000
       });
       return response.data;
     } catch (error: any) {
@@ -888,7 +888,7 @@ export class AnalyticsService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 15000
+        timeout: 300000
       });
       
       console.log('✅ AI forecast response received');
@@ -1085,10 +1085,22 @@ export class AnalyticsService {
       
       const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, systemData, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 10000
+        timeout: 5000 // 5 second timeout
       });
       
       console.log('🔍 AI recommendations response:', response.data);
+      
+      // Handle null or empty response
+      if (!response.data || !response.data.recommendations) {
+        console.warn('⚠️ AI returned null/empty recommendations');
+        return {
+          recommendations: [
+            'Optimiser la répartition des tâches entre équipes',
+            'Surveiller les délais de traitement critiques',
+            'Renforcer les effectifs pendant les pics de charge'
+          ]
+        };
+      }
       
       const recommendations = response.data.recommendations.map((rec: any) => rec.title || rec.description || rec);
       console.log('✅ Mapped recommendations:', recommendations);
@@ -1100,7 +1112,14 @@ export class AnalyticsService {
     } catch (error) {
       console.error('❌ AI recommendations failed:', error.message);
       console.error('❌ Full error:', error);
-      return { recommendations: [] }; // Return empty instead of throwing error
+      // Return default recommendations instead of empty array
+      return { 
+        recommendations: [
+          'Optimiser la répartition des tâches entre équipes',
+          'Surveiller les délais de traitement critiques',
+          'Renforcer les effectifs pendant les pics de charge'
+        ] 
+      };
     }
   }
 
@@ -1280,7 +1299,7 @@ export class AnalyticsService {
         workload: workloadData.map(w => ({ teamId: w.assignedToUserId, _count: { id: w._count.id } }))
       }, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 8000
+        timeout: 300000
       });
       
       const aiRecommendations = response.data.recommendations || [];
@@ -1316,7 +1335,7 @@ export class AnalyticsService {
         analysis_type: 'root_cause'
       }, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 10000
+        timeout: 300000
       });
       
       return response.data.root_causes || [];
@@ -1341,7 +1360,7 @@ export class AnalyticsService {
         optimization_focus: ['performance', 'efficiency', 'quality']
       }, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 10000
+        timeout: 300000
       });
       
       const aiRecommendations = response.data.recommendations || [];
@@ -1376,7 +1395,7 @@ export class AnalyticsService {
         detection_type: 'bottleneck'
       }, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 10000
+        timeout: 300000
       });
       
       return response.data.bottlenecks || [];
@@ -1405,7 +1424,7 @@ export class AnalyticsService {
         learning_context: learningInsights
       }, {
         headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 10000
+        timeout: 300000
       });
       
       const result = response.data.training_needs || [];
@@ -1616,7 +1635,7 @@ export class AnalyticsService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 15000
+        timeout: 300000
       });
       return response.data;
     } catch (error: any) {
@@ -1636,7 +1655,7 @@ export class AnalyticsService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 15000
+        timeout: 300000
       });
       return response.data;
     } catch (error: any) {
@@ -1653,7 +1672,7 @@ export class AnalyticsService {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 30000
+        timeout: 300000
       });
       return response.data;
     } catch (error: any) {
@@ -2053,7 +2072,8 @@ export class AnalyticsService {
       select: {
         id: true,
         fullName: true,
-        email: true
+        email: true,
+        role: true
       }
     });
     
@@ -2061,37 +2081,86 @@ export class AnalyticsService {
     const result: Array<{ id: string; name: string; documentsProcessed: number; documentsLast24h: number }> = [];
     
     for (const gest of gestionnaires) {
-      let documentsProcessed = await this.prisma.document.count({
-        where: { assignedToUserId: gest.id }
-      });
+      let documentsProcessed = 0;
+      let documentsLast24h = 0;
       
-      // Apply date filter if provided
-      if (query.fromDate || query.toDate) {
-        const dateWhere: any = { assignedToUserId: gest.id };
-        if (query.fromDate) {
-          const fromDate = new Date(query.fromDate);
-          fromDate.setHours(0, 0, 0, 0);
-          dateWhere.uploadedAt = { gte: fromDate };
-        }
-        if (query.toDate) {
-          const toDate = new Date(query.toDate);
-          toDate.setHours(23, 59, 59, 999); // End of day
-          if (dateWhere.uploadedAt) {
-            dateWhere.uploadedAt.lte = toDate;
-          } else {
-            dateWhere.uploadedAt = { lte: toDate };
+      if (gest.role === 'GESTIONNAIRE_SENIOR') {
+        // For GESTIONNAIRE_SENIOR: count documents from contracts assigned to them via teamLeaderId
+        const contracts = await this.prisma.contract.findMany({
+          where: { teamLeaderId: gest.id },
+          select: { id: true }
+        });
+        
+        const contractIds = contracts.map(c => c.id);
+        
+        if (contractIds.length > 0) {
+          // Count documents from bordereaux linked to these contracts
+          const dateWhere: any = {
+            bordereau: {
+              contractId: { in: contractIds }
+            }
+          };
+          
+          if (query.fromDate || query.toDate) {
+            if (query.fromDate) {
+              const fromDate = new Date(query.fromDate);
+              fromDate.setHours(0, 0, 0, 0);
+              dateWhere.uploadedAt = { gte: fromDate };
+            }
+            if (query.toDate) {
+              const toDate = new Date(query.toDate);
+              toDate.setHours(23, 59, 59, 999);
+              if (dateWhere.uploadedAt) {
+                dateWhere.uploadedAt.lte = toDate;
+              } else {
+                dateWhere.uploadedAt = { lte: toDate };
+              }
+            }
           }
+          
+          documentsProcessed = await this.prisma.document.count({ where: dateWhere });
+          
+          documentsLast24h = await this.prisma.document.count({
+            where: {
+              bordereau: {
+                contractId: { in: contractIds }
+              },
+              uploadedAt: { gte: last24h }
+            }
+          });
         }
-        documentsProcessed = await this.prisma.document.count({ where: dateWhere });
-        console.log(`📅 ${gest.fullName}: filtered count = ${documentsProcessed}`);
+      } else {
+        // For regular GESTIONNAIRE: count directly assigned documents
+        documentsProcessed = await this.prisma.document.count({
+          where: { assignedToUserId: gest.id }
+        });
+        
+        if (query.fromDate || query.toDate) {
+          const dateWhere: any = { assignedToUserId: gest.id };
+          if (query.fromDate) {
+            const fromDate = new Date(query.fromDate);
+            fromDate.setHours(0, 0, 0, 0);
+            dateWhere.uploadedAt = { gte: fromDate };
+          }
+          if (query.toDate) {
+            const toDate = new Date(query.toDate);
+            toDate.setHours(23, 59, 59, 999);
+            if (dateWhere.uploadedAt) {
+              dateWhere.uploadedAt.lte = toDate;
+            } else {
+              dateWhere.uploadedAt = { lte: toDate };
+            }
+          }
+          documentsProcessed = await this.prisma.document.count({ where: dateWhere });
+        }
+        
+        documentsLast24h = await this.prisma.document.count({
+          where: {
+            assignedToUserId: gest.id,
+            uploadedAt: { gte: last24h }
+          }
+        });
       }
-      
-      const documentsLast24h = await this.prisma.document.count({
-        where: {
-          assignedToUserId: gest.id,
-          uploadedAt: { gte: last24h }
-        }
-      });
       
       result.push({
         id: gest.id,

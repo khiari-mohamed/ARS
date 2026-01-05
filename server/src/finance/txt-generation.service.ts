@@ -56,160 +56,55 @@ export class TxtGenerationService {
   }
 
   private generateBTKComarFormat(data: OVTxtData): string {
-    // EXACT BANK FORMAT - 280 CHARS PER LINE - NO V1/V2 PREFIXES
     const lines: string[] = [];
     const dateStr = this.formatDateBTK(data.dateCreation);
     
-    // Validate RIB length and format
     if (!/^\d{20}$/.test(data.donneurOrdre.rib)) {
       throw new Error('RIB donneur d\'ordre doit être exactement 20 chiffres');
     }
     
-    // Calculate totals with precision
-    const totalAmountMillimes = data.virements
-      .reduce((sum, v) => sum + Math.round(v.montant * 1000), 0);
+    const totalAmountMillimes = data.virements.reduce((sum, v) => sum + Math.round(v.montant * 1000), 0);
     const numberOfOperations = data.virements.length;
     
-    // Validate number of operations (max 999 for 2-digit rang field)
-    if (numberOfOperations > 999) {
-      throw new Error('Nombre maximum de virements dépassé (max 999)');
-    }
-    
-    // Extract and validate bank code from RIB (first 2 digits)
-    const codeBanque = data.donneurOrdre.rib.substring(0, 2);
-    if (!/^\d{2}$/.test(codeBanque)) {
-      throw new Error('Code banque invalide (doit être 2 chiffres)');
-    }
-    
-    // HEADER LINE - EXACT 280 CHARS FORMAT
-    let headerLine = '';
-    
-    // 1. Sens (1 num) = '1'
-    headerLine += '1';
-    
-    // 2. Code valeur (2 num) = '10'
-    headerLine += '10';
-    
-    // 3. Nature remettant (1 num) = '1'
-    headerLine += '1';
-    
-    // 4. Code remettant (2 num) = code banque
-    headerLine += codeBanque;
-    
-    // 5. Code centre régional/agence (3 chars) = 3 BLANKS
-    headerLine += '   ';
-    
-    // 6. Date opération (8 num) AAAAMMJJ
+    // V1 HEADER
+    let headerLine = 'V1';
+    headerLine += '  ';
+    headerLine += data.donneurOrdre.rib;
+    headerLine += '00000000';
+    headerLine += data.reference.substring(0, 20).padEnd(20, '0');
     headerLine += dateStr;
-    
-    // 7. Numéro du lot (4 num) = '0001'
     headerLine += '0001';
-    
-    // 8. Code enregistrement (2 num) = '11'
-    headerLine += '11';
-    
-    // 9. Code devise (3 alphanum) = '788'
+    headerLine += '   ';
+    headerLine += numberOfOperations.toString().padStart(7, '0');
+    headerLine += '   ';
     headerLine += '788';
-    
-    // 10. Rang (2 num) = '00'
-    headerLine += '00';
-    
-    // 11. Montant total virements (15 num) - millimes, padded LEFT with zeros
-    headerLine += totalAmountMillimes.toString().padStart(15, '0');
-    
-    // 12. Nombre total virements (10 num) - padded LEFT with zeros
-    headerLine += numberOfOperations.toString().padStart(10, '0');
-    
-    // 13. Zone libre (227 chars) - SPACES
-    headerLine += ' '.repeat(227);
-    
-    // VERIFY: Total must be exactly 280 chars
-    if (headerLine.length !== 280) {
-      throw new Error(`HEADER LENGTH ERROR: ${headerLine.length} instead of 280`);
-    }
+    headerLine += 'TND';
+    headerLine += totalAmountMillimes.toString().padStart(18, '0');
+    headerLine += ' '.repeat(18);
     
     lines.push(headerLine);
 
-    // DETAIL LINES - EXACT 280 CHARS FORMAT (V2 equivalent)
-    data.virements.forEach((virement, index) => {
-      // Validate beneficiary RIB
+    // V2 DETAIL
+    data.virements.forEach((virement) => {
       if (!/^\d{20}$/.test(virement.rib)) {
         throw new Error(`RIB bénéficiaire invalide pour ${virement.nom} ${virement.prenom}`);
       }
       
       const montantMillimes = Math.round(virement.montant * 1000);
-      const codeBanqueBenef = virement.rib.substring(0, 2);
       
-      let line = '';
-      
-      // 1. Sens (1 num) = '1'
-      line += '1';
-      
-      // 2. Code valeur (2 num) = '10'
-      line += '10';
-      
-      // 3. Nature remettant (1 num) = '1'
-      line += '1';
-      
-      // 4. Code remettant (2 num) = code banque émetteur
-      line += codeBanque;
-      
-      // 5. Code centre/agence (3 chars) = 3 BLANKS
-      line += '   ';
-      
-      // 6. Date opération (8 num) AAAAMMJJ
-      line += dateStr;
-      
-      // 7. Numéro du lot (4 num) = '0001'
-      line += '0001';
-      
-      // 8. Code enregistrement (2 num) = '22' (detail)
-      line += '22';
-      
-      // 9. Code devise (3 alphanum) = '788'
-      line += '788';
-      
-      // 10. Rang (2 num) = sequence number padded to 3 digits, take last 2
-      const rang = (index + 1).toString().padStart(3, '0').slice(-2);
-      line += rang;
-      
-      // 11. Montant virement (15 num) - millimes
-      line += montantMillimes.toString().padStart(15, '0');
-      
-      // 12. RIB émetteur (20 num)
+      let line = 'V2';
+      line += '  ';
       line += data.donneurOrdre.rib;
-      
-      // 13. RIB bénéficiaire (20 num)
       line += virement.rib;
-      
-      // 14. Beneficiary name (nom + prenom) - NOT company name (30 alphanum)
-      const beneficiaryName = (virement.nom + ' ' + virement.prenom)
-        .toUpperCase()
-        .replace(/[^A-Z0-9 ]/g, '')
-        .substring(0, 30)
-        .padEnd(30, ' ');
-      line += beneficiaryName;
-      
-      // 15. Référence (20 alphanum) - no special chars
-      const ref = `MAT${virement.matricule}`.replace(/[^A-Z0-9]/g, '').substring(0, 20).padEnd(20, ' ');
-      line += ref;
-      
-      // 16. Société (35 alphanum) - Company/Client name from virement
-      const societeText = virement.societe || data.donneurOrdre.nom;
-      const societe = societeText
-        .toUpperCase()
-        .replace(/[^A-Z0-9 ]/g, '')
-        .substring(0, 35)
-        .padEnd(35, ' ');
-      line += societe;
-      
-      // 17. Zone libre (112 chars) - SPACES to reach exactly 280 chars
-      line += ' '.repeat(112);
-      
-      // VERIFY: Total must be exactly 280 chars
-      if (line.length !== 280) {
-        throw new Error(`DETAIL LINE ${index + 1} LENGTH ERROR: ${line.length} instead of 280`);
-      }
+      line += (virement.nom + ' ' + virement.prenom).toUpperCase().replace(/[^A-Z0-9 ]/g, '').substring(0, 30).padEnd(30, ' ');
+      line += virement.matricule.toString().substring(0, 20).padEnd(20, '0');
+      line += dateStr;
+      line += '0001';
+      line += '0';
+      line += '00';
+      line += `HIKMA APM${dateStr.substring(0, 4)}${data.reference} du ${dateStr.substring(6, 8)}${dateStr.substring(4, 6)}${dateStr.substring(0, 4)} OV GM n ${data.reference}`.substring(0, 100).padEnd(100, ' ');
+      line += montantMillimes.toString().padStart(18, '0');
+      line += ' '.repeat(6); // Only 6 trailing spaces, NO duplicate amount
       
       lines.push(line);
     });

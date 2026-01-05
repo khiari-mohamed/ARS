@@ -90,7 +90,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           });
         }
       } catch (error) {
-        console.error('Failed to fetch reclamation alerts:', error);
+        // console.error('Failed to fetch reclamation alerts:', error);
       }
     };
     fetchReclamationAlerts();
@@ -134,7 +134,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           );
           
           if (newNotificationsList.length > 0) {
-            console.log('🆕 NEW notifications detected:', newNotificationsList.map(n => ({ id: n.id, type: n._type, title: n.title })));
+            // console.log('🆕 NEW notifications detected:', newNotificationsList.map(n => ({ id: n.id, type: n._type, title: n.title })));
           }
           
           // Also check for new unread notifications (in case of status changes)
@@ -145,13 +145,13 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
               !notifications.find(existing => existing.id === n.id)
             ).map(n => n._type);
             
-            console.log('🔊 Playing notification sound for:', {
-              hasNewNotifications,
-              hasNewUnreadNotifications,
-              newUnreadCount,
-              previousUnreadCount,
-              newNotificationTypes
-            });
+            // console.log('🔊 Playing notification sound for:', {
+            //   hasNewNotifications,
+            //   hasNewUnreadNotifications,
+            //   newUnreadCount,
+            //   previousUnreadCount,
+            //   newNotificationTypes
+            // });
             
             playNotificationSound();
           }
@@ -167,7 +167,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           );
           
           if (returnedScanNotifications.length > 0) {
-            console.log('🔄 Playing sound for new returned scan notifications:', returnedScanNotifications.length);
+            // console.log('🔄 Playing sound for new returned scan notifications:', returnedScanNotifications.length);
             playNotificationSound();
             
             // Mark these notifications as having played sound
@@ -183,7 +183,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
         }
       } catch (error) {
         // Fallback: continue with existing reclamation alerts
-        console.log('Using fallback notification system');
+        // console.log('Using fallback notification system');
       }
     };
     
@@ -204,7 +204,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           await LocalAPI.patch(`/users/${user?.id}/notifications/${notification.id}/read`);
         }
       } catch (error) {
-        console.log('Failed to mark notification as read');
+        // console.log('Failed to mark notification as read');
       }
     }
     setNotifications(prev => prev.map((n, i) => i === index ? {...n, read: true} : n));
@@ -314,7 +314,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                       
                       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
                     } catch (error) {
-                      console.log('Failed to mark all as read');
+                      // console.log('Failed to mark all as read');
                     }
                   }}
                   sx={{ borderBottom: '1px solid #e0e0e0', backgroundColor: '#f5f5f5' }}
