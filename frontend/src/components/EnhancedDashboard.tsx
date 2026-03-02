@@ -137,7 +137,7 @@ const EnhancedDashboard: React.FC = () => {
   // Filter states
   const [filter1, setFilter1] = useState({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
   const [filter2, setFilter2] = useState({ ref: '', client: '', statut: '', dateFrom: '', dateTo: '' });
-  const [filter3, setFilter3] = useState({ ref: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' });
+  const [filter3, setFilter3] = useState({ ref: '', refBrdx: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' });
   
   const [filteredDerniers, setFilteredDerniers] = useState<any[]>([]);
   const [filteredEnCours, setFilteredEnCours] = useState<any[]>([]);
@@ -182,34 +182,16 @@ const EnhancedDashboard: React.FC = () => {
 
   // Fetch detailed dossier information
   const fetchDossierDetails = async (dossierId: string) => {
-    console.log('🔍 DEBUG: fetchDossierDetails called with dossierId:', dossierId);
-    
     try {
       setLoadingDossierDetails(true);
-      
       const endpoint = `/bordereaux/chef-equipe/tableau-bord/dossier/${dossierId}`;
-      console.log('🔍 DEBUG: Fetching dossier details from:', endpoint);
-      
       const response = await LocalAPI.get(endpoint);
-      
-      console.log('🔍 DEBUG: Dossier details response:', {
-        status: response.status,
-        data: response.data,
-        documentsCount: response.data?.documents?.length || 0
-      });
       
       if (response.data) {
         setDossierDetails(response.data);
-        console.log('🔍 DEBUG: Documents in dossier:', response.data.documents);
       }
     } catch (error: any) {
-      console.error('🔍 DEBUG: Error fetching dossier details:', {
-        error,
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
-      });
+      console.error('Error fetching dossier details:', error);
     } finally {
       setLoadingDossierDetails(false);
     }
@@ -217,43 +199,18 @@ const EnhancedDashboard: React.FC = () => {
 
   // Handle document PDF view
   const handleDocumentPDFView = async (documentId: string, documentName: string) => {
-    console.log('🔍 DEBUG: handleDocumentPDFView called with:', {
-      documentId,
-      documentName,
-      selectedDossier: selectedDossier?.id,
-      dossierDetails: dossierDetails
-    });
-    
     try {
-      // Try the dossier PDF endpoint since document ID matches dossier ID
       const endpoint = `/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${documentId}`;
-      console.log('🔍 DEBUG: Making request to endpoint:', endpoint);
-      
       const response = await LocalAPI.get(endpoint);
       
-      console.log('🔍 DEBUG: Response received:', {
-        status: response.status,
-        data: response.data,
-        headers: response.headers
-      });
-      
       if (response.data.success && response.data.pdfUrl) {
-        // Construct direct file URL
         const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         let pdfUrl = response.data.pdfUrl;
         
-        console.log('🔍 DEBUG: Original pdfUrl from server:', pdfUrl);
-        
-        // Extract just the file path from the URL
-        // The server returns: /api/bordereaux/chef-equipe/tableau-bord/serve-pdf//uploads/bordereaux/BORD-2024-0012.pdf
-        // We want: /uploads/bordereaux/BORD-2024-0012.pdf
-        
-        // Find the uploads part
         const uploadsIndex = pdfUrl.indexOf('/uploads/');
         if (uploadsIndex !== -1) {
           pdfUrl = pdfUrl.substring(uploadsIndex);
         } else {
-          // Fallback: remove all API prefixes
           pdfUrl = pdfUrl.replace('/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/', '');
           pdfUrl = pdfUrl.replace('/serve-pdf/', '');
           if (!pdfUrl.startsWith('/')) {
@@ -261,28 +218,14 @@ const EnhancedDashboard: React.FC = () => {
           }
         }
         
-        // Clean up double slashes
         const cleanedPdfUrl = pdfUrl.replace(/\/\/+/g, '/');
         const fullPdfUrl = `${serverBaseUrl}${cleanedPdfUrl}`;
-        
-        console.log('🔍 DEBUG: Extracted path:', cleanedPdfUrl);
-        console.log('🔍 DEBUG: Final URL:', fullPdfUrl);
-        
-        // Open PDF in new tab
         window.open(fullPdfUrl, '_blank');
       } else {
-        console.log('🔍 DEBUG: PDF not available or response unsuccessful:', response.data);
         alert(response.data.error || `PDF non disponible pour le document: ${documentName}`);
       }
     } catch (error: any) {
-      console.error('🔍 DEBUG: Error viewing document PDF:', {
-        error,
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        config: error.config
-      });
+      console.error('Error viewing document PDF:', error);
       alert(`Erreur lors de l'ouverture du PDF: ${documentName}`);
     }
   };
@@ -298,8 +241,6 @@ const EnhancedDashboard: React.FC = () => {
       });
       setDerniersDossiers(response.data);
       
-      const searchResultsCount = response.data.length;
-      console.log(`Found ${searchResultsCount} results for "${searchQuery}" in ${searchType}`);
     } catch (error) {
       console.error('Search error:', error);
       alert('Erreur lors de la recherche');
@@ -489,8 +430,6 @@ const EnhancedDashboard: React.FC = () => {
       // Load Chef d'équipe data for Super Admin
       await loadChefEquipeData();
       
-      // Use chef-equipe endpoints but with super-admin access to get ALL data
-      console.log('🔍 DEBUG: Fetching Super Admin data with superAdmin=true parameter');
       const [statsResponse, dossiersResponse, assignmentsResponse, seniorAssignmentsResponse, enCoursResponse, individuelsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
@@ -499,8 +438,6 @@ const EnhancedDashboard: React.FC = () => {
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels?superAdmin=true')
       ]);
-      console.log('🔍 DEBUG: enCoursResponse received:', enCoursResponse.data?.length, 'items');
-      console.log('🔍 DEBUG: Sample data:', enCoursResponse.data?.slice(0, 2));
       
       if (statsResponse.data) {
         const transformedStats = {
@@ -554,19 +491,14 @@ const EnhancedDashboard: React.FC = () => {
       }
       
       if (seniorAssignmentsResponse.data) {
-        console.log('⭐ Gestionnaire Senior assignments received:', seniorAssignmentsResponse.data.length, seniorAssignmentsResponse.data);
         setSuperAdminGestionnaireSeniorAssignments(seniorAssignmentsResponse.data);
-      } else {
-        console.warn('⚠️ No senior assignments data received');
       }
       
       if (enCoursResponse.data) {
-        console.log('🔍 DEBUG: Setting superAdminDossiersEnCours:', enCoursResponse.data.length, 'items');
         setSuperAdminDossiersEnCours(enCoursResponse.data);
       }
       
       if (individuelsResponse.data) {
-        console.log('🔍 DEBUG: Setting superAdminDocumentsIndividuels:', individuelsResponse.data.length, 'items');
         setSuperAdminDocumentsIndividuels(individuelsResponse.data);
       }
     } catch (error: any) {
@@ -657,8 +589,27 @@ const EnhancedDashboard: React.FC = () => {
         let recommendations = { recommendations: [] };
         if (healthCheck.status === 'healthy') {
           try {
+            // Fetch ALL ACTIVE bordereaux from backend
+            const bordereauxResponse = await LocalAPI.get('/bordereaux', {
+              params: { 
+                excludeArchived: true,
+                excludeClosed: true,
+                limit: 1000 // Get all active
+              }
+            });
+            
+            const allBordereaux = bordereauxResponse.data.bordereaux || bordereauxResponse.data || [];
+            
+            // Fetch agents data
+            const agentsResponse = await LocalAPI.get('/users/gestionnaires');
+            const agents = agentsResponse.data || [];
+            
             recommendations = await aiService.getRecommendations({
-              workload: dashboardData.performance?.performance || []
+              bordereaux: allBordereaux,
+              agents: agents,
+              workload: dashboardData.performance?.performance || [],
+              currentWorkload: allBordereaux.length,
+              staff_count: agents.length
             });
           } catch (error) {
             console.warn('Failed to get AI recommendations:', error);
@@ -719,6 +670,7 @@ const EnhancedDashboard: React.FC = () => {
     
     let f3 = superAdminDocumentsIndividuels.filter((d: any) => 
       (!filter3.ref || d.reference?.toLowerCase().includes(filter3.ref.toLowerCase())) &&
+      (!filter3.refBrdx || d.bordereauReference?.toLowerCase().includes(filter3.refBrdx.toLowerCase())) &&
       (!filter3.client || d.client?.toLowerCase().includes(filter3.client.toLowerCase())) &&
       (!filter3.type || d.type === filter3.type) &&
       (!filter3.statut || d.statut === filter3.statut) &&
@@ -775,7 +727,6 @@ const EnhancedDashboard: React.FC = () => {
     const { name, value } = e.target;
     const newFilters = { ...filters, [name]: value };
     setFilters(newFilters);
-    console.log('🔄 Filters updated:', newFilters);
   };
 
   const clearFilters = () => {
@@ -786,7 +737,6 @@ const EnhancedDashboard: React.FC = () => {
       period: 'day'
     };
     setFilters(clearedFilters);
-    console.log('🧹 Filters cleared');
   };
 
   // Super Admin filter handlers
@@ -850,22 +800,14 @@ const EnhancedDashboard: React.FC = () => {
   const handleSuperAdminViewPDF = async (dossierId: string) => {
     try {
       const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${dossierId}`);
-      console.log('🔍 PDF Response:', response.data);
       
       if (response.data.success && response.data.pdfUrl) {
-        // Find the dossier details
         const dossier = [...superAdminDerniersDossiers, ...superAdminDossiersEnCours, ...superAdminAllDossiers]
           .find(d => d.id === dossierId);
         
-        // Use the direct URL from server
         const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         const pdfUrl = response.data.pdfUrl;
-        
-        console.log('🔍 Original PDF URL:', pdfUrl);
-        
-        // Construct the full URL
         const fullPdfUrl = `${serverBaseUrl}${pdfUrl}`;
-        console.log('🔍 Full PDF URL:', fullPdfUrl);
         
         setCurrentSuperAdminPDFUrl(fullPdfUrl);
         setCurrentSuperAdminDossier(dossier);
@@ -940,7 +882,6 @@ const EnhancedDashboard: React.FC = () => {
       link.click();
       link.remove();
       
-      console.log(`✅ Dashboard exported as ${format.toUpperCase()}`);
     } catch (error: any) {
       console.error('Export failed:', error);
       alert(`Erreur d'exportation: ${error.response?.data?.message || error.message}`);
@@ -1019,8 +960,8 @@ const EnhancedDashboard: React.FC = () => {
       case 'RESPONSABLE_DEPARTEMENT':
         return (
           <div style={{ marginTop: '2rem' }}>
-            {/* All Document Types Overview - Corbeille - Tous Types de Documents */}
-            <div style={{ marginBottom: '2rem' }}>
+            {/* COMMENTED OUT: All Document Types Overview - Corbeille - Tous Types de Documents */}
+            {/* <div style={{ marginBottom: '2rem' }}>
               <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
                   <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
@@ -1065,7 +1006,6 @@ const EnhancedDashboard: React.FC = () => {
                         <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#059669', marginBottom: '0.25rem' }}>{docType.count}</div>
                         <div style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: '0.5rem' }}>{docType.label}</div>
                         
-                        {/* Document-level status breakdown */}
                         <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#6b7280' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                             <span>🟠 En cours:</span> <span>{statusBreakdown.enCours}</span>
@@ -1081,7 +1021,6 @@ const EnhancedDashboard: React.FC = () => {
                         {docType.noSLA && (
                           <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', fontSize: '0.7rem', backgroundColor: '#fbbf24', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>No SLA</div>
                         )}
-                        {/* SLA Status Indicator */}
                         {!docType.noSLA && (
                           <div style={{ position: 'absolute', top: '0.5rem', left: '0.5rem', fontSize: '0.7rem', backgroundColor: '#10b981', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>SLA</div>
                         )}
@@ -1090,7 +1029,6 @@ const EnhancedDashboard: React.FC = () => {
                   })}
                 </div>
                 
-                {/* Document-level assignment analytics */}
                 <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
                   <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>Affectation par Type de Document</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem' }}>
@@ -1115,7 +1053,6 @@ const EnhancedDashboard: React.FC = () => {
                   </div>
                 </div>
                 
-                {/* SLA Exemption Summary */}
                 <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
                   <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', fontWeight: '600', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span>⚖️</span> Exemptions SLA
@@ -1132,98 +1069,145 @@ const EnhancedDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */ }
+            <>
             
-            <div style={{ marginBottom: '2rem' }}>
-              <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <div style={{ width: '4px', height: '24px', backgroundColor: '#3b82f6', marginRight: '1rem', borderRadius: '2px' }}></div>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Statistiques par Département</h3>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ padding: '1rem 1.25rem', border: '1px solid #e0e7ff', borderRadius: '10px', backgroundColor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <div style={{ width: '3px', height: '16px', backgroundColor: '#3b82f6', marginRight: '0.625rem', borderRadius: '2px' }}></div>
+                  <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '700', color: '#1f2937', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Statistiques par Département</h3>
+                  <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#6b7280' }}>
+                    {(dashboardData.departmentStats || []).reduce((s: number, d: any) => s + (d.count || 0), 0)} dossiers total
+                  </span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-                  {dashboardData.departmentStats?.map((dept, index) => (
-                    <div key={index} style={{ 
-                      padding: '1.5rem', 
-                      border: '1px solid #e5e7eb', 
-                      borderRadius: '10px', 
-                      backgroundColor: '#fafbfc',
-                      transition: 'all 0.2s ease',
-                      cursor: 'pointer'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 8px 25px -8px rgba(0, 0, 0, 0.15)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.75rem' }}>
-                          <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.1rem' }}>{dept.department.charAt(0)}</span>
-                        </div>
-                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>{dept.department}</h4>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                        <div style={{ textAlign: 'center', padding: '0.75rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                          <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#059669' }}>{dept.count}</div>
-                          <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>Dossiers</div>
-                        </div>
-                        <div style={{ textAlign: 'center', padding: '0.75rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                          <span style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', backgroundColor: '#e3f2fd', color: '#1976d2', fontWeight: '500' }}>
-                            {dept.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+
+                {/* Status legend */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '0.75rem', paddingBottom: '0.625rem', borderBottom: '1px solid #f1f5f9' }}>
+                  {[
+                    { key: 'EN_COURS',          bg: '#e0f2fe', color: '#0369a1' },
+                    { key: 'A_AFFECTER',        bg: '#fce7f3', color: '#9d174d' },
+                    { key: 'A_SCANNER',         bg: '#fef3c7', color: '#92400e' },
+                    { key: 'TRAITE',            bg: '#d1fae5', color: '#065f46' },
+                    { key: 'VIREMENT_EXECUTE',  bg: '#dbeafe', color: '#1d4ed8' },
+                    { key: 'ASSIGNE',           bg: '#ede9fe', color: '#5b21b6' },
+                    { key: 'CLOTURE',           bg: '#f1f5f9', color: '#475569' },
+                  ].filter(s => (dashboardData.departmentStats || []).some((d: any) => d.status === s.key)).map(s => (
+                    <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.1rem 0.45rem', borderRadius: '4px', backgroundColor: s.bg, fontSize: '0.68rem', fontWeight: '600', color: s.color }}>
+                      {s.key}
+                    </span>
                   ))}
                 </div>
+
+                {/* Grouped department rows */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  {Object.entries(
+                    (dashboardData.departmentStats || []).reduce((acc: Record<string, any[]>, dept: any) => {
+                      if (!acc[dept.department]) acc[dept.department] = [];
+                      acc[dept.department].push(dept);
+                      return acc;
+                    }, {})
+                  ).map(([deptName, items]: [string, any[]]) => {
+                    const total = items.reduce((sum: number, d: any) => sum + (d.count || 0), 0);
+                    const avatarColors: Record<string, string> = {
+                      'N': '#6366f1', 'É': '#0ea5e9', 'E': '#0ea5e9',
+                    };
+                    const avatarBg = avatarColors[deptName.charAt(0)] || '#3b82f6';
+                    const statusColors: Record<string, { bg: string; color: string }> = {
+                      'VIREMENT_EXECUTE': { bg: '#dbeafe', color: '#1d4ed8' },
+                      'TRAITE':           { bg: '#d1fae5', color: '#065f46' },
+                      'A_SCANNER':        { bg: '#fef3c7', color: '#92400e' },
+                      'A_AFFECTER':       { bg: '#fce7f3', color: '#9d174d' },
+                      'EN_COURS':         { bg: '#e0f2fe', color: '#0369a1' },
+                      'CLOTURE':          { bg: '#f1f5f9', color: '#475569' },
+                      'ASSIGNE':          { bg: '#ede9fe', color: '#5b21b6' },
+                    };
+                    return (
+                      <div key={deptName} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.5rem 0.75rem', borderRadius: '7px', backgroundColor: '#f8faff', border: '1px solid #e8eef8' }}>
+                        {/* Avatar */}
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: avatarBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <span style={{ color: 'white', fontWeight: '700', fontSize: '0.78rem' }}>{deptName.charAt(0)}</span>
+                        </div>
+                        {/* Dept name */}
+                        <span style={{ fontSize: '0.82rem', fontWeight: '600', color: '#374151', minWidth: '108px', flexShrink: 0 }}>{deptName}</span>
+                        {/* Total badge */}
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#374151', backgroundColor: '#e5e7eb', padding: '0.1rem 0.45rem', borderRadius: '10px', flexShrink: 0 }}>
+                          {total}
+                        </span>
+                        {/* Divider */}
+                        <div style={{ width: '1px', height: '16px', backgroundColor: '#d1d5db', flexShrink: 0 }} />
+                        {/* Status chips */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', flex: 1 }}>
+                          {items.map((item: any, i: number) => {
+                            const sc = statusColors[item.status] || { bg: '#f3f4f6', color: '#374151' };
+                            return (
+                              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.18rem 0.5rem', borderRadius: '5px', backgroundColor: sc.bg, fontSize: '0.72rem' }}>
+                                <span style={{ fontWeight: '700', color: sc.color }}>{item.count}</span>
+                                <span style={{ color: sc.color, opacity: 0.75, fontWeight: '500' }}>{item.status}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             
-            <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div style={{ width: '4px', height: '24px', backgroundColor: '#8b5cf6', marginRight: '1rem', borderRadius: '2px' }}></div>
-                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Top Clients</h3>
+            <div style={{ padding: '1rem 1.25rem', border: '1px solid #e0e7ff', borderRadius: '10px', backgroundColor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div style={{ width: '3px', height: '16px', backgroundColor: '#8b5cf6', marginRight: '0.625rem', borderRadius: '2px' }}></div>
+                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '700', color: '#1f2937', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Top Clients</h3>
+                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#6b7280' }}>
+                  {(dashboardData.clientStats || []).length} clients
+                </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+
+              {/* Column labels */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0 0.75rem', marginBottom: '0.375rem' }}>
+                <div style={{ width: '28px', flexShrink: 0 }} />
+                <div style={{ flex: 1, fontSize: '0.68rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Client</div>
+                <div style={{ width: '80px', textAlign: 'center', fontSize: '0.68rem', fontWeight: '600', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Bordereaux</div>
+                <div style={{ width: '90px', textAlign: 'center', fontSize: '0.68rem', fontWeight: '600', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Réclamations</div>
+              </div>
+
+              {/* Client rows */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                 {dashboardData.clientStats?.map((client, index) => (
-                  <div key={index} style={{ 
-                    padding: '1.5rem', 
-                    border: '1px solid #e5e7eb', 
-                    borderRadius: '10px', 
-                    backgroundColor: '#fafbfc',
-                    transition: 'all 0.2s ease',
-                    cursor: 'pointer'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 8px 25px -8px rgba(0, 0, 0, 0.15)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.75rem' }}>
-                        <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.1rem' }}>{client.name.charAt(0)}</span>
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.45rem 0.75rem', borderRadius: '7px', backgroundColor: index % 2 === 0 ? '#f8faff' : '#faf8ff', border: '1px solid #ece8fd' }}>
+                    {/* Rank + Avatar */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: index === 0 ? '#7c3aed' : index === 1 ? '#8b5cf6' : index === 2 ? '#a78bfa' : '#c4b5fd', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: 'white', fontWeight: '700', fontSize: '0.78rem' }}>{client.name.charAt(0)}</span>
                       </div>
-                      <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>{client.name}</h4>
+                      {index < 3 && (
+                        <span style={{ position: 'absolute', top: '-4px', right: '-4px', width: '13px', height: '13px', borderRadius: '50%', backgroundColor: index === 0 ? '#f59e0b' : index === 1 ? '#94a3b8' : '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', color: 'white', fontWeight: '800', border: '1px solid white' }}>
+                          {index + 1}
+                        </span>
+                      )}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      <div style={{ textAlign: 'center', padding: '0.75rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#059669' }}>{client._count.bordereaux}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>Bordereaux</div>
-                      </div>
-                      <div style={{ textAlign: 'center', padding: '0.75rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#dc2626' }}>{client._count.reclamations}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>Réclamations</div>
-                      </div>
+                    {/* Client name */}
+                    <span style={{ flex: 1, fontSize: '0.8rem', fontWeight: '600', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={client.name}>{client.name}</span>
+                    {/* Bordereaux */}
+                    <div style={{ width: '80px', textAlign: 'center', flexShrink: 0 }}>
+                      <span style={{ display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: '10px', backgroundColor: '#d1fae5', fontSize: '0.78rem', fontWeight: '700', color: '#065f46' }}>
+                        {client._count.bordereaux}
+                      </span>
+                    </div>
+                    {/* Réclamations */}
+                    <div style={{ width: '90px', textAlign: 'center', flexShrink: 0 }}>
+                      <span style={{ display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: '10px', backgroundColor: client._count.reclamations > 0 ? '#fee2e2' : '#f1f5f9', fontSize: '0.78rem', fontWeight: '700', color: client._count.reclamations > 0 ? '#991b1b' : '#94a3b8' }}>
+                        {client._count.reclamations}
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+            </>
           </div>
         );
 
@@ -1401,7 +1385,7 @@ const EnhancedDashboard: React.FC = () => {
                     <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Prestation</h3>
                     <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.prestation?.total || 0}</span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
+                  <div style={{ fontSize: '12px', color: '#666', maxHeight: '200px', overflowY: 'auto' }}>
                     <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
                     {Object.entries(superAdminStats.prestation?.breakdown || {}).map(([key, value]) => (
                       <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
@@ -1417,35 +1401,113 @@ const EnhancedDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Other cards */}
+                {/* Adhésion Card */}
                 <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Adhésion</h3>
                     <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.adhesion?.total || 0}</span>
                   </div>
+                  <div style={{ fontSize: '12px', color: '#666', maxHeight: '200px', overflowY: 'auto' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                    {Object.entries(superAdminStats.adhesion?.breakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+                    {Object.entries(superAdminStats.adhesion?.gestionnaireBreakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Complément Card */}
                 <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Complément de dossier</h3>
                     <span style={{ background: '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.complement?.total || 0}</span>
                   </div>
+                  <div style={{ fontSize: '12px', color: '#666', maxHeight: '200px', overflowY: 'auto' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                    {Object.entries(superAdminStats.complement?.breakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+                    {Object.entries(superAdminStats.complement?.gestionnaireBreakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Résiliation Card */}
                 <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Résiliation</h3>
                     <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.resiliation?.total || 0}</span>
                   </div>
+                  <div style={{ fontSize: '12px', color: '#666', maxHeight: '200px', overflowY: 'auto' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                    {Object.entries(superAdminStats.resiliation?.breakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+                    {Object.entries(superAdminStats.resiliation?.gestionnaireBreakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Réclamation Card */}
                 <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Réclamation</h3>
                     <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.reclamation?.total || 0}</span>
                   </div>
+                  <div style={{ fontSize: '12px', color: '#666', maxHeight: '200px', overflowY: 'auto' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                    {Object.entries(superAdminStats.reclamation?.breakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+                    {Object.entries(superAdminStats.reclamation?.gestionnaireBreakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Avenant Card */}
                 <div style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Avenant</h3>
                     <span style={{ background: '#d52b36', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>{superAdminStats.avenant?.total || 0}</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666', maxHeight: '200px', overflowY: 'auto' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Par client:</div>
+                    {Object.entries(superAdminStats.avenant?.breakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
+                    <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
+                    {Object.entries(superAdminStats.avenant?.gestionnaireBreakdown || {}).map(([key, value]) => (
+                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                        <span>{key}:</span> <span>{String(value)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1701,6 +1763,7 @@ const EnhancedDashboard: React.FC = () => {
                   {/* FILTERS */}
                   <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
                     <input type="text" placeholder="Réf. Dossier" value={filter3.ref} onChange={(e) => setFilter3({...filter3, ref: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
+                    <input type="text" placeholder="Réf. Bordereau" value={filter3.refBrdx} onChange={(e) => setFilter3({...filter3, refBrdx: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
                     <input type="text" placeholder="Client" value={filter3.client} onChange={(e) => setFilter3({...filter3, client: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
                     <select value={filter3.type} onChange={(e) => setFilter3({...filter3, type: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '110px' }}>
                       <option value="">Type</option>
@@ -1714,7 +1777,7 @@ const EnhancedDashboard: React.FC = () => {
                     <input type="text" placeholder="Gestionnaire" value={filter3.gest} onChange={(e) => setFilter3({...filter3, gest: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
                     <input type="date" value={filter3.dateFrom} onChange={(e) => setFilter3({...filter3, dateFrom: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
                     <input type="date" value={filter3.dateTo} onChange={(e) => setFilter3({...filter3, dateTo: e.target.value})} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }} />
-                    <button onClick={() => setFilter3({ ref: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 12px', background: '#d52b36', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+                    <button onClick={() => setFilter3({ ref: '', refBrdx: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' })} style={{ padding: '6px 12px', background: '#d52b36', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
@@ -1961,14 +2024,7 @@ const EnhancedDashboard: React.FC = () => {
                           }}
                           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                          onClick={() => {
-                            console.log('🔍 DEBUG: Document clicked:', {
-                              doc,
-                              docId: doc.id,
-                              fileName: doc.fileName || doc.name
-                            });
-                            handleDocumentPDFView(doc.id, doc.fileName || doc.name);
-                          }}
+                          onClick={() => handleDocumentPDFView(doc.id, doc.fileName || doc.name)}
                           >
                             <div>
                               <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
@@ -2444,7 +2500,6 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           </div>
         )}
-      )
 
       {/* Data Source & AI Status */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
@@ -2526,37 +2581,6 @@ const EnhancedDashboard: React.FC = () => {
       {/* Main Content */}
       {dashboardData && (
         <>
-         
-
-          {/* Document-Level Analytics Summary */}
-          {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || user?.role === 'RESPONSABLE_DEPARTEMENT') && (
-            <div style={{ marginTop: '2rem' }}>
-              <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <div style={{ width: '4px', height: '24px', backgroundColor: '#6366f1', marginRight: '1rem', borderRadius: '2px' }}></div>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Analyse Documentaire Complète</h3>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                  <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                    <h4 style={{ margin: '0 0 1rem 0', color: '#374151' }}>Documents avec SLA</h4>
-                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#059669', marginBottom: '0.5rem' }}>
-                      {(dashboardData.documentStats?.bulletinSoin || 0) + (dashboardData.documentStats?.complementInfo || 0) + (dashboardData.documentStats?.adhesions || 0) + (dashboardData.documentStats?.reclamations || 0)}
-                    </div>
-                    <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>Soumis aux délais de traitement</div>
-                  </div>
-                  <div style={{ padding: '1.5rem', backgroundColor: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
-                    <h4 style={{ margin: '0 0 1rem 0', color: '#ea580c' }}>Documents exemptés SLA</h4>
-                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ea580c', marginBottom: '0.5rem' }}>
-                      {(dashboardData.documentStats?.contrats || 0) + (dashboardData.documentStats?.resiliations || 0) + (dashboardData.documentStats?.conventions || 0)}
-                    </div>
-                    <div style={{ fontSize: '0.9rem', color: '#9a3412' }}>Pas de contrainte temporelle</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-
           {/* Workforce Estimator for Admin roles */}
           {canViewFeature(user?.role, 'workforce_estimator') && (
             <div style={{ marginTop: '2rem' }}>
@@ -2610,84 +2634,66 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* AI Dashboard for Admin roles */}
-          {canViewFeature(user?.role, 'department_stats') && (
+          {/* AI Dashboard for Admin roles - COMMENTED OUT: Document classification section */}
+          {/* {canViewFeature(user?.role, 'department_stats') && (
             <div style={{ marginTop: '2rem' }}>
               <AIDashboard />
             </div>
-          )}
+          )} */}
 
-          {/* AI Recommendations */}
+          {/* AI Recommendations - ENHANCED UI */}
           {aiInsights?.recommendations.length > 0 && (
             <div style={{ marginTop: '2rem' }}>
               <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
                   <div style={{ width: '4px', height: '24px', backgroundColor: '#6366f1', marginRight: '1rem', borderRadius: '2px' }}></div>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Recommandations IA</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>🤖 Recommandations IA</h3>
                   <div style={{ marginLeft: 'auto', padding: '0.5rem 1rem', backgroundColor: '#6366f1', color: 'white', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '500' }}>
-                    🤖 {aiInsights.recommendations.length} recommandations
+                    {aiInsights.recommendations.length} recommandation{aiInsights.recommendations.length > 1 ? 's' : ''}
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
-                  {aiInsights.recommendations.map((rec: any, index: number) => {
-                    // Handle both string and object recommendations
-                    const isString = typeof rec === 'string';
-                    const recText = isString ? rec : (rec.recommendation || rec.description || rec.title || '');
-                    const priorityColor = isString ? '#10b981' : (rec.priority === 'HIGH' ? '#dc2626' : rec.priority === 'MEDIUM' ? '#f59e0b' : '#10b981');
-                    const priorityBg = isString ? '#d1fae5' : (rec.priority === 'HIGH' ? '#fee2e2' : rec.priority === 'MEDIUM' ? '#fef3c7' : '#d1fae5');
-                    const typeIcon = isString ? (recText.includes('📈') ? '📈' : recText.includes('👥') ? '👥' : recText.includes('⏰') ? '⏰' : recText.includes('🔍') ? '🔍' : '💡') : (rec.type === 'SLA_IMPROVEMENT' ? '⏰' : rec.type === 'CAPACITY_PLANNING' ? '👥' : rec.type === 'PERFORMANCE_IMPROVEMENT' ? '📈' : rec.type === 'PROCESS_OPTIMIZATION' ? '⚙️' : '💡');
-                    const title = isString ? 'Recommandation IA' : (rec.title || rec.type || 'Recommandation');
-                    const description = isString ? recText : (rec.description || rec.recommendation || 'Aucune description disponible');
-                    const recommendation = isString ? '' : (rec.recommendation && rec.recommendation !== rec.description ? rec.recommendation : '');
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {aiInsights.recommendations.map((rec: string, idx: number) => {
+                    const isCritical = rec.includes('🚨') || rec.includes('CRITIQUE') || rec.includes('URGENT');
+                    const isWarning = rec.includes('⚠️') || rec.includes('Alerte') || rec.includes('Attention');
+                    const isInfo = rec.includes('💡') || rec.includes('📊') || rec.includes('🔍');
+                    
+                    let bgColor = '#f0f9ff';
+                    let borderColor = '#3b82f6';
+                    let icon = '💡';
+                    
+                    if (isCritical) {
+                      bgColor = '#fef2f2';
+                      borderColor = '#ef4444';
+                      icon = '🚨';
+                    } else if (isWarning) {
+                      bgColor = '#fffbeb';
+                      borderColor = '#f59e0b';
+                      icon = '⚠️';
+                    } else if (isInfo) {
+                      bgColor = '#f0f9ff';
+                      borderColor = '#3b82f6';
+                      icon = '📊';
+                    }
+                    
                     return (
-                    <div key={index} style={{ 
-                      padding: '1.5rem', 
-                      border: `2px solid ${priorityColor}20`, 
-                      borderRadius: '10px', 
-                      backgroundColor: '#fafbfc',
-                      transition: 'all 0.2s ease',
-                      cursor: 'pointer',
-                      position: 'relative'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = `0 8px 25px -8px ${priorityColor}40`;
-                      e.currentTarget.style.borderColor = priorityColor;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.borderColor = `${priorityColor}20`;
-                    }}>
-                      <div style={{ position: 'absolute', top: '1rem', right: '1rem', padding: '0.25rem 0.75rem', backgroundColor: priorityBg, color: priorityColor, borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                        {rec.priority}
+                      <div 
+                        key={idx}
+                        style={{
+                          padding: '1rem',
+                          backgroundColor: bgColor,
+                          border: `2px solid ${borderColor}`,
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.75rem'
+                        }}
+                      >
+                        <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>{icon}</span>
+                        <span style={{ flex: 1, fontSize: '0.95rem', lineHeight: '1.5', color: '#374151' }}>{rec}</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: priorityBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.75rem' }}>
-                          <span style={{ fontSize: '1.5rem' }}>{typeIcon}</span>
-                        </div>
-                        <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>{title}</h4>
-                      </div>
-                      <div style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '1rem' }}>
-                        <p style={{ margin: 0, color: '#374151', lineHeight: '1.5', fontWeight: '500' }}>{description}</p>
-                        {recommendation && (
-                          <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', fontSize: '0.9rem' }}>{recommendation}</p>
-                        )}
-                      </div>
-                      {!isString && rec.action && (
-                        <div style={{ padding: '0.75rem', backgroundColor: '#f0f9ff', borderRadius: '6px', marginBottom: '0.75rem', borderLeft: '3px solid #3b82f6' }}>
-                          <div style={{ fontSize: '0.75rem', color: '#1e40af', fontWeight: '600', marginBottom: '0.25rem' }}>🎯 ACTION RECOMMANDÉE:</div>
-                          <div style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>{rec.action}</div>
-                        </div>
-                      )}
-                      {!isString && rec.impact && (
-                        <div style={{ padding: '0.75rem', backgroundColor: '#f0fdf4', borderRadius: '6px', borderLeft: '3px solid #10b981' }}>
-                          <div style={{ fontSize: '0.75rem', color: '#065f46', fontWeight: '600', marginBottom: '0.25rem' }}>✨ IMPACT ATTENDU:</div>
-                          <div style={{ fontSize: '0.85rem', color: '#064e3b' }}>{rec.impact}</div>
-                        </div>
-                      )}
-                    </div>
-                  );})}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -2709,10 +2715,10 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Feedback */}
-          <div style={{ marginTop: '2rem' }}>
+          {/* Feedback - COMMENTED OUT */}
+          {/* <div style={{ marginTop: '2rem' }}>
             <FeedbackForm page="enhanced-dashboard" />
-          </div>
+          </div> */}
         </>
       )}
     </div>

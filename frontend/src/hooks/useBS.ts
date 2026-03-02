@@ -152,11 +152,11 @@ export const useApplyRebalancing = () => {
   return useMutation<
     unknown,
     Error,
-    { bsId: string; toUserId: string },
+    { suggestion: any; toUserId: string },
     unknown
   >({
-    mutationFn: async ({ bsId, toUserId }) => {
-      const response = await bsApi.applyRebalancing(bsId, toUserId);
+    mutationFn: async ({ suggestion, toUserId }) => {
+      const response = await bsApi.applyRebalancing(suggestion, toUserId);
       return response;
     },
     onSuccess: () => {

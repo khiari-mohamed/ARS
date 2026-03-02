@@ -37,6 +37,7 @@ export class BordereauResponseDto {
   dureeTraitementStatus?: 'GREEN' | 'RED' | null;
   dureeReglement?: number | null;
   dureeReglementStatus?: 'GREEN' | 'RED' | null;
+  dateAffectation?: Date | null;
 
   // Relations
   client?: User;
@@ -61,6 +62,7 @@ export class BordereauResponseDto {
       dateDepotVirement: bordereau.dateDepotVirement || null,
       dateExecutionVirement: bordereau.ordresVirement?.[0]?.dateEtatFinal || bordereau.ordresVirement?.[0]?.dateTraitement || bordereau.dateExecutionVirement || null,
       dateReceptionBO: bordereau.dateReceptionBO || null,
+      dateAffectation: bordereau.dateAffectation || null,
       createdAt: bordereau.createdAt,
       updatedAt: bordereau.updatedAt,
       // Include relations if they exist
@@ -76,14 +78,16 @@ export class BordereauResponseDto {
       const receptionDate = new Date(bordereau.dateReception);
       const daysElapsed = Math.floor((today.getTime() - receptionDate.getTime()) / (1000 * 60 * 60 * 24));
       
-      // Calculate days remaining until deadline
-      const daysRemaining = bordereau.delaiReglement - daysElapsed;
+      // UNIFIED SLA LOGIC: Calculate percentage elapsed
+      const slaThreshold = bordereau.delaiReglement || 30;
+      const percentElapsed = (daysElapsed / slaThreshold) * 100;
+      const daysRemaining = slaThreshold - daysElapsed;
       
-      // Determine status color based on days remaining
+      // Determine status color based on percentage elapsed (UNIFIED: ≤80% green, >80% orange, >100% red)
       let statusColor = StatusColor.GREEN;
-      if (daysRemaining <= 0) {
+      if (percentElapsed > 100) {
         statusColor = StatusColor.RED;
-      } else if (daysRemaining <= 3) {
+      } else if (percentElapsed > 80) {
         statusColor = StatusColor.ORANGE;
       }
       

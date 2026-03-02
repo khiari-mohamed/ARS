@@ -123,4 +123,10 @@ export class SuperAdminController {
   async createUserFromTemplate(@Body() data: { templateId: string; userData: any }) {
     return this.superAdminService.createUserFromTemplate(data.templateId, data.userData);
   }
+
+  // === TEAM WORKLOAD ===
+  @Get('team-workload')
+  async getTeamWorkload() {
+    return this.superAdminService.getTeamWorkload();
+  }
 }

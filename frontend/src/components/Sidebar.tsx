@@ -30,10 +30,6 @@ const sidebarLinks = [
   { to: "/home/dashboard", label: "Dashboard", icon: <DashboardIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'] },
   { to: "/home/super-admin", label: "Interface Super Admin", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN'] },
   { to: "/home/archives", label: "Archives", icon: <ArchiveIcon />, roles: ['SUPER_ADMIN'] },
-  
-  // ADMINISTRATEUR: All modules + system parameters
-  // COMMENTED OUT: Redundant user management - Use Super Admin interface instead
-  // { to: "/home/users", label: "Utilisateurs", icon: <GroupIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR'] },
   { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
   { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
   
@@ -49,13 +45,12 @@ const sidebarLinks = [
   { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'CLIENT_SERVICE'] },
   { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
   
-  // CHEF_EQUIPE: Team management, global inbox, team dashboard
-  // COMMENTED OUT: Redundant Chef d'Équipe dashboard - Use main dashboard instead
-  // { to: "/home/chef-equipe", label: "Chef d'Équipe", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN', 'CHEF_EQUIPE'] },
   
   // Common access
-  { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
-  { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'BUREAU_ORDRE', 'SCAN_TEAM'] },
+  // Alertes - COMMENTED OUT (merged into Super Admin "Alertes Équipes" tab)
+  // { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
+  // Guide & Flux - COMMENTED OUT (client request: not needed in production)
+  // { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'BUREAU_ORDRE', 'SCAN_TEAM'] },
 ];
 
 interface SidebarProps {

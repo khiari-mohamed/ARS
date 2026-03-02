@@ -15,27 +15,29 @@ export class NotificationController {
   private async initializeTransporter() {
     try {
       if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.warn('⚠️ SMTP credentials not configured - email notifications disabled');
         return;
       }
 
+      const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+      const isSecure = smtpPort === 465;
+
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gnet.tn',
-        port: parseInt(process.env.SMTP_PORT || '465'),
-        secure: process.env.SMTP_SECURE === 'true' || true,
+        port: smtpPort,
+        secure: isSecure,
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS
         },
         tls: {
-          rejectUnauthorized: false
-        }
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2'
+        },
+        requireTLS: !isSecure
       });
       
       await this.transporter.verify();
-      console.log('✅ SMTP connection verified (NotificationController)');
     } catch (error) {
-      console.warn(`⚠️ SMTP connection failed (NotificationController): ${error.message} - Email notifications disabled`);
       this.transporter = null;
     }
   }
@@ -67,7 +69,7 @@ export class NotificationController {
         }
       });
     } catch (error) {
-      console.error('Failed to save preferences:', error);
+      return { success: false };
     }
     
     return { success: true };
@@ -122,7 +124,6 @@ export class NotificationController {
     if (!userPrefs.assignmentAlerts) {
       return { success: true, message: 'Notification disabled by user preferences' };
     }
-    console.log('📧 NOTIFICATION: Processing reassignment notification');
     
     try {
       // 1. Get user and bordereau details
@@ -158,7 +159,7 @@ export class NotificationController {
             }
           });
         } catch (error) {
-          console.error('Failed to create notification:', error);
+          // Silent fail
         }
       }
 
@@ -187,10 +188,6 @@ export class NotificationController {
         });
       }
 
-      console.log('✅ Notification processed successfully');
-      console.log('- Database notification:', notification ? 'Created' : 'Skipped');
-      console.log('- Email sent:', emailSent ? 'Yes' : 'Failed');
-
       return {
         success: true,
         message: 'Reassignment notification sent successfully',
@@ -200,7 +197,6 @@ export class NotificationController {
       };
 
     } catch (error) {
-      console.error('❌ Notification error:', error);
       return {
         success: false,
         message: 'Failed to send notification',
@@ -217,7 +213,6 @@ export class NotificationController {
   }): Promise<boolean> {
     try {
       if (!this.transporter) {
-        console.warn('⚠️ SMTP not configured - email skipped');
         return false;
       }
 
@@ -229,7 +224,6 @@ export class NotificationController {
       });
       return true;
     } catch (error) {
-      console.error('Email send error:', error);
       return false;
     }
   }

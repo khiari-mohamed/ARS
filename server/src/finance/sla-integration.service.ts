@@ -48,7 +48,7 @@ export class SlaIntegrationService {
       return {
         slaStatus: slaCheck.status,
         slaPercentage: slaCheck.pourcentage,
-        slaRemainingHours: slaCheck.heuresRestantes,
+        slaRemainingDays: slaCheck.joursRestants,
         slaMaxDelay: slaCheck.delaiMax,
         slaConfig: {
           seuilAlerte: typeof slaCheck?.slaConfig?.seuils === 'object' && slaCheck?.slaConfig?.seuils !== null && 'seuilAlerte' in slaCheck.slaConfig.seuils
@@ -125,17 +125,17 @@ export class SlaIntegrationService {
     const type = alert.type === 'BORDEREAU_SLA' ? 'bordereau' : 'virement';
     const client = alert.client || 'Client inconnu';
 
-    if (typeof alert.heuresRestantes === 'number' && alert.heuresRestantes <= 0) {
-      const heuresDepassement = Math.abs(alert.heuresRestantes);
-      return `Le ${type} ${alert.reference} de ${client} a dépassé son SLA de ${Math.round(heuresDepassement)}h (${alert.pourcentage}%)`;
+    if (typeof alert.joursRestants === 'number' && alert.joursRestants <= 0) {
+      const joursDepassement = Math.abs(alert.joursRestants);
+      return `Le ${type} ${alert.reference} de ${client} a dépassé son SLA de ${Math.round(joursDepassement)} jour(s) (${alert.pourcentage}%)`;
     } else {
-      return `Le ${type} ${alert.reference} de ${client} approche de son SLA limite. Temps restant: ${Math.round(alert.heuresRestantes ?? 0)}h (${alert.pourcentage}%)`;
+      return `Le ${type} ${alert.reference} de ${client} approche de son SLA limite. Temps restant: ${Math.round(alert.joursRestants ?? 0)} jour(s) (${alert.pourcentage}%)`;
     }
   }
 
   private calculateDelayHours(alert: any): number {
-    if (typeof alert.heuresRestantes === 'number' && alert.heuresRestantes <= 0) {
-      return Math.abs(alert.heuresRestantes);
+    if (typeof alert.joursRestants === 'number' && alert.joursRestants <= 0) {
+      return Math.abs(alert.joursRestants) * 24; // Convert days to hours
     }
     return 0;
   }
@@ -220,7 +220,7 @@ export class SlaIntegrationService {
           data: {
             slaLevel: alert.level,
             slaPercentage: alert.pourcentage,
-            remainingHours: alert.heuresRestantes,
+            remainingDays: alert.joursRestants,
             bordereauId: alert.bordereauId,
             virementId: alert.ordreVirementId
           }

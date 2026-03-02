@@ -586,6 +586,11 @@ function ChefEquipeBordereaux() {
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                             {(() => {
+                              // Show "✓ Réglé (Xj)" for VIREMENT_EXECUTE with days
+                              if (bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE') {
+                                const days = getDureeReglement(bordereau).days;
+                                return <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({days || 0}j)</span>;
+                              }
                               const dureeReglement = getDureeReglement(bordereau);
                               if (dureeReglement.days === null || dureeReglement.days === undefined) {
                                 return <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>;
@@ -1176,17 +1181,8 @@ function ChefEquipeBordereaux() {
                             </td>
                           )}
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {isVirementExecute && dureeReglementDays !== null ? (
-                              <span style={{ 
-                                background: dureeReglementOnTime ? '#c8e6c9' : '#ffcdd2', 
-                                color: dureeReglementOnTime ? '#1b5e20' : '#b71c1c', 
-                                padding: '4px 8px', 
-                                borderRadius: '12px', 
-                                fontSize: '12px', 
-                                fontWeight: 'bold' 
-                              }}>
-                                ✓ Réglé ({dureeReglementDays}j)
-                              </span>
+                            {bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE' ? (
+                              <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span>
                             ) : dr.days === null ? (
                               <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>
                             ) : (

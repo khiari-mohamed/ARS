@@ -122,8 +122,11 @@ export class ChefEquipeDashboardController {
       })
     );
 
-    console.log('🔍 [BACKEND] Returning assignments:', assignments.length, 'gestionnaires');
-    return assignments;
+    // Filter out gestionnaires with 0 assignments
+    const filteredAssignments = assignments.filter(a => a.totalAssigned > 0);
+    
+    console.log('🔍 [BACKEND] Returning assignments:', filteredAssignments.length, 'gestionnaires (filtered from', assignments.length, 'total)');
+    return filteredAssignments;
   }
 
   @Get('dashboard-dossiers')
@@ -484,7 +487,7 @@ export class GestionnaireSeniorDashboardController {
     console.log('🔍 User Role:', req.user.role);
     console.log('==============================================\n');
     
-    // First get documents (current behavior for backward compatibility)
+    // Get ALL documents from bordereaux where contract.teamLeaderId matches this senior
     const documents = await this.prisma.document.findMany({
       where: {
         bordereau: {
@@ -494,21 +497,36 @@ export class GestionnaireSeniorDashboardController {
       },
       include: {
         bordereau: {
-          include: {
+          select: {
+            reference: true,
             client: { select: { name: true } }
           }
         },
         assignedTo: { select: { fullName: true } }
       },
-      orderBy: { uploadedAt: 'desc' },
-      take: 100
+      orderBy: { uploadedAt: 'desc' }
     });
+    
+    console.log('📄 Total documents fetched:', documents.length);
+    console.log('📄 UTSS Documents in raw fetch:', documents.filter(d => d.bordereau?.client?.name?.includes('UTSS')).length);
+    console.log('📄 U-BULLETIN Documents:', documents.filter(d => d.bordereau?.reference?.includes('U-BULLETIN')).length);
+    if (documents.length > 0) {
+      const sample = documents.find(d => d.bordereau?.reference?.includes('U-BULLETIN'));
+      if (sample) {
+        console.log('📄 Sample U-BULLETIN document:', {
+          id: sample.id,
+          name: sample.name,
+          bordereauRef: sample.bordereau?.reference,
+          client: sample.bordereau?.client?.name
+        });
+      }
+    }
 
     const result: any[] = [];
     
     // Add documents with explicit flags
     documents.forEach(doc => {
-      result.push({
+      const docItem = {
         id: doc.id,
         reference: doc.name,
         nom: doc.name,
@@ -519,14 +537,18 @@ export class GestionnaireSeniorDashboardController {
         date: doc.uploadedAt.toISOString().split('T')[0],
         gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
         bordereauReference: doc.bordereau?.reference || 'N/A',
-        isDocument: true,  // EXPLICIT FLAG
-        isBordereau: false  // EXPLICIT FLAG
-      });
+        isDocument: true,
+        isBordereau: false
+      };
+      result.push(docItem);
+      
+      // Log UTSS documents
+      if (doc.bordereau?.client?.name?.includes('UTSS') || doc.bordereau?.reference?.includes('U-BULLETIN')) {
+        console.log('🔵 Adding UTSS/U-BULLETIN document to result:', docItem);
+      }
     });
     
-    console.log('📄 Added', documents.length, 'documents with isDocument=true');
-    
-    // Now get bordereaux
+    // Now get bordereaux where contract.teamLeaderId matches this senior
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         archived: false,
@@ -579,8 +601,19 @@ export class GestionnaireSeniorDashboardController {
     console.log('📦 Total Documents:', documents.length);
     console.log('📦 Total Bordereaux:', bordereaux.length);
     console.log('📦 Total Result Items:', result.length);
-    console.log('📦 Bordereaux in result:', result.filter(r => r.isBordereau).length);
-    console.log('📦 Documents in result:', result.filter(r => r.isDocument).length);
+    console.log('📦 Documents in result (isDocument=true):', result.filter(r => r.isDocument).length);
+    console.log('📦 Bordereaux in result (isBordereau=true):', result.filter(r => r.isBordereau).length);
+    console.log('📦 UTSS Documents in result:', result.filter(r => r.isDocument && (r.client?.includes('UTSS') || r.bordereauReference?.includes('U-BULLETIN'))).length);
+    console.log('📦 UTSS Bordereaux in result:', result.filter(r => r.isBordereau && r.reference?.includes('U-BULLETIN')).length);
+    const uBulletinBordereau = bordereaux.find(b => b.reference?.includes('U-BULLETIN'));
+    if (uBulletinBordereau) {
+      console.log('🔴 U-BULLETIN Bordereau found:', {
+        id: uBulletinBordereau.id,
+        reference: uBulletinBordereau.reference,
+        documentsCount: uBulletinBordereau.documents?.length || 0,
+        sampleDocIds: uBulletinBordereau.documents?.slice(0, 3).map(d => d.id) || []
+      });
+    }
     console.log('==============================================\n');
 
     return result;

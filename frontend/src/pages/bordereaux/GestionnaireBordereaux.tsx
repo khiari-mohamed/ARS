@@ -111,13 +111,13 @@ function GestionnaireBordereaux() {
                   </div>
                 </div>
               </div>
-              <div className="gestionnaire-stat-card" onClick={() => { setModalType('traites'); setModalData(userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE'].includes(b.statut))); setShowModal(true); }} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              <div className="gestionnaire-stat-card" onClick={() => { setModalType('traites'); setModalData(userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut))); setShowModal(true); }} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
                     <span style={{ fontSize: '32px' }}>✅</span>
                   </div>
                   <div>
-                    <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>{userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}</div>
+                    <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>{userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}</div>
                     <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
                     <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
                   </div>
@@ -152,7 +152,7 @@ function GestionnaireBordereaux() {
           </div>
           <div className="gestionnaire-perf-grid">
             <div className="gestionnaire-perf-card green">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>{userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length}</div>
+              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>{userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}</div>
               <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>Total traités</div>
             </div>
             <div className="gestionnaire-perf-card red">
@@ -164,7 +164,7 @@ function GestionnaireBordereaux() {
               <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>En cours</div>
             </div>
             <div className="gestionnaire-perf-card purple">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>{userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%</div>
+              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>{userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%</div>
               <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
             </div>
           </div>
@@ -217,7 +217,7 @@ function GestionnaireBordereaux() {
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.dateFinScan ? new Date(b.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}><span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{b.delaiReglement || 0}j</span></td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.statut === 'VIREMENT_EXECUTE' || b.statut === 'CLOTURE' || b.statut === 'PAYE' ? <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span> : dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}</td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                               {['EN_COURS', 'ASSIGNE'].includes(b.statut) && (
                                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -225,7 +225,7 @@ function GestionnaireBordereaux() {
                                   <span style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ff9800', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>↩ Retour</span>
                                 </div>
                               )}
-                              {['TRAITE', 'CLOTURE'].includes(b.statut) && <span style={{ fontSize: '12px', color: '#4caf50', fontWeight: 'bold' }}>✓ Complété</span>}
+                              {['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut) && <span style={{ fontSize: '12px', color: '#4caf50', fontWeight: 'bold' }}>✓ Complété</span>}
                             </td>
                           </tr>
                         );

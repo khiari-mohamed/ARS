@@ -3,6 +3,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import '../../styles/bordereaux.css';
 import { 
+  BarChart3, CheckCircle, AlertTriangle, TrendingUp, Eye, Archive,
+  Plus, Edit, FolderOpen, AlertCircle, Users, LayoutDashboard,
+  CheckSquare, Pause, ArrowRight, RefreshCw, Search, X, FileText,
+  Calendar, Filter, Download, Upload, FileSpreadsheet
+} from 'lucide-react';
+import { 
   fetchBordereaux, 
   fetchKPIs, 
   getPerformanceAnalytics,
@@ -41,7 +47,7 @@ const BordereauxDashboard: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedClient, setSelectedClient] = useState('');
-  const [slaFilter, setSlaFilter] = useState<'all' | 'en_cours' | 'regle' | 'en_retard'>('all');
+  const [slaFilter, setSlaFilter] = useState<'all' | 'respecte' | 'a_risque' | 'en_retard'>('all');
   const [referenceFilter, setReferenceFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [overdueFilter, setOverdueFilter] = useState(false);
@@ -79,22 +85,18 @@ const BordereauxDashboard: React.FC = () => {
   const isAdministrateur = user?.role === 'ADMINISTRATEUR';
 
   useEffect(() => {
-    console.log('🚀 Dashboard: Initial load with default filters');
     loadData();
     loadUsers();
     loadClients();
   }, []);
   
   useEffect(() => {
-    console.log('🔄 Filters changed:', filters);
     loadData();
   }, [filters]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      console.log('📡 Loading data with filters:', filters);
-      console.log('🔍 Dashboard: Current filter state:', JSON.stringify(filters, null, 2));
       const [bordereauxData, kpisData, analyticsData] = await Promise.all([
         fetchBordereaux({ ...filters, withVirement: true, include: 'ordresVirement' }),
         fetchKPIs(),
@@ -102,8 +104,6 @@ const BordereauxDashboard: React.FC = () => {
       ]);
       
       const bordereauList = Array.isArray(bordereauxData) ? bordereauxData : bordereauxData.items || [];
-      console.log('📊 Loaded bordereaux:', bordereauList.length, 'items');
-      console.log('📊 Dashboard: Bordereau statuts:', bordereauList.map((b: any) => `${b.reference}: ${b.statut}`));
       setBordereaux(bordereauList);
       setKpis(kpisData);
       setAnalytics(analyticsData);
@@ -142,9 +142,7 @@ const BordereauxDashboard: React.FC = () => {
     if (selectedClient) newFilters.clientId = selectedClient;
     if (referenceFilter) newFilters.reference = referenceFilter;
     if (statusFilter) newFilters.statut = statusFilter;
-    if (overdueFilter) newFilters.overdue = true;
     
-    console.log('🔍 Applying filters:', newFilters);
     setFilters(newFilters);
   };
 
@@ -155,7 +153,6 @@ const BordereauxDashboard: React.FC = () => {
     setSlaFilter('all');
     setReferenceFilter('');
     setStatusFilter('');
-    setOverdueFilter(false);
     setFilters({ archived: false });
   };
 
@@ -283,17 +280,71 @@ const BordereauxDashboard: React.FC = () => {
     }
   };
 
-  // Pagination logic
-  const totalPages = Math.ceil(bordereaux.length / itemsPerPage);
+  // Get Durée de traitement from backend calculation
+  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return { 
+      days: bordereau.dureeTraitement, 
+      isOnTime: bordereau.dureeTraitementStatus === 'GREEN' 
+    };
+  };
+
+  // Get Durée de règlement from backend calculation
+  const getDureeReglement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeReglement === null || bordereau.dureeReglement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return { 
+      days: bordereau.dureeReglement, 
+      isOnTime: bordereau.dureeReglementStatus === 'GREEN' 
+    };
+  };
+
+  // UNIFIED SLA LOGIC - Calculate days elapsed from dateReception (matches script)
+  const calculateSLAStatus = (bordereau: any) => {
+    if (!bordereau.dateReception || !bordereau.delaiReglement) return 'UNKNOWN';
+    
+    const today = new Date();
+    const reception = new Date(bordereau.dateReception);
+    const daysElapsed = (today.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24);
+    const delai = bordereau.delaiReglement;
+    const percentElapsed = (daysElapsed / delai) * 100;
+    
+    if (percentElapsed > 100) return 'OVERDUE';  // En retard
+    if (percentElapsed > 80) return 'AT_RISK';   // À risque (>80%)
+    return 'ON_TIME';  // À temps
+  };
+
+  // Pagination logic with SLA filter applied
+  const filteredBySLA = slaFilter === 'all' ? bordereaux : bordereaux.filter(b => {
+    const slaStatus = calculateSLAStatus(b);
+    
+    if (slaFilter === 'en_retard') return slaStatus === 'OVERDUE';
+    if (slaFilter === 'a_risque') return slaStatus === 'AT_RISK';
+    if (slaFilter === 'respecte') return slaStatus === 'ON_TIME';
+    return true;
+  });
+  
+  // Log SLA filter results for debugging
+  console.log('🔍 SLA Filter Applied:', slaFilter);
+  console.log('📊 Total bordereaux:', bordereaux.length);
+  console.log('📊 Filtered by SLA:', filteredBySLA.length);
+  console.log('📊 SLA Breakdown:', {
+    onTime: bordereaux.filter(b => calculateSLAStatus(b) === 'ON_TIME').length,
+    atRisk: bordereaux.filter(b => calculateSLAStatus(b) === 'AT_RISK').length,
+    overdue: bordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length
+  });
+  
+  const totalPages = Math.ceil(filteredBySLA.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedBordereaux = bordereaux.slice(startIndex, endIndex);
+  const paginatedBordereaux = filteredBySLA.slice(startIndex, endIndex);
 
   const handleViewBordereau = (bordereauId: string) => {
-    console.log('handleViewBordereau called with ID:', bordereauId);
     setSelectedBordereauForDetails(bordereauId);
     setShowDetailsModal(true);
-    console.log('Modal state set - showDetailsModal:', true, 'selectedId:', bordereauId);
   };
 
   const handleProgressBordereau = (bordereau: any) => {
@@ -334,41 +385,6 @@ const BordereauxDashboard: React.FC = () => {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const getSLAStatus = (bordereau: any) => {
-    if (!bordereau.dateReception || !bordereau.delaiReglement) return { color: 'text-gray-500', days: 0 };
-    
-    const today = new Date();
-    const reception = new Date(bordereau.dateReception);
-    const elapsed = Math.floor((today.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24));
-    const remaining = bordereau.delaiReglement - elapsed;
-    
-    if (remaining < 0) return { color: 'text-red-600', days: remaining, label: 'En retard' };
-    if (remaining <= 3) return { color: 'text-orange-600', days: remaining, label: 'Urgent' };
-    return { color: 'text-green-600', days: remaining, label: 'OK' };
-  };
-
-  // Get Durée de traitement from backend calculation
-  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
-    if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
-      return { days: null, isOnTime: true };
-    }
-    return { 
-      days: bordereau.dureeTraitement, 
-      isOnTime: bordereau.dureeTraitementStatus === 'GREEN' 
-    };
-  };
-
-  // Get Durée de règlement from backend calculation
-  const getDureeReglement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
-    if (bordereau.dureeReglement === null || bordereau.dureeReglement === undefined) {
-      return { days: null, isOnTime: true };
-    }
-    return { 
-      days: bordereau.dureeReglement, 
-      isOnTime: bordereau.dureeReglementStatus === 'GREEN' 
-    };
-  };
-
   if (loading) {
     return (
       <div className="bordereau-loading">
@@ -405,7 +421,7 @@ const BordereauxDashboard: React.FC = () => {
             <div className="bordereau-kpi-content">
               <div className="bordereau-kpi-info">
                 <div className="bordereau-kpi-icon">
-                  <span>📊</span>
+                  <BarChart3 className="w-6 h-6" />
                 </div>
                 <h3 className="bordereau-kpi-label">Total Bordereaux</h3>
                 <p className="bordereau-kpi-value">{bordereaux.length}</p>
@@ -416,7 +432,7 @@ const BordereauxDashboard: React.FC = () => {
             <div className="bordereau-kpi-content">
               <div className="bordereau-kpi-info">
                 <div className="bordereau-kpi-icon icon-success">
-                  <span>✅</span>
+                  <CheckCircle className="w-6 h-6" />
                 </div>
                 <h3 className="bordereau-kpi-label">Traités</h3>
                 <p className="bordereau-kpi-value value-success">
@@ -429,11 +445,15 @@ const BordereauxDashboard: React.FC = () => {
             <div className="bordereau-kpi-content">
               <div className="bordereau-kpi-info">
                 <div className="bordereau-kpi-icon icon-danger">
-                  <span>⚠️</span>
+                  <AlertTriangle className="w-6 h-6" />
                 </div>
                 <h3 className="bordereau-kpi-label">En retard</h3>
                 <p className="bordereau-kpi-value value-danger">
-                  {bordereaux.filter(b => getSLAStatus(b).days < 0).length}
+                  {bordereaux.filter(b => {
+                    const dureeTraitement = getDureeTraitement(b);
+                    const delai = b.delaiReglement || 0;
+                    return dureeTraitement.days !== null && dureeTraitement.days > delai;
+                  }).length}
                 </p>
               </div>
             </div>
@@ -442,7 +462,7 @@ const BordereauxDashboard: React.FC = () => {
             <div className="bordereau-kpi-content">
               <div className="bordereau-kpi-info">
                 <div className="bordereau-kpi-icon icon-warning">
-                  <span>📈</span>
+                  <TrendingUp className="w-6 h-6" />
                 </div>
                 <h3 className="bordereau-kpi-label">Conformité SLA</h3>
                 <p className="bordereau-kpi-value value-warning">{analytics?.slaCompliance || 0}%</p>
@@ -471,8 +491,21 @@ const BordereauxDashboard: React.FC = () => {
         <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '0', flexWrap: 'wrap' }}>
             <input type="text" placeholder="Référence" value={referenceFilter} onChange={(e) => setReferenceFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }} />
-            <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }}>
-              <option value="">Client</option>
+            <select 
+              value={selectedClient} 
+              onChange={(e) => {
+                setSelectedClient(e.target.value);
+                const newFilters: any = { archived: false };
+                if (e.target.value) newFilters.clientId = e.target.value;
+                if (dateFrom) newFilters.dateStart = dateFrom;
+                if (dateTo) newFilters.dateEnd = dateTo;
+                if (referenceFilter) newFilters.reference = referenceFilter;
+                if (statusFilter) newFilters.statut = statusFilter;
+                setFilters(newFilters);
+              }} 
+              style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }}
+            >
+              <option value="">Tous les clients</option>
               {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }}>
@@ -481,9 +514,11 @@ const BordereauxDashboard: React.FC = () => {
               <option value="TRAITE">Traité</option>
               <option value="VIREMENT_EXECUTE">Virement Exécuté</option>
             </select>
-            <select value={overdueFilter ? 'true' : ''} onChange={(e) => { const val = e.target.value; setOverdueFilter(val === 'true'); }} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }}>
-              <option value="">SLA</option>
-              <option value="true">En retard</option>
+            <select value={slaFilter} onChange={(e) => setSlaFilter(e.target.value as any)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '200px' }}>
+              <option value="all">📊 Tous les SLA ({bordereaux.length})</option>
+              <option value="en_retard">● En retard ({bordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length})</option>
+              <option value="a_risque">▲ À risque ({bordereaux.filter(b => calculateSLAStatus(b) === 'AT_RISK').length})</option>
+              <option value="respecte">✓ Respecté ({bordereaux.filter(b => calculateSLAStatus(b) === 'ON_TIME').length})</option>
             </select>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
@@ -497,13 +532,13 @@ const BordereauxDashboard: React.FC = () => {
                 <>
                   <button
                     onClick={() => setShowCreateModal(true)}
-                    className="bordereau-btn bordereau-btn-primary"
+                    className="bordereau-btn bordereau-btn-primary flex items-center gap-2"
                   >
-                    <span>➕</span>
+                    <Plus className="w-4 h-4" />
                     Enregistrer Bordereau
                   </button>
-                  <button className="bordereau-btn bordereau-btn-secondary">
-                    <span>✏️</span>
+                  <button className="bordereau-btn bordereau-btn-secondary flex items-center gap-2">
+                    <Edit className="w-4 h-4" />
                     Modifier
                   </button>
                 </>
@@ -517,13 +552,13 @@ const BordereauxDashboard: React.FC = () => {
                       accept=".pdf,.jpg,.png"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
-                    <button className="bordereau-btn bordereau-btn-primary">
-                      <span>📂</span>
+                    <button className="bordereau-btn bordereau-btn-primary flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4" />
                       Importer Scan
                     </button>
                   </div>
-                  <button className="bordereau-btn bordereau-btn-warning">
-                    <span>🚨</span>
+                  <button className="bordereau-btn bordereau-btn-warning flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
                     Signaler Surcharge
                   </button>
                 </>
@@ -531,12 +566,12 @@ const BordereauxDashboard: React.FC = () => {
               
               {isChefEquipe && (
                 <>
-                  <button className="bordereau-btn bordereau-btn-primary">
-                    <span>👥</span>
+                  <button className="bordereau-btn bordereau-btn-primary flex items-center gap-2">
+                    <Users className="w-4 h-4" />
                     Assigner en Lot
                   </button>
-                  <button className="bordereau-btn bordereau-btn-secondary">
-                    <span>📊</span>
+                  <button className="bordereau-btn bordereau-btn-secondary flex items-center gap-2">
+                    <LayoutDashboard className="w-4 h-4" />
                     Tableau de Bord
                   </button>
                 </>
@@ -546,16 +581,16 @@ const BordereauxDashboard: React.FC = () => {
                 <>
                   <button 
                     onClick={() => handleBulkAction('status', 'TRAITE')}
-                    className="bordereau-btn bordereau-btn-success"
+                    className="bordereau-btn bordereau-btn-success flex items-center gap-2"
                   >
-                    <span>✅</span>
+                    <CheckSquare className="w-4 h-4" />
                     Marquer Traités
                   </button>
                   <button 
                     onClick={() => handleBulkAction('status', 'MIS_EN_INSTANCE')}
-                    className="bordereau-btn bordereau-btn-warning"
+                    className="bordereau-btn bordereau-btn-warning flex items-center gap-2"
                   >
-                    <span>⏸️</span>
+                    <Pause className="w-4 h-4" />
                     Mettre en Instance
                   </button>
                 </>
@@ -575,7 +610,7 @@ const BordereauxDashboard: React.FC = () => {
                       className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
                       defaultValue=""
                     >
-                      <option value="">👥 Assigner à...</option>
+                      <option value="">Assigner à...</option>
                       {users.map(user => (
                         <option key={user.id} value={user.id}>{user.fullName}</option>
                       ))}
@@ -584,14 +619,16 @@ const BordereauxDashboard: React.FC = () => {
 
                   <button
                     onClick={() => handleBulkAction('progress')}
-                    className="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                    className="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-2"
                   >
-                    ➡️ Progresser
+                    <ArrowRight className="w-4 h-4" />
+                    Progresser
                   </button>
                   
                   <div className="relative group">
-                    <button className="bg-orange-600 text-white px-3 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm">
-                      🔄 Changer Statut ▼
+                    <button className="bg-orange-600 text-white px-3 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4" />
+                      Changer Statut ▼
                     </button>
                     <div className="absolute top-full left-0 mt-1 bg-white shadow-lg rounded-md py-1 z-10 hidden group-hover:block min-w-40">
                      
@@ -632,19 +669,21 @@ const BordereauxDashboard: React.FC = () => {
                 onKeyPress={(e) => e.key === 'Enter' && handleAdvancedSearch()}
               />
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
                 onClick={handleAdvancedSearch}
               >
-                🔍 Rechercher
+                <Search className="w-4 h-4" />
+                Rechercher
               </button>
               <button
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-2"
                 onClick={() => {
                   setSearchQuery('');
                   setShowAdvancedSearch(false);
                   loadData();
                 }}
               >
+                <X className="w-4 h-4" />
                 Annuler
               </button>
             </div>
@@ -683,13 +722,14 @@ const BordereauxDashboard: React.FC = () => {
                       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Date Trait. Virement</th>
                     )}
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Durée Règlement</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">SLA</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Dernière MAJ</th>
                     <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Statut</th>
                     <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
                   {paginatedBordereaux.map((bordereau) => {
-                    const sla = getSLAStatus(bordereau);
                     return (
                       <tr key={bordereau.id} className="hover:bg-blue-50 transition-colors group">
                         <td className="px-3 py-3">
@@ -789,8 +829,34 @@ const BordereauxDashboard: React.FC = () => {
                           )}
                         </td>
                         <td className="px-3 py-3">
+                          {(() => {
+                            const slaStatus = calculateSLAStatus(bordereau);
+                            if (slaStatus === 'UNKNOWN') {
+                              return <span className="text-xs text-gray-400">-</span>;
+                            }
+                            return (
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                slaStatus === 'OVERDUE' ? 'bg-red-100 text-red-700' :
+                                slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {slaStatus === 'OVERDUE' ? '● En retard' : slaStatus === 'AT_RISK' ? '▲ À risque' : '✓ Respecté'}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-xs text-gray-600">
+                            {bordereau.updatedAt ? new Date(bordereau.updatedAt).toLocaleDateString('fr-FR') : '-'}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(bordereau.statut)}`}>
-                            {bordereau.statut}
+                            {bordereau.statut === 'EN_COURS' && bordereau.currentHandler?.role === 'GESTIONNAIRE_SENIOR' 
+                              ? `Affecté à ${bordereau.currentHandler.fullName}` 
+                              : bordereau.statut === 'A_AFFECTER' && bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR'
+                              ? `Affecté à ${bordereau.contract.teamLeader.fullName}`
+                              : bordereau.statut}
                           </span>
                         </td>
                         <td className="px-3 py-3 text-center relative">
@@ -798,7 +864,7 @@ const BordereauxDashboard: React.FC = () => {
                           <div className="flex gap-2 justify-center">
                               {/* Always visible actions */}
                               <button
-                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors"
+                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors flex items-center gap-1"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -806,7 +872,8 @@ const BordereauxDashboard: React.FC = () => {
                                 }}
                                 title="Voir détails"
                               >
-                                👁️ Voir
+                                <Eye className="w-3 h-3" />
+                                Voir
                               </button>
 
 
@@ -815,7 +882,7 @@ const BordereauxDashboard: React.FC = () => {
                               {/* Archive action */}
                               {isSuperAdmin && (
                                 <button
-                                  className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors"
+                                  className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors flex items-center gap-1"
                                   onClick={async (e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
@@ -829,7 +896,8 @@ const BordereauxDashboard: React.FC = () => {
                                   }}
                                   title="Archiver"
                                 >
-                                  🗄️ Archiver
+                                  <Archive className="w-3 h-3" />
+                                  Archiver
                                 </button>
                               )}
                             {/* </div>
@@ -861,8 +929,8 @@ const BordereauxDashboard: React.FC = () => {
                   alignItems: 'center',
                   gap: '8px'
                 }}>
-                  <span style={{ fontSize: '18px' }}>📊</span>
-                  Affichage de <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{startIndex + 1}</span> à <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{Math.min(endIndex, bordereaux.length)}</span> sur <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{bordereaux.length}</span> bordereaux
+                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  Affichage de <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{startIndex + 1}</span> à <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{Math.min(endIndex, filteredBySLA.length)}</span> sur <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{filteredBySLA.length}</span> bordereaux
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <button
@@ -1055,7 +1123,14 @@ const BordereauxDashboard: React.FC = () => {
             setFilters(newFilters);
             console.log('🔄 Dashboard: Filters updated, triggering reload...');
           }}
-          getSLAStatus={getSLAStatus}
+          getSLAStatus={(b: any) => {
+            const status = calculateSLAStatus(b);
+            return {
+              color: status === 'OVERDUE' ? 'text-red-600' : status === 'AT_RISK' ? 'text-orange-600' : 'text-green-600',
+              days: 0,
+              label: status === 'OVERDUE' ? 'En retard' : status === 'AT_RISK' ? 'À risque' : 'Respecté'
+            };
+          }}
         />
       )}
 
@@ -1194,9 +1269,10 @@ const BordereauxDashboard: React.FC = () => {
                         notify('Erreur lors de l\'actualisation', 'error');
                       }
                     }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
                   >
-                    🔄 Actualiser
+                    <RefreshCw className="w-4 h-4" />
+                    Actualiser
                   </button>
                 </div>
               </div>

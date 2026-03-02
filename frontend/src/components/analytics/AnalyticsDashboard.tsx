@@ -10,14 +10,15 @@ import PerformanceTab from './PerformanceTab';
 import ClaimsTab from './ClaimsTab';
 import SLARiskTab from './SLARiskTab';
 import ForecastingTab from './ForecastingTab';
-import ReportsTab from './ReportsTab';
+// import ReportsTab from './ReportsTab';
 // COMMENTED OUT: Extra components not in core requirements
 // import AdvancedFilteringDashboard from './AdvancedFilteringDashboard';
 // import ScheduledReportsManager from './ScheduledReportsManager';
-import PredictiveAnalyticsDashboard from './PredictiveAnalyticsDashboard';
+// import PredictiveAnalyticsDashboard from './PredictiveAnalyticsDashboard';
 // import RealTimeDashboard from './RealTimeDashboard';
 // import OVAnalyticsDashboard from './OVAnalyticsDashboard';
-import DocumentTypesTab from './DocumentTypesTab';
+// COMMENTED OUT: Redundant information across the entire app
+// import DocumentTypesTab from './DocumentTypesTab';
 import AnalyticsMobileView from './AnalyticsMobileView';
 import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
@@ -107,8 +108,6 @@ const AnalyticsDashboard: React.FC = () => {
       const filterParams = {
         ...dateRange,
         clientId: filters.clientId,
-        departmentId: filters.departmentId,
-        teamId: filters.teamId,
         slaStatus: filters.slaStatus
       };
 
@@ -186,11 +185,6 @@ const AnalyticsDashboard: React.FC = () => {
       applied.push(`Client: ${client?.name || filters.clientId}`);
     }
     
-    if (filters.departmentId) {
-      const dept = filterOptions.departments.find(d => d.id === filters.departmentId);
-      applied.push(`Département: ${dept?.name || filters.departmentId}`);
-    }
-    
     if (filters.slaStatus) {
       const slaLabels: Record<string, string> = {
         'ontime': 'À temps',
@@ -226,8 +220,6 @@ const AnalyticsDashboard: React.FC = () => {
   const removeFilter = (filterToRemove: string) => {
     if (filterToRemove.includes('Client:')) {
       setFilters(prev => ({ ...prev, clientId: undefined }));
-    } else if (filterToRemove.includes('Département:')) {
-      setFilters(prev => ({ ...prev, departmentId: undefined }));
     } else if (filterToRemove.includes('SLA:')) {
       setFilters(prev => ({ ...prev, slaStatus: undefined }));
     } else if (filterToRemove.includes('Période:')) {
@@ -252,25 +244,15 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const tabLabels = [
-    'Vue d\'ensemble', 
-    'Types Documents',
     'Performance',
-    'Réclamations',
     'Risques SLA',
-    'Prévisions',
-    'Analyses Prédictives',
-    'Rapports'
-    // COMMENTED OUT: Extra tabs not in core requirements
-    // 'Temps Réel',
-    // 'OV Analytics',
-    // 'Filtrage Avancé',
-    // 'Rapports Programmés'
+    'Prévisions'
   ];
 
   return (
     <Box sx={{ p: 2 }}>
       {/* Global KPI Header */}
-      <GlobalKPIHeader />
+      <GlobalKPIHeader filters={filters} dateRange={getDateRange()} />
 
       {/* Mobile View */}
       {isMobile && (
@@ -288,19 +270,9 @@ const AnalyticsDashboard: React.FC = () => {
               {tabLabels[tab]}
             </Typography>
             <Box>
-              {tab === 0 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 1 && <DocumentTypesTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 2 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 3 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 4 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 5 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 6 && <PredictiveAnalyticsDashboard />}
-              {tab === 7 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
-              {/* COMMENTED OUT: Extra tabs not in core requirements */}
-              {/* {tab === 8 && <RealTimeDashboard />} */}
-              {/* {tab === 9 && <OVAnalyticsDashboard />} */}
-              {/* {tab === 10 && <AdvancedFilteringDashboard />} */}
-              {/* {tab === 11 && <ScheduledReportsManager />} */}
+              {tab === 0 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 1 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 2 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
             </Box>
           </Paper>
         </>
@@ -345,27 +317,13 @@ const AnalyticsDashboard: React.FC = () => {
                 />
 
                 <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Département</InputLabel>
-                  <Select
-                    value={filters.departmentId || ''}
-                    onChange={(e) => handleFilterChange('departmentId', e.target.value)}
-                    label="Département"
-                  >
-                    <MenuItem value="">Tous les départements</MenuItem>
-                    {filterOptions.departments.map((dept) => (
-                      <MenuItem key={dept.id || dept.code} value={dept.id || dept.code}>{dept.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
                   <InputLabel>Status SLA</InputLabel>
                   <Select
                     value={filters.slaStatus || ''}
                     onChange={(e) => handleFilterChange('slaStatus', e.target.value)}
                     label="Status SLA"
                   >
-                    <MenuItem value="">Tous les départements</MenuItem>
+                    <MenuItem value="">Tous les statuts</MenuItem>
                     <MenuItem value="ontime">À temps</MenuItem>
                     <MenuItem value="atrisk">À risque</MenuItem>
                     <MenuItem value="overdue">En retard</MenuItem>
@@ -425,19 +383,9 @@ const AnalyticsDashboard: React.FC = () => {
             </Tabs>
 
             <Box>
-              {tab === 0 && <OverviewTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 1 && <DocumentTypesTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 2 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 3 && <ClaimsTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 4 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 5 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 6 && <PredictiveAnalyticsDashboard />}
-              {tab === 7 && <ReportsTab filters={filters} dateRange={getDateRange()} />}
-              {/* COMMENTED OUT: Extra tabs not in core requirements */}
-              {/* {tab === 8 && <RealTimeDashboard />} */}
-              {/* {tab === 9 && <OVAnalyticsDashboard />} */}
-              {/* {tab === 10 && <AdvancedFilteringDashboard />} */}
-              {/* {tab === 11 && <ScheduledReportsManager />} */}
+              {tab === 0 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 1 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 2 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
             </Box>
           </Paper>
         </>

@@ -5,7 +5,7 @@ import "../../styles/chef-equipe.css";
 
 function GestionnaireSeniorBordereaux() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'non-affectes' | 'en-cours' | 'traites'>('non-affectes');
+  const [activeTab, setActiveTab] = useState<'en-cours' | 'traites'>('en-cours');
   const [unassignedBordereaux, setUnassignedBordereaux] = useState<any[]>([]);
   const [teamBordereaux, setTeamBordereaux] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,10 +56,7 @@ function GestionnaireSeniorBordereaux() {
 
   const getTabData = () => {
     switch (activeTab) {
-      case 'non-affectes':
-        return [];
       case 'en-cours':
-        // For Gestionnaire Senior, show ALL enCours bordereaux (backend already filtered)
         return teamBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
       case 'traites':
         return teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
@@ -125,18 +122,6 @@ function GestionnaireSeniorBordereaux() {
 
         {/* Quick Stats */}
         <div className="chef-equipe-stats">
-          <div className="chef-equipe-stat-card" onClick={() => openStatsModal('non-affectes')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(255, 152, 0, 0.2)' }}>
-                <span style={{ fontSize: '32px' }}>📋</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>{unassignedBordereaux.length}</div>
-                <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Non affectés</div>
-                <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
-              </div>
-            </div>
-          </div>
           <div className="chef-equipe-stat-card" onClick={() => openStatsModal('en-cours')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
@@ -171,12 +156,6 @@ function GestionnaireSeniorBordereaux() {
         <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', marginBottom: '24px' }}>
           <div className="chef-equipe-tabs">
             <button 
-              className={`chef-equipe-tab ${activeTab === 'non-affectes' ? 'active' : ''}`}
-              onClick={() => setActiveTab('non-affectes')}
-            >
-              Non affectés ({unassignedBordereaux.length})
-            </button>
-            <button 
               className={`chef-equipe-tab ${activeTab === 'en-cours' ? 'active' : ''}`}
               onClick={() => setActiveTab('en-cours')}
             >
@@ -202,12 +181,10 @@ function GestionnaireSeniorBordereaux() {
                 📋
               </div>
               <h3 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '16px', letterSpacing: '-0.5px' }}>
-                Aucun dossier {activeTab === 'non-affectes' ? 'non affecté' : activeTab === 'en-cours' ? 'en cours' : 'traité'}
+                Aucun dossier {activeTab === 'en-cours' ? 'en cours' : 'traité'}
               </h3>
               <p style={{ color: '#666', fontSize: '20px', marginBottom: '40px', lineHeight: '1.5' }}>
-                {activeTab === 'non-affectes' 
-                  ? 'Tous les dossiers ont été affectés.'
-                  : activeTab === 'en-cours'
+                {activeTab === 'en-cours'
                   ? 'Aucun dossier n\'est actuellement en cours de traitement.'
                   : 'Aucun dossier n\'a encore été traité.'}
               </p>
@@ -301,6 +278,10 @@ function GestionnaireSeniorBordereaux() {
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                         {(() => {
+                          if (bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE') {
+                            const days = getDureeReglement(bordereau).days;
+                            return <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({days || 0}j)</span>;
+                          }
                           const dureeReglement = getDureeReglement(bordereau);
                           if (dureeReglement.days === null || dureeReglement.days === undefined) {
                             return <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>;
@@ -344,7 +325,7 @@ function GestionnaireSeniorBordereaux() {
           <div className="chef-equipe-perf-grid">
             <div className="chef-equipe-perf-card blue">
               <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
-                {unassignedBordereaux.length + teamBordereaux.length}
+                {teamBordereaux.length}
               </div>
               <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total bordereaux</div>
             </div>
@@ -356,13 +337,13 @@ function GestionnaireSeniorBordereaux() {
             </div>
             <div className="chef-equipe-perf-card orange">
               <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
-                {Math.round(((unassignedBordereaux.length + teamBordereaux.length) / 20) * 100) || 0}%
+                {Math.round((teamBordereaux.length / 20) * 100) || 0}%
               </div>
               <div style={{ fontSize: '16px', color: '#f57c00', fontWeight: 'bold' }}>Charge moyenne</div>
             </div>
             <div className="chef-equipe-perf-card purple">
               <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
-                {(unassignedBordereaux.length + teamBordereaux.length) > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / (unassignedBordereaux.length + teamBordereaux.length)) * 100) : 0}%
+                {teamBordereaux.length > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / teamBordereaux.length) * 100) : 0}%
               </div>
               <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
             </div>
@@ -477,7 +458,7 @@ function GestionnaireSeniorBordereaux() {
                             {dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}
+                            {bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE' ? <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span> : dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}
                           </td>
                         </tr>
                         );

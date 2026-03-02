@@ -3,6 +3,10 @@ import { IsOptional, IsString, IsDateString } from 'class-validator';
 export class AnalyticsKpiDto {
   @IsOptional()
   @IsString()
+  clientId?: string;
+
+  @IsOptional()
+  @IsString()
   teamId?: string;
 
   @IsOptional()
@@ -16,4 +20,8 @@ export class AnalyticsKpiDto {
   @IsOptional()
   @IsDateString()
   toDate?: string;
+
+  @IsOptional()
+  @IsString()
+  slaStatus?: string;
 }

@@ -35,8 +35,11 @@ import { LocalAPI } from '../../services/axios';
 interface WorkforceData {
   currentStaff: number;
   requiredStaff: number;
+  requiredStaffCalculation?: string;
   currentWorkload: number;
+  currentWorkloadCalculation?: string;
   targetWorkload: number;
+  targetWorkloadCalculation?: string;
   efficiency: number;
   recommendations: string[];
   departmentAnalysis: {
@@ -192,7 +195,7 @@ const WorkforceEstimator: React.FC = () => {
                     {data.currentStaff}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    gestionnaires
+                    gestionnaires + seniors
                   </Typography>
                 </Box>
                 <People color="primary" sx={{ fontSize: 40 }} />
@@ -204,20 +207,22 @@ const WorkforceEstimator: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Effectif Requis
-                  </Typography>
-                  <Typography variant="h4" component="div" color={staffingGap > 0 ? 'error.main' : 'success.main'}>
-                    {data.requiredStaff}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    pour objectifs SLA
-                  </Typography>
+              <Tooltip title={data.requiredStaffCalculation || 'Calcul basé sur charge actuelle'} arrow placement="top">
+                <Box display="flex" alignItems="center" justifyContent="space-between">
+                  <Box>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Effectif Requis
+                    </Typography>
+                    <Typography variant="h4" component="div" color={staffingGap > 0 ? 'error.main' : 'success.main'}>
+                      {data.requiredStaff}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      pour objectifs SLA
+                    </Typography>
+                  </Box>
+                  {staffingGap > 0 ? <TrendingUp color="error" sx={{ fontSize: 40 }} /> : <CheckCircle color="success" sx={{ fontSize: 40 }} />}
                 </Box>
-                {staffingGap > 0 ? <TrendingUp color="error" sx={{ fontSize: 40 }} /> : <CheckCircle color="success" sx={{ fontSize: 40 }} />}
-              </Box>
+              </Tooltip>
             </CardContent>
           </Card>
         </Grid>
@@ -225,20 +230,24 @@ const WorkforceEstimator: React.FC = () => {
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="text.secondary" gutterBottom variant="body2">
-                    Charge Actuelle
-                  </Typography>
-                  <Typography variant="h4" component="div">
-                    {data.currentWorkload}
-                  </Typography>
-                  <Typography variant="caption" color={workloadStatus === 'critical' ? 'error.main' : 'text.secondary'}>
-                    / {data.targetWorkload} cible
-                  </Typography>
+              <Tooltip title={data.currentWorkloadCalculation || 'Bordereaux en cours'} arrow placement="top">
+                <Box display="flex" alignItems="center" justifyContent="space-between">
+                  <Box sx={{ width: '100%' }}>
+                    <Typography color="text.secondary" gutterBottom variant="body2">
+                      Charge Actuelle
+                    </Typography>
+                    <Typography variant="h4" component="div">
+                      {data.currentWorkload}
+                    </Typography>
+                    <Tooltip title={data.targetWorkloadCalculation || 'Capacité totale'} arrow placement="bottom">
+                      <Typography variant="caption" color={workloadStatus === 'critical' ? 'error.main' : 'text.secondary'} sx={{ cursor: 'help', borderBottom: '1px dotted' }}>
+                        / {data.targetWorkload} cible
+                      </Typography>
+                    </Tooltip>
+                  </Box>
+                  <Schedule color={workloadStatus === 'critical' ? 'error' : 'info'} sx={{ fontSize: 40 }} />
                 </Box>
-                <Schedule color={workloadStatus === 'critical' ? 'error' : 'info'} sx={{ fontSize: 40 }} />
-              </Box>
+              </Tooltip>
             </CardContent>
           </Card>
         </Grid>
@@ -268,7 +277,8 @@ const WorkforceEstimator: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Department Analysis */}
+      {/* Department Analysis - COMMENTED OUT: No departments configured in database */}
+      {/* 
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
@@ -351,26 +361,29 @@ const WorkforceEstimator: React.FC = () => {
           </TableContainer>
         </CardContent>
       </Card>
+      */}
 
-      {/* AI Recommendations */}
-      <Card>
+      {/* AI Recommendations - COMMENTED OUT: Duplicate with main dashboard AI recommendations */}
+      {/* <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom display="flex" alignItems="center" gap={1}>
             🤖 Recommandations IA
           </Typography>
           <Box>
-            {data.recommendations?.map((recommendation, index) => (
-              <Alert key={index} severity="info" sx={{ mb: 1 }}>
-                {recommendation}
-              </Alert>
-            )) || (
+            {data.recommendations && data.recommendations.length > 0 ? (
+              data.recommendations.map((recommendation, index) => (
+                <Alert key={index} severity="info" sx={{ mb: 1 }}>
+                  {recommendation}
+                </Alert>
+              ))
+            ) : (
               <Alert severity="info">
                 Aucune recommandation disponible
               </Alert>
             )}
           </Box>
         </CardContent>
-      </Card>
+      </Card> */}
     </Box>
   );
 };

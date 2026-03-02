@@ -25,16 +25,11 @@ const GECDashboardTab: React.FC = () => {
           'Content-Type': 'application/json'
         };
         
-        console.log('🔍 Loading GEC dashboard data...');
         const [analyticsResponse, slaBreachesResponse, volumeResponse] = await Promise.all([
           fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/analytics?period=30d`, { headers }),
           fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/sla-breaches`, { headers }),
           fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/courriers/volume-stats?period=7d`, { headers })
         ]);
-        
-        console.log('📊 Analytics response:', analyticsResponse.status, await analyticsResponse.clone().text());
-        console.log('🚨 SLA breaches response:', slaBreachesResponse.status, await slaBreachesResponse.clone().text());
-        console.log('📈 Volume response:', volumeResponse.status, await volumeResponse.clone().text());
         
         let analytics, slaBreaches, volumeData;
         
@@ -55,10 +50,6 @@ const GECDashboardTab: React.FC = () => {
         } else {
           throw new Error(`Volume API failed: ${volumeResponse.status}`);
         }
-        
-        console.log('📊 Analytics data:', analytics);
-        console.log('🚨 SLA breaches data:', slaBreaches);
-        console.log('📈 Volume data:', volumeData);
         
         setStats({
           totalThisMonth: analytics.totalCourriers || 0,

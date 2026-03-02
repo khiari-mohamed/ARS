@@ -1,5 +1,4 @@
-// Gestionnaire Senior Dashboard - Exact replica of Chef d'Équipe design but ONLY their own data
-// Uses separate API endpoints: /bordereaux/gestionnaire-senior/*
+
 import { useEffect, useState, useMemo } from "react";
 import { LocalAPI } from '../../services/axios';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,6 +27,7 @@ interface Dossier {
   dossierStates?: string[];
   priorite?: string;
   joursEnCours?: number;
+  bordereauReference?: string;
 }
 
 function GestionnaireSeniorDashboard() {
@@ -71,6 +71,11 @@ function GestionnaireSeniorDashboard() {
     [...new Set([...dossiers, ...documents].map((d: any) => d.statut).filter(Boolean))].sort(),
     [dossiers, documents]
   );
+  const uniqueDocumentStatuts = useMemo(() => {
+    const statuts = [...new Set(documents.map((d: any) => d.statut).filter(Boolean))];
+    const mappedStatuts = statuts.map(s => s === 'Nouveau' ? 'En cours' : s);
+    return [...new Set(mappedStatuts)].sort();
+  }, [documents]);
   const uniqueTypes = useMemo(() => 
     [...new Set([...dossiers, ...documents].map((d: any) => d.type).filter(Boolean))].sort(),
     [dossiers, documents]
@@ -85,7 +90,7 @@ function GestionnaireSeniorDashboard() {
       (!filterDerniers.reference || String(d.reference || '').trim().toLowerCase().includes(filterDerniers.reference.trim().toLowerCase())) &&
       (!filterDerniers.client || String(d.societe || d.client || '').trim().toLowerCase().includes(filterDerniers.client.trim().toLowerCase())) &&
       (!filterDerniers.type || d.type === filterDerniers.type) &&
-      (!filterDerniers.statut || d.statut === filterDerniers.statut) &&
+      (!filterDerniers.statut || d.statut === (filterDerniers.statut === 'En cours' ? 'Nouveau' : filterDerniers.statut)) &&
       (!filterDerniers.dateFrom || new Date(d.date) >= new Date(filterDerniers.dateFrom)) &&
       (!filterDerniers.dateTo || new Date(d.date) <= new Date(filterDerniers.dateTo))
     );
@@ -95,22 +100,31 @@ function GestionnaireSeniorDashboard() {
     const f2 = dossiers.filter((d: any) =>
       (!filterBordereaux.reference || d.reference.toLowerCase().includes(filterBordereaux.reference.toLowerCase())) &&
       (!filterBordereaux.client || (d.societe || d.client || '').toLowerCase().includes(filterBordereaux.client.toLowerCase())) &&
-      (!filterBordereaux.statut || d.statut === filterBordereaux.statut) &&
+      (!filterBordereaux.statut || d.statut === (filterBordereaux.statut === 'En cours' ? 'Nouveau' : filterBordereaux.statut)) &&
       (!filterBordereaux.dateFrom || new Date(d.date) >= new Date(filterBordereaux.dateFrom)) &&
       (!filterBordereaux.dateTo || new Date(d.date) <= new Date(filterBordereaux.dateTo))
     );
     setFilteredBordereauxTable(f2);
-
-    const f3 = documents.filter((d: any) =>
-      (!filterDocuments.reference || String(d.reference || '').trim().toLowerCase().includes(filterDocuments.reference.trim().toLowerCase())) &&
-      (!filterDocuments.bordereauReference || String(d.bordereauReference || '').trim().toLowerCase().includes(filterDocuments.bordereauReference.trim().toLowerCase())) &&
-      (!filterDocuments.client || String(d.societe || d.client || '').trim().toLowerCase().includes(filterDocuments.client.trim().toLowerCase())) &&
-      (!filterDocuments.type || d.type === filterDocuments.type) &&
-      (!filterDocuments.statut || d.statut === filterDocuments.statut) &&
-      (!filterDocuments.gestionnaire || (d.gestionnaire && String(d.gestionnaire).trim().toLowerCase().includes(filterDocuments.gestionnaire.trim().toLowerCase()))) &&
-      (!filterDocuments.dateFrom || new Date(d.date) >= new Date(filterDocuments.dateFrom)) &&
-      (!filterDocuments.dateTo || new Date(d.date) <= new Date(filterDocuments.dateTo))
-    );
+    
+    const f3 = documents.filter((d: any) => {
+      const refMatch = !filterDocuments.reference || String(d.reference || '').trim().toLowerCase().includes(filterDocuments.reference.trim().toLowerCase());
+      const bordRefMatch = !filterDocuments.bordereauReference || String(d.bordereauReference || '').trim().toLowerCase().includes(filterDocuments.bordereauReference.trim().toLowerCase());
+      // Enhanced client match: also search in bordereauReference for client name patterns
+      const clientSearchTerm = filterDocuments.client.trim().toLowerCase();
+      const clientMatch = !filterDocuments.client || 
+        String(d.societe || d.client || '').trim().toLowerCase().includes(clientSearchTerm) ||
+        String(d.bordereauReference || '').trim().toLowerCase().includes(clientSearchTerm);
+      const typeMatch = !filterDocuments.type || d.type === filterDocuments.type;
+      // Map filter status back to backend status for comparison
+      const filterStatus = filterDocuments.statut === 'En cours' ? 'Nouveau' : filterDocuments.statut;
+      const statutMatch = !filterDocuments.statut || d.statut === filterStatus;
+      const gestMatch = !filterDocuments.gestionnaire || (d.gestionnaire && String(d.gestionnaire).trim().toLowerCase().includes(filterDocuments.gestionnaire.trim().toLowerCase()));
+      const dateFromMatch = !filterDocuments.dateFrom || new Date(d.date) >= new Date(filterDocuments.dateFrom);
+      const dateToMatch = !filterDocuments.dateTo || new Date(d.date) <= new Date(filterDocuments.dateTo);
+      
+      return refMatch && bordRefMatch && clientMatch && typeMatch && statutMatch && gestMatch && dateFromMatch && dateToMatch;
+    });
+    
     setFilteredDocumentsTable(f3);
     setDocumentsPage(1);
   }, [filterDerniers, filterBordereaux, filterDocuments, dossiers, documents]);
@@ -214,27 +228,19 @@ function GestionnaireSeniorDashboard() {
     try {
       setLoading(true);
       
+      const timestamp = Date.now();
       const [statsResponse, dossiersResponse, corbeilleResponse, seniorAssignmentsResponse] = await Promise.all([
-        LocalAPI.get('/bordereaux/gestionnaire-senior/dashboard-stats'),
-        LocalAPI.get('/bordereaux/gestionnaire-senior/dashboard-dossiers'),
-        LocalAPI.get('/bordereaux/gestionnaire-senior/corbeille'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments')
+        LocalAPI.get(`/bordereaux/gestionnaire-senior/dashboard-stats?t=${timestamp}`),
+        LocalAPI.get(`/bordereaux/gestionnaire-senior/dashboard-dossiers?t=${timestamp}`),
+        LocalAPI.get(`/bordereaux/gestionnaire-senior/corbeille?t=${timestamp}`),
+        LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments?t=${timestamp}`)
       ]);
-      
-      console.log('📊 Stats Response:', statsResponse.data);
-      console.log('📋 Dossiers Response:', dossiersResponse.data);
-      console.log('📥 Corbeille Response:', corbeilleResponse.data);
       
       if (statsResponse.data) setStats(statsResponse.data);
       if (dossiersResponse.data) {
-        console.log('📦 All data:', dossiersResponse.data);
-        console.log('📦 First item:', dossiersResponse.data[0]);
-        console.log('📦 Has isBordereau?', dossiersResponse.data[0]?.isBordereau);
-        console.log('📦 Has isDocument?', dossiersResponse.data[0]?.isDocument);
         const bordereaux = dossiersResponse.data.filter((d: any) => d.isBordereau === true);
         const documents = dossiersResponse.data.filter((d: any) => d.isDocument === true);
-        console.log('📦 Bordereaux filtered:', bordereaux.length, bordereaux);
-        console.log('📄 Documents filtered:', documents.length, documents);
+        
         setDossiers(bordereaux);
         setDocuments(documents);
         setFilteredDerniersTable(bordereaux);
@@ -249,7 +255,6 @@ function GestionnaireSeniorDashboard() {
         });
       }
       if (seniorAssignmentsResponse.data) {
-        console.log('⭐ Senior assignments received:', seniorAssignmentsResponse.data);
         setSeniorAssignments(seniorAssignmentsResponse.data);
       }
     } catch (error: any) {
@@ -375,11 +380,6 @@ function GestionnaireSeniorDashboard() {
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Bordereaux En Cours</div>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff9800' }}>{corbeille.enCours || 0}</div>
               </div>
-              {/* Gestionnaire Senior works autonomously - no "Non Affectés" needed */}
-              {/* <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Dossiers Non Affectés</div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f44336' }}>{corbeille.nonAffectes || 0}</div>
-              </div> */}
             </div>
           </div>
         )}
@@ -439,9 +439,11 @@ function GestionnaireSeniorDashboard() {
                           {dossierStates.length > 0 ? dossierStates.map((state, idx) => {
                             const count = (dossier as any).dossierStateCounts?.[state];
                             const total = (dossier as any).totalDocs;
+                            // For Gestionnaire Senior: map "Nouveau" to "En cours"
+                            const displayState = state === 'Nouveau' ? 'En cours' : state;
                             return (
-                              <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
-                                {state} {count && total ? `${count}/${total}` : ''}
+                              <span key={idx} style={{ background: displayState === 'Traité' ? '#4caf50' : displayState === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                                {displayState} {count && total ? `${count}/${total}` : ''}
                               </span>
                             );
                           }) : <span style={{ fontSize: '12px', color: '#999' }}>-</span>}
@@ -555,7 +557,7 @@ function GestionnaireSeniorDashboard() {
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{dossier.reference}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.client || dossier.societe || 'N/A'}</td>
                       <td style={{ padding: '12px 8px' }}>
-                        <span style={{ background: dossier.statut === 'Traité' ? '#4caf50' : dossier.statut === 'En cours' ? '#ff9800' : '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dossier.statut}</span>
+                        <span style={{ background: dossier.statut === 'Traité' ? '#4caf50' : (dossier.statut === 'En cours' || dossier.statut === 'Nouveau') ? '#ff9800' : '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dossier.statut === 'Nouveau' ? 'En cours' : dossier.statut}</span>
                       </td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -570,9 +572,11 @@ function GestionnaireSeniorDashboard() {
                           {dossierStates.map((state, idx) => {
                             const count = (dossier as any).dossierStateCounts?.[state];
                             const total = (dossier as any).totalDocs;
+                            // For Gestionnaire Senior: map "Nouveau" to "En cours"
+                            const displayState = state === 'Nouveau' ? 'En cours' : state;
                             return (
-                              <span key={idx} style={{ background: state === 'Traité' ? '#4caf50' : state === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
-                                {state} {count && total ? `${count}/${total}` : ''}
+                              <span key={idx} style={{ background: displayState === 'Traité' ? '#4caf50' : displayState === 'En cours' ? '#ff9800' : '#f44336', color: 'white', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}>
+                                {displayState} {count && total ? `${count}/${total}` : ''}
                               </span>
                             );
                           })}
@@ -657,7 +661,7 @@ function GestionnaireSeniorDashboard() {
             </select>
             <select value={filterDocuments.statut} onChange={(e) => setFilterDocuments({...filterDocuments, statut: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}>
               <option value="">Tous statuts</option>
-              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
+              {uniqueDocumentStatuts.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <input type="text" placeholder="Gestionnaire" value={filterDocuments.gestionnaire} onChange={(e) => setFilterDocuments({...filterDocuments, gestionnaire: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
             <input type="date" placeholder="Date début" value={filterDocuments.dateFrom} onChange={(e) => setFilterDocuments({...filterDocuments, dateFrom: e.target.value})} style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }} />
@@ -687,14 +691,14 @@ function GestionnaireSeniorDashboard() {
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.type}</td>
                     <td style={{ padding: '12px 8px' }}>
                       <span style={{ 
-                        background: document.statut === 'Traité' ? '#4caf50' : document.statut === 'En cours' ? '#ff9800' : '#2196f3', 
+                        background: document.statut === 'Traité' ? '#4caf50' : (document.statut === 'En cours' || document.statut === 'Nouveau') ? '#ff9800' : '#2196f3', 
                         color: 'white', 
                         padding: '4px 8px', 
                         borderRadius: '12px', 
                         fontSize: '12px', 
                         fontWeight: 'bold' 
                       }}>
-                        {document.statut}
+                        {document.statut === 'Nouveau' ? 'En cours' : document.statut}
                       </span>
                     </td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>

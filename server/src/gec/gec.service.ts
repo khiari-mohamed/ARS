@@ -35,10 +35,13 @@ export class GecService {
         return;
       }
 
+      const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+      const isSecure = smtpPort === 465;
+
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gnet.tn',
-        port: parseInt(process.env.SMTP_PORT || '465'),
-        secure: process.env.SMTP_SECURE === 'true' || true,
+        port: smtpPort,
+        secure: isSecure,
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS
@@ -47,8 +50,10 @@ export class GecService {
         greetingTimeout: 10000,
         socketTimeout: 10000,
         tls: {
-          rejectUnauthorized: false
-        }
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2'
+        },
+        requireTLS: !isSecure
       });
       
       await this.transporter.verify();
@@ -621,7 +626,6 @@ export class GecService {
 
   // Analytics and reporting methods
   async getGECAnalytics(period: string = '30d') {
-    console.log('📊 Getting GEC analytics for period:', period);
     const startDate = this.getStartDateForPeriod(period);
     
     const [allCourriers, sentCourriers, pendingCourriers, overdueCount] = await Promise.all([
@@ -635,8 +639,6 @@ export class GecService {
       by: ['type'],
       _count: { id: true }
     });
-
-    console.log('📊 Analytics results:', { allCourriers, sentCourriers, pendingCourriers, overdueCount });
     
     return {
       totalCourriers: allCourriers,
@@ -650,8 +652,6 @@ export class GecService {
   }
 
   async getSLABreaches() {
-    console.log('🚨 Getting SLA breaches...');
-    
     // Get all SENT courriers (regardless of sentAt date for testing)
     const breaches = await this.prisma.courrier.findMany({
       where: {
@@ -668,8 +668,6 @@ export class GecService {
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log('🚨 Found', breaches.length, 'potential SLA items');
-    
     const result = breaches.map(courrier => {
       const referenceDate = courrier.sentAt || courrier.createdAt;
       const daysOverdue = Math.floor((Date.now() - new Date(referenceDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -686,12 +684,10 @@ export class GecService {
       };
     });
     
-    console.log('🚨 Mapped SLA breaches:', result);
     return result;
   }
 
   async getVolumeStats(period: string = '7d') {
-    console.log('📈 Getting volume stats for period:', period);
     const startDate = this.getStartDateForPeriod(period);
     const endDate = new Date();
     const days = Math.min(7, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -722,7 +718,6 @@ export class GecService {
       });
     }
     
-    console.log('📈 Volume data generated:', volumeData);
     return volumeData;
   }
 

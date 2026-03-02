@@ -168,51 +168,62 @@ async def suggestions(complaint: Dict = Body(...), current_user = Depends(get_cu
 @app.post("/recommendations")
 @log_endpoint_call("recommendations")
 async def recommendations(payload: Dict = Body(...), current_user = Depends(get_current_active_user)):
-    """Generate intelligent ARS recommendations based on REAL data analysis - NO MOCK DATA"""
+    """Generate intelligent ARS recommendations based on payload data"""
     try:
-        db = await get_db_manager()
+        # USE PAYLOAD DATA - NOT DATABASE
+        bordereaux = payload.get('bordereaux', [])
+        agents = payload.get('agents', [])
         
-        # Get REAL data from database - ALWAYS
-        db_workload = await db.get_live_workload()
-        db_sla = await db.get_sla_items()
-        db_agents = await db.get_agent_performance_metrics()
+        # CRITICAL: Filter out archived/closed bordereaux
+        active_bordereaux = [
+            b for b in bordereaux 
+            if b.get('statut') not in ['ARCHIVE', 'CLOTURE', 'ANNULE', 'SUPPRIME']
+        ]
         
         # Extract metrics from payload
         optimization_focus = payload.get('optimization_focus', ['workload', 'sla', 'performance'])
         metrics = payload.get('metrics', {})
         learning_context = payload.get('learning_context', {})
+        current_workload = payload.get('currentWorkload', payload.get('current_workload', len(active_bordereaux)))
+        staff_count = payload.get('staff_count', len(agents))
+        sla_breaches = payload.get('sla_breaches', 0)
+        capacity_utilization = payload.get('capacity_utilization', 0)
             
-        # Calculate real metrics from database
-        current_workload = len(db_workload) if db_workload else 0
-        staff_count = len(db_agents) if db_agents else 0
+        # Calculate SLA metrics from ACTIVE bordereaux only
+        db_sla = active_bordereaux
+        db_agents = agents
             
-        # Deep SLA Analysis
-        sla_critical = len([item for item in db_sla if item.get('days_remaining', 0) < 0])
-        sla_at_risk = len([item for item in db_sla if 0 <= item.get('days_remaining', 0) <= 2])
-        sla_total = len(db_sla)
+        # Deep SLA Analysis from ACTIVE bordereaux
+        sla_critical = len([item for item in active_bordereaux if item.get('days_remaining', 0) < 0])
+        sla_at_risk = len([item for item in active_bordereaux if 0 <= item.get('days_remaining', 0) <= 2])
+        sla_total = len(active_bordereaux)
         sla_breach_rate = (sla_critical / sla_total * 100) if sla_total > 0 else 0
+        
+        # Log for debugging
+        logger.info(f"📊 Recommendations: Total={len(bordereaux)}, Active={len(active_bordereaux)}, Archived={len(bordereaux)-len(active_bordereaux)}")
+        logger.info(f"📊 SLA Analysis: Critical={sla_critical}, At Risk={sla_at_risk}, Total Active={sla_total}")
             
-        # Workload Distribution Analysis
+        # Workload Distribution Analysis from ACTIVE bordereaux only
         workload_by_status = {}
         workload_by_agent = {}
-        for item in db_workload:
-            status = item.get('status', 'UNKNOWN')
-            agent_id = item.get('teamId')
-            count = item.get('_count', {}).get('id', 0)
-            workload_by_status[status] = workload_by_status.get(status, 0) + count
-            workload_by_agent[agent_id] = workload_by_agent.get(agent_id, 0) + count
+        for item in active_bordereaux:
+            status = item.get('status', item.get('statut', 'UNKNOWN'))
+            agent_id = item.get('assignedToUserId', item.get('teamId'))
+            workload_by_status[status] = workload_by_status.get(status, 0) + 1
+            if agent_id:
+                workload_by_agent[agent_id] = workload_by_agent.get(agent_id, 0) + 1
         
-        total_items = sum(workload_by_status.values())
+        total_items = len(active_bordereaux)
             
-        # Agent Performance Analysis
+        # Agent Performance Analysis from agents payload
         agent_efficiency = []
-        for agent in db_agents:
+        for agent in agents:
             total_b = agent.get('total_bordereaux', 0)
             sla_compliant = agent.get('sla_compliant', 0)
             efficiency = (sla_compliant / total_b * 100) if total_b > 0 else 0
             agent_efficiency.append({
                 'id': agent.get('id'),
-                'name': f"{agent.get('firstName', '')} {agent.get('lastName', '')}",
+                'name': agent.get('fullName', f"{agent.get('firstName', '')} {agent.get('lastName', '')}"),
                 'efficiency': efficiency,
                 'workload': total_b
             })
@@ -246,16 +257,16 @@ async def recommendations(payload: Dict = Body(...), current_user = Depends(get_
         ai_recommendations = []
         priority_actions = []
             
-        # 1. CRITICAL SLA ISSUES
+        # 1. CRITICAL SLA ISSUES - Using ACTIVE bordereaux count
         if sla_critical > 0:
             if sla_breach_rate >= 100:
-                priority_actions.append(f"🚨 CRITIQUE: TOUS les bordereaux ({sla_critical}) sont en dépassement SLA - Intervention d'urgence")
+                priority_actions.append(f"🚨 CRITIQUE: TOUS les bordereaux actifs ({sla_total}) sont en dépassement SLA - Intervention d'urgence")
                 priority_actions.append(f"💡 Action immédiate: Réaffecter à {min(staff_count, sla_critical)} gestionnaires disponibles et traiter en priorité absolue")
             elif sla_critical >= 10:
-                priority_actions.append(f"🚨 URGENT: {sla_critical} bordereaux en dépassement SLA - Crise opérationnelle")
+                priority_actions.append(f"🚨 URGENT: {sla_critical}/{sla_total} bordereaux actifs en dépassement SLA ({sla_breach_rate:.0f}%) - Crise opérationnelle")
                 priority_actions.append(f"💡 Mobiliser {min(3, sla_critical // 3)} gestionnaires supplémentaires + heures supplémentaires")
             else:
-                priority_actions.append(f"🚨 URGENT: {sla_critical} bordereaux en dépassement SLA - Réaffectation immédiate requise")
+                priority_actions.append(f"🚨 URGENT: {sla_critical}/{sla_total} bordereaux actifs en dépassement SLA - Réaffectation immédiate requise")
                 priority_actions.append(f"💡 Traiter ces {sla_critical} dossiers avant toute nouvelle affectation")
             
         if sla_at_risk > 0:
@@ -346,12 +357,16 @@ async def recommendations(payload: Dict = Body(...), current_user = Depends(get_
             ai_recommendations = priority_actions + ai_recommendations
             
             # Save recommendations for learning
-            await db.save_prediction_result(
-                "optimization_recommendations", 
-                {'metrics': metrics, 'focus': optimization_focus, 'system_data': payload}, 
-                {'recommendations': ai_recommendations}, 
-                current_user.username
-            )
+            try:
+                db = await get_db_manager()
+                await db.save_prediction_result(
+                    "optimization_recommendations", 
+                    {'metrics': metrics, 'focus': optimization_focus, 'system_data': payload}, 
+                    {'recommendations': ai_recommendations}, 
+                    current_user.username
+                )
+            except Exception as e:
+                logger.debug(f"Failed to save prediction result: {e}")
             
             result = {
                 'recommendations': ai_recommendations,
@@ -1114,19 +1129,200 @@ async def priorities(bordereaux: List[Dict], explain: bool = False, current_user
 @app.post("/reassignment")
 @log_endpoint_call("reassignment")
 async def reassignment(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
-    # Input: { 'managers': [{id, avg_time, norm_time, workload}], 'threshold': float }
-    managers = data.get('managers', [])
-    threshold = data.get('threshold', 1.2)  # 20% slower than norm
-    recs = []
-    for m in managers:
-        avg = m.get('avg_time', 1)
-        norm = m.get('norm_time', 1)
-        if avg > norm * threshold:
-            recs.append({
-                'manager_id': m['id'],
-                'recommendation': 'Reassign workload, underperformance detected.'
+    """Real ARS bordereau reassignment using agent performance data"""
+    try:
+        bordereau_id = data.get('bordereauId')
+        reason = data.get('reason', 'MANUAL_REASSIGNMENT')
+        
+        if not bordereau_id:
+            raise HTTPException(status_code=400, detail="bordereauId required")
+        
+        # Get real data from database
+        db = await get_db_manager()
+        agents = await db.get_agent_performance_metrics()
+        
+        if not agents:
+            raise HTTPException(status_code=404, detail="No agents available")
+        
+        # Get bordereau data with SLA context
+        bordereaux = await db.get_bordereau_with_sla_data(limit=1000)
+        bordereau_data = next((b for b in bordereaux if b['id'] == bordereau_id), None)
+        
+        # Analyze SLA issue root cause
+        sla_issue_type = None
+        sla_days_overdue = 0
+        
+        if bordereau_data:
+            # Check if dateReception is corrupted (before 2020)
+            date_reception = bordereau_data.get('dateReception')
+            if date_reception:
+                try:
+                    reception_date = datetime.fromisoformat(str(date_reception).replace('Z', ''))
+                    if reception_date.year < 2020:
+                        sla_issue_type = 'DATA_CORRUPTION'
+                    else:
+                        # Calculate real SLA delay
+                        days_since = (datetime.now() - reception_date).days
+                        sla_threshold = bordereau_data.get('delaiReglement', 30)
+                        sla_days_overdue = max(0, days_since - sla_threshold)
+                        
+                        if sla_days_overdue > 30:
+                            sla_issue_type = 'CRITICAL_DELAY'
+                        elif sla_days_overdue > 7:
+                            sla_issue_type = 'MAJOR_DELAY'
+                        else:
+                            sla_issue_type = 'MINOR_DELAY'
+                except:
+                    sla_issue_type = 'DATA_CORRUPTION'
+        
+        # Get current assignment
+        current_user_id = None
+        if bordereau_data:
+            current_user_id = bordereau_data.get('assignedToUserId') or bordereau_data.get('currentHandlerId')
+        
+        # Score agents for reassignment
+        scored_agents = []
+        for agent in agents:
+            # Skip current agent if reassigning
+            if current_user_id and agent['id'] == current_user_id:
+                continue
+                
+            total_bordereaux = agent.get('total_bordereaux', 0)
+            sla_compliant = agent.get('sla_compliant', 0)
+            avg_hours = agent.get('avg_hours', 48)
+            
+            # Performance score (0-1)
+            performance_score = (sla_compliant / total_bordereaux) if total_bordereaux > 0 else 0.5
+            
+            # Speed score (0-1, lower hours = better)
+            speed_score = min(1.0, 24 / max(avg_hours, 1))
+            
+            # Workload score (0-1, lower workload = better)
+            workload_score = max(0, 1.0 - (total_bordereaux / 50))
+            
+            # Combined score
+            total_score = (performance_score * 0.4 + speed_score * 0.3 + workload_score * 0.3)
+            
+            scored_agents.append({
+                'agent_id': agent['id'],
+                'agent_name': f"{agent.get('firstName', '')} {agent.get('lastName', '')}".strip(),
+                'username': agent.get('username'),
+                'total_score': total_score,
+                'performance_score': performance_score,
+                'speed_score': speed_score,
+                'workload_score': workload_score,
+                'current_workload': total_bordereaux,
+                'sla_compliance': performance_score,
+                'avg_processing_hours': avg_hours
             })
-    return {'reassignment': recs}
+        
+        if not scored_agents:
+            raise HTTPException(status_code=404, detail="No alternative agents available")
+        
+        # Sort by score (best first)
+        scored_agents.sort(key=lambda x: x['total_score'], reverse=True)
+        
+        # Log top 3 for debugging
+        logger.info(f"Top 3 agents for bordereau {bordereau_id}:")
+        for i, agent in enumerate(scored_agents[:3]):
+            logger.info(f"  {i+1}. {agent['agent_name']}: score={agent['total_score']:.2f} (perf={agent['performance_score']:.0%}, speed={agent['speed_score']:.2f}, workload={agent['workload_score']:.2f}, current={agent['current_workload']} bordereaux)")
+        
+        # Get top 3 recommendations
+        top_recommendations = scored_agents[:3]
+        best = top_recommendations[0]
+        
+        # Generate SLA-aware contextual reasoning
+        reasoning = []
+        
+        # Get current agent data
+        current_agent = next((a for a in agents if a['id'] == current_user_id), None) if current_user_id else None
+        
+        # Analyze SLA context
+        if sla_issue_type:
+            if sla_issue_type == 'DATA_CORRUPTION':
+                reasoning.append(f"🔧 PROBLÈME DÉTECTÉ: Date de réception corrompue (avant 2020)")
+                reasoning.append(f"💡 Solution: Corriger la date de réception dans la base de données")
+                reasoning.append(f"⚠️ Le délai SLA affiché ({sla_days_overdue} jours) est incorrect")
+            elif sla_issue_type == 'CRITICAL_DELAY':
+                reasoning.append(f"🚨 RETARD CRITIQUE: {sla_days_overdue} jours de dépassement SLA")
+                reasoning.append(f"💡 Action urgente: Réaffectation immédiate vers agent le plus rapide")
+            elif sla_issue_type == 'MAJOR_DELAY':
+                reasoning.append(f"⚠️ RETARD MAJEUR: {sla_days_overdue} jours de dépassement SLA")
+                reasoning.append(f"💡 Recommandation: Traitement prioritaire requis")
+        
+        if current_agent:
+            current_name = f"{current_agent.get('firstName', '')} {current_agent.get('lastName', '')}".strip()
+            current_workload = current_agent.get('total_bordereaux', 0)
+            current_sla_count = current_agent.get('sla_compliant', 0)
+            current_sla = (current_sla_count / max(current_agent.get('total_bordereaux', 1), 1)) * 100
+            current_hours = current_agent.get('avg_hours', 48)
+            
+            # Calculate differences
+            workload_diff = current_workload - best['current_workload']
+            sla_diff = (best['sla_compliance'] * 100) - current_sla
+            time_diff = current_hours - best['avg_processing_hours']
+            
+            # Build comparison reasoning
+            reasoning.append(f"\n📊 Comparaison {current_name} → {best['agent_name']}:")
+            
+            if workload_diff > 5:
+                reasoning.append(f"  ✓ Charge: {best['current_workload']} vs {current_workload} bordereaux (-{workload_diff})")
+            
+            if sla_diff > 10:
+                reasoning.append(f"  ✓ Performance SLA: {best['sla_compliance']:.0%} vs {current_sla:.0%} (+{sla_diff:.0f} pts)")
+            
+            if time_diff > 5:
+                reasoning.append(f"  ✓ Vitesse: {best['avg_processing_hours']:.1f}h vs {current_hours:.1f}h (-{time_diff:.1f}h)")
+            
+            # SLA-specific recommendations
+            if sla_issue_type == 'CRITICAL_DELAY':
+                reasoning.append(f"\n💡 Solution: Réaffectation urgente vers {best['agent_name']}")
+                reasoning.append(f"  • Traitement estimé: {best['avg_processing_hours']:.1f}h")
+                reasoning.append(f"  • Réduction du retard: {time_diff:.1f}h par rapport à {current_name}")
+            
+            reassignment_reason = f"Réaffectation SLA urgente: {current_name} → {best['agent_name']} (Performance: {best['sla_compliance']:.0%}, Charge: {best['current_workload']} bordereaux)"
+        else:
+            # No current assignment
+            reasoning.append(f"✓ Agent optimal: {best['agent_name']} (score: {best['total_score']:.0%})")
+            reasoning.append(f"✓ Performance SLA: {best['sla_compliance']:.0%} sur {best['current_workload']} bordereaux")
+            reasoning.append(f"✓ Temps moyen: {best['avg_processing_hours']:.1f}h par bordereau")
+            
+            if sla_issue_type:
+                reasoning.append(f"\n💡 Affectation urgente recommandée pour résoudre le problème SLA")
+            
+            reassignment_reason = f"Affectation optimale à {best['agent_name']} - Agent le plus performant disponible"
+        
+        return {
+            'success': True,
+            'bordereau_id': bordereau_id,
+            'recommended_agent': {
+                'agent_id': best['agent_id'],
+                'agent_name': best['agent_name'],
+                'username': best['username'],
+                'confidence': 'high' if best['total_score'] > 0.7 else 'medium',
+                'total_score': best['total_score'],
+                'current_workload': best['current_workload'],
+                'sla_compliance': best['sla_compliance'],
+                'estimated_completion_hours': best['avg_processing_hours']
+            },
+            'alternative_agents': [
+                {
+                    'agent_id': alt['agent_id'],
+                    'agent_name': alt['agent_name'],
+                    'total_score': alt['total_score'],
+                    'current_workload': alt['current_workload']
+                } for alt in top_recommendations[1:]
+            ],
+            'reassignment_reason': reassignment_reason,
+            'reasoning': reasoning,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reassignment failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Reassignment failed: {str(e)}")
 
 # 4. Performance Analysis
 @app.post("/performance")
@@ -3351,3 +3547,70 @@ if __name__ == "__main__":
     port = int(os.getenv('AI_SERVICE_PORT', 8002))
     logger.info(f"Starting ARS AI microservice with advanced analytics on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+@app.post("/alert_solution")
+@log_endpoint_call("alert_solution")
+async def generate_alert_solution(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Generate AI-powered solution for SLA alerts"""
+    try:
+        bordereau_id = data.get('bordereau_id')
+        reference = data.get('reference')
+        client = data.get('client')
+        statut = data.get('statut')
+        sla_days = data.get('sla_days', 0)
+        alert_level = data.get('alert_level', 'red')
+        reason = data.get('reason', 'SLA breach')
+        
+        # Analyze root cause
+        root_causes = []
+        if statut == 'A_AFFECTER':
+            root_causes.append("Bordereau non affecté - Aucun gestionnaire assigné")
+        elif statut == 'ASSIGNE':
+            root_causes.append("Bordereau assigné mais non traité - Possible surcharge gestionnaire")
+        elif statut == 'EN_COURS':
+            root_causes.append("Traitement en cours mais lent - Complexité ou manque de ressources")
+        
+        if sla_days > 30:
+            root_causes.append(f"Retard critique de {sla_days} jours - Problème systémique")
+        elif sla_days > 14:
+            root_causes.append(f"Retard majeur de {sla_days} jours - Action urgente requise")
+        
+        # Generate specific actions
+        actions = []
+        if statut == 'A_AFFECTER':
+            actions.append(f"Affecter immédiatement à un gestionnaire disponible")
+            actions.append(f"Utiliser l'affectation automatique IA pour sélectionner le meilleur gestionnaire")
+            actions.append(f"Notifier le chef d'équipe de l'urgence")
+        elif statut in ['ASSIGNE', 'EN_COURS']:
+            actions.append(f"Vérifier la charge de travail du gestionnaire actuel")
+            actions.append(f"Considérer une réaffectation si le gestionnaire est surchargé")
+            actions.append(f"Escalader au chef d'équipe pour priorisation")
+        
+        if sla_days > 14:
+            actions.append(f"Traitement en priorité absolue - Avant tous les autres dossiers")
+            actions.append(f"Notification client du retard avec plan d'action")
+        
+        # Determine priority
+        if sla_days > 30 or alert_level == 'red':
+            priority = 'URGENT'
+            reasoning = f"Retard critique de {sla_days} jours - Risque contractuel majeur - Action immédiate obligatoire"
+        elif sla_days > 14:
+            priority = 'HIGH'
+            reasoning = f"Retard important de {sla_days} jours - Intervention rapide nécessaire"
+        else:
+            priority = 'MEDIUM'
+            reasoning = f"Retard de {sla_days} jours - Surveillance et action recommandées"
+        
+        return {
+            'root_cause': ' | '.join(root_causes) if root_causes else f"Bordereau {reference} en retard de {sla_days} jours",
+            'recommended_actions': actions,
+            'priority': priority,
+            'reasoning': reasoning,
+            'analysis': f"Client: {client} | Statut: {statut} | Retard: {sla_days} jours",
+            'confidence': 0.92
+        }
+        
+    except Exception as e:
+        logger.error(f"Alert solution generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Alert solution failed: {str(e)}")

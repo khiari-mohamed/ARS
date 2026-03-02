@@ -1907,6 +1907,7 @@ export class BordereauxController {
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async getGestionnaireSeniorDashboardDossiers(@Req() req) {
     const user = req.user;
+    console.log('🔍 SENIOR DASHBOARD DOSSIERS - User ID:', user.id);
     
     const [documents, bordereaux] = await Promise.all([
       this.prisma.document.findMany({
@@ -1920,11 +1921,10 @@ export class BordereauxController {
           }
         },
         include: {
-          bordereau: { include: { client: true, contract: true } },
+          bordereau: { include: { client: true, contract: { include: { teamLeader: { select: { fullName: true } } } } } },
           assignedTo: { select: { fullName: true } }
         },
-        orderBy: { uploadedAt: 'desc' },
-        take: 200
+        orderBy: { uploadedAt: 'desc' }
       }),
       this.prisma.bordereau.findMany({
         where: {
@@ -1936,7 +1936,7 @@ export class BordereauxController {
         },
         include: {
           client: true,
-          contract: true,
+          contract: { include: { teamLeader: { select: { fullName: true } } } },
           currentHandler: { select: { fullName: true } },
           documents: true
         },
@@ -1949,6 +1949,9 @@ export class BordereauxController {
 
     // Add documents with flags
     documents.forEach(doc => {
+      // For Gestionnaire Senior: show senior's name if not assigned to specific gestionnaire
+      const gestionnaireDisplay = doc.assignedTo?.fullName || doc.bordereau?.contract?.teamLeader?.fullName || user.fullName;
+      
       dossiers.push({
         id: doc.id,
         reference: doc.name,
@@ -1958,7 +1961,7 @@ export class BordereauxController {
         type: this.getDocumentTypeLabel(doc.type),
         statut: this.getDocumentStatusLabel(doc.status ?? 'UPLOADED'),
         date: doc.uploadedAt.toISOString().split('T')[0],
-        gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+        gestionnaire: gestionnaireDisplay,
         bordereauReference: doc.bordereau?.reference || 'N/A',
         isDocument: true,
         isBordereau: false
@@ -1998,7 +2001,7 @@ export class BordereauxController {
         type: 'Prestation',
         statut: this.getStatutLabel(bordereau.statut),
         date: bordereau.dateReception?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+        gestionnaire: bordereau.currentHandler?.fullName || bordereau.contract?.teamLeader?.fullName || user.fullName,
         completionPercentage: completion,
         dossierStates: states.length > 0 ? states : [this.getStatutLabel(bordereau.statut)],
         dossierStateCounts: stateCounts,

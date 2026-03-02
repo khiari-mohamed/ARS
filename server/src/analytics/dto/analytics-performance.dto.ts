@@ -3,6 +3,10 @@ import { IsOptional, IsString, IsDateString } from 'class-validator';
 export class AnalyticsPerformanceDto {
   @IsOptional()
   @IsString()
+  clientId?: string;
+
+  @IsOptional()
+  @IsString()
   teamId?: string;
 
   @IsOptional()

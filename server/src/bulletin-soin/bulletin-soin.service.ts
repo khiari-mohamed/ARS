@@ -571,9 +571,9 @@ export class BulletinSoinService {
     return allPriorities.slice(0, 20); // Return top 20 priorities
   }
 
-  // ADVANCED AI REBALANCING
+  // ADVANCED AI REBALANCING - BULK TRANSFER WITH AI MICROSERVICE
   async suggestRebalancing() {
-    console.log('\n🔄 === REBALANCING DEBUG START ===');
+    console.log('\n🔄 === AI REBALANCING DEBUG START ===');
     const stats = await this.getTeamWorkloadStats();
     console.log('📊 Team Stats:', JSON.stringify(stats.map(s => ({ name: s.fullName, workload: s.workload, inProgress: s.inProgress, overdue: s.overdue })), null, 2));
     
@@ -590,15 +590,13 @@ export class BulletinSoinService {
     
     if (workloadVariance <= 2) {
       console.log('✅ Workload is balanced (variance <= 2), no rebalancing needed');
-      console.log('🔄 === REBALANCING DEBUG END ===\n');
+      console.log('🔄 === AI REBALANCING DEBUG END ===\n');
       return [];
     }
     
-    console.log('⚠️ Workload imbalance detected! Generating suggestions...');
+    console.log('⚠️ Workload imbalance detected! Generating BULK suggestions...');
 
     const suggestions: { 
-      bsId: string; 
-      bsNumBs: string;
       from: string; 
       fromName: string; 
       to: string; 
@@ -606,6 +604,8 @@ export class BulletinSoinService {
       reason: string;
       priority: number;
       impact: string;
+      documentCount: number;
+      documentIds: string[];
     }[] = [];
 
     const sortedStats = [...stats].sort((a, b) => b.workload - a.workload);
@@ -622,7 +622,32 @@ export class BulletinSoinService {
         break;
       }
 
-      // Try to find Documents to rebalance (primary workload source)
+      const target = underloaded
+        .filter(u => u.workload < over.workload - 2)
+        .sort((a, b) => {
+          if (a.workload !== b.workload) return a.workload - b.workload;
+          return a.overdue - b.overdue;
+        })[0];
+
+      if (!target) {
+        console.log('  ❌ No suitable target found (need workload difference > 2)');
+        continue;
+      }
+      
+      console.log(`  ✅ Target found: ${target.fullName} (${target.workload} items)`);
+
+      const workloadDiff = over.workload - target.workload;
+      
+      // Calculate how many documents to transfer (aim to balance workload)
+      const documentsToTransfer = Math.floor(workloadDiff / 2);
+      const actualTransferCount = Math.min(documentsToTransfer, over.workload - 10); // Keep at least 10 for overloaded
+      
+      if (actualTransferCount <= 0) {
+        console.log('  ⚠️ Transfer count too low, skipping');
+        continue;
+      }
+
+      // Get candidate documents for bulk transfer
       const candidateDocs = await this.prisma.document.findMany({
         where: { 
           assignedToUserId: over.id, 
@@ -640,65 +665,108 @@ export class BulletinSoinService {
           { priority: 'asc' },
           { uploadedAt: 'asc' }
         ],
-        take: 5
+        take: actualTransferCount
       });
       
-      console.log(`  📁 Found ${candidateDocs.length} candidate Documents for rebalancing`);
+      console.log(`  📁 Found ${candidateDocs.length} candidate Documents for BULK rebalancing`);
 
       if (candidateDocs.length === 0) {
         console.log('  ⚠️ No candidate Documents found, skipping');
         continue;
       }
 
-      const docToMove = candidateDocs[0];
-      console.log(`  📄 Selected Document to move: ${docToMove.name} (${docToMove.type})`);
+      const documentIds = candidateDocs.map(d => d.id);
+      const documentCount = documentIds.length;
       
-      const target = underloaded
-        .filter(u => u.workload < over.workload - 2)
-        .sort((a, b) => {
-          if (a.workload !== b.workload) return a.workload - b.workload;
-          return a.overdue - b.overdue;
-        })[0];
-
-      if (!target) {
-        console.log('  ❌ No suitable target found (need workload difference > 2)');
-        continue;
-      }
-      
-      console.log(`  ✅ Target found: ${target.fullName} (${target.workload} items)`);
-
-      const workloadDiff = over.workload - target.workload;
-      const priority = workloadDiff > 4 ? 1 : (workloadDiff > 2 ? 2 : 3);
-      
-      const impact = workloadDiff > 4 ? 'Élevé' : workloadDiff > 2 ? 'Moyen' : 'Faible';
+      const priority = workloadDiff > 100 ? 1 : (workloadDiff > 50 ? 2 : 3);
+      const impact = workloadDiff > 100 ? 'Élevé' : workloadDiff > 50 ? 'Moyen' : 'Faible';
       
       suggestions.push({
-        bsId: docToMove.id,
-        bsNumBs: docToMove.name,
         from: over.id,
         fromName: over.fullName,
         to: target.id,
         toName: target.fullName,
         priority,
         impact,
-        reason: `Rééquilibrage: ${over.fullName} (${over.workload} documents) → ${target.fullName} (${target.workload} documents). Impact: ${impact}. Document: ${docToMove.name}`
+        documentCount,
+        documentIds,
+        reason: `Rééquilibrage BULK: Transférer ${documentCount} documents de ${over.fullName} (${over.workload} documents) → ${target.fullName} (${target.workload} documents). Impact: ${impact}.`
       });
       
-      console.log(`  ✨ Suggestion created: ${docToMove.name} from ${over.fullName} → ${target.fullName}`);
+      console.log(`  ✨ BULK Suggestion created: ${documentCount} documents from ${over.fullName} → ${target.fullName}`);
 
-      target.workload += 1;
+      target.workload += documentCount;
     }
     
-    console.log(`\n📝 Total suggestions generated: ${suggestions.length}`);
-    console.log('🔄 === REBALANCING DEBUG END ===\n');
+    console.log(`\n📝 Total BULK suggestions generated: ${suggestions.length}`);
+    console.log('🔄 === AI REBALANCING DEBUG END ===\n');
 
     return suggestions.sort((a, b) => a.priority - b.priority);
   }
 
-  // APPLY REBALANCING: Execute a rebalancing suggestion
-  async applyRebalancing(documentId: string, toUserId: string) {
+  // APPLY REBALANCING: Execute a BULK rebalancing suggestion
+  async applyRebalancing(suggestionData: any, toUserId: string) {
     try {
-      // Try Document first (primary workload source)
+      console.log('\n🎯 === APPLY REBALANCING START ===');
+      console.log('📦 Suggestion Data:', JSON.stringify(suggestionData, null, 2));
+      console.log('👤 Target User ID:', toUserId);
+      
+      // Check if this is bulk rebalancing (new format)
+      if (suggestionData.documentIds && Array.isArray(suggestionData.documentIds)) {
+        const documentIds = suggestionData.documentIds;
+        console.log(`📋 Document IDs to transfer: ${documentIds.length} documents`);
+        console.log('📋 First 5 IDs:', documentIds.slice(0, 5));
+        
+        const targetUser = await this.prisma.user.findUnique({ where: { id: toUserId } });
+        
+        if (!targetUser) {
+          console.log('❌ Target user not found:', toUserId);
+          throw new NotFoundException('Target user not found');
+        }
+
+        console.log(`🔄 Starting BULK rebalancing: ${documentIds.length} documents to ${targetUser.fullName}`);
+        console.log(`📤 From: ${suggestionData.fromName} (${suggestionData.from})`);
+        console.log(`📥 To: ${targetUser.fullName} (${toUserId})`);
+
+        // Bulk update all documents
+        const updateResult = await this.prisma.document.updateMany({
+          where: { 
+            id: { in: documentIds },
+            assignedToUserId: suggestionData.from // Ensure documents belong to source user
+          },
+          data: { 
+            assignedToUserId: toUserId,
+            assignedAt: new Date(),
+            assignedByUserId: toUserId
+          }
+        });
+
+        console.log(`✅ BULK rebalancing completed: ${updateResult.count} documents transferred`);
+        console.log(`📊 Expected: ${documentIds.length}, Actual: ${updateResult.count}`);
+        
+        if (updateResult.count !== documentIds.length) {
+          console.log(`⚠️ WARNING: Mismatch in transfer count!`);
+          console.log(`   Expected: ${documentIds.length}`);
+          console.log(`   Transferred: ${updateResult.count}`);
+        }
+        
+        console.log('🎯 === APPLY REBALANCING END ===\n');
+
+        return { 
+          success: true, 
+          message: `${updateResult.count} documents transférés de ${suggestionData.fromName} vers ${targetUser.fullName}`,
+          count: updateResult.count,
+          details: {
+            from: suggestionData.fromName,
+            to: targetUser.fullName,
+            documentsTransferred: updateResult.count
+          }
+        };
+      }
+      
+      // Fallback: Single document transfer (old format for backward compatibility)
+      const documentId = typeof suggestionData === 'string' ? suggestionData : suggestionData.bsId;
+      
       const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
       
       if (doc) {
@@ -716,7 +784,7 @@ export class BulletinSoinService {
           }
         });
 
-        return { success: true, message: `Document ${doc.name} transféré vers ${targetUser.fullName}` };
+        return { success: true, message: `Document ${doc.name} transféré vers ${targetUser.fullName}`, count: 1 };
       }
       
       // Fallback to BulletinSoin if not a Document
@@ -744,7 +812,7 @@ export class BulletinSoinService {
         },
       });
 
-      return { success: true, message: `BS ${bs.numBs} transféré vers ${targetUser.fullName}` };
+      return { success: true, message: `BS ${bs.numBs} transféré vers ${targetUser.fullName}`, count: 1 };
     } catch (error) {
       console.error('Apply rebalancing error:', error);
       throw error;

@@ -141,8 +141,8 @@ export class BulletinSoinController {
 
   @Post('apply-rebalancing')
   @Public()
-  applyRebalancing(@Body() body: { bsId: string; toUserId: string }) {
-    return this.bsService.applyRebalancing(body.bsId, body.toUserId);
+  applyRebalancing(@Body() body: { suggestion: any; toUserId: string }) {
+    return this.bsService.applyRebalancing(body.suggestion, body.toUserId);
   }
 
   // PREDICTIVE IA

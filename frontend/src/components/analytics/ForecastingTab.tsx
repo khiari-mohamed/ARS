@@ -159,89 +159,105 @@ const ForecastingTab: React.FC<Props> = ({ filters, dateRange }) => {
 
   return (
     <Grid container spacing={3}>
-      {/* Forecast KPI Cards */}
+      {/* Forecast KPI Cards - Executive Summary Style */}
       {forecastKpis && (
         <Grid item xs={12}>
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={2}>
+            {/* Weekly Forecast - Action Oriented */}
+            <Grid item xs={12} md={6}>
+              <Card elevation={3} sx={{ bgcolor: 'primary.main', color: 'white' }}>
                 <CardContent>
-                  <Box display="flex" alignItems="center" sx={{ mb: 1 }}>
-                    <TrendingUpIcon color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Prévision Semaine</Typography>
+                  <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
+                    <TrendingUpIcon sx={{ fontSize: 40, mr: 2 }} />
+                    <Box>
+                      <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                        {forecastKpis.nextWeekForecast} dossiers
+                      </Typography>
+                      <Typography variant="h6">attendus cette semaine</Typography>
+                    </Box>
                   </Box>
-                  <Typography variant="h3" color="primary" sx={{ fontWeight: 600 }}>
-                    {forecastKpis.nextWeekForecast}
+                  <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                    <TrendingUpIcon sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+                    Prévision basée sur {Math.round(forecastKpis.accuracy)}% de fiabilité
                   </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    dossiers attendus
-                  </Typography>
-                  <Chip 
-                    size="small" 
-                    label={`${forecastKpis.accuracy}% précision`} 
-                    color="success" 
-                    sx={{ mt: 1 }}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={2}>
-                <CardContent>
-                  <Box display="flex" alignItems="center" sx={{ mb: 1 }}>
-                    <AutoAwesomeIcon color="warning" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Prévision Mois</Typography>
-                  </Box>
-                  <Typography variant="h3" color="warning.main" sx={{ fontWeight: 600 }}>
-                    {forecastKpis.nextMonthForecast}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    dossiers attendus
+                  <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+                    ≈ {Math.round(forecastKpis.nextWeekForecast / 5)} dossiers/jour en moyenne
                   </Typography>
                 </CardContent>
               </Card>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={2}>
+            {/* Monthly Forecast - Strategic View */}
+            <Grid item xs={12} md={6}>
+              <Card elevation={3} sx={{ bgcolor: 'warning.main', color: 'white' }}>
                 <CardContent>
-                  <Box display="flex" alignItems="center" sx={{ mb: 1 }}>
-                    <PeopleIcon color={staffingGap > 0 ? 'error' : 'success'} sx={{ mr: 1 }} />
-                    <Typography variant="h6">Personnel Requis</Typography>
+                  <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
+                    <AutoAwesomeIcon sx={{ fontSize: 40, mr: 2 }} />
+                    <Box>
+                      <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                        {forecastKpis.nextMonthForecast} dossiers
+                      </Typography>
+                      <Typography variant="h6">prévus ce mois</Typography>
+                    </Box>
                   </Box>
-                  <Typography variant="h3" color={staffingGap > 0 ? 'error.main' : 'success.main'} sx={{ fontWeight: 600 }}>
-                    {data.forecast.recommendedStaff}
+                  <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                    <AssessmentIcon sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+                    Planification: {Math.round(forecastKpis.nextMonthForecast / 4)} dossiers/semaine
                   </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    gestionnaires ({staffingGap > 0 ? `+${staffingGap}` : staffingGap} vs actuel)
+                  <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+                    Capacité actuelle: {forecastKpis.currentStaff} gestionnaires
                   </Typography>
-                  {staffingGap > 0 && (
-                    <Chip 
-                      size="small" 
-                      label="Action requise" 
-                      color="error" 
-                      icon={<WarningIcon />}
-                      sx={{ mt: 1 }}
-                    />
-                  )}
                 </CardContent>
               </Card>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
-              <Card elevation={2}>
+            {/* Staffing Decision - Action Required */}
+            <Grid item xs={12}>
+              <Card elevation={3} sx={{ 
+                bgcolor: staffingGap > 0 ? 'error.main' : staffingGap < 0 ? 'success.main' : 'info.main',
+                color: 'white'
+              }}>
                 <CardContent>
-                  <Box display="flex" alignItems="center" sx={{ mb: 1 }}>
-                    <AssessmentIcon color="info" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Précision Modèle</Typography>
-                  </Box>
-                  <Typography variant="h3" color="info.main" sx={{ fontWeight: 600 }}>
-                    {forecastKpis.accuracy}%
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    fiabilité des prévisions
-                  </Typography>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} md={8}>
+                      <Box display="flex" alignItems="center" sx={{ mb: 1 }}>
+                        <PeopleIcon sx={{ fontSize: 40, mr: 2 }} />
+                        <Box>
+                          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                            {staffingGap > 0 ? (
+                              <><WarningIcon sx={{ verticalAlign: 'middle', mr: 1 }} />RECRUTEMENT URGENT</>
+                            ) : staffingGap < 0 ? (
+                              <><AssessmentIcon sx={{ verticalAlign: 'middle', mr: 1 }} />SUREFFECTIF DÉTECTÉ</>
+                            ) : (
+                              <><AssessmentIcon sx={{ verticalAlign: 'middle', mr: 1 }} />EFFECTIF OPTIMAL</>
+                            )}
+                          </Typography>
+                          <Typography variant="h6">
+                            {staffingGap > 0 ? `Besoin de ${staffingGap} gestionnaire(s) supplémentaire(s)` :
+                             staffingGap < 0 ? `${Math.abs(staffingGap)} gestionnaire(s) en excès` :
+                             'Effectif adapté à la charge'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Typography variant="body1" sx={{ mt: 2, opacity: 0.9 }}>
+                        <AssessmentIcon sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+                        Actuel: {forecastKpis.currentStaff} gestionnaires | Requis: {data.forecast.recommendedStaff} gestionnaires
+                      </Typography>
+                      <Typography variant="body2" sx={{ mt: 1, opacity: 0.8 }}>
+                        Charge prévue: {Math.round(forecastKpis.nextWeekForecast / data.forecast.recommendedStaff)} dossiers/gestionnaire
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={12} md={4}>
+                      {staffingGap > 0 && (
+                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(255,255,255,0.2)', borderRadius: 2 }}>
+                          <Typography variant="h3" sx={{ fontWeight: 700 }}>
+                            {staffingGap > 0 ? '+' : ''}{staffingGap}
+                          </Typography>
+                          <Typography variant="body1">Action requise</Typography>
+                        </Box>
+                      )}
+                    </Grid>
+                  </Grid>
                 </CardContent>
               </Card>
             </Grid>
@@ -249,162 +265,87 @@ const ForecastingTab: React.FC<Props> = ({ filters, dateRange }) => {
         </Grid>
       )}
 
-      {/* Planned vs Actual Chart */}
-      <Grid item xs={12} md={8}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Planifié vs Réalisé</Typography>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={data.plannedVsActual}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="period" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="planned" 
-                stroke="#1976d2" 
-                strokeWidth={3}
-                name="Planifié"
-                strokeDasharray="5 5"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="actual" 
-                stroke="#4caf50" 
-                strokeWidth={3}
-                name="Réalisé"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid>
-
-      {/* Resource Planning */}
-      <Grid item xs={12} md={4}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Planification Ressources</Typography>
-          {data.resourcePlanning?.map((resource: any, index: number) => (
-            <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="subtitle2">{resource.resource}</Typography>
-              <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
-                <Typography variant="body2">Actuel: {resource.current}</Typography>
-                <Typography variant="body2">Requis: {resource.needed}</Typography>
-              </Box>
-              {resource.gap !== 0 && (
-                <Chip 
-                  size="small" 
-                  label={resource.gap > 0 ? `+${resource.gap}` : resource.gap}
-                  color={resource.gap > 0 ? 'warning' : 'success'}
-                  sx={{ mt: 1 }}
-                />
-              )}
-            </Box>
-          ))}
-        </Paper>
-      </Grid>
-
-      {/* Advanced Analytics Section */}
-      {advancedAnalytics && (
-        <>
-          {/* Process Clustering */}
-          <Grid item xs={12} md={6}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                <GroupWorkIcon sx={{ mr: 1 }} />
-                Clustering Processus IA
-              </Typography>
-              {advancedAnalytics.criticalClusters.length > 0 ? (
-                advancedAnalytics.criticalClusters.map((cluster: any, index: number) => (
-                  <Alert key={index} severity="error" sx={{ mb: 1 }}>
-                    <Typography variant="subtitle2">{cluster.process_count} processus critiques</Typography>
-                    <Typography variant="body2">{cluster.recommendations?.[0] || 'Action immédiate requise'}</Typography>
-                  </Alert>
-                ))
-              ) : (
-                <Alert severity="success">
-                  Aucun cluster critique détecté - processus optimaux
-                </Alert>
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Anomaly Detection */}
-          <Grid item xs={12} md={6}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                <BugReportIcon sx={{ mr: 1 }} />
-                Détection Anomalies IA
-              </Typography>
-              {advancedAnalytics.highAnomalies.length > 0 ? (
-                advancedAnalytics.highAnomalies.slice(0, 3).map((anomaly: any, index: number) => (
-                  <Alert key={index} severity="warning" sx={{ mb: 1 }}>
-                    <Typography variant="subtitle2">Anomalie: {anomaly.record_id}</Typography>
-                    <Typography variant="body2">{anomaly.explanation?.[0] || 'Comportement anormal détecté'}</Typography>
-                  </Alert>
-                ))
-              ) : (
-                <Alert severity="success">
-                  Aucune anomalie critique détectée
-                </Alert>
-              )}
-            </Paper>
-          </Grid>
-        </>
-      )}
-
-      {/* Executive Summary */}
-      {executiveReport && (
-        <Grid item xs={12}>
-          <Paper elevation={2} sx={{ p: 3, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
-            <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-              <ReportIcon sx={{ mr: 1 }} />
-              Rapport Exécutif IA
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={3}>
-                <Typography variant="h4">{executiveReport.overall_health_score}</Typography>
-                <Typography variant="body2">Score Santé Système</Typography>
-              </Grid>
-              <Grid item xs={12} sm={3}>
-                <Typography variant="h4">{executiveReport.critical_anomalies}</Typography>
-                <Typography variant="body2">Anomalies Critiques</Typography>
-              </Grid>
-              <Grid item xs={12} sm={3}>
-                <Typography variant="h4">{executiveReport.problematic_clusters}</Typography>
-                <Typography variant="body2">Clusters Problématiques</Typography>
-              </Grid>
-              <Grid item xs={12} sm={3}>
-                <Typography variant="h4">{executiveReport.total_bordereaux}</Typography>
-                <Typography variant="body2">Bordereaux Analysés</Typography>
-              </Grid>
-            </Grid>
-            {executiveReport.key_recommendations && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>Recommandations Clés:</Typography>
-                {executiveReport.key_recommendations.slice(0, 2).map((rec: string, index: number) => (
-                  <Typography key={index} variant="body2" sx={{ mb: 0.5 }}>• {rec}</Typography>
-                ))}
-              </Box>
-            )}
-          </Paper>
-        </Grid>
-      )}
-
-      {/* AI Recommendations */}
+      {/* Planned vs Actual Chart - Simplified */}
       <Grid item xs={12}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Recommandations IA</Typography>
-          {data.aiRecommendations.map((recommendation: string, index: number) => (
-            <Alert 
-              key={index} 
-              severity="info" 
-              sx={{ mb: 1 }}
-              icon={<AutoAwesomeIcon />}
-            >
-              {recommendation}
-            </Alert>
-          ))}
+        <Paper elevation={3} sx={{ p: 3 }}>
+          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>Évolution de la Charge de Travail</Typography>
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={data.plannedVsActual.slice(-8)}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="period" 
+                tick={{ fontSize: 12 }}
+                label={{ value: 'Période', position: 'insideBottom', offset: -5 }}
+              />
+              <YAxis 
+                label={{ value: 'Nombre de dossiers', angle: -90, position: 'insideLeft' }}
+              />
+              <Tooltip 
+                contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: '1px solid #ccc' }}
+                formatter={(value: any) => [`${value} dossiers`, '']}
+              />
+              <Legend 
+                wrapperStyle={{ paddingTop: '20px' }}
+                iconType="rect"
+              />
+              <Bar 
+                dataKey="planned" 
+                fill="#1976d2" 
+                name="Planifié"
+                radius={[8, 8, 0, 0]}
+              />
+              <Bar 
+                dataKey="actual" 
+                fill="#4caf50" 
+                name="Réalisé"
+                radius={[8, 8, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              <AssessmentIcon sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+              Ce graphique compare la charge de travail planifiée vs réalisée sur les 8 dernières périodes
+            </Typography>
+          </Box>
+        </Paper>
+      </Grid>
+
+      {/* AI Recommendations - Executive Actions */}
+      <Grid item xs={12}>
+        <Paper elevation={3} sx={{ p: 3, bgcolor: 'grey.50' }}>
+          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center' }}>
+            <AutoAwesomeIcon sx={{ mr: 1, color: 'primary.main', fontSize: 32 }} />
+            Actions Prioritaires Recommandées par l'IA
+          </Typography>
+          <Grid container spacing={2}>
+            {data.aiRecommendations.slice(0, 3).map((recommendation: string, index: number) => {
+              const isUrgent = recommendation.includes('🚨') || recommendation.includes('critique') || recommendation.includes('CRITIQUE');
+              const isWarning = recommendation.includes('⚠️') || recommendation.includes('🟠');
+              const cleanRec = recommendation.replace(/📊|💡|🟠|🚨|⚠️/g, '').trim();
+              
+              return (
+                <Grid item xs={12} key={index}>
+                  <Alert 
+                    severity={isUrgent ? 'error' : isWarning ? 'warning' : 'info'}
+                    sx={{ 
+                      fontSize: '1.1rem',
+                      '& .MuiAlert-message': { width: '100%' }
+                    }}
+                    icon={
+                      isUrgent ? <WarningIcon sx={{ fontSize: 28 }} /> :
+                      isWarning ? <AssessmentIcon sx={{ fontSize: 28 }} /> :
+                      <TrendingUpIcon sx={{ fontSize: 28 }} />
+                    }
+                  >
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {cleanRec}
+                    </Typography>
+                  </Alert>
+                </Grid>
+              );
+            })}
+          </Grid>
         </Paper>
       </Grid>
     </Grid>

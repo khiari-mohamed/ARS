@@ -236,52 +236,7 @@ export class SuperAdminService {
 
   async getSystemConfiguration() {
     try {
-      // HARDCODED DATA - COMMENTED OUT
-      // return {
-      //   email: {
-      //     smtp: {
-      //       host: 'smtp.company.com',
-      //       port: 587,
-      //       secure: false,
-      //       auth: {
-      //         user: 'noreply@company.com',
-      //         pass: '***'
-      //       }
-      //     },
-      //     templates: {
-      //       bordereau_assigned: {
-      //         subject: 'Nouveau bordereau assigné',
-      //         body: 'Un nouveau bordereau vous a été assigné: {{reference}}'
-      //       },
-      //       sla_warning: {
-      //         subject: 'Alerte SLA',
-      //         body: 'Le bordereau {{reference}} approche de la limite SLA'
-      //       }
-      //     }
-      //   },
-      //   sms: {
-      //     provider: 'twilio',
-      //     apiKey: '***',
-      //     sender: '+33123456789'
-      //   },
-      //   integrations: {
-      //     paperstream: {
-      //       enabled: true,
-      //       config: {
-      //         scannerPath: '/dev/scanner',
-      //         quality: 'high'
-      //       }
-      //     },
-      //     ocr_engine: {
-      //       enabled: true,
-      //       config: {
-      //         language: 'fra+eng',
-      //         confidence: 0.8
-      //       }
-      //     }
-      //   }
-      // };
-      
+   
       // TODO: Use real system configuration from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts getSystemConfiguration() instead');
     } catch (error) {
@@ -322,11 +277,7 @@ export class SuperAdminService {
 
   async testSMSConfiguration(config: any): Promise<boolean> {
     try {
-      // SYNTHETIC DATA - COMMENTED OUT
-      // this.logger.log('Testing SMS configuration...');
-      // await new Promise(resolve => setTimeout(resolve, 1000));
-      // return Math.random() > 0.1;
-      
+  
       // TODO: Use real SMS test from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts testSMSConfiguration() instead');
     } catch (error) {
@@ -440,37 +391,7 @@ export class SuperAdminService {
   }
 
   async getRoleTemplates() {
-    // HARDCODED DATA - COMMENTED OUT
-    // return [
-    //   {
-    //     id: 'template_bo',
-    //     name: 'Bureau d\'Ordre Standard',
-    //     role: 'BO',
-    //     permissions: ['CREATE_BORDEREAU', 'VIEW_BORDEREAU', 'UPLOAD_DOCUMENTS'],
-    //     defaultCapacity: 30
-    //   },
-    //   {
-    //     id: 'template_gestionnaire',
-    //     name: 'Gestionnaire Standard',
-    //     role: 'GESTIONNAIRE',
-    //     permissions: ['PROCESS_BORDEREAU', 'UPDATE_STATUS', 'VIEW_ASSIGNED'],
-    //     defaultCapacity: 20
-    //   },
-    //   {
-    //     id: 'template_chef_equipe',
-    //     name: 'Chef d\'Équipe Standard',
-    //     role: 'CHEF_EQUIPE',
-    //     permissions: ['ASSIGN_BORDEREAU', 'VIEW_TEAM', 'MANAGE_WORKLOAD'],
-    //     defaultCapacity: 50
-    //   },
-    //   {
-    //     id: 'template_scan',
-    //     name: 'Équipe SCAN Standard',
-    //     role: 'SCAN_TEAM',
-    //     permissions: ['SCAN_DOCUMENTS', 'OCR_PROCESSING', 'QUALITY_CONTROL'],
-    //     defaultCapacity: 100
-    //   }
-    // ];
+   
     
     // TODO: Use real role templates from super-admin.controller.ts
     throw new Error('Use super-admin.controller.ts getRoleTemplates() instead');
@@ -478,33 +399,7 @@ export class SuperAdminService {
 
   async createUserFromTemplate(templateId: string, userData: any) {
     try {
-      // const templates = await this.getRoleTemplates();
-      // const template = templates.find(t => t.id === templateId);
-      
-      // if (!template) {
-      //   throw new Error('Template not found');
-      // }
-
-      // const user = await this.prisma.user.create({
-      //   data: {
-      //     ...userData,
-      //     role: template.role,
-      //     capacity: template.defaultCapacity,
-      //     permissions: template.permissions,
-      //     password: 'default123'
-      //   }
-      // });
-
-      // await this.prisma.auditLog.create({
-      //   data: {
-      //     userId: 'SUPER_ADMIN',
-      //     action: 'USER_CREATED_FROM_TEMPLATE',
-      //     details: { templateId, userId: user.id }
-      //   }
-      // });
-
-      // return { ...user, password: undefined };
-      
+     
       // TODO: Use real implementation from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts createUserFromTemplate() instead');
     } catch (error) {
@@ -543,7 +438,7 @@ export class SuperAdminService {
       ] = await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { active: true } }),
-        this.prisma.bordereau.count(),
+        this.prisma.bordereau.count({ where: { archived: false } }),
         this.prisma.bordereau.count({ where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } } }),
         this.prisma.document.count(),
         this.prisma.auditLog.count({ where: { action: { contains: 'ERROR' } } })
@@ -563,6 +458,142 @@ export class SuperAdminService {
         documents: { total: 0 },
         errors: { total: 0 }
       };
+    }
+  }
+
+  async getTeamWorkload() {
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { active: true },
+        orderBy: { fullName: 'asc' }
+      });
+
+      const chefEquipes = users.filter(u => u.role === 'CHEF_EQUIPE');
+      const seniors = users.filter(u => u.role === 'GESTIONNAIRE_SENIOR');
+      const responsables = users.filter(u => u.role === 'RESPONSABLE_DEPARTEMENT');
+
+      const teams: any[] = [];
+
+      // Chef d'équipe teams
+      for (const chef of chefEquipes) {
+        const members = users.filter(u => u.teamLeaderId === chef.id);
+        
+        const chefDocuments = await this.prisma.document.count({
+          where: { assignedToUserId: chef.id }
+        });
+
+        let totalMembersDocuments = 0;
+        for (const member of members) {
+          const count = await this.prisma.document.count({
+            where: { assignedToUserId: member.id }
+          });
+          totalMembersDocuments += count;
+        }
+
+        const totalWorkload = chefDocuments + totalMembersDocuments;
+        const totalCapacity = (chef.capacity || 400) + members.reduce((sum, m) => sum + (m.capacity || 50), 0);
+        const utilizationRate = totalCapacity > 0 ? Math.round((totalWorkload / totalCapacity) * 100) : 0;
+
+        let level = 'NORMAL';
+        let color = 'success';
+        if (utilizationRate >= 90) {
+          level = 'OVERLOADED';
+          color = 'error';
+        } else if (utilizationRate >= 70) {
+          level = 'BUSY';
+          color = 'warning';
+        }
+
+        teams.push({
+          id: chef.id,
+          name: `Équipe ${chef.fullName}`,
+          role: 'CHEF_EQUIPE',
+          workload: totalWorkload,
+          capacity: totalCapacity,
+          utilizationRate,
+          level,
+          color
+        });
+      }
+
+      // Individual teams (GESTIONNAIRE_SENIOR)
+      for (const senior of seniors) {
+        // GESTIONNAIRE_SENIOR gets documents via contract.teamLeaderId
+        // this.logger.log(`🔍 Checking GESTIONNAIRE_SENIOR: ${senior.fullName} (${senior.id})`);
+        
+        const documents = await this.prisma.document.count({
+          where: {
+            bordereau: {
+              archived: false,
+              contract: {
+                teamLeaderId: senior.id
+              }
+            }
+          }
+        });
+        
+        // this.logger.log(`📄 ${senior.fullName}: ${documents} documents via contract.teamLeaderId`);
+
+        const capacity = senior.capacity || 50;
+        const utilizationRate = capacity > 0 ? Math.round((documents / capacity) * 100) : 0;
+
+        let level = 'NORMAL';
+        let color = 'success';
+        if (utilizationRate >= 90) {
+          level = 'OVERLOADED';
+          color = 'error';
+        } else if (utilizationRate >= 70) {
+          level = 'BUSY';
+          color = 'warning';
+        }
+
+        teams.push({
+          id: senior.id,
+          name: senior.fullName,
+          role: 'GESTIONNAIRE_SENIOR',
+          workload: documents,
+          capacity,
+          utilizationRate,
+          level,
+          color
+        });
+      }
+
+      // Individual teams (RESPONSABLE_DEPARTEMENT)
+      for (const resp of responsables) {
+        const documents = await this.prisma.document.count({
+          where: { assignedToUserId: resp.id }
+        });
+
+        const capacity = resp.capacity || 20;
+        const utilizationRate = capacity > 0 ? Math.round((documents / capacity) * 100) : 0;
+
+        let level = 'NORMAL';
+        let color = 'success';
+        if (utilizationRate >= 90) {
+          level = 'OVERLOADED';
+          color = 'error';
+        } else if (utilizationRate >= 70) {
+          level = 'BUSY';
+          color = 'warning';
+        }
+
+        teams.push({
+          id: resp.id,
+          name: resp.fullName,
+          role: 'RESPONSABLE_DEPARTEMENT',
+          workload: documents,
+          capacity,
+          utilizationRate,
+          level,
+          color
+        });
+      }
+
+      return teams;
+    } catch (error) {
+      this.logger.error('Failed to get team workload:', error);
+      return [];
     }
   }
 }

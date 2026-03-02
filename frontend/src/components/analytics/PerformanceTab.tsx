@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody, Chip, Box, CircularProgress, Card, CardContent } from '@mui/material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
+import { Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody, Chip, Box, CircularProgress, Card, CardContent, Popover } from '@mui/material';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
 import { LocalAPI } from '../../services/axios';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import GroupIcon from '@mui/icons-material/Group';
 import SpeedIcon from '@mui/icons-material/Speed';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import WarningIcon from '@mui/icons-material/Warning';
 
 interface Props {
   filters: any;
@@ -19,6 +20,8 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
   const [gestionnaireFilter, setGestionnaireFilter] = useState('');
   const [gestDateRange, setGestDateRange] = useState({ fromDate: '', toDate: '' });
   const [appliedDateRange, setAppliedDateRange] = useState({ fromDate: '', toDate: '' });
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [selectedGest, setSelectedGest] = useState<any>(null);
 
   const loadPerformanceData = async () => {
     try {
@@ -30,16 +33,27 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       
       console.log('📅 Gestionnaire date params:', gestParams);
       
-      const [performanceResponse, slaResponse, kpiResponse, gestionnairesDailyResponse] = await Promise.all([
-        LocalAPI.get('/analytics/performance/by-user', { params: dateRange }),
-        LocalAPI.get('/analytics/sla-compliance-by-user'),
-        LocalAPI.get('/analytics/kpis/daily', { params: dateRange }),
-        LocalAPI.get('/analytics/gestionnaires/daily-performance', { params: gestParams })
+      // Apply parent filters to all API calls
+      const apiParams = { ...dateRange };
+      if (filters.clientId) apiParams.clientId = filters.clientId;
+      if (filters.slaStatus) apiParams.slaStatus = filters.slaStatus;
+      
+      console.log('🔍 Frontend apiParams being sent:', apiParams);
+      console.log('🔍 Frontend filters:', filters);
+      console.log('🔍 Frontend dateRange:', dateRange);
+      
+      const [performanceResponse, slaResponse, kpiResponse, gestionnairesDailyResponse, alertsResponse] = await Promise.all([
+        LocalAPI.get('/analytics/performance/by-user', { params: apiParams }),
+        LocalAPI.get('/analytics/sla-compliance-by-user', { params: apiParams }),
+        LocalAPI.get('/analytics/kpis/daily', { params: apiParams }),
+        LocalAPI.get('/analytics/gestionnaires/daily-performance', { params: gestParams }),
+        LocalAPI.get('/analytics/alerts', { params: apiParams })  // ✅ FIX: Pass apiParams to alerts
       ]);
 
       const performanceData = performanceResponse.data;
       const slaData = slaResponse.data;
       const kpiData = kpiResponse.data;
+      const alertData = alertsResponse.data;
 
       // Calculate performance KPIs
       const totalProcessed = performanceData.processedByUser?.reduce((sum: number, user: any) => sum + (user._count?.id || 0), 0) || 0;
@@ -51,22 +65,39 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       const activeUsersWithData = slaData.filter((user: any) => user.userName && user.total > 0);
       const avgSlaCompliance = activeUsersWithData.length > 0 ? Math.round(activeUsersWithData.reduce((sum: any, user: any) => sum + (user.complianceRate || 0), 0) / activeUsersWithData.length) : 0;
       const avgProcessingTime = kpiData.avgDelay || 0;
+      const enAttenteCount = kpiData.enAttenteCount || 0;
 
       setPerformanceKpis({
         totalProcessed,
         avgSlaCompliance,
         totalUsers,
-        avgProcessingTime
+        avgProcessingTime,
+        enAttenteCount
       });
 
-      // Get department performance from backend
-      const deptPerformanceResponse = await LocalAPI.get('/analytics/performance/by-department', { params: dateRange });
+      // Get department performance from backend with filters
+      const deptPerformanceResponse = await LocalAPI.get('/analytics/performance/by-department', { params: apiParams });
       const departmentPerformance = deptPerformanceResponse.data || [];
       
       console.log('📊 Department Performance Data:', departmentPerformance);
       console.log('📊 Number of departments:', departmentPerformance.length);
       
+      // Process volume trend data from bsPerDay
+      const volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
+        date: new Date(day.createdAt).toLocaleDateString('fr-FR'),
+        volume: day._count?.id || 0
+      })) || [];
 
+      // Calculate SLA distribution from alert data
+      const slaCompliant = alertData.ok?.length || 0;
+      const slaAtRisk = alertData.warning?.length || 0;
+      const slaOverdue = alertData.critical?.length || 0;
+      
+      const slaDistribution = [
+        { name: 'À temps', value: slaCompliant, color: '#4caf50' },
+        { name: 'À risque', value: slaAtRisk, color: '#ff9800' },
+        { name: 'En retard', value: slaOverdue, color: '#f44336' }
+      ];
 
       // Process team ranking from SLA data with real user names
       const teamRanking = slaData
@@ -84,7 +115,9 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
         departmentPerformance,
         teamRanking,
         userPerformance: slaData.slice(0, 10),
-        gestionnairesDailyPerformance: gestionnairesDailyResponse.data
+        gestionnairesDailyPerformance: gestionnairesDailyResponse.data,
+        volumeTrend,
+        slaDistribution
       });
     } catch (error) {
       console.error('Failed to load performance data:', error);
@@ -100,6 +133,16 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
 
   const handleApplyDateFilter = () => {
     setAppliedDateRange(gestDateRange);
+  };
+
+  const handlePopoverOpen = (event: React.MouseEvent<HTMLElement>, gest: any) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedGest(gest);
+  };
+
+  const handlePopoverClose = () => {
+    setAnchorEl(null);
+    setSelectedGest(null);
   };
 
   if (loading) {
@@ -151,7 +194,8 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            {/* COMMENTED OUT: Redundant Utilisateurs Actifs - Already in Super Admin Gestion Utilisateurs */}
+            {/* <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>
                   <Box display="flex" alignItems="center" gap={2}>
@@ -163,7 +207,7 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
+            </Grid> */}
             <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>
@@ -172,6 +216,22 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
                     <Box>
                       <Typography variant="h4">{performanceKpis.avgProcessingTime.toFixed(1)}j</Typography>
                       <Typography color="textSecondary">Temps Moyen</Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <WarningIcon color="warning" />
+                    <Box>
+                      <Typography variant="h4">{performanceKpis.enAttenteCount}</Typography>
+                      <Typography color="textSecondary">En Attente</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mt: 0.5 }}>
+                        (EN_ATTENTE + A_SCANNER + SCAN_EN_COURS + A_AFFECTER + ASSIGNE)
+                      </Typography>
                     </Box>
                   </Box>
                 </CardContent>
@@ -198,6 +258,40 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
           </ResponsiveContainer>
         </Paper>
       </Grid> */}
+
+      {/* Volume Trend Chart */}
+      <Grid item xs={12} md={8}>
+        <Paper elevation={2} sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Volume de Traitement</Typography>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={data.volumeTrend}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="volume" stroke="#1976d2" strokeWidth={3} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Paper>
+      </Grid>
+
+      {/* SLA Distribution Chart */}
+      <Grid item xs={12} md={4}>
+        <Paper elevation={2} sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Répartition SLA</Typography>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie data={data.slaDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value">
+                {data.slaDistribution.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </Paper>
+      </Grid>
 
       {/* Daily Gestionnaire Performance */}
       <Grid item xs={12}>
@@ -256,6 +350,7 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
                 <TableRow>
                   <TableCell>Gestionnaire</TableCell>
                   <TableCell align="right">Total Documents</TableCell>
+                  <TableCell align="right">Traités</TableCell>
                   <TableCell align="right">Dernières 24h</TableCell>
                   <TableCell align="right" width="200px">Progression</TableCell>
                 </TableRow>
@@ -266,12 +361,26 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
                     gest.name.toLowerCase().includes(gestionnaireFilter.toLowerCase())
                   )
                   .map((gest: any) => {
-                  const maxDocs = Math.max(...data.gestionnairesDailyPerformance.map((g: any) => g.documentsProcessed), 1);
-                  const percentage = (gest.documentsProcessed / maxDocs) * 100;
+                  // Calculate completion rate: Traités / Total Documents
+                  const completionRate = gest.documentsProcessed > 0 
+                    ? (gest.documentsTraites / gest.documentsProcessed) * 100 
+                    : 0;
+                  
                   return (
                     <TableRow key={gest.id}>
                       <TableCell>{gest.name}</TableCell>
                       <TableCell align="right">{gest.documentsProcessed}</TableCell>
+                      <TableCell align="right">
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            fontWeight: 'bold',
+                            color: 'error.main'
+                          }}
+                        >
+                          {gest.documentsTraites || 0}
+                        </Typography>
+                      </TableCell>
                       <TableCell align="right">
                         <Typography 
                           variant="body2" 
@@ -286,9 +395,26 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Box sx={{ width: '100%', bgcolor: 'grey.200', borderRadius: 1, height: 8 }}>
-                            <Box sx={{ width: `${percentage}%`, bgcolor: 'primary.main', borderRadius: 1, height: 8 }} />
+                            <Box 
+                              sx={{ 
+                                width: `${Math.min(completionRate, 100)}%`, 
+                                bgcolor: completionRate >= 80 ? 'success.main' : completionRate >= 50 ? 'warning.main' : 'error.main', 
+                                borderRadius: 1, 
+                                height: 8 
+                              }} 
+                            />
                           </Box>
-                          <Typography variant="caption" sx={{ minWidth: 40 }}>{Math.round(percentage)}%</Typography>
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              minWidth: 40, 
+                              cursor: 'pointer',
+                              '&:hover': { textDecoration: 'underline' }
+                            }}
+                            onClick={(e) => handlePopoverOpen(e, gest)}
+                          >
+                            {Math.round(completionRate)}%
+                          </Typography>
                         </Box>
                       </TableCell>
                     </TableRow>
@@ -300,8 +426,8 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
         </Paper>
       </Grid>
 
-      {/* Team Ranking */}
-      <Grid item xs={12} md={4}>
+      {/* Team Ranking - COMMENTED OUT */}
+      {/* <Grid item xs={12} md={4}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Top Performers</Typography>
           <Box>
@@ -328,7 +454,44 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
             )}
           </Box>
         </Paper>
-      </Grid>
+      </Grid> */}
+
+      {/* Formula Popover */}
+      <Popover
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={handlePopoverClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'center',
+        }}
+      >
+        {selectedGest && (
+          <Box sx={{ p: 2, maxWidth: 300 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Calcul de Progression
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              <strong>{selectedGest.name}</strong>
+            </Typography>
+            <Box sx={{ bgcolor: 'grey.100', p: 1.5, borderRadius: 1, fontFamily: 'monospace' }}>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                Progression = (Traités / Total) × 100
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'primary.main' }}>
+                = ({selectedGest.documentsTraites} / {selectedGest.documentsProcessed}) × 100
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 0.5 }}>
+                = {Math.round((selectedGest.documentsTraites / selectedGest.documentsProcessed) * 100)}%
+              </Typography>
+            </Box>
+          </Box>
+        )}
+      </Popover>
       
       {/* Department Performance Table - COMMENTED OUT */}
       {/* <Grid item xs={12}>

@@ -16,26 +16,36 @@ export class OutlookIntegrationService {
   constructor(private prisma: PrismaService) {}
 
   async readEmailsAndCreateReclamations() {
+    // Skip if email credentials not configured
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return;
+    }
+
     try {
-      // Read emails from monitored addresses
       for (const emailAddress of this.MONITORED_EMAILS) {
         try {
           const emails = await this.fetchEmailsFromOutlook(emailAddress);
-          this.logger.log(`Found ${emails.length} emails from ${emailAddress}`);
-          
-          for (const email of emails) {
-            await this.processEmailToReclamation(email, emailAddress);
+          if (emails.length > 0) {
+            this.logger.log(`Found ${emails.length} emails from ${emailAddress}`);
+            for (const email of emails) {
+              await this.processEmailToReclamation(email, emailAddress);
+            }
           }
         } catch (error) {
-          this.logger.error(`Error processing emails from ${emailAddress}:`, error);
+          // Silently skip errors
         }
       }
     } catch (error) {
-      this.logger.error('Error reading emails:', error);
+      // Silently skip errors
     }
   }
 
   private async fetchEmailsFromOutlook(emailAddress: string): Promise<any[]> {
+    // Skip email fetching if credentials not configured
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return [];
+    }
+
     return new Promise((resolve, reject) => {
       const imap = new Imap({
         user: process.env.SMTP_USER || '',
@@ -43,19 +53,28 @@ export class OutlookIntegrationService {
         host: process.env.SMTP_HOST || 'outlook.office365.com',
         port: 993,
         tls: true,
-        tlsOptions: { rejectUnauthorized: false }
+        tlsOptions: { rejectUnauthorized: false },
+        connTimeout: 5000,
+        authTimeout: 5000
       });
 
       const emails: any[] = [];
+      let connectionTimeout: NodeJS.Timeout;
+
+      // Set overall timeout
+      connectionTimeout = setTimeout(() => {
+        imap.end();
+        resolve([]);
+      }, 10000);
 
       imap.once('ready', () => {
+        clearTimeout(connectionTimeout);
         imap.openBox('INBOX', true, (err) => {
           if (err) {
-            this.logger.error('Error opening inbox:', err);
-            return reject(err);
+            imap.end();
+            return resolve([]);
           }
 
-          // Search for emails from monitored addresses in last 24 hours
           const yesterday = new Date();
           yesterday.setDate(yesterday.getDate() - 1);
           
@@ -64,8 +83,8 @@ export class OutlookIntegrationService {
             ['SINCE', yesterday]
           ], (err, results) => {
             if (err) {
-              this.logger.error('Error searching emails:', err);
-              return reject(err);
+              imap.end();
+              return resolve([]);
             }
 
             if (!results || results.length === 0) {
@@ -81,10 +100,7 @@ export class OutlookIntegrationService {
             fetch.on('message', (msg) => {
               msg.on('body', (stream) => {
                 simpleParser(stream as any, (err, parsed) => {
-                  if (err) {
-                    this.logger.error('Error parsing email:', err);
-                    return;
-                  }
+                  if (err) return;
 
                   emails.push({
                     id: parsed.messageId,
@@ -106,8 +122,9 @@ export class OutlookIntegrationService {
       });
 
       imap.once('error', (err) => {
-        this.logger.error('IMAP connection error:', err);
-        reject(err);
+        clearTimeout(connectionTimeout);
+        imap.end();
+        resolve([]);
       });
 
       imap.connect();

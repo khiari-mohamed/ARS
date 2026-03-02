@@ -94,12 +94,12 @@ export class AnalyticsService {
         
         // Transform AI response back to expected format
         const aiPredictions = aiResponse.data.sla_predictions || [];
-        console.log(`AI returned ${aiPredictions.length} predictions for ${bordereaux.length} bordereaux`);
-        console.log('🔍 AI predictions raw data:', JSON.stringify(aiPredictions, null, 2));
-        console.log('🔍 Bordereaux data:', JSON.stringify(bordereaux.map(b => ({ id: b.id, reference: b.reference, client: b.client?.name })), null, 2));
+        // console.log(`AI returned ${aiPredictions.length} predictions for ${bordereaux.length} bordereaux`);
+        // console.log('🔍 AI predictions raw data:', JSON.stringify(aiPredictions, null, 2));
+        // console.log('🔍 Bordereaux data:', JSON.stringify(bordereaux.map(b => ({ id: b.id, reference: b.reference, client: b.client?.name })), null, 2));
         
         if (aiPredictions.length === 0) {
-          console.log('AI returned empty predictions - throwing error');
+          // console.log('AI returned empty predictions - throwing error');
           throw new Error('AI service returned no predictions');
         }
         
@@ -118,7 +118,7 @@ export class AnalyticsService {
           };
         });
         
-        console.log('✅ Final mapped predictions:', JSON.stringify(mappedPredictions, null, 2));
+        // console.log('✅ Final mapped predictions:', JSON.stringify(mappedPredictions, null, 2));
         return mappedPredictions;
         
       } catch (aiError) {
@@ -293,7 +293,9 @@ export class AnalyticsService {
 
   async getDailyKpis(query: AnalyticsKpiDto, user: any) {
     this.checkAnalyticsRole(user);
-    const where: any = { archived: false }; // Exclude archived by default
+    // console.log('📊 getDailyKpis filters:', query);
+    
+    const where: any = { archived: false };
     
     if (user.role === 'GESTIONNAIRE') {
       where.assignedToUserId = user.id;
@@ -305,49 +307,63 @@ export class AnalyticsService {
       where.assignedToUserId = { in: teamMembers.map(m => m.id) };
     }
     
+    if (query.clientId) {
+      where.clientId = query.clientId;
+      // console.log('✅ Applying clientId filter:', query.clientId);
+    }
     if (query.teamId) where.teamId = query.teamId;
     if (query.userId) where.assignedToUserId = query.userId;
     if (query.fromDate || query.toDate) {
       where.createdAt = {};
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
+      // console.log('✅ Applying date filter:', query.fromDate, '-', query.toDate);
     }
     
-    // Remove the today-only filter to get all bordereaux when no date range specified
-    // if (!query.fromDate && !query.toDate) {
-    //   const today = new Date();
-    //   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    //   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-    //   where.createdAt = { gte: todayStart, lt: todayEnd };
-    // }
+    // console.log('🔍 Final where clause:', JSON.stringify(where, null, 2));
     
-    const [bordereaux, avgDelay, totalCount, processedCount, enAttenteCount] = await Promise.all([
-      this.prisma.bordereau.findMany({
-        where,
-        select: { id: true, createdAt: true }
-      }),
-      this.prisma.bordereau.aggregate({
-        _avg: { delaiReglement: true },
-        where,
-      }),
-      this.prisma.bordereau.count({ where }),
-      this.prisma.bordereau.count({
-        where: {
-          ...where,
-          statut: { in: ['CLOTURE', 'TRAITE'] }
-        }
-      }),
-      this.prisma.bordereau.count({
-        where: {
-          ...where,
-          statut: { in: ['EN_ATTENTE', 'A_SCANNER', 'SCAN_EN_COURS', 'A_AFFECTER', 'ASSIGNE'] }
-        }
-      })
-    ]);
+    // Get ALL bordereaux first
+    const allBordereaux = await this.prisma.bordereau.findMany({
+      where,
+      select: {
+        id: true,
+        createdAt: true,
+        dateReception: true,
+        delaiReglement: true,
+        statut: true,
+        contract: { select: { delaiReglement: true } },
+        client: { select: { reglementDelay: true } }
+      }
+    });
     
-    // Group by date (not timestamp)
+    // Apply slaStatus filter AFTER calculating SLA
+    let filteredBordereaux = allBordereaux;
+    if (query.slaStatus) {
+      // console.log('✅ Applying slaStatus filter to KPIs:', query.slaStatus);
+      const now = new Date();
+      filteredBordereaux = allBordereaux.filter(b => {
+        const slaThreshold = b.delaiReglement || b.contract?.delaiReglement || b.client?.reglementDelay || 30;
+        const validDate = b.dateReception || b.createdAt;
+        const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
+        const percentElapsed = (daysElapsed / slaThreshold) * 100;
+        
+        if (query.slaStatus === 'overdue') return percentElapsed > 100;
+        if (query.slaStatus === 'atrisk') return percentElapsed > 80 && percentElapsed <= 100;
+        if (query.slaStatus === 'ontime') return percentElapsed <= 80;
+        return true;
+      });
+      // console.log(`📊 Filtered from ${allBordereaux.length} to ${filteredBordereaux.length} bordereaux`);
+    }
+    
+    const totalCount = filteredBordereaux.length;
+    const processedCount = filteredBordereaux.filter(b => ['CLOTURE', 'TRAITE'].includes(b.statut)).length;
+    const enAttenteCount = filteredBordereaux.filter(b => ['EN_ATTENTE', 'A_SCANNER', 'SCAN_EN_COURS', 'A_AFFECTER', 'ASSIGNE'].includes(b.statut)).length;
+    
+    const avgDelay = filteredBordereaux.reduce((sum, b) => sum + (b.delaiReglement || 0), 0) / Math.max(filteredBordereaux.length, 1);
+    
+    // Group by date
     const dateMap = new Map<string, number>();
-    for (const b of bordereaux) {
+    for (const b of filteredBordereaux) {
       const date = new Date(b.createdAt).toISOString().split('T')[0];
       dateMap.set(date, (dateMap.get(date) || 0) + 1);
     }
@@ -361,7 +377,7 @@ export class AnalyticsService {
     
     return {
       bsPerDay,
-      avgDelay: avgDelay._avg.delaiReglement || 0,
+      avgDelay,
       totalCount,
       processedCount,
       enAttenteCount,
@@ -371,7 +387,10 @@ export class AnalyticsService {
 
   async getPerformance(query: AnalyticsPerformanceDto, user: any) {
     this.checkAnalyticsRole(user);
-    const where: any = {};
+    const where: any = { archived: false };
+    
+    // Apply filters
+    if (query.clientId) where.clientId = query.clientId;
     if (query.teamId) where.teamId = query.teamId;
     if (query.userId) where.userId = query.userId;
     if (query.role) where.role = query.role;
@@ -394,19 +413,38 @@ export class AnalyticsService {
     };
   }
 
-  async getAlerts(user: any) {
+  async getAlerts(user: any, filters: any = {}) {
     this.checkAnalyticsRole(user);
+    // console.log('🚨 getAlerts filters:', filters);
     
-    // Get all bordereaux with dateReception
+    const where: any = { archived: false };
+    
+    // Apply database filters
+    if (filters.clientId) {
+      where.clientId = filters.clientId;
+      // console.log('✅ Applying clientId filter to alerts:', filters.clientId);
+    }
+    if (filters.fromDate || filters.toDate) {
+      where.createdAt = {};
+      if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
+      if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
+      // console.log('✅ Applying date filter to alerts:', filters.fromDate, '-', filters.toDate);
+    }
+    
+    // console.log('🔍 Alerts where clause:', JSON.stringify(where, null, 2));
+    
     const allBordereaux = await this.prisma.bordereau.findMany({
+      where,
       select: {
         id: true,
         reference: true,
         dateReception: true,
+        dateReceptionBO: true,
         delaiReglement: true,
         statut: true,
         clientId: true,
-        assignedToUserId: true
+        assignedToUserId: true,
+        createdAt: true
       }
     });
     
@@ -416,36 +454,60 @@ export class AnalyticsService {
     const ok: any[] = [];
     
     for (const bordereau of allBordereaux) {
-      if (!bordereau.dateReception) continue;
+      // Use dateReceptionBO from Bureau d'Ordre as primary date
+      const validDate = bordereau.dateReceptionBO || bordereau.dateReception || bordereau.createdAt;
       
-      // Calculate days since reception
       const daysSinceReception = Math.floor(
-        (now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
+        (now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24)
       );
       
-      // Get SLA threshold (default 30 days)
       const slaThreshold = bordereau.delaiReglement || 30;
+      const percentageElapsed = (daysSinceReception / slaThreshold) * 100;
       
-      // Categorize based on days since reception vs SLA threshold
-      if (daysSinceReception > slaThreshold) {
+      // RÈGLE SLA UNIFIÉE: Basée sur pourcentage du délai écoulé
+      if (percentageElapsed > 100) {
         critical.push({ ...bordereau, statusLevel: 'red', daysSinceReception, slaThreshold });
-      } else if (daysSinceReception > slaThreshold - 2) {
+      } else if (percentageElapsed > 80) {
         warning.push({ ...bordereau, statusLevel: 'orange', daysSinceReception, slaThreshold });
       } else {
         ok.push({ ...bordereau, statusLevel: 'green', daysSinceReception, slaThreshold });
       }
     }
     
+    // Apply SLA status filter AFTER calculating status
+    let filteredCritical = critical;
+    let filteredWarning = warning;
+    let filteredOk = ok;
+    
+    if (filters.slaStatus) {
+      // console.log('✅ Applying slaStatus filter:', filters.slaStatus);
+      if (filters.slaStatus === 'overdue') {
+        filteredWarning = [];
+        filteredOk = [];
+      } else if (filters.slaStatus === 'atrisk') {
+        filteredCritical = [];
+        filteredOk = [];
+      } else if (filters.slaStatus === 'ontime') {
+        filteredCritical = [];
+        filteredWarning = [];
+      }
+    }
+    
+    // console.log(`📊 Alert counts: critical=${filteredCritical.length}, warning=${filteredWarning.length}, ok=${filteredOk.length}`);
+    
     return {
-      critical,
-      warning,
-      ok
+      critical: filteredCritical,
+      warning: filteredWarning,
+      ok: filteredOk
     };
   }
 
   async getSlaComplianceByUser(user: any, filters: any = {}) {
     this.checkAnalyticsRole(user);
-    const where: any = {};
+    const where: any = { archived: false };
+    
+    // Apply filters
+    if (filters.clientId) where.clientId = filters.clientId;
     if (filters.teamId) where.teamId = filters.teamId;
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
@@ -506,10 +568,18 @@ export class AnalyticsService {
 
   async getReassignmentAI(payload: any) {
     try {
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/reassignment`, payload);
+      const token = await this.getAIToken();
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/reassignment`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 300000
+      });
       return response.data;
     } catch (error: any) {
-      throw new Error('AI reassignment failed: ' + error.message);
+      console.error('AI reassignment failed:', error.response?.data || error.message);
+      throw new Error('AI reassignment failed: ' + (error.response?.data?.detail || error.message));
     }
   }
 
@@ -536,11 +606,11 @@ export class AnalyticsService {
             timeout: 300000
           });
           
-          console.log(`✅ AI Token obtained with ${cred.username}`);
+          // console.log(`✅ AI Token obtained with ${cred.username}`);
           return tokenResponse.data.access_token;
           
         } catch (credError: any) {
-          console.log(`❌ Failed with ${cred.username}: ${credError.response?.status}`);
+          // console.log(`❌ Failed with ${cred.username}: ${credError.response?.status}`);
           continue;
         }
       }
@@ -554,7 +624,7 @@ export class AnalyticsService {
   }
 
   async getPerformanceAI(payload: any) {
-    console.log('AI Performance request received:', payload);
+    // console.log('AI Performance request received:', payload);
     
     try {
       // Get real performance data from database
@@ -574,7 +644,7 @@ export class AnalyticsService {
         timeout: 300000
       });
       
-      console.log('✅ AI Performance Service response received');
+      // console.log('✅ AI Performance Service response received');
       
       // Save AI result for continuous learning
       await this.saveAIAnalysisResult('performance_analysis', payload, response.data, { id: 'system' });
@@ -849,7 +919,7 @@ export class AnalyticsService {
     try {
       this.checkAnalyticsRole(user);
       
-      console.log('📊 Getting forecast with REAL data...');
+      // console.log('📊 Getting forecast with REAL data...');
       
       // Get ALL historical data (not just 30 days) for better AI predictions
       const historicalBordereaux = await this.prisma.bordereau.findMany({
@@ -857,7 +927,7 @@ export class AnalyticsService {
         orderBy: { createdAt: 'asc' }
       });
       
-      console.log(`📈 Found ${historicalBordereaux.length} total bordereaux for forecasting`);
+      // console.log(`📈 Found ${historicalBordereaux.length} total bordereaux for forecasting`);
       
       // Group by date to get daily counts
       const dailyCounts = new Map<string, number>();
@@ -871,9 +941,9 @@ export class AnalyticsService {
         .map(([date, value]) => ({ date, value }))
         .sort((a, b) => a.date.localeCompare(b.date));
       
-      console.log(`📅 Prepared ${forecastData.length} days of data for AI`);
-      console.log(`📊 Sample data: ${JSON.stringify(forecastData.slice(0, 5))}`);
-      console.log(`📊 Total volume: ${forecastData.reduce((sum, d) => sum + d.value, 0)} bordereaux`);
+      // console.log(`📅 Prepared ${forecastData.length} days of data for AI`);
+      // console.log(`📊 Sample data: ${JSON.stringify(forecastData.slice(0, 5))}`);
+      // console.log(`📊 Total volume: ${forecastData.reduce((sum, d) => sum + d.value, 0)} bordereaux`);
       
       if (forecastData.length === 0) {
         throw new Error('No historical data available for forecasting');
@@ -881,7 +951,7 @@ export class AnalyticsService {
       
       // Call AI microservice with REAL data
       const token = await this.getAIToken();
-      console.log('🤖 Calling AI forecast with real data...');
+      // console.log('🤖 Calling AI forecast with real data...');
       
       const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, forecastData, {
         headers: {
@@ -891,20 +961,20 @@ export class AnalyticsService {
         timeout: 300000
       });
       
-      console.log('✅ AI forecast response received');
+      // console.log('✅ AI forecast response received');
       
       const forecast = aiResponse.data.forecast || [];
       let nextWeekForecast = forecast.reduce((sum: number, day: any) => sum + (day.predicted_value || 0), 0);
       
-      console.log(`📈 AI raw prediction: ${Math.round(nextWeekForecast)} bordereaux for next week`);
-      console.log(`📊 Trend direction: ${aiResponse.data.trend_direction}`);
+      // console.log(`📈 AI raw prediction: ${Math.round(nextWeekForecast)} bordereaux for next week`);
+      // console.log(`📊 Trend direction: ${aiResponse.data.trend_direction}`);
       
       // Fallback: If AI predicts 0 or unrealistic values, use historical average
       if (nextWeekForecast < 1 || nextWeekForecast > historicalBordereaux.length * 2) {
         const totalBordereaux = forecastData.reduce((sum, d) => sum + d.value, 0);
         const avgPerDay = totalBordereaux / forecastData.length;
         nextWeekForecast = Math.round(avgPerDay * 7);
-        console.log(`⚠️ AI prediction unrealistic, using historical average: ${nextWeekForecast} bordereaux/week`);
+        // console.log(`⚠️ AI prediction unrealistic, using historical average: ${nextWeekForecast} bordereaux/week`);
       }
       
       // Transform AI response to expected format
@@ -916,7 +986,7 @@ export class AnalyticsService {
       // Calculate monthly forecast
       const monthlyForecast = Math.round(nextWeekForecast * 4.3);
       
-      console.log(`✅ Final prediction: ${nextWeekForecast} per week, ${monthlyForecast} per month`);
+      // console.log(`✅ Final prediction: ${nextWeekForecast} per week, ${monthlyForecast} per month`);
       
       return {
         nextWeekForecast: Math.round(nextWeekForecast),
@@ -1055,10 +1125,10 @@ export class AnalyticsService {
     this.checkAnalyticsRole(user);
     
     try {
-      console.log('🔍 Getting AI recommendations...');
-      console.log('🔍 Backend AI recommendations method called');
+      // console.log('🔍 Getting AI recommendations...');
+      // console.log('🔍 Backend AI recommendations method called');
       const token = await this.getAIToken();
-      console.log('🔍 AI token obtained for recommendations');
+      // console.log('🔍 AI token obtained for recommendations');
       
       // Get real system data for AI recommendations
       const currentWorkload = await this.prisma.bordereau.count({ where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } } });
@@ -1081,18 +1151,18 @@ export class AnalyticsService {
         trend_analysis: 'workload_increasing'
       };
       
-      console.log('🔍 Sending system data to AI:', systemData);
+      // console.log('🔍 Sending system data to AI:', systemData);
       
       const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, systemData, {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 5000 // 5 second timeout
       });
       
-      console.log('🔍 AI recommendations response:', response.data);
+      // console.log('🔍 AI recommendations response:', response.data);
       
       // Handle null or empty response
       if (!response.data || !response.data.recommendations) {
-        console.warn('⚠️ AI returned null/empty recommendations');
+        // console.warn('⚠️ AI returned null/empty recommendations');
         return {
           recommendations: [
             'Optimiser la répartition des tâches entre équipes',
@@ -1103,8 +1173,8 @@ export class AnalyticsService {
       }
       
       const recommendations = response.data.recommendations.map((rec: any) => rec.title || rec.description || rec);
-      console.log('✅ Mapped recommendations:', recommendations);
-      console.log('🔍 Returning recommendations to frontend');
+      // console.log('✅ Mapped recommendations:', recommendations);
+      // console.log('🔍 Returning recommendations to frontend');
       
       return {
         recommendations
@@ -1199,53 +1269,71 @@ export class AnalyticsService {
       
       const period = query.period || 'current';
       
-      // Get current staff count
+      // 1. Include GESTIONNAIRE_SENIOR in staff count
       const currentStaff = await this.prisma.user.count({
         where: { 
-          role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] },
+          role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'] },
           active: true
         }
       });
       
-      // Get current workload
-      const currentWorkload = await this.prisma.bordereau.count({
-        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
-      });
-      
-      // Calculate required staff (basic formula: 10 bordereaux per person)
-      const requiredStaff = Math.ceil(currentWorkload / 10);
-      
-      // Get departments with user counts
-      const departments = await this.prisma.department.findMany({
-        where: { active: true },
-        include: {
-          users: {
-            where: { active: true }
+      // 2. Get current workload - ALL ACTIVE bordereaux (exclude only closed/completed)
+      const currentWorkload = await this.prisma.bordereau.count({        where: { 
+          statut: { 
+            notIn: ['CLOTURE', 'PAYE', 'REJETE'] 
           }
         }
       });
       
-      const departmentAnalysis = departments.map(dept => {
-        const deptStaff = dept.users.length;
-        const deptWorkload = Math.floor(currentWorkload * (deptStaff / Math.max(currentStaff, 1)));
-        const deptRequired = Math.ceil(deptWorkload / 10);
-        const deptEfficiency = Math.min(100, (deptStaff * 10 / Math.max(deptWorkload, 1)) * 100);
-        
-        return {
-          department: dept.name,
-          currentStaff: deptStaff,
-          requiredStaff: deptRequired,
-          workload: deptWorkload,
-          efficiency: deptEfficiency,
-          status: deptStaff < deptRequired ? 'understaffed' as const : deptStaff > deptRequired ? 'overstaffed' as const : 'optimal' as const
-        };
+      // 3. Calculate required staff with explanation
+      const requiredStaff = Math.ceil(currentWorkload / 10);
+      const requiredStaffCalculation = `${currentWorkload} bordereaux ÷ 10 bordereaux/personne = ${requiredStaff} personnes`;
+      
+      // 4. Calculate target and current workload with explanation
+      const targetWorkload = currentStaff * 10;
+      const targetWorkloadCalculation = `${currentStaff} personnes × 10 bordereaux/personne = ${targetWorkload} bordereaux`;
+      const currentWorkloadCalculation = `Bordereaux actifs (hors archivés/clôturés) = ${currentWorkload}`;
+      
+      // 5. Get departments with GESTIONNAIRE + GESTIONNAIRE_SENIOR + CHEF_EQUIPE
+      const departments = await this.prisma.department.findMany({
+        where: { active: true },
+        include: {
+          users: {
+            where: { 
+              active: true,
+              role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'] }
+            }
+          }
+        }
       });
+      
+      // 6. Filter departments with staff and calculate metrics
+      const departmentAnalysis = departments
+        .filter(dept => dept.users.length > 0)
+        .map(dept => {
+          const deptStaff = dept.users.length;
+          const deptWorkload = Math.floor(currentWorkload * (deptStaff / Math.max(currentStaff, 1)));
+          const deptRequired = Math.ceil(deptWorkload / 10);
+          const deptEfficiency = Math.min(100, (deptStaff * 10 / Math.max(deptWorkload, 1)) * 100);
+          
+          return {
+            department: dept.name,
+            currentStaff: deptStaff,
+            requiredStaff: deptRequired,
+            workload: deptWorkload,
+            efficiency: Math.round(deptEfficiency),
+            status: deptStaff < deptRequired ? 'understaffed' as const : deptStaff > deptRequired ? 'overstaffed' as const : 'optimal' as const
+          };
+        });
       
       return {
         currentStaff,
         requiredStaff,
+        requiredStaffCalculation,
         currentWorkload,
-        targetWorkload: currentStaff * 10,
+        currentWorkloadCalculation,
+        targetWorkload,
+        targetWorkloadCalculation,
         efficiency: Math.min(100, (currentStaff * 10 / Math.max(currentWorkload, 1)) * 100),
         recommendations: await this.getAIWorkforceRecommendations(currentStaff, requiredStaff, currentWorkload),
         departmentAnalysis
@@ -1258,7 +1346,8 @@ export class AnalyticsService {
         currentWorkload: 0,
         targetWorkload: 0,
         efficiency: 0,
-        recommendations: []
+        recommendations: [],
+        departmentAnalysis: []
       };
     }
   }
@@ -1289,38 +1378,141 @@ export class AnalyticsService {
   private async getAIWorkforceRecommendations(currentStaff: number, requiredStaff: number, currentWorkload: number): Promise<string[]> {
     try {
       const token = await this.getAIToken();
-      const workloadData = await this.prisma.bordereau.groupBy({
-        by: ['assignedToUserId'],
-        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } },
-        _count: { id: true }
+      
+      // Get SLA data for AI analysis - ALL ACTIVE bordereaux
+      const slaItems = await this.prisma.bordereau.findMany({
+        where: { 
+          statut: { 
+            notIn: ['CLOTURE', 'PAYE', 'REJETE'] 
+          }
+        },
+        select: {
+          id: true,
+          statut: true,
+          delaiReglement: true,
+          dateReception: true,
+          dateReceptionBO: true,
+          createdAt: true,
+          updatedAt: true
+        }
       });
       
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, {
-        workload: workloadData.map(w => ({ teamId: w.assignedToUserId, _count: { id: w._count.id } }))
-      }, {
+      // Calculate days remaining for each bordereau using dateReceptionBO
+      const now = new Date();
+      const bordereaux = slaItems.map(b => {
+        // Use dateReceptionBO (Bureau d'Ordre) as primary date
+        const receptionDate = b.dateReceptionBO || b.dateReception || b.createdAt;
+        const slaThreshold = b.delaiReglement || 30;
+        const deadline = new Date(receptionDate);
+        deadline.setDate(deadline.getDate() + slaThreshold);
+        const daysRemaining = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        
+        return {
+          id: b.id,
+          status: b.statut,
+          days_remaining: daysRemaining,
+          sla_days: slaThreshold
+        };
+      });
+      
+      // Get agent performance
+      const agents = await this.prisma.user.findMany({
+        where: { 
+          active: true,
+          role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'] }
+        }
+      });
+      
+      const agentsData = await Promise.all(agents.map(async (a) => {
+        const totalBordereaux = await this.prisma.bordereau.count({
+          where: { 
+            assignedToUserId: a.id,
+            statut: { in: ['ASSIGNE', 'EN_COURS'] }
+          }
+        });
+        
+        return {
+          id: a.id,
+          firstName: a.fullName.split(' ')[0],
+          lastName: a.fullName.split(' ').slice(1).join(' '),
+          total_bordereaux: totalBordereaux,
+          sla_compliant: 0,
+          avg_hours: 24
+        };
+      }));
+      
+      // Format payload matching AI endpoint expectations
+      const payload = {
+        bordereaux,
+        agents: agentsData,
+        currentStaff,
+        requiredStaff,
+        currentWorkload,
+        staff_count: currentStaff,
+        sla_breaches: bordereaux.filter(b => b.days_remaining < 0).length,
+        capacity_utilization: currentWorkload / (currentStaff * 10)
+      };
+      
+      // console.log('🔍 AI Workforce Request:', JSON.stringify(payload, null, 2));
+      
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, payload, {
         headers: { 'Authorization': `Bearer ${token}` },
         timeout: 300000
       });
       
-      const aiRecommendations = response.data.recommendations || [];
-      return aiRecommendations.slice(0, 3).map((rec: any) => 
-        rec.title || rec.recommendation || rec.description || 'Recommandation IA'
-      );
-    } catch (error) {
-      const recommendations: string[] = [];
-      if (requiredStaff > currentStaff) {
-        recommendations.push(`Ajouter ${requiredStaff - currentStaff} gestionnaire(s) pour traiter la charge actuelle`);
-      } else {
-        recommendations.push('Effectif optimal pour la charge actuelle');
+      // console.log('🔍 AI Workforce Response:', JSON.stringify(response.data, null, 2));
+      
+      // Extract recommendations array from AI response
+      const aiRecommendations = response.data?.recommendations || [];
+      
+      if (!Array.isArray(aiRecommendations) || aiRecommendations.length === 0) {
+        console.warn('⚠️ AI returned invalid/empty recommendations:', response.data);
+        return [];
       }
-      recommendations.push('Optimiser la répartition des tâches entre équipes');
-      recommendations.push('Former les nouveaux gestionnaires sur les processus ARS');
-      return recommendations;
+      
+      // AI returns array of strings directly - just return them
+      // console.log('✅ Parsed recommendations:', aiRecommendations);
+      return aiRecommendations;
+    } catch (error) {
+      console.error('❌ AI workforce recommendations failed:', error);
+      return [];
     }
   }
 
   // === AI-POWERED PERFORMANCE ANALYTICS ===
   
+  async getAIAlertSolution(payload: any): Promise<any> {
+    const token = await this.getAIToken();
+    
+    const aiPayload = {
+      bordereau_id: payload.bordereau.id,
+      reference: payload.bordereau.reference,
+      client: payload.bordereau.contract?.client?.name || payload.bordereau.client?.name,
+      statut: payload.bordereau.statut,
+      date_reception: payload.bordereau.dateReception,
+      sla_days: payload.slaDays,
+      alert_level: payload.alertLevel,
+      reason: payload.reason,
+      current_handler: payload.bordereau.currentHandler?.fullName,
+      team_leader: payload.bordereau.contract?.teamLeader?.fullName
+    };
+    
+    const response = await axios.post(`${AI_MICROSERVICE_URL}/alert_solution`, aiPayload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      timeout: 10000
+    });
+    
+    return {
+      rootCause: response.data.root_cause,
+      actions: response.data.recommended_actions,
+      priority: response.data.priority,
+      reasoning: response.data.reasoning
+    };
+  }
+
   async performRootCauseAnalysis(user: any): Promise<any[]> {
     try {
       this.checkAnalyticsRole(user);
@@ -1852,7 +2044,7 @@ export class AnalyticsService {
     this.checkAnalyticsRole(user);
     
     try {
-      console.log('🔍 Getting department performance...');
+      // console.log('🔍 Getting department performance...');
       
       // Get all departments from database
       const departments = await this.prisma.department.findMany({
@@ -1860,22 +2052,22 @@ export class AnalyticsService {
         select: { id: true, name: true, code: true }
       });
       
-      console.log(`📁 Found ${departments.length} departments`);
+      // console.log(`📁 Found ${departments.length} departments`);
       
       if (departments.length === 0) {
-        console.log('⚠️  No departments - using role-based grouping');
+        // console.log('⚠️  No departments - using role-based grouping');
         return this.getPerformanceByRole(user, filters);
       }
       
       // Don't apply date filters for department performance - show all time data
       const where: any = {};
       
-      console.log('📅 Date filters (ignored for dept performance):', filters);
+      // console.log('📅 Date filters (ignored for dept performance):', filters);
       
       const departmentPerformance: any[] = [];
       
       for (const dept of departments) {
-        console.log(`📂 Processing ${dept.name}...`);
+        // console.log(`📂 Processing ${dept.name}...`);
         
         // Get users in this department
         const deptUsers = await this.prisma.user.findMany({
@@ -1886,17 +2078,17 @@ export class AnalyticsService {
           select: { id: true }
         });
         
-        console.log(`   Users in ${dept.name}: ${deptUsers.length}`);
+        // console.log(`   Users in ${dept.name}: ${deptUsers.length}`);
         
         if (deptUsers.length === 0) {
-          console.log(`   ⚠️  Skipping ${dept.name} - no users`);
+          // console.log(`   ⚠️  Skipping ${dept.name} - no users`);
           continue;
         }
         
         const userIds = deptUsers.map(u => u.id);
         
         // Get bordereaux processed by this department (all time)
-        console.log(`   User IDs: ${userIds.join(', ')}`);
+        // console.log(`   User IDs: ${userIds.join(', ')}`);
         
         const totalProcessed = await this.prisma.bordereau.count({
           where: {
@@ -1904,10 +2096,10 @@ export class AnalyticsService {
           }
         });
         
-        console.log(`   Bordereaux for ${dept.name}: ${totalProcessed}`);
+        // console.log(`   Bordereaux for ${dept.name}: ${totalProcessed}`);
         
         if (totalProcessed === 0) {
-          console.log(`   ⚠️  Skipping ${dept.name} - no bordereaux`);
+          // console.log(`   ⚠️  Skipping ${dept.name} - no bordereaux`);
           continue;
         }
         
@@ -1937,11 +2129,11 @@ export class AnalyticsService {
           workload: totalProcessed
         };
         
-        console.log(`   ✅ ${dept.name}: ${totalProcessed} bordereaux, ${slaCompliance}% SLA`);
+        // console.log(`   ✅ ${dept.name}: ${totalProcessed} bordereaux, ${slaCompliance}% SLA`);
         departmentPerformance.push(deptData);
       }
       
-      console.log(`📊 Returning ${departmentPerformance.length} department results`);
+      // console.log(`📊 Returning ${departmentPerformance.length} department results`);
       return departmentPerformance;
       
     } catch (error) {
@@ -2002,7 +2194,7 @@ export class AnalyticsService {
 
   async getDocumentTypesBreakdown(user: any, query: any) {
     this.checkAnalyticsRole(user);
-    console.log('📊 getDocumentTypesBreakdown called');
+    // console.log('📊 getDocumentTypesBreakdown called');
     
     const DOCUMENT_TYPES = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION', 'CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
     const result: any = {};
@@ -2024,19 +2216,19 @@ export class AnalyticsService {
 
         result[type] = { total: count, traite, enCours, rejete };
         total += count;
-        console.log(`   ${type}: ${count} documents`);
+        // console.log(`   ${type}: ${count} documents`);
       } else {
         result[type] = { total: 0, traite: 0, enCours: 0, rejete: 0 };
       }
     }
     
-    console.log('✅ Total:', total);
+    // console.log('✅ Total:', total);
     return result;
   }
 
   async getDocumentStatusByType(user: any, query: any) {
     this.checkAnalyticsRole(user);
-    console.log('📊 getDocumentStatusByType called');
+    // console.log('📊 getDocumentStatusByType called');
     
     const DOCUMENT_TYPES = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION', 'CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
     const result: any = {};
@@ -2059,10 +2251,10 @@ export class AnalyticsService {
     return result;
   }
 
-  async getGestionnairesDailyPerformance(user: any, query: any): Promise<Array<{ id: string; name: string; documentsProcessed: number; documentsLast24h: number }>> {
+  async getGestionnairesDailyPerformance(user: any, query: any): Promise<Array<{ id: string; name: string; documentsProcessed: number; documentsTraites: number; documentsLast24h: number }>> {
     this.checkAnalyticsRole(user);
     
-    console.log('📊 getGestionnairesDailyPerformance query:', query);
+    // console.log('📊 getGestionnairesDailyPerformance query:', query);
     
     const gestionnaires = await this.prisma.user.findMany({
       where: {
@@ -2078,10 +2270,11 @@ export class AnalyticsService {
     });
     
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const result: Array<{ id: string; name: string; documentsProcessed: number; documentsLast24h: number }> = [];
+    const result: Array<{ id: string; name: string; documentsProcessed: number; documentsTraites: number; documentsLast24h: number }> = [];
     
     for (const gest of gestionnaires) {
       let documentsProcessed = 0;
+      let documentsTraites = 0;
       let documentsLast24h = 0;
       
       if (gest.role === 'GESTIONNAIRE_SENIOR') {
@@ -2120,6 +2313,13 @@ export class AnalyticsService {
           
           documentsProcessed = await this.prisma.document.count({ where: dateWhere });
           
+          documentsTraites = await this.prisma.document.count({
+            where: {
+              ...dateWhere,
+              status: 'TRAITE'
+            }
+          });
+          
           documentsLast24h = await this.prisma.document.count({
             where: {
               bordereau: {
@@ -2152,6 +2352,20 @@ export class AnalyticsService {
             }
           }
           documentsProcessed = await this.prisma.document.count({ where: dateWhere });
+          
+          documentsTraites = await this.prisma.document.count({
+            where: {
+              ...dateWhere,
+              status: 'TRAITE'
+            }
+          });
+        } else {
+          documentsTraites = await this.prisma.document.count({
+            where: {
+              assignedToUserId: gest.id,
+              status: 'TRAITE'
+            }
+          });
         }
         
         documentsLast24h = await this.prisma.document.count({
@@ -2166,6 +2380,7 @@ export class AnalyticsService {
         id: gest.id,
         name: gest.fullName || gest.email,
         documentsProcessed,
+        documentsTraites,
         documentsLast24h
       });
     }

@@ -123,7 +123,7 @@ export class AlertsService {
   async getAlertsDashboard(query: AlertsQueryDto, user: any) {
     this.checkAlertsRole(user);
     
-    this.logger.log(`🔍 Alerts Dashboard - User: ${user.id} Role: ${user.role}`);
+    // this.logger.log(`🔍 Alerts Dashboard - User: ${user.id} Role: ${user.role}`);
     
     const where: any = {};
     if (query.teamId) where.teamId = query.teamId;
@@ -138,13 +138,13 @@ export class AlertsService {
     // Role-based filtering
     if (user.role === 'GESTIONNAIRE') {
       where.currentHandlerId = user.id;
-      this.logger.log(`🎯 Filtering for GESTIONNAIRE: ${user.id}`);
+      // this.logger.log(`🎯 Filtering for GESTIONNAIRE: ${user.id}`);
     } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
-      // Filter by contract.teamLeaderId for Chef d'équipe
+      // Filter by contract.teamLeaderId for Chef d'équipe and GESTIONNAIRE_SENIOR
       where.contract = {
         teamLeaderId: user.id
       };
-      this.logger.log(`🎯 Filtering for CHEF_EQUIPE/GESTIONNAIRE_SENIOR by contract.teamLeaderId: ${user.id}`);
+      // this.logger.log(`🎯 Filtering for CHEF_EQUIPE/GESTIONNAIRE_SENIOR by contract.teamLeaderId: ${user.id}`);
     }
     
     const bordereaux = await this.prisma.bordereau.findMany({
@@ -152,8 +152,19 @@ export class AlertsService {
       include: { 
         courriers: true, 
         virement: true, 
-        contract: true, 
-        client: true,
+        contract: { 
+          include: { 
+            teamLeader: { 
+              select: { id: true, fullName: true, role: true } 
+            },
+            client: {
+              select: { id: true, name: true }
+            }
+          } 
+        }, 
+        client: {
+          select: { id: true, name: true }
+        },
         currentHandler: {
           select: {
             id: true,
@@ -168,10 +179,10 @@ export class AlertsService {
       orderBy: { createdAt: 'desc' },
     });
     
-    this.logger.log(`📊 Found ${bordereaux.length} bordereaux after filtering`);
-    if (bordereaux.length > 0) {
-      this.logger.log(`📊 Sample: ${bordereaux[0].reference}, contract.teamLeaderId: ${bordereaux[0].contract?.teamLeaderId}`);
-    }
+    // this.logger.log(`📊 Found ${bordereaux.length} bordereaux after filtering`);
+    // if (bordereaux.length > 0) {
+    //   this.logger.log(`📊 Sample: ${bordereaux[0].reference}, contract.teamLeaderId: ${bordereaux[0].contract?.teamLeaderId}`);
+    // }
 
     // Prepare data for AI SLA prediction
     const aiItems = bordereaux.map(b => ({
@@ -209,12 +220,14 @@ export class AlertsService {
         aiScore = aiPrediction.score;
         reason = aiPrediction.explanation || this.generateReasonFromScore(aiScore, daysSinceReception);
       } else {
-        // Fallback logic
+        // RÈGLE SLA UNIFIÉE: Basée sur pourcentage du délai écoulé
         const slaThreshold = this.getSlaThreshold(b);
-        if (b.statut !== 'CLOTURE' && daysSinceReception > slaThreshold) {
+        const percentageElapsed = (daysSinceReception / slaThreshold) * 100;
+        
+        if (b.statut !== 'CLOTURE' && percentageElapsed > 100) {
           level = 'red';
           reason = 'SLA breach';
-        } else if (b.statut !== 'CLOTURE' && daysSinceReception > slaThreshold - 2) {
+        } else if (b.statut !== 'CLOTURE' && percentageElapsed > 80) {
           level = 'orange';
           reason = 'Risk of delay';
         }
@@ -224,13 +237,17 @@ export class AlertsService {
       let assignedToName = 'Non assigné';
       if (b.currentHandler) {
         assignedToName = b.currentHandler.fullName;
+      } else if (b.chargeCompte) {
+        assignedToName = b.chargeCompte.fullName;
       }
       
       return {
         bordereau: {
           ...b,
           teamName: b.team?.fullName || 'Non assigné',
-          assignedToName
+          assignedToName,
+          currentHandler: b.currentHandler, // Include currentHandler in response
+          contract: b.contract // Include contract with teamLeader
         },
         alertLevel: level,
         reason,
@@ -314,85 +331,172 @@ export class AlertsService {
   }
 
   /**
-   * 2. Team overload detection
+   * 2. Team overload detection - UNIFIED LOGIC with Super Admin
+   * Uses TIME-BASED calculation with delaiReglement (durée de règlement)
+   * Règle: <70% Normal | 70-89% Occupé | ≥90% Surchargé
    */
   async getTeamOverloadAlerts(user: any) {
     this.checkAlertsRole(user);
     
-    const chefs = await this.prisma.user.findMany({ 
-      where: { role: 'CHEF_EQUIPE' },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        capacity: true
+    const now = new Date();
+    
+    // Get all CHEF_EQUIPE with their team members (EXACT SAME QUERY AS SUPER ADMIN)
+    const chefEquipes = await this.prisma.user.findMany({
+      where: {
+        role: 'CHEF_EQUIPE',
+        active: true
+      },
+      include: {
+        teamMembers: {
+          where: { active: true },
+          include: {
+            assignedDocuments: {
+              include: {
+                bordereau: {
+                  select: {
+                    dateReception: true,
+                    delaiReglement: true,
+                    contract: {
+                      select: { delaiReglement: true }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        assignedDocuments: {
+          include: {
+            bordereau: {
+              select: {
+                dateReception: true,
+                delaiReglement: true,
+                contract: {
+                  select: { delaiReglement: true }
+                }
+              }
+            }
+          }
+        }
       }
     });
-    
-    const overloads: any[] = [];
-    
-    for (const chef of chefs) {
-      // Find gestionnaires using teamLeaderId relationship
-      const gestionnaires = await this.prisma.user.findMany({
-        where: { 
-          teamLeaderId: chef.id,
-          role: 'GESTIONNAIRE'
+
+    // Get GESTIONNAIRE_SENIOR and RESPONSABLE_DEPARTEMENT (EXACT SAME AS SUPER ADMIN)
+    const individualTeams = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'] },
+        active: true
+      },
+      include: {
+        assignedDocuments: {
+          include: {
+            bordereau: {
+              select: {
+                dateReception: true,
+                delaiReglement: true,
+                contract: {
+                  select: { delaiReglement: true }
+                }
+              }
+            }
+          }
         },
-        select: { id: true, capacity: true }
-      });
-      
-      const gestionnaireIds = gestionnaires.map(g => g.id);
-      
-      const chefCapacity = chef.capacity || 0;
-      const gestionnairesCapacity = gestionnaires.reduce((sum, g) => sum + (g.capacity || 0), 0);
-      const totalCapacity = chefCapacity + gestionnairesCapacity;
-      
-      if (totalCapacity === 0) continue;
-      
-      const count = await this.prisma.bordereau.count({ 
-        where: { 
-          statut: { notIn: ['CLOTURE', 'PAYE'] },
-          OR: [
-            { teamId: chef.id },
-            { currentHandlerId: { in: [chef.id, ...gestionnaireIds] } }
-          ]
+        contractsAsTeamLeader: {
+          include: {
+            bordereaux: {
+              where: { archived: false },
+              include: {
+                documents: true,
+                contract: true
+              }
+            }
+          }
         }
-      });
+      }
+    });
+
+    const overloads: any[] = [];
+
+    // Helper function: EXACT SAME TIME-BASED CALCULATION AS SUPER ADMIN
+    const calculateTimeBasedUtilization = (documents: any[], capacity: number) => {
+      let totalRequiredPerDay = 0;
       
-      const utilizationRate = (count / totalCapacity) * 100;
-      const teamSize = 1 + gestionnaires.length;
+      for (const doc of documents) {
+        const bordereau = doc.bordereau || doc;
+        const delaiReglement = bordereau?.delaiReglement || bordereau?.contract?.delaiReglement || 30;
+        const dateReception = bordereau?.dateReception || now;
+        
+        const deadlineDate = new Date(dateReception);
+        deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
+        
+        const remainingDays = Math.max(1, Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        
+        totalRequiredPerDay += 1 / remainingDays;
+      }
       
-      this.logger.log(`Team ${chef.fullName}: ${count} dossiers, ${totalCapacity} capacity (Chef: ${chefCapacity}, ${gestionnaires.length} gestionnaires: ${gestionnairesCapacity}), ${Math.round(utilizationRate)}% utilization`);
+      const utilizationRate = capacity > 0 ? Math.round((totalRequiredPerDay / capacity) * 100) : 0;
+      return { utilizationRate, requiredPerDay: totalRequiredPerDay };
+    };
+
+    // Process Chef d'Équipe teams (EXACT SAME LOGIC AS SUPER ADMIN)
+    for (const chef of chefEquipes) {
+      const teamMembers = chef.teamMembers || [];
+      const allDocs = [...chef.assignedDocuments, ...teamMembers.flatMap(m => m.assignedDocuments)];
+      const totalCapacity = chef.capacity + teamMembers.reduce((sum, member) => sum + member.capacity, 0);
       
-      if (utilizationRate > 120) {
-        overloads.push({ 
-          team: {
-            id: chef.id,
-            fullName: chef.fullName,
-            email: chef.email,
-            role: chef.role,
-            createdAt: chef.createdAt,
-            password: ''
-          }, 
-          count, 
-          alert: 'red', 
-          reason: `Surcharge critique: ${count} dossiers / ${totalCapacity} capacité (${teamSize} membres) - +${Math.round((count / totalCapacity - 1) * 100)}%` 
+      const { utilizationRate } = calculateTimeBasedUtilization(allDocs, totalCapacity);
+      const teamSize = teamMembers.length + 1;
+      
+      // this.logger.log(`Team ${chef.fullName}: ${allDocs.length} docs, ${totalCapacity} capacity, ${utilizationRate}% utilization (time-based)`);
+      
+      // UNIFIED THRESHOLDS: <70% Normal | 70-89% Occupé | ≥90% Surchargé
+      if (utilizationRate >= 90) {
+        overloads.push({
+          team: { id: chef.id, fullName: chef.fullName, email: chef.email, role: chef.role, createdAt: chef.createdAt, password: '' },
+          count: allDocs.length,
+          alert: 'red',
+          reason: `Surcharge critique: ${allDocs.length} docs / ${totalCapacity} capacité (${teamSize} membres) - ${utilizationRate}%`
         });
-      } else if (utilizationRate > 80) {
-        overloads.push({ 
-          team: {
-            id: chef.id,
-            fullName: chef.fullName,
-            email: chef.email,
-            role: chef.role,
-            createdAt: chef.createdAt,
-            password: ''
-          }, 
-          count, 
-          alert: 'orange', 
-          reason: `Charge élevée: ${count} dossiers / ${totalCapacity} capacité (${teamSize} membres) - ${Math.round(utilizationRate)}%` 
+      } else if (utilizationRate >= 70) {
+        overloads.push({
+          team: { id: chef.id, fullName: chef.fullName, email: chef.email, role: chef.role, createdAt: chef.createdAt, password: '' },
+          count: allDocs.length,
+          alert: 'orange',
+          reason: `Charge élevée: ${allDocs.length} docs / ${totalCapacity} capacité (${teamSize} membres) - ${utilizationRate}%`
+        });
+      }
+    }
+
+    // Process individual teams (EXACT SAME LOGIC AS SUPER ADMIN)
+    for (const user of individualTeams) {
+      let allDocs = user.assignedDocuments;
+      
+      if (user.role === 'GESTIONNAIRE_SENIOR' && user.contractsAsTeamLeader) {
+        allDocs = user.contractsAsTeamLeader.flatMap(contract => 
+          contract.bordereaux.flatMap(bordereau => 
+            bordereau.documents.map(doc => ({ ...doc, bordereau }))
+          )
+        );
+      }
+      
+      const { utilizationRate } = calculateTimeBasedUtilization(allDocs, user.capacity);
+      
+      // this.logger.log(`Individual ${user.fullName}: ${allDocs.length} docs, ${user.capacity} capacity, ${utilizationRate}% utilization (time-based)`);
+      
+      // UNIFIED THRESHOLDS: <70% Normal | 70-89% Occupé | ≥90% Surchargé
+      if (utilizationRate >= 90) {
+        overloads.push({
+          team: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, createdAt: user.createdAt, password: '' },
+          count: allDocs.length,
+          alert: 'red',
+          reason: `${user.fullName} surchargé - ${allDocs.length} docs (${utilizationRate}% time-based)`
+        });
+      } else if (utilizationRate >= 70) {
+        overloads.push({
+          team: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, createdAt: user.createdAt, password: '' },
+          count: allDocs.length,
+          alert: 'orange',
+          reason: `${user.fullName} charge élevée - ${allDocs.length} docs (${utilizationRate}% time-based)`
         });
       }
     }
@@ -442,7 +546,7 @@ export class AlertsService {
         orderBy: { createdAt: 'asc' }
       });
       
-      this.logger.log(`📊 AI analyzing ${historicalData.length} bordereaux for predictions`);
+      // this.logger.log(`📊 AI analyzing ${historicalData.length} bordereaux for predictions`);
 
       // Prepare data for AI trend forecasting - count bordereaux per day
       const dailyCounts = historicalData.reduce((acc, b) => {
@@ -474,7 +578,7 @@ export class AlertsService {
           value: count
         }));
       
-      this.logger.log(`📊 Prepared ${trendData.length} days of historical data for AI analysis`);
+      // this.logger.log(`📊 Prepared ${trendData.length} days of historical data for AI analysis`);
 
       // Try AI service first
       let forecast: any = {};
@@ -490,8 +594,8 @@ export class AlertsService {
         });
         forecast = forecastResponse.data;
         
-        this.logger.log(`🤖 AI Forecast: ${JSON.stringify(forecast.forecast?.slice(0, 3))}`);
-        this.logger.log(`📈 Trend: ${forecast.trend_direction}, Weekly prediction: ${this.calculateWeeklyPrediction(forecast.forecast || [])}`);
+        // this.logger.log(`🤖 AI Forecast: ${JSON.stringify(forecast.forecast?.slice(0, 3))}`);
+        // this.logger.log(`📈 Trend: ${forecast.trend_direction}, Weekly prediction: ${this.calculateWeeklyPrediction(forecast.forecast || [])}`);
         
         // Get recommendations
         const workload = await this.getCurrentWorkload();
@@ -520,12 +624,17 @@ export class AlertsService {
       const weeklyPrediction = this.calculateWeeklyPrediction(forecast.forecast || []);
       
       // Generate actionable insights
-      const insights = this.generatePredictionInsights(
+      const insights = await this.generatePredictionInsights(
         weeklyPrediction,
         forecast.trend_direction,
         trendData,
         finalConfidence
       );
+      
+      // this.logger.log(`💡 Generated ${insights.length} insights:`);
+      // insights.forEach((insight, i) => {
+      //   this.logger.log(`  ${i+1}. [${insight.priority}] ${insight.message.substring(0, 50)}...`);
+      // });
       
       return {
         forecast: forecast.forecast || [],
@@ -580,64 +689,169 @@ export class AlertsService {
     }, 0) / forecast.length;
     
     const weeklyPrediction = Math.round(avgDaily * 7);
-    this.logger.log(`📊 Calculated weekly prediction: ${weeklyPrediction} (avg daily: ${avgDaily.toFixed(2)})`);
+    // this.logger.log(`📊 Calculated weekly prediction: ${weeklyPrediction} (avg daily: ${avgDaily.toFixed(2)})`);
     
     return Math.max(0, weeklyPrediction);
   }
 
-  private generatePredictionInsights(weeklyPrediction: number, trendDirection: string, historicalData: any[], confidence: number): Array<{type: string; icon: string; message: string; action: string}> {
-    const insights: Array<{type: string; icon: string; message: string; action: string}> = [];
+  private async generatePredictionInsights(weeklyPrediction: number, trendDirection: string, historicalData: any[], confidence: number): Promise<Array<{type: string; icon: string; message: string; action: string; priority: string}>> {
+    const insights: Array<{type: string; icon: string; message: string; action: string; priority: string}> = [];
     const avgHistorical = historicalData.reduce((sum, d) => sum + d.value, 0) / historicalData.length;
-    const percentChange = ((weeklyPrediction / 7 - avgHistorical) / avgHistorical) * 100;
+    const dailyAvg = weeklyPrediction / 7;
+    const percentChange = ((dailyAvg - avgHistorical) / avgHistorical) * 100;
+    
+    // Get current team capacity and workload
+    const teams = await this.prisma.user.findMany({
+      where: { role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] } },
+      select: { capacity: true, role: true, id: true }
+    });
+    const totalCapacity = teams.reduce((sum, t) => sum + (t.capacity || 0), 0);
+    const gestionnaireCount = teams.filter(t => t.role === 'GESTIONNAIRE').length;
+    
+    // Get current active workload
+    const activeWorkload = await this.prisma.bordereau.count({
+      where: { statut: { notIn: ['CLOTURE', 'PAYE'] } }
+    });
+    
+    // Calculate capacity utilization
+    const currentUtilization = totalCapacity > 0 ? (activeWorkload / totalCapacity) * 100 : 0;
+    
+    // Calculate required resources based on prediction
+    const avgProcessingPerPerson = totalCapacity > 0 && gestionnaireCount > 0 ? (avgHistorical * 7) / gestionnaireCount : 10;
+    const requiredStaff = Math.ceil(weeklyPrediction / avgProcessingPerPerson);
+    const staffGap = requiredStaff - gestionnaireCount;
 
-    // Workload insight
-    if (weeklyPrediction > avgHistorical * 7 * 1.2) {
+    // Workload prediction insights with actionable recommendations
+    if (percentChange > 50) {
+      const extraBordereaux = Math.round(weeklyPrediction - avgHistorical * 7);
+      const hoursNeeded = Math.round(extraBordereaux * 2); // Assume 2h per bordereau
+      insights.push({
+        type: 'critical',
+        icon: '🚨',
+        message: `Surcharge critique: +${Math.round(percentChange)}% (${Math.round(weeklyPrediction)} bordereaux prévus vs ${Math.round(avgHistorical * 7)} habituels)`,
+        action: staffGap > 0 
+          ? `ACTION URGENTE: Recruter ${staffGap} gestionnaire(s) OU mobiliser ${Math.ceil(hoursNeeded / 40)} ressources temporaires (${hoursNeeded}h nécessaires)`
+          : `PLAN D'URGENCE: Activer heures supplémentaires (${hoursNeeded}h), prioriser dossiers critiques, reporter tâches non-urgentes`,
+        priority: 'high'
+      });
+    } else if (percentChange > 20) {
+      const extraBordereaux = Math.round(weeklyPrediction - avgHistorical * 7);
       insights.push({
         type: 'warning',
         icon: '⚠️',
-        message: `Charge prévue +${Math.round(percentChange)}% supérieure à la moyenne`,
-        action: 'Prévoir des ressources supplémentaires'
+        message: `Charge élevée: +${Math.round(percentChange)}% (${Math.round(dailyAvg)} bordereaux/jour vs ${Math.round(avgHistorical)} habituels)`,
+        action: staffGap > 0
+          ? `RECOMMANDATION: Prévoir ${staffGap} ressource(s) temporaire(s) OU réduire congés planifiés pour absorber ${extraBordereaux} dossiers supplémentaires`
+          : `OPTIMISATION: Automatiser tâches répétitives, réduire réunions non-essentielles, focus sur productivité`,
+        priority: 'medium'
       });
-    } else if (weeklyPrediction < avgHistorical * 7 * 0.8) {
+    } else if (percentChange < -20) {
+      const savedHours = Math.round((avgHistorical * 7 - weeklyPrediction) * 2);
       insights.push({
         type: 'info',
-        icon: '📉',
-        message: `Charge prévue ${Math.round(Math.abs(percentChange))}% inférieure à la moyenne`,
-        action: 'Opportunité pour formation ou maintenance'
+        icon: '💡',
+        message: `Charge réduite: ${Math.round(Math.abs(percentChange))}% (${Math.round(weeklyPrediction)} bordereaux vs ${Math.round(avgHistorical * 7)} habituels)`,
+        action: `OPPORTUNITÉ: Utiliser ${savedHours}h libérées pour formation équipe, audit qualité, amélioration processus, ou maintenance système`,
+        priority: 'low'
       });
     } else {
       insights.push({
         type: 'success',
         icon: '✅',
-        message: 'Charge prévue dans les normes habituelles',
-        action: 'Maintenir les ressources actuelles'
+        message: `Charge stable: ${Math.round(weeklyPrediction)} bordereaux prévus (variation: ${Math.round(Math.abs(percentChange))}%)`,
+        action: `MAINTIEN: Équipe actuelle (${gestionnaireCount} gestionnaires, capacité ${totalCapacity}) adaptée. Continuer surveillance quotidienne`,
+        priority: 'low'
+      });
+    }
+    
+    // Capacity utilization insight
+    if (currentUtilization > 90) {
+      insights.push({
+        type: 'critical',
+        icon: '🔴',
+        message: `Capacité saturée: ${Math.round(currentUtilization)}% (${activeWorkload}/${totalCapacity} dossiers actifs)`,
+        action: `CRITIQUE: Système proche de la saturation. Augmenter capacité de ${Math.ceil((weeklyPrediction - totalCapacity) / 10)} gestionnaires OU clôturer ${activeWorkload - Math.floor(totalCapacity * 0.8)} dossiers en urgence`,
+        priority: 'high'
+      });
+    } else if (currentUtilization > 75) {
+      insights.push({
+        type: 'warning',
+        icon: '🟠',
+        message: `Capacité élevée: ${Math.round(currentUtilization)}% (${activeWorkload}/${totalCapacity} dossiers actifs)`,
+        action: `ATTENTION: Préparer plan de contingence. Capacité disponible: ${totalCapacity - activeWorkload} dossiers. Anticiper renforcement si tendance continue`,
+        priority: 'medium'
+      });
+    } else if (currentUtilization < 50) {
+      const availableCapacity = totalCapacity - activeWorkload;
+      insights.push({
+        type: 'info',
+        icon: '🟢',
+        message: `Capacité disponible: ${Math.round(currentUtilization)}% (${activeWorkload}/${totalCapacity} dossiers actifs)`,
+        action: `OPPORTUNITÉ: ${availableCapacity} dossiers de capacité libre. Accepter nouveaux clients OU accélérer traitement dossiers en attente`,
+        priority: 'low'
       });
     }
 
-    // Trend insight
+    // Trend-based strategic insights with specific actions
     if (trendDirection === 'increasing') {
+      const projectedIncrease = Math.round(weeklyPrediction * 0.15);
+      const weeksUntilCapacity = totalCapacity > 0 ? Math.floor((totalCapacity - activeWorkload) / (weeklyPrediction / 4)) : 0;
       insights.push({
         type: 'warning',
         icon: '📈',
-        message: 'Tendance croissante détectée',
-        action: 'Anticiper une augmentation continue'
+        message: `Tendance croissante: +${projectedIncrease} bordereaux prévus dans 2 semaines (analyse sur ${historicalData.length} jours)`,
+        action: weeksUntilCapacity > 0 && weeksUntilCapacity < 4
+          ? `URGENT: Capacité saturée dans ${weeksUntilCapacity} semaine(s). Lancer recrutement MAINTENANT ou refuser nouveaux contrats`
+          : `PLANIFICATION: Préparer scaling (recrutement, formation, processus). Budget: ${Math.ceil(projectedIncrease / 50)} gestionnaires supplémentaires`,
+        priority: 'high'
       });
     } else if (trendDirection === 'decreasing') {
+      const projectedDecrease = Math.round(weeklyPrediction * 0.15);
       insights.push({
         type: 'info',
         icon: '📉',
-        message: 'Tendance décroissante observée',
-        action: 'Charge de travail en diminution'
+        message: `Tendance décroissante: -${projectedDecrease} bordereaux prévus dans 2 semaines`,
+        action: `OPTIMISATION: Période calme idéale pour audit qualité (${Math.round(projectedDecrease * 0.5)}h disponibles), formation équipe, refonte processus inefficaces`,
+        priority: 'low'
+      });
+    } else {
+      insights.push({
+        type: 'info',
+        icon: '➡️',
+        message: `Tendance stable: variation <5% sur ${historicalData.length} jours`,
+        action: `MAINTIEN: Processus actuels efficaces. Surveillance quotidienne + revue hebdomadaire des KPIs. Pas d'action immédiate requise`,
+        priority: 'low'
       });
     }
 
-    // Confidence insight
+    // Data quality and confidence insights with improvement actions
     if (confidence < 0.6) {
+      const daysNeeded = Math.max(0, 30 - historicalData.length);
       insights.push({
         type: 'warning',
         icon: '⚡',
-        message: 'Prévision basée sur données limitées',
-        action: 'Surveiller de près les variations'
+        message: `Fiabilité limitée: ${historicalData.length} jours de données (${Math.round(confidence * 100)}% confiance)`,
+        action: daysNeeded > 0
+          ? `AMÉLIORATION: Collecter ${daysNeeded} jours supplémentaires (ETA: ${Math.ceil(daysNeeded / 7)} semaines). En attendant: valider prévisions manuellement + marge sécurité +20%`
+          : `QUALITÉ DONNÉES: Vérifier cohérence saisies, éliminer anomalies, augmenter fréquence mise à jour (quotidienne recommandée)`,
+        priority: 'medium'
+      });
+    } else if (confidence > 0.8) {
+      const nextReviewDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR');
+      insights.push({
+        type: 'success',
+        icon: '🎯',
+        message: `Haute fiabilité: ${historicalData.length} jours de données (${Math.round(confidence * 100)}% confiance)`,
+        action: `PLANIFICATION STRATÉGIQUE: Prévisions fiables pour budgets, recrutement, contrats clients. Prochaine revue: ${nextReviewDate}`,
+        priority: 'low'
+      });
+    } else {
+      insights.push({
+        type: 'info',
+        icon: '📊',
+        message: `Fiabilité moyenne: ${historicalData.length} jours de données (${Math.round(confidence * 100)}% confiance)`,
+        action: `AMÉLIORATION CONTINUE: Prévisions utilisables avec marge prudence ±15%. Continuer collecte données pour précision accrue`,
+        priority: 'low'
       });
     }
 
@@ -734,26 +948,36 @@ export class AlertsService {
   }
 
   /**
-   * 5b. Query alert history/trends
+   * 5b. Query alert history/trends - WITH UNIFIED SLA LOGIC
    */
   async getAlertHistory(query: any, user: any) {
     this.checkAlertsRole(user);
+    
     const where: any = {};
+    
+    // Handle resolved filter from query (convert string to boolean)
+    if (query.resolved !== undefined) {
+      where.resolved = query.resolved === 'true' || query.resolved === true;
+    } else {
+      where.resolved = false; // Default to unresolved
+    }
+    
     if (query.bordereauId) where.bordereauId = query.bordereauId;
-    if (query.userId) where.userId = query.userId;
     if (query.alertLevel) where.alertLevel = query.alertLevel;
     if (query.fromDate || query.toDate) {
       where.createdAt = {};
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
     }
+    
     const alerts = await this.prisma.alertLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: { 
         bordereau: { 
           include: { 
-            client: true
+            client: true,
+            contract: true
           } 
         }, 
         document: true, 
@@ -761,10 +985,45 @@ export class AlertsService {
       },
     });
     
-    return alerts.map(alert => {
+    // Role-based filtering AFTER fetch (to handle alerts without bordereaux)
+    const filteredAlerts = alerts.filter(alert => {
+      // SUPER_ADMIN sees all
+      if (user.role === 'SUPER_ADMIN') return true;
+      
+      // Alerts without bordereau: only show if no bordereau exists
+      if (!alert.bordereau) return false;
+      
+      // GESTIONNAIRE: only their assigned bordereaux
+      if (user.role === 'GESTIONNAIRE') {
+        return alert.bordereau.currentHandlerId === user.id;
+      }
+      
+      // CHEF_EQUIPE/GESTIONNAIRE_SENIOR: only their team's bordereaux
+      if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+        return alert.bordereau.contract?.teamLeaderId === user.id;
+      }
+      
+      return false;
+    });
+    
+    // Remove duplicates: keep only the LATEST alert per bordereau
+    const uniqueAlerts = new Map();
+    filteredAlerts.forEach(alert => {
+      const bordereauId = alert.bordereauId;
+      if (!uniqueAlerts.has(bordereauId) || 
+          new Date(alert.createdAt) > new Date(uniqueAlerts.get(bordereauId).createdAt)) {
+        uniqueAlerts.set(bordereauId, alert);
+      }
+    });
+    const deduplicatedAlerts = Array.from(uniqueAlerts.values());
+    
+    const now = new Date();
+    
+    // this.logger.log(`🔍 Alert History - Filtered ${deduplicatedAlerts.length} alerts (${filteredAlerts.length} before deduplication) for user ${user.id} (${user.role})`);
+    
+    return deduplicatedAlerts.map(alert => {
       let resolutionTime: number | null = null;
       if (alert.resolved && alert.resolvedAt) {
-        // Calculate from bordereau dateReception to resolution
         const startTime = alert.bordereau?.dateReception 
           ? new Date(alert.bordereau.dateReception).getTime()
           : new Date(alert.createdAt).getTime();
@@ -773,12 +1032,41 @@ export class AlertsService {
         resolutionTime = hours > 0 ? hours : null;
       }
       
+      // UNIFIED SLA LOGIC: Percentage-based using delaiReglement (time factor)
+      let calculatedAlertLevel = alert.alertLevel;
+      let daysSinceReception = 0;
+      let slaThreshold = 30;
+      let percentElapsed = 0;
+      
+      if (alert.bordereau && alert.bordereau.dateReception) {
+        daysSinceReception = Math.round(
+          (now.getTime() - new Date(alert.bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        slaThreshold = this.getSlaThreshold(alert.bordereau);
+        percentElapsed = (daysSinceReception / slaThreshold) * 100;
+        
+        // UNIFIED RULE: ≤80% = green, >80% = orange/red
+        if (alert.bordereau.statut !== 'CLOTURE') {
+          if (percentElapsed > 100) {
+            calculatedAlertLevel = 'red';
+          } else if (percentElapsed > 80) {
+            calculatedAlertLevel = 'orange';
+          } else {
+            calculatedAlertLevel = 'green';
+          }
+        }
+      }
+      
       return {
         ...alert,
+        alertLevel: calculatedAlertLevel,
         clientName: alert.bordereau?.client?.name || null,
         bordereauReference: alert.bordereau?.reference || null,
         resolvedBy: alert.user?.fullName || (alert.userId ? 'Utilisateur' : null),
-        resolutionTime
+        resolutionTime,
+        daysSinceReception,
+        slaThreshold,
+        percentElapsed: Math.round(percentElapsed)
       };
     });
   }
@@ -1136,51 +1424,50 @@ export class AlertsService {
   async getChartsData(user: any) {
     this.checkAlertsRole(user);
     
-    const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const now = new Date();
     
-    // Alerts by day
-    const alertsByDay = await this.prisma.alertLog.groupBy({
-      by: ['createdAt', 'alertLevel'],
-      where: { createdAt: { gte: last7Days } },
-      _count: { id: true }
+    // Get ALL bordereaux with role-based filtering
+    const where: any = { archived: false };
+    if (user.role === 'GESTIONNAIRE') {
+      where.currentHandlerId = user.id;
+    } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+      where.contract = { teamLeaderId: user.id };
+    }
+    
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where,
+      include: { contract: true, client: true }
     });
     
-    // Process data for charts
-    const dayMap = new Map();
-    alertsByDay.forEach(item => {
-      const date = new Date(item.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-      if (!dayMap.has(date)) {
-        dayMap.set(date, { date, critical: 0, warning: 0, normal: 0 });
+    // Calculate SLA status for each bordereau
+    let ontimeCount = 0;
+    let atriskCount = 0;
+    let overdueCount = 0;
+    
+    bordereaux.forEach(b => {
+      const daysSinceReception = b.dateReception 
+        ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) 
+        : 0;
+      const slaThreshold = this.getSlaThreshold(b);
+      const percentElapsed = (daysSinceReception / slaThreshold) * 100;
+      
+      if (percentElapsed > 100) {
+        overdueCount++;
+      } else if (percentElapsed > 80) {
+        atriskCount++;
+      } else {
+        ontimeCount++;
       }
-      const dayData = dayMap.get(date);
-      if (item.alertLevel === 'red') dayData.critical += item._count.id;
-      else if (item.alertLevel === 'orange') dayData.warning += item._count.id;
-      else dayData.normal += item._count.id;
     });
-    
-    // Alerts by type
-    const alertsByType = await this.prisma.alertLog.groupBy({
-      by: ['alertType'],
-      where: { createdAt: { gte: last7Days } },
-      _count: { id: true }
-    });
-    
-    const typeColors = {
-      'SLA_BREACH': '#ff4d4f',
-      'PERFORMANCE': '#faad14',
-      'WORKLOAD': '#722ed1',
-      'CLAIM': '#1890ff',
-      'SYSTEM': '#52c41a'
-    };
     
     return {
-      alertsByDay: Array.from(dayMap.values()),
-      alertsByType: alertsByType.map(item => ({
-        name: item.alertType.replace('_', ' '),
-        value: item._count.id,
-        color: typeColors[item.alertType] || '#d9d9d9'
-      })),
-      slaComplianceChart: await this.generateSlaComplianceChart(last7Days)
+      alertsByDay: [],
+      alertsByType: [
+        { name: 'À temps', value: ontimeCount, color: '#52c41a' },
+        { name: 'À risque', value: atriskCount, color: '#faad14' },
+        { name: 'En retard', value: overdueCount, color: '#ff4d4f' }
+      ],
+      slaComplianceChart: await this.generateSlaComplianceChart(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
     };
   }
 }

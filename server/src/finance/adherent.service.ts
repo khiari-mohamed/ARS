@@ -95,6 +95,7 @@ export class AdherentService {
       assurance: newAdherent.assurance,
       statut: newAdherent.statut,
       duplicateRib: !!duplicateRib,
+      societe: newAdherent.client.name,
       client: {
         id: newAdherent.client.id,
         name: newAdherent.client.name
@@ -171,6 +172,7 @@ export class AdherentService {
       assurance: updated.assurance,
       statut: updated.statut,
       duplicateRib,
+      societe: updated.client.name,
       client: { id: updated.client.id, name: updated.client.name }
     };
   }
@@ -346,6 +348,7 @@ export class AdherentService {
         assurance: adherent.assurance,
         statut: adherent.statut,
         duplicateRib: ribCounts.get(adherent.rib)! > 1,
+        societe: adherent.client.name,
         client: {
           id: adherent.client.id,
           name: adherent.client.name

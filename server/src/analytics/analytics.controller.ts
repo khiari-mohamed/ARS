@@ -147,9 +147,9 @@ export class AnalyticsController {
   }
 
   @Get('alerts')
-  async getAlerts(@Req() req: any) {
+  async getAlerts(@Query() query: any, @Req() req: any) {
     const user = getUserFromRequest(req);
-    return this.analyticsService.getAlerts(user);
+    return this.analyticsService.getAlerts(user, query);
   }
 
   @Get('recommendations')
@@ -305,6 +305,12 @@ export class AnalyticsController {
 
   // === NEW AI-POWERED ANALYTICS ENDPOINTS ===
   
+  @Post('ai/alert-solution')
+  async getAlertSolution(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getAIAlertSolution(payload);
+  }
+
   @Post('ai/root-cause-analysis')
   async getRootCauseAnalysis(@Body() payload: any, @Req() req: any) {
     const user = getUserFromRequest(req);

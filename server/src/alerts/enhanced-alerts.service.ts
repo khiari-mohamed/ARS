@@ -60,10 +60,13 @@ export class EnhancedAlertsService {
       return;
     }
 
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+    const isSecure = smtpPort === 465;
+
     this.emailTransporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '465'),
-      secure: process.env.SMTP_SECURE === 'true',
+      port: smtpPort,
+      secure: isSecure,
       auth: {
         user: smtpUser,
         pass: process.env.SMTP_PASS
@@ -72,12 +75,14 @@ export class EnhancedAlertsService {
       greetingTimeout: 15000,
       socketTimeout: 15000,
       tls: {
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      },
+      requireTLS: !isSecure
     });
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  // @Cron(CronExpression.EVERY_HOUR) // DISABLED - Email spam issue
   async processAlerts() {
     this.logger.log('Processing scheduled alerts...');
 
@@ -107,26 +112,24 @@ export class EnhancedAlertsService {
       const daysElapsed = Math.floor(
         (Date.now() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
       );
-      const daysRemaining = bordereau.delaiReglement - daysElapsed;
+      const delaiReglement = bordereau.delaiReglement || 30;
+      const percentageElapsed = (daysElapsed / delaiReglement) * 100;
 
-      const bordereauWithDays = { ...bordereau, daysRemaining, daysElapsed };
+      const bordereauWithDays = { ...bordereau, daysRemaining: delaiReglement - daysElapsed, daysElapsed };
 
-      // Check SLA risk
-      if (daysRemaining <= 3 && daysRemaining > 0) {
-        await this.triggerAlert('SLA_RISK', {
-          bordereauId: bordereau.id,
-          reference: bordereau.reference,
-          daysRemaining,
-          clientName: bordereau.client?.name
-        });
-      }
-
-      // Check SLA breach
-      if (daysRemaining <= 0) {
+      // RÈGLE SLA UNIFIÉE: Basée sur pourcentage du délai écoulé
+      if (percentageElapsed > 100) {
         await this.triggerAlert('SLA_BREACH', {
           bordereauId: bordereau.id,
           reference: bordereau.reference,
-          daysOverdue: Math.abs(daysRemaining),
+          daysOverdue: Math.abs(delaiReglement - daysElapsed),
+          clientName: bordereau.client?.name
+        });
+      } else if (percentageElapsed > 80) {
+        await this.triggerAlert('SLA_RISK', {
+          bordereauId: bordereau.id,
+          reference: bordereau.reference,
+          daysRemaining: delaiReglement - daysElapsed,
           clientName: bordereau.client?.name
         });
       }

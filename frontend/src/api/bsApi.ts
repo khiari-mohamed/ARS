@@ -115,8 +115,8 @@ export const fetchRebalancingSuggestions = async () => {
 };
 
 // Apply Rebalancing
-export const applyRebalancing = async (bsId: string, toUserId: string) => {
-  const { data } = await axios.post(`${API_BASE}/apply-rebalancing`, { bsId, toUserId });
+export const applyRebalancing = async (suggestion: any, toUserId: string) => {
+  const { data } = await axios.post(`${API_BASE}/apply-rebalancing`, { suggestion, toUserId });
   return data;
 };
 

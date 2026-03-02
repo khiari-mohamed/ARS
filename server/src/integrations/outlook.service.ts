@@ -17,17 +17,22 @@ export class OutlookService { // Updated for TypeScript compilation
         return;
       }
 
+      const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+      const isSecure = smtpPort === 465;
+
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gnet.tn',
-        port: parseInt(process.env.SMTP_PORT || '465'),
-        secure: process.env.SMTP_SECURE === 'true' || true,
+        port: smtpPort,
+        secure: isSecure,
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS
         },
         tls: {
-          rejectUnauthorized: false
-        }
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2'
+        },
+        requireTLS: !isSecure
       });
 
       await this.transporter.verify();

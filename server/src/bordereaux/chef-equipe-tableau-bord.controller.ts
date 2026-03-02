@@ -553,7 +553,7 @@ export class ChefEquipeTableauBordController {
               }
             });
           } catch (error) {
-            console.log(`Failed to create history for document ${docId}:`, error.message);
+            // console.log(`Failed to create history for document ${docId}:`, error.message);
           }
         }
       }
@@ -597,7 +597,7 @@ export class ChefEquipeTableauBordController {
                 }
               });
             } catch (error) {
-              console.log(`Failed to create history for document ${doc.id}:`, error.message);
+              // console.log(`Failed to create history for document ${doc.id}:`, error.message);
             }
           }
         }
@@ -824,10 +824,7 @@ export class ChefEquipeTableauBordController {
           return { success: false, message: 'Accès refusé: Ce document ne vous est pas assigné' };
         }
         
-        // Check if gestionnaire already modified status once
-        if (document.statusModifiedByGestionnaire) {
-          return { success: false, message: 'Vous avez déjà modifié le statut de ce dossier une fois. Vous ne pouvez pas le modifier à nouveau.' };
-        }
+        // REMOVED: statusModifiedByGestionnaire check - gestionnaires can now modify after reassignment
       }
       
       // Update document status and set flag if gestionnaire
@@ -913,7 +910,7 @@ export class ChefEquipeTableauBordController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDossierPDF(@Param('dossierId') dossierId: string, @Req() req: any) {
-    console.log(`🔍 Looking for document ID: ${dossierId}`);
+    // console.log(`🔍 Looking for document ID: ${dossierId}`);
     
     const document = await this.prisma.document.findUnique({
       where: { id: dossierId },
@@ -923,7 +920,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (!document) {
-      console.log(`❌ Document not found: ${dossierId}`);
+      // console.log(`❌ Document not found: ${dossierId}`);
       return { 
         success: false, 
         error: 'Document non trouvé',
@@ -931,7 +928,7 @@ export class ChefEquipeTableauBordController {
       };
     }
     
-    console.log(`✅ Found document: ${document.name}, path: ${document.path}`);
+    // console.log(`✅ Found document: ${document.name}, path: ${document.path}`);
 
     // Check if document has a valid file path
     if (!document.path || document.path.includes('placeholder')) {
@@ -947,7 +944,7 @@ export class ChefEquipeTableauBordController {
     const pdfUrl = `/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/${cleanPath}`;
 
     // Return PDF URL or path for viewing
-    console.log(`📄 Returning PDF URL: ${pdfUrl}`);
+    // console.log(`📄 Returning PDF URL: ${pdfUrl}`);
     return {
       success: true,
       pdfUrl: pdfUrl,
@@ -981,26 +978,26 @@ export class ChefEquipeTableauBordController {
       }
       
       if (!fullPath) {
-        console.log('❌ No file path provided');
+        // console.log('❌ No file path provided');
         return res.status(400).json({ error: 'Invalid file path' });
       }
       
-      console.log(`📄 Attempting to serve file from path: ${fullPath}`);
+      // console.log(`📄 Attempting to serve file from path: ${fullPath}`);
       
       const filename = path.basename(fullPath);
-      console.log(`📄 Extracted filename: ${filename}`);
+      // console.log(`📄 Extracted filename: ${filename}`);
       
       const foundPath = await this.findFileInUploads(filename);
       
       if (foundPath) {
-        console.log(`✅ Found file at: ${foundPath}`);
+        // console.log(`✅ Found file at: ${foundPath}`);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Accept-Ranges', 'bytes');
         return res.sendFile(foundPath);
       } else {
-        console.log(`❌ File not found: ${filename}`);
+        // console.log(`❌ File not found: ${filename}`);
         return res.status(404).json({ error: 'File not found' });
       }
     } catch (error) {
@@ -1031,7 +1028,7 @@ export class ChefEquipeTableauBordController {
           }
         }
       } catch (error) {
-        console.log(`Error reading directory ${dir}:`, error.message);
+        // console.log(`Error reading directory ${dir}:`, error.message);
       }
       
       return null;
@@ -1190,7 +1187,9 @@ export class ChefEquipeTableauBordController {
       });
 
       const traites = documents.filter(doc => doc.status === 'TRAITE').length;
-      const enCours = documents.filter(doc => doc.status === 'EN_COURS').length;
+      const enCours = documents.filter(doc => 
+        doc.status === 'EN_COURS' || doc.status === 'SCANNE' || doc.status === 'UPLOADED' || !doc.status
+      ).length;
       const retournes = documents.filter(doc => doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN').length;
 
       let returnedBy: string | null = null;
@@ -1232,6 +1231,7 @@ export class ChefEquipeTableauBordController {
   @Get('gestionnaire-assignments-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireAssignmentsDossiers(@Req() req: any) {
+    // console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
     
     // Filter gestionnaires based on user role
@@ -1312,6 +1312,7 @@ export class ChefEquipeTableauBordController {
       })
     );
 
+    // console.log('🔍 [BACKEND] Returning assignments:', assignments.length, 'gestionnaires (filtered from', gestionnaires.length, 'total)');
     return assignments;
   }
 
@@ -1385,7 +1386,7 @@ export class ChefEquipeTableauBordController {
     const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
     // Log export action (simplified logging)
-    console.log(`Export Excel - ${documents.length} dossiers${typeFilter && typeFilter !== 'Tous types' ? ` (filtre: ${typeFilter})` : ''} at ${new Date().toISOString()}`);
+    // console.log(`Export Excel - ${documents.length} dossiers${typeFilter && typeFilter !== 'Tous types' ? ` (filtre: ${typeFilter})` : ''} at ${new Date().toISOString()}`);
 
     // Set response headers for Excel download
     const fileName = `Dossiers_En_Cours_${typeFilter && typeFilter !== 'Tous types' ? typeFilter.replace(' ', '_') + '_' : ''}${new Date().toISOString().split('T')[0]}.xlsx`;

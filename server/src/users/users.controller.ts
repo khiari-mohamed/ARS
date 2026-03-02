@@ -51,16 +51,22 @@ export class UsersController {
   @Get('gestionnaires')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE)
   async getGestionnaires(@Request() req) {
+    // console.log('🔍 Getting gestionnaires endpoint hit for user:', req.user?.role);
     try {
       const filters = {
         role: 'GESTIONNAIRE',
         active: true
       };
       
+      // console.log('🔍 Querying users with GESTIONNAIRE role for user:', req.user?.role);
       const users = await this.usersService.findAll(filters);
       
+      // console.log('✅ Found users:', users.map(u => ({ id: u.id, fullName: u.fullName, email: u.email, role: u.role })));
+      
       // Return users without password
-      return users.map(({ password, ...user }) => user);
+      const result = users.map(({ password, ...user }) => user);
+      // console.log('✅ Gestionnaires found:', result.length, result.map(u => ({ id: u.id, fullName: u.fullName, email: u.email, role: u.role })));
+      return result;
     } catch (error) {
       console.error('Error fetching gestionnaires:', error);
       return [];

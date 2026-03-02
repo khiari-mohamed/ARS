@@ -755,10 +755,10 @@ export class DashboardService {
             timeout: 300000
           });
           
-          console.log(`✅ Dashboard AI authenticated with ${cred.username}`);
+      // console.log(`✅ Dashboard AI authenticated with ${cred.username}`);
           return tokenResponse.data.access_token;
         } catch (credError: any) {
-          console.warn(`❌ Dashboard AI auth failed with ${cred.username}: ${credError.response?.status || credError.message}`);
+          // console.warn(`❌ Dashboard AI auth failed with ${cred.username}: ${credError.response?.status || credError.message}`);
           continue;
         }
       }
@@ -1198,20 +1198,51 @@ export class DashboardService {
   }
   
   private async getDepartmentStatistics() {
-    // Use document-based statistics for consistency
-    const stats = await this.prisma.document.groupBy({
-      by: ['status'],
-      where: {
-        bordereau: { archived: false }
-      },
-      _count: { id: true }
+    // Get statistics based on user departments who are handling bordereaux
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: { archived: false },
+      include: {
+        currentHandler: {
+          select: { department: true }
+        }
+      }
     });
     
-    return stats.map(s => ({
-      department: this.mapDocumentStatusToDepartment(s.status),
-      status: s.status,
-      count: s._count.id
-    }));
+    // Group by user department
+    const deptMap = new Map<string, { status: string; count: number }[]>();
+    
+    bordereaux.forEach(b => {
+      const dept = b.currentHandler?.department || 'Non Affecté';
+      const status = b.statut;
+      
+      if (!deptMap.has(dept)) {
+        deptMap.set(dept, []);
+      }
+      
+      const deptStats = deptMap.get(dept)!;
+      const existingStat = deptStats.find(s => s.status === status);
+      
+      if (existingStat) {
+        existingStat.count++;
+      } else {
+        deptStats.push({ status, count: 1 });
+      }
+    });
+    
+    // Convert to array format
+    const result: Array<{ department: string; status: string; count: number }> = [];
+    
+    deptMap.forEach((stats, dept) => {
+      stats.forEach(stat => {
+        result.push({
+          department: dept,
+          status: stat.status,
+          count: stat.count
+        });
+      });
+    });
+    
+    return result;
   }
   
   private async getAllTeamsAggregatedData() {
@@ -1281,9 +1312,10 @@ export class DashboardService {
       'EN_COURS': 'Gestionnaire',
       'TRAITE': 'Gestionnaire',
       'REJETE': 'Gestionnaire',
-      'RETOUR_ADMIN': 'Chef d\'Équipe'
+      'RETOUR_ADMIN': 'Chef d\'Équipe',
+      'SCANNE': 'Service SCAN'
     };
-    return mapping[status] || 'Inconnu';
+    return mapping[status] || status;
   }
   
   private async getClientStatistics() {

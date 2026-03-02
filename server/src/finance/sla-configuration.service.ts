@@ -165,19 +165,19 @@ export class SlaConfigurationService {
 
     const now = new Date();
     const dateReception = bordereau.dateReception;
-    const heuresEcoulees = (now.getTime() - dateReception.getTime()) / (1000 * 60 * 60);
+    // UNIFIED SLA LOGIC: Convert hours to days and use percentage
+    const joursEcoules = Math.floor((now.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24));
+    const delaiJours = Math.floor(seuils.delaiTraitement / 24); // Convert hours to days
 
-    const seuilAlerte = seuils.delaiTraitement * (seuils.seuilAlerte / 100);
-    const seuilCritique = seuils.delaiTraitement * (seuils.seuilCritique / 100);
+    const pourcentage = (joursEcoules / delaiJours) * 100;
 
     let status: 'OK' | 'ALERTE' | 'CRITIQUE' | 'DEPASSEMENT' = 'OK';
-    let pourcentage = (heuresEcoulees / seuils.delaiTraitement) * 100;
 
-    if (heuresEcoulees > seuils.delaiTraitement) {
+    if (pourcentage > 100) {
       status = 'DEPASSEMENT';
-    } else if (heuresEcoulees > seuilCritique) {
+    } else if (pourcentage > 80) {
       status = 'CRITIQUE';
-    } else if (heuresEcoulees > seuilAlerte) {
+    } else if (pourcentage > 60) {
       status = 'ALERTE';
     }
 
@@ -185,9 +185,9 @@ export class SlaConfigurationService {
       bordereauId,
       status,
       pourcentage: Math.round(pourcentage),
-      heuresEcoulees: Math.round(heuresEcoulees),
-      delaiMax: seuils.delaiTraitement,
-      heuresRestantes: Math.max(0, seuils.delaiTraitement - heuresEcoulees),
+      joursEcoules: Math.round(joursEcoules),
+      delaiMax: delaiJours,
+      joursRestants: Math.max(0, delaiJours - joursEcoules),
       slaConfig,
       needsAlert: status !== 'OK'
     };
@@ -210,19 +210,19 @@ export class SlaConfigurationService {
 
     const now = new Date();
     const dateCreation = ordreVirement.dateCreation;
-    const heuresEcoulees = (now.getTime() - dateCreation.getTime()) / (1000 * 60 * 60);
+    // UNIFIED SLA LOGIC: Convert hours to days and use percentage
+    const joursEcoules = Math.floor((now.getTime() - dateCreation.getTime()) / (1000 * 60 * 60 * 24));
+    const delaiJours = Math.floor(seuils.delaiVirement / 24); // Convert hours to days
 
-    const seuilAlerte = seuils.delaiVirement * (seuils.seuilAlerte / 100);
-    const seuilCritique = seuils.delaiVirement * (seuils.seuilCritique / 100);
+    const pourcentage = (joursEcoules / delaiJours) * 100;
 
     let status: 'OK' | 'ALERTE' | 'CRITIQUE' | 'DEPASSEMENT' = 'OK';
-    let pourcentage = (heuresEcoulees / seuils.delaiVirement) * 100;
 
-    if (heuresEcoulees > seuils.delaiVirement) {
+    if (pourcentage > 100) {
       status = 'DEPASSEMENT';
-    } else if (heuresEcoulees > seuilCritique) {
+    } else if (pourcentage > 80) {
       status = 'CRITIQUE';
-    } else if (heuresEcoulees > seuilAlerte) {
+    } else if (pourcentage > 60) {
       status = 'ALERTE';
     }
 
@@ -230,9 +230,9 @@ export class SlaConfigurationService {
       ordreVirementId,
       status,
       pourcentage: Math.round(pourcentage),
-      heuresEcoulees: Math.round(heuresEcoulees),
-      delaiMax: seuils.delaiVirement,
-      heuresRestantes: Math.max(0, seuils.delaiVirement - heuresEcoulees),
+      joursEcoules: Math.round(joursEcoules),
+      delaiMax: delaiJours,
+      joursRestants: Math.max(0, delaiJours - joursEcoules),
       slaConfig,
       needsAlert: status !== 'OK'
     };
@@ -261,7 +261,7 @@ export class SlaConfigurationService {
             reference: bordereau.reference,
             client: bordereau.client.name,
             pourcentage: slaCheck.pourcentage,
-            heuresRestantes: slaCheck.heuresRestantes
+            joursRestants: slaCheck.joursRestants
           });
         }
       } catch (error) {
@@ -291,7 +291,7 @@ export class SlaConfigurationService {
             reference: ordreVirement.reference,
             client: ordreVirement.bordereau?.client?.name || 'N/A',
             pourcentage: slaCheck.pourcentage,
-            heuresRestantes: slaCheck.heuresRestantes
+            joursRestants: slaCheck.joursRestants
           });
         }
       } catch (error) {

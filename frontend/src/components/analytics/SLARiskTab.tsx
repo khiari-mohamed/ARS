@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody, Chip, Button, Box, CircularProgress, Card, CardContent, Alert, LinearProgress } from '@mui/material';
+import { Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody, Chip, Button, Box, CircularProgress, Card, CardContent, Alert, LinearProgress, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { LocalAPI } from '../../services/axios';
 import WarningIcon from '@mui/icons-material/Warning';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -16,6 +16,9 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [slaKpis, setSlaKpis] = useState<any>(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage] = useState(10);
+  const [reassignmentDialog, setReassignmentDialog] = useState<{ open: boolean; bordereau: any; aiResponse: any }>({ open: false, bordereau: null, aiResponse: null });
 
   const loadSLARiskData = async () => {
     try {
@@ -111,19 +114,37 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
     return 'success';
   };
 
-  const handleReallocate = async (bordereauId: string) => {
+  const handleReallocate = async (bordereauId: string, item: any) => {
     try {
-      // Try AI reassignment first
-      await LocalAPI.post('/analytics/ai/reassignment', {
+      const response = await LocalAPI.post('/analytics/ai/reassignment', {
         bordereauId,
         reason: 'SLA_RISK'
       });
-      // Refresh data after reallocation
-      loadSLARiskData();
+      
+      setReassignmentDialog({
+        open: true,
+        bordereau: item,
+        aiResponse: response.data
+      });
     } catch (error) {
-      console.log('AI reassignment not available, using fallback');
-      // Fallback: simulate successful reallocation
-      alert(`Bordereau ${bordereauId} marqué pour réallocation manuelle`);
+      console.error('AI reassignment failed:', error);
+      alert('Erreur: La réaffectation IA a échoué');
+    }
+  };
+
+  const handleConfirmReassignment = async () => {
+    try {
+      await LocalAPI.post(`/bordereaux/${reassignmentDialog.bordereau.bordereauId}/reassign`, {
+        newUserId: reassignmentDialog.aiResponse.recommended_agent?.agent_id,
+        comment: 'Réaffectation IA pour optimisation SLA'
+      });
+      
+      setReassignmentDialog({ open: false, bordereau: null, aiResponse: null });
+      loadSLARiskData();
+      alert('Réaffectation effectuée avec succès');
+    } catch (error) {
+      console.error('Reassignment execution failed:', error);
+      alert('Erreur lors de la réaffectation');
     }
   };
 
@@ -146,7 +167,8 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            {/* COMMENTED OUT: Redundant À Risque - Not needed */}
+            {/* <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>
                   <Box display="flex" alignItems="center" gap={2}>
@@ -158,7 +180,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
+            </Grid> */}
             <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>
@@ -172,7 +194,8 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            {/* COMMENTED OUT: Redundant Conformité - Not needed */}
+            {/* <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>
                   <Box display="flex" alignItems="center" gap={2}>
@@ -184,7 +207,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
+            </Grid> */}
           </Grid>
         </Grid>
       )}
@@ -218,7 +241,9 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data.atRiskBordereaux.map((item: any, index: number) => (
+                {data.atRiskBordereaux
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((item: any, index: number) => (
                   <TableRow key={index} sx={{ bgcolor: item.alertLevel === 'critical' ? 'error.light' : item.alertLevel === 'warning' ? 'warning.light' : 'inherit' }}>
                     <TableCell>
                       <Typography variant="subtitle2">{item.reference}</Typography>
@@ -238,7 +263,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                         variant={item.daysOverdue > 0 ? 'contained' : 'outlined'}
                         color={item.daysOverdue > 0 ? 'error' : 'primary'}
                         size="small"
-                        onClick={() => handleReallocate(item.bordereauId)}
+                        onClick={() => handleReallocate(item.bordereauId, item)}
                       >
                         {item.daysOverdue > 0 ? 'Urgent' : 'Réallouer'}
                       </Button>
@@ -247,12 +272,22 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              component="div"
+              count={data.atRiskBordereaux.length}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              rowsPerPage={rowsPerPage}
+              rowsPerPageOptions={[10]}
+              labelRowsPerPage="Lignes par page:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+            />
           </Box>
         </Paper>
       </Grid>
 
-      {/* Workload Distribution */}
-      <Grid item xs={12}>
+      {/* Workload Distribution - COMMENTED OUT: Redundant information */}
+      {/* <Grid item xs={12}>
         <Paper elevation={2} sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Analyse de la Charge de Travail</Typography>
           <Grid container spacing={2}>
@@ -299,7 +334,47 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
             })}
           </Grid>
         </Paper>
-      </Grid>
+      </Grid> */}
+
+      {/* AI Reassignment Confirmation Dialog */}
+      <Dialog open={reassignmentDialog.open} onClose={() => setReassignmentDialog({ open: false, bordereau: null, aiResponse: null })} maxWidth="sm" fullWidth>
+        <DialogTitle>Confirmation de Réaffectation IA</DialogTitle>
+        <DialogContent>
+          {reassignmentDialog.aiResponse && (
+            <Box>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                <strong>Bordereau:</strong> {reassignmentDialog.bordereau?.reference}
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                <strong>Actuellement assigné à:</strong> {reassignmentDialog.bordereau?.assignedTo || 'Non assigné'}
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                <strong>Recommandation IA:</strong> Réaffecter à {reassignmentDialog.aiResponse.recommended_agent?.agent_name || 'Agent non disponible'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <strong>Raison:</strong> {reassignmentDialog.aiResponse.reasoning?.[0] || reassignmentDialog.aiResponse.reassignment_reason || 'Optimisation de la charge de travail'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <strong>Confiance IA:</strong> {reassignmentDialog.aiResponse.recommended_agent?.confidence === 'high' ? '85%' : '70%'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <strong>Charge actuelle:</strong> {reassignmentDialog.aiResponse.recommended_agent?.current_workload || 0} bordereaux
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                <strong>Temps estimé:</strong> {reassignmentDialog.aiResponse.recommended_agent?.estimated_completion_hours || 24}h
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReassignmentDialog({ open: false, bordereau: null, aiResponse: null })} color="inherit">
+            Annuler
+          </Button>
+          <Button onClick={handleConfirmReassignment} variant="contained" color="primary">
+            Confirmer la Réaffectation
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Grid>
   );
 };

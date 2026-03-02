@@ -14,13 +14,19 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider
 } from '@mui/material';
 import { 
   Upload, 
   CheckCircle, 
   Description,
-  Warning
+  Warning,
+  Error as ErrorIcon
 } from '@mui/icons-material';
 
 interface Props {
@@ -34,6 +40,13 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
   const [bulkType, setBulkType] = useState<string>('BULLETIN_SOIN');
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    success: boolean;
+    successCount: number;
+    failedCount: number;
+    failedFiles: Array<{ fileName: string; error: string }>;
+    typeSummary: Record<string, number>;
+  } | null>(null);
 
   const documentTypes = [
     { value: 'BULLETIN_SOIN', label: '🏥 Bulletin de Soins', icon: '🏥' },
@@ -121,26 +134,49 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
         response = await uploadManualDocuments(bordereau.id, uploadedFiles, fileTypes);
       }
 
-      if (response.success) {
-        const scanType = validation.canScanMultiple ? 'supplémentaire' : 'initial';
-        const typeSummary = Object.values(fileTypes).reduce((acc: Record<string, number>, type) => {
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        }, {});
-        const summaryText = Object.entries(typeSummary)
-          .map(([type, count]) => `  • ${documentTypes.find(t => t.value === type)?.icon || '📄'} ${type}: ${count}`)
-          .join('\n');
-        
-        alert(`✅ Documents uploadés avec succès!\n\n📄 ${response.uploadedDocuments?.length || uploadedFiles.length} document(s) ajouté(s)\n🔄 Scan ${scanType} effectué\n\n📊 Répartition par type:\n${summaryText}\n\n📁 Total documents: ${validation.documentsCount + uploadedFiles.length}`);
-        onComplete();
-      } else {
-        alert(`❌ Erreur lors de l'upload: ${response.message || 'Erreur inconnue'}`);
+      const successCount = response.uploadedDocuments?.length || 0;
+      const failedCount = response.errors?.length || 0;
+      const typeSummary = Object.values(fileTypes).reduce((acc: Record<string, number>, type) => {
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {});
+
+      setUploadResult({
+        success: response.success,
+        successCount,
+        failedCount,
+        failedFiles: response.errors || [],
+        typeSummary
+      });
+
+      if (response.success && failedCount === 0) {
+        // Auto-close after 2 seconds if all successful
+        setTimeout(() => {
+          setUploadResult(null);
+          onComplete();
+        }, 2000);
       }
     } catch (error: any) {
       console.error('Upload failed:', error);
-      alert(`❌ Erreur: ${error.response?.data?.message || error.message || 'Erreur lors de l\'upload'}`);
+      setUploadResult({
+        success: false,
+        successCount: 0,
+        failedCount: uploadedFiles.length,
+        failedFiles: uploadedFiles.map(f => ({
+          fileName: f.name,
+          error: error.response?.data?.message || error.message || 'Erreur lors de l\'upload'
+        })),
+        typeSummary: {}
+      });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleCloseResult = () => {
+    setUploadResult(null);
+    if (uploadResult?.success && uploadResult.failedCount === 0) {
+      onComplete();
     }
   };
 
@@ -304,6 +340,88 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
       {uploading && (
         <LinearProgress sx={{ mt: 2 }} />
       )}
+
+      {/* Custom Upload Result Modal */}
+      <Dialog 
+        open={uploadResult !== null} 
+        onClose={handleCloseResult}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          bgcolor: uploadResult?.success ? '#4caf50' : '#f44336', 
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          {uploadResult?.success ? (
+            <><CheckCircle /> Upload Terminé</>
+          ) : (
+            <><ErrorIcon /> Erreur d'Upload</>
+          )}
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {uploadResult && (
+            <Box>
+              {/* Success Summary */}
+              {uploadResult.successCount > 0 && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    ✅ {uploadResult.successCount} document(s) uploadé(s) avec succès
+                  </Typography>
+                  {Object.keys(uploadResult.typeSummary).length > 0 && (
+                    <Box mt={1}>
+                      <Typography variant="body2" fontWeight="bold">📊 Répartition par type:</Typography>
+                      {Object.entries(uploadResult.typeSummary).map(([type, count]) => (
+                        <Typography key={type} variant="body2" sx={{ ml: 2 }}>
+                          • {documentTypes.find(t => t.value === type)?.icon || '📄'} {type}: {count}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                </Alert>
+              )}
+
+              {/* Failed Files */}
+              {uploadResult.failedCount > 0 && (
+                <Alert severity="error">
+                  <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                    ❌ {uploadResult.failedCount} document(s) échoué(s)
+                  </Typography>
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="body2" fontWeight="bold" gutterBottom>
+                    Documents en erreur:
+                  </Typography>
+                  <List dense>
+                    {uploadResult.failedFiles.map((failed, index) => (
+                      <ListItem key={index} sx={{ py: 0.5, px: 0 }}>
+                        <ListItemIcon sx={{ minWidth: 30 }}>
+                          <ErrorIcon color="error" fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={failed.fileName}
+                          secondary={failed.error}
+                          primaryTypographyProps={{ fontWeight: 'bold', fontSize: '0.9rem' }}
+                          secondaryTypographyProps={{ fontSize: '0.8rem', color: 'error.main' }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Alert severity="warning" sx={{ mt: 2 }}>
+                    💡 Veuillez vérifier ces fichiers sur votre ordinateur et réessayer.
+                  </Alert>
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseResult} variant="contained" color="primary">
+            {uploadResult?.success && uploadResult.failedCount === 0 ? 'Fermer' : 'Compris'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

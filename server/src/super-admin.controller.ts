@@ -91,7 +91,7 @@ export class SuperAdminController {
     const [totalUsers, activeUsers, totalBordereaux, processingBordereaux, totalDocuments, errorCount] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { active: true } }),
-      this.prisma.bordereau.count(),
+      this.prisma.bordereau.count({ where: { archived: false } }),
       this.prisma.bordereau.count({ 
         where: { 
           statut: { 
@@ -103,12 +103,12 @@ export class SuperAdminController {
       this.prisma.auditLog.count({ where: { action: { contains: 'ERROR' } } })
     ]);
 
-    console.log('📊 System Stats:', {
-      totalBordereaux,
-      processingBordereaux,
-      totalUsers,
-      activeUsers
-    });
+    // console.log('📊 System Stats:', {
+    //   totalBordereaux,
+    //   processingBordereaux,
+    //   totalUsers,
+    //   activeUsers
+    // });
 
     return {
       users: { total: totalUsers, active: activeUsers },
@@ -184,7 +184,7 @@ export class SuperAdminController {
         }
       }
 
-      console.log(`📊 Queue ${queue.name}: Total=${total}, Pending=${pending}, Processing=${processing}`);
+      // console.log(`📊 Queue ${queue.name}: Total=${total}, Pending=${pending}, Processing=${processing}`);
 
       return {
         name: queue.name,
@@ -205,44 +205,113 @@ export class SuperAdminController {
   @Get('team-workload')
   @Public()
   async getTeamWorkload() {
-    const users = await this.prisma.user.findMany({
+    const now = new Date();
+    
+    // Get all CHEF_EQUIPE with their team members
+    const chefEquipes = await this.prisma.user.findMany({
       where: {
-        role: { in: ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'RESPONSABLE_DEPARTEMENT'] },
+        role: 'CHEF_EQUIPE',
         active: true
       },
-      orderBy: [
-        { role: 'asc' },
-        { fullName: 'asc' }
-      ]
-    });
-
-    console.log(`👥 Found ${users.length} users for workload analysis`);
-
-    const workloadData = await Promise.all(users.map(async (user) => {
-      // Count documents assigned directly
-      const documentsAssigned = await this.prisma.document.count({
-        where: { assignedToUserId: user.id }
-      });
-
-      // For SENIOR/RESPONSABLE: count documents via contracts
-      let documentsViaContracts = 0;
-      if (user.role === 'GESTIONNAIRE_SENIOR' || user.role === 'RESPONSABLE_DEPARTEMENT' || user.role === 'CHEF_EQUIPE') {
-        documentsViaContracts = await this.prisma.document.count({
-          where: {
-            bordereau: {
-              contract: {
-                OR: [
-                  { assignedManagerId: user.id },
-                  { teamLeaderId: user.id }
-                ]
+      include: {
+        teamMembers: {
+          where: { active: true },
+          include: {
+            assignedDocuments: {
+              include: {
+                bordereau: {
+                  select: {
+                    dateReception: true,
+                    delaiReglement: true,
+                    contract: {
+                      select: { delaiReglement: true }
+                    }
+                  }
+                }
               }
             }
           }
-        });
+        },
+        assignedDocuments: {
+          include: {
+            bordereau: {
+              select: {
+                dateReception: true,
+                delaiReglement: true,
+                contract: {
+                  select: { delaiReglement: true }
+                }
+              }
+            }
+          }
+        }
       }
+    });
 
-      const workload = Math.max(documentsAssigned, documentsViaContracts);
-      const utilizationRate = user.capacity > 0 ? Math.round((workload / user.capacity) * 100) : 0;
+    // Get GESTIONNAIRE_SENIOR and RESPONSABLE_DEPARTEMENT
+    const individualTeams = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'] },
+        active: true
+      },
+      include: {
+        assignedDocuments: {
+          include: {
+            bordereau: {
+              select: {
+                dateReception: true,
+                delaiReglement: true,
+                contract: {
+                  select: { delaiReglement: true }
+                }
+              }
+            }
+          }
+        },
+        contractsAsTeamLeader: {
+          include: {
+            bordereaux: {
+              where: { archived: false },
+              include: {
+                documents: true,
+                contract: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const workloadData: any[] = [];
+
+    // Helper function to calculate time-based utilization
+    const calculateTimeBasedUtilization = (documents: any[], capacity: number) => {
+      let totalRequiredPerDay = 0;
+      
+      for (const doc of documents) {
+        const bordereau = doc.bordereau || doc;
+        const delaiReglement = bordereau?.delaiReglement || bordereau?.contract?.delaiReglement || 30;
+        const dateReception = bordereau?.dateReception || now;
+        
+        const deadlineDate = new Date(dateReception);
+        deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
+        
+        const remainingDays = Math.max(1, Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        
+        totalRequiredPerDay += 1 / remainingDays;
+      }
+      
+      const utilizationRate = capacity > 0 ? Math.round((totalRequiredPerDay / capacity) * 100) : 0;
+      return { utilizationRate, requiredPerDay: totalRequiredPerDay };
+    };
+
+    // Process Chef d'Équipe teams
+    for (const chef of chefEquipes) {
+      const teamMembers = chef.teamMembers || [];
+      const allDocs = [...chef.assignedDocuments, ...teamMembers.flatMap(m => m.assignedDocuments)];
+      const totalCapacity = chef.capacity + teamMembers.reduce((sum, member) => sum + member.capacity, 0);
+      
+      const { utilizationRate, requiredPerDay } = calculateTimeBasedUtilization(allDocs, totalCapacity);
       
       let level = 'NORMAL';
       let color = 'success';
@@ -254,19 +323,57 @@ export class SuperAdminController {
         color = 'warning';
       }
 
-      console.log(`👤 ${user.fullName}: ${workload} docs (direct: ${documentsAssigned}, via contracts: ${documentsViaContracts})`);
+      workloadData.push({
+        id: chef.id,
+        name: `Équipe ${chef.fullName}`,
+        role: 'CHEF_EQUIPE',
+        workload: allDocs.length,
+        capacity: totalCapacity,
+        utilizationRate,
+        requiredPerDay: Math.round(requiredPerDay * 10) / 10,
+        level,
+        color,
+        teamSize: teamMembers.length + 1
+      });
+    }
 
-      return {
+    // Process individual teams
+    for (const user of individualTeams) {
+      let allDocs = user.assignedDocuments;
+      
+      if (user.role === 'GESTIONNAIRE_SENIOR' && user.contractsAsTeamLeader) {
+        allDocs = user.contractsAsTeamLeader.flatMap(contract => 
+          contract.bordereaux.flatMap(bordereau => 
+            bordereau.documents.map(doc => ({ ...doc, bordereau }))
+          )
+        );
+      }
+      
+      const { utilizationRate, requiredPerDay } = calculateTimeBasedUtilization(allDocs, user.capacity);
+      
+      let level = 'NORMAL';
+      let color = 'success';
+      if (utilizationRate >= 90) {
+        level = 'OVERLOADED';
+        color = 'error';
+      } else if (utilizationRate >= 70) {
+        level = 'BUSY';
+        color = 'warning';
+      }
+
+      workloadData.push({
         id: user.id,
         name: user.fullName,
         role: user.role,
-        workload,
+        workload: allDocs.length,
         capacity: user.capacity,
         utilizationRate,
+        requiredPerDay: Math.round(requiredPerDay * 10) / 10,
         level,
-        color
-      };
-    }));
+        color,
+        teamSize: 1
+      });
+    }
 
     return workloadData;
   }
@@ -447,7 +554,7 @@ export class SuperAdminController {
   @Get('bordereaux/unassigned')
   @Public()
   async getUnassignedBordereaux() {
-    console.log('🔍 Checking for unassigned bordereaux...');
+    // console.log('🔍 Checking for unassigned bordereaux...');
     
     // First check all bordereaux
     const allBordereaux = await this.prisma.bordereau.findMany({
@@ -457,11 +564,11 @@ export class SuperAdminController {
       orderBy: { dateReception: 'desc' }
     });
     
-    console.log('📊 Total bordereaux in DB:', allBordereaux.length);
-    console.log('📊 Bordereaux by status:', allBordereaux.reduce((acc, b) => {
-      acc[b.statut] = (acc[b.statut] || 0) + 1;
-      return acc;
-    }, {} as any));
+    // console.log('📊 Total bordereaux in DB:', allBordereaux.length);
+    // console.log('📊 Bordereaux by status:', allBordereaux.reduce((acc, b) => {
+    //   acc[b.statut] = (acc[b.statut] || 0) + 1;
+    //   return acc;
+    // }, {} as any));
     
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
@@ -476,10 +583,10 @@ export class SuperAdminController {
       orderBy: { dateReception: 'desc' }
     });
     
-    console.log('📋 Unassigned bordereaux found:', bordereaux.length);
-    bordereaux.forEach(b => {
-      console.log(`  - ${b.reference}: ${b.statut}, assigned: ${b.assignedToUserId ? 'YES' : 'NO'}`);
-    });
+    // console.log('📋 Unassigned bordereaux found:', bordereaux.length);
+    // bordereaux.forEach(b => {
+    //   console.log(`  - ${b.reference}: ${b.statut}, assigned: ${b.assignedToUserId ? 'YES' : 'NO'}`);
+    // });
 
     return bordereaux.map(b => ({
       id: b.id,
@@ -1609,12 +1716,12 @@ export class SuperAdminController {
     const busyCount = teamWorkload.filter(t => t.level === 'BUSY').length;
     const totalTeams = teamWorkload.length;
 
-    console.log('📊 Team Stats:', {
-      total: totalTeams,
-      overloaded: overloadedCount,
-      busy: busyCount,
-      teams: teamWorkload.map(t => ({ name: t.name, level: t.level, utilization: t.utilizationRate }))
-    });
+    // console.log('📊 Team Stats:', {
+    //   total: totalTeams,
+    //   overloaded: overloadedCount,
+    //   busy: busyCount,
+    //   teams: teamWorkload.map(t => ({ name: t.name, level: t.level, utilization: t.utilizationRate }))
+    // });
 
     return {
       timestamp: new Date().toISOString(),
@@ -1738,7 +1845,8 @@ export class SuperAdminController {
   @Get('document-assignments')
   @Public()
   async getDocumentAssignments(@Query() params: any) {
-    const { documentType, gestionnaire, chefEquipe, slaStatus } = params;
+    const { documentType, gestionnaire, chefEquipe } = params;
+    // NOTE: slaStatus filtering is done on frontend after calculation
 
     const whereClause: any = {};
     if (documentType) whereClause.type = documentType;
@@ -1811,7 +1919,7 @@ export class SuperAdminController {
 
     const now = new Date();
     
-    console.log(`🔍 Processing ${documents.length} documents for assignments`);
+    // console.log(`🔍 Processing ${documents.length} documents for assignments`);
     
     const assignments = documents.map(doc => {
       let gestionnaire: any = null;
@@ -1846,15 +1954,21 @@ export class SuperAdminController {
       const gestionnaireName = gestionnaire?.fullName || 'NON ASSIGNÉ';
       const chefEquipeName = chefEquipe?.fullName || 'AUCUN CHEF';
       
-      // RÈGLE SLA: Calcul du statut
+      // RÈGLE SLA UNIFIÉE: Calcul basé sur pourcentage du délai écoulé (identique aux bordereaux)
       let slaStatusValue = 'ON_TIME';
       let slaColor = 'success';
-      if (doc.bordereau?.dateLimiteTraitement) {
-        const hoursRemaining = (doc.bordereau.dateLimiteTraitement.getTime() - now.getTime()) / (1000 * 60 * 60);
-        if (hoursRemaining < 0) {
+      
+      // Utiliser dateReception du bordereau (pas dateReceptionBO qui peut être null)
+      const receptionDate = doc.bordereau?.dateReception;
+      
+      if (receptionDate && doc.bordereau?.delaiReglement) {
+        const daysElapsed = (now.getTime() - new Date(receptionDate).getTime()) / (1000 * 60 * 60 * 24);
+        const percentageElapsed = (daysElapsed / doc.bordereau.delaiReglement) * 100;
+        
+        if (percentageElapsed > 100) {
           slaStatusValue = 'OVERDUE';
           slaColor = 'error';
-        } else if (hoursRemaining < 24) {
+        } else if (percentageElapsed > 80) {
           slaStatusValue = 'AT_RISK';
           slaColor = 'warning';
         }
@@ -1882,7 +1996,7 @@ export class SuperAdminController {
       };
     });
 
-    // Appliquer filtres
+    // Appliquer filtres (sauf SLA qui est filtré côté frontend)
     let filtered = assignments;
     if (gestionnaire) {
       if (gestionnaire === 'NON ASSIGNÉ') {
@@ -1898,9 +2012,7 @@ export class SuperAdminController {
         filtered = filtered.filter(a => a.chefEquipe.toLowerCase().includes(chefEquipe.toLowerCase()));
       }
     }
-    if (slaStatus) {
-      filtered = filtered.filter(a => a.slaStatus === slaStatus);
-    }
+    // NOTE: slaStatus filtering removed - done on frontend
 
     return {
       total: filtered.length,
@@ -1916,7 +2028,7 @@ export class SuperAdminController {
   async getComprehensiveDocumentStats(@Query() params: any) {
     const documentType = params.documentType;
     
-    console.log('📊 Fetching DOCUMENT-LEVEL stats for type:', documentType || 'ALL');
+    // console.log('📊 Fetching DOCUMENT-LEVEL stats for type:', documentType || 'ALL');
     
     const documentTypes = [
       'BULLETIN_SOIN',
@@ -1996,7 +2108,7 @@ export class SuperAdminController {
         avgProcessingTime: Math.round(avgProcessingTime * 10) / 10
       };
       
-      console.log(`📊 Document stats for ${type}:`, stats[type]);
+      // console.log(`📊 Document stats for ${type}:`, stats[type]);
     }
     
     return stats;
@@ -2088,5 +2200,478 @@ export class SuperAdminController {
         orphanedAssignments
       }
     };
+  }
+
+  @Post('ai-suggestions')
+  @Public()
+  async getAISuggestions(@Body() data: {
+    teamId: string;
+    teamName: string;
+    workload: number;
+    utilizationRate: number;
+  }) {
+    const now = new Date();
+    
+    // Get team details
+    const team = await this.prisma.user.findUnique({
+      where: { id: data.teamId },
+      include: {
+        assignedDocuments: {
+          include: {
+            bordereau: {
+              select: {
+                dateReception: true,
+                delaiReglement: true,
+                contract: { select: { delaiReglement: true } }
+              }
+            }
+          }
+        },
+        teamMembers: {
+          where: { active: true },
+          include: {
+            assignedDocuments: {
+              include: {
+                bordereau: {
+                  select: {
+                    dateReception: true,
+                    delaiReglement: true,
+                    contract: { select: { delaiReglement: true } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!team) {
+      return { suggestions: ['Équipe non trouvée'], recommendations: [] };
+    }
+
+    // Get all available teams with capacity
+    const allTeams = await this.getTeamWorkload();
+    const availableTeams = allTeams.filter(t => 
+      t.id !== data.teamId && t.utilizationRate < 70
+    ).sort((a, b) => a.utilizationRate - b.utilizationRate);
+
+    // Calculate urgent documents (< 3 days remaining)
+    const allDocs = team.role === 'CHEF_EQUIPE'
+      ? [...team.assignedDocuments, ...(team.teamMembers || []).flatMap(m => m.assignedDocuments)]
+      : team.assignedDocuments;
+
+    let urgentCount = 0;
+    let overdueCount = 0;
+    
+    for (const doc of allDocs) {
+      const bordereau = doc.bordereau;
+      if (!bordereau) continue;
+      
+      const delaiReglement = bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30;
+      const deadlineDate = new Date(bordereau.dateReception);
+      deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
+      
+      const remainingDays = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (remainingDays < 0) overdueCount++;
+      else if (remainingDays <= 3) urgentCount++;
+    }
+
+    // Generate AI suggestions
+    const suggestions: string[] = [];
+    const recommendations: any[] = [];
+
+    // Suggestion 1: Reassignment
+    if (availableTeams.length > 0 && data.utilizationRate >= 90) {
+      const docsToReassign = Math.ceil(data.workload * 0.3); // 30% of workload
+      const targetTeam = availableTeams[0];
+      
+      suggestions.push(
+        `Réaffecter ${docsToReassign} documents vers "${targetTeam.name}" (${targetTeam.utilizationRate}% d'utilisation)`
+      );
+      
+      recommendations.push({
+        type: 'REASSIGNMENT',
+        action: 'Transférer des documents',
+        target: targetTeam.name,
+        count: docsToReassign,
+        priority: 'HIGH'
+      });
+    }
+
+    // Suggestion 2: Capacity increase
+    if (data.utilizationRate >= 100) {
+      const capacityNeeded = Math.ceil(data.utilizationRate - 90);
+      suggestions.push(
+        `Augmenter la capacité de ${capacityNeeded}% (ajouter ${Math.ceil(capacityNeeded / 20)} membre(s) ou heures supplémentaires)`
+      );
+      
+      recommendations.push({
+        type: 'CAPACITY_INCREASE',
+        action: 'Augmenter les ressources',
+        percentage: capacityNeeded,
+        priority: 'HIGH'
+      });
+    }
+
+    // Suggestion 3: Prioritize urgent
+    if (urgentCount > 0 || overdueCount > 0) {
+      suggestions.push(
+        `Prioriser ${urgentCount + overdueCount} documents urgents (${overdueCount} en retard, ${urgentCount} < 3 jours)`
+      );
+      
+      recommendations.push({
+        type: 'PRIORITIZATION',
+        action: 'Traiter les urgences en priorité',
+        urgentCount,
+        overdueCount,
+        priority: overdueCount > 0 ? 'CRITICAL' : 'HIGH'
+      });
+    }
+
+    // Suggestion 4: Workflow optimization
+    if (data.utilizationRate >= 80 && data.utilizationRate < 100) {
+      suggestions.push(
+        `Optimiser le workflow: automatiser les tâches répétitives et éliminer les blocages`
+      );
+      
+      recommendations.push({
+        type: 'OPTIMIZATION',
+        action: 'Améliorer l\'efficacité',
+        priority: 'MEDIUM'
+      });
+    }
+
+    // Suggestion 5: Team distribution
+    if (team.role === 'CHEF_EQUIPE' && team.teamMembers) {
+      const memberLoads = team.teamMembers.map(m => ({
+        name: m.fullName,
+        load: m.assignedDocuments.length,
+        capacity: m.capacity
+      }));
+      
+      const maxLoad = Math.max(...memberLoads.map(m => m.load));
+      const minLoad = Math.min(...memberLoads.map(m => m.load));
+      
+      if (maxLoad - minLoad > 10) {
+        suggestions.push(
+          `Rééquilibrer la charge entre les membres de l'équipe (écart: ${maxLoad - minLoad} documents)`
+        );
+        
+        recommendations.push({
+          type: 'REBALANCING',
+          action: 'Redistribuer au sein de l\'équipe',
+          gap: maxLoad - minLoad,
+          priority: 'MEDIUM'
+        });
+      }
+    }
+
+    return {
+      suggestions,
+      recommendations,
+      analysis: {
+        totalDocuments: data.workload,
+        urgentDocuments: urgentCount,
+        overdueDocuments: overdueCount,
+        utilizationRate: data.utilizationRate,
+        availableTeams: availableTeams.length,
+        status: data.utilizationRate >= 100 ? 'CRITICAL' : data.utilizationRate >= 90 ? 'OVERLOADED' : 'BUSY'
+      }
+    };
+  }
+
+  @Post('execute-action')
+  @Public()
+  async executeAction(@Body() data: {
+    action: 'REASSIGN' | 'INCREASE_CAPACITY' | 'PRIORITIZE' | 'NOTIFY';
+    teamId?: string;
+    sourceTeamId?: string;
+    targetTeamName?: string;
+    count?: number;
+    percentage?: number;
+    urgentCount?: number;
+    overdueCount?: number;
+    teamName?: string;
+    message?: string;
+  }) {
+    const now = new Date();
+
+    try {
+      switch (data.action) {
+        case 'REASSIGN': {
+          // Find target team by name
+          const targetTeam = await this.prisma.user.findFirst({
+            where: { 
+              fullName: data.targetTeamName,
+              active: true
+            }
+          });
+
+          if (!targetTeam) {
+            return { success: false, message: 'Équipe cible non trouvée' };
+          }
+
+          // Get documents from source team (most urgent first)
+          const sourceTeam = await this.prisma.user.findUnique({
+            where: { id: data.sourceTeamId },
+            include: {
+              assignedDocuments: {
+                include: {
+                  bordereau: {
+                    select: {
+                      dateReception: true,
+                      delaiReglement: true,
+                      contract: { select: { delaiReglement: true } }
+                    }
+                  }
+                },
+                take: data.count || 100
+              },
+              teamMembers: {
+                where: { active: true },
+                include: {
+                  assignedDocuments: {
+                    include: {
+                      bordereau: {
+                        select: {
+                          dateReception: true,
+                          delaiReglement: true,
+                          contract: { select: { delaiReglement: true } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          if (!sourceTeam) {
+            return { success: false, message: 'Équipe source non trouvée' };
+          }
+
+          // Get all documents and sort by urgency
+          const allDocs = sourceTeam.role === 'CHEF_EQUIPE'
+            ? [...sourceTeam.assignedDocuments, ...(sourceTeam.teamMembers || []).flatMap(m => m.assignedDocuments)]
+            : sourceTeam.assignedDocuments;
+
+          const sortedDocs = allDocs
+            .map(doc => {
+              const bordereau = doc.bordereau;
+              const delaiReglement = bordereau?.delaiReglement || bordereau?.contract?.delaiReglement || 30;
+              const deadlineDate = new Date(bordereau?.dateReception || now);
+              deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
+              const remainingDays = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              return { doc, remainingDays };
+            })
+            .sort((a, b) => a.remainingDays - b.remainingDays)
+            .slice(0, data.count || 100);
+
+          // Reassign documents
+          const reassignedIds: string[] = [];
+          for (const { doc } of sortedDocs) {
+            await this.prisma.document.update({
+              where: { id: doc.id },
+              data: { 
+                assignedTo: { connect: { id: targetTeam.id } }
+              }
+            });
+            reassignedIds.push(doc.id);
+          }
+
+          // Create audit log
+          await this.prisma.auditLog.create({
+            data: {
+              action: 'REASSIGN_DOCUMENTS',
+              userId: data.sourceTeamId,
+              details: {
+                from: sourceTeam.fullName,
+                to: targetTeam.fullName,
+                count: reassignedIds.length,
+                documentIds: reassignedIds
+              }
+            }
+          });
+
+          return { 
+            success: true, 
+            message: `${reassignedIds.length} documents réaffectés avec succès`,
+            reassignedCount: reassignedIds.length
+          };
+        }
+
+        case 'INCREASE_CAPACITY': {
+          const team = await this.prisma.user.findUnique({
+            where: { id: data.teamId }
+          });
+
+          if (!team) {
+            return { success: false, message: 'Équipe non trouvée' };
+          }
+
+          const newCapacity = Math.ceil(team.capacity * (1 + (data.percentage || 0) / 100));
+
+          await this.prisma.user.update({
+            where: { id: data.teamId },
+            data: { capacity: newCapacity }
+          });
+
+          // Create audit log
+          await this.prisma.auditLog.create({
+            data: {
+              action: 'INCREASE_CAPACITY',
+              userId: data.teamId,
+              details: {
+                team: team.fullName,
+                oldCapacity: team.capacity,
+                newCapacity,
+                percentage: data.percentage
+              }
+            }
+          });
+
+          return { 
+            success: true, 
+            message: `Capacité augmentée de ${team.capacity} à ${newCapacity}`,
+            oldCapacity: team.capacity,
+            newCapacity
+          };
+        }
+
+        case 'PRIORITIZE': {
+          const team = await this.prisma.user.findUnique({
+            where: { id: data.teamId },
+            include: {
+              assignedDocuments: {
+                include: {
+                  bordereau: {
+                    select: {
+                      dateReception: true,
+                      delaiReglement: true,
+                      contract: { select: { delaiReglement: true } }
+                    }
+                  }
+                }
+              },
+              teamMembers: {
+                where: { active: true },
+                include: {
+                  assignedDocuments: {
+                    include: {
+                      bordereau: {
+                        select: {
+                          dateReception: true,
+                          delaiReglement: true,
+                          contract: { select: { delaiReglement: true } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          if (!team) {
+            return { success: false, message: 'Équipe non trouvée' };
+          }
+
+          // Get all urgent documents
+          const allDocs = team.role === 'CHEF_EQUIPE'
+            ? [...team.assignedDocuments, ...(team.teamMembers || []).flatMap(m => m.assignedDocuments)]
+            : team.assignedDocuments;
+
+          const urgentDocs = allDocs.filter(doc => {
+            const bordereau = doc.bordereau;
+            if (!bordereau) return false;
+            
+            const delaiReglement = bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30;
+            const deadlineDate = new Date(bordereau.dateReception);
+            deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
+            const remainingDays = Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            
+            return remainingDays <= 3 || remainingDays < 0;
+          });
+
+          // Mark as priority
+          const prioritizedIds: string[] = [];
+          for (const doc of urgentDocs) {
+            await this.prisma.document.update({
+              where: { id: doc.id },
+              data: { priority: 1 }
+            });
+            prioritizedIds.push(doc.id);
+          }
+
+          // Create audit log
+          await this.prisma.auditLog.create({
+            data: {
+              action: 'PRIORITIZE_DOCUMENTS',
+              userId: data.teamId,
+              details: {
+                team: team.fullName,
+                count: prioritizedIds.length,
+                documentIds: prioritizedIds
+              }
+            }
+          });
+
+          return { 
+            success: true, 
+            message: `${prioritizedIds.length} documents marqués comme prioritaires`,
+            prioritizedCount: prioritizedIds.length
+          };
+        }
+
+        case 'NOTIFY': {
+          const team = await this.prisma.user.findUnique({
+            where: { id: data.teamId },
+            select: { fullName: true, email: true, role: true }
+          });
+
+          if (!team) {
+            return { success: false, message: 'Équipe non trouvée' };
+          }
+
+          // Create alert log
+          await this.prisma.alertLog.create({
+            data: {
+              alertType: 'TEAM_OVERLOAD',
+              alertLevel: 'CRITICAL',
+              message: data.message || `Alerte: Équipe surchargée`,
+              userId: data.teamId,
+              resolved: false
+            }
+          });
+
+          // Create audit log
+          await this.prisma.auditLog.create({
+            data: {
+              action: 'SEND_NOTIFICATION',
+              userId: data.teamId,
+              details: {
+                team: team.fullName,
+                email: team.email,
+                message: data.message
+              }
+            }
+          });
+
+          return { 
+            success: true, 
+            message: `Notification envoyée à ${team.fullName}`,
+            recipient: `${team.fullName} (${team.email})`
+          };
+        }
+
+        default:
+          return { success: false, message: 'Action non reconnue' };
+      }
+    } catch (error) {
+      console.error('Error executing action:', error);
+      return { success: false, message: 'Erreur lors de l\'exécution de l\'action' };
+    }
   }
 }

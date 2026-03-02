@@ -51,28 +51,18 @@ export class GecController {
   // SLA breaches endpoint - MUST BE FIRST
   @Get('sla-breaches')
   async getSLABreaches(@Req() req: any) {
-    this.logger.log('🚨 GET /api/courriers/sla-breaches called');
-    this.logger.log('🚨 Request headers:', req.headers.authorization ? 'Token present' : 'No token');
-    const result = await this.gecService.getSLABreaches();
-    this.logger.log('🚨 SLA breaches result:', result.length, 'items');
-    return result;
+    return this.gecService.getSLABreaches();
   }
 
   // Analytics endpoints
   @Get('analytics')
   async getAnalytics(@Query('period') period: string = '30d') {
-    console.log('📊 GEC Controller: Analytics requested for period:', period);
-    const result = await this.gecService.getGECAnalytics(period);
-    console.log('📊 GEC Controller: Analytics result:', result);
-    return result;
+    return this.gecService.getGECAnalytics(period);
   }
 
   @Get('volume-stats')
   async getVolumeStats(@Query('period') period: string = '7d') {
-    console.log('📈 Volume stats requested for period:', period);
-    const result = await this.gecService.getVolumeStats(period);
-    console.log('📈 Volume stats result:', result);
-    return result;
+    return this.gecService.getVolumeStats(period);
   }
 
   @Get('ai-insights')
@@ -128,51 +118,33 @@ export class GecController {
 
   @Get('tracking/stats')
   async getTrackingStats(@Query('period') period: string = '7d', @Req() req: any) {
-    this.logger.log('📊 GET /api/courriers/tracking/stats called');
-    this.logger.log('📊 Period:', period);
     const user = getUserFromRequest(req);
-    const stats = await this.gecService.getEmailTrackingStats(period);
-    this.logger.log('📊 Tracking stats result:', stats);
-    return stats;
+    return this.gecService.getEmailTrackingStats(period);
   }
 
   // A/B Test endpoints
   @Get('ab-tests')
   async getABTests(@Req() req: any) {
-    this.logger.log('🧪 GET /api/courriers/ab-tests called');
     const user = getUserFromRequest(req);
-    const tests = await this.gecService.getABTests();
-    this.logger.log('🧪 A/B tests result:', tests.length, 'tests');
-    return tests;
+    return this.gecService.getABTests();
   }
 
   @Post('ab-tests')
   async createABTest(@Body() testData: any, @Req() req: any) {
-    this.logger.log('🧪 POST /api/courriers/ab-tests called');
-    this.logger.log('🧪 Test data:', testData);
     const user = getUserFromRequest(req);
-    const test = await this.gecService.createABTest(testData, user);
-    this.logger.log('🧪 A/B test created:', test.id);
-    return test;
+    return this.gecService.createABTest(testData, user);
   }
 
   @Patch('ab-tests/:id')
   async updateABTest(@Param('id') id: string, @Body() testData: any, @Req() req: any) {
-    this.logger.log('🧪 PATCH /api/courriers/ab-tests/:id called');
-    this.logger.log('🧪 Test ID:', id, 'Data:', testData);
     const user = getUserFromRequest(req);
-    const test = await this.gecService.updateABTest(id, testData, user);
-    this.logger.log('🧪 A/B test updated:', test.id);
-    return test;
+    return this.gecService.updateABTest(id, testData, user);
   }
 
   @Get('ab-tests/:id/results')
   async getABTestResults(@Param('id') id: string, @Req() req: any) {
-    this.logger.log('🧪 GET /api/courriers/ab-tests/:id/results called');
     const user = getUserFromRequest(req);
-    const results = await this.gecService.getABTestResults(id);
-    this.logger.log('🧪 A/B test results:', results);
-    return results;
+    return this.gecService.getABTestResults(id);
   }
 
   @Get('reports/data')
@@ -183,20 +155,14 @@ export class GecController {
     @Query('department') department?: string,
     @Req() req?: any
   ) {
-    this.logger.log('📈 GET /api/courriers/reports/data called');
-    this.logger.log('📈 Filters:', { dateFrom, dateTo, client, department });
     const user = getUserFromRequest(req);
-    const data = await this.gecService.getReportData({ dateFrom, dateTo, client, department });
-    this.logger.log('📈 Report data result:', data);
-    return data;
+    return this.gecService.getReportData({ dateFrom, dateTo, client, department });
   }
 
   // Relance endpoints
   @Post('trigger-relances')
   async triggerRelances(@Req() req: any) {
-    this.logger.log('🚀 POST /api/courriers/trigger-relances called');
     const user = getUserFromRequest(req);
-    this.logger.log('👤 User role:', user.role);
     if (!['ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('Only admins can trigger relances');
     }
@@ -209,9 +175,6 @@ export class GecController {
     @Body() body: { type: 'CLIENT' | 'PRESTATAIRE' },
     @Req() req: any,
   ) {
-    this.logger.log('🚀 POST /api/courriers/bordereau/:bordereauId/relance called');
-    this.logger.log('💼 Bordereau ID:', bordereauId);
-    this.logger.log('📝 Body:', body);
     const user = getUserFromRequest(req);
     return this.gecService.createAutomaticRelance(bordereauId, body.type, user);
   }

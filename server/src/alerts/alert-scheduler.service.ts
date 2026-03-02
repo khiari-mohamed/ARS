@@ -87,12 +87,14 @@ export class AlertSchedulerService {
         if (aiPrediction) {
           alertLevel = aiPrediction.risk === '🔴' ? 'red' : aiPrediction.risk === '🟠' ? 'orange' : 'green';
         } else {
-          // Fallback logic
+          // RÈGLE SLA UNIFIÉE: Basée sur pourcentage du délai écoulé
           const slaThreshold = this.getSlaThreshold(bordereau);
-          if (daysSinceReception > slaThreshold) {
+          const percentageElapsed = (daysSinceReception / slaThreshold) * 100;
+          
+          if (percentageElapsed > 100) {
             alertLevel = 'red';
             alertType = 'SLA_BREACH';
-          } else if (daysSinceReception > slaThreshold - 2) {
+          } else if (percentageElapsed > 80) {
             alertLevel = 'orange';
             alertType = 'SLA_RISK';
           }
@@ -181,78 +183,178 @@ export class AlertSchedulerService {
     this.logger.log('Processing team overload alerts...');
     
     try {
-      const chefs = await this.prisma.user.findMany({
-        where: { role: 'CHEF_EQUIPE' }
+      const now = new Date();
+      
+      // Get all CHEF_EQUIPE with their team members (EXACT SAME QUERY AS SUPER ADMIN)
+      const chefEquipes = await this.prisma.user.findMany({
+        where: {
+          role: 'CHEF_EQUIPE',
+          active: true
+        },
+        include: {
+          teamMembers: {
+            where: { active: true },
+            include: {
+              assignedDocuments: {
+                include: {
+                  bordereau: {
+                    select: {
+                      dateReception: true,
+                      delaiReglement: true,
+                      contract: {
+                        select: { delaiReglement: true }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          assignedDocuments: {
+            include: {
+              bordereau: {
+                select: {
+                  dateReception: true,
+                  delaiReglement: true,
+                  contract: {
+                    select: { delaiReglement: true }
+                  }
+                }
+              }
+            }
+          }
+        }
       });
 
-      for (const chef of chefs) {
-        // Find gestionnaires using teamLeaderId relationship
-        const gestionnaires = await this.prisma.user.findMany({
-          where: { 
-            teamLeaderId: chef.id,
-            role: 'GESTIONNAIRE'
+      // Get GESTIONNAIRE_SENIOR and RESPONSABLE_DEPARTEMENT (EXACT SAME AS SUPER ADMIN)
+      const individualTeams = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'] },
+          active: true
+        },
+        include: {
+          assignedDocuments: {
+            include: {
+              bordereau: {
+                select: {
+                  dateReception: true,
+                  delaiReglement: true,
+                  contract: {
+                    select: { delaiReglement: true }
+                  }
+                }
+              }
+            }
           },
-          select: { id: true, capacity: true }
-        });
-        
-        const gestionnaireIds = gestionnaires.map(g => g.id);
-        
-        // Calculate total team capacity (chef + gestionnaires)
-        const chefCapacity = chef.capacity || 0;
-        const gestionnairesCapacity = gestionnaires.reduce((sum, g) => sum + (g.capacity || 0), 0);
-        const totalCapacity = chefCapacity + gestionnairesCapacity;
-        
-        this.logger.log(`Team ${chef.fullName}: Chef capacity=${chefCapacity}, ${gestionnaires.length} gestionnaires capacity=${gestionnairesCapacity}, TOTAL=${totalCapacity}`);
-        
-        if (totalCapacity === 0) continue;
-        
-        // Count open bordereaux for entire team
-        const workload = await this.prisma.bordereau.count({
-          where: {
-            statut: { notIn: ['CLOTURE', 'PAYE'] },
-            OR: [
-              { teamId: chef.id },
-              { currentHandlerId: { in: [chef.id, ...gestionnaireIds] } }
-            ]
+          contractsAsTeamLeader: {
+            include: {
+              bordereaux: {
+                where: { archived: false },
+                include: {
+                  documents: true,
+                  contract: true
+                }
+              }
+            }
           }
-        });
-        
-        const utilizationRate = (workload / totalCapacity) * 100;
-        const teamSize = 1 + gestionnaires.length;
+        }
+      });
 
-        if (utilizationRate > 120) {
+      // Helper function: EXACT SAME TIME-BASED CALCULATION AS SUPER ADMIN
+      const calculateTimeBasedUtilization = (documents: any[], capacity: number) => {
+        let totalRequiredPerDay = 0;
+        
+        for (const doc of documents) {
+          const bordereau = doc.bordereau || doc;
+          const delaiReglement = bordereau?.delaiReglement || bordereau?.contract?.delaiReglement || 30;
+          const dateReception = bordereau?.dateReception || now;
+          
+          const deadlineDate = new Date(dateReception);
+          deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
+          
+          const remainingDays = Math.max(1, Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+          
+          totalRequiredPerDay += 1 / remainingDays;
+        }
+        
+        const utilizationRate = capacity > 0 ? Math.round((totalRequiredPerDay / capacity) * 100) : 0;
+        return { utilizationRate, requiredPerDay: totalRequiredPerDay };
+      };
+
+      // Process Chef d'Équipe teams (EXACT SAME LOGIC AS SUPER ADMIN)
+      for (const chef of chefEquipes) {
+        const teamMembers = chef.teamMembers || [];
+        const allDocs = [...chef.assignedDocuments, ...teamMembers.flatMap(m => m.assignedDocuments)];
+        const totalCapacity = chef.capacity + teamMembers.reduce((sum, member) => sum + member.capacity, 0);
+        
+        const { utilizationRate } = calculateTimeBasedUtilization(allDocs, totalCapacity);
+        const teamSize = teamMembers.length + 1;
+
+        // UNIFIED THRESHOLDS: <70% Normal | 70-89% Occupé | ≥90% Surchargé
+        if (utilizationRate >= 90) {
           await this.createOrUpdateAlert({
             alertType: 'TEAM_OVERLOAD',
             alertLevel: 'red',
-            message: `Équipe surchargée - ${chef.fullName} - ${workload}/${totalCapacity} dossiers (+${Math.round((workload / totalCapacity - 1) * 100)}%)`,
+            message: `Équipe surchargée - ${chef.fullName} - ${allDocs.length} docs (${utilizationRate}% time-based)`,
             userId: chef.id,
-            metadata: { workload, capacity: totalCapacity, teamSize, overloadPercentage: Math.round((workload / totalCapacity - 1) * 100) }
+            metadata: { workload: allDocs.length, capacity: totalCapacity, teamSize, utilizationRate }
           });
-        } else if (utilizationRate > 80) {
+        } else if (utilizationRate >= 70) {
           await this.createOrUpdateAlert({
             alertType: 'TEAM_OVERLOAD',
             alertLevel: 'orange',
-            message: `Charge élevée - ${chef.fullName} - ${workload}/${totalCapacity} dossiers (${Math.round(utilizationRate)}%)`,
+            message: `Charge élevée - ${chef.fullName} - ${allDocs.length} docs (${utilizationRate}% time-based)`,
             userId: chef.id,
-            metadata: { workload, capacity: totalCapacity, teamSize, utilizationRate: Math.round(utilizationRate) }
+            metadata: { workload: allDocs.length, capacity: totalCapacity, teamSize, utilizationRate }
           });
         } else {
-          // Resolve existing alerts when utilization is normal
           await this.prisma.alertLog.updateMany({
-            where: {
-              userId: chef.id,
-              alertType: 'TEAM_OVERLOAD',
-              resolved: false
-            },
-            data: {
-              resolved: true,
-              resolvedAt: new Date()
-            }
+            where: { userId: chef.id, alertType: 'TEAM_OVERLOAD', resolved: false },
+            data: { resolved: true, resolvedAt: new Date() }
           });
         }
       }
 
-      this.logger.log(`Processed ${chefs.length} teams for overload alerts`);
+      // Process individual teams (EXACT SAME LOGIC AS SUPER ADMIN)
+      for (const user of individualTeams) {
+        let allDocs = user.assignedDocuments;
+        
+        if (user.role === 'GESTIONNAIRE_SENIOR' && user.contractsAsTeamLeader) {
+          allDocs = user.contractsAsTeamLeader.flatMap(contract => 
+            contract.bordereaux.flatMap(bordereau => 
+              bordereau.documents.map(doc => ({ ...doc, bordereau }))
+            )
+          );
+        }
+        
+        const { utilizationRate } = calculateTimeBasedUtilization(allDocs, user.capacity);
+
+        // UNIFIED THRESHOLDS: <70% Normal | 70-89% Occupé | ≥90% Surchargé
+        if (utilizationRate >= 90) {
+          await this.createOrUpdateAlert({
+            alertType: 'TEAM_OVERLOAD',
+            alertLevel: 'red',
+            message: `${user.fullName} surchargé - ${allDocs.length} docs (${utilizationRate}% time-based)`,
+            userId: user.id,
+            metadata: { workload: allDocs.length, capacity: user.capacity, teamSize: 1, utilizationRate }
+          });
+        } else if (utilizationRate >= 70) {
+          await this.createOrUpdateAlert({
+            alertType: 'TEAM_OVERLOAD',
+            alertLevel: 'orange',
+            message: `${user.fullName} charge élevée - ${allDocs.length} docs (${utilizationRate}% time-based)`,
+            userId: user.id,
+            metadata: { workload: allDocs.length, capacity: user.capacity, teamSize: 1, utilizationRate }
+          });
+        } else {
+          await this.prisma.alertLog.updateMany({
+            where: { userId: user.id, alertType: 'TEAM_OVERLOAD', resolved: false },
+            data: { resolved: true, resolvedAt: new Date() }
+          });
+        }
+      }
+
+      this.logger.log(`Processed ${chefEquipes.length + individualTeams.length} teams for overload alerts`);
     } catch (error) {
       this.logger.error('Failed to process team overload alerts:', error);
     } finally {

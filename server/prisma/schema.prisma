@@ -197,6 +197,7 @@ model Bordereau {
   chargeCompteId           String?
   dateLimiteTraitement     DateTime?
   dateReceptionBO          DateTime?
+  dateAffectation          DateTime?
   dateReceptionEquipeSante DateTime?
   dateReelleCloture        DateTime?
   nombreJourTraitement     Int?

@@ -13,8 +13,8 @@ export class WorkflowCorbeilleController {
     const userId = req.user?.sub || req.user?.id;
     const reclamationId = body.bordereauId;
     
-    console.log(`Returning reclamation ${reclamationId} to chef by user ${userId}`);
-    console.log('Reason:', body.reason);
+    // console.log(`Returning reclamation ${reclamationId} to chef by user ${userId}`);
+    // console.log('Reason:', body.reason);
     
     try {
       // Update reclamation status and clear assignment
@@ -38,7 +38,7 @@ export class WorkflowCorbeilleController {
         }
       });
       
-      console.log(`Successfully returned reclamation ${reclamationId} to chef`);
+      // console.log(`Successfully returned reclamation ${reclamationId} to chef`);
       return { success: true, message: 'Réclamation retournée au chef avec succès' };
     } catch (error) {
       console.error('Error returning to chef:', error);

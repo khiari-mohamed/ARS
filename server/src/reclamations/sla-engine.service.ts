@@ -78,18 +78,19 @@ export class SLAEngineService {
       const elapsedTime = now.getTime() - createdAt.createdAt.getTime();
       const remainingTime = deadline.getTime() - now.getTime();
       
+      // UNIFIED SLA LOGIC: Use percentage elapsed with 80%/100% thresholds
       const percentageUsed = (elapsedTime / totalTime) * 100;
       
       let status: SLAStatus['status'] = 'ON_TIME';
       let escalationLevel = 0;
 
-      if (remainingTime <= 0) {
+      if (remainingTime <= 0 || percentageUsed > 100) {
         status = 'OVERDUE';
         escalationLevel = 3;
-      } else if (percentageUsed >= 90) {
+      } else if (percentageUsed > 80) {
         status = 'CRITICAL';
         escalationLevel = 2;
-      } else if (percentageUsed >= 70) {
+      } else if (percentageUsed > 60) {
         status = 'AT_RISK';
         escalationLevel = 1;
       }

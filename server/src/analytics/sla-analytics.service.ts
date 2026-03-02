@@ -24,6 +24,12 @@ export class SLAAnalyticsService {
       where.assignedToUserId = { in: teamMembers.map(m => m.id) };
     }
 
+    // Apply clientId filter
+    if (filters.clientId) {
+      where.clientId = filters.clientId;
+      // console.log('✅ SLA Dashboard applying clientId filter:', filters.clientId);
+    }
+
     // Apply date filters
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
@@ -41,7 +47,7 @@ export class SLAAnalyticsService {
       slaByUser,
       slaByDay
     ] = await Promise.all([
-      this.prisma.bordereau.count({ where }),
+      this.prisma.bordereau.count({ where: { ...where, archived: false } }),
       this.getSLACompliantCount(where),
       this.getAtRiskCount(where),
       this.getBreachedCount(where),
@@ -52,6 +58,8 @@ export class SLAAnalyticsService {
     ]);
 
     const complianceRate = totalBordereaux > 0 ? (slaCompliant / totalBordereaux) * 100 : 0;
+
+    // console.log(`📊 SLA Dashboard: ${slaCompliant} compliant / ${totalBordereaux} total = ${Math.round(complianceRate)}%`);
 
     return {
       overview: {
@@ -70,23 +78,39 @@ export class SLAAnalyticsService {
   }
 
   private async getSLACompliantCount(where: any) {
-    return this.prisma.bordereau.count({
+    const now = new Date();
+    
+    const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
-        dateCloture: { not: null },
-        // Add SLA compliance logic based on contract/client SLA
-      }
+        archived: false,
+      },
+      include: { contract: true, client: true }
     });
+
+    let compliantCount = 0;
+    
+    for (const bordereau of bordereaux) {
+      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
+      const validDate = bordereau.dateReception || bordereau.createdAt;
+      const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
+      const percentElapsed = (daysElapsed / slaThreshold) * 100;
+      
+      if (percentElapsed <= 80) {
+        compliantCount++;
+      }
+    }
+
+    return compliantCount;
   }
 
   private async getAtRiskCount(where: any) {
     const now = new Date();
     
-    // Get bordereaux that are approaching SLA deadline
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
-        dateCloture: null, // Not closed yet
+        archived: false,
       },
       include: { contract: true, client: true }
     });
@@ -94,13 +118,12 @@ export class SLAAnalyticsService {
     let atRiskCount = 0;
     
     for (const bordereau of bordereaux) {
-      const slaThreshold = bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 5;
-      const daysSinceReception = bordereau.dateReception 
-        ? Math.floor((now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24))
-        : 0;
+      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
+      const validDate = bordereau.dateReception || bordereau.createdAt;
+      const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
+      const percentElapsed = (daysElapsed / slaThreshold) * 100;
       
-      // At risk if 80% of SLA time has passed
-      if (daysSinceReception > slaThreshold * 0.8 && daysSinceReception <= slaThreshold) {
+      if (percentElapsed > 80 && percentElapsed <= 100) {
         atRiskCount++;
       }
     }
@@ -114,7 +137,7 @@ export class SLAAnalyticsService {
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
-        dateCloture: null, // Not closed yet
+        archived: false,
       },
       include: { contract: true, client: true }
     });
@@ -122,12 +145,12 @@ export class SLAAnalyticsService {
     let breachedCount = 0;
     
     for (const bordereau of bordereaux) {
-      const slaThreshold = bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 5;
-      const daysSinceReception = bordereau.dateReception 
-        ? Math.floor((now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24))
-        : 0;
+      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
+      const validDate = bordereau.dateReception || bordereau.createdAt;
+      const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
+      const percentElapsed = (daysElapsed / slaThreshold) * 100;
       
-      if (daysSinceReception > slaThreshold) {
+      if (percentElapsed > 100) {
         breachedCount++;
       }
     }
@@ -220,6 +243,7 @@ export class SLAAnalyticsService {
 
   private async getSLAByDay(where: any) {
     const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const now = new Date();
     
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
@@ -230,6 +254,7 @@ export class SLAAnalyticsService {
         createdAt: true,
         dateCloture: true,
         dateReception: true,
+        delaiReglement: true,
         contract: { select: { delaiReglement: true } },
         client: { select: { reglementDelay: true } }
       }
@@ -247,15 +272,15 @@ export class SLAAnalyticsService {
       const stats = dailyStats.get(date);
       stats.total++;
       
-      if (bordereau.dateCloture) {
-        const slaThreshold = bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 5;
-        const processingDays = Math.floor(
-          (new Date(bordereau.dateCloture).getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
-        );
-        
-        if (processingDays <= slaThreshold) {
-          stats.compliant++;
-        }
+      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
+      const validDate = bordereau.dateReception || bordereau.createdAt;
+      const daysElapsed = Math.floor(
+        (now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const percentElapsed = (daysElapsed / slaThreshold) * 100;
+      
+      if (percentElapsed <= 80) {
+        stats.compliant++;
       }
     }
 
@@ -273,7 +298,7 @@ export class SLAAnalyticsService {
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
-        dateCloture: null,
+        archived: false,
       },
       include: {
         contract: {
@@ -287,6 +312,12 @@ export class SLAAnalyticsService {
           }
         },
         client: true,
+        currentHandler: {
+          select: {
+            fullName: true,
+            role: true
+          }
+        },
         documents: {
           include: {
             assignedTo: {
@@ -303,40 +334,50 @@ export class SLAAnalyticsService {
     const alerts: any[] = [];
     
     for (const bordereau of bordereaux) {
-      const slaThreshold = bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
-      const daysSinceReception = bordereau.dateReception 
-        ? Math.floor((now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24))
+      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
+      const validDate = bordereau.dateReception || bordereau.createdAt;
+      const daysElapsed = validDate
+        ? Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24))
         : 0;
       
       let alertLevel: string | null = null;
       let message = '';
+      const percentElapsed = (daysElapsed / slaThreshold) * 100;
       
-      if (daysSinceReception > slaThreshold) {
+      if (percentElapsed > 100) {
         alertLevel = 'critical';
-        message = `SLA breached by ${daysSinceReception - slaThreshold} days`;
-      } else if (daysSinceReception > slaThreshold * 0.8) {
+        const daysOverdue = Math.floor(daysElapsed - slaThreshold);
+        message = `SLA breached by ${daysOverdue} days (${Math.round(percentElapsed)}% elapsed)`;
+      } else if (percentElapsed > 80) {
         alertLevel = 'warning';
-        message = `SLA at risk - ${slaThreshold - daysSinceReception} days remaining`;
+        const daysRemaining = Math.ceil(slaThreshold - daysElapsed);
+        message = `SLA at risk - ${daysRemaining} days remaining (${Math.round(percentElapsed)}% elapsed)`;
       }
       
       if (alertLevel) {
         let assignedTo = 'Non assigné';
         
-        // Priority 1: Get gestionnaire from documents
-        const gestionnaires = bordereau.documents
-          .filter(d => d.assignedTo && d.assignedTo.role === 'GESTIONNAIRE')
-          .map(d => d.assignedTo!.fullName);
-        
-        if (gestionnaires.length > 0) {
-          const counts = gestionnaires.reduce((acc, name) => {
-            acc[name] = (acc[name] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-          assignedTo = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-        } 
-        // Priority 2: Get GESTIONNAIRE_SENIOR from contract teamLeader
-        else if (bordereau.contract?.teamLeader && bordereau.contract.teamLeader.role === 'GESTIONNAIRE_SENIOR') {
-          assignedTo = bordereau.contract.teamLeader.fullName;
+        // Priority 1: currentHandler (most recent assignment)
+        if (bordereau.currentHandler) {
+          assignedTo = bordereau.currentHandler.fullName;
+        }
+        // Priority 2: Get gestionnaire from documents
+        else {
+          const gestionnaires = bordereau.documents
+            .filter(d => d.assignedTo && d.assignedTo.role === 'GESTIONNAIRE')
+            .map(d => d.assignedTo!.fullName);
+          
+          if (gestionnaires.length > 0) {
+            const counts = gestionnaires.reduce((acc, name) => {
+              acc[name] = (acc[name] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            assignedTo = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+          } 
+          // Priority 3: Get GESTIONNAIRE_SENIOR from contract teamLeader
+          else if (bordereau.contract?.teamLeader && bordereau.contract.teamLeader.role === 'GESTIONNAIRE_SENIOR') {
+            assignedTo = bordereau.contract.teamLeader.fullName;
+          }
         }
         
         alerts.push({
@@ -346,9 +387,9 @@ export class SLAAnalyticsService {
           assignedTo,
           alertLevel,
           message,
-          daysSinceReception,
+          daysSinceReception: daysElapsed,
           slaThreshold,
-          daysOverdue: Math.max(0, daysSinceReception - slaThreshold)
+          daysOverdue: Math.max(0, daysElapsed - slaThreshold)
         });
       }
     }
@@ -417,14 +458,20 @@ export class SLAAnalyticsService {
       const [activeBordereaux, avgProcessingTime] = await Promise.all([
         this.prisma.bordereau.count({
           where: {
-            currentHandlerId: member.id,
+            OR: [
+              { currentHandlerId: member.id },
+              { assignedToUserId: member.id }
+            ],
             dateCloture: null
           }
         }),
         this.prisma.bordereau.aggregate({
           _avg: { delaiReglement: true },
           where: {
-            currentHandlerId: member.id,
+            OR: [
+              { currentHandlerId: member.id },
+              { assignedToUserId: member.id }
+            ],
             dateCloture: { not: null }
           }
         })

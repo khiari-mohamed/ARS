@@ -166,13 +166,16 @@ export class SlaConfigurationService {
 
     let compliantCount = 0;
     let breachCount = 0;
+    const now = new Date();
 
     bordereaux.forEach(b => {
-      const processingDays = b.dateCloture 
-        ? Math.floor((b.dateCloture.getTime() - b.dateReception.getTime()) / (1000 * 60 * 60 * 24))
-        : Math.floor((new Date().getTime() - b.dateReception.getTime()) / (1000 * 60 * 60 * 24));
+      const daysElapsed = Math.floor((now.getTime() - b.dateReception.getTime()) / (1000 * 60 * 60 * 24));
+      const slaThreshold = thresholds.reglementDelay;
+      
+      // UNIFIED SLA LOGIC: Use percentage elapsed
+      const percentElapsed = (daysElapsed / slaThreshold) * 100;
 
-      if (processingDays <= thresholds.reglementDelay) {
+      if (percentElapsed <= 80) {
         compliantCount++;
       } else {
         breachCount++;

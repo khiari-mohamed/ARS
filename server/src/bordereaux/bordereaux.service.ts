@@ -106,7 +106,7 @@ export class BordereauxService {
   
   // Performance analytics
   async getPerformanceAnalytics(filters: any = {}): Promise<any> {
-    const whereClause: any = {};
+    const whereClause: any = { archived: false }; // ALWAYS exclude archived
     if (filters.dateStart) whereClause.dateReception = { gte: new Date(filters.dateStart) };
     if (filters.dateEnd) whereClause.dateReception = { ...whereClause.dateReception, lte: new Date(filters.dateEnd) };
     if (filters.clientId) whereClause.clientId = filters.clientId;
@@ -125,9 +125,11 @@ export class BordereauxService {
       monthlyTrends: []
     };
     
-    // Calculate metrics
+    // Calculate metrics using UNIFIED SLA LOGIC
     let totalDays = 0;
     let slaCompliant = 0;
+    let slaEvaluated = 0;
+    const today = new Date();
     
     bordereaux.forEach(b => {
       // Status distribution
@@ -137,9 +139,22 @@ export class BordereauxService {
       if (b.dateCloture) {
         const days = Math.floor((new Date(b.dateCloture).getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
         totalDays += days;
+      }
+      
+      // UNIFIED SLA COMPLIANCE: Use percentage elapsed logic (same as frontend)
+      if (b.dateReception && b.delaiReglement) {
+        slaEvaluated++;
+        const daysElapsed = Math.floor((today.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+        const percentElapsed = (daysElapsed / b.delaiReglement) * 100;
         
-        // SLA compliance
-        if (days <= b.delaiReglement) slaCompliant++;
+        // Compliant if <= 80% of delay elapsed (matches frontend logic)
+        if (percentElapsed <= 80) {
+          slaCompliant++;
+        }
+        // else if (slaEvaluated <= 3) {
+        //   // DEBUG: Log first 3 non-compliant
+        //   console.log(`❌ Non-compliant: ${b.reference} - ${daysElapsed}d elapsed / ${b.delaiReglement}d delay = ${percentElapsed.toFixed(0)}%`);
+        // }
       }
       
       // Client performance
@@ -151,8 +166,10 @@ export class BordereauxService {
       if (b.statut === 'CLOTURE') analytics.clientPerformance[clientName].completed++;
     });
     
+    // console.log(`📊 SLA Compliance Calculation: ${slaCompliant} compliant out of ${slaEvaluated} evaluated (${bordereaux.length} total)`);
+    
     analytics.averageProcessingTime = bordereaux.length > 0 ? Math.round(totalDays / bordereaux.length) : 0;
-    analytics.slaCompliance = bordereaux.length > 0 ? Math.round((slaCompliant / bordereaux.length) * 100) : 0;
+    analytics.slaCompliance = slaEvaluated > 0 ? Math.round((slaCompliant / slaEvaluated) * 100) : 0;
     
     return analytics;
   }
@@ -757,8 +774,20 @@ export class BordereauxService {
     }
     console.log('✅ Reference is unique');
 
-    // DYNAMIC STATUS: Start with A_SCANNER (ready for scan) instead of EN_ATTENTE
-    const initialStatus = statut || Statut.A_SCANNER;
+    // DYNAMIC STATUS: Check if contract has Gestionnaire Senior as team leader
+    let initialStatus = statut || Statut.A_SCANNER;
+    
+    if (contractId) {
+      const contract = await this.prisma.contract.findUnique({
+        where: { id: contractId },
+        include: { teamLeader: { select: { role: true } } }
+      });
+      
+      // If contract is assigned to Gestionnaire Senior, start with EN_COURS
+      if (contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR') {
+        initialStatus = Statut.EN_COURS;
+      }
+    }
 
     const data: any = {
       reference,
@@ -808,7 +837,23 @@ export class BordereauxService {
   }
   
   async findAll(filters: any = {}): Promise<BordereauResponseDto[] | { items: BordereauResponseDto[]; total: number }> {
-    console.log('📡 Backend: Received filters:', JSON.stringify(filters, null, 2));
+    console.log('🔍 findAll called with filters:', JSON.stringify(filters));
+    
+    // TEMP DEBUG: Check ALL bordereaux for VIREMENT_EXECUTE
+    if (filters.page) {
+      const allBordereaux = await this.prisma.bordereau.findMany({
+        where: { archived: false, statut: 'VIREMENT_EXECUTE' },
+        include: {
+          ordresVirement: { select: { dateEtatFinal: true, dateTraitement: true, etatVirement: true }, take: 1 }
+        },
+        take: 5
+      });
+      console.log(`🔍 GLOBAL CHECK: Found ${allBordereaux.length} VIREMENT_EXECUTE bordereaux in database`);
+      allBordereaux.forEach(b => {
+        console.log(`  - ${b.reference}: ordresVirement=${b.ordresVirement?.length || 0}, dateReceptionBO=${b.dateReceptionBO}`);
+      });
+    }
+    
     // Build Prisma where clause based on filters
     const where: any = {};
     if (filters.teamId) where.teamId = filters.teamId;
@@ -819,13 +864,10 @@ export class BordereauxService {
     // Handle statut filter (can be statut or statut[])
     const statutFilter = filters.statut || filters['statut[]'];
     if (statutFilter) {
-      console.log('🔍 Backend: Filtering by statut:', statutFilter);
       if (Array.isArray(statutFilter)) {
         where.statut = { in: statutFilter };
-        console.log('🔍 Backend: Applied statut IN filter:', statutFilter);
       } else {
         where.statut = statutFilter;
-        console.log('🔍 Backend: Applied statut equals filter:', statutFilter);
       }
     }
     if (filters.sla) where.statusColor = filters.sla;
@@ -843,24 +885,17 @@ export class BordereauxService {
     }
     if (typeof filters.archived === 'boolean') {
       where.archived = filters.archived;
-      console.log('🗄️ Backend: Filtering by archived:', filters.archived);
     } else if (filters.archived === 'false') {
       where.archived = false;
-      console.log('🗄️ Backend: Filtering by archived (string):', false);
     } else if (filters.archived === 'true') {
       where.archived = true;
-      console.log('🗄️ Backend: Filtering by archived (string):', true);
     }
     if (filters.assigned === false) where.assignedToUserId = null;
-    // Handle overdue filter (SLA breach)
     if (filters.overdue === 'true' || filters.overdue === true) {
-      console.log('🚨 Backend: Filtering by overdue (SLA breach)');
       // Note: This will be post-filtered after query since SLA calculation requires delaiReglement per bordereau
-      // We'll filter in-memory after fetching
     }
     if (filters.documentStatus) {
       where.documentStatus = filters.documentStatus;
-      console.log('🔍 Backend: Filtering by documentStatus:', filters.documentStatus);
     }
     
     // Handle pagination
@@ -876,27 +911,21 @@ export class BordereauxService {
       orderBy.dateReception = 'desc'; // Default sort
     }
     
-    // Build include clause - ALWAYS include documents for accurate count
+    // Build include clause - ALWAYS include documents for accurate count AND currentHandler for senior display
     const include: any = {
       client: true,
-      contract: true,
+      contract: { include: { teamLeader: true } },
       documents: { select: { id: true } },
+      currentHandler: { select: { id: true, fullName: true, role: true } },
+      ordresVirement: {
+        select: { dateTraitement: true, dateEtatFinal: true, etatVirement: true },
+        orderBy: { dateEtatFinal: 'desc' },
+        take: 1
+      },
       _count: {
         select: { documents: true }
       }
     };
-    
-    // FIXED: Include virement data when withVirement filter is present
-    if (filters.withVirement === 'true' || filters.withVirement === true) {
-      include.virement = true;
-      include.ordresVirement = {
-        where: { etatVirement: 'EXECUTE' },
-        select: { dateTraitement: true, dateEtatFinal: true },
-        orderBy: { dateEtatFinal: 'desc' },
-        take: 1
-      };
-      console.log('🔗 Backend: Including virement and ordresVirement data in query');
-    }
     
     // NEW: Include bulletinSoins when requested for dossiers list
     if (filters.include) {
@@ -914,12 +943,6 @@ export class BordereauxService {
             dateCreation: true
           }
         };
-        console.log('🔗 Backend: Including bulletinSoins data in query');
-      }
-      
-      if (includeFields.includes('assignedToUser')) {
-        // Note: assignedToUser relation doesn't exist in schema, skip this include
-        console.log('⚠️ Backend: assignedToUser relation not found in schema, skipping');
       }
     }
     
@@ -936,6 +959,22 @@ export class BordereauxService {
         this.prisma.bordereau.count({ where })
       ]);
       
+      console.log(`✅ Found ${bordereaux.length} bordereaux`);
+      
+      // Find VIREMENT_EXECUTE bordereaux
+      const virementExecute = bordereaux.filter(b => b.statut === 'VIREMENT_EXECUTE');
+      console.log(`🔍 Found ${virementExecute.length} bordereaux with VIREMENT_EXECUTE status`);
+      
+      if (virementExecute.length > 0) {
+        virementExecute.forEach(b => {
+          console.log(`  - ${b.reference}: ordresVirement=${b.ordresVirement?.length || 0}, dateReceptionBO=${b.dateReceptionBO}`);
+        });
+      }
+      
+      console.log('Sample bordereau ordresVirement:', bordereaux[0]?.ordresVirement);
+      console.log('Sample bordereau dateReceptionBO:', bordereaux[0]?.dateReceptionBO);
+      console.log('Sample bordereau statut:', bordereaux[0]?.statut);
+      
       return {
         items: bordereaux.map(bordereau => {
           const dto = BordereauResponseDto.fromEntity(bordereau);
@@ -949,19 +988,15 @@ export class BordereauxService {
     }
     
     // Otherwise return all results
-    console.log('📡 Backend: Final where clause:', JSON.stringify(where, null, 2));
     const bordereaux = await this.prisma.bordereau.findMany({
       where,
       include,
       orderBy,
     });
-    console.log('📊 Backend: Found', bordereaux.length, 'bordereaux');
-    console.log('📊 Backend: Sample results:', bordereaux.slice(0, 2).map(b => `${b.reference}: ${b.statut} (archived: ${b.archived}) (virement: ${b.virement ? 'YES' : 'NO'})`));
     
     // Post-filter for overdue if requested
     let filteredBordereaux = bordereaux;
     if (filters.overdue === 'true' || filters.overdue === true) {
-      console.log('🚨 Backend: Applying overdue post-filter');
       const today = new Date();
       filteredBordereaux = bordereaux.filter(b => {
         if (!b.dateReception || !b.delaiReglement) return false;
@@ -970,7 +1005,6 @@ export class BordereauxService {
         const remaining = b.delaiReglement - elapsed;
         return remaining < 0; // Only include overdue
       });
-      console.log('🚨 Backend: Filtered to', filteredBordereaux.length, 'overdue bordereaux');
     }
     
     const result = filteredBordereaux.map(bordereau => {
@@ -980,7 +1014,6 @@ export class BordereauxService {
       dto.nombreBS = docCount;
       return dto;
     });
-    console.log('📊 Backend: Mapped results with dureeTraitement:', result.slice(0, 2).map(b => `${b.reference}: dureeTraitement=${b.dureeTraitement}, dureeReglement=${b.dureeReglement}, nombreBS=${b.nombreBS}`));
     return result;
   }
 
@@ -1777,7 +1810,7 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
     if (!user) throw new NotFoundException('Uploader user not found');
 
     // Save file to disk with unique filename
-    const uploadDir = path.join(__dirname, '../../uploads');
+    const uploadDir = path.join(process.cwd(), 'uploads', 'documents');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
     const ext = path.extname(file.originalname);
     const base = path.basename(file.originalname, ext);
@@ -1785,8 +1818,8 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
     const uniqueFilename = `${base}-${uniqueSuffix}${ext}`;
     const filePath = path.join(uploadDir, uniqueFilename);
     fs.writeFileSync(filePath, file.buffer);
-    // Store relative path in DB
-    const relativePath = path.relative(path.join(__dirname, '../..'), filePath);
+    // Store path relative to uploads directory for easy serving
+    const relativePath = `documents/${uniqueFilename}`;
 
     // GESTIONNAIRE_SENIOR FIX: Check if uploader or contract team leader is GESTIONNAIRE_SENIOR
     const isGestionnaireSenior = uploaderRole === 'GESTIONNAIRE_SENIOR' || 
@@ -2234,11 +2267,12 @@ async reassignBordereau(bordereauId: string, newUserId: string, comment?: string
   console.log('From:', oldUserId);
   console.log('To:', newUserId);
   
-  // Update the bordereau assignment
+  // Update the bordereau assignment (BOTH assignedToUserId AND currentHandlerId)
   const updatedBordereau = await this.prisma.bordereau.update({
     where: { id: bordereauId },
     data: {
       assignedToUserId: newUserId,
+      currentHandlerId: newUserId, // CRITICAL: Update currentHandler for display
       statut: Statut.ASSIGNE // Ensure proper status
     },
     include: { client: true, contract: true }

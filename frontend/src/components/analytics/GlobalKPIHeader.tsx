@@ -15,23 +15,37 @@ interface KPIData {
   activeAlerts: number;
 }
 
-const GlobalKPIHeader: React.FC = () => {
+interface GlobalKPIHeaderProps {
+  filters?: any;
+  dateRange?: any;
+}
+
+const GlobalKPIHeader: React.FC<GlobalKPIHeaderProps> = ({ filters = {}, dateRange = {} }) => {
   const [kpis, setKpis] = useState<KPIData | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const loadKPIData = async () => {
     try {
-      const [kpiResponse, alertsResponse] = await Promise.all([
-        LocalAPI.get('/analytics/kpis/daily'),
-        LocalAPI.get('/analytics/alerts')
+      const params = {
+        ...dateRange,
+        clientId: filters.clientId,
+        slaStatus: filters.slaStatus
+      };
+
+      const [kpiResponse, alertsResponse, slaResponse] = await Promise.all([
+        LocalAPI.get('/analytics/kpis/daily', { params }),
+        LocalAPI.get('/analytics/alerts', { params }),
+        LocalAPI.get('/analytics/sla/dashboard', { params })
       ]);
 
       const kpiData = kpiResponse.data;
       const alertData = alertsResponse.data;
+      const slaData = slaResponse.data;
       
       console.log('🔍 Raw KPI Data:', kpiData);
       console.log('🔍 Raw Alert Data:', alertData);
+      console.log('🔍 Raw SLA Data:', slaData);
 
       // Extract real data from API response
       const totalBordereaux = kpiData.totalCount || 0;
@@ -39,8 +53,8 @@ const GlobalKPIHeader: React.FC = () => {
       const enAttenteCount = kpiData.enAttenteCount || 0;
       const avgProcessingTime = kpiData.avgDelay || 0;
       
-      // Calculate SLA compliance from processed vs total
-      const slaCompliance = totalBordereaux > 0 ? Math.round((processedCount / totalBordereaux) * 100) : 0;
+      // Use REAL SLA compliance from unified backend logic (percentageElapsed ≤ 80%)
+      const slaCompliance = Math.round(slaData.overview?.complianceRate || 0);
       
       // Calculate rejection rate (total - processed - en attente)
       const rejectedCount = Math.max(0, totalBordereaux - processedCount - enAttenteCount);
@@ -78,12 +92,7 @@ const GlobalKPIHeader: React.FC = () => {
 
   useEffect(() => {
     loadKPIData();
-    
-    // Auto-refresh every 60 seconds
-    const interval = setInterval(loadKPIData, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  }, [filters, dateRange]);
   if (loading || !kpis) {
     return (
       <Paper elevation={2} sx={{ p: 3, mb: 3 }}>

@@ -49,13 +49,20 @@ interface RealTimeStats {
   teamWorkloadDetails?: any[];
 }
 
-const RealTimeSuperAdminDashboard: React.FC = () => {
+interface RealTimeSuperAdminDashboardProps {
+  onTeamRulesClick: () => void;
+}
+
+const RealTimeSuperAdminDashboard: React.FC<RealTimeSuperAdminDashboardProps> = ({ onTeamRulesClick }) => {
   const [realTimeData, setRealTimeData] = useState<RealTimeStats | null>(null);
   const [queuesData, setQueuesData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportDialog, setExportDialog] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [ageRulesDialog, setAgeRulesDialog] = useState(false);
+  const [alertRulesDialog, setAlertRulesDialog] = useState(false);
+  const [workloadRulesDialog, setWorkloadRulesDialog] = useState(false);
   // Removed: dossiers, documents, stats, filters - tables commented out
 
   useEffect(() => {
@@ -176,8 +183,8 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
         </Box>
       </Box>
 
-      {/* System Health Alert */}
-      {realTimeData?.systemHealth?.status !== 'healthy' && (
+      {/* System Health Alert - COMMENTED OUT (Client request: too technical) */}
+      {false && realTimeData?.systemHealth?.status !== 'healthy' && (
         <Alert 
           severity={realTimeData?.systemHealth?.status === 'critical' ? 'error' : 'warning'} 
           sx={{ mb: 3 }}
@@ -195,6 +202,8 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
 
       {/* Key Metrics */}
       <Grid container spacing={3} mb={4}>
+        {/* État Système Card - COMMENTED OUT (Client request: too technical) */}
+        {false && (
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
@@ -217,7 +226,10 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+        )}
 
+        {/* Utilisateurs Actifs Card - COMMENTED OUT (Client request: not needed) */}
+        {false && (
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
@@ -238,9 +250,31 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+        )}
 
         <Grid item xs={12} sm={6} md={3}>
           <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography color="text.secondary" gutterBottom variant="body2">
+                    Bordereaux
+                  </Typography>
+                  <Typography variant="h4" component="div">
+                    {realTimeData?.systemStats?.bordereaux?.total || 0}
+                  </Typography>
+                  <Typography variant="caption" color="info.main">
+                    {realTimeData?.systemStats?.bordereaux?.processing || 0} en cours
+                  </Typography>
+                </Box>
+                <Speed color="info" sx={{ fontSize: 40 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ cursor: 'pointer', '&:hover': { boxShadow: 6 } }} onClick={onTeamRulesClick}>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
@@ -254,12 +288,17 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
                     {realTimeData?.busyTeams || 0} occupées | {realTimeData?.teamWorkload || 0} total
                   </Typography>
                 </Box>
-                <Assignment color="error" sx={{ fontSize: 40 }} />
+                <Box display="flex" flexDirection="column" alignItems="center">
+                  <Assignment color="error" sx={{ fontSize: 40 }} />
+                  <Info color="action" sx={{ fontSize: 16, mt: 0.5 }} />
+                </Box>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
+        {/* Bordereaux en Cours Card - COMMENTED OUT (duplicate - already in header) */}
+        {false && (
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
@@ -280,6 +319,7 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+        )}
       </Grid>
 
       {/* Queues Overview with Alert Rules */}
@@ -379,11 +419,12 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
                       <Typography variant="body2">{queue.processing}</Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Box>
+                      <Box sx={{ cursor: 'pointer' }} onClick={() => setAgeRulesDialog(true)}>
                         <Chip 
                           label={formatAge(queue.oldestAge)}
                           color={getAgeColor(queue.oldestAge) as any}
                           size="small"
+                          icon={<Info />}
                         />
                         {queue.alertLevel === 'CRITICAL' && (
                           <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
@@ -393,7 +434,7 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
                       </Box>
                     </TableCell>
                     <TableCell align="center">
-                      <Box display="flex" flexDirection="column" alignItems="center" gap={0.5}>
+                      <Box display="flex" flexDirection="column" alignItems="center" gap={0.5} sx={{ cursor: 'pointer' }} onClick={() => setAlertRulesDialog(true)}>
                         {queue.alertLevel === 'CRITICAL' && (
                           <>
                             <Error color="error" />
@@ -450,12 +491,14 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             <Typography variant="h6">
               Charge de Travail des Équipes
             </Typography>
-            <Chip 
-              label="Règle: <70% Normal | 70-89% Occupé | ≥90% Surchargé" 
-              size="small" 
-              color="info"
+            <Button
+              size="small"
               variant="outlined"
-            />
+              startIcon={<Info />}
+              onClick={() => setWorkloadRulesDialog(true)}
+            >
+              📘 Cliquez pour Comprendre
+            </Button>
           </Box>
           <TableContainer>
             <Table>
@@ -499,17 +542,12 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
-          <Alert severity="info" sx={{ mt: 2 }}>
-            <Typography variant="caption">
-              <strong>Formule:</strong> Taux d'utilisation = (Bordereaux assignés / Capacité) × 100 | 
-              🟢 Normal (&lt;70%) | 🟠 Occupé (70-89%) | 🔴 Surchargé (≥90%)
-            </Typography>
-          </Alert>
         </CardContent>
       </Card>
 
 
-      {/* System Performance */}
+      {/* System Performance - COMMENTED OUT (Client request: too technical) */}
+      {false && (
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={6}>
           <Card>
@@ -585,6 +623,7 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+      )}
 
       {/* Export Dialog */}
       <Dialog open={exportDialog} onClose={() => setExportDialog(false)}>
@@ -609,6 +648,188 @@ const RealTimeSuperAdminDashboard: React.FC = () => {
             disabled={exporting}
           >
             PDF
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Age Rules Dialog */}
+      <Dialog open={ageRulesDialog} onClose={() => setAgeRulesDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Info color="primary" />
+            <Typography variant="h6">Règles de Calcul - Attente Maximum</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ fontFamily: 'monospace', whiteSpace: 'pre', bgcolor: '#f5f5f5', p: 2, borderRadius: 1, mb: 3 }}>
+{`╔════════════════════════════════════════════════════════════════╗
+║           CALCUL DE L'ATTENTE MAXIMUM DES BORDEREAUX          ║
+╚════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────┐
+│  ATTENTE MAX = Temps écoulé depuis la date de réception   │
+│              du bordereau le plus ancien                     │
+└─────────────────────────────────────────────────────────────┘
+
+   Date Actuelle: 15/01/2025 14:30
+   Date Réception Bordereau: 25/11/2023 17:00
+   
+   Calcul:
+   └── Différence = 15/01/2025 - 25/11/2023
+       = 416 jours + 21 heures
+       = 50j 21h (affiché)`}
+          </Box>
+
+          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+            🚦 Codes Couleur par Âge
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+              <Chip label="< 24h" size="small" />
+              <Typography variant="body2">Bordereau récent (moins d'un jour)</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: '#e3f2fd', borderRadius: 1 }}>
+              <Chip label="1-3j" color="info" size="small" />
+              <Typography variant="body2">Bordereau en cours (1 à 3 jours)</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: '#fff3e0', borderRadius: 1 }}>
+              <Chip label="3-7j" color="warning" size="small" />
+              <Typography variant="body2">Attention requise (3 à 7 jours)</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: '#ffebee', borderRadius: 1 }}>
+              <Chip label="> 7j" color="error" size="small" />
+              <Typography variant="body2">Délai critique (plus de 7 jours)</Typography>
+            </Box>
+          </Box>
+
+          <Alert severity="warning" sx={{ mt: 3 }}>
+            <Typography variant="body2">
+              <strong>⚠️ Important:</strong> L'attente maximum indique le temps écoulé depuis la réception 
+              du bordereau le plus ancien dans cette étape. Un délai élevé peut indiquer un blocage ou 
+              une surcharge à cette étape du processus.
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAgeRulesDialog(false)} variant="contained">
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Workload Calculation Rules Dialog */}
+      <Dialog open={workloadRulesDialog} onClose={() => setWorkloadRulesDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Info color="primary" />
+            <Typography variant="h6">Calcul de la Charge de Travail - Basé sur le Temps</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ fontFamily: 'monospace', whiteSpace: 'pre', bgcolor: '#f5f5f5', p: 2, borderRadius: 1, mb: 3 }}>
+{`╔════════════════════════════════════════════════════════════════╗
+║     CALCUL DE LA CHARGE DE TRAVAIL (TIME-BASED)             ║
+╚════════════════════════════════════════════════════════════════╝
+
+🎯 OBJECTIF:
+Calculer si un gestionnaire peut finir ses documents à temps
+selon les délais contractuels (durée de règlement).
+
+┌─────────────────────────────────────────────────────────────┐
+│  FORMULE PRINCIPALE:                                        │
+│                                                             │
+│  Pour chaque document:                                      │
+│    Requis/Jour = 1 / Jours_Restants                       │
+│                                                             │
+│  Total Requis/Jour = Σ (1 / Jours_Restants)              │
+│                                                             │
+│  Utilisation% = (Total_Requis/Jour / Capacité) × 100     │
+└─────────────────────────────────────────────────────────────┘`}
+          </Box>
+
+          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+            📊 Exemple Concret
+          </Typography>
+          <Box sx={{ bgcolor: '#e3f2fd', p: 2, borderRadius: 1, mb: 2 }}>
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              Gestionnaire: Sonia Bouaicha
+            </Typography>
+            <Typography variant="body2" component="div">
+              • Capacité quotidienne: <strong>50 documents/jour</strong><br/>
+              • Documents assignés: <strong>997 documents</strong>
+            </Typography>
+          </Box>
+
+          <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1, fontFamily: 'monospace', fontSize: '0.85rem', mb: 2 }}>
+{`Détail des documents par délai:
+
+┌──────────────────────────────────────────────────────────┐
+│ Groupe 1: 200 docs - Délai: 10 jours restants          │
+│   Requis/Jour = 200 / 10 = 20 docs/jour                │
+├──────────────────────────────────────────────────────────┤
+│ Groupe 2: 300 docs - Délai: 15 jours restants          │
+│   Requis/Jour = 300 / 15 = 20 docs/jour                │
+├──────────────────────────────────────────────────────────┤
+│ Groupe 3: 497 docs - Délai: 30 jours restants          │
+│   Requis/Jour = 497 / 30 = 16.57 docs/jour             │
+└──────────────────────────────────────────────────────────┘
+
+Total Requis/Jour = 20 + 20 + 16.57 = 56.57 docs/jour
+Capacité = 50 docs/jour
+
+Utilisation = (56.57 / 50) × 100 = 113% → 🔴 SURCHARGÉ`}
+          </Box>
+
+          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+            🚦 Interprétation des Résultats
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: '#e8f5e9', borderRadius: 1 }}>
+              <Typography sx={{ fontSize: '1.5rem' }}>🟢</Typography>
+              <Box flex={1}>
+                <Typography variant="subtitle2" fontWeight={600}>NORMAL (&lt;70%)</Typography>
+                <Typography variant="body2">Le gestionnaire peut traiter tous ses documents à temps avec marge de sécurité</Typography>
+              </Box>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: '#fff3e0', borderRadius: 1 }}>
+              <Typography sx={{ fontSize: '1.5rem' }}>🟠</Typography>
+              <Box flex={1}>
+                <Typography variant="subtitle2" fontWeight={600}>OCCUPÉ (70-89%)</Typography>
+                <Typography variant="body2">Charge élevée mais gérable. Surveillance recommandée</Typography>
+              </Box>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, bgcolor: '#ffebee', borderRadius: 1 }}>
+              <Typography sx={{ fontSize: '1.5rem' }}>🔴</Typography>
+              <Box flex={1}>
+                <Typography variant="subtitle2" fontWeight={600}>SURCHARGÉ (≥90%)</Typography>
+                <Typography variant="body2">Impossible de finir à temps. Réaffectation nécessaire!</Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+            💡 Avantages de cette Méthode
+          </Typography>
+          <Box sx={{ bgcolor: '#e8f5e9', p: 2, borderRadius: 1 }}>
+            <Typography variant="body2" component="div">
+              ✅ <strong>Réaliste:</strong> Prend en compte les délais contractuels<br/>
+              ✅ <strong>Prédictif:</strong> Détecte les surcharges avant qu'il soit trop tard<br/>
+              ✅ <strong>Équitable:</strong> 80 docs en 4 jours = 50 docs en 2 jours (même charge)<br/>
+              ✅ <strong>Actionnable:</strong> Permet de réaffecter intelligemment
+            </Typography>
+          </Box>
+
+          <Alert severity="warning" sx={{ mt: 3 }}>
+            <Typography variant="body2">
+              <strong>⚠️ Important:</strong> Cette méthode calcule la charge RÉELLE basée sur les délais. 
+              Un gestionnaire avec 100 documents peut être moins surchargé qu'un autre avec 50 documents 
+              si les délais sont différents!
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWorkloadRulesDialog(false)} variant="contained">
+            Fermer
           </Button>
         </DialogActions>
       </Dialog>

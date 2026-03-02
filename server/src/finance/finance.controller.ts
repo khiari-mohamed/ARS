@@ -117,18 +117,6 @@ export class FinanceController {
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet);
       
-      // Get first client or create one
-      let defaultClient = await this.prisma.client.findFirst();
-      if (!defaultClient) {
-        defaultClient = await this.prisma.client.create({
-          data: {
-            name: 'AIR LIQUIDE TUNISIE ACTIFS',
-            reglementDelay: 30,
-            reclamationDelay: 15
-          }
-        });
-      }
-      
       let imported = 0;
       let skipped = 0;
       const errors: string[] = [];
@@ -142,7 +130,6 @@ export class FinanceController {
           const assuranceCompany = row['ASSURE'] || row['Assurance'] || '';
           const fullName = row['Name'] || row['Nom'] || row['nom'] || '';
           const rib = String(row['Banque'] || row['RIB'] || row['rib'] || '').replace(/\D/g, '');
-          
           
           if (!matricule || !rib) {
             skipped++;
@@ -158,12 +145,37 @@ export class FinanceController {
             continue;
           }
           
+          // FIXED: Find client by matching assurance company name
+          let targetClient = await this.prisma.client.findFirst({
+            where: {
+              OR: [
+                { name: { contains: assuranceCompany, mode: 'insensitive' } },
+                { compagnieAssurance: { nom: { contains: assuranceCompany, mode: 'insensitive' } } }
+              ]
+            },
+            include: { compagnieAssurance: true }
+          });
+          
+          // If no match found, use first client as fallback
+          if (!targetClient) {
+            targetClient = await this.prisma.client.findFirst({ include: { compagnieAssurance: true } });
+            console.log(`⚠️ Row ${i + 1}: No client found for "${assuranceCompany}", using fallback: ${targetClient?.name}`);
+          } else {
+            console.log(`✅ Row ${i + 1}: Matched client "${targetClient.name}" for assurance "${assuranceCompany}"`);
+          }
+          
+          if (!targetClient) {
+            skipped++;
+            errors.push(`Ligne ${i + 1}: Aucun client disponible`);
+            continue;
+          }
+          
           const nameParts = fullName.split(' ');
           const adherentData = {
             matricule: String(matricule),
             nom: nameParts[0] || fullName,
             prenom: nameParts.slice(1).join(' ') || '',
-            clientId: defaultClient.id,
+            clientId: targetClient.id,
             rib: rib,
             codeAssure: String(row['Code Assurée'] || row['Code Assuré'] || row['Code Assure'] || row['codeAssure'] || ''),
             numeroContrat: String(row['ContratN'] || row['Numéro Contrat'] || row['Numero Contrat'] || row['numeroContrat'] || ''),

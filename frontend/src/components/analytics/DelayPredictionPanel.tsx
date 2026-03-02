@@ -9,9 +9,11 @@ import {
   CircularProgress,
   Alert,
   Divider,
-  Stack
+  Stack,
+  Paper,
+  Grid
 } from '@mui/material';
-import { Psychology, TrendingUp, TrendingDown, CheckCircle, Warning, Info } from '@mui/icons-material';
+import { Psychology, TrendingUp, TrendingDown, CheckCircle, Warning, Info, CalendarToday, Speed, Assessment } from '@mui/icons-material';
 
 interface DelayPredictionPanelProps {
   prediction?: {
@@ -44,9 +46,10 @@ const DelayPredictionPanel: React.FC<DelayPredictionPanelProps> = ({ prediction 
   }
 
   const getRiskLevel = (forecast: number) => {
-    if (forecast > 100) return { level: 'Élevé', color: 'error', icon: <Warning /> };
-    if (forecast > 50) return { level: 'Moyen', color: 'warning', icon: <Info /> };
-    return { level: 'Faible', color: 'success', icon: <CheckCircle /> };
+    if (forecast > 150) return { level: 'Critique', color: 'error', icon: <Warning />, description: 'Surcharge importante prévue' };
+    if (forecast > 100) return { level: 'Élevé', color: 'error', icon: <Warning />, description: 'Charge élevée attendue' };
+    if (forecast > 50) return { level: 'Moyen', color: 'warning', icon: <Info />, description: 'Charge modérée prévue' };
+    return { level: 'Faible', color: 'success', icon: <CheckCircle />, description: 'Charge normale' };
   };
 
   const getTrendIcon = (trend: string) => {
@@ -74,161 +77,113 @@ const DelayPredictionPanel: React.FC<DelayPredictionPanelProps> = ({ prediction 
   const dataPoints = prediction.data_points_analyzed || 0;
   const reliability = prediction.forecast_reliability;
   
+  // DEBUG: Log AI response
+  console.log('🤖 AI Prediction Response:', {
+    nextWeekPrediction,
+    aiConfidence,
+    trendDirection,
+    insightsCount: insights.length,
+    insights: insights,
+    fullPrediction: prediction
+  });
+  
   const risk = getRiskLevel(nextWeekPrediction);
 
   return (
     <Card elevation={3}>
       <CardContent>
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <Psychology color="primary" fontSize="large" />
-          <Box>
-            <Typography variant="h6">Prédiction IA</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Analyse de {dataPoints} points de données
-            </Typography>
+        <Box mb={2} p={2} bgcolor="primary.main" borderRadius={2}>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+            <Box>
+              <Typography variant="caption" color="primary.contrastText" sx={{ opacity: 0.9 }}>
+                🔮 PRÉVISION SEMAINE PROCHAINE
+              </Typography>
+              <Typography variant="h3" fontWeight="bold" color="primary.contrastText">
+                {Math.round(nextWeekPrediction)} bordereaux
+              </Typography>
+              <Typography variant="caption" color="primary.contrastText" sx={{ opacity: 0.8 }}>
+                attendus du {new Date(Date.now() + 7*24*60*60*1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} au {new Date(Date.now() + 14*24*60*60*1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+              </Typography>
+            </Box>
+            <Chip 
+              label={`${Math.round(aiConfidence * 100)}% fiable`}
+              color="default"
+              size="small"
+              sx={{ fontWeight: 'bold', bgcolor: 'rgba(255,255,255,0.9)' }}
+            />
           </Box>
         </Box>
-        
-        <Box mb={2} p={2} bgcolor="primary.light" borderRadius={2}>
-          <Typography variant="body2" color="primary.contrastText" gutterBottom>
-            Prévision Semaine Prochaine
-          </Typography>
-          <Box display="flex" alignItems="baseline" gap={1}>
-            <Typography variant="h3" color="primary.contrastText" fontWeight="bold">
-              {Math.round(nextWeekPrediction)}
-            </Typography>
-            <Typography variant="body1" color="primary.contrastText">
-              bordereaux
-            </Typography>
-          </Box>
-          <Box mt={1} display="flex" alignItems="center" gap={1}>
-            <LinearProgress 
-              variant="determinate" 
-              value={Math.round(aiConfidence * 100)} 
-              sx={{ 
-                flex: 1, 
-                height: 8, 
-                borderRadius: 4,
-                bgcolor: 'rgba(255,255,255,0.3)',
-                '& .MuiLinearProgress-bar': {
-                  bgcolor: aiConfidence > 0.7 ? 'success.main' : aiConfidence > 0.5 ? 'warning.main' : 'error.main'
-                }
-              }} 
-            />
-            <Typography variant="caption" color="primary.contrastText" fontWeight="bold">
-              {Math.round(aiConfidence * 100)}% confiance
-            </Typography>
-          </Box>
-          {dataPoints < 14 && (
-            <Typography variant="caption" color="primary.contrastText" sx={{ mt: 0.5, display: 'block', opacity: 0.9 }}>
-              📈 La précision s'améliorera avec plus de données ({dataPoints}/30 jours)
-            </Typography>
-          )}
-        </Box>
 
-        <Stack spacing={1} mb={2}>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Box display="flex" alignItems="center" gap={1}>
-              {risk.icon}
-              <Typography variant="body2">Niveau de Risque</Typography>
-            </Box>
-            <Chip
-              label={risk.level}
-              color={risk.color as any}
-              size="small"
-              sx={{ fontWeight: 'bold' }}
-            />
-          </Box>
-          
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Box display="flex" alignItems="center" gap={1}>
-              {getTrendIcon(trendDirection)}
-              <Typography variant="body2">Tendance</Typography>
-            </Box>
-            <Chip
-              label={trendDirection === 'increasing' ? 'Croissante' : 
-                     trendDirection === 'decreasing' ? 'Décroissante' : 'Stable'}
-              color={trendDirection === 'increasing' ? 'error' : 
-                     trendDirection === 'decreasing' ? 'success' : 'default'}
-              size="small"
-              variant="outlined"
-            />
-          </Box>
+        {/* Priority Actions Only */}
+        {insights.filter(i => i.priority === 'high' || i.priority === 'medium').length > 0 && (
+          <Stack spacing={2} mb={3}>
+            {insights.filter(i => i.priority === 'high' || i.priority === 'medium').map((insight: any, index: number) => (
+              <Paper 
+                key={index}
+                elevation={3}
+                sx={{ 
+                  p: 2.5, 
+                  bgcolor: insight.priority === 'high' ? 'error.light' : 'warning.light',
+                  borderLeft: 6,
+                  borderColor: insight.priority === 'high' ? 'error.main' : 'warning.main'
+                }}
+              >
+                <Box display="flex" alignItems="flex-start" gap={1.5}>
+                  <Typography sx={{ fontSize: '1.8rem', lineHeight: 1 }}>
+                    {insight.icon || (insight.priority === 'high' ? '🚨' : '⚠️')}
+                  </Typography>
+                  <Box flex={1}>
+                    <Typography variant="h6" fontWeight="bold" gutterBottom color="text.primary">
+                      {insight.message}
+                    </Typography>
+                    <Box 
+                      sx={{ 
+                        mt: 1.5, 
+                        p: 2, 
+                        bgcolor: 'background.paper', 
+                        borderRadius: 1,
+                        borderLeft: 4,
+                        borderColor: insight.priority === 'high' ? 'error.main' : 'warning.main'
+                      }}
+                    >
+                      <Typography variant="body1" fontWeight="600" 
+                        color={insight.priority === 'high' ? 'error.dark' : 'warning.dark'}>
+                        ✓ {insight.action}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Paper>
+            ))}
+          </Stack>
+        )}
 
-          {reliability && (
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <Typography variant="body2">Fiabilité</Typography>
-              <Chip
-                label={reliability.level === 'high' ? 'Élevée' : 
-                       reliability.level === 'medium' ? 'Moyenne' : 'Faible'}
-                color={reliability.level === 'high' ? 'success' : 
-                       reliability.level === 'medium' ? 'warning' : 'error'}
-                size="small"
-                variant="outlined"
-              />
-            </Box>
-          )}
-        </Stack>
-
-        {insights.length > 0 && (
-          <>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle2" gutterBottom fontWeight="bold">
-              💡 Insights IA
+        {/* Additional Info - Collapsible */}
+        {insights.filter(i => i.priority === 'low').length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Divider sx={{ mb: 2 }} />
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom fontWeight="bold">
+              📊 Informations Complémentaires
             </Typography>
             <Stack spacing={1}>
-              {insights.map((insight: any, index: number) => (
-                <Alert 
-                  key={index} 
-                  severity={insight.type === 'warning' ? 'warning' : insight.type === 'success' ? 'success' : 'info'}
-                  icon={<span>{getInsightIcon(insight.type)}</span>}
-                  sx={{ py: 0.5 }}
+              {insights.filter(i => i.priority === 'low').map((insight: any, index: number) => (
+                <Box 
+                  key={index}
+                  sx={{ 
+                    p: 1.5, 
+                    bgcolor: 'grey.50', 
+                    borderRadius: 1,
+                    borderLeft: 3,
+                    borderColor: 'info.main'
+                  }}
                 >
-                  <Typography variant="caption" fontWeight="bold">
-                    {insight.message}
+                  <Typography variant="body2" color="text.secondary">
+                    {insight.icon} {insight.message}
                   </Typography>
-                  <Typography variant="caption" display="block" color="text.secondary">
-                    → {insight.action}
-                  </Typography>
-                </Alert>
+                </Box>
               ))}
             </Stack>
-          </>
-        )}
-
-        {recommendations.length > 0 && (
-          <>
-            <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle2" gutterBottom fontWeight="bold">
-              🎯 Recommandations
-            </Typography>
-            <Stack spacing={0.5}>
-              {recommendations.slice(0, 3).map((rec: any, index: number) => (
-                <Typography key={index} variant="caption" sx={{ pl: 2 }}>
-                  • {rec.action || rec.reasoning || rec.description || rec}
-                </Typography>
-              ))}
-            </Stack>
-          </>
-        )}
-        
-        {forecast.length > 0 && (
-          <Box mt={2} p={1} bgcolor="grey.100" borderRadius={1}>
-            <Typography variant="caption" color="text.secondary">
-              📅 Prévisions détaillées disponibles pour {forecast.length} jours
-            </Typography>
           </Box>
-        )}
-        
-        {dataPoints < 14 && reliability?.level === 'low' && (
-          <Alert severity="info" sx={{ mt: 2 }} icon="💡">
-            <Typography variant="caption" fontWeight="bold">
-              Amélioration en cours
-            </Typography>
-            <Typography variant="caption" display="block">
-              Le système collecte des données quotidiennement. La précision augmentera automatiquement avec le temps.
-            </Typography>
-          </Alert>
         )}
       </CardContent>
     </Card>

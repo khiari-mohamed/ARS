@@ -216,7 +216,7 @@ const DocumentAnalyticsDashboard: React.FC = () => {
       {/* SLA Rules Info */}
       <Alert severity="info" sx={{ mb: 2 }}>
         <Typography variant="body2">
-          <strong>Règles SLA:</strong> 🟢 À temps (&gt;24h restant) | 🟠 À risque (0-24h) | 🔴 En retard (&lt;0h)
+          <strong>Règles SLA (unifiées avec Bordereaux):</strong> 🟢 Respecté (≤80% délai) | 🟠 À risque (80-100%) | 🔴 En retard (&gt;100%)
         </Typography>
       </Alert>
 
@@ -318,7 +318,10 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         <Box mt={2} display="flex" gap={1}>
           <Button 
             variant="contained" 
-            onClick={loadDocumentAnalytics}
+            onClick={() => {
+              setPage(0); // Reset to first page when applying filters
+              loadDocumentAnalytics();
+            }}
             size="small"
           >
             Appliquer les filtres
@@ -416,10 +419,25 @@ const DocumentAnalyticsDashboard: React.FC = () => {
       {/* Document-Level Assignment Table */}
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom display="flex" alignItems="center" gap={1}>
-            <Assignment />
-            Affectations au Niveau Document
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6" display="flex" alignItems="center" gap={1}>
+              <Assignment />
+              Affectations au Niveau Document
+            </Typography>
+            <Chip 
+              label={`${assignmentStats.filter(assignment => {
+                if (!filters.slaStatus && !filters.gestionnaire && !filters.chefEquipe) {
+                  if (assignment.gestionnaire === 'NON ASSIGNÉ' && assignment.chefEquipe === 'AUCUN CHEF') return false;
+                }
+                if (filters.slaStatus && assignment.slaStatus !== filters.slaStatus) return false;
+                if (filters.gestionnaire && assignment.gestionnaire !== filters.gestionnaire) return false;
+                if (filters.chefEquipe && assignment.chefEquipe !== filters.chefEquipe) return false;
+                return true;
+              }).length} documents trouvés`}
+              color="primary"
+              variant="outlined"
+            />
+          </Box>
           
           <TableContainer>
             <Table size="small">
@@ -435,13 +453,30 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {assignmentStats
-                  .filter(assignment => {
-                    // Hide documents with NO assignment at all
-                    return !(assignment.gestionnaire === 'NON ASSIGNÉ' && assignment.chefEquipe === 'AUCUN CHEF');
-                  })
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((assignment: any, index) => {
+                {(() => {
+                  // Filter FIRST, then paginate
+                  const filtered = assignmentStats.filter(assignment => {
+                    // Only hide completely unassigned documents if NO filters are active
+                    if (!filters.slaStatus && !filters.gestionnaire && !filters.chefEquipe) {
+                      if (assignment.gestionnaire === 'NON ASSIGNÉ' && assignment.chefEquipe === 'AUCUN CHEF') return false;
+                    }
+                    
+                    // Apply SLA filter
+                    if (filters.slaStatus && assignment.slaStatus !== filters.slaStatus) return false;
+                    
+                    // Apply gestionnaire filter
+                    if (filters.gestionnaire && assignment.gestionnaire !== filters.gestionnaire) return false;
+                    
+                    // Apply chef filter
+                    if (filters.chefEquipe && assignment.chefEquipe !== filters.chefEquipe) return false;
+                    
+                    return true;
+                  });
+                  
+                  // Then paginate
+                  return filtered
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((assignment: any, index) => {
                   const hasFaultyData = assignment.hasIssue;
                   return (
                     <TableRow 
@@ -485,7 +520,7 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Chip 
-                          label={assignment.slaStatus}
+                          label={assignment.slaStatus === 'ON_TIME' ? 'À temps' : assignment.slaStatus === 'AT_RISK' ? 'À risque' : 'En retard'}
                           size="small"
                           color={assignment.slaColor as any}
                           icon={getSlaStatusIcon(assignment.slaStatus)}
@@ -496,12 +531,22 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   );
-                })}
+                });
+                })()}
               </TableBody>
             </Table>
           </TableContainer>
 
-          {assignmentStats.length === 0 && (
+          {assignmentStats.filter(assignment => {
+            // Only hide completely unassigned if NO filters active
+            if (!filters.slaStatus && !filters.gestionnaire && !filters.chefEquipe) {
+              if (assignment.gestionnaire === 'NON ASSIGNÉ' && assignment.chefEquipe === 'AUCUN CHEF') return false;
+            }
+            if (filters.slaStatus && assignment.slaStatus !== filters.slaStatus) return false;
+            if (filters.gestionnaire && assignment.gestionnaire !== filters.gestionnaire) return false;
+            if (filters.chefEquipe && assignment.chefEquipe !== filters.chefEquipe) return false;
+            return true;
+          }).length === 0 && (
             <Box textAlign="center" py={4}>
               <Typography color="text.secondary">
                 Aucune affectation au niveau document trouvée
@@ -512,10 +557,28 @@ const DocumentAnalyticsDashboard: React.FC = () => {
             </Box>
           )}
           
-          {assignmentStats.length > 0 && (
+          {assignmentStats.filter(assignment => {
+            // Only hide completely unassigned if NO filters active
+            if (!filters.slaStatus && !filters.gestionnaire && !filters.chefEquipe) {
+              if (assignment.gestionnaire === 'NON ASSIGNÉ' && assignment.chefEquipe === 'AUCUN CHEF') return false;
+            }
+            if (filters.slaStatus && assignment.slaStatus !== filters.slaStatus) return false;
+            if (filters.gestionnaire && assignment.gestionnaire !== filters.gestionnaire) return false;
+            if (filters.chefEquipe && assignment.chefEquipe !== filters.chefEquipe) return false;
+            return true;
+          }).length > 0 && (
             <TablePagination
               component="div"
-              count={assignmentStats.length}
+              count={assignmentStats.filter(assignment => {
+                // Only hide completely unassigned if NO filters active
+                if (!filters.slaStatus && !filters.gestionnaire && !filters.chefEquipe) {
+                  if (assignment.gestionnaire === 'NON ASSIGNÉ' && assignment.chefEquipe === 'AUCUN CHEF') return false;
+                }
+                if (filters.slaStatus && assignment.slaStatus !== filters.slaStatus) return false;
+                if (filters.gestionnaire && assignment.gestionnaire !== filters.gestionnaire) return false;
+                if (filters.chefEquipe && assignment.chefEquipe !== filters.chefEquipe) return false;
+                return true;
+              }).length}
               page={page}
               onPageChange={(e, newPage) => setPage(newPage)}
               rowsPerPage={rowsPerPage}

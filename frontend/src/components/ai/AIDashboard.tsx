@@ -258,22 +258,82 @@ const AIDashboard: React.FC = () => {
                     ✅ Modèle entraîné sur données réelles ARS
                   </Typography>
                 </Alert>
-                <Alert severity="info">
-                  <Typography variant="body2" fontWeight="bold" gutterBottom>
-                    🎯 Actions Recommandées:
-                  </Typography>
+                
+                {/* Enhanced Recommendations Display */}
+                <Typography variant="body2" fontWeight="bold" gutterBottom sx={{ mt: 2, mb: 1 }}>
+                  🤖 Recommandations IA:
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {(() => {
-                    const actions = [];
                     const classCounts: {[key: string]: number} = {};
                     documentAI.data.classifications.forEach((c: any) => {
                       classCounts[c.predicted_class] = (classCounts[c.predicted_class] || 0) + 1;
                     });
-                    if (classCounts['SCAN_EN_COURS'] > 0) actions.push(`Accélérer scan de ${classCounts['SCAN_EN_COURS']} bordereaux`);
-                    if (classCounts['EN_COURS'] > 15) actions.push(`Répartir ${classCounts['EN_COURS']} dossiers en cours`);
-                    if (classCounts['TRAITE'] > 0) actions.push(`Clôturer ${classCounts['TRAITE']} dossiers traités`);
-                    return actions.slice(0, 3).map((a, i) => <div key={i}>• {a}</div>);
+                    const recommendations = [];
+                    
+                    if (classCounts['SCAN_EN_COURS'] > 5) {
+                      recommendations.push({ 
+                        text: `${classCounts['SCAN_EN_COURS']} bordereaux en scan - Prioriser la numérisation`, 
+                        type: 'warning',
+                        icon: '⚠️'
+                      });
+                    }
+                    if (classCounts['EN_COURS'] > 10) {
+                      recommendations.push({ 
+                        text: `${classCounts['EN_COURS']} bordereaux en cours - Vérifier les affectations`, 
+                        type: 'info',
+                        icon: '📊'
+                      });
+                    }
+                    if (classCounts['TRAITE'] > 0) {
+                      recommendations.push({ 
+                        text: `${classCounts['TRAITE']} bordereaux traités - Prêts pour clôture`, 
+                        type: 'success',
+                        icon: '💡'
+                      });
+                    }
+                    if (classCounts['CLOTURE'] > 0) {
+                      recommendations.push({ 
+                        text: `${classCounts['CLOTURE']} bordereaux clôturés - Archivage possible`, 
+                        type: 'info',
+                        icon: '📊'
+                      });
+                    }
+                    const lowConfidence = documentAI.data.classifications.filter((c: any) => c.confidence < 0.7).length;
+                    if (lowConfidence > 0) {
+                      recommendations.push({ 
+                        text: `${lowConfidence} classifications incertaines - Révision manuelle recommandée`, 
+                        type: 'warning',
+                        icon: '⚠️'
+                      });
+                    }
+                    
+                    return recommendations.map((rec, i) => {
+                      const bgColor = rec.type === 'warning' ? '#fffbeb' : rec.type === 'success' ? '#f0fdf4' : '#f0f9ff';
+                      const borderColor = rec.type === 'warning' ? '#f59e0b' : rec.type === 'success' ? '#10b981' : '#3b82f6';
+                      
+                      return (
+                        <Box 
+                          key={i}
+                          sx={{
+                            p: 1.5,
+                            backgroundColor: bgColor,
+                            border: `2px solid ${borderColor}`,
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 1
+                          }}
+                        >
+                          <span style={{ fontSize: '1.25rem', flexShrink: 0 }}>{rec.icon}</span>
+                          <Typography variant="body2" sx={{ flex: 1, lineHeight: 1.5, color: '#374151' }}>
+                            {rec.text}
+                          </Typography>
+                        </Box>
+                      );
+                    });
                   })()}
-                </Alert>
+                </Box>
               </Box>
             ) : (
               <Grid container spacing={2}>

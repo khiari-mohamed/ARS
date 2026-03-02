@@ -115,7 +115,7 @@ export class DashboardController {
 
   @Post('feedback')
   async submitFeedback(@Body() body: { message: string; page: string }) {
-    console.log('🔥 FEEDBACK ENDPOINT HIT IN DASHBOARD!', body);
+    // console.log('🔥 FEEDBACK ENDPOINT HIT IN DASHBOARD!', body);
     return { success: true, message: 'Feedback received', data: body, timestamp: new Date().toISOString() };
   }
 

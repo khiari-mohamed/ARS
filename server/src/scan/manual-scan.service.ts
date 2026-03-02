@@ -108,11 +108,11 @@ export class ManualScanService {
   async uploadScanDocuments(dto: ManualScanDto) {
     const { bordereauId, files, userId, notes, fileTypes } = dto;
 
-    console.log('🔍 DEBUG SERVICE: uploadScanDocuments called');
-    console.log('📄 Files count:', files.length);
-    console.log('🏷️ FileTypes received:', fileTypes);
-    console.log('🏷️ FileTypes type:', typeof fileTypes);
-    console.log('🏷️ FileTypes is array:', Array.isArray(fileTypes));
+    // console.log('🔍 DEBUG SERVICE: uploadScanDocuments called');
+    // console.log('📄 Files count:', files.length);
+    // console.log('🏷️ FileTypes received:', fileTypes);
+    // console.log('🏷️ FileTypes type:', typeof fileTypes);
+    // console.log('🏷️ FileTypes is array:', Array.isArray(fileTypes));
 
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
@@ -163,14 +163,14 @@ export class ManualScanService {
 
         // Get document type from fileTypes array or fallback to auto-detection
         const providedType = fileTypes && fileTypes[i] ? fileTypes[i] : null;
-        console.log(`📄 File ${i}: ${file.originalname}`);
-        console.log(`🏷️ Provided type: ${providedType}`);
+        // console.log(`📄 File ${i}: ${file.originalname}`);
+        // console.log(`🏷️ Provided type: ${providedType}`);
         
         const documentType = providedType
           ? this.mapToDocumentType(providedType)
           : this.mapToDocumentType(this.getDocumentType(file.originalname));
         
-        console.log(`✅ Final mapped type: ${documentType}`);
+        // console.log(`✅ Final mapped type: ${documentType}`);
 
         // Create document record
         const document = await this.prisma.document.create({
@@ -193,9 +193,21 @@ export class ManualScanService {
         });
 
       } catch (error: any) {
+        // Translate Prisma errors to user-friendly messages
+        let errorMessage = error.message;
+        if (error.message?.includes('Unique constraint failed on the fields: (`hash`)')) {
+          errorMessage = '⚠️ Ce document existe déjà dans la base de données (fichier identique détecté)';
+        } else if (error.message?.includes('Unique constraint')) {
+          errorMessage = '⚠️ Ce document existe déjà dans le système';
+        } else if (error.message?.includes('Foreign key constraint')) {
+          errorMessage = '❌ Erreur de référence: bordereau ou utilisateur invalide';
+        } else if (error.message?.includes('Invalid')) {
+          errorMessage = '❌ Données invalides pour ce document';
+        }
+        
         errors.push({
           fileName: file.originalname,
-          error: error.message
+          error: errorMessage
         });
       }
     }
@@ -226,11 +238,11 @@ export class ManualScanService {
   async uploadAdditionalDocuments(dto: ManualScanDto) {
     const { bordereauId, files, userId, notes, fileTypes } = dto;
 
-    console.log('🔍 DEBUG SERVICE: uploadAdditionalDocuments called');
-    console.log('📄 Files count:', files.length);
-    console.log('🏷️ FileTypes received:', fileTypes);
-    console.log('🏷️ FileTypes type:', typeof fileTypes);
-    console.log('🏷️ FileTypes is array:', Array.isArray(fileTypes));
+    // console.log('🔍 DEBUG SERVICE: uploadAdditionalDocuments called');
+    // console.log('📄 Files count:', files.length);
+    // console.log('🏷️ FileTypes received:', fileTypes);
+    // console.log('🏷️ FileTypes type:', typeof fileTypes);
+    // console.log('🏷️ FileTypes is array:', Array.isArray(fileTypes));
 
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
@@ -245,7 +257,7 @@ export class ManualScanService {
       throw new BadRequestException('Bordereau not found');
     }
 
-    console.log('📊 Bordereau status:', bordereau.statut);
+    // console.log('📊 Bordereau status:', bordereau.statut);
 
     if (bordereau.statut !== 'SCAN_EN_COURS') {
       throw new BadRequestException(`Cannot upload additional documents. Bordereau status is ${bordereau.statut}, expected SCAN_EN_COURS`);
@@ -256,7 +268,7 @@ export class ManualScanService {
       bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR' ||
       bordereau.currentHandler?.role === 'GESTIONNAIRE_SENIOR';
     const documentStatus = isGestionnaireSenior ? 'EN_COURS' : 'UPLOADED';
-    console.log('🔍 Is Gestionnaire Senior:', isGestionnaireSenior, '- Document status:', documentStatus);
+    // console.log('🔍 Is Gestionnaire Senior:', isGestionnaireSenior, '- Document status:', documentStatus);
 
     const uploadedDocuments: Array<{id: string; name: string; type: string; size: number}> = [];
     const errors: Array<{fileName: string; error: string}> = [];
@@ -280,14 +292,14 @@ export class ManualScanService {
 
         // Get document type from fileTypes array or fallback to auto-detection
         const providedType = fileTypes && fileTypes[i] ? fileTypes[i] : null;
-        console.log(`📄 File ${i}: ${file.originalname}`);
-        console.log(`🏷️ Provided type: ${providedType}`);
+        // console.log(`📄 File ${i}: ${file.originalname}`);
+        // console.log(`🏷️ Provided type: ${providedType}`);
         
         const documentType = providedType
           ? this.mapToDocumentType(providedType)
           : this.mapToDocumentType(this.getDocumentType(file.originalname));
         
-        console.log(`✅ Final mapped type: ${documentType}`);
+        // console.log(`✅ Final mapped type: ${documentType}`);
 
         // Create document record with GESTIONNAIRE_SENIOR status fix
         const document = await this.prisma.document.create({
@@ -311,14 +323,27 @@ export class ManualScanService {
 
       } catch (error: any) {
         console.error(`❌ Error uploading ${file.originalname}:`, error.message, error.stack);
+        
+        // Translate Prisma errors to user-friendly messages
+        let errorMessage = error.message;
+        if (error.message?.includes('Unique constraint failed on the fields: (`hash`)')) {
+          errorMessage = '⚠️ Ce document existe déjà dans la base de données (fichier identique détecté)';
+        } else if (error.message?.includes('Unique constraint')) {
+          errorMessage = '⚠️ Ce document existe déjà dans le système';
+        } else if (error.message?.includes('Foreign key constraint')) {
+          errorMessage = '❌ Erreur de référence: bordereau ou utilisateur invalide';
+        } else if (error.message?.includes('Invalid')) {
+          errorMessage = '❌ Données invalides pour ce document';
+        }
+        
         errors.push({
           fileName: file.originalname,
-          error: error.message
+          error: errorMessage
         });
       }
     }
 
-    console.log(`📊 Upload result: ${uploadedDocuments.length} success, ${errors.length} failed`);
+    // console.log(`📊 Upload result: ${uploadedDocuments.length} success, ${errors.length} failed`);
 
     // Log additional upload action
     await this.prisma.auditLog.create({
@@ -652,7 +677,7 @@ export class ManualScanService {
   private mapToDocumentType(oldType?: string): any {
     if (!oldType) return 'BULLETIN_SOIN';
     
-    console.log(`🔄 Mapping type: ${oldType}`);
+    // console.log(`🔄 Mapping type: ${oldType}`);
     
     const mapping: Record<string, string> = {
       'BS': 'BULLETIN_SOIN',
@@ -669,7 +694,7 @@ export class ManualScanService {
     };
     
     const result = mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
-    console.log(`✅ Mapped to: ${result}`);
+    // console.log(`✅ Mapped to: ${result}`);
     return result;
   }
 }
