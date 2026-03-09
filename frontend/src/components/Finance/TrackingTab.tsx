@@ -3,7 +3,7 @@ import {
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Chip, Button, Dialog, DialogTitle, DialogContent, 
   DialogActions, TextField, FormControl, InputLabel, Select, MenuItem,
-  Stack, Box, CircularProgress, Card, CardContent, Alert, Checkbox
+  Stack, Box, CircularProgress, Card, CardContent, Alert, Checkbox, TablePagination
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -30,8 +30,10 @@ interface BordereauTraite {
 
 const TrackingTab: React.FC = () => {
   const [bordereauxTraites, setBordereauxTraites] = useState<BordereauTraite[]>([]);
+  const [manualOVs, setManualOVs] = useState<BordereauTraite[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<BordereauTraite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingManual, setLoadingManual] = useState(true);
   const [selectedBordereaux, setSelectedBordereaux] = useState<string[]>([]);
   const [clients, setClients] = useState<any[]>([]);
 
@@ -73,8 +75,8 @@ const TrackingTab: React.FC = () => {
     reference: '',
     clientName: '',
     donneurOrdreId: '',
-    montantTotal: 0,
-    nombreAdherents: 0
+    montantTotal: '',
+    nombreAdherents: ''
   });
   const [documentViewer, setDocumentViewer] = useState<{open: boolean, url: string, title: string, type: 'pdf' | 'txt'}>({
     open: false, url: '', title: '', type: 'pdf'
@@ -85,6 +87,8 @@ const TrackingTab: React.FC = () => {
   const [reinjectFiles, setReinjectFiles] = useState<{excel: File | null, pdf: File | null}>({
     excel: null, pdf: null
   });
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
 
   const loadClients = async () => {
     try {
@@ -99,13 +103,8 @@ const TrackingTab: React.FC = () => {
   const loadBordereauxTraites = async () => {
     setLoading(true);
     try {
-      console.log('🔍 Loading bordereaux traités for user:', user?.role, user?.id);
-      console.log('🔍 With filters:', filters);
-      
       const financeService = await import('../../services/financeService');
       const data = await financeService.financeService.getBordereauxTraites(filters);
-      
-      console.log('✅ Received bordereaux data:', data.length, 'items');
       setBordereauxTraites(data);
     } catch (error) {
       console.error('Failed to load bordereaux traités:', error);
@@ -115,15 +114,31 @@ const TrackingTab: React.FC = () => {
     }
   };
 
+  const loadManualOVs = async () => {
+    setLoadingManual(true);
+    try {
+      const { LocalAPI } = await import('../../services/axios');
+      const response = await LocalAPI.get('/finance/manual-ov-entries', { params: filters });
+      setManualOVs(response.data);
+    } catch (error) {
+      console.error('Failed to load manual OVs:', error);
+      setManualOVs([]);
+    } finally {
+      setLoadingManual(false);
+    }
+  };
+
   useEffect(() => {
     loadClients();
     loadBordereauxTraites();
+    loadManualOVs();
   }, []);
   
   // Reload when filters change
   useEffect(() => {
     if (filters.society || filters.status || filters.dateFrom || filters.dateTo || filters.referenceBordereau) {
       loadBordereauxTraites();
+      loadManualOVs();
     }
   }, [filters.society, filters.status, filters.dateFrom, filters.dateTo, filters.referenceBordereau]);
 
@@ -146,7 +161,6 @@ const TrackingTab: React.FC = () => {
       filtered = filtered.filter(r => r.referenceBordereau.toLowerCase().includes(filters.referenceBordereau.toLowerCase()));
     }
     
-    // Sort by dateTraitementVirement first (most recent), then by dateInjection (most recent first)
     filtered = filtered.sort((a, b) => {
       const dateA = new Date(a.dateTraitementVirement || a.dateInjection).getTime();
       const dateB = new Date(b.dateTraitementVirement || b.dateInjection).getTime();
@@ -273,8 +287,8 @@ const TrackingTab: React.FC = () => {
     sessionStorage.setItem('manualOVData', JSON.stringify({
       reference: createForm.reference,
       clientName: createForm.clientName,
-      montantTotal: createForm.montantTotal,
-      nombreAdherents: createForm.nombreAdherents,
+      montantTotal: parseFloat(createForm.montantTotal) || 0,
+      nombreAdherents: parseInt(createForm.nombreAdherents) || 0,
       isManual: true,
       uploadedPdfPath: manualOVPdfPath
     }));
@@ -425,13 +439,9 @@ const TrackingTab: React.FC = () => {
       </Paper>
 
       {/* EXACT SPEC: Bloc récapitulatif des bordereaux en état Traité */}
-      <Paper elevation={2} sx={{ p: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-          Bloc récapitulatif des bordereaux en état Traité
-        </Typography>
-        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-          Affichage de {filteredRecords.length} bordereau(x) traité(s)
-        </Typography>
+      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Bloc récapitulatif des bordereaux en état Traité</Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Affichage de {filteredRecords.filter(r => r.referenceBordereau).length} bordereau(x) traité(s) - Page {page + 1}</Typography>
         {user?.role === 'CHEF_EQUIPE' && (
           <Typography variant="caption" color="info.main" sx={{ fontStyle: 'italic', mb: 2, display: 'block' }}>
             Affichage limité aux bordereaux de votre équipe
@@ -475,7 +485,7 @@ const TrackingTab: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredRecords.map((record) => (
+                {filteredRecords.filter(r => r.referenceBordereau).slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((record) => (
                   <TableRow key={record.id}>
                     <TableCell padding="checkbox">
                       {!record.referenceOV && (
@@ -703,6 +713,190 @@ const TrackingTab: React.FC = () => {
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              component="div"
+              count={filteredRecords.filter(r => r.referenceBordereau).length}
+              page={page}
+              onPageChange={(e, newPage) => setPage(newPage)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[10, 20, 50, 100]}
+              labelRowsPerPage="Lignes par page:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+            />
+          </Box>
+        )}
+      </Paper>
+
+      {/* EXACT SPEC: Entrées manuelles (non liées à un bordereau) */}
+      <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Entrées manuelles (non liées à un bordereau)</Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>Affichage de {manualOVs.length} entrée(s) manuelle(s)</Typography>
+        
+        {loadingManual ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : manualOVs.length === 0 ? (
+          <Alert severity="info">Aucune entrée manuelle trouvée</Alert>
+        ) : (
+          <Box sx={{ overflowX: 'auto', width: '100%' }}>
+            <Table sx={{ minWidth: 1000 }}>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                  <TableCell><strong>Client / Société</strong></TableCell>
+                  <TableCell><strong>Référence OV</strong></TableCell>
+                  <TableCell><strong>Montant</strong></TableCell>
+                  <TableCell><strong>Date d'injection</strong></TableCell>
+                  <TableCell><strong>Statut de virement</strong></TableCell>
+                  <TableCell><strong>Date de traitement du virement</strong></TableCell>
+                  <TableCell><strong>Motif / Observation</strong></TableCell>
+                  <TableCell><strong>Demande de récupération</strong></TableCell>
+                  <TableCell><strong>Montant récupéré</strong></TableCell>
+                  <TableCell><strong>Documents</strong></TableCell>
+                  <TableCell><strong>Actions par rôle</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {manualOVs.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>{record.clientSociete}</TableCell>
+                    <TableCell>{record.referenceOV}</TableCell>
+                    <TableCell>{record.montantBordereau.toLocaleString('fr-TN')} TND</TableCell>
+                    <TableCell>
+                      {record.dateInjection && record.dateInjection !== '1970-01-01T00:00:00.000Z' 
+                        ? new Date(record.dateInjection).toLocaleDateString('fr-FR')
+                        : '-'
+                      }
+                    </TableCell>
+                    <TableCell>{getStatusChip(record.statutVirement)}</TableCell>
+                    <TableCell>
+                      {record.dateTraitementVirement
+                        ? new Date(record.dateTraitementVirement).toLocaleDateString('fr-FR') 
+                        : '-'
+                      }
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Typography variant="body2" sx={{ 
+                        wordBreak: 'break-word',
+                        whiteSpace: 'pre-wrap',
+                        fontSize: '0.875rem'
+                      }}>
+                        {record.motifObservation || '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {record.demandeRecuperation ? (
+                        <Box>
+                          <Chip label="Oui" color="warning" size="small" />
+                          {record.dateDemandeRecuperation && (
+                            <Typography variant="caption" display="block">
+                              {new Date(record.dateDemandeRecuperation).toLocaleDateString('fr-FR')}
+                            </Typography>
+                          )}
+                        </Box>
+                      ) : (
+                        <Chip label="Non" color="default" size="small" />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {record.montantRecupere ? (
+                        <Box>
+                          <Chip label="Oui" color="success" size="small" />
+                          {record.dateMontantRecupere && (
+                            <Typography variant="caption" display="block">
+                              {new Date(record.dateMontantRecupere).toLocaleDateString('fr-FR')}
+                            </Typography>
+                          )}
+                        </Box>
+                      ) : (
+                        <Chip label="Non" color="default" size="small" />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {record.referenceOV && (
+                          <>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<VisibilityIcon />}
+                              onClick={async () => {
+                                try {
+                                  const { LocalAPI } = await import('../../services/axios');
+                                  const response = await LocalAPI.get(`/finance/ordres-virement/${record.id}/pdf`, {
+                                    responseType: 'blob'
+                                  });
+                                  const blob = new Blob([response.data], { type: 'application/pdf' });
+                                  setDocumentViewer({
+                                    open: true,
+                                    url: URL.createObjectURL(blob),
+                                    title: `PDF OV - ${record.referenceOV}`,
+                                    type: 'pdf'
+                                  });
+                                } catch (error) {
+                                  alert('Erreur lors du chargement du PDF');
+                                }
+                              }}
+                            >
+                              PDF OV
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<VisibilityIcon />}
+                              onClick={async () => {
+                                try {
+                                  const { LocalAPI } = await import('../../services/axios');
+                                  const response = await LocalAPI.get(`/finance/ordres-virement/${record.id}/txt`, {
+                                    responseType: 'blob'
+                                  });
+                                  const blob = new Blob([response.data], { type: 'text/plain' });
+                                  setDocumentViewer({
+                                    open: true,
+                                    url: URL.createObjectURL(blob),
+                                    title: `TXT - ${record.referenceOV}`,
+                                    type: 'txt'
+                                  });
+                                } catch (error) {
+                                  alert('Erreur lors du chargement du TXT');
+                                }
+                              }}
+                            >
+                              TXT
+                            </Button>
+                          </>
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {canModifyStatus() && (
+                          <Button
+                            size="small"
+                            startIcon={<EditIcon />}
+                            onClick={() => handleEditClick(record)}
+                          >
+                            Modifier
+                          </Button>
+                        )}
+                        <Button
+                          size="small"
+                          color="warning"
+                          startIcon={<EditIcon />}
+                          onClick={() => handleEditClick(record)}
+                        >
+                          Corriger
+                        </Button>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </Box>
         )}
       </Paper>
@@ -888,22 +1082,28 @@ const TrackingTab: React.FC = () => {
             
             <TextField
               label="Montant total (TND)"
-              type="number"
-              value={createForm.montantTotal}
-              onChange={(e) => setCreateForm({...createForm, montantTotal: parseFloat(e.target.value) || 0})}
+              type="text"
+              value={createForm.montantTotal ? parseFloat(createForm.montantTotal).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : ''}
+              onChange={(e) => {
+                const value = e.target.value.replace(/,/g, '');
+                if (value === '' || /^\d*\.?\d{0,3}$/.test(value)) {
+                  setCreateForm({...createForm, montantTotal: value});
+                }
+              }}
               fullWidth
               required
-              inputProps={{ min: 0, step: 0.01 }}
+              placeholder="Ex: 10 ou 100 ou 100,000"
+              helperText="Format: 10dt, 100dt, 100,000dt"
             />
             
             <TextField
               label="Nombre d'adhérents"
-              type="number"
+              type="text"
               value={createForm.nombreAdherents}
-              onChange={(e) => setCreateForm({...createForm, nombreAdherents: parseInt(e.target.value) || 0})}
+              onChange={(e) => setCreateForm({...createForm, nombreAdherents: e.target.value})}
               fullWidth
               required
-              inputProps={{ min: 1 }}
+              placeholder="0"
             />
           </Stack>
         </DialogContent>
@@ -914,7 +1114,7 @@ const TrackingTab: React.FC = () => {
           <Button 
             onClick={handleCreateManualEntry} 
             variant="contained"
-            disabled={!createForm.reference || !createForm.clientName || createForm.montantTotal <= 0}
+            disabled={!createForm.reference || !createForm.clientName || !createForm.montantTotal || parseFloat(createForm.montantTotal) <= 0}
             startIcon={<AddIcon />}
           >
             Créer l'entrée

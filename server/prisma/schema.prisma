@@ -641,6 +641,7 @@ model OrdreVirement {
   fichierPdf              String?
   fichierTxt              String?
   uploadedPdfPath         String? // Manual OV uploaded PDF path
+  clientName              String? // Manual OV client name
   // Recovery tracking fields - EXACT SPEC
   demandeRecuperation     Boolean              @default(false)
   dateDemandeRecuperation DateTime?

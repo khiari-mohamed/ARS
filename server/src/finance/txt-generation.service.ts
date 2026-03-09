@@ -20,6 +20,7 @@ export interface OVTxtData {
   virements: TxtVirementData[];
   dateCreation: Date;
   reference: string;
+  bordereauReference?: string; // Bordereau reference for Attijari motif
 }
 
 @Injectable()
@@ -102,7 +103,8 @@ export class TxtGenerationService {
       line += '0001';
       line += '0';
       line += '00';
-      line += `HIKMA APM${dateStr.substring(0, 4)}${data.reference} du ${dateStr.substring(6, 8)}${dateStr.substring(4, 6)}${dateStr.substring(0, 4)} OV GM n ${data.reference}`.substring(0, 100).padEnd(100, ' ');
+      const societeBlock = (virement.societe || 'XXXXX').toUpperCase().replace(/[^A-Z0-9 ]/g, '').substring(0, 9).padEnd(9, ' ');
+      line += `${societeBlock}${dateStr.substring(0, 4)}${data.reference} du ${dateStr.substring(6, 8)}${dateStr.substring(4, 6)}${dateStr.substring(0, 4)} OV GM n ${data.reference}`.substring(0, 100).padEnd(100, ' ');
       line += montantMillimes.toString().padStart(18, '0');
       line += ' '.repeat(6); // Only 6 trailing spaces, NO duplicate amount
       
@@ -174,8 +176,12 @@ export class TxtGenerationService {
       line += '0';
       // Field 21: Nombre enreg complémentaires (2)
       line += '00';
-      // Field 22: Motif (45)
-      line += 'PGH20-2025GAN FRIGAN'.padEnd(45, ' ');
+      // Field 22: Motif (45) - Dynamic: {SOCIETE}20-{YEAR}{BORDEREAU_REF}
+      const societe = (virement.societe || 'PGH').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 5);
+      const year = dateStr.substring(0, 4);
+      const bordereauRef = (data.bordereauReference || 'GANFRIGAN').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 9);
+      const motif = `${societe}20-${year}${bordereauRef}`.substring(0, 20).padEnd(45, ' ');
+      line += motif;
       // Field 23: Date compensation (8)
       line += dateStr;
       // Field 24: Motif rejet (8)
@@ -384,11 +390,16 @@ export class TxtGenerationService {
   }
 
   async generateOVTxtFromOrderId(ordreVirementId: string): Promise<string> {
-    // Fetch real data from database
+    // Fetch real data from database INCLUDING bordereau client
     const ordreVirement = await this.prisma.ordreVirement.findUnique({
       where: { id: ordreVirementId },
       include: {
         donneurOrdre: true,
+        bordereau: {
+          include: {
+            client: true  // ✅ BORDEREAU CLIENT = SOCIÉTÉ
+          }
+        },
         items: {
           include: {
             adherent: {
@@ -431,6 +442,10 @@ export class TxtGenerationService {
           throw new Error(`Adherent data missing for item ${index + 1}. Matricule: ${adherent?.matricule || 'unknown'}. Please ensure all adherents exist in database.`);
         }
         
+        // ✅ EXACT FIX: Société comes from BORDEREAU CLIENT, not adherent client
+        const societe = ordreVirement.bordereau?.client?.name || adherent.client?.name || adherent.assurance || ordreVirement.donneurOrdre.nom;
+        console.log(`✅ TXT Gen - Item ${index + 1}: Société="${societe}" (from ${ordreVirement.bordereau?.client?.name ? 'bordereau.client' : adherent.client?.name ? 'adherent.client' : 'fallback'})`);
+        
         return {
           reference: `${ordreVirement.reference}-${(index + 1).toString().padStart(3, '0')}`,
           montant: item.montant,
@@ -438,7 +453,7 @@ export class TxtGenerationService {
           nom: adherent.nom,
           prenom: adherent.prenom || '',
           matricule: adherent.matricule,
-          societe: adherent.client?.name || adherent.assurance || ordreVirement.donneurOrdre.nom
+          societe
         };
       });
 
@@ -472,7 +487,8 @@ export class TxtGenerationService {
       },
       virements,
       dateCreation: ordreVirement.dateCreation,
-      reference: ordreVirement.reference
+      reference: ordreVirement.reference,
+      bordereauReference: ordreVirement.bordereau?.reference // Pass bordereau reference for Attijari motif
     };
 
     console.log('TXT Data prepared:', {

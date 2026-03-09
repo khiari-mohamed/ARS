@@ -57,7 +57,10 @@ function GestionnaireSeniorDashboard() {
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [currentDossier, setCurrentDossier] = useState<any>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [seniorAssignments, setSeniorAssignments] = useState<any[]>([]);
   const { user } = useAuth();
@@ -171,6 +174,9 @@ function GestionnaireSeniorDashboard() {
   const handleConfirmStatusChange = async (newStatus: string) => {
     if (!currentDossier) return;
     
+    const currentScrollPosition = window.scrollY;
+    const docId = currentDossier.id;
+    
     try {
       const response = await LocalAPI.post('/bordereaux/gestionnaire-senior/modify-dossier-status', {
         dossierId: currentDossier.id,
@@ -178,10 +184,20 @@ function GestionnaireSeniorDashboard() {
       });
       
       if (response.data.success) {
-        alert('Statut modifié avec succès');
-        loadDashboardData();
         setShowStatusModal(false);
         setCurrentDossier(null);
+        setSuccessMessage('Statut modifié avec succès');
+        setShowSuccessModal(true);
+        
+        setTimeout(() => setShowSuccessModal(false), 3000);
+        
+        await loadDashboardData();
+        
+        setTimeout(() => {
+          window.scrollTo(0, currentScrollPosition);
+          setHighlightedDocId(docId);
+          setTimeout(() => setHighlightedDocId(null), 3000);
+        }, 100);
       } else {
         alert('Erreur lors de la modification du statut');
       }
@@ -684,7 +700,17 @@ function GestionnaireSeniorDashboard() {
               </thead>
               <tbody>
                 {filteredDocumentsTable.slice((documentsPage - 1) * documentsPerPage, documentsPage * documentsPerPage).map((document, index) => (
-                  <tr key={document.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                  <tr 
+                    key={document.id} 
+                    style={{ 
+                      background: highlightedDocId === document.id 
+                        ? '#c8e6c9' 
+                        : index % 2 === 0 ? '#ffffff' : '#f8f9fa', 
+                      borderBottom: '1px solid #dee2e6',
+                      transition: 'background-color 0.3s ease',
+                      boxShadow: highlightedDocId === document.id ? '0 0 10px rgba(76, 175, 80, 0.5)' : 'none'
+                    }}
+                  >
                     <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#0066cc' }}>{document.reference}</td>
                     <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#9c27b0' }}>{(document as any).bordereauReference || 'N/A'}</td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client || document.societe || 'N/A'}</td>
@@ -712,7 +738,7 @@ function GestionnaireSeniorDashboard() {
                               if (response.data.success && response.data.hasDocument) {
                                 const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
                                 setPdfUrl(`${serverBaseUrl}${response.data.pdfUrl}`);
-                                setCurrentDossier(document);
+                                setCurrentDossier({ ...document, isDocument: true });
                                 setShowPdfModal(true);
                               } else {
                                 alert(response.data.error || 'PDF non disponible pour ce dossier');
@@ -734,21 +760,6 @@ function GestionnaireSeniorDashboard() {
                           }}
                         >
                           📄 Voir PDF
-                        </button>
-                        <button 
-                          onClick={() => handleModifyStatus(document, true)}
-                          style={{ 
-                            background: '#9c27b0', 
-                            color: 'white', 
-                            border: 'none', 
-                            padding: '4px 8px', 
-                            borderRadius: '4px', 
-                            fontSize: '11px', 
-                            cursor: 'pointer',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          ✏️ Statut
                         </button>
                         <button 
                           onClick={async () => {
@@ -1095,24 +1106,44 @@ function GestionnaireSeniorDashboard() {
                   Type: {currentDossier?.type} | Statut: {currentDossier?.statut}
                 </p>
               </div>
-              <button 
-                onClick={() => {
-                  setShowPdfModal(false);
-                  setPdfUrl(null);
-                  setCurrentDossier(null);
-                }}
-                style={{
-                  background: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Fermer
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  onClick={() => {
+                    setShowPdfModal(false);
+                    handleModifyStatus(currentDossier, true);
+                  }}
+                  style={{
+                    background: '#9c27b0',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✏️ Modifier Statut
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowPdfModal(false);
+                    setPdfUrl(null);
+                    setCurrentDossier(null);
+                  }}
+                  style={{
+                    background: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Fermer
+                </button>
+              </div>
             </div>
             
             {/* PDF Viewer */}
@@ -1141,6 +1172,51 @@ function GestionnaireSeniorDashboard() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          zIndex: 1005,
+          animation: 'slideIn 0.3s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: '#4caf50',
+            color: 'white',
+            borderRadius: '8px',
+            padding: '16px 24px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            minWidth: '300px'
+          }}>
+            <span style={{ fontSize: '24px' }}>✅</span>
+            <span style={{ fontSize: '15px', fontWeight: '500' }}>{successMessage}</span>
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: 'white',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                fontSize: '16px',
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ×
+            </button>
           </div>
         </div>
       )}

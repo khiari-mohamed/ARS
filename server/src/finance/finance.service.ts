@@ -237,6 +237,7 @@ export class FinanceService {
     
     try {
       let clientId = body.clientId;
+      const bordereauId = body.bordereauId; // EXACT FIX: Get bordereauId from body
       
       // Ensure client exists or create default
       if (!clientId || clientId === 'default') {
@@ -258,7 +259,8 @@ export class FinanceService {
         }
       }
 
-      const validationResult = await this.excelValidationService.validateExcelFile(file.buffer, clientId);
+      // EXACT FIX: Pass bordereauId to validation service
+      const validationResult = await this.excelValidationService.validateExcelFile(file.buffer, clientId, bordereauId);
       
       await this.logAuditAction('VALIDATE_OV_FILE', {
         userId: user.id,
@@ -1320,8 +1322,8 @@ Document généré automatiquement par ARS`;
           id: ov.id,
           reference: ov.reference,
           referenceBordereau: ov.bordereau?.reference || null, // NEW: Référence bordereau
-          compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || null, // NEW: Compagnie d'assurance
-          client: ov.bordereau?.client?.name || (ov.bordereauId ? 'Client inconnu' : 'Entrée manuelle'), // NEW: Manual entry display
+          compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || ov.clientName || null, // NEW: Use clientName for manual OV
+          client: ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle', // NEW: Use clientName for manual OV
           bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle', // NEW: Manual entry display
           montant: ov.montantTotal,
           statut: ov.etatVirement,

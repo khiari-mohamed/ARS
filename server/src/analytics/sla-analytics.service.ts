@@ -357,9 +357,9 @@ export class SLAAnalyticsService {
       if (alertLevel) {
         let assignedTo = 'Non assigné';
         
-        // Priority 1: currentHandler (most recent assignment)
-        if (bordereau.currentHandler) {
-          assignedTo = bordereau.currentHandler.fullName;
+        // Priority 1: Get GESTIONNAIRE_SENIOR from contract teamLeader (CORRECT)
+        if (bordereau.contract?.teamLeader && bordereau.contract.teamLeader.role === 'GESTIONNAIRE_SENIOR') {
+          assignedTo = bordereau.contract.teamLeader.fullName;
         }
         // Priority 2: Get gestionnaire from documents
         else {
@@ -373,10 +373,10 @@ export class SLAAnalyticsService {
               return acc;
             }, {} as Record<string, number>);
             assignedTo = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-          } 
-          // Priority 3: Get GESTIONNAIRE_SENIOR from contract teamLeader
-          else if (bordereau.contract?.teamLeader && bordereau.contract.teamLeader.role === 'GESTIONNAIRE_SENIOR') {
-            assignedTo = bordereau.contract.teamLeader.fullName;
+          }
+          // Priority 3: currentHandler as fallback (might be scan team/admin)
+          else if (bordereau.currentHandler) {
+            assignedTo = bordereau.currentHandler.fullName;
           }
         }
         

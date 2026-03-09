@@ -561,7 +561,7 @@ const FinanceDashboard: React.FC = () => {
                   <TableRow key={ordre.id || index} hover>
                     <TableCell>{ordre.reference}</TableCell>
                     <TableCell>{ordre.referenceBordereau || '-'}</TableCell>
-                    <TableCell>{ordre.compagnieAssurance || '-'}</TableCell>
+                    <TableCell>{ordre.compagnieAssurance || ordre.client || '-'}</TableCell>
                     <TableCell>{ordre.client}</TableCell>
                     <TableCell>{ordre.bordereau}</TableCell>
                     <TableCell>{ordre.montant?.toLocaleString('fr-TN')} TND</TableCell>

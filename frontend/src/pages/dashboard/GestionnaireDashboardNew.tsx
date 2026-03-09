@@ -84,6 +84,9 @@ function GestionnaireDashboardNew() {
   const [currentPDFUrl, setCurrentPDFUrl] = useState('');
   const [currentDossier, setCurrentDossier] = useState<any>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
   const [derniersBordereauxPage, setDerniersBordereauxPage] = useState(1);
   const [bordereauxEnCoursPage, setBordereauxEnCoursPage] = useState(1);
   const [dossiersIndividuelsPage, setDossiersIndividuelsPage] = useState(1);
@@ -153,17 +156,14 @@ function GestionnaireDashboardNew() {
     setDossiersIndividuelsPage(1);
   }, [filterDerniers, filterBordereaux, filterDocuments, dossiers, documents]);
   
-  useEffect(() => {
-    console.log('🔍 filteredDocuments updated:', filteredDocuments.length);
-  }, [filteredDocuments]);
+  // useEffect(() => {
+  //   console.log('🔍 filteredDocuments updated:', filteredDocuments.length);
+  // }, [filteredDocuments]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       
-      console.log('🔄 Loading gestionnaire dashboard data...');
-      
-      // Use exact same endpoints as working ChefEquipeDashboard
       const [statsResponse, dossiersResponse, documentsResponse, assignmentsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers'),
@@ -171,22 +171,7 @@ function GestionnaireDashboardNew() {
         LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers')
       ]);
       
-      console.log('📊 Raw API Responses (correct endpoints):');
-      console.log('  Stats Response:', statsResponse.data);
-      console.log('  Dossiers Response:', dossiersResponse.data);
-      console.log('  Documents Response:', documentsResponse.data);
-      console.log('  Assignments Response:', assignmentsResponse.data);
-      
-      // Debug: Check if we have data
-      console.log('🔍 Data check:');
-      console.log('  Stats exists:', !!statsResponse.data);
-      console.log('  Dossiers exists:', !!dossiersResponse.data);
-      console.log('  Dossiers array length:', dossiersResponse.data?.length || 0);
-      
       if (statsResponse.data) {
-        // Process types-detail response (same as chef d'équipe)
-        console.log('📊 Stats Response Data:', statsResponse.data);
-        console.log('📊 Prestation total from backend:', statsResponse.data.Prestation?.total);
         const transformedStats = {
           prestation: {
             total: statsResponse.data.Prestation?.total || 0,
@@ -219,47 +204,27 @@ function GestionnaireDashboardNew() {
             gestionnaireBreakdown: statsResponse.data.Avenant?.gestionnaireBreakdown || {}
           }
         };
-        console.log('📊 Transformed stats:', transformedStats);
         setStats(transformedStats);
       }
       
       if (dossiersResponse.data) {
         // derniers-dossiers endpoint returns an array directly (same as chef d'équipe)
         const allDossiers = Array.isArray(dossiersResponse.data) ? dossiersResponse.data : [];
-        
-        console.log('📄 Processing dossiers:', allDossiers.length);
-        console.log('📄 Dossiers:', allDossiers);
         setDossiers(allDossiers);
-        
-        // Extract unique societes
         const uniqueSocietes = [...new Set(allDossiers.map((d: Dossier) => d.client).filter(Boolean))] as string[];
         setSocietes(uniqueSocietes.sort());
-        console.log('🏢 Unique societes:', uniqueSocietes);
-      } else {
-        console.log('⚠️ No dossiers data received');
       }
       
       if (documentsResponse.data) {
         // documents-individuels endpoint returns individual documents
         const allDocuments = Array.isArray(documentsResponse.data) ? documentsResponse.data : [];
-        
-        console.log('📄 Processing documents:', allDocuments.length);
-        console.log('📄 Documents:', allDocuments);
-        console.log('📄 Documents by client:', allDocuments.map(d => ({ ref: d.reference, client: d.client })));
         setDocuments(allDocuments);
-      } else {
-        console.log('⚠️ No documents data received');
       }
       
       if (assignmentsResponse.data) {
-        console.log('👥 Gestionnaire assignments received:', assignmentsResponse.data.length, assignmentsResponse.data);
         setGestionnaireAssignments(assignmentsResponse.data);
-        
         const uniqueGestionnaires = [...new Set(assignmentsResponse.data.map((a: any) => a.gestionnaire))].sort() as string[];
         setAvailableGestionnaires(uniqueGestionnaires);
-        console.log('👤 Unique gestionnaires:', uniqueGestionnaires);
-      } else {
-        console.warn('⚠️ No assignments data received');
       }
     } catch (error: any) {
       console.error('❌ Error loading gestionnaire dashboard data:', error);
@@ -270,18 +235,14 @@ function GestionnaireDashboardNew() {
   };
 
   const applyFilters = () => {
-    console.log('🔍 Starting filter with dossiers:', dossiers.length);
     let filtered = [...dossiers];
-    console.log('🔍 Initial filtered:', filtered.length);
     
     if (typeFilter !== 'Tous') {
       filtered = filtered.filter(d => d.type === typeFilter);
-      console.log('🔍 After type filter:', filtered.length);
     }
     
     if (societeFilter !== 'Toutes') {
       filtered = filtered.filter(d => (d.client || d.societe) === societeFilter);
-      console.log('🔍 After societe filter:', filtered.length);
     }
     
     if (statutFilter !== 'Tous') {
@@ -289,7 +250,6 @@ function GestionnaireDashboardNew() {
         d.statut === statutFilter || 
         (d.dossierStates && d.dossierStates.includes(statutFilter))
       );
-      console.log('🔍 After statut filter:', filtered.length);
     }
     
     if (searchQuery.trim()) {
@@ -300,10 +260,8 @@ function GestionnaireDashboardNew() {
         (d.type && d.type.toLowerCase().includes(query)) ||
         (d.gestionnaire && d.gestionnaire.toLowerCase().includes(query))
       );
-      console.log('🔍 After search filter:', filtered.length);
     }
     
-    console.log('🔍 Final filtered dossiers:', filtered.length, filtered);
     setFilteredDossiers(filtered);
     
     // Apply same filters to documents
@@ -332,7 +290,6 @@ function GestionnaireDashboardNew() {
       );
     }
     
-    console.log('🔍 Final filtered documents:', filteredDocs.length, filteredDocs);
     setFilteredDocuments(filteredDocs);
   };
 
@@ -370,11 +327,11 @@ function GestionnaireDashboardNew() {
       // Use chef d'équipe endpoint for PDF access
       const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${dossierId}`);
       if (response.data.success && response.data.hasDocument) {
-        const dossier = filteredDossiers.find(d => d.id === dossierId);
+        const dossier = filteredDocuments.find(d => d.id === dossierId) || filteredDossiers.find(d => d.id === dossierId);
         
         const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
         setCurrentPDFUrl(`${serverBaseUrl}${response.data.pdfUrl}`);
-        setCurrentDossier(dossier);
+        setCurrentDossier({ ...dossier, isDocument: true });
         setShowPDFModal(true);
       } else {
         alert(response.data.error || 'PDF non disponible pour ce dossier');
@@ -433,6 +390,9 @@ function GestionnaireDashboardNew() {
   const handleConfirmStatusChange = async (newStatus: string) => {
     if (!currentDossier) return;
     
+    const currentScrollPosition = window.scrollY;
+    const docId = currentDossier.id;
+    
     try {
       const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
         dossierId: currentDossier.id,
@@ -440,10 +400,20 @@ function GestionnaireDashboardNew() {
       });
       
       if (response.data.success) {
-        alert('Statut modifié avec succès');
-        loadDashboardData();
         setShowStatusModal(false);
         setCurrentDossier(null);
+        setSuccessMessage('Statut modifié avec succès');
+        setShowSuccessToast(true);
+        
+        setTimeout(() => setShowSuccessToast(false), 3000);
+        
+        await loadDashboardData();
+        
+        setTimeout(() => {
+          window.scrollTo(0, currentScrollPosition);
+          setHighlightedDocId(docId);
+          setTimeout(() => setHighlightedDocId(null), 3000);
+        }, 100);
       } else {
         alert('Erreur lors de la modification du statut');
       }
@@ -458,13 +428,10 @@ function GestionnaireDashboardNew() {
     if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Traité ?')) return;
     
     try {
-      console.log('Marking bordereau as Traité:', bordereauId);
       const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
         dossierId: bordereauId,
         newStatus: 'Traité'
       });
-      
-      console.log('Response:', response.data);
       
       if (response.data.success) {
         alert('Bordereau marqué comme Traité avec succès');
@@ -484,13 +451,10 @@ function GestionnaireDashboardNew() {
     if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Retourné ?')) return;
     
     try {
-      console.log('Marking bordereau as Retourné:', bordereauId);
       const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
         dossierId: bordereauId,
         newStatus: 'Retourné'
       });
-      
-      console.log('Response:', response.data);
       
       if (response.data.success) {
         alert('Bordereau marqué comme Retourné avec succès');
@@ -1042,7 +1006,14 @@ function GestionnaireDashboardNew() {
                     ? (!document.statusModifiedByGestionnaire && document.gestionnaire === user?.fullName)
                     : (document.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN');
                   return (
-                    <tr key={document.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                    <tr key={document.id} style={{ 
+                      borderBottom: '1px solid #f0f0f0', 
+                      backgroundColor: highlightedDocId === document.id 
+                        ? '#c8e6c9' 
+                        : index % 2 === 0 ? '#ffffff' : '#fafafa',
+                      transition: 'background-color 0.3s ease',
+                      boxShadow: highlightedDocId === document.id ? '0 0 10px rgba(76, 175, 80, 0.5)' : 'none'
+                    }}>
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{document.reference}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#9c27b0' }}>{(document as any).bordereauReference || 'N/A'}</td>
                       <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.client}</td>
@@ -1079,44 +1050,6 @@ function GestionnaireDashboardNew() {
                           >
                             Voir PDF
                           </button>
-                          {canModify ? (
-                            <>
-                              <button 
-                                onClick={() => handleMarkAsTraite(document.id)}
-                                style={{ 
-                                  background: '#4caf50', 
-                                  color: 'white', 
-                                  border: 'none', 
-                                  padding: '4px 8px', 
-                                  borderRadius: '4px', 
-                                  cursor: 'pointer', 
-                                  fontSize: '11px', 
-                                  fontWeight: 'bold'
-                                }}
-                                title="Marquer comme Traité"
-                              >
-                                ✓ Traité
-                              </button>
-                              <button 
-                                onClick={() => handleMarkAsRetourne(document.id)}
-                                style={{ 
-                                  background: '#f44336', 
-                                  color: 'white', 
-                                  border: 'none', 
-                                  padding: '4px 8px', 
-                                  borderRadius: '4px', 
-                                  cursor: 'pointer', 
-                                  fontSize: '11px', 
-                                  fontWeight: 'bold'
-                                }}
-                                title="Marquer comme Retourné"
-                              >
-                                ↩ Retourné
-                              </button>
-                            </>
-                          ) : (
-                            <span style={{ fontSize: '12px', color: '#ccc', padding: '4px 8px' }}>Lecture seule</span>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -1155,6 +1088,51 @@ function GestionnaireDashboardNew() {
         </div>
 
       </div>
+      
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          zIndex: 1005,
+          animation: 'slideIn 0.3s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: '#4caf50',
+            color: 'white',
+            borderRadius: '8px',
+            padding: '16px 24px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            minWidth: '300px'
+          }}>
+            <span style={{ fontSize: '24px' }}>✅</span>
+            <span style={{ fontSize: '15px', fontWeight: '500' }}>{successMessage}</span>
+            <button
+              onClick={() => setShowSuccessToast(false)}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: 'white',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                fontSize: '16px',
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* PDF Modal */}
       {showPDFModal && (
@@ -1197,21 +1175,37 @@ function GestionnaireDashboardNew() {
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {/*<select 
-                  onChange={(e) => handleStatusChangeInModal(e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
-                  defaultValue=""
-                >
-                  <option value="" disabled>Modifier statut</option>
-                  <option value="En cours">En cours</option>
-                  <option value="Traité">Traité</option>
-                  <option value="Retourné">Retourné</option>
-                </select>*/}
+                {(() => {
+                  const isGestionnaire = user?.role === 'GESTIONNAIRE';
+                  const canModify = isGestionnaire 
+                    ? (!currentDossier?.statusModifiedByGestionnaire && currentDossier?.gestionnaire === user?.fullName)
+                    : (currentDossier?.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN');
+                  
+                  return canModify ? (
+                    <button 
+                      onClick={() => {
+                        setShowPDFModal(false);
+                        handleModifyStatus(currentDossier.id);
+                      }}
+                      style={{
+                        background: '#9c27b0',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '8px 16px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      ✏️ Modifier Statut
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: '14px', color: '#999', padding: '8px 16px', fontStyle: 'italic' }}>
+                      📖 Lecture seule
+                    </span>
+                  );
+                })()}
                 <button 
                   onClick={closePDFModal}
                   style={{

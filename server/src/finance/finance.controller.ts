@@ -943,6 +943,65 @@ export class FinanceController {
     return this.financeService.getBordereauxTraites(filters, user as any);
   }
 
+  // === MANUAL OV ENTRIES (WITHOUT BORDEREAU) ===
+  @Get('manual-ov-entries')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async getManualOVEntries(
+    @Req() req: any,
+    @Query() filters: {
+      client?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+    }
+  ) {
+    const user = getUserFromRequest(req);
+    
+    const where: any = {
+      bordereauId: null  // Only manual entries without bordereau
+    };
+    
+    if (filters.client) {
+      where.clientName = { contains: filters.client, mode: 'insensitive' };
+    }
+    
+    if (filters.dateFrom) {
+      where.dateCreation = { ...where.dateCreation, gte: new Date(filters.dateFrom) };
+    }
+    
+    if (filters.dateTo) {
+      where.dateCreation = { ...where.dateCreation, lte: new Date(filters.dateTo) };
+    }
+    
+    if (filters.status) {
+      where.etatVirement = filters.status;
+    }
+    
+    const manualOVs = await this.prisma.ordreVirement.findMany({
+      where,
+      include: {
+        donneurOrdre: true
+      },
+      orderBy: { dateCreation: 'desc' }
+    });
+    
+    return manualOVs.map(ov => ({
+      id: ov.id,
+      clientSociete: ov.clientName || 'Entrée manuelle',
+      referenceOV: ov.reference,
+      referenceBordereau: '-',
+      montantBordereau: ov.montantTotal || 0,
+      dateInjection: ov.dateCreation,
+      statutVirement: ov.etatVirement,
+      dateTraitementVirement: ov.dateTraitement,
+      motifObservation: ov.motifObservation,
+      demandeRecuperation: ov.demandeRecuperation || false,
+      dateDemandeRecuperation: ov.dateDemandeRecuperation,
+      montantRecupere: ov.montantRecupere || false,
+      dateMontantRecupere: ov.dateMontantRecupere
+    }));
+  }
+
   // === UPDATE BORDEREAU TRAITÉ ENDPOINT ===
   // EXACT SPEC: Finance can update virement status, recovery info
   @Put('bordereaux-traites/:id')

@@ -284,39 +284,65 @@ export class AutoNotificationService {
           where: { role: 'SUPER_ADMIN', active: true }
         });
 
+        // Check for recent duplicate notifications (within last 8 hours)
+        const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60 * 1000);
+
         for (const admin of superAdmins) {
-          await this.prisma.notification.create({
-            data: {
+          // Check if similar notification already exists
+          const existingNotification = await this.prisma.notification.findFirst({
+            where: {
               userId: admin.id,
               type: 'TEAM_OVERLOAD_ALERT',
-              title: 'Alerte surcharge équipe',
-              message: `${overloadedTeams.length} équipe(s) en surcharge détectée(s)`,
-              data: { 
-                overloadedTeams: overloadedTeams.map(chef => ({ 
-                  id: chef.id, 
-                  name: chef.fullName, 
-                  workload: chef.bordereauxTeam.length,
-                  threshold: overloadThreshold
-                })),
-                severity: 'HIGH'
-              },
-              read: false
+              read: false,
+              createdAt: { gte: eightHoursAgo }
             }
-          }).catch(() => this.logger.warn('Failed to create overload notification'));
+          });
+
+          if (!existingNotification) {
+            await this.prisma.notification.create({
+              data: {
+                userId: admin.id,
+                type: 'TEAM_OVERLOAD_ALERT',
+                title: 'Équipe surchargée',
+                message: `L'équipe a ${overloadedTeams[0].bordereauxTeam.length} dossiers en attente - intervention requise`,
+                data: { 
+                  overloadedTeams: overloadedTeams.map(chef => ({ 
+                    id: chef.id, 
+                    name: chef.fullName, 
+                    workload: chef.bordereauxTeam.length,
+                    threshold: overloadThreshold
+                  })),
+                  severity: 'HIGH'
+                },
+                read: false
+              }
+            }).catch(() => this.logger.warn('Failed to create overload notification'));
+          }
         }
 
-        // Create workflow notification
-        await this.prisma.workflowNotification.create({
-          data: {
-            fromService: 'SYSTEM',
-            toService: 'SUPER_ADMIN',
-            message: `${overloadedTeams.length} équipe(s) en surcharge détectée(s)`,
+        // Check for recent workflow notification
+        const existingWorkflowNotif = await this.prisma.workflowNotification.findFirst({
+          where: {
             type: 'TEAM_OVERLOAD',
-            status: 'SENT'
+            sentAt: { gte: eightHoursAgo }
           }
-        }).catch(() => this.logger.warn('Failed to create workflow notification'));
+        });
 
-        this.logger.log(`⚠️ Notified Super Admins about ${overloadedTeams.length} overloaded team(s)`);
+        if (!existingWorkflowNotif) {
+          await this.prisma.workflowNotification.create({
+            data: {
+              fromService: 'SYSTEM',
+              toService: 'SUPER_ADMIN',
+              message: `${overloadedTeams.length} équipe(s) en surcharge détectée(s)`,
+              type: 'TEAM_OVERLOAD',
+              status: 'SENT'
+            }
+          }).catch(() => this.logger.warn('Failed to create workflow notification'));
+
+          this.logger.log(`⚠️ Notified Super Admins about ${overloadedTeams.length} overloaded team(s)`);
+        } else {
+          this.logger.log(`ℹ️ Skipped duplicate overload notification (recent notification exists)`);
+        }
       }
     } catch (error) {
       this.logger.error(`Error checking team overload: ${error.message}`);

@@ -47,13 +47,8 @@ export class BulletinSoinController {
   @Get('notifications')
   @Public()
   async getNotifications() {
-    try {
-      // Return empty array for now - implement notifications later if needed
-      return [];
-    } catch (error) {
-      console.error('Error in getNotifications:', error);
-      return [];
-    }
+    // TODO: Implement real notifications from database
+    return [];
   }
 
   // EXPORT/REPORTING
@@ -155,23 +150,20 @@ export class BulletinSoinController {
   @Get('ai/suggest-assignment')
   @Public()
   async suggestAssignment() {
-    try {
-      const suggestions = await this.bsService.suggestAssignment();
-      // Transform to expected format
-      return suggestions.map(s => ({
-        assignee: s.fullName || s.id,
-        confidence: s.score > 0.8 ? 'high' : s.score > 0.5 ? 'medium' : 'low',
-        score: s.score,
-        reasoning: [
-          `Efficacité: ${s.efficiency_score?.toFixed(2) || 'N/A'}`,
-          `Charge actuelle: ${s.inProgress} BS`,
-          `Retards: ${s.overdue} BS`,
-          s.avgProcessingHours ? `Temps moyen: ${s.avgProcessingHours.toFixed(1)}h` : 'Nouveau gestionnaire'
-        ]
-      }));
-    } catch (error) {
-      return [];
-    }
+    const suggestions = await this.bsService.suggestAssignment();
+    return suggestions.map(s => ({
+      assignee: s.fullName || s.id,
+      confidence: s.score > 0.7 ? 'high' : s.score > 0.4 ? 'medium' : 'low',
+      score: s.score,
+      reasoning: [
+        `Efficacité: ${s.efficiencyRate.toFixed(0)}%`,
+        `Charge: ${s.inProgress} éléments (${s.workloadBreakdown.documents} docs, ${s.workloadBreakdown.bulletinsSoin} BS, ${s.workloadBreakdown.bordereaux} bord, ${s.workloadBreakdown.reclamations} récl)`,
+        `Retards: ${s.overdue} éléments`,
+        `SLA: ${s.slaRespect.toFixed(0)}%`,
+        `Débit: ${s.throughputPerDay.toFixed(1)}/jour`,
+        s.capacityDays ? `Capacité: ${s.capacityDays.toFixed(1)} jours` : 'Nouvelle affectation'
+      ]
+    }));
   }
 
   @Get('ai/suggest-priorities/:gestionnaireId')

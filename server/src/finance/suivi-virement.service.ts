@@ -232,7 +232,8 @@ export class SuiviVirementService {
       }
     }
 
-    return this.prisma.suiviVirement.findMany({
+    // Get suivi virements (linked to bordereaux)
+    const suiviVirements = await this.prisma.suiviVirement.findMany({
       where,
       include: {
         ordreVirement: {
@@ -248,6 +249,42 @@ export class SuiviVirementService {
       },
       orderBy: { dateInjection: 'desc' }
     });
+
+    // Get manual OV entries (not linked to bordereaux)
+    const manualOVWhere: any = { bordereauId: null };
+    if (filters?.etatVirement) manualOVWhere.etatVirement = filters.etatVirement;
+    if (filters?.dateFrom || filters?.dateTo) {
+      manualOVWhere.dateCreation = {};
+      if (filters.dateFrom) manualOVWhere.dateCreation.gte = filters.dateFrom;
+      if (filters.dateTo) manualOVWhere.dateCreation.lte = filters.dateTo;
+    }
+
+    const manualOVs = await this.prisma.ordreVirement.findMany({
+      where: manualOVWhere,
+      include: {
+        donneurOrdre: true,
+        items: { include: { adherent: true } }
+      },
+      orderBy: { dateCreation: 'desc' }
+    });
+
+    // Transform manual OVs to suivi format
+    const manualSuivis = manualOVs.map(ov => ({
+      id: ov.id,
+      numeroBordereau: ov.reference,
+      societe: ov.clientName || 'Entrée manuelle',
+      dateInjection: ov.dateCreation,
+      utilisateurSante: ov.utilisateurSante,
+      dateTraitement: ov.dateTraitement,
+      utilisateurFinance: ov.utilisateurFinance,
+      etatVirement: ov.etatVirement,
+      dateEtatFinal: ov.dateEtatFinal,
+      commentaire: ov.commentaire,
+      ordreVirementId: ov.id,
+      ordreVirement: ov
+    }));
+
+    return [...suiviVirements, ...manualSuivis];
   }
 
   async getSuiviVirementDetails(suiviId: string): Promise<any> {

@@ -64,6 +64,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     nombreBS: 1
   });
   const [clients, setClients] = useState<any[]>([]);
+  const [fileInputKey, setFileInputKey] = useState(Date.now());
   
   // Read selected bordereau from sessionStorage on mount
   useEffect(() => {
@@ -228,15 +229,27 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         erreur: null
       }));
       
-      // Get manual OV PDF path from sessionStorage
+      // Get manual OV PDF path and client name from sessionStorage
       const manualOVPdfPath = sessionStorage.getItem('manualOVPdfPath');
+      const manualOVData = sessionStorage.getItem('manualOVData');
+      let clientName = null;
+      
+      if (manualOVData) {
+        try {
+          const parsedData = JSON.parse(manualOVData);
+          clientName = parsedData.clientName;
+        } catch (e) {
+          console.error('Failed to parse manual OV data:', e);
+        }
+      }
       
       const ovData = {
         donneurOrdreId: selectedDonneur?.id || 'default',
         bordereauId: selectedBordereauId,
         virementData,
         utilisateurSante: user?.id || 'demo-user',
-        uploadedPdfPath: manualOVPdfPath || undefined
+        uploadedPdfPath: manualOVPdfPath || undefined,
+        clientName: clientName || undefined
       };
       
       const ovRecord = await processOV(ovData);
@@ -306,7 +319,9 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     if (file) {
       setUploadedFile(file);
       processFile(file);
+      setFileInputKey(Date.now());
     }
+    event.target.value = '';
   };
 
   const handlePdfUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -321,7 +336,9 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         setUploadedPdfFile(file);
         uploadPdfDocument(file);
       }
+      setFileInputKey(Date.now());
     }
+    event.target.value = '';
   };
   
   const handleCreateNewBordereau = async () => {
@@ -521,7 +538,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         // Transform backend results to frontend format
         const transformedResults = result.data.map((item: any) => ({
           matricule: item.matricule || '',
-          name: item.nom && item.prenom ? `${item.nom} ${item.prenom}` : 'Non trouvé',
+          name: item.nom || item.prenom ? `${item.nom || ''} ${item.prenom || ''}`.trim() : 'Non trouvé',
           society: item.societe || 'ARS TUNISIE',
           rib: item.rib || 'N/A',
           amount: item.montant || 0,
@@ -718,6 +735,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                     component="label"
                   >
                     <input
+                      key={fileInputKey}
                       type="file"
                       accept=".xlsx,.xls"
                       onChange={handleFileUpload}
@@ -755,6 +773,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                     component="label"
                   >
                     <input
+                      key={fileInputKey + 1}
                       type="file"
                       accept=".pdf"
                       onChange={handlePdfUpload}
@@ -866,14 +885,27 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                 </TableHead>
                 <TableBody>
                   {validationResults.map((result, index) => (
-                    <TableRow key={index} sx={{ bgcolor: result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white' }}>
-                      <TableCell>{result.society}</TableCell>
-                      <TableCell>{result.matricule}</TableCell>
-                      <TableCell>{result.name}</TableCell>
-                      <TableCell>{result.rib || 'N/A'}</TableCell>
-                      <TableCell><strong>{result.amount.toFixed(2)} TND</strong></TableCell>
-                      <TableCell>{getStatusChip(result.status)}</TableCell>
-                    </TableRow>
+                    <React.Fragment key={index}>
+                      <TableRow sx={{ bgcolor: result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white' }}>
+                        <TableCell>{result.society}</TableCell>
+                        <TableCell>{result.matricule}</TableCell>
+                        <TableCell>{result.name}</TableCell>
+                        <TableCell>{result.rib || 'N/A'}</TableCell>
+                        <TableCell><strong>{result.amount.toFixed(2)} TND</strong></TableCell>
+                        <TableCell>{getStatusChip(result.status)}</TableCell>
+                      </TableRow>
+                      {result.notes && (
+                        <TableRow sx={{ bgcolor: result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white' }}>
+                          <TableCell colSpan={6} sx={{ py: 1, px: 2 }}>
+                            <Alert severity={result.status === 'error' ? 'error' : 'warning'} sx={{ py: 0 }}>
+                              <Typography variant="caption">
+                                <strong>Détails:</strong> {result.notes}
+                              </Typography>
+                            </Alert>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>

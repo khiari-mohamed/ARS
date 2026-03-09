@@ -239,13 +239,25 @@ export class WorkflowNotificationsService {
       });
 
       for (const admin of superAdmins) {
-        await this.createNotification({
-          userId: admin.id,
-          type: 'TEAM_OVERLOAD',
-          title: 'Équipe surchargée',
-          message: `L'équipe a ${workloadCount} dossiers en attente - intervention requise`,
-          data: { teamId, workloadCount, action: 'REBALANCE' }
+        // Check if unread TEAM_OVERLOAD notification already exists for this admin
+        const existingNotification = await this.prisma.notification.findFirst({
+          where: {
+            userId: admin.id,
+            type: 'TEAM_OVERLOAD',
+            read: false
+          }
         });
+
+        // Only create if no unread notification exists
+        if (!existingNotification) {
+          await this.createNotification({
+            userId: admin.id,
+            type: 'TEAM_OVERLOAD',
+            title: 'Équipe surchargée',
+            message: `L'équipe a ${workloadCount} dossiers en attente - intervention requise`,
+            data: { teamId, workloadCount, action: 'REBALANCE' }
+          });
+        }
       }
     } catch (error) {
       this.logger.error(`Failed to send overload notification: ${error.message}`);

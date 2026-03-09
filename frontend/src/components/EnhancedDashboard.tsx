@@ -134,6 +134,9 @@ const EnhancedDashboard: React.FC = () => {
   const superAdminBordereauxPerPage = 5;
   const superAdminIndividuelsPerPage = 20;
   
+  // AI Explanation Modal state
+  const [showAIExplanationModal, setShowAIExplanationModal] = useState(false);
+  
   // Filter states
   const [filter1, setFilter1] = useState({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
   const [filter2, setFilter2] = useState({ ref: '', client: '', statut: '', dateFrom: '', dateTo: '' });
@@ -2246,6 +2249,305 @@ const EnhancedDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* AI Explanation Modal */}
+        {showAIExplanationModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+            padding: '2rem'
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '1.5rem',
+                borderBottom: '2px solid #6366f1',
+                paddingBottom: '1rem'
+              }}>
+                <h2 style={{
+                  margin: 0,
+                  color: '#6366f1',
+                  fontSize: '1.8rem',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span>🤖</span> Comment fonctionne l'IA d'assignation ?
+                </h2>
+                <button
+                  onClick={() => setShowAIExplanationModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '2rem',
+                    cursor: 'pointer',
+                    color: '#666',
+                    padding: '0',
+                    lineHeight: 1
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={{ fontSize: '0.95rem', lineHeight: '1.6', color: '#374151' }}>
+                {/* Introduction */}
+                <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                  <p style={{ margin: 0, fontWeight: '600', color: '#0369a1' }}>
+                    💡 L'Intelligence Artificielle ARS analyse automatiquement la charge de travail, les performances historiques et les délais SLA pour recommander les meilleurs gestionnaires pour chaque dossier.
+                  </p>
+                </div>
+
+                {/* Section 1: Scoring System */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#6366f1', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>📊</span> Système de Notation (Score)
+                  </h3>
+                  <p style={{ marginBottom: '1rem' }}>
+                    Chaque gestionnaire reçoit un <strong>score entre 0 et 1</strong> basé sur 4 critères pondérés :
+                  </p>
+                  <div style={{ backgroundColor: '#fef3c7', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                    <strong>Formule de calcul :</strong><br/>
+                    Score = (Charge × 40%) + (Efficacité × 25%) + (SLA × 20%) + (Retards × 15%)
+                  </div>
+                  <ul style={{ marginLeft: '1.5rem', marginBottom: '1rem' }}>
+                    <li style={{ marginBottom: '0.5rem' }}>
+                      <strong>Charge de travail (40%)</strong> : Plus la charge est faible, meilleur est le score<br/>
+                      <code style={{ backgroundColor: '#f3f4f6', padding: '0.2rem 0.4rem', borderRadius: '4px', fontSize: '0.85rem' }}>
+                        Score_Charge = 1 - (charge_actuelle / charge_max)
+                      </code>
+                    </li>
+                    <li style={{ marginBottom: '0.5rem' }}>
+                      <strong>Efficacité (25%)</strong> : Pourcentage de dossiers traités avec succès<br/>
+                      <code style={{ backgroundColor: '#f3f4f6', padding: '0.2rem 0.4rem', borderRadius: '4px', fontSize: '0.85rem' }}>
+                        Efficacité = (dossiers_traités / total_assignés) × 100
+                      </code>
+                    </li>
+                    <li style={{ marginBottom: '0.5rem' }}>
+                      <strong>Respect SLA (20%)</strong> : Pourcentage de dossiers traités dans les délais<br/>
+                      <code style={{ backgroundColor: '#f3f4f6', padding: '0.2rem 0.4rem', borderRadius: '4px', fontSize: '0.85rem' }}>
+                        SLA = (dossiers_dans_délai / total_traités) × 100
+                      </code>
+                    </li>
+                    <li>
+                      <strong>Retards (15%)</strong> : Nombre de dossiers en retard (pénalité)<br/>
+                      <code style={{ backgroundColor: '#f3f4f6', padding: '0.2rem 0.4rem', borderRadius: '4px', fontSize: '0.85rem' }}>
+                        Score_Retards = 1 - (retards / total_assignés)
+                      </code>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Section 2: Workload Calculation */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#6366f1', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>📦</span> Calcul de la Charge
+                  </h3>
+                  <p style={{ marginBottom: '1rem' }}>
+                    La charge totale d'un gestionnaire inclut tous les types de documents :
+                  </p>
+                  <div style={{ backgroundColor: '#fef3c7', padding: '1rem', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                    <strong>Charge Totale =</strong><br/>
+                    Documents + Bulletins de Soin + Bordereaux + Réclamations
+                  </div>
+                </div>
+
+                {/* Section 3: Rebalancing Logic */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#6366f1', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>⚖️</span> Rééquilibrage Intelligent
+                  </h3>
+                  <p style={{ marginBottom: '1rem' }}>
+                    L'IA détecte automatiquement les déséquilibres et suggère des transferts :
+                  </p>
+                  <div style={{ backgroundColor: '#f3f4f6', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                    <strong>Algorithme de rééquilibrage :</strong>
+                    <ol style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
+                      <li>Identifier les gestionnaires surchargés (charge {'>'} moyenne + 20%)</li>
+                      <li>Trier les gestionnaires par charge croissante</li>
+                      <li>Transférer des dossiers vers les moins chargés</li>
+                      <li>Éviter d'assigner au même gestionnaire plusieurs fois</li>
+                      <li>Recalculer la charge après chaque transfert</li>
+                    </ol>
+                  </div>
+                  <div style={{ backgroundColor: '#fef3c7', padding: '1rem', borderRadius: '8px', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                    <strong>Exemple :</strong><br/>
+                    Siwar (256 docs) → Marwen (25 docs) : Transfert de 52 docs<br/>
+                    Manar (254 docs) → Nesrine (76 docs) : Transfert de 51 docs
+                  </div>
+                </div>
+
+                {/* Section 4: ASCII Diagram */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#6366f1', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>📐</span> Diagramme du Flux
+                  </h3>
+                  <pre style={{
+                    backgroundColor: '#1f2937',
+                    color: '#10b981',
+                    padding: '1.5rem',
+                    borderRadius: '8px',
+                    overflow: 'auto',
+                    fontSize: '0.75rem',
+                    lineHeight: '1.4'
+                  }}>
+{`┌─────────────────────────────────────────────────────────────┐
+│                  SYSTÈME D'ASSIGNATION IA                   │
+└─────────────────────────────────────────────────────────────┘
+
+    ┌──────────────┐
+    │ Nouveau BS   │
+    └──────┬───────┘
+           │
+           ▼
+    ┌──────────────────────────────────────┐
+    │  Analyse des Gestionnaires           │
+    │  • Charge actuelle                   │
+    │  • Efficacité historique             │
+    │  • Respect SLA                       │
+    │  • Retards en cours                  │
+    └──────┬───────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────┐
+    │  Calcul des Scores                   │
+    │                                      │
+    │  Score = Σ (Critère × Poids)        │
+    │                                      │
+    │  • Charge:     40%                   │
+    │  • Efficacité: 25%                   │
+    │  • SLA:        20%                   │
+    │  • Retards:    15%                   │
+    └──────┬───────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────┐
+    │  Classement par Score                │
+    │                                      │
+    │  1. Marwen    (0.52) ⭐ RECOMMANDÉ  │
+    │  2. Nesrine   (0.46)                 │
+    │  3. Mariem    (0.43)                 │
+    │  4. Jihed     (0.38)                 │
+    │  ...                                 │
+    └──────┬───────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────┐
+    │  Suggestion d'Assignation            │
+    │  → Gestionnaire avec meilleur score  │
+    └──────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────┐
+│              RÉÉQUILIBRAGE AUTOMATIQUE                      │
+└─────────────────────────────────────────────────────────────┘
+
+    ┌──────────────────────────────────────┐
+    │  Détection Déséquilibre              │
+    │                                      │
+    │  Siwar:  256 docs  ████████████████  │
+    │  Manar:  254 docs  ████████████████  │
+    │  Mariem: 156 docs  ████████          │
+    │  Jihed:  129 docs  ██████            │
+    │  Nesrine: 76 docs  ███               │
+    │  Marwen:  25 docs  █                 │
+    └──────┬───────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────┐
+    │  Calcul Transferts Optimaux          │
+    │                                      │
+    │  Siwar (256) → Marwen (25)           │
+    │    Transfert: 52 docs                │
+    │                                      │
+    │  Manar (254) → Nesrine (76)          │
+    │    Transfert: 51 docs                │
+    └──────┬───────────────────────────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────┐
+    │  Résultat Équilibré                  │
+    │                                      │
+    │  Siwar:  204 docs  ██████████        │
+    │  Manar:  203 docs  ██████████        │
+    │  Mariem: 156 docs  ████████          │
+    │  Nesrine:127 docs  ██████            │
+    │  Jihed:  129 docs  ██████            │
+    │  Marwen:  77 docs  ████              │
+    └──────────────────────────────────────┘`}
+                  </pre>
+                </div>
+
+                {/* Section 5: Glossary */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <h3 style={{ color: '#6366f1', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>📖</span> Glossaire des Termes
+                  </h3>
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#f9fafb', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
+                      <strong>Efficacité :</strong> Pourcentage de dossiers complétés avec succès par rapport au total assigné. Une efficacité de 34% signifie que 34% des dossiers ont été traités.
+                    </div>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#f9fafb', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
+                      <strong>Charge :</strong> Nombre total de documents, BS, bordereaux et réclamations actuellement assignés à un gestionnaire.
+                    </div>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#f9fafb', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
+                      <strong>SLA (Service Level Agreement) :</strong> Pourcentage de dossiers traités dans les délais contractuels. 100% = tous les dossiers respectent les délais.
+                    </div>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#f9fafb', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
+                      <strong>Retards :</strong> Nombre de dossiers dépassant les délais de traitement définis.
+                    </div>
+                    <div style={{ padding: '0.75rem', backgroundColor: '#f9fafb', borderRadius: '6px', borderLeft: '3px solid #6366f1' }}>
+                      <strong>Score :</strong> Note globale entre 0 et 1 calculée par l'IA. Plus le score est élevé, plus le gestionnaire est disponible et performant.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                paddingTop: '1.5rem',
+                borderTop: '1px solid #e5e7eb'
+              }}>
+                <button
+                  onClick={() => setShowAIExplanationModal(false)}
+                  style={{
+                    background: '#6366f1',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.75rem 2rem',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: '600'
+                  }}
+                >
+                  J'ai compris
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Edit Type Modal */}
         {editModalOpen && (
           <div style={{
@@ -2611,6 +2913,26 @@ const EnhancedDashboard: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
                   <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
                   <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Module Bulletin de Soins</h3>
+                  <button
+                    onClick={() => setShowAIExplanationModal(true)}
+                    style={{
+                      marginLeft: 'auto',
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#6366f1',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <span>ℹ️</span>
+                    Comment ça marche ?
+                  </button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
                   <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
@@ -2699,7 +3021,7 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           )}
           
-          {/* AI Service Status Info */}
+          {/* AI Service Status Info remved comented out section  */}
           {aiInsights?.health.status === 'unavailable' && (
             <div style={{ marginTop: '2rem' }}>
               <div style={{ padding: '1rem', border: '1px solid #ffeaa7', borderRadius: '8px', backgroundColor: '#fffbf0' }}>
@@ -2714,11 +3036,7 @@ const EnhancedDashboard: React.FC = () => {
               </div>
             </div>
           )}
-
-          {/* Feedback - COMMENTED OUT */}
-          {/* <div style={{ marginTop: '2rem' }}>
-            <FeedbackForm page="enhanced-dashboard" />
-          </div> */}
+  
         </>
       )}
     </div>

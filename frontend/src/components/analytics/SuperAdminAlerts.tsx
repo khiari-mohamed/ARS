@@ -74,6 +74,8 @@ const SuperAdminAlerts: React.FC = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [alertDetailDialog, setAlertDetailDialog] = useState<{ open: boolean; alert: any | null; aiSolution: any | null; loadingAI: boolean }>({ open: false, alert: null, aiSolution: null, loadingAI: false });
+  const [clientFilter, setClientFilter] = useState('');
+  const [severityFilter, setSeverityFilter] = useState('');
 
   // Import alerts from Alert Module - use history for resolved
   const { data: alertsResponse, refetch: refetchAlerts } = useAlertsDashboard({});
@@ -423,6 +425,48 @@ const SuperAdminAlerts: React.FC = () => {
       {/* Tab 1: Active Alerts Table */}
       {activeTab === 1 && (
         <Paper>
+          {/* Filters */}
+          <Box sx={{ p: 2, display: 'flex', gap: 2, borderBottom: '1px solid #e0e0e0' }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="caption" color="text.secondary">Client/Société</Typography>
+              <select
+                value={clientFilter}
+                onChange={(e) => setClientFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">Tous les clients</option>
+                {Array.from(new Set(activeAlerts.map((alert: any) => 
+                  alert.bordereau.contract?.client?.name || alert.bordereau.client?.name || 'N/A'
+                )) as Set<string>).sort().map((client) => (
+                  <option key={client} value={client}>{client}</option>
+                ))}
+              </select>
+            </Box>
+            <Box sx={{ minWidth: 200 }}>
+              <Typography variant="caption" color="text.secondary">Urgence</Typography>
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">Tous</option>
+                <option value="red">Critique</option>
+                <option value="orange">Avertissement</option>
+              </select>
+            </Box>
+          </Box>
           <TableContainer>
             <Table>
               <TableHead>
@@ -440,6 +484,13 @@ const SuperAdminAlerts: React.FC = () => {
               </TableHead>
               <TableBody>
                 {activeAlerts
+                  .filter((alert: any) => {
+                    const clientName = alert.bordereau.contract?.client?.name || alert.bordereau.client?.name || 'N/A';
+                    const matchesClient = !clientFilter || clientName === clientFilter;
+                    const alertSeverity = alert.alertLevel || alert.severity || alert.level;
+                    const matchesSeverity = !severityFilter || alertSeverity === severityFilter;
+                    return matchesClient && matchesSeverity;
+                  })
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((alert: any) => (
                   <TableRow key={alert.bordereau.id}>
@@ -470,8 +521,8 @@ const SuperAdminAlerts: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {alert.bordereau.currentHandler?.fullName || 
-                       alert.bordereau.contract?.teamLeader?.fullName || 
+                      {alert.bordereau.contract?.teamLeader?.fullName || 
+                       alert.bordereau.currentHandler?.fullName || 
                        'Non assigné'}
                     </TableCell>
                     <TableCell>
@@ -490,13 +541,26 @@ const SuperAdminAlerts: React.FC = () => {
                             size="small"
                             onClick={async () => {
                               setAlertDetailDialog({ open: true, alert, aiSolution: null, loadingAI: true });
-                              const response = await LocalAPI.post('/analytics/ai/alert-solution', {
-                                bordereau: alert.bordereau,
-                                alertLevel: alert.alertLevel,
-                                reason: alert.reason,
-                                slaDays: getSLAStatus(alert)
-                              });
-                              setAlertDetailDialog(prev => ({ ...prev, aiSolution: response.data, loadingAI: false }));
+                              try {
+                                const timeoutPromise = new Promise<never>((_, reject) => 
+                                  setTimeout(() => reject({ message: 'Timeout' }), 30000)
+                                );
+                                const apiPromise = LocalAPI.post('/analytics/ai/alert-solution', {
+                                  bordereau: alert.bordereau,
+                                  alertLevel: alert.alertLevel,
+                                  reason: alert.reason,
+                                  slaDays: getSLAStatus(alert)
+                                });
+                                const response = await Promise.race([apiPromise, timeoutPromise]) as any;
+                                setAlertDetailDialog(prev => ({ ...prev, aiSolution: response.data, loadingAI: false }));
+                              } catch (error) {
+                                console.error('AI solution error:', error);
+                                setAlertDetailDialog(prev => ({ 
+                                  ...prev, 
+                                  aiSolution: null, 
+                                  loadingAI: false 
+                                }));
+                              }
                             }}
                           >
                             <Visibility />
@@ -520,7 +584,13 @@ const SuperAdminAlerts: React.FC = () => {
           </TableContainer>
           <TablePagination
             component="div"
-            count={activeAlerts.length}
+            count={activeAlerts.filter((alert: any) => {
+              const clientName = alert.bordereau.contract?.client?.name || alert.bordereau.client?.name || 'N/A';
+              const matchesClient = !clientFilter || clientName === clientFilter;
+              const alertSeverity = alert.alertLevel || alert.severity || alert.level;
+              const matchesSeverity = !severityFilter || alertSeverity === severityFilter;
+              return matchesClient && matchesSeverity;
+            }).length}
             page={page}
             onPageChange={(_, newPage) => setPage(newPage)}
             rowsPerPage={rowsPerPage}

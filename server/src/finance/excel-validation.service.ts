@@ -42,10 +42,25 @@ export class ExcelValidationService {
     private txtParserService: TxtParserService
   ) {}
 
-  async validateExcelFile(fileBuffer: Buffer, clientId: string | string[]): Promise<ExcelValidationResult> {
+  async validateExcelFile(fileBuffer: Buffer, clientId: string | string[], bordereauId?: string): Promise<ExcelValidationResult> {
     // Fix: Handle clientId as array (frontend sends it twice)
     const actualClientId = Array.isArray(clientId) ? clientId[0] : clientId;
-    console.log('validateExcelFile called with clientId:', clientId, '-> using:', actualClientId);
+    console.log('validateExcelFile called with clientId:', clientId, 'bordereauId:', bordereauId, '-> using:', actualClientId);
+    
+    // EXACT FIX: Get bordereau's client name and ID if bordereauId is provided
+    let bordereauClientName: string | null = null;
+    let bordereauClientId: string | null = null;
+    if (bordereauId) {
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: bordereauId },
+        include: { client: true }
+      });
+      if (bordereau) {
+        bordereauClientName = bordereau.client.name;
+        bordereauClientId = bordereau.client.id;
+        console.log('✅ Using bordereau client:', bordereauClientName, 'ID:', bordereauClientId);
+      }
+    }
     // Check if file is TXT format (starts with 110104)
     const content = fileBuffer.toString('utf-8');
     if (content.startsWith('110104')) {
@@ -85,7 +100,7 @@ export class ExcelValidationService {
     // Process all rows
     const rowPromises: Promise<{item?: VirementValidationItem, error?: ValidationError}>[] = [];
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
-      rowPromises.push(this.processRow(worksheet.getRow(rowNumber), rowNumber, actualClientId, columnMap));
+      rowPromises.push(this.processRow(worksheet.getRow(rowNumber), rowNumber, actualClientId, columnMap, bordereauClientName, bordereauClientId));
     }
     
     const rowResults = await Promise.all(rowPromises);
@@ -251,19 +266,23 @@ export class ExcelValidationService {
         map.prenom = colNumber;
       } else if (header.includes('nom') && !header.includes('prenom') && !header.includes('prénom')) {
         map.nom = colNumber;
-      } else if (header.includes('rib') || header.includes('compte')) {
+      } else if (header.includes('name') && !header.includes('firstname')) {
+        // EXACT FIX: Detect "Name" column as nom (full name)
+        map.nom = colNumber;
+      } else if (header.includes('rib') || header.includes('compte') || header.includes('banque') || header.includes('bank')) {
         map.rib = colNumber;
-      } else if (header.includes('montant') || header.includes('amount')) {
+      } else if (header.includes('montant') || header.includes('amount') || header.includes('code')) {
         map.montant = colNumber;
-      } else if (header.includes('societe') || header.includes('société') || header.includes('client')) {
+      } else if (header.includes('societe') || header.includes('société') || header.includes('client') || header.includes('assure')) {
         map.societe = colNumber;
       }
     });
     
+    console.log('📊 Column detection result:', map);
     return map;
   }
 
-  private async processRow(row: ExcelJS.Row, rowNumber: number, clientId: string, columnMap: any): Promise<{item?: VirementValidationItem, error?: ValidationError}> {
+  private async processRow(row: ExcelJS.Row, rowNumber: number, clientId: string, columnMap: any, bordereauClientName?: string | null, bordereauClientId?: string | null): Promise<{item?: VirementValidationItem, error?: ValidationError}> {
     if (!row.hasValues) {
       return {};
     }
@@ -301,46 +320,136 @@ export class ExcelValidationService {
       }
       
       // EXACT SPEC: Fetch adherent data from database using matricule AND clientId
-      // This prevents picking wrong adherent if two companies have same matricule
+      // EXACT FIX: Use bordereauClientId if provided to get adherent from correct client
       let adherent: any = null;
       if (matricule) {
-        // Try with clientId first
+        const searchClientId = bordereauClientId || clientId;
+        
         adherent = await this.prisma.adherent.findFirst({
           where: {
             matricule: matricule,
-            clientId: clientId
+            clientId: searchClientId
           },
           include: { client: true }
         });
         
-        // If not found and clientId is 'default', try without clientId filter
-        if (!adherent && clientId === 'default') {
-          adherent = await this.prisma.adherent.findFirst({
-            where: { matricule: matricule },
-            include: { client: true }
-          });
-        }
+        console.log(`Row ${rowNumber}: Searching adherent with matricule=${matricule}, clientId=${searchClientId}, found=${!!adherent}`);
       }
       
       // Use adherent data if found, otherwise try Excel columns
       const excelNom = columnMap.nom > 0 ? (row.getCell(columnMap.nom).text || row.getCell(columnMap.nom).value?.toString() || '').trim() : '';
       const excelPrenom = columnMap.prenom > 0 ? (row.getCell(columnMap.prenom).text || row.getCell(columnMap.prenom).value?.toString() || '').trim() : '';
       
-      // Handle RIB - convert scientific notation to full number
+      // Handle RIB - CRITICAL: preserve full precision from Excel
       let excelRib = '';
       if (columnMap.rib > 0) {
         const ribCell = row.getCell(columnMap.rib);
         if (ribCell.value) {
-          // Always use the TEXT value for RIB to avoid precision loss
-          excelRib = (ribCell.text || ribCell.value.toString()).trim().replace(/\s/g, '');
+          const rawValue = ribCell.value;
+          
+          // EXACT FIX: Try to get original text before numeric conversion
+          // Priority: 1) Cell text 2) Cell formula result 3) Numeric conversion
+          if (ribCell.text && ribCell.text.trim() && !/[eE]/.test(ribCell.text)) {
+            // Use text if available and not in scientific notation
+            excelRib = ribCell.text.trim().replace(/\s/g, '');
+            console.log(`Row ${rowNumber}: RIB from cell.text: ${excelRib}`);
+          } else if (typeof rawValue === 'string') {
+            excelRib = rawValue.trim().replace(/\s/g, '');
+            console.log(`Row ${rowNumber}: RIB from string value: ${excelRib}`);
+          } else if (typeof rawValue === 'number') {
+            // CRITICAL: Use BigInt-like string manipulation to preserve precision
+            const numStr = rawValue.toString();
+            
+            if (numStr.includes('e') || numStr.includes('E')) {
+              // Scientific notation - parse carefully
+              const [mantissa, exponent] = numStr.toLowerCase().split('e');
+              const exp = parseInt(exponent);
+              const mantissaDigits = mantissa.replace('.', '').replace('-', '');
+              const mantissaDecimals = mantissa.includes('.') ? mantissa.split('.')[1].length : 0;
+              
+              const totalDigits = exp + 1;
+              const zerosToAdd = totalDigits - mantissaDigits.length + mantissaDecimals;
+              
+              excelRib = mantissaDigits + '0'.repeat(Math.max(0, zerosToAdd));
+              
+              // Ensure exactly 20 digits
+              if (excelRib.length < 20) {
+                excelRib = excelRib.padStart(20, '0');
+              } else if (excelRib.length > 20) {
+                excelRib = excelRib.substring(0, 20);
+              }
+              
+              console.log(`Row ${rowNumber}: RIB from scientific: ${rawValue} -> ${excelRib}`);
+            } else {
+              excelRib = numStr;
+              console.log(`Row ${rowNumber}: RIB from number: ${excelRib}`);
+            }
+          }
+          
+          // Clean and validate
+          excelRib = excelRib.replace(/[^0-9]/g, '');
+          
+          // Validate RIB is exactly 20 digits
+          if (excelRib.length !== 20 || !/^\d{20}$/.test(excelRib)) {
+            console.log(`Row ${rowNumber}: Invalid RIB length: ${excelRib} (length: ${excelRib.length})`);
+            // If from DB, try to use DB RIB as fallback
+            excelRib = ''; // Clear invalid RIB
+          } else {
+            console.log(`Row ${rowNumber}: ✅ Valid RIB: ${excelRib}`);
+          }
         }
       }
       
-      // Priority: Excel first, then DB (if Excel column missing/empty)
+      // CRITICAL: Excel data has ABSOLUTE PRIORITY for money flow accuracy
       const nom = excelNom || adherent?.nom || '';
       const prenom = excelPrenom || adherent?.prenom || '';
-      const societe = adherent?.client?.name || 'ARS TUNISIE';
-      const rib = excelRib || adherent?.rib || '';
+      const societe = bordereauClientName || adherent?.client?.name || '';
+      
+      // EXACT FIX: RIB logic with validation
+      let rib = '';
+      let ribSource = '';
+      const ribErrors: string[] = [];
+      
+      // CRITICAL: Detect if Excel RIB lost precision (ends with 8+ zeros)
+      const excelLostPrecision = excelRib && /0{8,}$/.test(excelRib);
+      
+      if (excelLostPrecision && adherent?.rib) {
+        rib = adherent.rib;
+        ribSource = 'DB (Excel lost precision)';
+        ribErrors.push(`RIB Excel imprécis (${excelRib}), RIB DB utilisé (${adherent.rib})`);
+        console.log(`Row ${rowNumber}: ⚠️ Excel RIB lost precision (${excelRib}), using DB RIB`);
+      } else if (excelRib && excelRib.length === 20) {
+        rib = excelRib;
+        ribSource = excelLostPrecision ? 'Excel (precision lost)' : 'Excel';
+        
+        if (excelLostPrecision && !adherent) {
+          ribErrors.push(`⚠️ RIB Excel peut être imprécis (${excelRib}). Veuillez vérifier ou formater la colonne RIB comme TEXTE dans Excel.`);
+          console.log(`Row ${rowNumber}: ⚠️ Using Excel RIB with possible precision loss (no DB to verify): ${rib}`);
+        } else if (adherent?.rib && adherent.rib !== excelRib) {
+          console.log(`Row ${rowNumber}: ⚠️ RIB mismatch - Excel: ${excelRib}, DB: ${adherent.rib}`);
+          ribErrors.push(`RIB Excel (${excelRib}) différent du RIB DB (${adherent.rib})`);
+        }
+        
+        console.log(`Row ${rowNumber}: Using Excel RIB: ${rib}`);
+      } else if (!excelRib && adherent?.rib) {
+        // Case 2: Excel has NO RIB column - use DB RIB ONLY if from correct client
+        if (bordereauClientId && adherent.clientId === bordereauClientId) {
+          rib = adherent.rib;
+          ribSource = 'DB (correct client)';
+          console.log(`Row ${rowNumber}: Using DB RIB from correct client (${bordereauClientName}): ${rib}`);
+        } else if (bordereauClientId) {
+          console.log(`Row ${rowNumber}: ❌ Adherent found but from wrong client. Expected: ${bordereauClientName}, Got: ${adherent.client?.name}`);
+          ribErrors.push(`Adhérent trouvé pour client ${adherent.client?.name} au lieu de ${bordereauClientName}`);
+        } else {
+          // No bordereau context - use DB RIB with warning
+          rib = adherent.rib;
+          ribSource = 'DB (no bordereau context)';
+          console.log(`Row ${rowNumber}: Using DB RIB (no bordereau context): ${rib}`);
+        }
+      } else if (excelRib && excelRib.length !== 20) {
+        // Case 3: Excel has invalid RIB
+        console.log(`Row ${rowNumber}: ❌ Invalid Excel RIB: ${excelRib} (length: ${excelRib.length})`);        ribErrors.push(`RIB Excel invalide: ${excelRib} (doit être 20 chiffres)`);
+      }
 
       const validationItem: VirementValidationItem = {
         matricule: matricule || '',
@@ -350,11 +459,11 @@ export class ExcelValidationService {
         rib,
         montant: isNaN(montant) ? 0 : montant,
         status: 'VALIDE',
-        erreurs: [],
+        erreurs: [...ribErrors],
         adherentId: adherent?.id
       };
 
-      // EXACT SPEC: Validate only matricule and montant (required inputs)
+      // EXACT SPEC: Validate required fields
       if (!matricule) {
         validationItem.erreurs.push('Matricule/Numéro de contrat manquant');
         validationItem.status = 'ERREUR';
@@ -364,16 +473,26 @@ export class ExcelValidationService {
         validationItem.status = 'ERREUR';
       }
       
-      // EXACT SPEC: Validate adherent exists in database (optional - only warning if not found)
-      if (matricule && !adherent) {
-        validationItem.erreurs.push('Adhérent non trouvé dans la base');
-        validationItem.status = 'ALERTE'; // Changed from ERREUR to ALERTE
-      } else if (adherent && (!adherent.rib || adherent.rib.length < 20)) {
-        validationItem.erreurs.push('RIB invalide dans la base adhérents');
-        validationItem.status = 'ALERTE';
+      // CRITICAL: RIB validation for money flow
+      if (!rib || rib.length !== 20) {
+        validationItem.erreurs.push('RIB manquant ou invalide (doit être 20 chiffres)');
+        validationItem.status = 'ERREUR';
       }
       
-      console.log(`Row ${rowNumber}: Processed - status=${validationItem.status}, errors=${validationItem.erreurs.length}`);
+      // EXACT SPEC: Adherent validation
+      if (matricule && !adherent) {
+        validationItem.erreurs.push(`Adhérent non trouvé dans la base pour le client ${bordereauClientName || 'sélectionné'}. Veuillez vérifier que l'adhérent avec matricule ${matricule} existe bien pour ce client.`);
+        if (validationItem.status === 'VALIDE') {
+          validationItem.status = 'ALERTE';
+        }
+      } else if (adherent && bordereauClientId && adherent.clientId !== bordereauClientId) {
+        validationItem.erreurs.push(`Adhérent lié à ${adherent.client?.name} au lieu de ${bordereauClientName}`);
+        if (validationItem.status === 'VALIDE') {
+          validationItem.status = 'ALERTE';
+        }
+      }
+      
+      console.log(`Row ${rowNumber}: Final - RIB=${rib} (source: ${ribSource}), Status=${validationItem.status}, Errors=${validationItem.erreurs.length}`);
       return { item: validationItem };
 
     } catch (error) {

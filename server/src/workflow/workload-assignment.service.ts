@@ -144,7 +144,7 @@ export class WorkloadAssignmentService {
       );
 
       // Step 7: Check for team overload after assignment
-      setTimeout(() => this.autoNotificationService.checkAndNotifyTeamOverload(), 1000);
+      // setTimeout(() => this.autoNotificationService.checkAndNotifyTeamOverload(), 1000);
 
       this.logger.log(`✅ Auto-assigned bordereau ${bordereau.reference} to ${selectedGestionnaire.fullName}: ${assignmentReason}`);
 

@@ -25,7 +25,7 @@ type BordereauWithMontant = { montant?: number } & any;
 
 @Injectable()
 export class BordereauxService {
-  // --- Missing Features Implementation ---
+  // --- Missing Features Implementationsss ---
   
   // Workflow progression with notifications
   async progressToNextStage(bordereauId: string): Promise<BordereauResponseDto> {

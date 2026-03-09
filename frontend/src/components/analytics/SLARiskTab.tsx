@@ -116,10 +116,14 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
 
   const handleReallocate = async (bordereauId: string, item: any) => {
     try {
-      const response = await LocalAPI.post('/analytics/ai/reassignment', {
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject({ message: 'Timeout' }), 30000)
+      );
+      const apiPromise = LocalAPI.post('/analytics/ai/reassignment', {
         bordereauId,
         reason: 'SLA_RISK'
       });
+      const response = await Promise.race([apiPromise, timeoutPromise]) as any;
       
       setReassignmentDialog({
         open: true,
@@ -128,7 +132,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
       });
     } catch (error) {
       console.error('AI reassignment failed:', error);
-      alert('Erreur: La réaffectation IA a échoué');
+      alert('Erreur: La réaffectation IA a échoué. Le service IA est peut-être indisponible.');
     }
   };
 
