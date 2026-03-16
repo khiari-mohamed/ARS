@@ -251,6 +251,12 @@ export class AnalyticsController {
     return this.analyticsService.getReassignmentAI(payload);
   }
 
+  @Post('ai/reassign-suggestion')
+  async getReassignSuggestion(@Body() payload: any, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.analyticsService.getAIReassignSuggestion(payload);
+  }
+
   @Post('ai/performance')
   async getPerformanceAI(@Body() payload: any) {
     return this.analyticsService.getPerformanceAI(payload);

@@ -305,6 +305,7 @@ model Client {
   chargeCompteId       String?
   contractDocumentPath String?
   compagnieAssuranceId String? // NEW: Link to insurance company
+  modeRecuperation     String? // NEW: Mode de récupération
   adherents            Adherent[]
   bordereaux           Bordereau[]
   chargeCompte         User?               @relation("ChargeCompte", fields: [chargeCompteId], references: [id])
@@ -588,6 +589,7 @@ model Adherent {
   client        Client                @relation(fields: [clientId], references: [id])
   virementItems VirementItem[]
   ribHistory    AdherentRibHistory[]
+  history       AdherentHistory[]
 
   @@unique([matricule, clientId]) // Matricule unique per société
   @@index([rib]) // RIB unique per adherent
@@ -600,6 +602,20 @@ model AdherentRibHistory {
   adherentId  String
   oldRib      String
   newRib      String
+  updatedById String
+  updatedAt   DateTime @default(now())
+  adherent    Adherent @relation(fields: [adherentId], references: [id], onDelete: Cascade)
+
+  @@index([adherentId])
+  @@index([updatedAt])
+}
+
+model AdherentHistory {
+  id          String   @id @default(uuid())
+  adherentId  String
+  field       String
+  oldValue    String?
+  newValue    String?
   updatedById String
   updatedAt   DateTime @default(now())
   adherent    Adherent @relation(fields: [adherentId], references: [id], onDelete: Cascade)

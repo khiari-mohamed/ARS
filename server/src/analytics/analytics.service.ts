@@ -583,6 +583,23 @@ export class AnalyticsService {
     }
   }
 
+  async getAIReassignSuggestion(payload: any) {
+    try {
+      const token = await this.getAIToken();
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/analytics/ai/reassign-suggestion`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 300000
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('AI reassign suggestion failed:', error.response?.data || error.message);
+      throw new Error('AI reassign suggestion failed: ' + (error.response?.data?.detail || error.message));
+    }
+  }
+
   private async getAIToken(): Promise<string> {
     try {
       // Try multiple credential combinations

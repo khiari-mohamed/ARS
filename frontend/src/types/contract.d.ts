@@ -2,6 +2,7 @@ export interface Contract {
   id: string;
   clientId: string;
   clientName: string;
+  codeAssure?: string; // NEW: Code Assuré field
   name?: string; // For backward compatibility
   nom?: string; // For backward compatibility
   delaiReglement: number; // SLA Treatment delay in days
@@ -54,6 +55,7 @@ export interface SLACompliance {
 export interface CreateContractRequest {
   clientId: string;
   contractNumber: string;
+  codeAssure?: string; // NEW: Code Assuré field
   treatmentDelay: number;
   claimsReplyDelay: number;
   paymentDelay: number;

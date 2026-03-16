@@ -18,6 +18,7 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
   reglementDelay: 0,
   reclamationDelay: 0,
   gestionnaireIds: [] as string[],
+  modeRecuperation: '' as string,
 });
   const [errors, setErrors] = useState<any>({});
   const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
@@ -35,10 +36,11 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
         name: client.name,
         reglementDelay: client.reglementDelay || 0,
         reclamationDelay: client.reclamationDelay || 0,
-        gestionnaireIds: client.gestionnaires?.map((g: any) => g.id) || [] 
+        gestionnaireIds: client.gestionnaires?.map((g: any) => g.id) || [],
+        modeRecuperation: (client as any).modeRecuperation || ''
       });
     } else {
-      setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [] });
+      setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [], modeRecuperation: '' });
     }
     setErrors({});
   }, [client]);
@@ -93,7 +95,7 @@ const validate = () => {
       <DialogContent>
         {formError && <div style={{ color: 'red', marginBottom: 8 }}>{formError}</div>}
         <Grid container spacing={2}>
-          <Grid>
+          <Grid item xs={12}>
             <TextField
               label="Name"
               name="name"
@@ -105,7 +107,7 @@ const validate = () => {
               helperText={errors.name}
             />
           </Grid>
-          <Grid >
+          <Grid item xs={12} md={6}>
             <TextField
               label="Reglement Delay"
               name="reglementDelay"
@@ -118,7 +120,7 @@ const validate = () => {
               helperText={errors.reglementDelay}
             />
           </Grid>
-          <Grid>
+          <Grid item xs={12} md={6}>
             <TextField
               label="Reclamation Delay"
               name="reclamationDelay"
@@ -131,7 +133,7 @@ const validate = () => {
               helperText={errors.reclamationDelay}
             />
           </Grid>
-          <Grid>
+          <Grid item xs={12}>
             <FormControl fullWidth required error={!!errors.gestionnaireIds}>
               <InputLabel id="gestionnaireIds-label">Chef d'Équipe</InputLabel>
               <Select
@@ -150,6 +152,23 @@ const validate = () => {
                 ))}
               </Select>
               {errors.gestionnaireIds && <FormHelperText>{errors.gestionnaireIds}</FormHelperText>}
+            </FormControl>
+          </Grid>
+          <Grid item xs={12}>
+            <FormControl fullWidth required>
+              <InputLabel id="modeRecuperation-label">Mode de récupération *</InputLabel>
+              <Select
+                labelId="modeRecuperation-label"
+                name="modeRecuperation"
+                value={form.modeRecuperation}
+                onChange={e => setForm({ ...form, modeRecuperation: e.target.value })}
+                label="Mode de récupération *"
+              >
+                <MenuItem value="">Sélectionner un mode</MenuItem>
+                <MenuItem value="CHEQUE">Mode de récupération par chèque</MenuItem>
+                <MenuItem value="VIREMENT">Mode de récupération par virement</MenuItem>
+                <MenuItem value="FEUILLE_CAISSE">Mode de récupération sur feuille de caisse</MenuItem>
+              </Select>
             </FormControl>
           </Grid>
         </Grid>

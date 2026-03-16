@@ -91,6 +91,7 @@ const ClientListPage: React.FC = () => {
 
   const handleSubmitClient = async (data: any) => {
     try {
+      console.log('🔍 Submitting client data:', data);
       if (editingClient) {
         await updateClient(editingClient.id, data);
         notify('Client modifié avec succès', 'success');
@@ -101,6 +102,7 @@ const ClientListPage: React.FC = () => {
       setShowForm(false);
       loadClients();
     } catch (error) {
+      console.error('❌ Error submitting client:', error);
       notify('Erreur lors de la sauvegarde', 'error');
     }
   };
@@ -1638,7 +1640,8 @@ const ClientFormModal: React.FC<{
     reglementDelay: client?.reglementDelay || 30,
     reclamationDelay: client?.reclamationDelay || 48,
     status: (client?.status || 'active') as 'active' | 'inactive' | 'suspended',
-    gestionnaireIds: client?.gestionnaires?.map(g => g.id) || []
+    gestionnaireIds: client?.gestionnaires?.map(g => g.id) || [],
+    modeRecuperation: (client as any)?.modeRecuperation || ''
   });
   const [availableGestionnaires, setAvailableGestionnaires] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1790,6 +1793,21 @@ const ClientFormModal: React.FC<{
                   {gestionnaire.fullName} ({gestionnaire.email})
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Mode de récupération *</label>
+            <select
+              value={formData.modeRecuperation}
+              onChange={(e) => setFormData({ ...formData, modeRecuperation: e.target.value })}
+              className="form-select"
+              required
+            >
+              <option value="">Sélectionner un mode</option>
+              <option value="VIREMENT">Mode de récupération par virement</option>
+              <option value="CHEQUE">Mode de récupération par chèque</option>
+              <option value="FEUILLE_CAISSE">Mode de récupération sur feuille de caisse</option>
             </select>
           </div>
           

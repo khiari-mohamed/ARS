@@ -18,10 +18,10 @@ import AddIcon from '@mui/icons-material/Add';
 
 interface DonneurOrdre {
   id: string;
-  name: string;
-  bank: string;
+  nom: string;
+  banque: string;
   rib: string;
-  txtFormat: string;
+  structureTxt: string;
 }
 
 interface ValidationResult {
@@ -65,6 +65,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   });
   const [clients, setClients] = useState<any[]>([]);
   const [fileInputKey, setFileInputKey] = useState(Date.now());
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   
   // Read selected bordereau from sessionStorage on mount
   useEffect(() => {
@@ -123,7 +124,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   
   const loadClients = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/client`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/clients`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (response.ok) {
@@ -212,7 +213,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         const mockAdherent = {
           matricule: 'MOCK001',
           name: 'Test Adherent',
-          society: selectedDonneur?.name || 'Test Society',
+          society: selectedDonneur?.nom || 'Test Society',
           rib: '12345678901234567890',
           amount: 100,
           status: 'ok' as const,
@@ -496,28 +497,56 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       // Use the correct validation endpoint
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('clientId', 'default');
+      
       if (selectedBordereauId) {
         formData.append('bordereauId', selectedBordereauId);
         console.log('📋 Linking OV to bordereau:', selectedBordereauId);
       }
       
-      // Get first available client for validation
-      const clientsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/client`, {
+      // Get client ID for validation
+      // For manual OV, use the client name from sessionStorage
+      const manualOVData = sessionStorage.getItem('manualOVData');
+      let clientId = 'default';
+      let clientName: string | null = null;
+      
+      if (manualOVData) {
+        try {
+          const parsedData = JSON.parse(manualOVData);
+          clientName = parsedData.clientName;
+          console.log('📝 Manual OV client name:', clientName);
+        } catch (e) {
+          console.error('Failed to parse manual OV data:', e);
+        }
+      }
+      
+      const clientsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/clients`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      let clientId = 'default';
       if (clientsResponse.ok) {
         const clients = await clientsResponse.json();
         if (clients && clients.length > 0) {
-          clientId = clients[0].id;
-          console.log('✅ Using clientId for validation:', clientId);
+          // If manual OV, find client by name
+          if (clientName) {
+            const matchedClient = clients.find((c: any) => c.name === clientName);
+            if (matchedClient) {
+              clientId = matchedClient.id;
+              console.log('✅ Using manual OV clientId for validation:', clientId, '(', clientName, ')');
+            } else {
+              console.warn('⚠️ Client not found:', clientName, '- using first client');
+              clientId = clients[0].id;
+            }
+          } else {
+            // Normal flow: use first client
+            clientId = clients[0].id;
+            console.log('✅ Using clientId for validation:', clientId);
+          }
         }
       }
       
+      // Append clientId ONCE at the end
       formData.append('clientId', clientId);
       
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/validate-excel`, {
@@ -676,16 +705,16 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                         {selectedDonneur?.id === donneur.id && <CheckCircleIcon color="primary" sx={{ mr: 1 }} />}
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>{donneur.name}</Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>{donneur.nom}</Typography>
                       </Box>
                       <Typography variant="body2" color="textSecondary" sx={{ mb: 0.5 }}>
-                        <strong>Banque:</strong> {donneur.bank}
+                        <strong>Banque:</strong> {donneur.banque}
                       </Typography>
                       <Typography variant="body2" color="textSecondary" sx={{ mb: 0.5 }}>
                         <strong>RIB utilisé pour l'émission:</strong> {donneur.rib}
                       </Typography>
                       <Typography variant="body2" color="textSecondary">
-                        <strong>Format TXT associé:</strong> {donneur.txtFormat}
+                        <strong>Format TXT associé:</strong> {donneur.structureTxt}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -700,7 +729,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
               <Alert severity="success" sx={{ mb: 2 }}>
-                <strong>Donneur d'ordre sélectionné:</strong> {selectedDonneur?.name} - {selectedDonneur?.bank}
+                <strong>Donneur d'ordre sélectionné:</strong> {selectedDonneur?.nom} - {selectedDonneur?.banque}
               </Alert>
               
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
@@ -864,9 +893,19 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         {activeStep === 2 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Étape 3 : Affichage récapitulatif
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  Étape 3 : Affichage récapitulatif
+                </Typography>
+                <Button
+                  variant="outlined"
+                  color="info"
+                  startIcon={<HourglassEmptyIcon />}
+                  onClick={() => setHelpDialogOpen(true)}
+                >
+                  ℹ️ Comment ça marche ?
+                </Button>
+              </Box>
               
               <Alert severity="success" sx={{ mb: 2 }}>
                 Validation automatique terminée
@@ -938,7 +977,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                         </style></head><body>
                           <h2>Récapitulatif - Ordre de Virement</h2>
                           <p><strong>Date:</strong> ${new Date().toLocaleString('fr-FR')}</p>
-                          <p><strong>Donneur:</strong> ${selectedDonneur?.name || 'N/A'}</p>
+                          <p><strong>Donneur:</strong> ${selectedDonneur?.nom || 'N/A'}</p>
                           <table><thead><tr><th>Société</th><th>Matricule</th><th>Nom</th><th>RIB</th><th>Montant</th><th>Statut</th></tr></thead>
                           <tbody>${validationResults.map(r => `<tr><td>${r.society}</td><td>${r.matricule}</td><td>${r.name}</td><td>${r.rib||'N/A'}</td><td>${r.amount.toFixed(2)}</td><td>${r.status==='ok'?'Valide':r.status==='warning'?'Attention':'Erreur'}</td></tr>`).join('')}</tbody></table>
                           <p style="margin-top:20px"><strong>Total:</strong> ${validationResults.reduce((s,r)=>s+r.amount,0).toFixed(2)} TND</p>
@@ -1037,10 +1076,10 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   {selectedDonneur && (
                     <Box>
                       <Typography variant="body2" sx={{ mb: 1 }}>
-                        <strong>Donneur d'ordre:</strong> {selectedDonneur.name}
+                        <strong>Donneur d'ordre:</strong> {selectedDonneur.nom}
                       </Typography>
                       <Typography variant="body2" sx={{ mb: 1 }}>
-                        <strong>Banque:</strong> {selectedDonneur.bank}
+                        <strong>Banque:</strong> {selectedDonneur.banque}
                       </Typography>
                       <Typography variant="body2" sx={{ mb: 1 }}>
                         <strong>RIB:</strong> {selectedDonneur.rib}
@@ -1113,7 +1152,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   </Typography>
                   {selectedDonneur && (
                     <Typography variant="body2">
-                      <strong>Structure:</strong> {selectedDonneur.txtFormat}
+                      <strong>Structure:</strong> {selectedDonneur.structureTxt}
                     </Typography>
                   )}
                 </CardContent>
@@ -1180,7 +1219,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   {selectedDonneur && (
                     <Box>
                       <Typography variant="body2" sx={{ mb: 1 }}>
-                        <strong>Donneur utilisé:</strong> {selectedDonneur.name}
+                        <strong>Donneur utilisé:</strong> {selectedDonneur.nom}
                       </Typography>
                       <Typography variant="body2" sx={{ mb: 1 }}>
                         <strong>Date et heure:</strong> {new Date().toLocaleString('fr-FR')}
@@ -1342,6 +1381,239 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
               </Button>
             </>
           )}
+        </DialogActions>
+      </Dialog>
+      
+      {/* Help Dialog - How it works */}
+      <Dialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: 'info.main', color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <HourglassEmptyIcon />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            📋 Comment fonctionne la validation ?
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Stack spacing={3}>
+            {/* Section 0 - Duplicate Detection System */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'warning.main' }}>
+                🛡️ SYSTÈME DE DÉTECTION DES DOUBLONS
+              </Typography>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  ⚠️ Pourquoi le système affiche des avertissements au lieu de bloquer ?
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Le système utilise <strong>2 niveaux de protection</strong> pour détecter les paiements en double :
+                </Typography>
+              </Alert>
+              
+              <Box sx={{ pl: 2, mb: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                  📊 NIVEAU 1 : Détection du fichier Excel
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  • Le système calcule une <strong>empreinte unique (hash)</strong> de votre fichier Excel<br/>
+                  • Si ce fichier exact a déjà été uploadé dans les <strong>90 derniers jours</strong>, vous recevez un avertissement<br/>
+                  • Exemple : "⚠️ Ce fichier Excel a déjà été utilisé le 13/03/2026 pour l'OV VIR-20260313-0001"
+                </Typography>
+              </Box>
+              
+              <Box sx={{ pl: 2, mb: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                  👤 NIVEAU 2 : Détection par matricule
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  • Pour chaque matricule dans votre Excel, le système vérifie <strong>TOUS les OVs précédents</strong> (sans limite de temps)<br/>
+                  • Si un matricule a déjà été payé, vous voyez <strong>TOUS ses paiements antérieurs</strong><br/>
+                  • Exemple : "⚠️ Matricule déjà utilisé : 452.80 TND dans OV VIR-20260313-0001 (créé il y a 3 jours)"
+                </Typography>
+              </Box>
+              
+              <Alert severity="success" sx={{ mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  ✅ Pourquoi ne pas BLOQUER au lieu d'avertir ?
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Cas légitimes de paiements multiples :</strong><br/>
+                  • 📅 <strong>Paiements mensuels récurrents</strong> : Un adhérent peut recevoir un remboursement chaque mois<br/>
+                  • 💰 <strong>Remboursements multiples</strong> : Plusieurs dossiers médicaux dans le même mois<br/>
+                  • 🔄 <strong>Ajustements</strong> : Corrections ou compléments de paiement<br/>
+                  • ⏰ <strong>Paiements tardifs</strong> : Régularisation de dossiers en retard
+                </Typography>
+              </Alert>
+              
+              <Alert severity="error" sx={{ mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  ❌ Cas de vrais doublons (erreurs à éviter) :
+                </Typography>
+                <Typography variant="body2">
+                  • 📂 <strong>Fichier uploadé 2 fois par erreur</strong> : Vous avez cliqué 2 fois sur "Valider"<br/>
+                  • 🔁 <strong>Même Excel pour 2 bordereaux différents</strong> : Vous avez utilisé le mauvais fichier<br/>
+                  • 📋 <strong>Copier-coller d'un ancien Excel</strong> : Vous avez oublié de mettre à jour les données
+                </Typography>
+              </Alert>
+              
+              <Box sx={{ bgcolor: '#f5f5f5', p: 2, borderRadius: 1, mt: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  🎯 Comment utiliser ces avertissements ?
+                </Typography>
+                <Typography variant="body2">
+                  1️⃣ <strong>Lisez attentivement</strong> les avertissements affichés<br/>
+                  2️⃣ <strong>Vérifiez les dates</strong> : "il y a 2 heures" = probablement un doublon / "il y a 30 jours" = probablement légitime<br/>
+                  3️⃣ <strong>Vérifiez les montants</strong> : Si le montant est identique et la date récente, c'est suspect<br/>
+                  4️⃣ <strong>Décidez</strong> : Cliquez "Continuer" si légitime, "Annuler" si c'est une erreur
+                </Typography>
+              </Box>
+              
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  💡 <strong>Le système vous protège sans vous bloquer</strong> : Vous gardez le contrôle tout en étant alerté des risques potentiels.
+                </Typography>
+              </Alert>
+            </Box>
+            <Divider sx={{ my: 2 }} />
+            
+            {/* Section 1 */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                1️⃣ STRUCTURE DU FICHIER EXCEL
+              </Typography>
+              <Alert severity="info" sx={{ mb: 1 }}>
+                <Typography variant="body2">
+                  • <strong>Colonne 1 :</strong> Matricule de l'adhérent<br/>
+                  • <strong>Colonne 2 :</strong> Montant à virer
+                </Typography>
+              </Alert>
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  ⚠️ IMPORTANT : Colonnes supplémentaires
+                </Typography>
+                <Typography variant="body2">
+                  Si vous ajoutez d'autres colonnes (Nom, Prénom, RIB, Adresse, Téléphone, etc.), elles seront <strong>IGNORÉES</strong> par le système.
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                  🔒 Le système utilise UNIQUEMENT les données de la <strong>Base Adhérents</strong> pour garantir l'intégrité et l'exactitude des informations (Nom, Prénom, RIB, Société).
+                </Typography>
+              </Alert>
+            </Box>
+
+            {/* Section 2 */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                2️⃣ PROCESSUS DE VALIDATION
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                Le système recherche automatiquement chaque matricule dans la <strong>BASE ADHÉRENTS</strong> du client sélectionné.
+              </Typography>
+            </Box>
+
+            {/* Section 3 */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                3️⃣ DONNÉES RÉCUPÉRÉES AUTOMATIQUEMENT
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                Pour chaque matricule trouvé, le système récupère :
+              </Typography>
+              <Box sx={{ pl: 2 }}>
+                <Typography variant="body2">✅ Nom et Prénom</Typography>
+                <Typography variant="body2">✅ Société</Typography>
+                <Typography variant="body2">✅ RIB (20 chiffres)</Typography>
+                <Typography variant="body2">✅ Code Assuré</Typography>
+                <Typography variant="body2">✅ Numéro de Contrat</Typography>
+              </Box>
+            </Box>
+
+            {/* Section 4 */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'success.main' }}>
+                4️⃣ CONDITIONS DE SUCCÈS
+              </Typography>
+              <Alert severity="success">
+                <Typography variant="body2">
+                  ✅ Le matricule DOIT exister dans la base adhérents<br/>
+                  ✅ Le matricule DOIT être lié au CLIENT sélectionné<br/>
+                  ✅ L'adhérent DOIT avoir un RIB valide (20 chiffres)<br/>
+                  ✅ L'adhérent DOIT avoir le statut ACTIF
+                </Typography>
+              </Alert>
+            </Box>
+
+            {/* Section 5 - RIB Duplicate */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'warning.main' }}>
+                5️⃣ CAS PARTICULIER : RIB DUPLIQUÉ
+              </Typography>
+              <Alert severity="warning" sx={{ mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                  ⚠️ Que se passe-t-il si plusieurs adhérents ont le même RIB ?
+                </Typography>
+                <Typography variant="body2">
+                  Le système utilise le <strong>MATRICULE + SOCIÉTÉ</strong> pour identifier l'adhérent correct :
+                </Typography>
+                <Box sx={{ pl: 2, mt: 1 }}>
+                  <Typography variant="body2">
+                    🔹 <strong>Matricule 105934</strong> + <strong>Société HPE</strong> → Trouve MAISSA LAAMIRI (HPE)<br/>
+                    🔹 <strong>Matricule 105934</strong> + <strong>Société FIELDCORE</strong> → Trouve MAISSA LAAMIRI (FIELDCORE)
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                  💡 Même si le RIB est identique (08208000000000000000), le système sélectionne le bon adhérent grâce au couple <strong>Matricule + Société</strong>.
+                </Typography>
+              </Alert>
+            </Box>
+
+            {/* Section 6 */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'error.main' }}>
+                6️⃣ EN CAS D'ERREUR
+              </Typography>
+              <Alert severity="error" sx={{ mb: 1 }}>
+                <Typography variant="body2">
+                  ❌ <strong>'Adhérent non trouvé'</strong> = Le matricule n'existe pas dans la base pour ce client<br/>
+                  ❌ <strong>'RIB manquant'</strong> = L'adhérent existe mais n'a pas de RIB valide
+                </Typography>
+              </Alert>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                ⚠️ Solution :
+              </Typography>
+              <Typography variant="body2">
+                Allez dans <strong>'Gestion de la Base Adhérents'</strong> et ajoutez/corrigez les données manquantes.
+              </Typography>
+            </Box>
+
+            {/* Section 7 */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                7️⃣ IMPORTANT
+              </Typography>
+              <Alert severity="info">
+                <Typography variant="body2">
+                  📌 Vérifiez TOUJOURS que vos adhérents sont importés dans la base AVANT de créer un OV<br/>
+                  📌 Le client sélectionné (HPE, FIELDCORE, etc.) détermine quelle base d'adhérents est utilisée<br/>
+                  📌 Les matricules sont UNIQUES par société
+                </Typography>
+              </Alert>
+            </Box>
+
+            {/* Section 8 */}
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: 'success.main' }}>
+                💡 CONSEIL
+              </Typography>
+              <Alert severity="success">
+                <Typography variant="body2">
+                  Avant de créer un OV, allez dans <strong>'Gestion de la Base Adhérents'</strong>, filtrez par votre société, et vérifiez que tous les matricules existent avec des RIBs valides.
+                </Typography>
+              </Alert>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHelpDialogOpen(false)} variant="contained" color="primary">
+            J'ai compris
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

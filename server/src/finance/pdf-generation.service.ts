@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as PDFDocument from 'pdfkit';
 import * as fs from 'fs';
+import * as path from 'path';
 
 export interface OVPdfData {
   ordreVirementId: string;
@@ -35,6 +36,30 @@ export interface OVPdfData {
 export class PdfGenerationService {
   constructor(private prisma: PrismaService) {}
 
+  private getImagePath(imageName: string): string {
+    // Try multiple possible paths for cross-platform compatibility
+    const possiblePaths = [
+      // Production Ubuntu: server and frontend are siblings
+      path.join(process.cwd(), '..', 'frontend', 'public', imageName),
+      // Alternative: if running from server directory
+      path.join(__dirname, '..', '..', '..', 'frontend', 'public', imageName),
+      // Alternative: if frontend is served from server/public
+      path.join(process.cwd(), 'public', imageName),
+      // Dev Windows path
+      path.join('D:', 'ARS', 'frontend', 'public', imageName),
+    ];
+
+    for (const imagePath of possiblePaths) {
+      if (fs.existsSync(imagePath)) {
+        console.log(`Found image at: ${imagePath}`);
+        return imagePath;
+      }
+    }
+
+    console.warn(`Image ${imageName} not found in any of these paths:`, possiblePaths);
+    return ''; // Return empty string if not found
+  }
+
   async generateOVPdf(data: OVPdfData): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
@@ -46,7 +71,8 @@ export class PdfGenerationService {
         const doc = new PDFDocument({ 
           size: 'A4',
           margins: { top: 50, bottom: 50, left: 50, right: 50 },
-          autoFirstPage: true
+          autoFirstPage: false,
+          bufferPages: false // CRITICAL: Disable buffering to prevent extra pages
         });
         
         const chunks: Buffer[] = [];
@@ -54,11 +80,11 @@ export class PdfGenerationService {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
         
-        let currentPage = 1;
-        let totalPages = 1;
+        // Add single page manually
+        doc.addPage();
         
         // Header
-        this.addPageHeader(doc, data, currentPage, totalPages);
+        this.addPageHeader(doc, data, 1, 1);
         
         // Table
         this.addVirementTable(doc, data, null);
@@ -66,11 +92,20 @@ export class PdfGenerationService {
         // Footer info
         this.addFooterInfo(doc, data);
         
-        // Page footer
-        this.addPageFooter(doc, data, currentPage, totalPages);
+        // Bottom logo at fixed position
+        const bottomLogoPath = this.getImagePath('Image3.jpg');
+        if (bottomLogoPath) {
+          try {
+            doc.image(bottomLogoPath, 50, doc.page.height - 80, { width: doc.page.width - 100, height: 30 });
+          } catch (e) {
+            console.warn('Failed to load bottom logo:', e.message);
+          }
+        }
+        
+        // REMOVED: Page number that was causing second page
+        // doc.fontSize(7).font('Helvetica').text('Page 1 sur 1', 0, doc.page.height - 40, { width: doc.page.width, align: 'center' });
 
-        // Prevent extra blank pages
-        doc.flushPages();
+        // CRITICAL: End immediately without any flush or additional operations
         doc.end();
       } catch (error) {
         reject(error);
@@ -81,33 +116,37 @@ export class PdfGenerationService {
   private addPageHeader(doc: any, data: OVPdfData, pageNum: number, totalPages: number) {
     const startY = 20;
     
-    // Logos
-    const logoPath1 = 'D:\\ARS\\frontend\\public\\Image1.png';
-    const logoPath2 = 'D:\\ARS\\frontend\\public\\Image2.png';
+    // Logos - use dynamic path resolution
+    const logoPath1 = this.getImagePath('Image1.png');
+    const logoPath2 = this.getImagePath('Image2.png');
     
-    try {
-      if (require('fs').existsSync(logoPath1)) {
-        doc.image(logoPath1, 50, startY, { width: 70, height: 50 });
+    if (logoPath1) {
+      try {
+        doc.image(logoPath1, 50, startY, { width: 60, height: 40 });
+      } catch (e) {
+        console.warn('Failed to load logo 1:', e.message);
       }
-    } catch (e) {}
+    }
     
-    try {
-      if (require('fs').existsSync(logoPath2)) {
-        doc.image(logoPath2, doc.page.width - 120, startY, { width: 70, height: 50 });
+    if (logoPath2) {
+      try {
+        doc.image(logoPath2, doc.page.width - 110, startY, { width: 60, height: 40 });
+      } catch (e) {
+        console.warn('Failed to load logo 2:', e.message);
       }
-    } catch (e) {}
+    }
     
     // Title
-    doc.fontSize(14)
+    doc.fontSize(12)
        .font('Helvetica-Bold')
-       .text('ORDRE DE VIREMENT', 0, startY + 55, { width: doc.page.width, align: 'center' });
+       .text('ORDRE DE VIREMENT', 0, startY + 45, { width: doc.page.width, align: 'center' });
     
-    let currentY = startY + 80;
+    let currentY = startY + 65;
 
     // Only show full header on first page
     if (pageNum === 1) {
       // DONNEUR D'ORDRE - always ARS TUNISIE
-      doc.fontSize(10)
+      doc.fontSize(9)
          .font('Helvetica-Bold')
          .text('DONNEUR D\'ORDRE', 50, currentY);
       
@@ -117,63 +156,63 @@ export class PdfGenerationService {
       const rightX = 350;
       let rightY = currentY;
       
-      doc.fontSize(9).font('Helvetica');
+      doc.fontSize(8).font('Helvetica');
       doc.text(`Tunis le : ${data.dateEmission.toLocaleDateString('fr-FR')}`, rightX, rightY, { width: 220, align: 'right' });
-      rightY += 14;
+      rightY += 12;
       doc.text(`Fichier de Transmission : ${fileName}`, rightX, rightY, { width: 220, align: 'right' });
-      rightY += 14;
+      rightY += 12;
       doc.text(`Référence OV : ${ovReference}`, rightX, rightY, { width: 220, align: 'right' });
       
       // Company name - always ARS TUNISIE (left side)
-      currentY += 8;
-      doc.fontSize(9)
+      currentY += 6;
+      doc.fontSize(8)
          .font('Helvetica-Bold')
          .text('ARS TUNISIE', 50, currentY);
       
-      currentY += 12;
+      currentY += 10;
       const address = '89 Bis Avenue Habib Bourguiba 2080 Nouvelle Ariana';
       doc.font('Helvetica').text(address, 50, currentY);
       
-      currentY += 25;
+      currentY += 20;
       
       // Bank information - variable account
       const agence = (data.donneurOrdre.agence || 'ARIANA').toUpperCase();
       const banque = (data.donneurOrdre.banque || 'ATTIJARI BANK').toUpperCase();
       
-      doc.fontSize(9)
+      doc.fontSize(8)
          .font('Helvetica')
          .text('AGENCE :', 50, currentY)
          .font('Helvetica-Bold')
-         .text(agence, 140, currentY);
+         .text(agence, 120, currentY);
       
-      currentY += 12;
+      currentY += 10;
       doc.font('Helvetica')
          .text('BANQUE :', 50, currentY)
          .font('Helvetica-Bold')
-         .text(banque, 140, currentY);
+         .text(banque, 120, currentY);
       
-      currentY += 12;
+      currentY += 10;
       doc.font('Helvetica')
          .text('COMPTE N° :', 50, currentY)
          .font('Helvetica-Bold')
-         .text(data.donneurOrdre.rib, 140, currentY);
-      
-      currentY += 20;
-      
-      // CodeBanque
-      const codeBank = data.donneurOrdre.rib.substring(0, 2);
-      doc.fontSize(8)
-         .font('Helvetica-Oblique')
-         .text(`CodeBanque ${codeBank}`, 0, currentY, { width: doc.page.width, align: 'center' });
+         .text(data.donneurOrdre.rib, 120, currentY);
       
       currentY += 15;
       
+      // CodeBanque
+      const codeBank = data.donneurOrdre.rib.substring(0, 2);
+      doc.fontSize(7)
+         .font('Helvetica-Oblique')
+         .text(`CodeBanque ${codeBank}`, 0, currentY, { width: doc.page.width, align: 'center' });
+      
+      currentY += 12;
+      
       // Instruction text
-      doc.fontSize(9)
+      doc.fontSize(8)
          .font('Helvetica')
          .text('Par le débit de mon / notre compte indiqué ci-dessus, veuillez effectuer les virements suivants :', 50, currentY, { width: 495 });
       
-      currentY += 25;
+      currentY += 18;
     } else {
       // Continuation pages - minimal header
       currentY += 10;
@@ -189,7 +228,7 @@ export class PdfGenerationService {
     const tableX = 50;
     const tableWidth = 495;
     const colWidths = [60, 180, 170, 85]; // Matricule, Nom, RIB, Montant
-    const rowHeight = 14;
+    const rowHeight = 12;
     
     // Draw table border
     doc.rect(tableX, currentY, tableWidth, rowHeight).stroke();
@@ -206,7 +245,7 @@ export class PdfGenerationService {
         doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
       }
       // Header text
-      doc.text(header, colX + 3, currentY + 4, { width: colWidths[i] - 6, align: i === 3 ? 'right' : 'left' });
+      doc.text(header, colX + 3, currentY + 3, { width: colWidths[i] - 6, align: i === 3 ? 'right' : 'left' });
       colX += colWidths[i];
     });
     
@@ -227,27 +266,27 @@ export class PdfGenerationService {
       
       // Matricule
       doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
-      doc.text(virement.matricule, colX + 3, currentY + 4, { width: colWidths[0] - 6, align: 'left' });
+      doc.text(virement.matricule, colX + 3, currentY + 3, { width: colWidths[0] - 6, align: 'left' });
       colX += colWidths[0];
       
       // Nom et Prénom
       doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
-      doc.text(beneficiaryName, colX + 3, currentY + 4, { width: colWidths[1] - 6, align: 'left' });
+      doc.text(beneficiaryName, colX + 3, currentY + 3, { width: colWidths[1] - 6, align: 'left' });
       colX += colWidths[1];
       
       // RIB
       doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
-      doc.text(virement.rib, colX + 3, currentY + 4, { width: colWidths[2] - 6, align: 'left' });
+      doc.text(virement.rib, colX + 3, currentY + 3, { width: colWidths[2] - 6, align: 'left' });
       colX += colWidths[2];
       
       // Montant
       doc.moveTo(colX, currentY).lineTo(colX, currentY + rowHeight).stroke();
-      doc.text(montantFormatted, colX + 3, currentY + 4, { width: colWidths[3] - 6, align: 'right' });
+      doc.text(montantFormatted, colX + 3, currentY + 3, { width: colWidths[3] - 6, align: 'right' });
       
       currentY += rowHeight;
     }
     
-    doc.y = currentY + 8;
+    doc.y = currentY + 6;
   }
   
 
@@ -270,28 +309,23 @@ export class PdfGenerationService {
   }
 
   private addFooterInfo(doc: any, data: OVPdfData) {
+    // Prevent PDFKit from creating an extra page due to overflow
+    if (doc.y > doc.page.height - 120) return;
+
     let currentY = doc.y;
     
     // Total line
-    doc.fontSize(8)
-       .font('Helvetica-Bold')
-       .text('TOTAL', 50, currentY);
-    
+    doc.fontSize(7).font('Helvetica-Bold').text('TOTAL', 50, currentY);
     const totalFormatted = data.montantTotal.toFixed(3).replace('.', ',');
     doc.text(totalFormatted, 430, currentY, { width: 115, align: 'right' });
-    
-    currentY += 14;
+    currentY += 10;
     
     // Montant en toutes lettres
     const amountInWords = this.convertAmountToWords(data.montantTotal);
-    doc.fontSize(7)
-       .font('Helvetica-Bold')
-       .text('MONTANT EN TOUTES LETTRES :', 50, currentY);
+    doc.fontSize(7).font('Helvetica-Bold').text('MONTANT EN TOUTES LETTRES :', 50, currentY);
+    currentY += 8;
+    doc.font('Helvetica').text(amountInWords, 50, currentY, { width: 495 });
     currentY += 10;
-    doc.font('Helvetica')
-       .text(amountInWords, 50, currentY, { width: 495 });
-    
-    currentY += 14;
     
     // Compact info section
     const bordereauRef = data.bordereauReference || data.reference || `BR-${Date.now().toString().slice(-8)}`;
@@ -299,39 +333,35 @@ export class PdfGenerationService {
     const clientName = data.companyReference || 'ARS TUNISIE';
     const userName = data.createdBy || 'SYSTEM USER';
     
-    doc.fontSize(7)
-       .font('Helvetica')
-       .text(`Réf Bordereau : ${bordereauRef}`, 50, currentY);
-    
-    currentY += 10;
-    doc.text(`N° Contrat : ${contractNum}`, 50, currentY);
-    
-    currentY += 10;
-    doc.text(`Nom du Client : ${clientName}`, 50, currentY);
-    
-    currentY += 10;
-    doc.text(`Date Injection OV : ${data.dateEmission.toLocaleDateString('fr-FR')}`, 50, currentY);
-    
-    currentY += 10;
+    doc.fontSize(7).font('Helvetica');
+    doc.text(`Réf Bordereau : ${bordereauRef}`, 50, currentY); currentY += 8;
+    doc.text(`N° Contrat : ${contractNum}`, 50, currentY); currentY += 8;
+    doc.text(`Nom du Client : ${clientName}`, 50, currentY); currentY += 8;
+    doc.text(`Date Injection OV : ${data.dateEmission.toLocaleDateString('fr-FR')}`, 50, currentY); currentY += 8;
     doc.text(`Saisie par : ${userName}`, 50, currentY);
   }
   
   private addPageFooter(doc: any, data: OVPdfData, currentPage: number, totalPages: number) {
-    // Bottom logo
-    const bottomLogoPath = 'D:\\ARS\\frontend\\public\\Image3.jpg';
-    try {
-      if (require('fs').existsSync(bottomLogoPath)) {
-        const bottomY = doc.page.height - 80;
-        doc.image(bottomLogoPath, 50, bottomY, { width: doc.page.width - 100, height: 30 });
-      }
-    } catch (e) {}
+    // Calculate safe footer position to avoid triggering new page
+    const maxY = doc.page.height - 100; // Leave 100px from bottom
     
-    // Page number
+    // Only add footer if we have space, otherwise skip logos
+    if (doc.y < maxY) {
+      // Bottom logo
+      const bottomLogoPath = 'D:\\ARS\\frontend\\public\\Image3.jpg';
+      try {
+        if (require('fs').existsSync(bottomLogoPath)) {
+          const bottomY = doc.page.height - 80;
+          doc.image(bottomLogoPath, 50, bottomY, { width: doc.page.width - 100, height: 30 });
+        }
+      } catch (e) {}
+    }
+    
+    // Page number - always at fixed position
     const footerY = doc.page.height - 40;
     doc.fontSize(7)
        .font('Helvetica')
-       .text(`Page ${currentPage} sur ${totalPages}`, 50, footerY)
-       .text(`Saisie par : ${data.createdBy || 'SYSTEM USER'}`, 350, footerY, { width: 195, align: 'right' });
+       .text(`Page ${currentPage} sur ${totalPages}`, 50, footerY, { width: 495, align: 'center' });
   }
   
   private convertAmountToWords(amount: number): string {
@@ -415,6 +445,15 @@ export class PdfGenerationService {
       throw new Error('Ordre de virement non trouvé');
     }
     
+    // Fetch user info for "Saisie par"
+    let createdByUser: { fullName: string; email: string } | null = null;
+    if (ordreVirement.utilisateurSante) {
+      createdByUser = await this.prisma.user.findUnique({
+        where: { id: ordreVirement.utilisateurSante },
+        select: { fullName: true, email: true }
+      });
+    }
+    
     // If no items, get real adherents from database and CREATE THEM IN DB
     if (!ordreVirement.items || ordreVirement.items.length === 0) {
       console.log('No items found in ordre virement, fetching adherents from database...');
@@ -469,6 +508,15 @@ export class PdfGenerationService {
       items: ordreVirement.items
     });
     
+    // Get proper contract number from bordereau reference or contract
+    const contractNumber = ordreVirement.bordereau?.contract?.codeAssure 
+      || ordreVirement.bordereau?.reference 
+      || ordreVirement.reference
+      || 'N/A';
+    
+    // Get proper user name
+    const createdByName = createdByUser?.fullName || createdByUser?.email || 'SYSTEM USER';
+    
     const pdfData: OVPdfData = {
       ordreVirementId,
       donneurOrdre: {
@@ -480,10 +528,10 @@ export class PdfGenerationService {
         signaturePath: ordreVirement.donneurOrdre.signaturePath || undefined
       },
       reference: ordreVirement.reference,
-      contractNumber: ordreVirement.bordereau?.contract?.id?.substring(0, 8), // Use contract ID as reference
+      contractNumber: contractNumber,
       companyReference: ordreVirement.bordereau?.client?.name,
       bordereauReference: ordreVirement.bordereau?.reference,
-      createdBy: ordreVirement.utilisateurSante || 'SYSTEM USER',
+      createdBy: createdByName,
       virements: ordreVirement.items
         ?.filter(item => item.statut === 'VALIDE') // Only valid items
         ?.map(item => ({
@@ -503,7 +551,9 @@ export class PdfGenerationService {
       ordreVirementId,
       virementsCount: pdfData.virements.length,
       totalAmount: pdfData.montantTotal,
-      reference: pdfData.reference
+      reference: pdfData.reference,
+      createdBy: createdByName,
+      contractNumber: contractNumber
     });
 
     // Generate PDF

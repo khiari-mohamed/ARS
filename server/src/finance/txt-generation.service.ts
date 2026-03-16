@@ -58,7 +58,7 @@ export class TxtGenerationService {
 
   private generateBTKComarFormat(data: OVTxtData): string {
     const lines: string[] = [];
-    const dateStr = this.formatDateBTK(data.dateCreation);
+    const dateStr = this.formatDateBTK(data.dateCreation); // YYYYMMDD
     
     if (!/^\d{20}$/.test(data.donneurOrdre.rib)) {
       throw new Error('RIB donneur d\'ordre doit être exactement 20 chiffres');
@@ -67,46 +67,83 @@ export class TxtGenerationService {
     const totalAmountMillimes = data.virements.reduce((sum, v) => sum + Math.round(v.montant * 1000), 0);
     const numberOfOperations = data.virements.length;
     
-    // V1 HEADER
+    // Extract numeric reference (remove ALL non-numeric chars) and take last 5 digits
+    const numericRef = data.reference.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
+    
+    // V1 HEADER - EXACT FORMAT (240 chars)
     let headerLine = 'V1';
-    headerLine += '  ';
-    headerLine += data.donneurOrdre.rib;
-    headerLine += '00000000';
-    headerLine += data.reference.substring(0, 20).padEnd(20, '0');
-    headerLine += dateStr;
-    headerLine += '0001';
-    headerLine += '   ';
-    headerLine += numberOfOperations.toString().padStart(7, '0');
-    headerLine += '   ';
-    headerLine += '788';
-    headerLine += 'TND';
-    headerLine += totalAmountMillimes.toString().padStart(18, '0');
-    headerLine += ' '.repeat(18);
+    headerLine += '  '; // 2 spaces
+    headerLine += data.donneurOrdre.rib; // 20 digits
+    headerLine += dateStr; // 8 digits YYYYMMDD
+    headerLine += '000000000000000' + numericRef; // 15 zeros + 5 digits ref = 20 chars (numericRef already padded)
+    headerLine += dateStr; // 8 digits date again
+    headerLine += '0001'; // 4 digits lot
+    headerLine += '   '; // 3 spaces
+    headerLine += numberOfOperations.toString().padStart(7, '0'); // 7 digits
+    headerLine += '   '; // 3 spaces
+    headerLine += '788'; // 3 digits
+    headerLine += 'TND'; // 3 chars
+    headerLine += totalAmountMillimes.toString().padStart(18, '0'); // 18 digits
+    headerLine += ' '.repeat(139); // Pad to 240 chars total
     
     lines.push(headerLine);
 
-    // V2 DETAIL
-    data.virements.forEach((virement) => {
+    // V2 DETAIL - EXACT FORMAT (240 chars, except last line = 234 chars)
+    data.virements.forEach((virement, index) => {
       if (!/^\d{20}$/.test(virement.rib)) {
         throw new Error(`RIB bénéficiaire invalide pour ${virement.nom} ${virement.prenom}`);
       }
       
       const montantMillimes = Math.round(virement.montant * 1000);
+      const sequenceNum = (index + 1).toString().padStart(7, '0');
+      const isLastLine = (index === data.virements.length - 1);
       
       let line = 'V2';
-      line += '  ';
-      line += data.donneurOrdre.rib;
-      line += virement.rib;
-      line += (virement.nom + ' ' + virement.prenom).toUpperCase().replace(/[^A-Z0-9 ]/g, '').substring(0, 30).padEnd(30, ' ');
-      line += virement.matricule.toString().substring(0, 20).padEnd(20, '0');
-      line += dateStr;
-      line += '0001';
-      line += '0';
-      line += '00';
-      const societeBlock = (virement.societe || 'XXXXX').toUpperCase().replace(/[^A-Z0-9 ]/g, '').substring(0, 9).padEnd(9, ' ');
-      line += `${societeBlock}${dateStr.substring(0, 4)}${data.reference} du ${dateStr.substring(6, 8)}${dateStr.substring(4, 6)}${dateStr.substring(0, 4)} OV GM n ${data.reference}`.substring(0, 100).padEnd(100, ' ');
-      line += montantMillimes.toString().padStart(18, '0');
-      line += ' '.repeat(6); // Only 6 trailing spaces, NO duplicate amount
+      line += '  '; // 2 spaces
+      line += data.donneurOrdre.rib; // 20 digits emitter RIB
+      line += virement.rib; // 20 digits beneficiary RIB
+      
+      // Clean name: Remove special chars but PRESERVE original case
+      const cleanName = (virement.nom + ' ' + virement.prenom)
+        .replace(/[^A-Za-z0-9 ]/g, '') // Remove special chars but keep case
+        .replace(/\s+/g, ' ') // Normalize spaces
+        .trim()
+        .substring(0, 30)
+        .padEnd(30, ' ');
+      line += cleanName; // 30 chars name
+      
+      // COMPOSITE FIELD: 42 chars total
+      // Format: 15 zeros + 5 ref + 8 date + 4 lot + 10 sequence = 42 chars
+      let compositeField = '000000000000000'; // 15 zeros
+      compositeField += numericRef; // 5 digits reference (already padded)
+      compositeField += dateStr; // 8 digits date YYYYMMDD
+      compositeField += '0001'; // 4 digits lot
+      compositeField += sequenceNum + '000'; // 10 digits (7 sequence + 3 zeros)
+      line += compositeField; // 42 chars total
+      
+      // MOTIF FIELD - 100 chars
+      // Format: {SOCIETE_FULL} {BORDEREAU_REF} du {DDMMYYYY} OV GM n {REF}
+      const cleanSociete = (virement.societe || data.donneurOrdre.nom || 'SOCIETE')
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, '') // Remove special chars
+        .replace(/\s+/g, ' ') // Normalize spaces
+        .trim();
+      
+      const cleanBordereauRef = (data.bordereauReference || data.reference)
+        .replace(/[^A-Z0-9]/g, '')
+        .substring(0, 15);
+      
+      // Date in DDMMYYYY format for motif - USE 1 DAY BEFORE transaction date
+      const motifDate = new Date(data.dateCreation);
+      motifDate.setDate(motifDate.getDate() - 1); // Subtract 1 day
+      const motifDateStr = this.formatDateBTK(motifDate); // YYYYMMDD
+      const dateMotif = motifDateStr.substring(6, 8) + motifDateStr.substring(4, 6) + motifDateStr.substring(0, 4); // DDMMYYYY
+      
+      const motif = `${cleanSociete} ${cleanBordereauRef} du ${dateMotif} OV GM n ${numericRef}`;
+      line += motif.substring(0, 100).padEnd(100, ' '); // 100 chars motif
+      
+      line += montantMillimes.toString().padStart(18, '0'); // 18 digits amount
+      line += isLastLine ? '' : ' '.repeat(6); // Last line: no trailing spaces, others: 6 spaces
       
       lines.push(line);
     });

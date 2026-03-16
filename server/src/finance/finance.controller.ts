@@ -61,6 +61,93 @@ export class FinanceController {
     private prisma: PrismaService
   ) {}
 
+  // === GET CLIENT AUTO-FILL DATA FOR ADHERENT FORM ===
+  @Get('clients/:clientId/autofill-data')
+  async getClientAutofillData(@Param('clientId') clientId: string) {
+    try {
+      console.log('🔍 Fetching autofill data for client:', clientId);
+      
+      // Find client by ID or name
+      const client = await this.prisma.client.findFirst({
+        where: {
+          OR: [
+            { id: clientId },
+            { name: clientId }
+          ]
+        },
+        include: {
+          compagnieAssurance: true,
+          contracts: {
+            // Get ALL contracts, not just active ones (to ensure we get data)
+            orderBy: { createdAt: 'desc' },
+            take: 5  // Get last 5 contracts to check
+          }
+        }
+      });
+      
+      if (!client) {
+        throw new BadRequestException('Client not found');
+      }
+      
+      console.log('✅ Client found:', {
+        id: client.id,
+        name: client.name,
+        hasInsurance: !!client.compagnieAssurance,
+        insuranceName: client.compagnieAssurance?.nom,
+        contractsCount: client.contracts.length,
+        contracts: client.contracts.map(c => ({
+          id: c.id,
+          codeAssure: c.codeAssure,
+          startDate: c.startDate,
+          endDate: c.endDate,
+          isActive: c.startDate <= new Date() && c.endDate >= new Date()
+        }))
+      });
+      
+      // Try to find active contract first, then fall back to most recent
+      const now = new Date();
+      let selectedContract = client.contracts.find(c => 
+        c.startDate <= now && c.endDate >= now
+      );
+      
+      // If no active contract, use most recent one
+      if (!selectedContract && client.contracts.length > 0) {
+        selectedContract = client.contracts[0];
+        console.log('⚠️ No active contract found, using most recent:', {
+          id: selectedContract.id,
+          codeAssure: selectedContract.codeAssure
+        });
+      }
+      
+      // Extract auto-fill data
+      const autofillData = {
+        assurance: client.compagnieAssurance?.nom || '',
+        codeAssure: selectedContract?.codeAssure || '',
+        numeroContrat: ''  // Leave empty - user must enter manually (per-adherent field)
+      };
+      
+      console.log('📋 Autofill data to return:', autofillData);
+      
+      return {
+        success: true,
+        data: autofillData,
+        clientInfo: {
+          id: client.id,
+          name: client.name,
+          hasActiveContract: !!selectedContract,
+          contractUsed: selectedContract ? {
+            id: selectedContract.id,
+            codeAssure: selectedContract.codeAssure,
+            isActive: selectedContract.startDate <= now && selectedContract.endDate >= now
+          } : null
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error fetching client autofill data:', error);
+      throw new BadRequestException('Failed to fetch client data: ' + error.message);
+    }
+  }
+
   // === ADHERENT ENDPOINTS ===
   @Post('adherents')
   async createAdherent(@Body() dto: CreateAdherentDto, @Req() req: any) {
@@ -117,6 +204,60 @@ export class FinanceController {
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet);
       
+      // EXACT STRUCTURE VALIDATION - Reject if structure doesn't match
+      const REQUIRED_COLUMNS = [
+        'Matricule',
+        'Société',
+        'Nom',
+        'Prénom',
+        'RIB',
+        'Code Assuré',
+        'Numéro Contrat',
+        'Assurance',
+        'Statut'
+      ];
+      
+      // Check if file has data
+      if (!data || data.length === 0) {
+        throw new BadRequestException(
+          '❌ STRUCTURE INVALIDE: Le fichier Excel est vide. Veuillez utiliser le modèle exact fourni par le système.'
+        );
+      }
+      
+      // Get actual columns from first row
+      const firstRow = data[0] as any;
+      const actualColumns = Object.keys(firstRow);
+      
+      console.log('📊 VALIDATION - Colonnes attendues:', REQUIRED_COLUMNS);
+      console.log('📊 VALIDATION - Colonnes reçues:', actualColumns);
+      
+      // Check for missing required columns
+      const missingColumns = REQUIRED_COLUMNS.filter(col => !actualColumns.includes(col));
+      
+      // Check for extra/unexpected columns
+      const extraColumns = actualColumns.filter(col => !REQUIRED_COLUMNS.includes(col));
+      
+      if (missingColumns.length > 0 || extraColumns.length > 0) {
+        let errorMessage = '❌ STRUCTURE INVALIDE: Le fichier Excel ne correspond pas au format requis.\n\n';
+        
+        if (missingColumns.length > 0) {
+          errorMessage += `❌ Colonnes manquantes: ${missingColumns.join(', ')}\n`;
+        }
+        
+        if (extraColumns.length > 0) {
+          errorMessage += `⚠️ Colonnes non reconnues: ${extraColumns.join(', ')}\n`;
+        }
+        
+        errorMessage += '\n✅ Structure attendue (ordre exact):\n';
+        errorMessage += REQUIRED_COLUMNS.map((col, idx) => `${idx + 1}. ${col}`).join('\n');
+        errorMessage += '\n\n📌 Veuillez télécharger le modèle Excel depuis le système et ne pas modifier les noms de colonnes.';
+        
+        console.log('❌ VALIDATION FAILED:', errorMessage);
+        throw new BadRequestException(errorMessage);
+      }
+      
+      console.log('✅ VALIDATION PASSED: Structure Excel correcte');
+      
       let imported = 0;
       let skipped = 0;
       const errors: string[] = [];
@@ -126,10 +267,16 @@ export class FinanceController {
       for (let i = 0; i < data.length; i++) {
         const row = data[i] as any;
         try {
-          const matricule = row['Matricule. Assurance'] || row['Matricule'] || row['matricule'];
-          const assuranceCompany = row['ASSURE'] || row['Assurance'] || '';
-          const fullName = row['Name'] || row['Nom'] || row['nom'] || '';
-          const rib = String(row['Banque'] || row['RIB'] || row['rib'] || '').replace(/\D/g, '');
+          // FIXED: Read correct column names from Excel (EXACT MATCH)
+          const matricule = row['Matricule'];
+          const societe = row['Société'];
+          const nom = row['Nom'];
+          const prenom = row['Prénom'];
+          const rib = String(row['RIB'] || '').replace(/\D/g, '');
+          const codeAssure = String(row['Code Assuré'] || '');
+          const numeroContrat = String(row['Numéro Contrat'] || '');
+          const assuranceCompany = row['Assurance'] || '';
+          const statut = row['Statut'] || 'ACTIF';
           
           if (!matricule || !rib) {
             skipped++;
@@ -145,42 +292,39 @@ export class FinanceController {
             continue;
           }
           
-          // FIXED: Find client by matching assurance company name
+          // FIXED: Find client by matching société column (not assurance)
           let targetClient = await this.prisma.client.findFirst({
             where: {
               OR: [
-                { name: { contains: assuranceCompany, mode: 'insensitive' } },
-                { compagnieAssurance: { nom: { contains: assuranceCompany, mode: 'insensitive' } } }
+                { name: { contains: societe, mode: 'insensitive' } },
+                { name: { equals: societe, mode: 'insensitive' } }
               ]
             },
             include: { compagnieAssurance: true }
           });
           
-          // If no match found, use first client as fallback
-          if (!targetClient) {
-            targetClient = await this.prisma.client.findFirst({ include: { compagnieAssurance: true } });
-            console.log(`⚠️ Row ${i + 1}: No client found for "${assuranceCompany}", using fallback: ${targetClient?.name}`);
-          } else {
-            console.log(`✅ Row ${i + 1}: Matched client "${targetClient.name}" for assurance "${assuranceCompany}"`);
-          }
-          
+          // REJECT if client doesn't exist - DO NOT auto-create
           if (!targetClient) {
             skipped++;
-            errors.push(`Ligne ${i + 1}: Aucun client disponible`);
+            const errorMsg = `Ligne ${i + 1}: Client "${societe}" n'existe pas dans le système. Veuillez créer le client d'abord.`;
+            errors.push(errorMsg);
+            console.log(`❌ Row ${i + 1}: Client "${societe}" not found - REJECTED`);
             continue;
           }
           
-          const nameParts = fullName.split(' ');
+          console.log(`✅ Row ${i + 1}: Matched client "${targetClient.name}" for société "${societe}"`);
+          
+          // FIXED: Use separate nom and prenom columns
           const adherentData = {
             matricule: String(matricule),
-            nom: nameParts[0] || fullName,
-            prenom: nameParts.slice(1).join(' ') || '',
+            nom: nom,
+            prenom: prenom,
             clientId: targetClient.id,
             rib: rib,
-            codeAssure: String(row['Code Assurée'] || row['Code Assuré'] || row['Code Assure'] || row['codeAssure'] || ''),
-            numeroContrat: String(row['ContratN'] || row['Numéro Contrat'] || row['Numero Contrat'] || row['numeroContrat'] || ''),
+            codeAssure: codeAssure,
+            numeroContrat: numeroContrat,
             assurance: assuranceCompany,
-            statut: 'ACTIF'
+            statut: statut
           };
           
           await this.adherentService.createAdherent(adherentData, user.id);
@@ -1729,5 +1873,16 @@ export class FinanceController {
       console.error('❌ Error fetching OV documents by bordereau:', error);
       throw new BadRequestException('Failed to fetch documents');
     }
+  }
+
+  // === EXPORT OV DETAILS TO EXCEL ===
+  @Get('ordres-virement/:id/export-excel')
+  async exportOVDetailsExcel(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.financeService.exportOVDetailsExcel(id, res, user as any);
   }
 }

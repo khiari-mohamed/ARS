@@ -21,7 +21,8 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Select
+  Select,
+  Autocomplete
 } from '@mui/material';
 import {
   AccountBalance,
@@ -44,6 +45,8 @@ interface DashboardStats {
   ordresExecutes: number;
   ordresRejetes: number;
   montantTotal: number;
+  demandesRecuperation: number;
+  montantsRecuperes: number;
 }
 
 interface RecentOrdre {
@@ -81,15 +84,17 @@ const FinanceDashboard: React.FC = () => {
     client: '',
     referenceBordereau: '',
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
+    montant: ''
   });
   const [showRecentOrdersFilters, setShowRecentOrdersFilters] = useState(false);
   const [showAllRecentOrders, setShowAllRecentOrders] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [documentViewer, setDocumentViewer] = useState<{open: boolean, url: string, title: string, type: 'pdf' | 'txt'}>({
+  const [documentViewer, setDocumentViewer] = useState<{open: boolean, url: string, title: string, type: 'pdf' | 'txt' | 'excel'}>({
     open: false, url: '', title: '', type: 'pdf'
   });
+  const [excelPreviewData, setExcelPreviewData] = useState<any>(null);
 
   const loadDashboard = async () => {
     try {
@@ -143,14 +148,14 @@ const FinanceDashboard: React.FC = () => {
   };
   
   const clearRecentOrdersFilters = () => {
-    setRecentOrdersFilters({ compagnie: '', client: '', referenceBordereau: '', dateFrom: '', dateTo: '' });
+    setRecentOrdersFilters({ compagnie: '', client: '', referenceBordereau: '', dateFrom: '', dateTo: '', montant: '' });
     setCurrentPage(1);
   };
 
   // Reset page when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [recentOrdersFilters.compagnie, recentOrdersFilters.client, recentOrdersFilters.referenceBordereau, recentOrdersFilters.dateFrom, recentOrdersFilters.dateTo]);
+  }, [recentOrdersFilters.compagnie, recentOrdersFilters.client, recentOrdersFilters.referenceBordereau, recentOrdersFilters.dateFrom, recentOrdersFilters.dateTo, recentOrdersFilters.montant]);
 
   useEffect(() => {
     const loadClients = async () => {
@@ -165,6 +170,68 @@ const FinanceDashboard: React.FC = () => {
     loadClients();
     loadDashboard();
   }, []);
+
+  const getFilteredStats = () => {
+    let filtered = ordresVirement || [];
+    
+    // Apply all filters
+    if (recentOrdersFilters.compagnie) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.compagnieAssurance?.toLowerCase().includes(recentOrdersFilters.compagnie.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.client) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.client?.toLowerCase().includes(recentOrdersFilters.client.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.referenceBordereau) {
+      filtered = filtered.filter((ordre: any) => 
+        ordre.referenceBordereau?.toLowerCase().includes(recentOrdersFilters.referenceBordereau.toLowerCase())
+      );
+    }
+    
+    if (recentOrdersFilters.dateFrom) {
+      filtered = filtered.filter((ordre: any) => 
+        new Date(ordre.dateCreation) >= new Date(recentOrdersFilters.dateFrom)
+      );
+    }
+    
+    if (recentOrdersFilters.dateTo) {
+      filtered = filtered.filter((ordre: any) => 
+        new Date(ordre.dateCreation) <= new Date(recentOrdersFilters.dateTo)
+      );
+    }
+    
+    if (recentOrdersFilters.montant) {
+      const searchAmount = parseFloat(recentOrdersFilters.montant);
+      filtered = filtered.filter((ordre: any) => 
+        ordre.montant?.toString().includes(recentOrdersFilters.montant) ||
+        Math.abs((ordre.montant || 0) - searchAmount) < 0.01
+      );
+    }
+    
+    // Calculate stats from filtered data
+    const totalOrdres = filtered.length;
+    const ordresEnCours = filtered.filter((o: any) => ['EN_COURS', 'PENDING'].includes(o.statut)).length;
+    const ordresExecutes = filtered.filter((o: any) => ['EXECUTE', 'VIREMENT_DEPOSE'].includes(o.statut)).length;
+    const ordresRejetes = filtered.filter((o: any) => ['REJETE', 'VIREMENT_NON_VALIDE'].includes(o.statut)).length;
+    const montantTotal = filtered.reduce((sum: number, o: any) => sum + (o.montant || 0), 0);
+    const demandesRecuperation = filtered.filter((o: any) => o.demandeRecuperation).length;
+    const montantsRecuperes = filtered.filter((o: any) => o.montantRecupere).length;
+    
+    return {
+      totalOrdres,
+      ordresEnCours,
+      ordresExecutes,
+      ordresRejetes,
+      montantTotal,
+      demandesRecuperation,
+      montantsRecuperes
+    };
+  };
 
   if (isLoading) {
     return (
@@ -187,15 +254,17 @@ const FinanceDashboard: React.FC = () => {
     );
   }
 
-  const stats: DashboardStats = dashboard?.stats || {
+  const ordresVirement = dashboard?.ordresVirement || [];
+
+  const stats: DashboardStats = dashboard?.ordresVirement ? getFilteredStats() : {
     totalOrdres: 0,
     ordresEnCours: 0,
     ordresExecutes: 0,
     ordresRejetes: 0,
-    montantTotal: 0
+    montantTotal: 0,
+    demandesRecuperation: 0,
+    montantsRecuperes: 0
   };
-  
-  const ordresVirement = dashboard?.ordresVirement || [];
 
   const renderStatsCards = () => (
     <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -324,6 +393,14 @@ const FinanceDashboard: React.FC = () => {
       );
     }
     
+    if (recentOrdersFilters.montant) {
+      const searchAmount = parseFloat(recentOrdersFilters.montant);
+      filtered = filtered.filter((ordre: any) => 
+        ordre.montant?.toString().includes(recentOrdersFilters.montant) ||
+        Math.abs((ordre.montant || 0) - searchAmount) < 0.01
+      );
+    }
+    
     // Sort by dateExecution first (most recent), then by dateCreation (most recent first)
     filtered = filtered.sort((a: any, b: any) => {
       const dateA = new Date(a.dateExecution || a.dateCreation).getTime();
@@ -370,6 +447,14 @@ const FinanceDashboard: React.FC = () => {
     if (recentOrdersFilters.dateTo) {
       filtered = filtered.filter((ordre: any) => 
         new Date(ordre.dateCreation) <= new Date(recentOrdersFilters.dateTo)
+      );
+    }
+    
+    if (recentOrdersFilters.montant) {
+      const searchAmount = parseFloat(recentOrdersFilters.montant);
+      filtered = filtered.filter((ordre: any) => 
+        ordre.montant?.toString().includes(recentOrdersFilters.montant) ||
+        Math.abs((ordre.montant || 0) - searchAmount) < 0.01
       );
     }
     
@@ -452,44 +537,54 @@ const FinanceDashboard: React.FC = () => {
             </Box>
           </Box>
           
-          {/* EXACT SPEC: Filtres - Compagnie d'assurance / Client / Référence Bordereau / Période */}
+          {/* EXACT SPEC: Filtres - Compagnie d'assurance / Client / Référence Bordereau / Période / Montant */}
           {showRecentOrdersFilters && (
             <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>Filtres : Compagnie d'assurance / Client / Référence Bordereau / Période</Typography>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>Filtres : Compagnie d'assurance / Client / Référence Bordereau / Période / Montant</Typography>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={2.5}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Compagnie d'assurance</InputLabel>
-                    <Select
-                      value={recentOrdersFilters.compagnie}
-                      onChange={(e) => handleRecentOrdersFilterChange('compagnie', e.target.value)}
-                      label="Compagnie d'assurance"
-                    >
-                      <MenuItem value="">Tous</MenuItem>
-                      {clients.map((client) => (
-                        <MenuItem key={client.id} value={client.name}>
-                          {client.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                <Grid item xs={12} md={2.2}>
+                  <Autocomplete
+                    options={clients}
+                    getOptionLabel={(option) => option.name}
+                    value={clients.find(c => c.name === recentOrdersFilters.compagnie) || null}
+                    onChange={(event, newValue) => {
+                      handleRecentOrdersFilterChange('compagnie', newValue?.name || '');
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Compagnie d'assurance"
+                        placeholder="Tapez pour rechercher..."
+                        size="small"
+                      />
+                    )}
+                    isOptionEqualToValue={(option, value) => option.name === value.name}
+                    noOptionsText="Aucun client trouvé"
+                    size="small"
+                    fullWidth
+                  />
                 </Grid>
-                <Grid item xs={12} md={2.5}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Client</InputLabel>
-                    <Select
-                      value={recentOrdersFilters.client}
-                      onChange={(e) => handleRecentOrdersFilterChange('client', e.target.value)}
-                      label="Client"
-                    >
-                      <MenuItem value="">Tous</MenuItem>
-                      {clients.map((client) => (
-                        <MenuItem key={client.id} value={client.name}>
-                          {client.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                <Grid item xs={12} md={2.2}>
+                  <Autocomplete
+                    options={clients}
+                    getOptionLabel={(option) => option.name}
+                    value={clients.find(c => c.name === recentOrdersFilters.client) || null}
+                    onChange={(event, newValue) => {
+                      handleRecentOrdersFilterChange('client', newValue?.name || '');
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Client"
+                        placeholder="Tapez pour rechercher..."
+                        size="small"
+                      />
+                    )}
+                    isOptionEqualToValue={(option, value) => option.name === value.name}
+                    noOptionsText="Aucun client trouvé"
+                    size="small"
+                    fullWidth
+                  />
                 </Grid>
                 <Grid item xs={12} md={2}>
                   <TextField
@@ -501,7 +596,7 @@ const FinanceDashboard: React.FC = () => {
                     placeholder="Ex: BORD-2024-001"
                   />
                 </Grid>
-                <Grid item xs={12} md={2}>
+                <Grid item xs={12} md={1.8}>
                   <TextField
                     fullWidth
                     label="Période - Début"
@@ -512,7 +607,7 @@ const FinanceDashboard: React.FC = () => {
                     size="small"
                   />
                 </Grid>
-                <Grid item xs={12} md={2}>
+                <Grid item xs={12} md={1.8}>
                   <TextField
                     fullWidth
                     label="Période - Fin"
@@ -521,6 +616,18 @@ const FinanceDashboard: React.FC = () => {
                     onChange={(e) => handleRecentOrdersFilterChange('dateTo', e.target.value)}
                     InputLabelProps={{ shrink: true }}
                     size="small"
+                  />
+                </Grid>
+                <Grid item xs={12} md={1}>
+                  <TextField
+                    fullWidth
+                    label="Montant (TND)"
+                    type="number"
+                    value={recentOrdersFilters.montant}
+                    onChange={(e) => handleRecentOrdersFilterChange('montant', e.target.value)}
+                    size="small"
+                    placeholder="Ex: 5000"
+                    inputProps={{ min: 0, step: 0.001 }}
                   />
                 </Grid>
                 <Grid item xs={12} md={1}>
@@ -551,6 +658,7 @@ const FinanceDashboard: React.FC = () => {
                   <TableCell><strong>Statut</strong></TableCell>
                   <TableCell><strong>Date d'Exécution</strong></TableCell>
                   <TableCell><strong>Motif/Observations</strong></TableCell>
+                  <TableCell><strong>Mode de récupération</strong></TableCell>
                   <TableCell><strong>Demande Récupération</strong></TableCell>
                   <TableCell><strong>Montant Récupéré</strong></TableCell>
                   <TableCell><strong>Documents</strong></TableCell>
@@ -583,6 +691,19 @@ const FinanceDashboard: React.FC = () => {
                       }}>
                         {ordre.motifObservation || '-'}
                       </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={
+                          ordre.modeRecuperation === 'CHEQUE' ? 'Chèque' :
+                          ordre.modeRecuperation === 'VIREMENT' ? 'Virement' :
+                          ordre.modeRecuperation === 'FEUILLE_CAISSE' ? 'Feuille de caisse' :
+                          '-'
+                        }
+                        color="default"
+                        size="small"
+                        variant="outlined"
+                      />
                     </TableCell>
                     <TableCell>
                       {ordre.demandeRecuperation ? (
@@ -706,6 +827,51 @@ const FinanceDashboard: React.FC = () => {
                         >
                           PDF Bordereau
                         </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="success"
+                          onClick={async () => {
+                            try {
+                              const { LocalAPI } = await import('../../services/axios');
+                              
+                              // Fetch Excel file
+                              const response = await LocalAPI.get(`/finance/ordres-virement/${ordre.id}/export-excel`, {
+                                responseType: 'blob'
+                              });
+                              
+                              // Create blob URL for download
+                              const blob = new Blob([response.data], { 
+                                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+                              });
+                              const blobUrl = URL.createObjectURL(blob);
+                              
+                              // Parse Excel to get data for preview
+                              const XLSX = await import('xlsx');
+                              const arrayBuffer = await blob.arrayBuffer();
+                              const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                              const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                              const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                              
+                              setExcelPreviewData({
+                                data: jsonData,
+                                reference: ordre.reference
+                              });
+                              
+                              setDocumentViewer({
+                                open: true,
+                                url: blobUrl,
+                                title: `Détails OV - ${ordre.reference}`,
+                                type: 'excel'
+                              });
+                            } catch (error) {
+                              console.error('Error loading Excel:', error);
+                              alert('Erreur lors du chargement de l\'Excel');
+                            }
+                          }}
+                        >
+                          Excel Détails
+                        </Button>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -716,13 +882,13 @@ const FinanceDashboard: React.FC = () => {
         ) : (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body1" color="textSecondary">
-              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) 
+              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo || recentOrdersFilters.montant) 
                 ? 'Aucun ordre de virement trouvé avec ces filtres' 
                 : 'Aucun ordre de virement récent'
               }
             </Typography>
             <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo)
+              {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo || recentOrdersFilters.montant)
                 ? 'Essayez de modifier les critères de recherche'
                 : 'Les ordres de virement apparaîtront ici une fois créés'
               }
@@ -739,7 +905,7 @@ const FinanceDashboard: React.FC = () => {
                   ? `Affichage de tous les ${filteredOrders.length} ordres`
                   : `Affichage de ${Math.min(itemsPerPage, filteredOrders.length)} sur ${getTotalFilteredCount()} ordres (Page ${currentPage}/${getTotalPages()})`
                 }
-                {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo) && 
+                {(recentOrdersFilters.compagnie || recentOrdersFilters.client || recentOrdersFilters.referenceBordereau || recentOrdersFilters.dateFrom || recentOrdersFilters.dateTo || recentOrdersFilters.montant) && 
                   ' (filtrés)'
                 }
               </Typography>
@@ -915,7 +1081,7 @@ const FinanceDashboard: React.FC = () => {
                   Demandes de Récupération
                 </Typography>
                 <Typography variant="h4" color="warning.main">
-                  {dashboard.stats.demandesRecuperation || 0}
+                  {stats.demandesRecuperation || 0}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
                   Ordres avec demande de récupération
@@ -930,7 +1096,7 @@ const FinanceDashboard: React.FC = () => {
                   Montants Récupérés
                 </Typography>
                 <Typography variant="h4" color="success.main">
-                  {dashboard.stats.montantsRecuperes || 0}
+                  {stats.montantsRecuperes || 0}
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
                   Ordres avec montant récupéré
@@ -966,6 +1132,21 @@ const FinanceDashboard: React.FC = () => {
                 Télécharger
               </Button>
             )}
+            {documentViewer.type === 'excel' && documentViewer.url && (
+              <Button
+                variant="contained"
+                color="success"
+                size="small"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = documentViewer.url;
+                  link.download = documentViewer.title.replace('Détails OV - ', 'Details_OV_') + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
+                  link.click();
+                }}
+              >
+                📥 Télécharger Excel
+              </Button>
+            )}
             <Button 
               onClick={() => setDocumentViewer({open: false, url: '', title: '', type: 'pdf'})}
               size="small"
@@ -982,6 +1163,100 @@ const FinanceDashboard: React.FC = () => {
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title={documentViewer.title}
               />
+            ) : documentViewer.type === 'excel' ? (
+              <Box sx={{ 
+                p: 3, 
+                height: '100%', 
+                overflow: 'auto',
+                backgroundColor: '#f5f5f5'
+              }}>
+                {excelPreviewData && excelPreviewData.data ? (
+                  <Box sx={{ bgcolor: 'white', borderRadius: 1, boxShadow: 1, overflow: 'hidden' }}>
+                    <TableContainer>
+                      <Table size="small" sx={{ minWidth: 650 }}>
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: '#2c3e50' }}>
+                            {excelPreviewData.data[0]?.map((header: any, index: number) => (
+                              <TableCell 
+                                key={index} 
+                                sx={{ 
+                                  color: '#ffffff !important', 
+                                  fontWeight: 'bold',
+                                  fontSize: '0.85rem',
+                                  borderRight: index < excelPreviewData.data[0].length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                                  py: 2,
+                                  backgroundColor: '#2c3e50 !important',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {header}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {excelPreviewData.data.slice(1).map((row: any[], rowIndex: number) => {
+                            const isLastRow = rowIndex === excelPreviewData.data.length - 2;
+                            return (
+                              <TableRow 
+                                key={rowIndex}
+                                sx={{ 
+                                  '&:nth-of-type(odd)': { bgcolor: '#f9f9f9' },
+                                  '&:hover': { bgcolor: isLastRow ? '#E7E6E6' : '#f0f0f0' },
+                                  bgcolor: isLastRow ? '#E7E6E6' : 'inherit',
+                                  fontWeight: isLastRow ? 'bold' : 'normal'
+                                }}
+                              >
+                                {row.map((cell: any, cellIndex: number) => (
+                                  <TableCell 
+                                    key={cellIndex}
+                                    sx={{ 
+                                      fontWeight: isLastRow ? 'bold' : 'normal',
+                                      fontFamily: cellIndex === 9 ? 'monospace' : 'inherit', // RIB Bénéficiaire column (now at index 9)
+                                      fontSize: '0.875rem',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {cell !== undefined && cell !== null ? String(cell) : ''}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    
+                    <Box sx={{ p: 2, textAlign: 'center', borderTop: '2px solid #ddd', bgcolor: '#fafafa' }}>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        size="large"
+                        startIcon={<span>📥</span>}
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = documentViewer.url;
+                          link.download = `Details_OV_${excelPreviewData.reference}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                          link.click();
+                        }}
+                        sx={{ px: 4, py: 1.5 }}
+                      >
+                        Télécharger le Fichier Excel
+                      </Button>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center',
+                    height: '100%'
+                  }}>
+                    <CircularProgress />
+                    <Typography sx={{ ml: 2 }}>Chargement des données...</Typography>
+                  </Box>
+                )}
+              </Box>
             ) : (
               <Box sx={{ p: 2, height: '100%', overflow: 'auto', backgroundColor: '#f5f5f5' }}>
                 <iframe

@@ -61,6 +61,17 @@ export class ExcelValidationService {
         console.log('✅ Using bordereau client:', bordereauClientName, 'ID:', bordereauClientId);
       }
     }
+    
+    // 🚨 LEVEL 1: Excel File Hash Detection (Prevent duplicate file uploads)
+    const crypto = require('crypto');
+    const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    console.log('📊 Excel file hash:', fileHash);
+    
+    // Check if this exact file was uploaded recently (last 90 days) for same client
+    const recentDuplicateFile = await this.checkDuplicateFileHash(fileHash, bordereauClientId || actualClientId);
+    if (recentDuplicateFile) {
+      console.log('⚠️ DUPLICATE FILE DETECTED:', recentDuplicateFile);
+    }
     // Check if file is TXT format (starts with 110104)
     const content = fileBuffer.toString('utf-8');
     if (content.startsWith('110104')) {
@@ -122,6 +133,11 @@ export class ExcelValidationService {
     // Additionner les montants pour les adhérents qui apparaissent plusieurs fois
     const consolidatedResults = this.consolidateAmounts(results);
     console.log(`Total items after consolidation: ${consolidatedResults.length}`);
+    
+    // 🚨 LEVEL 2: Recent Payment Detection (Warn about recent payments)
+    if (bordereauClientId || actualClientId) {
+      await this.checkRecentPayments(consolidatedResults, bordereauClientId || actualClientId, recentDuplicateFile);
+    }
 
     const summary = {
       total: consolidatedResults.length,
@@ -132,6 +148,16 @@ export class ExcelValidationService {
         .filter(r => r.status !== 'ERREUR')
         .reduce((sum, r) => sum + r.montant, 0)
     };
+    
+    // Add duplicate file warning to errors if detected
+    if (recentDuplicateFile) {
+      errors.push({
+        row: 0,
+        field: 'file',
+        message: `⚠️ ATTENTION: Ce fichier Excel a déjà été utilisé le ${new Date(recentDuplicateFile.uploadedAt).toLocaleDateString('fr-FR')} pour l'OV ${recentDuplicateFile.ovReference}. Vérifiez qu'il ne s'agit pas d'un doublon de paiement.`,
+        type: 'WARNING'
+      });
+    }
 
     return {
       valid: errors.filter(e => e.type === 'ERROR').length === 0,
@@ -541,6 +567,147 @@ export class ExcelValidationService {
     } catch (error) {
       console.error('Error finding/creating adherent:', error);
       return `temp-${item.matricule}`;
+    }
+  }
+  
+  // 🚨 LEVEL 1: Check if this exact Excel file was uploaded before
+  private async checkDuplicateFileHash(fileHash: string, clientId: string): Promise<any> {
+    try {
+      // Check OrdreVirement table for recent uploads with same file hash (last 90 days)
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      
+      const recentOV = await this.prisma.ordreVirement.findFirst({
+        where: {
+          commentaire: {
+            contains: fileHash // Store hash in commentaire field
+          },
+          dateCreation: {
+            gte: ninetyDaysAgo
+          },
+          bordereau: {
+            clientId: clientId
+          }
+        },
+        include: {
+          bordereau: { include: { client: true } }
+        },
+        orderBy: { dateCreation: 'desc' }
+      });
+      
+      if (recentOV) {
+        return {
+          ovReference: recentOV.reference,
+          uploadedAt: recentOV.dateCreation,
+          clientName: recentOV.bordereau?.client?.name
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error checking duplicate file hash:', error);
+      return null;
+    }
+  }
+  
+  // 🚨 LEVEL 2: Check if matricules were used in ANY previous OV (regardless of time)
+  private async checkRecentPayments(items: VirementValidationItem[], clientId: string, skipIfDuplicateFile: any): Promise<void> {
+    try {
+      // If duplicate file already detected, skip individual checks (avoid noise)
+      if (skipIfDuplicateFile) {
+        return;
+      }
+      
+      const matricules = items
+        .filter(item => item.status !== 'ERREUR' && item.matricule)
+        .map(item => item.matricule);
+      
+      if (matricules.length === 0) return;
+      
+      // Find ALL OVs that contain these matricules (no time limit)
+      const allOVs = await this.prisma.ordreVirement.findMany({
+        where: {
+          items: {
+            some: {
+              adherent: {
+                matricule: { in: matricules },
+                clientId: clientId
+              }
+            }
+          }
+        },
+        include: {
+          items: {
+            include: {
+              adherent: true
+            },
+            where: {
+              adherent: {
+                matricule: { in: matricules },
+                clientId: clientId
+              }
+            }
+          }
+        },
+        orderBy: { dateCreation: 'desc' }
+      });
+      
+      // Group by matricule and collect ALL OVs for each
+      const allOVsByMatricule = new Map<string, any[]>();
+      
+      for (const ov of allOVs) {
+        for (const item of ov.items) {
+          const matricule = item.adherent.matricule;
+          
+          if (!allOVsByMatricule.has(matricule)) {
+            allOVsByMatricule.set(matricule, []);
+          }
+          
+          allOVsByMatricule.get(matricule)!.push({
+            ovReference: ov.reference,
+            ovDate: ov.dateCreation,
+            amount: item.montant
+          });
+        }
+      }
+      
+      // Add warnings to items showing ALL previous OV usage
+      for (const item of items) {
+        if (item.status === 'ERREUR') continue;
+        
+        const previousOVs = allOVsByMatricule.get(item.matricule);
+        if (previousOVs && previousOVs.length > 0) {
+          // Show all previous usages
+          for (const ov of previousOVs) {
+            // Calculate time difference
+            const timeDiffMs = new Date().getTime() - new Date(ov.ovDate).getTime();
+            const hoursSincePayment = Math.floor(timeDiffMs / (1000 * 60 * 60));
+            const daysSincePayment = Math.floor(timeDiffMs / (1000 * 60 * 60 * 24));
+            
+            // Format time message
+            let timeMessage: string;
+            if (hoursSincePayment < 1) {
+              timeMessage = `il y a moins d'une heure`;
+            } else if (hoursSincePayment < 24) {
+              timeMessage = `il y a ${hoursSincePayment} heure(s)`;
+            } else if (daysSincePayment === 1) {
+              timeMessage = `il y a 1 jour`;
+            } else {
+              timeMessage = `il y a ${daysSincePayment} jours`;
+            }
+            
+            item.erreurs.push(
+              `⚠️ Matricule déjà utilisé: ${ov.amount} TND dans OV ${ov.ovReference} (créé ${timeMessage})`
+            );
+          }
+          
+          if (item.status === 'VALIDE') {
+            item.status = 'ALERTE';
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking recent payments:', error);
     }
   }
 }

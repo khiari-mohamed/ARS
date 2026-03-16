@@ -111,8 +111,18 @@ export class AdherentService {
     const current = await this.prisma.adherent.findUnique({ where: { id } });
     if (!current) throw new BadRequestException('Adherent not found');
 
-    // Track RIB change
+    // Track ALL field changes
+    const changes: Array<{ field: string; oldValue: string; newValue: string }> = [];
+
+    if (dto.nom && dto.nom !== current.nom) {
+      changes.push({ field: 'nom', oldValue: current.nom, newValue: dto.nom });
+    }
+    if (dto.prenom && dto.prenom !== current.prenom) {
+      changes.push({ field: 'prenom', oldValue: current.prenom, newValue: dto.prenom });
+    }
     if (dto.rib && dto.rib !== current.rib) {
+      changes.push({ field: 'rib', oldValue: current.rib, newValue: dto.rib });
+      // Keep RIB-specific history for backward compatibility
       await this.prisma.adherentRibHistory.create({
         data: {
           adherentId: id,
@@ -134,6 +144,31 @@ export class AdherentService {
           title: 'RIB modifié',
           message: `RIB de ${current.nom} ${current.prenom} (${current.matricule}) modifié`,
           data: { adherentId: id, oldRib: current.rib, newRib: dto.rib }
+        }))
+      });
+    }
+    if (dto.codeAssure && dto.codeAssure !== current.codeAssure) {
+      changes.push({ field: 'codeAssure', oldValue: current.codeAssure || '', newValue: dto.codeAssure });
+    }
+    if (dto.numeroContrat && dto.numeroContrat !== current.numeroContrat) {
+      changes.push({ field: 'numeroContrat', oldValue: current.numeroContrat || '', newValue: dto.numeroContrat });
+    }
+    if (dto.assurance && dto.assurance !== current.assurance) {
+      changes.push({ field: 'assurance', oldValue: current.assurance || '', newValue: dto.assurance });
+    }
+    if (dto.statut && dto.statut !== current.statut) {
+      changes.push({ field: 'statut', oldValue: current.statut, newValue: dto.statut });
+    }
+
+    // Save all changes to history
+    if (changes.length > 0) {
+      await this.prisma.adherentHistory.createMany({
+        data: changes.map(change => ({
+          adherentId: id,
+          field: change.field,
+          oldValue: change.oldValue,
+          newValue: change.newValue,
+          updatedById: userId
         }))
       });
     }
@@ -178,7 +213,8 @@ export class AdherentService {
   }
 
   async getAdherentRibHistory(adherentId: string) {
-    const history = await this.prisma.adherentRibHistory.findMany({
+    // Get ALL changes, not just RIB
+    const history = await this.prisma.adherentHistory.findMany({
       where: { adherentId },
       orderBy: { updatedAt: 'desc' }
     });
@@ -288,7 +324,10 @@ export class AdherentService {
       );
     }
 
-    // Delete RIB history first
+    // Delete all history first
+    await this.prisma.adherentHistory.deleteMany({
+      where: { adherentId: id }
+    });
     await this.prisma.adherentRibHistory.deleteMany({
       where: { adherentId: id }
     });

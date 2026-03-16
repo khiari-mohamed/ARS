@@ -89,6 +89,7 @@ const ContractsPage: React.FC = () => {
   const [formData, setFormData] = useState<CreateContractRequest>({
     clientId: '',
     contractNumber: '',
+    codeAssure: '',  // NEW: Code Assuré field
     treatmentDelay: 30,
     claimsReplyDelay: 48,
     paymentDelay: 30,
@@ -171,6 +172,7 @@ const ContractsPage: React.FC = () => {
     setFormData({
       clientId: '',
       contractNumber: '',
+      codeAssure: '',  // NEW: Code Assuré field
       treatmentDelay: 30,
       claimsReplyDelay: 48,
       paymentDelay: 30,
@@ -196,6 +198,7 @@ const ContractsPage: React.FC = () => {
     setFormData({
       clientId: contract.clientId,
       contractNumber: contract.clientName,
+      codeAssure: contract.codeAssure || '',  // NEW: Code Assuré field
       treatmentDelay: contract.delaiReglement,
       claimsReplyDelay: contract.delaiReclamation,
       paymentDelay: contract.delaiReglement,
@@ -590,6 +593,20 @@ const ContractsPage: React.FC = () => {
                 required
               />
             </Grid>
+            
+            {/* NEW: Code Assuré field */}
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Code Assuré *"
+                value={formData.codeAssure || ''}
+                onChange={(e) => setFormData({ ...formData, codeAssure: e.target.value })}
+                placeholder="Ex: CA-BTL-001"
+                required
+                helperText="Ce code sera utilisé pour auto-remplir le champ lors de l'ajout d'adhérents"
+              />
+            </Grid>
+            
             <Grid item xs={12} sm={4}>
               <TextField
                 fullWidth
@@ -795,6 +812,23 @@ const ContractsPage: React.FC = () => {
                   <Grid item xs={12}>
                     <Typography variant="subtitle1" gutterBottom>Informations générales</Typography>
                     <Typography><strong>Client:</strong> {selectedContract.client?.name}</Typography>
+                    <Typography>
+                      <strong>Code Assuré:</strong>{' '}
+                      <Box 
+                        component="span" 
+                        sx={{ 
+                          bgcolor: '#fff3cd', 
+                          color: '#856404',
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: 1,
+                          fontWeight: 600,
+                          border: '1px solid #ffc107'
+                        }}
+                      >
+                        {selectedContract.codeAssure || 'N/A'}
+                      </Box>
+                    </Typography>
                     <Box display="flex" alignItems="center" gap={2} mt={1}>
                       <Typography><strong>Chef d'équipe:</strong> {selectedContract.teamLeader?.fullName || 'N/A'}</Typography>
                       {canManage && (

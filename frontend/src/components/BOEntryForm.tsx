@@ -15,7 +15,8 @@ import {
   Box,
   Typography,
   Chip,
-  IconButton
+  IconButton,
+  Autocomplete
 } from '@mui/material';
 import { AutoAwesome, Refresh } from '@mui/icons-material';
 import { fetchClients } from '../services/clientService';
@@ -305,20 +306,25 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth>
-              <InputLabel>Client *</InputLabel>
-              <Select
-                value={formData.clientId}
-                label="Client *"
-                onChange={(e) => setFormData(prev => ({ ...prev, clientId: e.target.value }))}
-              >
-                {clients.map((client) => (
-                  <MenuItem key={client.id} value={client.id}>
-                    {client.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              options={clients}
+              getOptionLabel={(option) => option.name}
+              value={clients.find(c => c.id === formData.clientId) || null}
+              onChange={(event, newValue) => {
+                setFormData(prev => ({ ...prev, clientId: newValue?.id || '' }));
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Client *"
+                  required
+                  placeholder="Tapez pour rechercher..."
+                />
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              noOptionsText="Aucun client trouvé"
+              fullWidth
+            />
           </Grid>
 
           <Grid item xs={12} sm={6}>

@@ -74,16 +74,18 @@ class DatabaseManager:
         """Get real agent performance data for assignment AI"""
         query = """
         SELECT u.id, u.email as username, u."fullName" as full_name, u.role,
-               COUNT(b.id) as total_bordereaux,
+               COUNT(DISTINCT b.id) as total_bordereaux,
+               COUNT(d.id) as total_documents,
                COALESCE(AVG(EXTRACT(EPOCH FROM (b."dateCloture" - b."dateReception"))/3600), 24) as avg_hours,
                COUNT(CASE WHEN b."dateCloture" IS NOT NULL AND b."dateCloture" <= (b."dateReception" + INTERVAL '1 day' * b."delaiReglement") THEN 1 END) as sla_compliant,
                COUNT(CASE WHEN b.statut = 'EN_DIFFICULTE' THEN 1 END) as rejected_count,
                COALESCE(MAX(b."updatedAt"), NOW()) as last_activity
         FROM "User" u
         LEFT JOIN "Bordereau" b ON u.id = b."assignedToUserId"
+        LEFT JOIN "Document" d ON u.id = d."assignedToUserId" AND d.status IN ('UPLOADED', 'EN_COURS', 'SCANNE')
         WHERE u.role IN ('GESTIONNAIRE', 'CHEF_EQUIPE') AND u.active = true
         GROUP BY u.id, u.email, u."fullName", u.role
-        ORDER BY u.role DESC, total_bordereaux DESC
+        ORDER BY u.role DESC, total_documents DESC
         """
         if not self.pool:
             return []
@@ -106,6 +108,7 @@ class DatabaseManager:
                         'lastName': last_name,
                         'role': row['role'],
                         'total_bordereaux': int(row['total_bordereaux'] or 0),
+                        'total_documents': int(row['total_documents'] or 0),
                         'avg_hours': float(row['avg_hours'] or 24),
                         'sla_compliant': int(row['sla_compliant'] or 0),
                         'rejected_count': int(row['rejected_count'] or 0),

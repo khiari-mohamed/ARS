@@ -3520,6 +3520,377 @@ schedule.every().day.do(lambda: model_persistence.cleanup_old_models())
 schedule.every(2).hours.do(lambda: learning_engine.process_feedback_batch())
 schedule.every().day.do(lambda: generative_ai.update_company_lexicon())
 
+@app.post("/analytics/ai/reassign-suggestion")
+@log_endpoint_call("analytics_ai_reassign_suggestion")
+@save_ai_response("analytics_ai_reassign_suggestion")
+async def analytics_ai_reassign_suggestion(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """🤖 EXTREMELY SMART AI-powered reassignment suggestions based on real-time data analysis"""
+    try:
+        bordereau_id = data.get('bordereau_id')
+        current_handler_id = data.get('current_handler_id')
+        sla_days = data.get('sla_days', 0)
+        urgency = data.get('urgency', 'normal')
+        bordereau_complexity = data.get('complexity', 1)
+        
+        if not bordereau_id:
+            raise HTTPException(status_code=400, detail="bordereau_id required")
+        
+        db = await get_db_manager()
+        
+        # Get ALL agents with real performance metrics
+        agents = await db.get_agent_performance_metrics()
+        
+        if not agents or len(agents) == 0:
+            raise HTTPException(status_code=404, detail="No agents available")
+        
+        # Advanced AI scoring algorithm
+        scored_suggestions = []
+        
+        for agent in agents:
+            # Skip current handler
+            if current_handler_id and agent['id'] == current_handler_id:
+                continue
+            
+            agent_id = agent['id']
+            
+            # Use the actual document workload from the agent performance metrics
+            actual_workload = agent.get('total_documents', 0)
+            
+            total_bordereaux = agent.get('total_bordereaux', 0)
+            sla_compliant = agent.get('sla_compliant', 0)
+            avg_hours = agent.get('avg_hours', 48)
+            
+            # 1. PERFORMANCE SCORE (0-100) - SLA compliance rate
+            if total_bordereaux > 0:
+                performance_score = (sla_compliant / total_bordereaux) * 100
+            else:
+                performance_score = 50  # Neutral for new agents
+            
+            # 2. SPEED SCORE (0-100) - Processing speed (lower hours = better)
+            if avg_hours > 0:
+                # Optimal is 24h, worst is 72h+
+                speed_score = max(0, min(100, (72 - avg_hours) / 48 * 100))
+            else:
+                speed_score = 50
+            
+            # 3. WORKLOAD SCORE (0-100) - Current capacity (lower workload = better)
+            # Optimal: 0-20 documents, Overloaded: 100+
+            if actual_workload <= 20:
+                workload_score = 100
+            elif actual_workload <= 50:
+                workload_score = 75
+            elif actual_workload <= 100:
+                workload_score = 50
+            else:
+                workload_score = max(0, 100 - (actual_workload - 100) * 2)
+            
+            # 4. URGENCY BONUS - Boost agents with better speed for urgent cases
+            urgency_bonus = 0
+            if urgency == 'critical' or sla_days > 30:
+                if speed_score > 70:
+                    urgency_bonus = 15
+                elif speed_score > 50:
+                    urgency_bonus = 10
+            
+            # 5. EXPERIENCE FACTOR - Agents with more completed work get slight boost
+            experience_factor = min(10, total_bordereaux * 0.5)
+            
+            # FINAL AI SCORE (weighted algorithm)
+            final_score = (
+                performance_score * 0.40 +  # 40% weight on SLA compliance
+                speed_score * 0.30 +        # 30% weight on processing speed
+                workload_score * 0.25 +     # 25% weight on availability
+                experience_factor * 0.05    # 5% weight on experience
+            ) + urgency_bonus
+            
+            # Determine availability level
+            if workload_score >= 75:
+                availability = 'Élevée'
+            elif workload_score >= 50:
+                availability = 'Moyenne'
+            else:
+                availability = 'Faible'
+            
+            # Generate intelligent reasoning
+            reasoning_parts = []
+            if workload_score >= 75:
+                reasoning_parts.append("Faible charge de travail")
+            if performance_score >= 80:
+                reasoning_parts.append("excellent historique SLA")
+            elif performance_score >= 60:
+                reasoning_parts.append("bon historique SLA")
+            if speed_score >= 70:
+                reasoning_parts.append("traitement rapide")
+            if urgency == 'critical' and speed_score >= 70:
+                reasoning_parts.append("spécialisé en dossiers urgents")
+            if actual_workload == 0:
+                reasoning_parts.append("disponible immédiatement")
+            elif actual_workload > 200:
+                reasoning_parts.append("charge très élevée")
+            elif actual_workload > 100:
+                reasoning_parts.append("charge élevée")
+            
+            reasoning = ', '.join(reasoning_parts) if reasoning_parts else "Agent disponible"
+            reasoning = reasoning.capitalize()
+            
+            scored_suggestions.append({
+                'user_id': agent_id,
+                'name': f"{agent.get('firstName', '')} {agent.get('lastName', '')}".strip(),
+                'role': agent.get('role', 'GESTIONNAIRE'),
+                'email': agent.get('email', ''),
+                'workload_percentage': min(500, int((actual_workload / 50) * 100)),
+                'current_bordereaux': actual_workload,
+                'sla_compliance_rate': round(performance_score, 1),
+                'avg_processing_hours': round(avg_hours, 1),
+                'availability': availability,
+                'ai_score': round(final_score, 2),
+                'reasoning': reasoning,
+                'is_recommended': False  # Will be set for top choice
+            })
+        
+        if not scored_suggestions:
+            raise HTTPException(status_code=404, detail="No alternative agents available")
+        
+        # Sort by AI score (highest first)
+        scored_suggestions.sort(key=lambda x: x['ai_score'], reverse=True)
+        
+        # Mark top recommendation
+        if len(scored_suggestions) > 0:
+            scored_suggestions[0]['is_recommended'] = True
+            scored_suggestions[0]['reasoning'] = "⭐ " + scored_suggestions[0]['reasoning']
+        
+        # Return top 5 suggestions
+        top_suggestions = scored_suggestions[:5]
+        
+        # Log AI decision
+        logger.info(f"🤖 AI Reassignment for bordereau {bordereau_id}:")
+        logger.info(f"   Top choice: {top_suggestions[0]['name']} (score: {top_suggestions[0]['ai_score']:.1f})")
+        logger.info(f"   Reasoning: {top_suggestions[0]['reasoning']}")
+        
+        # Save for learning
+        await db.save_prediction_result(
+            "ai_reassignment_suggestion",
+            {'bordereau_id': bordereau_id, 'urgency': urgency, 'sla_days': sla_days},
+            {'suggestions': top_suggestions},
+            current_user.username
+        )
+        
+        return {
+            'success': True,
+            'bordereau_id': bordereau_id,
+            'suggestions': top_suggestions,
+            'total_analyzed': len(agents),
+            'algorithm': 'advanced_weighted_scoring',
+            'factors_considered': [
+                'SLA compliance history (40%)',
+                'Processing speed (30%)',
+                'Current workload (25%)',
+                'Experience level (5%)',
+                'Urgency bonus (variable)'
+            ],
+            'confidence': 0.95 if len(top_suggestions) >= 3 else 0.85,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI reassignment suggestion failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI suggestion failed: {str(e)}")
+
+@app.post("/alert_solution")
+@log_endpoint_call("alert_solution")
+async def generate_alert_solution(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
+    """Generate AI-powered solution for SLA alerts using historical data and real-time context"""
+    try:
+        bordereau_id = data.get('bordereau_id')
+        reference = data.get('reference')
+        client = data.get('client')
+        statut = data.get('statut')
+        sla_days = data.get('sla_days', 0)
+        alert_level = data.get('alert_level', 'red')
+        reason = data.get('reason', 'SLA breach')
+
+        # Default values
+        root_cause = None
+        actions = []
+        priority = 'MEDIUM'
+        reasoning = ''
+        confidence = 0.5
+        similar_cases_used = 0
+
+        # Try to fetch additional context from database
+        db = await get_db_manager()
+        bordereau_details = None
+        agent_workload = None
+        if bordereau_id:
+            try:
+                # Fetch bordereau details (assumed function exists)
+                bordereau_details = await db.get_bordereau_by_id(bordereau_id)
+                # Fetch current workload of assigned agent if any
+                if bordereau_details and bordereau_details.get('assignedToUserId'):
+                    agent_id = bordereau_details['assignedToUserId']
+                    workload = await db.get_agent_current_workload(agent_id)
+                    agent_workload = workload.get('count', 0)
+            except Exception as e:
+                logger.warning(f"Could not fetch additional context: {e}")
+
+        # 1. Attempt to find similar past alerts
+        try:
+            # Fetch historical alert resolutions (last 90 days, successful)
+            history = await db.get_historical_alert_resolutions(days=90, limit=1000)
+            if history and len(history) > 5:
+                # Build similarity features
+                current_features = f"{statut} {client} {reason} {alert_level} {sla_days//7}week"
+                hist_texts = []
+                for h in history:
+                    text = f"{h.get('statut','')} {h.get('client','')} {h.get('reason','')} {h.get('alert_level','')} {h.get('sla_days',0)//7}week"
+                    hist_texts.append(text)
+
+                # Vectorize
+                from sklearn.feature_extraction.text import TfidfVectorizer
+                vectorizer = TfidfVectorizer(max_features=100, stop_words='french')
+                hist_vectors = vectorizer.fit_transform(hist_texts)
+                current_vector = vectorizer.transform([current_features])
+
+                # Compute cosine similarities
+                from sklearn.metrics.pairwise import cosine_similarity
+                similarities = cosine_similarity(current_vector, hist_vectors).flatten()
+
+                # Get top similar cases (threshold > 0.3)
+                similar_indices = [i for i, sim in enumerate(similarities) if sim > 0.3]
+                similar_cases = [history[i] for i in similar_indices]
+                similar_cases_used = len(similar_cases)
+
+                if similar_cases_used >= 3:
+                    # Aggregate root causes and actions
+                    from collections import Counter
+                    root_causes_counter = Counter([c.get('root_cause', '') for c in similar_cases])
+                    actions_counter = Counter()
+                    for c in similar_cases:
+                        for act in c.get('actions', []):
+                            actions_counter[act] += 1
+
+                    root_cause = root_causes_counter.most_common(1)[0][0]
+                    actions = [act for act, _ in actions_counter.most_common(5)]
+                    # Priority: most common among similar cases
+                    priority_counter = Counter([c.get('priority', 'MEDIUM') for c in similar_cases])
+                    priority = priority_counter.most_common(1)[0][0]
+                    # Confidence based on average similarity and count
+                    avg_sim = sum(similarities[i] for i in similar_indices) / similar_cases_used
+                    confidence = min(0.5 + 0.1 * similar_cases_used + 0.3 * avg_sim, 0.98)
+                    reasoning = f"Basé sur {similar_cases_used} cas similaires résolus avec succès."
+        except Exception as e:
+            logger.warning(f"Similarity search failed: {e}, falling back to rule-based")
+
+        # 2. If insufficient similar cases, fallback to rule-based + real-time enhancements
+        if not actions:
+            # Rule-based root causes
+            root_causes_list = []
+            if statut == 'A_AFFECTER':
+                root_causes_list.append("Bordereau non affecté - Aucun gestionnaire assigné")
+            elif statut == 'ASSIGNE':
+                root_causes_list.append("Bordereau assigné mais non traité - Possible surcharge gestionnaire")
+            elif statut == 'EN_COURS':
+                root_causes_list.append("Traitement en cours mais lent - Complexité ou manque de ressources")
+
+            if sla_days > 30:
+                root_causes_list.append(f"Retard critique de {sla_days} jours - Problème systémique")
+            elif sla_days > 14:
+                root_causes_list.append(f"Retard majeur de {sla_days} jours - Action urgente requise")
+
+            root_cause = ' | '.join(root_causes_list) if root_causes_list else f"Bordereau {reference} en retard de {sla_days} jours"
+
+            # Rule-based actions, enriched with real-time data
+            actions = []
+            if statut == 'A_AFFECTER':
+                # Use smart router to suggest best agent
+                try:
+                    suggestion = await smart_router.suggest_optimal_assignment(
+                        {'id': bordereau_id, 'client': client, 'sla_days': sla_days},
+                        db
+                    )
+                    if suggestion and suggestion.get('recommended_assignment'):
+                        agent = suggestion['recommended_assignment']
+                        actions.append(f"Affecter immédiatement à {agent['agent_name']} (score: {agent['total_score']:.2f})")
+                    else:
+                        actions.append("Affecter immédiatement à un gestionnaire disponible")
+                except:
+                    actions.append("Affecter immédiatement à un gestionnaire disponible")
+                actions.append("Utiliser l'affectation automatique IA pour sélectionner le meilleur gestionnaire")
+                actions.append("Notifier le chef d'équipe de l'urgence")
+            elif statut in ['ASSIGNE', 'EN_COURS']:
+                if agent_workload is not None:
+                    if agent_workload > 50:
+                        actions.append(f"Agent actuel surchargé ({agent_workload} bordereaux) - Réaffectation recommandée")
+                    else:
+                        actions.append(f"Vérifier la charge de travail du gestionnaire actuel ({agent_workload} bordereaux)")
+                else:
+                    actions.append("Vérifier la charge de travail du gestionnaire actuel")
+                actions.append("Considérer une réaffectation si le gestionnaire est surchargé")
+                actions.append("Escalader au chef d'équipe pour priorisation")
+
+            if sla_days > 14:
+                actions.append("Traitement en priorité absolue - Avant tous les autres dossiers")
+                actions.append("Notification client du retard avec plan d'action")
+
+            # Determine priority
+            if sla_days > 30 or alert_level == 'red':
+                priority = 'URGENT'
+                reasoning = f"Retard critique de {sla_days} jours - Risque contractuel majeur - Action immédiate obligatoire"
+            elif sla_days > 14:
+                priority = 'HIGH'
+                reasoning = f"Retard important de {sla_days} jours - Intervention rapide nécessaire"
+            else:
+                priority = 'MEDIUM'
+                reasoning = f"Retard de {sla_days} jours - Surveillance et action recommandées"
+
+            confidence = 0.7  # rule-based confidence
+
+        # 3. Final enhancements: if still URGENT, add reassignment suggestion from smart router
+        if priority == 'URGENT' and bordereau_id:
+            try:
+                suggestion = await smart_router.suggest_optimal_assignment(
+                    {'id': bordereau_id, 'client': client, 'sla_days': sla_days},
+                    db
+                )
+                if suggestion and suggestion.get('recommended_assignment'):
+                    agent = suggestion['recommended_assignment']
+                    actions.insert(0, f"Réaffectation d'urgence recommandée à {agent['agent_name']} (score: {agent['total_score']:.2f})")
+            except:
+                pass
+
+        # 4. Prepare final response
+        result = {
+            'root_cause': root_cause,
+            'recommended_actions': actions[:5],  # keep max 5 actions
+            'priority': priority,
+            'reasoning': reasoning,
+            'analysis': f"Client: {client} | Statut: {statut} | Retard: {sla_days} jours",
+            'confidence': round(confidence, 2)
+        }
+
+        # Add extra metadata if similar cases were used
+        if similar_cases_used > 0:
+            result['similar_cases_used'] = similar_cases_used
+
+        # Save to learning database for future improvements
+        try:
+            await db.save_alert_solution(
+                bordereau_id=bordereau_id,
+                input_data=data,
+                output_result=result,
+                user=current_user.username
+            )
+        except Exception as e:
+            logger.debug(f"Could not save alert solution: {e}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Alert solution generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Alert solution failed: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     import os
@@ -3547,70 +3918,3 @@ if __name__ == "__main__":
     port = int(os.getenv('AI_SERVICE_PORT', 8002))
     logger.info(f"Starting ARS AI microservice with advanced analytics on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
-
-
-@app.post("/alert_solution")
-@log_endpoint_call("alert_solution")
-async def generate_alert_solution(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
-    """Generate AI-powered solution for SLA alerts"""
-    try:
-        bordereau_id = data.get('bordereau_id')
-        reference = data.get('reference')
-        client = data.get('client')
-        statut = data.get('statut')
-        sla_days = data.get('sla_days', 0)
-        alert_level = data.get('alert_level', 'red')
-        reason = data.get('reason', 'SLA breach')
-        
-        # Analyze root cause
-        root_causes = []
-        if statut == 'A_AFFECTER':
-            root_causes.append("Bordereau non affecté - Aucun gestionnaire assigné")
-        elif statut == 'ASSIGNE':
-            root_causes.append("Bordereau assigné mais non traité - Possible surcharge gestionnaire")
-        elif statut == 'EN_COURS':
-            root_causes.append("Traitement en cours mais lent - Complexité ou manque de ressources")
-        
-        if sla_days > 30:
-            root_causes.append(f"Retard critique de {sla_days} jours - Problème systémique")
-        elif sla_days > 14:
-            root_causes.append(f"Retard majeur de {sla_days} jours - Action urgente requise")
-        
-        # Generate specific actions
-        actions = []
-        if statut == 'A_AFFECTER':
-            actions.append(f"Affecter immédiatement à un gestionnaire disponible")
-            actions.append(f"Utiliser l'affectation automatique IA pour sélectionner le meilleur gestionnaire")
-            actions.append(f"Notifier le chef d'équipe de l'urgence")
-        elif statut in ['ASSIGNE', 'EN_COURS']:
-            actions.append(f"Vérifier la charge de travail du gestionnaire actuel")
-            actions.append(f"Considérer une réaffectation si le gestionnaire est surchargé")
-            actions.append(f"Escalader au chef d'équipe pour priorisation")
-        
-        if sla_days > 14:
-            actions.append(f"Traitement en priorité absolue - Avant tous les autres dossiers")
-            actions.append(f"Notification client du retard avec plan d'action")
-        
-        # Determine priority
-        if sla_days > 30 or alert_level == 'red':
-            priority = 'URGENT'
-            reasoning = f"Retard critique de {sla_days} jours - Risque contractuel majeur - Action immédiate obligatoire"
-        elif sla_days > 14:
-            priority = 'HIGH'
-            reasoning = f"Retard important de {sla_days} jours - Intervention rapide nécessaire"
-        else:
-            priority = 'MEDIUM'
-            reasoning = f"Retard de {sla_days} jours - Surveillance et action recommandées"
-        
-        return {
-            'root_cause': ' | '.join(root_causes) if root_causes else f"Bordereau {reference} en retard de {sla_days} jours",
-            'recommended_actions': actions,
-            'priority': priority,
-            'reasoning': reasoning,
-            'analysis': f"Client: {client} | Statut: {statut} | Retard: {sla_days} jours",
-            'confidence': 0.92
-        }
-        
-    except Exception as e:
-        logger.error(f"Alert solution generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Alert solution failed: {str(e)}")

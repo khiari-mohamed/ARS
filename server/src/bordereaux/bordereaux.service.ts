@@ -2256,8 +2256,8 @@ async reassignBordereau(bordereauId: string, newUserId: string, comment?: string
     throw new NotFoundException(`User with ID ${newUserId} not found`);
   }
   
-  if (newUser.role !== 'GESTIONNAIRE') {
-    throw new BadRequestException('User must have GESTIONNAIRE role');
+  if (!['GESTIONNAIRE', 'CHEF_EQUIPE'].includes(newUser.role)) {
+    throw new BadRequestException('User must have GESTIONNAIRE or CHEF_EQUIPE role');
   }
   
   // Store old assignment for logging

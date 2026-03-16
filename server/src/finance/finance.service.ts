@@ -1333,7 +1333,8 @@ Document généré automatiquement par ARS`;
           dateDemandeRecuperation: ov.dateDemandeRecuperation,
           montantRecupere: ov.montantRecupere,
           dateMontantRecupere: ov.dateMontantRecupere,
-          motifObservation: ov.validationComment || ov.motifObservation || null // NEW: Full text display
+          motifObservation: ov.validationComment || ov.motifObservation || null, // NEW: Full text display
+          modeRecuperation: ov.bordereau?.client?.modeRecuperation || null // NEW: Mode de récupération from client
         })),
         stats
       };
@@ -2112,6 +2113,166 @@ Document généré automatiquement par ARS`;
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', `inline; filename="OV_${id}.txt"`);
       res.send(txtContent);
+    }
+  }
+
+  async exportOVDetailsExcel(id: string, res: Response, user: User) {
+    this.checkFinanceRole(user);
+    
+    try {
+      // Get OrdreVirement with all related data
+      const ordreVirement = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        include: {
+          donneurOrdre: true,
+          bordereau: { include: { client: true } },
+          items: {
+            include: {
+              adherent: {
+                include: {
+                  client: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!ordreVirement) {
+        throw new NotFoundException('Ordre de virement not found');
+      }
+
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Détails OV');
+
+      // EXACT SPEC: Headers
+      worksheet.columns = [
+        { header: 'Fichier de Transmission', key: 'fichierTransmission', width: 25 },
+        { header: 'Référence Ordre de Virement', key: 'referenceOV', width: 30 },
+        { header: 'Agence Donneur d\'Ordre', key: 'agenceDonneurOrdre', width: 25 },
+        { header: 'Banque Donneur d\'Ordre', key: 'banqueDonneurOrdre', width: 25 },
+        { header: 'Code Agence Bénéficiaire', key: 'codeAgence', width: 20 },
+        { header: 'Code Banque Bénéficiaire', key: 'codeBanque', width: 20 },
+        { header: 'Compte N° Donneur d\'Ordre', key: 'compteNumero', width: 25 },
+        { header: 'Matricule', key: 'matricule', width: 15 },
+        { header: 'Nom et Prénom', key: 'nomPrenom', width: 30 },
+        { header: 'RIB Bénéficiaire', key: 'rib', width: 25 },
+        { header: 'Montant', key: 'montant', width: 15 }
+      ];
+
+      // Style header row
+      worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4472C4' }
+      };
+      worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add data rows
+      if (ordreVirement.items && ordreVirement.items.length > 0) {
+        ordreVirement.items.forEach((item: any) => {
+          const adherent = item.adherent;
+          const rib = adherent?.rib || '';
+          
+          // Extract bank code and agency from RIB (first 5 digits = bank, next 5 = agency)
+          const codeBanque = rib.substring(0, 5);
+          const codeAgence = rib.substring(5, 10);
+          
+          // Get donneur d'ordre info
+          const agenceDonneurOrdre = ordreVirement.donneurOrdre?.agence || 'TUNIS CENTRE';
+          const banqueDonneurOrdre = ordreVirement.donneurOrdre?.banque || 'ATTIJARI BANK';
+          
+          worksheet.addRow({
+            fichierTransmission: ordreVirement.reference,
+            referenceOV: ordreVirement.reference,
+            agenceDonneurOrdre: agenceDonneurOrdre,
+            banqueDonneurOrdre: banqueDonneurOrdre,
+            codeAgence: codeAgence || '-',
+            codeBanque: codeBanque || '-',
+            compteNumero: ordreVirement.donneurOrdre?.rib || '-',
+            matricule: adherent?.matricule || '-',
+            nomPrenom: `${adherent?.nom || ''} ${adherent?.prenom || ''}`.trim(),
+            rib: rib,
+            montant: item.montant
+          });
+        });
+      } else {
+        // If no items, add summary row
+        const agenceDonneurOrdre = ordreVirement.donneurOrdre?.agence || 'TUNIS CENTRE';
+        const banqueDonneurOrdre = ordreVirement.donneurOrdre?.banque || 'ATTIJARI BANK';
+        
+        worksheet.addRow({
+          fichierTransmission: ordreVirement.reference,
+          referenceOV: ordreVirement.reference,
+          agenceDonneurOrdre: agenceDonneurOrdre,
+          banqueDonneurOrdre: banqueDonneurOrdre,
+          codeAgence: '-',
+          codeBanque: '-',
+          compteNumero: ordreVirement.donneurOrdre?.rib || '-',
+          matricule: '-',
+          nomPrenom: 'Aucun adhérent',
+          rib: '-',
+          montant: ordreVirement.montantTotal
+        });
+      }
+
+      // Add total row
+      const totalRow = worksheet.addRow({
+        fichierTransmission: '',
+        referenceOV: '',
+        agenceDonneurOrdre: '',
+        banqueDonneurOrdre: '',
+        codeAgence: '',
+        codeBanque: '',
+        compteNumero: '',
+        matricule: '',
+        nomPrenom: 'TOTAL',
+        rib: '',
+        montant: ordreVirement.montantTotal
+      });
+      
+      totalRow.font = { bold: true };
+      totalRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE7E6E6' }
+      };
+
+      // Format montant column as currency
+      worksheet.getColumn('montant').numFmt = '#,##0.000 "TND"';
+
+      // Auto-fit columns
+      worksheet.columns.forEach(column => {
+        if (column.header) {
+          column.width = Math.max(column.width || 10, column.header.length + 5);
+        }
+      });
+
+      // Set response headers
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="Details_OV_${ordreVirement.reference}_${new Date().toISOString().split('T')[0]}.xlsx"`
+      );
+
+      // Write to response
+      await workbook.xlsx.write(res);
+      res.end();
+
+      await this.logAuditAction('EXPORT_OV_DETAILS_EXCEL', {
+        userId: user.id,
+        ordreVirementId: id,
+        reference: ordreVirement.reference
+      });
+
+    } catch (error) {
+      console.error('Error exporting OV details to Excel:', error);
+      throw new BadRequestException('Failed to export OV details: ' + error.message);
     }
   }
 }

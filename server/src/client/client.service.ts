@@ -1041,6 +1041,8 @@ export class ClientService {
   }
 
   async update(id: string, dto: UpdateClientDto) {
+    console.log('🔍 ClientService.update called with:', { id, dto });
+    
     const {
       name,
       compagnieAssurance,
@@ -1051,7 +1053,8 @@ export class ClientService {
       reglementDelay,
       reclamationDelay,
       teamLeaderId,
-      slaConfig
+      slaConfig,
+      modeRecuperation
     } = dto as any;
     
     const data: any = {
@@ -1064,7 +1067,10 @@ export class ClientService {
       ...(reclamationDelay !== undefined && { reclamationDelay }),
       ...(slaConfig !== undefined && { slaConfig }),
       ...(teamLeaderId !== undefined && { chargeCompteId: teamLeaderId }),
+      ...(modeRecuperation !== undefined && { modeRecuperation }),
     };
+    
+    console.log('🔍 Final data to update in database:', data);
     
     // Handle compagnieAssurance update
     if (compagnieAssurance !== undefined) {
@@ -1087,7 +1093,7 @@ export class ClientService {
       data.compagnieAssuranceId = compagnieAssuranceRecord?.id;
     }
     
-    return this.prisma.client.update({
+    const result = await this.prisma.client.update({
       where: { id },
       data,
       include: { 
@@ -1098,6 +1104,9 @@ export class ClientService {
         compagnieAssurance: true
       },
     });
+    
+    console.log('✅ Client updated successfully:', { id, modeRecuperation: result.modeRecuperation });
+    return result;
   }
 
   async remove(id: string) {

@@ -23,7 +23,13 @@ import {
   Tabs,
   Tab,
   TablePagination,
-  Tooltip
+  Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  TextField,
+  Stack
 } from '@mui/material';
 import {
   Warning,
@@ -34,7 +40,8 @@ import {
   Refresh,
   Info,
   Visibility,
-  CheckCircle
+  CheckCircle,
+  HourglassEmpty as HourglassEmptyIcon
 } from '@mui/icons-material';
 import { LocalAPI } from '../../services/axios';
 import { getWorkloadPredictions } from '../../services/superAdminService';
@@ -76,6 +83,15 @@ const SuperAdminAlerts: React.FC = () => {
   const [alertDetailDialog, setAlertDetailDialog] = useState<{ open: boolean; alert: any | null; aiSolution: any | null; loadingAI: boolean }>({ open: false, alert: null, aiSolution: null, loadingAI: false });
   const [clientFilter, setClientFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
+  const [reassignDialog, setReassignDialog] = useState<{ open: boolean; bordereau: any | null; currentHandler: string }>({ open: false, bordereau: null, currentHandler: '' });
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState('');
+  const [reassignLoading, setReassignLoading] = useState(false);
+  const [reassignSuggestions, setReassignSuggestions] = useState<any>(null);
+  const [loadingReassignSuggestions, setLoadingReassignSuggestions] = useState(false);
+  const [notifyClientDialog, setNotifyClientDialog] = useState<{ open: boolean; bordereau: any | null; aiSolution: any | null; slaDays: number }>({ open: false, bordereau: null, aiSolution: null, slaDays: 0 });
+  const [emailMessage, setEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // Import alerts from Alert Module - use history for resolved
   const { data: alertsResponse, refetch: refetchAlerts } = useAlertsDashboard({});
@@ -84,9 +100,22 @@ const SuperAdminAlerts: React.FC = () => {
 
   useEffect(() => {
     loadAlerts();
+    loadAvailableUsers();
     const interval = setInterval(loadAlerts, 60000); // Refresh every minute
     return () => clearInterval(interval);
   }, []);
+  
+  const loadAvailableUsers = async () => {
+    try {
+      const response = await LocalAPI.get('/users');
+      const users = response.data.filter((u: any) => 
+        u.role === 'GESTIONNAIRE' || u.role === 'CHEF_EQUIPE'
+      );
+      setAvailableUsers(users);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+    }
+  };
 
   const loadAlerts = async () => {
     try {
@@ -171,6 +200,71 @@ const SuperAdminAlerts: React.FC = () => {
 
   const getCriticalCount = () => overloadAlerts.filter(a => a.alert === 'red').length;
   const getWarningCount = () => overloadAlerts.filter(a => a.alert === 'orange').length;
+
+  const handleReassignBordereau = async () => {
+    if (!selectedUser || !reassignDialog.bordereau) return;
+    
+    setReassignLoading(true);
+    try {
+      await LocalAPI.post(`/bordereaux/${reassignDialog.bordereau.id}/reassign`, {
+        newUserId: selectedUser
+      });
+      
+      alert('✅ Bordereau réaffecté avec succès!');
+      loadAlerts();
+      setReassignDialog({ open: false, bordereau: null, currentHandler: '' });
+      setSelectedUser('');
+      
+      // Close the alert detail dialog
+      setAlertDetailDialog({ open: false, alert: null, aiSolution: null, loadingAI: false });
+    } catch (error) {
+      console.error('Failed to reassign bordereau:', error);
+      alert('❌ Erreur lors de la réaffectation');
+    } finally {
+      setReassignLoading(false);
+    }
+  };
+  
+  const handleNotifyClient = async () => {
+    if (!notifyClientDialog.bordereau || !emailMessage.trim()) {
+      alert('⚠️ Veuillez saisir un message');
+      return;
+    }
+    
+    setSendingEmail(true);
+    try {
+      await LocalAPI.post(`/bordereaux/${notifyClientDialog.bordereau.id}/notify-client`, {
+        message: emailMessage,
+        slaDays: notifyClientDialog.slaDays,
+        aiSolution: notifyClientDialog.aiSolution
+      });
+      
+      alert('✅ Notification envoyée au client avec succès!');
+      setNotifyClientDialog({ open: false, bordereau: null, aiSolution: null, slaDays: 0 });
+      setEmailMessage('');
+      
+      // Close the alert detail dialog
+      setAlertDetailDialog({ open: false, alert: null, aiSolution: null, loadingAI: false });
+    } catch (error) {
+      console.error('Failed to notify client:', error);
+      alert('❌ Erreur lors de l\'envoi de la notification');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+  
+  // Auto-generate email message when dialog opens
+  useEffect(() => {
+    if (notifyClientDialog.open && notifyClientDialog.bordereau) {
+      const client = notifyClientDialog.bordereau.contract?.client?.name || notifyClientDialog.bordereau.client?.name || 'Client';
+      const reference = notifyClientDialog.bordereau.reference || notifyClientDialog.bordereau.id;
+      const days = notifyClientDialog.slaDays;
+      
+      const autoMessage = `Cher ${client},\n\nNous vous informons que le traitement du bordereau ${reference} accuse un retard de ${days} jours.\n\nNous mettons en place les actions suivantes pour régulariser la situation :\n${notifyClientDialog.aiSolution?.actions?.map((a: string, i: number) => `${i + 1}. ${a}`).join('\n') || '- Traitement prioritaire du dossier'}\n\nNous nous excusons pour ce désagrément et restons à votre disposition pour toute question.\n\nCordialement,\nÉquipe ARS`;
+      
+      setEmailMessage(autoMessage);
+    }
+  }, [notifyClientDialog.open]);
 
   const handleResolveAlert = async (alert: any) => {
     try {
@@ -711,7 +805,7 @@ const SuperAdminAlerts: React.FC = () => {
                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
                       ✅ Actions Recommandées:
                     </Typography>
-                    <Box sx={{ bgcolor: 'white', p: 1.5, borderRadius: 1 }}>
+                    <Box sx={{ bgcolor: 'white', p: 1.5, borderRadius: 1, mb: 2 }}>
                       {alertDetailDialog.aiSolution.actions?.map((action: string, idx: number) => (
                         <Typography key={idx} variant="body2" sx={{ mb: 0.5 }}>
                           {idx + 1}. {action}
@@ -720,7 +814,7 @@ const SuperAdminAlerts: React.FC = () => {
                     </Box>
                     
                     {alertDetailDialog.aiSolution.priority && (
-                      <Alert severity={alertDetailDialog.aiSolution.priority === 'URGENT' ? 'error' : 'warning'} sx={{ mt: 2 }}>
+                      <Alert severity={alertDetailDialog.aiSolution.priority === 'URGENT' ? 'error' : 'warning'} sx={{ mt: 2, mb: 2 }}>
                         <Typography variant="body2" fontWeight={600}>
                           Priorité: {alertDetailDialog.aiSolution.priority}
                         </Typography>
@@ -729,6 +823,53 @@ const SuperAdminAlerts: React.FC = () => {
                         </Typography>
                       </Alert>
                     )}
+                    
+                    {/* Quick Actions Section */}
+                    <Box sx={{ mt: 3, p: 2, bgcolor: '#fff3e0', borderRadius: 1, border: '1px solid #ff9800' }}>
+                      <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        🛠️ ACTIONS RAPIDES
+                      </Typography>
+                      <Stack spacing={1.5}>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          fullWidth
+                          startIcon={<People />}
+                          onClick={async () => {
+                            setReassignDialog({
+                              open: true,
+                              bordereau: alertDetailDialog.alert.bordereau,
+                              currentHandler: alertDetailDialog.alert.bordereau.currentHandler?.fullName || 'Non assigné'
+                            });
+                            
+                            // Load AI suggestions for reassignment
+                            setLoadingReassignSuggestions(true);
+                            try {
+                              console.log('🤖 Loading AI suggestions for bordereau:', alertDetailDialog.alert.bordereau.id);
+                              const response = await LocalAPI.post('/analytics/ai/reassign-suggestion', {
+                                bordereau_id: alertDetailDialog.alert.bordereau.id || alertDetailDialog.alert.bordereau.reference,
+                                current_handler_id: alertDetailDialog.alert.bordereau.currentHandler?.id || alertDetailDialog.alert.bordereau.assignedToUserId,
+                                sla_days: getSLAStatus(alertDetailDialog.alert),
+                                urgency: alertDetailDialog.alert.alertLevel === 'red' ? 'critical' : 'normal',
+                                complexity: alertDetailDialog.alert.bordereau.nombreBS || 1
+                              });
+                              console.log('🤖 AI Suggestions Response:', response.data);
+                              setReassignSuggestions(response.data);
+                            } catch (error: any) {
+                              console.error('❌ Failed to load reassign suggestions:', error);
+                              console.error('Error details:', error.response?.data || error.message);
+                              setReassignSuggestions(null);
+                            } finally {
+                              setLoadingReassignSuggestions(false);
+                            }
+                          }}
+                          sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                        >
+                          🔄 Réaffecter ce Bordereau
+                        </Button>
+
+                      </Stack>
+                    </Box>
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
@@ -1096,6 +1237,207 @@ const SuperAdminAlerts: React.FC = () => {
             }}
           >
             Réaffecter Documents
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Reassign Bordereau Dialog */}
+      <Dialog open={reassignDialog.open} onClose={() => !reassignLoading && setReassignDialog({ open: false, bordereau: null, currentHandler: '' })} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <People />
+            <Typography variant="h6">🔄 Réaffecter le Bordereau</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {reassignDialog.bordereau && (
+            <Box>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>Bordereau:</strong> {reassignDialog.bordereau.reference || reassignDialog.bordereau.id}<br/>
+                  <strong>Actuellement assigné à:</strong> {reassignDialog.currentHandler}
+                </Typography>
+              </Alert>
+              
+              {/* AI Suggestions Section */}
+              {loadingReassignSuggestions ? (
+                <Box sx={{ p: 2, bgcolor: '#f0f7ff', borderRadius: 1, mb: 2, textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    🤖 Analyse IA en cours...
+                  </Typography>
+                </Box>
+              ) : reassignSuggestions?.suggestions ? (
+                <Box sx={{ p: 2, bgcolor: '#f0f7ff', borderRadius: 1, border: '1px solid #2196f3', mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    🤖 Suggestions IA ({reassignSuggestions.suggestions.length})
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                    Algorithme: {reassignSuggestions.algorithm} - Confiance: {Math.round(reassignSuggestions.confidence * 100)}%
+                  </Typography>
+                  
+                  {reassignSuggestions.suggestions?.map((suggestion: any, idx: number) => (
+                    <Box 
+                      key={idx}
+                      sx={{ 
+                        p: 1.5, 
+                        bgcolor: suggestion.is_recommended ? '#e8f5e9' : 'white', 
+                        borderRadius: 1, 
+                        mb: 1,
+                        border: suggestion.is_recommended ? '2px solid #4caf50' : '1px solid #e0e0e0',
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: suggestion.is_recommended ? '#c8e6c9' : '#f5f5f5' }
+                      }}
+                      onClick={() => setSelectedUser(suggestion.user_id)}
+                    >
+                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Box flex={1}>
+                          <Typography variant="body2" fontWeight={600}>
+                            {suggestion.is_recommended && '⭐ '}{suggestion.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {suggestion.role} - Charge: {suggestion.workload_percentage}% - Disponibilité: {suggestion.availability}
+                          </Typography>
+                        </Box>
+                        {suggestion.is_recommended && (
+                          <Chip label="Recommandé" color="success" size="small" />
+                        )}
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                        💡 {suggestion.reasoning}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              ) : null}
+              
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Sélectionner le nouveau gestionnaire:
+              </Typography>
+              
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Gestionnaire</InputLabel>
+                <Select
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  label="Gestionnaire"
+                  disabled={reassignLoading}
+                >
+                  <MenuItem value="">
+                    <em>-- Sélectionner --</em>
+                  </MenuItem>
+                  {availableUsers.map((user) => {
+                    const suggestion = reassignSuggestions?.suggestions?.find((s: any) => s.user_id === user.id);
+                    const isRecommended = suggestion?.is_recommended;
+                    
+                    return (
+                    <MenuItem key={user.id} value={user.id}>
+                      <Box sx={{ width: '100%' }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                          <Typography variant="body2">
+                            {isRecommended && '⭐ '}{user.fullName}
+                          </Typography>
+                          {isRecommended && (
+                            <Chip label="IA" color="success" size="small" sx={{ ml: 1 }} />
+                          )}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {user.role} - {user.email}
+                        </Typography>
+                        {suggestion && (
+                          <Typography variant="caption" color="success.main" sx={{ display: 'block', mt: 0.5 }}>
+                            Charge: {suggestion.workload_percentage}% - {suggestion.reasoning}
+                          </Typography>
+                        )}
+                      </Box>
+                    </MenuItem>
+                    );
+                  })}
+                </Select>
+              </FormControl>
+              
+              {selectedUser && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2" fontWeight={600}>
+                    ⚠️ Confirmation requise
+                  </Typography>
+                  <Typography variant="caption">
+                    Le bordereau sera réaffecté et une notification sera envoyée au nouveau gestionnaire.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReassignDialog({ open: false, bordereau: null, currentHandler: '' })} disabled={reassignLoading}>
+            Annuler
+          </Button>
+          <Button 
+            variant="contained" 
+            color="primary"
+            onClick={handleReassignBordereau}
+            disabled={!selectedUser || reassignLoading}
+            startIcon={reassignLoading ? <HourglassEmptyIcon /> : <People />}
+          >
+            {reassignLoading ? 'Réaffectation...' : 'Confirmer la Réaffectation'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Notify Client Dialog */}
+      <Dialog open={notifyClientDialog.open} onClose={() => !sendingEmail && setNotifyClientDialog({ open: false, bordereau: null, aiSolution: null, slaDays: 0 })} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: 'info.main', color: 'white' }}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Notifications />
+            <Typography variant="h6">📧 Notifier le Client</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {notifyClientDialog.bordereau && (
+            <Box>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>Bordereau:</strong> {notifyClientDialog.bordereau.reference || notifyClientDialog.bordereau.id}<br/>
+                  <strong>Client:</strong> {notifyClientDialog.bordereau.contract?.client?.name || notifyClientDialog.bordereau.client?.name || 'N/A'}<br/>
+                  <strong>Retard:</strong> {notifyClientDialog.slaDays} jours
+                </Typography>
+              </Alert>
+              
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Message au client:
+              </Typography>
+              
+              <TextField
+                fullWidth
+                multiline
+                rows={10}
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                placeholder="Saisir le message..."
+                disabled={sendingEmail}
+                sx={{ mb: 2 }}
+              />
+              
+              <Alert severity="success" icon={<Info />}>
+                <Typography variant="caption">
+                  🤖 Message généré automatiquement par l'IA. Vous pouvez le modifier avant l'envoi.
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNotifyClientDialog({ open: false, bordereau: null, aiSolution: null, slaDays: 0 })} disabled={sendingEmail}>
+            Annuler
+          </Button>
+          <Button 
+            variant="contained" 
+            color="info"
+            onClick={handleNotifyClient}
+            disabled={!emailMessage.trim() || sendingEmail}
+            startIcon={sendingEmail ? <HourglassEmptyIcon /> : <Notifications />}
+          >
+            {sendingEmail ? 'Envoi...' : 'Envoyer la Notification'}
           </Button>
         </DialogActions>
       </Dialog>

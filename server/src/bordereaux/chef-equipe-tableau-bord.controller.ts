@@ -843,6 +843,37 @@ export class ChefEquipeTableauBordController {
         await this.updateBordereauStatusBasedOnDocuments(document.bordereauId);
       }
 
+      // ✅ NEW: Auto-complete bordereau if ALL documents are TRAITE
+      if (document.bordereauId && documentStatusMapping[body.newStatus] === 'TRAITE') {
+        try {
+          // Get all documents in this bordereau
+          const allDocuments = await this.prisma.document.findMany({
+            where: { bordereauId: document.bordereauId }
+          });
+          
+          const totalDocs = allDocuments.length;
+          const traitesDocs = allDocuments.filter(d => d.status === 'TRAITE').length;
+          
+          console.log(`🔍 Checking bordereau completion: { documentId: ${body.dossierId}, newStatus: ${body.newStatus}, bordereauId: ${document.bordereauId} }`);
+          console.log(`📊 Bordereau ${document.bordereauId}: ${traitesDocs}/${totalDocs} documents TRAITE`);
+          
+          // If ALL documents are TRAITE → Auto-update bordereau
+          if (totalDocs > 0 && traitesDocs === totalDocs) {
+            console.log(`✅ All documents TRAITE! Auto-updating bordereau status...`);
+            await this.prisma.bordereau.update({
+              where: { id: document.bordereauId },
+              data: {
+                statut: 'TRAITE',
+                dateCloture: new Date()
+              }
+            });
+            console.log(`✅ Bordereau ${document.bordereauId} automatically marked as TRAITE with dateCloture: ${new Date().toISOString()}`);
+          }
+        } catch (borderError) {
+          console.error('❌ Failed to auto-complete bordereau:', borderError);
+        }
+      }
+
       // If gestionnaire returns a document, create history and notify chef d'équipe
       if (req.user?.role === 'GESTIONNAIRE' && body.newStatus === 'Retourné') {
         // Create assignment history

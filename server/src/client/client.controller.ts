@@ -63,6 +63,8 @@ export class ClientController {
   @Patch(':id')
   @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
+    console.log('🔍 Received client update request for ID:', id);
+    console.log('🔍 Update data:', JSON.stringify(dto, null, 2));
     return this.clientService.update(id, dto);
   }
 

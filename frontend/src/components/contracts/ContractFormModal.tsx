@@ -13,6 +13,7 @@ interface Props {
 const initialState = {
   clientId: '',
   clientName: '',
+  codeAssure: '',  // NEW: Code Assuré field
   startDate: '',
   endDate: '',
   signatureDate: '',
@@ -94,6 +95,20 @@ const ContractFormModal: React.FC<Props> = ({ contract, onClose, onSaved }) => {
         </select>
         <label>Nom du client :</label>
         <input name="clientName" value={form.clientName} readOnly placeholder="Nom du client" required />
+        
+        {/* NEW: Code Assuré field */}
+        <label>Code Assuré * :</label>
+        <input 
+          name="codeAssure" 
+          value={form.codeAssure || ''} 
+          onChange={handleChange} 
+          placeholder="Ex: CA-BTL-001" 
+          required 
+        />
+        <small style={{ color: '#666', fontSize: '0.85em', marginTop: '-8px', display: 'block' }}>
+          Ce code sera utilisé pour auto-remplir le champ lors de l'ajout d'adhérents
+        </small>
+        
         <label>Date de début :</label>
         <input name="startDate" type="date" value={form.startDate} onChange={handleChange} required />
         <label>Date de fin :</label>

@@ -66,6 +66,7 @@ export class ContractsService {
       const contractData: any = {
         clientId: dto.clientId,
         clientName: dto.contractNumber,
+        codeAssure: dto.codeAssure || null,  // NEW: Code Assuré field
         delaiReglement: parseInt(dto.treatmentDelay.toString()),
         delaiReclamation: parseInt(dto.claimsReplyDelay.toString()),
         escalationThreshold: dto.warningThreshold ? parseInt(dto.warningThreshold.toString()) : null,
@@ -175,6 +176,7 @@ export class ContractsService {
     const updateData: any = {};
     
     if (dto.contractNumber) updateData.clientName = dto.contractNumber;
+    if (dto.codeAssure !== undefined) updateData.codeAssure = dto.codeAssure || null;  // NEW: Code Assuré field
     if (dto.treatmentDelay) updateData.delaiReglement = parseInt(dto.treatmentDelay.toString());
     if (dto.claimsReplyDelay) updateData.delaiReclamation = parseInt(dto.claimsReplyDelay.toString());
     if (dto.paymentDelay) updateData.delaiReglement = parseInt(dto.paymentDelay.toString());

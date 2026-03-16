@@ -3,13 +3,16 @@ import {
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, FormControl, InputLabel, Select, MenuItem, Chip, IconButton,
-  Alert, Stack, Box, TablePagination
+  Alert, Stack, Box, TablePagination, Autocomplete, Collapse
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import WarningIcon from '@mui/icons-material/Warning';
 import HistoryIcon from '@mui/icons-material/History';
+import InfoIcon from '@mui/icons-material/Info';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 interface Adherent {
   id: string;
@@ -47,6 +50,7 @@ const AdherentsTab: React.FC = () => {
     assurance: '',
     status: 'active' as 'active' | 'inactive'
   });
+  const [clients, setClients] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
   const [importDialog, setImportDialog] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -55,10 +59,39 @@ const AdherentsTab: React.FC = () => {
   const [page, setPage] = useState(0);
   const rowsPerPage = 20;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [uniqueSocieties, setUniqueSocieties] = useState<Array<{name: string, count: number}>>([]);
+  const [deleteDialog, setDeleteDialog] = useState<{open: boolean, count: number}>({open: false, count: 0});
+  const [showTips, setShowTips] = useState(false);
 
   useEffect(() => {
     loadAdherents();
+    loadClients();
   }, []);
+
+  const loadClients = async () => {
+    try {
+      const { fetchClients } = await import('../../services/clientService');
+      const data = await fetchClients();
+      setClients(data);
+    } catch (error) {
+      console.error('Failed to load clients:', error);
+    }
+  };
+
+  useEffect(() => {
+    // Calculate unique societies with counts
+    const societyMap = new Map<string, number>();
+    adherents.forEach(adherent => {
+      const count = societyMap.get(adherent.society) || 0;
+      societyMap.set(adherent.society, count + 1);
+    });
+    
+    const societies = Array.from(societyMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count); // Sort by count descending
+    
+    setUniqueSocieties(societies);
+  }, [adherents]);
 
   const loadAdherents = async () => {
     try {
@@ -291,22 +324,24 @@ const AdherentsTab: React.FC = () => {
   const handleDownloadTemplate = async () => {
     const XLSX = await import('xlsx');
     
-    const data = adherents.map(a => ({
-      'Matricule': a.matricule,
-      'Société': a.society,
-      'Nom': a.name,
-      'Prénom': a.surname,
-      'RIB': a.rib,
-      'Code Assuré': a.codeAssure || '',
-      'Numéro Contrat': a.numeroContrat || '',
-      'Assurance': a.assurance || '',
-      'Statut': a.status === 'active' ? 'ACTIF' : 'INACTIF'
-    }));
+    // FIXED: Create EMPTY template with ONLY headers (no data rows at all)
+    const headers = [
+      'Matricule',
+      'Société',
+      'Nom',
+      'Prénom',
+      'RIB',
+      'Code Assuré',
+      'Numéro Contrat',
+      'Assurance',
+      'Statut'
+    ];
     
-    const worksheet = XLSX.utils.json_to_sheet(data);
+    // Create worksheet with only headers
+    const worksheet = XLSX.utils.aoa_to_sheet([headers]);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Adhérents');
-    XLSX.writeFile(workbook, `adherents_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(workbook, `template_adherents_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleImportFile = async () => {
@@ -325,18 +360,22 @@ const AdherentsTab: React.FC = () => {
         body: formData
       });
       
+      const result = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Import failed');
+        // Show detailed error message from backend
+        const errorMsg = result.message || 'Import failed';
+        alert(`❌ ERREUR D'IMPORT\n\n${errorMsg}`);
+        throw new Error(errorMsg);
       }
       
-      const result = await response.json();
-      alert(`Import réussi! ${result.imported || 0} adhérent(s) importé(s)`);
+      alert(`✅ Import réussi!\n\n${result.imported || 0} adhérent(s) importé(s)\n${result.skipped || 0} ignoré(s)\n\n${result.message || ''}`);
       setImportDialog(false);
       setImportFile(null);
       await loadAdherents();
     } catch (error) {
       console.error('Import failed:', error);
-      alert('Erreur lors de l\'import');
+      // Error already shown in alert above
     } finally {
       setImporting(false);
     }
@@ -361,32 +400,7 @@ const AdherentsTab: React.FC = () => {
                 variant="contained"
                 color="error"
                 startIcon={<DeleteIcon />}
-                onClick={async () => {
-                  if (window.confirm(`Êtes-vous sûr de vouloir supprimer ${selectedIds.length} adhérent(s) ?`)) {
-                    let successCount = 0;
-                    let errorCount = 0;
-                    const errors: string[] = [];
-                    
-                    for (const id of selectedIds) {
-                      try {
-                        await handleDelete(id);
-                        successCount++;
-                      } catch (error: any) {
-                        errorCount++;
-                        errors.push(error.message || 'Erreur inconnue');
-                      }
-                    }
-                    
-                    setSelectedIds([]);
-                    await loadAdherents();
-                    
-                    if (errorCount > 0) {
-                      alert(`${successCount} supprimé(s), ${errorCount} échec(s)\n${errors[0]}`);
-                    } else {
-                      alert(`${successCount} adhérent(s) supprimé(s) avec succès!`);
-                    }
-                  }
-                }}
+                onClick={() => setDeleteDialog({open: true, count: selectedIds.length})}
               >
                 Supprimer ({selectedIds.length})
               </Button>
@@ -415,7 +429,7 @@ const AdherentsTab: React.FC = () => {
         <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
           🔍 Recherche & Filtres
         </Typography>
-        <Stack direction="row" spacing={2} flexWrap="wrap">
+        <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 2 }}>
           <TextField
             label="Recherche"
             value={filters.search}
@@ -425,12 +439,24 @@ const AdherentsTab: React.FC = () => {
             sx={{ minWidth: 250 }}
           />
           
-          <TextField
-            label="Société"
-            value={filters.society}
-            onChange={(e) => setFilters({...filters, society: e.target.value})}
+          <Autocomplete
+            options={uniqueSocieties}
+            getOptionLabel={(option) => `${option.name} (${option.count})`}
+            value={uniqueSocieties.find(s => s.name === filters.society) || null}
+            onChange={(event, newValue) => {
+              setFilters({...filters, society: newValue?.name || ''});
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Société"
+                placeholder="Tapez pour rechercher..."
+                size="small"
+              />
+            )}
+            isOptionEqualToValue={(option, value) => option.name === value.name}
+            noOptionsText="Aucune société trouvée"
             size="small"
-            placeholder="Filtrer par société"
             sx={{ minWidth: 200 }}
           />
           
@@ -451,9 +477,32 @@ const AdherentsTab: React.FC = () => {
             variant="outlined" 
             onClick={() => setFilters({society: '', status: '', search: ''})}
           >
-            🔄 Appliquer
+            🔄 Réinitialiser
           </Button>
         </Stack>
+        
+        {/* Quick Filter Buttons - Dynamic */}
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Typography variant="caption" sx={{ alignSelf: 'center', mr: 1, fontWeight: 600 }}>
+            Filtres rapides:
+          </Typography>
+          {uniqueSocieties.map((society) => (
+            <Button 
+              key={society.name}
+              size="small" 
+              variant={filters.society === society.name ? 'contained' : 'outlined'}
+              onClick={() => setFilters({...filters, society: society.name})}
+              sx={{ textTransform: 'none' }}
+            >
+              {society.name} ({society.count})
+            </Button>
+          ))}
+          {uniqueSocieties.length === 0 && (
+            <Typography variant="caption" color="textSecondary">
+              Aucune société disponible
+            </Typography>
+          )}
+        </Box>
       </Paper>
 
       {/* EXACT SPEC: Import massif section */}
@@ -462,15 +511,21 @@ const AdherentsTab: React.FC = () => {
           📅 Import Massif
         </Typography>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          Le fichier d'alimentation doit contenir les colonnes obligatoires :
+          ⚠️ <strong>IMPORTANT:</strong> Le fichier Excel doit respecter EXACTEMENT la structure suivante (ordre et noms des colonnes) :
         </Typography>
-        <Typography variant="body2" component="div">
-          • Matricule (unique par société)<br/>
-          • Société<br/>
-          • Nom et prénom<br/>
-          • RIB (20 chiffres)<br/>
-          • Code assuré (lié au champ ajouté dans la table Contrat)<br/>
-          • Numéro de contrat
+        <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', bgcolor: '#f5f5f5', p: 1, borderRadius: 1 }}>
+          1. Matricule<br/>
+          2. Société<br/>
+          3. Nom<br/>
+          4. Prénom<br/>
+          5. RIB<br/>
+          6. Code Assuré<br/>
+          7. Numéro Contrat<br/>
+          8. Assurance<br/>
+          9. Statut
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 1, color: 'error.main', fontWeight: 600 }}>
+          ❌ Toute modification de cette structure entraînera le rejet du fichier.
         </Typography>
         <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
           <Button 
@@ -569,7 +624,7 @@ const AdherentsTab: React.FC = () => {
                     });
                     const history = await res.json();
                     setHistoryDialog({open: true, adherentId: adherent.id, history});
-                  }} color="info" title="Historique RIB">
+                  }} color="info" title="Historique des modifications">
                     <HistoryIcon />
                   </IconButton>
                   <IconButton size="small" onClick={() => handleDelete(adherent.id)} color="error" title="Supprimer">
@@ -605,13 +660,91 @@ const AdherentsTab: React.FC = () => {
           </Typography>
         </DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Règles de gestion :</strong><br/>
-            • Le matricule ne peut pas être dupliqué pour une même société<br/>
-            • Le RIB est unique à un seul adhérent (sauf cas exceptionnels)<br/>
-            • Si un RIB existe déjà → alerte<br/>
-            • Si un matricule existe déjà dans la même société → rejet
-          </Alert>
+          {/* Collapsible Tips Section */}
+          <Box sx={{ mb: 2 }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              color="info"
+              startIcon={showTips ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              onClick={() => setShowTips(!showTips)}
+              sx={{ 
+                mb: showTips ? 2 : 0,
+                textTransform: 'none',
+                justifyContent: 'space-between',
+                borderStyle: 'dashed',
+                py: 1.5
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <InfoIcon />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {showTips ? '👆 Masquer les conseils et informations importantes' : '👉 Afficher les conseils et informations importantes (recommandé)'}
+                </Typography>
+              </Box>
+            </Button>
+            
+            <Collapse in={showTips}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Alert severity="info">
+                  <strong>Règles de gestion :</strong><br/>
+                  • Le matricule ne peut pas être dupliqué pour une même société<br/>
+                  • Le RIB est unique à un seul adhérent (sauf cas exceptionnels)<br/>
+                  • Si un RIB existe déjà → alerte<br/>
+                  • Si un matricule existe déjà dans la même société → rejet
+                </Alert>
+                
+                <Alert severity="success" icon="✨">
+                  <strong>💡 Remplissage automatique intelligent :</strong><br/>
+                  Lorsque vous sélectionnez une <strong>Société de rattachement</strong>, le système remplit automatiquement :<br/>
+                  • ✅ <strong>Assurance</strong> → Récupérée depuis la fiche client<br/>
+                  • ✅ <strong>Code assuré</strong> → Récupéré depuis le contrat actif<br/>
+                  • ❌ <strong>Numéro de contrat</strong> → À saisir manuellement (chaque adhérent a son propre numéro)<br/>
+                </Alert>
+                
+                <Alert severity="error" icon="🚨" sx={{ bgcolor: '#ffebee', border: '2px solid #d32f2f' }}>
+                  <strong>🚨 IMPORTANT - Structure des champs Nom et Prénom :</strong><br/>
+                  <Typography variant="body2" sx={{ mt: 1, mb: 1 }}>
+                    Les champs <strong>"Nom"</strong> et <strong>"Prénom"</strong> sont séparés pour des raisons critiques :
+                  </Typography>
+                  <Typography variant="body2" component="div" sx={{ mt: 1 }}>
+                    <strong>❌ Pourquoi ne PAS les combiner en un seul champ :</strong><br/>
+                    • <strong>Système bancaire</strong> → Les fichiers de virement utilisent un format strict (Nom + Prénom séparés). Toute modification peut causer des rejets de paiement<br/>
+                    • <strong>8,304 adhérents</strong> → Migration complexe et irréversible de toutes les données existantes<br/>
+                    • <strong>Fichiers Excel</strong> → Tous les modèles d'import deviennent invalides, nécessitant une mise à jour complète<br/>
+                    • <strong>Historique</strong> → Perte de la traçabilité des modifications individuelles de nom ou prénom<br/>
+                    • <strong>Tri et recherche</strong> → Impossible de trier par nom de famille ou rechercher séparément<br/>
+                    • <strong>10+ fichiers système</strong> → Modifications majeures dans les modules Finance, Workflow, Reporting
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1.5, p: 1, bgcolor: '#fff', borderRadius: 1, fontWeight: 600, color: '#d32f2f' }}>
+                    ⚠️ Conséquence : Risque élevé d'erreurs de paiement, perte de données, et interruption du système bancaire.
+                  </Typography>
+                  <Typography variant="caption" sx={{ mt: 1, display: 'block', fontStyle: 'italic', color: '#666' }}>
+                    💡 La séparation Nom/Prénom est une norme bancaire et garantit la qualité et l'intégrité des données.
+                  </Typography>
+                </Alert>
+                
+                <Alert severity="warning" icon="⚠️" sx={{ bgcolor: '#fff3cd', border: '2px solid #ff9800' }}>
+                  <strong>⚠️ ATTENTION - TRÈS IMPORTANT :</strong><br/>
+                  <Typography variant="body2" sx={{ mt: 1, mb: 1 }}>
+                    <strong style={{ color: '#d32f2f' }}>🚨 NE MODIFIEZ PAS les champs "Assurance" et "Code assuré" après le remplissage automatique !</strong>
+                  </Typography>
+                  <Typography variant="body2" component="div" sx={{ mt: 1 }}>
+                    <strong>Pourquoi ?</strong><br/>
+                    • Modifier <strong>"Assurance"</strong> → L'adhérent sera rattaché à la mauvaise compagnie<br/>
+                    • Modifier <strong>"Code assuré"</strong> → Les remboursements iront au mauvais dossier<br/>
+                    • Conséquence : <strong style={{ color: '#d32f2f' }}>❌ Erreurs de traitement, retards de paiement, réclamations</strong>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1.5, p: 1, bgcolor: '#fff', borderRadius: 1, fontWeight: 600, color: '#e65100' }}>
+                    ✅ Règle simple : Les champs remplis automatiquement sont corrects. Ne les modifiez jamais.
+                  </Typography>
+                  <Typography variant="caption" sx={{ mt: 1, display: 'block', fontStyle: 'italic', color: '#666' }}>
+                    💡 Si vous pensez qu'une information automatique est incorrecte, ne la modifiez pas ici. Contactez votre responsable pour corriger la fiche client ou le contrat.
+                  </Typography>
+                </Alert>
+              </Box>
+            </Collapse>
+          </Box>
           <Grid container spacing={2.5} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -626,13 +759,67 @@ const AdherentsTab: React.FC = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                label="Société de rattachement"
-                value={form.society}
-                onChange={(e) => setForm({...form, society: e.target.value})}
+              <Autocomplete
+                options={clients}
+                getOptionLabel={(option) => option.name}
+                value={clients.find(c => c.name === form.society) || null}
+                onChange={async (event, newValue) => {
+                  console.log('🔍 Client selected:', newValue);
+                  setForm({...form, society: newValue?.name || ''});
+                  
+                  // AUTO-FILL: Fetch client data when selected
+                  if (newValue?.id) {
+                    try {
+                      console.log('📡 Fetching autofill data for client ID:', newValue.id);
+                      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/clients/${newValue.id}/autofill-data`, {
+                        headers: {
+                          'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
+                      });
+                      
+                      if (response.ok) {
+                        const result = await response.json();
+                        console.log('✅ Autofill data received:', result);
+                        console.log('📊 Data to fill:', {
+                          assurance: result.data.assurance,
+                          codeAssure: result.data.codeAssure,
+                          numeroContrat: result.data.numeroContrat
+                        });
+                        
+                        // Auto-fill fields (user can still edit them)
+                        setForm(prev => {
+                          const newForm = {
+                            ...prev,
+                            assurance: result.data.assurance || prev.assurance,
+                            codeAssure: result.data.codeAssure || prev.codeAssure
+                            // numeroContrat is NOT auto-filled (per-adherent field)
+                          };
+                          console.log('📝 Form updated:', newForm);
+                          return newForm;
+                        });
+                      } else {
+                        const errorText = await response.text();
+                        console.error('❌ Failed to fetch autofill data:', response.status, errorText);
+                      }
+                    } catch (error) {
+                      console.error('❌ Error fetching autofill data:', error);
+                    }
+                  } else {
+                    console.log('⚠️ No client ID available');
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Société de rattachement *"
+                    required
+                    placeholder="Tapez pour rechercher..."
+                    helperText="Via l'identifiant existant"
+                  />
+                )}
+                isOptionEqualToValue={(option, value) => option.name === value.name}
+                noOptionsText="Aucune société trouvée"
                 fullWidth
-                required
-                placeholder="Via l'identifiant existant"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -642,6 +829,7 @@ const AdherentsTab: React.FC = () => {
                 onChange={(e) => setForm({...form, name: e.target.value})}
                 fullWidth
                 required
+                helperText="Nom de famille (requis pour le système bancaire)"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -651,6 +839,7 @@ const AdherentsTab: React.FC = () => {
                 onChange={(e) => setForm({...form, surname: e.target.value})}
                 fullWidth
                 required
+                helperText="Prénom (requis pour le système bancaire)"
               />
             </Grid>
             <Grid item xs={12}>
@@ -737,8 +926,12 @@ const AdherentsTab: React.FC = () => {
       <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>📁 Importer des Adhérents</DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Le fichier doit contenir les colonnes: Matricule, Société, Nom, Prénom, RIB, Code Assuré, Numéro Contrat, Statut
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <strong>⚠️ STRUCTURE OBLIGATOIRE:</strong><br/>
+            Le fichier doit contenir EXACTEMENT ces colonnes dans cet ordre:<br/>
+            <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', mt: 1 }}>
+              Matricule | Société | Nom | Prénom | RIB | Code Assuré | Numéro Contrat | Assurance | Statut
+            </Typography>
           </Alert>
           <Box
             sx={{
@@ -754,7 +947,7 @@ const AdherentsTab: React.FC = () => {
           >
             <input
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".xlsx,.xls"
               onChange={(e) => setImportFile(e.target.files?.[0] || null)}
               style={{ display: 'none' }}
             />
@@ -762,7 +955,7 @@ const AdherentsTab: React.FC = () => {
               {importFile ? importFile.name : 'Cliquez pour sélectionner un fichier'}
             </Typography>
             <Typography variant="caption" color="textSecondary">
-              Formats acceptés: .xlsx, .xls, .csv
+              Formats acceptés: .xlsx, .xls
             </Typography>
           </Box>
         </DialogContent>
@@ -780,16 +973,17 @@ const AdherentsTab: React.FC = () => {
 
       {/* History Dialog */}
       <Dialog open={historyDialog.open} onClose={() => setHistoryDialog({open: false, adherentId: null, history: []})} maxWidth="md" fullWidth>
-        <DialogTitle>📜 Historique des modifications RIB</DialogTitle>
+        <DialogTitle>📜 Historique des modifications</DialogTitle>
         <DialogContent>
           {historyDialog.history.length === 0 ? (
-            <Alert severity="info">Aucune modification de RIB</Alert>
+            <Alert severity="info">Aucune modification</Alert>
           ) : (
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Ancien RIB</strong></TableCell>
-                  <TableCell><strong>Nouveau RIB</strong></TableCell>
+                  <TableCell><strong>Champ</strong></TableCell>
+                  <TableCell><strong>Ancienne valeur</strong></TableCell>
+                  <TableCell><strong>Nouvelle valeur</strong></TableCell>
                   <TableCell><strong>Modifié par</strong></TableCell>
                   <TableCell><strong>Date</strong></TableCell>
                 </TableRow>
@@ -797,8 +991,19 @@ const AdherentsTab: React.FC = () => {
               <TableBody>
                 {historyDialog.history.map((h: any) => (
                   <TableRow key={h.id}>
-                    <TableCell sx={{fontFamily: 'monospace', color: 'error.main'}}>{h.oldRib}</TableCell>
-                    <TableCell sx={{fontFamily: 'monospace', color: 'success.main'}}>{h.newRib}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={h.field || 'RIB'} 
+                        size="small" 
+                        color={h.field === 'rib' ? 'warning' : 'default'}
+                      />
+                    </TableCell>
+                    <TableCell sx={{fontFamily: h.field === 'rib' ? 'monospace' : 'inherit', color: 'error.main'}}>
+                      {h.oldValue || h.oldRib || '-'}
+                    </TableCell>
+                    <TableCell sx={{fontFamily: h.field === 'rib' ? 'monospace' : 'inherit', color: 'success.main'}}>
+                      {h.newValue || h.newRib || '-'}
+                    </TableCell>
                     <TableCell>
                       <Typography variant="body2">{h.updatedBy?.fullName || 'Utilisateur inconnu'}</Typography>
                       <Typography variant="caption" color="textSecondary">{h.updatedBy?.role || ''}</Typography>
@@ -812,6 +1017,86 @@ const AdherentsTab: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setHistoryDialog({open: false, adherentId: null, history: []})}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog 
+        open={deleteDialog.open} 
+        onClose={() => setDeleteDialog({open: false, count: 0})}
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningIcon color="error" fontSize="large" />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Confirmation de suppression
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <strong>⚠️ Attention :</strong> Cette action est irréversible!
+          </Alert>
+          <Typography variant="body1">
+            Êtes-vous sûr de vouloir supprimer <strong>{deleteDialog.count} adhérent(s)</strong> ?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Toutes les données associées seront définitivement supprimées.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setDeleteDialog({open: false, count: 0})} 
+            variant="outlined"
+            size="large"
+          >
+            ❌ Annuler
+          </Button>
+          <Button 
+            onClick={async () => {
+              setDeleteDialog({open: false, count: 0});
+              
+              let successCount = 0;
+              let errorCount = 0;
+              const errors: string[] = [];
+              
+              for (const id of selectedIds) {
+                try {
+                  const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                      'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                  });
+                  
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Failed to delete adherent');
+                  }
+                  
+                  successCount++;
+                } catch (error: any) {
+                  errorCount++;
+                  errors.push(error.message || 'Erreur inconnue');
+                }
+              }
+              
+              setSelectedIds([]);
+              await loadAdherents();
+              
+              if (errorCount > 0) {
+                alert(`${successCount} supprimé(s), ${errorCount} échec(s)\n${errors[0]}`);
+              } else {
+                alert(`✅ ${successCount} adhérent(s) supprimé(s) avec succès!`);
+              }
+            }}
+            variant="contained"
+            color="error"
+            size="large"
+            startIcon={<DeleteIcon />}
+          >
+            🗑️ Supprimer définitivement
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

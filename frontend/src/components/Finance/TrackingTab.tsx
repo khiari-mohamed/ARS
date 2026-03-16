@@ -3,7 +3,8 @@ import {
   Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, 
   TableBody, Chip, Button, Dialog, DialogTitle, DialogContent, 
   DialogActions, TextField, FormControl, InputLabel, Select, MenuItem,
-  Stack, Box, CircularProgress, Card, CardContent, Alert, Checkbox, TablePagination
+  Stack, Box, CircularProgress, Card, CardContent, Alert, Checkbox, TablePagination,
+  Autocomplete
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -284,10 +285,15 @@ const TrackingTab: React.FC = () => {
     // EXACT SPEC: Manual OV must follow same workflow as bordereau OV
     // Store manual OV data and redirect to OV Processing tab
     const manualOVPdfPath = sessionStorage.getItem('manualOVPdfPath');
+    
+    // Clean montantTotal: remove all separators (spaces, commas, dots) and parse as number
+    const cleanMontant = createForm.montantTotal.replace(/[\s,\.]/g, '');
+    const montantTotal = parseFloat(cleanMontant) || 0;
+    
     sessionStorage.setItem('manualOVData', JSON.stringify({
       reference: createForm.reference,
       clientName: createForm.clientName,
-      montantTotal: parseFloat(createForm.montantTotal) || 0,
+      montantTotal: montantTotal,
       nombreAdherents: parseInt(createForm.nombreAdherents) || 0,
       isManual: true,
       uploadedPdfPath: manualOVPdfPath
@@ -366,21 +372,26 @@ const TrackingTab: React.FC = () => {
           </Button>
         </Box>
         <Stack direction="row" spacing={2} flexWrap="wrap">
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Société / Client</InputLabel>
-            <Select
-              value={filters.society}
-              onChange={(e) => setFilters({...filters, society: e.target.value})}
-              label="Société / Client"
-            >
-              <MenuItem value="">Tous</MenuItem>
-              {clients.map((client) => (
-                <MenuItem key={client.id} value={client.name}>
-                  {client.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Autocomplete
+            options={clients}
+            getOptionLabel={(option) => option.name}
+            value={clients.find(c => c.name === filters.society) || null}
+            onChange={(event, newValue) => {
+              setFilters({...filters, society: newValue?.name || ''});
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Société / Client"
+                placeholder="Tapez pour rechercher..."
+                size="small"
+              />
+            )}
+            isOptionEqualToValue={(option, value) => option.name === value.name}
+            noOptionsText="Aucun client trouvé"
+            size="small"
+            sx={{ minWidth: 200 }}
+          />
           
           <TextField
             label="Référence bordereau"
@@ -1065,35 +1076,36 @@ const TrackingTab: React.FC = () => {
               helperText="Référence unique de l'ordre de virement"
             />
             
-            <FormControl fullWidth required>
-              <InputLabel>Client / Société *</InputLabel>
-              <Select
-                value={createForm.clientName}
-                label="Client / Société *"
-                onChange={(e) => setCreateForm({...createForm, clientName: e.target.value})}
-              >
-                {clients.map((client) => (
-                  <MenuItem key={client.id} value={client.name}>
-                    {client.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              options={clients}
+              getOptionLabel={(option) => option.name}
+              value={clients.find(c => c.name === createForm.clientName) || null}
+              onChange={(event, newValue) => {
+                setCreateForm({...createForm, clientName: newValue?.name || ''});
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Client / Société *"
+                  required
+                  placeholder="Tapez pour rechercher..."
+                />
+              )}
+              isOptionEqualToValue={(option, value) => option.name === value.name}
+              noOptionsText="Aucun client trouvé"
+              fullWidth
+            />
             
             <TextField
               label="Montant total (TND)"
-              type="text"
-              value={createForm.montantTotal ? parseFloat(createForm.montantTotal).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : ''}
+              value={createForm.montantTotal}
               onChange={(e) => {
-                const value = e.target.value.replace(/,/g, '');
-                if (value === '' || /^\d*\.?\d{0,3}$/.test(value)) {
-                  setCreateForm({...createForm, montantTotal: value});
-                }
+                setCreateForm({...createForm, montantTotal: e.target.value});
               }}
               fullWidth
               required
-              placeholder="Ex: 10 ou 100 ou 100,000"
-              helperText="Format: 10dt, 100dt, 100,000dt"
+              placeholder="Ex: 1191310 ou 1,191,310 ou 1.191.310"
+              helperText="Vous pouvez taper librement avec ou sans séparateurs"
             />
             
             <TextField
@@ -1114,7 +1126,7 @@ const TrackingTab: React.FC = () => {
           <Button 
             onClick={handleCreateManualEntry} 
             variant="contained"
-            disabled={!createForm.reference || !createForm.clientName || !createForm.montantTotal || parseFloat(createForm.montantTotal) <= 0}
+            disabled={!createForm.reference || !createForm.clientName || !createForm.montantTotal || parseFloat(createForm.montantTotal.replace(/[\s,\.]/g, '')) <= 0}
             startIcon={<AddIcon />}
           >
             Créer l'entrée

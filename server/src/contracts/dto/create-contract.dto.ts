@@ -10,6 +10,10 @@ export class CreateContractDto {
   @IsString()
   contractNumber: string;
 
+  @IsOptional()
+  @IsString()
+  codeAssure?: string; // NEW: Code Assuré field
+
   @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
