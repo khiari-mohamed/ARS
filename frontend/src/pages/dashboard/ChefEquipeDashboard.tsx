@@ -88,6 +88,11 @@ function ChefEquipeDashboard() {
   const derniersPerPage = 5;
   const bordereauxPerPage = 5;
   const documentsPerPage = 20;
+  const [reassignedDocs, setReassignedDocs] = useState<any[]>([]);
+  const [reassignedByMember, setReassignedByMember] = useState<Record<string, { name: string; count: number }>>({});
+  const [loadingReassigned, setLoadingReassigned] = useState(false);
+  const [reassignedDocsPage, setReassignedDocsPage] = useState(1);
+  const REASSIGNED_PAGE_SIZE = 10;
 
   // Table-specific filters
   const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
@@ -111,6 +116,7 @@ function ChefEquipeDashboard() {
 
   useEffect(() => {
     loadDashboardData();
+    loadReassignedDocuments();
     
     // Listen for PDF modal events from DossiersList
     const handlePDFModal = (event: any) => {
@@ -127,6 +133,23 @@ function ChefEquipeDashboard() {
       window.removeEventListener('openPDFModal', handlePDFModal);
     };
   }, []);
+
+  const loadReassignedDocuments = async () => {
+    if (!user?.id) return;
+    setLoadingReassigned(true);
+    try {
+      const response = await LocalAPI.get(`/super-admin/chef-equipe/reassigned-documents?userId=${user.id}`);
+      if (response.data.success) {
+        setReassignedDocs(response.data.documents || []);
+        setReassignedByMember(response.data.byMember || {});
+        setReassignedDocsPage(1);
+      }
+    } catch (error) {
+      console.error('Error loading reassigned documents:', error);
+    } finally {
+      setLoadingReassigned(false);
+    }
+  };
 
   useEffect(() => {
     console.log('🔄 Applying filters with dossiers:', dossiers.length);
@@ -702,11 +725,20 @@ function ChefEquipeDashboard() {
                 </div>
               ))}
               <div style={{ fontWeight: 'bold', marginTop: '6px', marginBottom: '4px', color: '#333' }}>Par gestionnaire:</div>
-              {Object.entries(stats.prestation?.gestionnaireBreakdown || {}).map(([key, value]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span>{key}:</span> <span>{value}</span>
-                </div>
-              ))}
+              {Object.entries(stats.prestation?.gestionnaireBreakdown || {}).map(([key, value]) => {
+                const memberEntry = Object.values(reassignedByMember).find(m => m.name === key);
+                const reassignedCount = memberEntry ? memberEntry.count : 0;
+                const totalCount = (value as number) + reassignedCount;
+                return (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                    <span>{key}:</span> 
+                    <span>
+                      {totalCount}
+                      {reassignedCount > 0 && <span style={{ color: '#2196f3', fontSize: '10px', marginLeft: '4px' }}>(🔄{reassignedCount})</span>}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -913,6 +945,15 @@ function ChefEquipeDashboard() {
                         → Retourné par: {assignment.returnedBy}
                       </div>
                     )}
+                    {(() => {
+                      const memberEntry = Object.values(reassignedByMember).find(m => m.name === assignment.gestionnaire);
+                      return memberEntry ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                          <span style={{ color: '#2196f3' }}>🔄 Réaffectés:</span>
+                          <span style={{ fontWeight: 'bold', color: '#2196f3' }}>{memberEntry.count}</span>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
                 <div style={{ fontSize: '11px', color: '#6c757d' }}>
@@ -1378,6 +1419,64 @@ function ChefEquipeDashboard() {
               >
                 Suivant →
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Documents Réaffectés Section */}
+        <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #2196f3 100%)', borderRadius: '8px', padding: '20px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(33,150,243,0.3)', border: '2px solid #2196f3' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0d47a1', margin: 0 }}>🔄 Documents Réaffectés à Moi</h3>
+            <button onClick={loadReassignedDocuments} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>🔄 Actualiser</button>
+          </div>
+          <div style={{ background: 'white', borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '24px' }}>
+              <div><strong>Total:</strong> {Array.isArray(reassignedDocs) ? reassignedDocs.length : 0} document(s)</div>
+              <div style={{ color: '#f44336' }}><strong>🔴 En retard:</strong> {Array.isArray(reassignedDocs) ? reassignedDocs.filter(d => d.isOverdue).length : 0}</div>
+              <div style={{ color: '#4caf50' }}><strong>🟢 À jour:</strong> {Array.isArray(reassignedDocs) ? reassignedDocs.filter(d => !d.isOverdue).length : 0}</div>
+            </div>
+          </div>
+          {loadingReassigned ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Chargement...</div>
+          ) : !Array.isArray(reassignedDocs) || reassignedDocs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666', background: 'white', borderRadius: '6px' }}>Aucun document réaffecté</div>
+          ) : (
+            <div style={{ overflowX: 'auto', background: 'white', borderRadius: '6px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5' }}>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', borderBottom: '2px solid #ddd' }}>Document</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', borderBottom: '2px solid #ddd' }}>Type</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', borderBottom: '2px solid #ddd' }}>Bordereau</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', borderBottom: '2px solid #ddd' }}>Client</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', borderBottom: '2px solid #ddd' }}>Assigné le</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', borderBottom: '2px solid #ddd' }}>Statut</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold', borderBottom: '2px solid #ddd' }}>Délai</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reassignedDocs.slice((reassignedDocsPage - 1) * REASSIGNED_PAGE_SIZE, reassignedDocsPage * REASSIGNED_PAGE_SIZE).map((doc, index) => (
+                    <tr key={doc.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f9f9f9', borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{doc.name}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{doc.type}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', color: '#2196f3' }}>{doc.bordereauReference}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{doc.clientName}</td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px' }}>{new Date(doc.assignedAt).toLocaleDateString()}</td>
+                      <td style={{ padding: '12px 8px' }}>
+                        <span style={{ background: doc.status === 'TRAITE' ? '#4caf50' : doc.status === 'EN_COURS' ? '#ff9800' : '#2196f3', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{doc.status}</span>
+                      </td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', color: doc.isOverdue ? '#f44336' : '#4caf50', fontWeight: 'bold' }}>{doc.daysRemaining}j restants</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {reassignedDocs.length > REASSIGNED_PAGE_SIZE && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '12px', padding: '12px', background: 'white', borderRadius: '6px' }}>
+              <button onClick={() => setReassignedDocsPage(p => Math.max(1, p - 1))} disabled={reassignedDocsPage === 1} style={{ padding: '6px 12px', border: '1px solid #ddd', borderRadius: '4px', background: reassignedDocsPage === 1 ? '#f5f5f5' : 'white', color: reassignedDocsPage === 1 ? '#999' : '#333', cursor: reassignedDocsPage === 1 ? 'not-allowed' : 'pointer', fontSize: '13px' }}>← Précédent</button>
+              <span style={{ fontSize: '13px', color: '#666' }}>Page {reassignedDocsPage} sur {Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE)}</span>
+              <button onClick={() => setReassignedDocsPage(p => Math.min(Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE), p + 1))} disabled={reassignedDocsPage >= Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE)} style={{ padding: '6px 12px', border: '1px solid #ddd', borderRadius: '4px', background: reassignedDocsPage >= Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE) ? '#f5f5f5' : 'white', color: reassignedDocsPage >= Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE) ? '#999' : '#333', cursor: reassignedDocsPage >= Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE) ? 'not-allowed' : 'pointer', fontSize: '13px' }}>Suivant →</button>
             </div>
           )}
         </div>

@@ -11,16 +11,30 @@ export class BordereauStatusAutomationService {
   /**
    * Check and update bordereau status based on document assignments
    * Rule 1: If all documents are assigned → status changes to EN_COURS
+   * Special case: Senior-managed bordereaux don't require explicit assignment
    */
   async checkAndUpdateStatusAfterAssignment(bordereauId: string): Promise<void> {
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
-      include: { documents: true }
+      include: { 
+        documents: true,
+        contract: {
+          include: {
+            teamLeader: { select: { role: true } }
+          }
+        }
+      }
     });
 
     if (!bordereau || bordereau.documents.length === 0) return;
 
-    const allAssigned = bordereau.documents.every(doc => doc.assignedToUserId !== null);
+    // Check if Senior-managed
+    const isSeniorManaged = await this.isSeniorManagedBordereau(bordereau);
+    
+    // For Senior: no explicit assignment needed (contract relationship grants access)
+    // For Regular: all documents must be assigned
+    const allAssigned = isSeniorManaged || 
+      bordereau.documents.every(doc => doc.assignedToUserId !== null);
 
     if (allAssigned && bordereau.statut === Statut.A_AFFECTER) {
       await this.prisma.bordereau.update({
@@ -28,7 +42,7 @@ export class BordereauStatusAutomationService {
         data: { statut: Statut.EN_COURS }
       });
       
-      this.logger.log(`✅ Bordereau ${bordereau.reference}: Status changed A_AFFECTER → EN_COURS (all documents assigned)`);
+      this.logger.log(`✅ Bordereau ${bordereau.reference}: Status changed A_AFFECTER → EN_COURS ${isSeniorManaged ? '(Senior-managed)' : '(all documents assigned)'}`);
     }
   }
 
@@ -93,5 +107,29 @@ export class BordereauStatusAutomationService {
     await this.checkAndUpdateStatusAfterAssignment(bordereauId);
     await this.checkAndUpdateStatusAfterProcessing(bordereauId);
     await this.checkAndUpdateStatusAfterVirement(bordereauId);
+  }
+
+  /**
+   * Check if bordereau is managed by Gestionnaire Senior
+   * @param bordereau - Bordereau with contract and teamLeader included
+   * @returns true if managed by Senior, false otherwise
+   */
+  private async isSeniorManagedBordereau(bordereau: any): Promise<boolean> {
+    if (!bordereau?.contract?.teamLeaderId) {
+      return false;
+    }
+    
+    // If teamLeader is already included in the query
+    if (bordereau.contract.teamLeader?.role) {
+      return bordereau.contract.teamLeader.role === 'GESTIONNAIRE_SENIOR';
+    }
+    
+    // Otherwise fetch it
+    const teamLeader = await this.prisma.user.findUnique({
+      where: { id: bordereau.contract.teamLeaderId },
+      select: { role: true }
+    });
+    
+    return teamLeader?.role === 'GESTIONNAIRE_SENIOR';
   }
 }

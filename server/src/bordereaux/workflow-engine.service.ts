@@ -45,13 +45,24 @@ export class WorkflowEngineService {
           break;
           
         case 'SCAN_COMPLETED':
-          // Scan completed -> ready for assignment to health team
-          newStatus = Statut.A_AFFECTER;
-          updateData.dateFinScan = new Date();
-          notifications.push('CHEF_EQUIPE');
-          // Auto-assign to available gestionnaire
-          setTimeout(() => this.autoAssignToGestionnaire(bordereauId), 1000);
-          this.logger.log(`Scan completed for ${bordereauId}, notifying Chef d'équipe`);
+          // Scan completed -> check if Senior-managed or regular
+          const isSeniorManaged = await this.isSeniorManagedBordereau(bordereau);
+          
+          if (isSeniorManaged) {
+            // Senior-managed: Auto-transition directly to EN_COURS
+            newStatus = Statut.EN_COURS;
+            updateData.dateFinScan = new Date();
+            updateData.dateReceptionSante = new Date();
+            this.logger.log(`✅ Senior-managed bordereau ${bordereauId}: Auto-transitioned SCAN_COMPLETED → EN_COURS`);
+          } else {
+            // Regular flow: A_AFFECTER -> wait for Chef assignment
+            newStatus = Statut.A_AFFECTER;
+            updateData.dateFinScan = new Date();
+            notifications.push('CHEF_EQUIPE');
+            // Auto-assign to available gestionnaire
+            setTimeout(() => this.autoAssignToGestionnaire(bordereauId), 1000);
+            this.logger.log(`Scan completed for ${bordereauId}, notifying Chef d'équipe`);
+          }
           break;
           
         case 'CHEF_ASSIGNED':
@@ -237,6 +248,24 @@ export class WorkflowEngineService {
     } catch (error) {
       this.logger.error(`Error logging workflow action: ${error.message}`);
     }
+  }
+
+  /**
+   * Check if bordereau is managed by Gestionnaire Senior
+   * @param bordereau - Bordereau with contract and teamLeader included
+   * @returns true if managed by Senior, false otherwise
+   */
+  private async isSeniorManagedBordereau(bordereau: any): Promise<boolean> {
+    if (!bordereau?.contract?.teamLeaderId) {
+      return false;
+    }
+    
+    const teamLeader = await this.prisma.user.findUnique({
+      where: { id: bordereau.contract.teamLeaderId },
+      select: { role: true }
+    });
+    
+    return teamLeader?.role === 'GESTIONNAIRE_SENIOR';
   }
 
   /**

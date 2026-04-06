@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
+import { Autocomplete } from '@mui/material';
 import '../../styles/bordereaux.css';
 import { 
   BarChart3, CheckCircle, AlertTriangle, TrendingUp, Eye, Archive,
@@ -24,6 +25,7 @@ import {
   markBordereauAsProcessed,
   advancedSearchBordereaux
 } from '../../services/bordereauxService';
+import { LocalAPI } from '../../services/axios';
 import EnhancedBordereauCreateForm from '../../components/EnhancedBordereauCreateForm';
 import AIRecommendations from '../../components/AIRecommendations';
 import BordereauDetailsModal from '../../components/BordereauDetailsModal';
@@ -44,16 +46,23 @@ const BordereauxDashboard: React.FC = () => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<any>({archived: false});
   const [clients, setClients] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [gestionnaires, setGestionnaires] = useState<any[]>([]);
+  const [gestionnaireSeniors, setGestionnaireSeniors] = useState<any[]>([]);
+  const [chefsEquipe, setChefsEquipe] = useState<any[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedClient, setSelectedClient] = useState('');
+  const [selectedGestionnaire, setSelectedGestionnaire] = useState('');
+  const [selectedGestionnaireSenior, setSelectedGestionnaireSenior] = useState('');
+  const [selectedChefEquipe, setSelectedChefEquipe] = useState('');
   const [slaFilter, setSlaFilter] = useState<'all' | 'respecte' | 'a_risque' | 'en_retard'>('all');
   const [referenceFilter, setReferenceFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [virementFilter, setVirementFilter] = useState('');
   const [overdueFilter, setOverdueFilter] = useState(false);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showFiltersPanel, setShowFiltersPanel] = useState(false);
@@ -119,6 +128,14 @@ const BordereauxDashboard: React.FC = () => {
     try {
       const usersData = await fetchUsers({ role: 'GESTIONNAIRE' });
       setUsers(usersData || []);
+      
+      // Load all users and categorize by role
+      const allUsersResponse = await LocalAPI.get('/users');
+      const allUsers = allUsersResponse.data || [];
+      
+      setGestionnaires(allUsers.filter((u: any) => u.role === 'GESTIONNAIRE' && u.active));
+      setGestionnaireSeniors(allUsers.filter((u: any) => u.role === 'GESTIONNAIRE_SENIOR' && u.active));
+      setChefsEquipe(allUsers.filter((u: any) => u.role === 'CHEF_EQUIPE' && u.active));
     } catch (error) {
       console.error('Error loading users:', error);
     }
@@ -140,9 +157,13 @@ const BordereauxDashboard: React.FC = () => {
     if (dateFrom) newFilters.dateStart = dateFrom;
     if (dateTo) newFilters.dateEnd = dateTo;
     if (selectedClient) newFilters.clientId = selectedClient;
+    if (selectedGestionnaire) newFilters.gestionnaireId = selectedGestionnaire;
+    if (selectedGestionnaireSenior) newFilters.gestionnaireSeniorId = selectedGestionnaireSenior;
+    if (selectedChefEquipe) newFilters.chefEquipeId = selectedChefEquipe;
     if (referenceFilter) newFilters.reference = referenceFilter;
     if (statusFilter) newFilters.statut = statusFilter;
     
+    console.log('🔍 Applying filters:', newFilters);
     setFilters(newFilters);
   };
 
@@ -150,9 +171,13 @@ const BordereauxDashboard: React.FC = () => {
     setDateFrom('');
     setDateTo('');
     setSelectedClient('');
+    setSelectedGestionnaire('');
+    setSelectedGestionnaireSenior('');
+    setSelectedChefEquipe('');
     setSlaFilter('all');
     setReferenceFilter('');
     setStatusFilter('');
+    setVirementFilter('');
     setFilters({ archived: false });
   };
 
@@ -281,13 +306,14 @@ const BordereauxDashboard: React.FC = () => {
   };
 
   // Get Durée de traitement from backend calculation
-  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean; warning?: string } => {
     if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
       return { days: null, isOnTime: true };
     }
     return { 
       days: bordereau.dureeTraitement, 
-      isOnTime: bordereau.dureeTraitementStatus === 'GREEN' 
+      isOnTime: bordereau.dureeTraitementStatus === 'GREEN',
+      warning: bordereau.dureeTraitementWarning || undefined
     };
   };
 
@@ -327,20 +353,33 @@ const BordereauxDashboard: React.FC = () => {
     return true;
   });
   
+  // Apply virement filter
+  const filteredByVirement = virementFilter === '' ? filteredBySLA : filteredBySLA.filter(b => {
+    if (virementFilter === 'NONE') {
+      return !b.ordresVirement || b.ordresVirement.length === 0;
+    }
+    if (b.ordresVirement && b.ordresVirement.length > 0) {
+      return b.ordresVirement[0].etatVirement === virementFilter;
+    }
+    return false;
+  });
+  
   // Log SLA filter results for debugging
   console.log('🔍 SLA Filter Applied:', slaFilter);
+  console.log('🔍 Virement Filter Applied:', virementFilter);
   console.log('📊 Total bordereaux:', bordereaux.length);
   console.log('📊 Filtered by SLA:', filteredBySLA.length);
+  console.log('📊 Filtered by Virement:', filteredByVirement.length);
   console.log('📊 SLA Breakdown:', {
     onTime: bordereaux.filter(b => calculateSLAStatus(b) === 'ON_TIME').length,
     atRisk: bordereaux.filter(b => calculateSLAStatus(b) === 'AT_RISK').length,
     overdue: bordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length
   });
   
-  const totalPages = Math.ceil(filteredBySLA.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredByVirement.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedBordereaux = filteredBySLA.slice(startIndex, endIndex);
+  const paginatedBordereaux = filteredByVirement.slice(startIndex, endIndex);
 
   const handleViewBordereau = (bordereauId: string) => {
     setSelectedBordereauForDetails(bordereauId);
@@ -488,42 +527,144 @@ const BordereauxDashboard: React.FC = () => {
         )}
 
         {/* Filters Panel */}
-        <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '0', flexWrap: 'wrap' }}>
-            <input type="text" placeholder="Référence" value={referenceFilter} onChange={(e) => setReferenceFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }} />
-            <select 
-              value={selectedClient} 
-              onChange={(e) => {
-                setSelectedClient(e.target.value);
-                const newFilters: any = { archived: false };
-                if (e.target.value) newFilters.clientId = e.target.value;
-                if (dateFrom) newFilters.dateStart = dateFrom;
-                if (dateTo) newFilters.dateEnd = dateTo;
-                if (referenceFilter) newFilters.reference = referenceFilter;
-                if (statusFilter) newFilters.statut = statusFilter;
-                setFilters(newFilters);
-              }} 
-              style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '140px' }}
-            >
-              <option value="">Tous les clients</option>
-              {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '120px' }}>
-              <option value="">Statut</option>
-              <option value="EN_COURS">En cours</option>
-              <option value="TRAITE">Traité</option>
-              <option value="VIREMENT_EXECUTE">Virement Exécuté</option>
-            </select>
-            <select value={slaFilter} onChange={(e) => setSlaFilter(e.target.value as any)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '200px' }}>
-              <option value="all">📊 Tous les SLA ({bordereaux.length})</option>
-              <option value="en_retard">● En retard ({bordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length})</option>
-              <option value="a_risque">▲ À risque ({bordereaux.filter(b => calculateSLAStatus(b) === 'AT_RISK').length})</option>
-              <option value="respecte">✓ Respecté ({bordereaux.filter(b => calculateSLAStatus(b) === 'ON_TIME').length})</option>
-            </select>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px', width: '130px' }} />
-            <button onClick={applyFilters} style={{ padding: '6px 12px', background: '#2196f3', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Appliquer</button>
-            <button onClick={resetFilters} style={{ padding: '6px 12px', background: '#d52b36', color: 'white', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>Effacer</button>
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', border: '1px solid #f0f0f0', borderTop: '3px solid #2196f3' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
+            <div style={{ background: '#e3f2fd', borderRadius: '6px', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Filter style={{ width: '14px', height: '14px', color: '#1976d2' }} />
+            </div>
+            <span style={{ fontSize: '14px', fontWeight: '700', color: '#1a1a1a' }}>Filtres de recherche</span>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Référence</label>
+              <input type="text" placeholder="Rechercher..." value={referenceFilter} onChange={(e) => setReferenceFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '140px', color: '#374151' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Client</label>
+              <Autocomplete
+                options={clients}
+                getOptionLabel={(option) => option.name || ''}
+                value={clients.find(c => c.id === selectedClient) || null}
+                onChange={(e, newValue) => setSelectedClient(newValue?.id || '')}
+                renderInput={(params) => (
+                  <div ref={params.InputProps.ref}>
+                    <input
+                      {...params.inputProps}
+                      type="text"
+                      placeholder="Sélectionner..."
+                      style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '100%', color: '#374151' }}
+                    />
+                  </div>
+                )}
+                style={{ width: '180px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gestionnaire</label>
+              <Autocomplete
+                options={gestionnaires}
+                getOptionLabel={(option) => option.fullName || ''}
+                value={gestionnaires.find(g => g.id === selectedGestionnaire) || null}
+                onChange={(e, newValue) => setSelectedGestionnaire(newValue?.id || '')}
+                renderInput={(params) => (
+                  <div ref={params.InputProps.ref}>
+                    <input
+                      {...params.inputProps}
+                      type="text"
+                      placeholder="Sélectionner..."
+                      style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '100%', color: '#374151' }}
+                    />
+                  </div>
+                )}
+                style={{ width: '180px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gestionnaire Senior</label>
+              <Autocomplete
+                options={gestionnaireSeniors}
+                getOptionLabel={(option) => option.fullName || ''}
+                value={gestionnaireSeniors.find(g => g.id === selectedGestionnaireSenior) || null}
+                onChange={(e, newValue) => setSelectedGestionnaireSenior(newValue?.id || '')}
+                renderInput={(params) => (
+                  <div ref={params.InputProps.ref}>
+                    <input
+                      {...params.inputProps}
+                      type="text"
+                      placeholder="Sélectionner..."
+                      style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '100%', color: '#374151' }}
+                    />
+                  </div>
+                )}
+                style={{ width: '180px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Chef d'équipe</label>
+              <Autocomplete
+                options={chefsEquipe}
+                getOptionLabel={(option) => option.fullName || ''}
+                value={chefsEquipe.find(c => c.id === selectedChefEquipe) || null}
+                onChange={(e, newValue) => setSelectedChefEquipe(newValue?.id || '')}
+                renderInput={(params) => (
+                  <div ref={params.InputProps.ref}>
+                    <input
+                      {...params.inputProps}
+                      type="text"
+                      placeholder="Sélectionner..."
+                      style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '100%', color: '#374151' }}
+                    />
+                  </div>
+                )}
+                style={{ width: '180px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Statut</label>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '140px', color: '#374151' }}>
+                <option value="">Tous</option>
+                <option value="EN_COURS">En cours</option>
+                <option value="TRAITE">Traité</option>
+                <option value="CLOTURE">Clôturé</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Statut Virement</label>
+              <select value={virementFilter} onChange={(e) => setVirementFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '160px', color: '#374151' }}>
+                <option value="">Tous</option>
+                <option value="EXECUTE">✅ Exécuté</option>
+                <option value="EN_COURS">🔄 En cours</option>
+                <option value="EN_COURS_VALIDATION">⏳ En attente validation</option>
+                <option value="REJETE">❌ Rejeté</option>
+                <option value="NONE">Pas de virement</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA</label>
+              <select value={slaFilter} onChange={(e) => setSlaFilter(e.target.value as any)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '190px', color: '#374151' }}>
+                <option value="all">📊 Tous ({bordereaux.length})</option>
+                <option value="en_retard">● En retard ({bordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length})</option>
+                <option value="a_risque">▲ À risque ({bordereaux.filter(b => calculateSLAStatus(b) === 'AT_RISK').length})</option>
+                <option value="respecte">✓ Respecté ({bordereaux.filter(b => calculateSLAStatus(b) === 'ON_TIME').length})</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date début</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '142px', color: '#374151' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date fin</label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '142px', color: '#374151' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+              <button onClick={applyFilters} style={{ padding: '7px 16px', background: '#2196f3', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Search style={{ width: '13px', height: '13px' }} />
+                Appliquer
+              </button>
+              <button onClick={resetFilters} style={{ padding: '7px 14px', background: 'white', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>
+                Effacer
+              </button>
+            </div>
           </div>
         </div>
 
@@ -695,10 +836,10 @@ const BordereauxDashboard: React.FC = () => {
         {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="bordereau-table-container">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
-                  <tr>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8f9fa' }}>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>
                       <input
                         type="checkbox"
                         checked={selectedRows.size === bordereaux.length && bordereaux.length > 0}
@@ -712,27 +853,27 @@ const BordereauxDashboard: React.FC = () => {
                         className="rounded border-gray-300"
                       />
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Référence</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Client</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Date Réception</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Documents</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Délai</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Durée Trait.</th>
-                    {paginatedBordereaux.some(b => b.statut === 'VIREMENT_EXECUTE' && b.virement?.dateExecution) && (
-                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Date Trait. Virement</th>
-                    )}
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Durée Règlement</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">SLA</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Dernière MAJ</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700">Statut</th>
-                    <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700">Actions</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Client / Prestataire</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Référence Bordereau</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Gestionnaire</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date réception BO</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Bulletin de soins</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date fin de Scannérisation</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Délais contractuels de règlement</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de traitement</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de règlement</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>SLA</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Statut Virement</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Dernière MAJ</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Statut</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {paginatedBordereaux.map((bordereau) => {
+                <tbody>
+                  {paginatedBordereaux.map((bordereau, index) => {
                     return (
-                      <tr key={bordereau.id} className="hover:bg-blue-50 transition-colors group">
-                        <td className="px-3 py-3">
+                      <tr key={bordereau.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                           <input
                             type="checkbox"
                             checked={selectedRows.has(bordereau.id)}
@@ -748,110 +889,220 @@ const BordereauxDashboard: React.FC = () => {
                             className="rounded border-gray-300"
                           />
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="text-sm font-semibold text-blue-600">{bordereau.reference}</div>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          {bordereau.client?.name || 'N/A'}
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="text-sm text-gray-700">{bordereau.client?.name}</div>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc', borderBottom: '1px solid #dee2e6' }}>
+                          {bordereau.reference}
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="text-xs text-gray-600">
-                            {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          {(() => {
+                            // Check for Gestionnaire Senior first (priority)
+                            if (bordereau.contract?.assignedManager) {
+                              return (
+                                <span style={{ 
+                                  background: '#e8f5e9', 
+                                  color: '#2e7d32', 
+                                  padding: '4px 8px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '11px', 
+                                  fontWeight: 'bold',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  👨‍💼 {bordereau.contract.assignedManager.fullName}
+                                </span>
+                              );
+                            }
+                            // Then check for regular Gestionnaire
+                            if (bordereau.currentHandler && (bordereau.currentHandler.role === 'GESTIONNAIRE' || bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR')) {
+                              const icon = bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR' ? '👨💼' : '👤';
+                              const bgColor = bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR' ? '#e8f5e9' : '#e3f2fd';
+                              const textColor = bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR' ? '#2e7d32' : '#1976d2';
+                              return (
+                                <span style={{ background: bgColor, color: textColor, padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  {icon} {bordereau.currentHandler.fullName}
+                                </span>
+                              );
+                            }
+                            // Not assigned
+                            return <span style={{ color: '#999', fontSize: '12px' }}>Non assigné</span>;
+                          })()}
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>
+                              {bordereau.nombreBS || 0} BS
+                            </span>
+                            {bordereau.BulletinSoin && bordereau.BulletinSoin.length > 0 && (
+                              <span style={{ fontSize: '12px', color: '#666' }}>
+                                ({bordereau.BulletinSoin.filter((bs: any) => bs.etat === 'VALIDATED').length} traités)
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td className="px-3 py-3">
-                          <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
-                            {bordereau._count?.documents || 0}
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          <span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>
+                            {bordereau.delaiReglement || 0} jours
                           </span>
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="text-xs text-gray-600">
-                            {bordereau.delaiReglement || '-'}j
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                           {(() => {
                             const dureeTraitement = getDureeTraitement(bordereau);
                             if (dureeTraitement.days === null || dureeTraitement.days === undefined) {
-                              return <span className="text-xs text-gray-400">-</span>;
+                              return <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>;
                             }
+                            
+                            const hasWarning = !!dureeTraitement.warning;
+                            const bgColor = hasWarning ? '#fff3e0' : (dureeTraitement.isOnTime ? '#e8f5e9' : '#ffebee');
+                            const textColor = hasWarning ? '#f57c00' : (dureeTraitement.isOnTime ? '#2e7d32' : '#c62828');
+                            
                             return (
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                dureeTraitement.isOnTime ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                              }`}>
-                                {dureeTraitement.days}j
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ 
+                                  background: bgColor, 
+                                  color: textColor, 
+                                  padding: '4px 8px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '12px', 
+                                  fontWeight: 'bold',
+                                  display: 'inline-block'
+                                }}>
+                                  {dureeTraitement.days} jour{dureeTraitement.days !== 1 ? 's' : ''}
+                                </span>
+                                {hasWarning && (
+                                  <span 
+                                    title={dureeTraitement.warning}
+                                    style={{ 
+                                      cursor: 'help',
+                                      fontSize: '14px',
+                                      color: '#f57c00'
+                                    }}
+                                  >
+                                    ⚠️
+                                  </span>
+                                )}
+                              </div>
                             );
                           })()}
                         </td>
-                        {paginatedBordereaux.some(b => b.statut === 'VIREMENT_EXECUTE' && b.ordresVirement?.[0]?.dateEtatFinal) && (
-                          <td className="px-3 py-3">
-                            {bordereau.statut === 'VIREMENT_EXECUTE' && bordereau.ordresVirement?.[0]?.dateEtatFinal ? (
-                              <span style={{
-                                display: 'inline-flex',
-                                padding: '4px 8px',
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                borderRadius: '9999px',
-                                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                color: 'white',
-                                boxShadow: '0 2px 4px rgba(16, 185, 129, 0.3)'
-                              }}>
-                                {new Date(bordereau.ordresVirement[0].dateEtatFinal).toLocaleDateString('fr-FR')}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-400">-</span>
-                            )}
-                          </td>
-                        )}
-                        <td className="px-3 py-3">
-                          {bordereau.statut === 'VIREMENT_EXECUTE' && bordereau.ordresVirement?.[0]?.dateEtatFinal ? (
-                            <span style={{
-                              display: 'inline-flex',
-                              padding: '4px 8px',
-                              fontSize: '11px',
-                              fontWeight: '600',
-                              borderRadius: '9999px',
-                              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                              color: 'white',
-                              boxShadow: '0 2px 4px rgba(16, 185, 129, 0.3)'
-                            }}>
-                              ✓ Réglé ({bordereau.dureeReglement || 0}j)
-                            </span>
-                          ) : bordereau.dureeReglement !== null && bordereau.dureeReglement !== undefined ? (
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              bordereau.dureeReglementStatus === 'GREEN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              {bordereau.dureeReglement}j
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400">En attente</span>
-                          )}
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          {(() => {
+                            if (bordereau.statut === 'VIREMENT_EXECUTE' && bordereau.ordresVirement?.[0]?.dateEtatFinal) {
+                              return <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({bordereau.dureeReglement || 0}j)</span>;
+                            }
+                            if (bordereau.dureeReglement !== null && bordereau.dureeReglement !== undefined) {
+                              return (
+                                <span style={{ 
+                                  background: bordereau.dureeReglementStatus === 'GREEN' ? '#e8f5e9' : '#ffebee', 
+                                  color: bordereau.dureeReglementStatus === 'GREEN' ? '#2e7d32' : '#c62828', 
+                                  padding: '4px 8px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '12px', 
+                                  fontWeight: 'bold',
+                                  display: 'inline-block'
+                                }}>
+                                  {bordereau.dureeReglement} jour{bordereau.dureeReglement !== 1 ? 's' : ''}
+                                </span>
+                              );
+                            }
+                            return <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>;
+                          })()}
                         </td>
-                        <td className="px-3 py-3">
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                           {(() => {
                             const slaStatus = calculateSLAStatus(bordereau);
                             if (slaStatus === 'UNKNOWN') {
-                              return <span className="text-xs text-gray-400">-</span>;
+                              return <span style={{ color: '#999', fontSize: '12px' }}>-</span>;
                             }
                             return (
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                slaStatus === 'OVERDUE' ? 'bg-red-100 text-red-700' :
-                                slaStatus === 'AT_RISK' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-green-100 text-green-700'
-                              }`}>
+                              <span style={{ 
+                                background: slaStatus === 'OVERDUE' ? '#ffebee' : slaStatus === 'AT_RISK' ? '#fff3e0' : '#e8f5e9',
+                                color: slaStatus === 'OVERDUE' ? '#c62828' : slaStatus === 'AT_RISK' ? '#f57c00' : '#2e7d32',
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '12px', 
+                                fontWeight: 'bold',
+                                display: 'inline-block'
+                              }}>
                                 {slaStatus === 'OVERDUE' ? '● En retard' : slaStatus === 'AT_RISK' ? '▲ À risque' : '✓ Respecté'}
                               </span>
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="text-xs text-gray-600">
-                            {bordereau.updatedAt ? new Date(bordereau.updatedAt).toLocaleDateString('fr-FR') : '-'}
-                          </div>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          {(() => {
+                            // Check if virement exists
+                            if (bordereau.ordresVirement && bordereau.ordresVirement.length > 0) {
+                              const virement = bordereau.ordresVirement[0];
+                              const etat = virement.etatVirement;
+                              
+                              let bgColor = '#e3f2fd';
+                              let textColor = '#1976d2';
+                              let icon = '⏳';
+                              let label = 'En attente';
+                              
+                              if (etat === 'EXECUTE') {
+                                bgColor = '#e8f5e9';
+                                textColor = '#2e7d32';
+                                icon = '✅';
+                                label = 'Exécuté';
+                              } else if (etat === 'REJETE') {
+                                bgColor = '#ffebee';
+                                textColor = '#c62828';
+                                icon = '❌';
+                                label = 'Rejeté';
+                              } else if (etat === 'EN_COURS') {
+                                bgColor = '#fff3e0';
+                                textColor = '#f57c00';
+                                icon = '🔄';
+                                label = 'En cours';
+                              } else if (etat === 'EN_COURS_VALIDATION') {
+                                bgColor = '#e3f2fd';
+                                textColor = '#1976d2';
+                                icon = '⏳';
+                                label = 'En attente';
+                              }
+                              
+                              return (
+                                <span style={{ 
+                                  background: bgColor, 
+                                  color: textColor, 
+                                  padding: '4px 8px', 
+                                  borderRadius: '12px', 
+                                  fontSize: '11px', 
+                                  fontWeight: 'bold',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  {icon} {label}
+                                </span>
+                              );
+                            }
+                            
+                            // No virement yet
+                            return <span style={{ color: '#999', fontSize: '12px' }}>Pas de virement</span>;
+                          })()}
                         </td>
-                        <td className="px-3 py-3">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(bordereau.statut)}`}>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          {bordereau.updatedAt ? new Date(bordereau.updatedAt).toLocaleDateString('fr-FR') : '-'}
+                        </td>
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          <span style={{
+                            background: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(bordereau.statut) ? '#4caf50' : '#2196f3',
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}>
                             {bordereau.statut === 'EN_COURS' && bordereau.currentHandler?.role === 'GESTIONNAIRE_SENIOR' 
                               ? `Affecté à ${bordereau.currentHandler.fullName}` 
                               : bordereau.statut === 'A_AFFECTER' && bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR'
@@ -859,12 +1110,11 @@ const BordereauxDashboard: React.FC = () => {
                               : bordereau.statut}
                           </span>
                         </td>
-                        <td className="px-3 py-3 text-center relative">
-
-                          <div className="flex gap-2 justify-center">
+                        <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                               {/* Always visible actions */}
                               <button
-                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors flex items-center gap-1"
+                                style={{ padding: '4px 8px', fontSize: '12px', background: '#e3f2fd', color: '#1976d2', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -876,13 +1126,10 @@ const BordereauxDashboard: React.FC = () => {
                                 Voir
                               </button>
 
-
-
-                              
                               {/* Archive action */}
                               {isSuperAdmin && (
                                 <button
-                                  className="px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors flex items-center gap-1"
+                                  style={{ padding: '4px 8px', fontSize: '12px', background: '#ffebee', color: '#c62828', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                                   onClick={async (e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
@@ -900,8 +1147,6 @@ const BordereauxDashboard: React.FC = () => {
                                   Archiver
                                 </button>
                               )}
-                            {/* </div>
-                          </div> */}
                           </div>
                         </td>
                       </tr>
@@ -914,116 +1159,98 @@ const BordereauxDashboard: React.FC = () => {
             {/* Pagination */}
             {totalPages > 1 && (
               <div style={{
-                padding: '20px 24px',
-                borderTop: '2px solid #e5e7eb',
-                background: 'linear-gradient(to bottom, #f9fafb, #ffffff)',
+                padding: '14px 20px',
+                borderTop: '1px solid #e5e7eb',
+                background: '#fafafa',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between'
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px'
               }}>
-                <div style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#4b5563',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
-                  Affichage de <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{startIndex + 1}</span> à <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{Math.min(endIndex, filteredBySLA.length)}</span> sur <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{filteredBySLA.length}</span> bordereaux
+                {/* Info */}
+                <div style={{ fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  Affichage de{' '}
+                  <span style={{ color: '#2563eb', fontWeight: '700' }}>{startIndex + 1}</span>
+                  {' '}à{' '}
+                  <span style={{ color: '#2563eb', fontWeight: '700' }}>{Math.min(endIndex, filteredByVirement.length)}</span>
+                  {' '}sur{' '}
+                  <span style={{ color: '#2563eb', fontWeight: '700' }}>{filteredByVirement.length}</span>
+                  {' '}bordereaux
                 </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+
+                {/* Buttons */}
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {/* Prev */}
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
                     style={{
-                      padding: '8px 16px',
-                      fontSize: '14px',
+                      padding: '6px 12px',
+                      fontSize: '13px',
                       fontWeight: '600',
-                      border: '2px solid #e5e7eb',
-                      borderRadius: '8px',
-                      background: currentPage === 1 ? '#f3f4f6' : 'white',
-                      color: currentPage === 1 ? '#9ca3af' : '#374151',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      background: currentPage === 1 ? '#f9fafb' : 'white',
+                      color: currentPage === 1 ? '#d1d5db' : '#374151',
                       cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      boxShadow: currentPage === 1 ? 'none' : '0 1px 3px rgba(0,0,0,0.1)'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (currentPage !== 1) {
-                        e.currentTarget.style.background = '#f3f4f6';
-                        e.currentTarget.style.borderColor = '#d1d5db';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (currentPage !== 1) {
-                        e.currentTarget.style.background = 'white';
-                        e.currentTarget.style.borderColor = '#e5e7eb';
-                      }
                     }}
                   >
                     ← Précédent
                   </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      style={{
-                        padding: '8px 14px',
-                        fontSize: '14px',
-                        fontWeight: 'bold',
-                        border: currentPage === page ? '2px solid #2563eb' : '2px solid #e5e7eb',
-                        borderRadius: '8px',
-                        background: currentPage === page ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'white',
-                        color: currentPage === page ? 'white' : '#374151',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        boxShadow: currentPage === page ? '0 4px 12px rgba(37, 99, 235, 0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
-                        minWidth: '40px'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (currentPage !== page) {
-                          e.currentTarget.style.background = '#f3f4f6';
-                          e.currentTarget.style.borderColor = '#d1d5db';
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (currentPage !== page) {
-                          e.currentTarget.style.background = 'white';
-                          e.currentTarget.style.borderColor = '#e5e7eb';
-                          e.currentTarget.style.transform = 'translateY(0)';
-                        }
-                      }}
-                    >
-                      {page}
-                    </button>
-                  ))}
+
+                  {/* Windowed page numbers */}
+                  {(() => {
+                    const pages: (number | string)[] = [];
+                    if (totalPages <= 7) {
+                      for (let i = 1; i <= totalPages; i++) pages.push(i);
+                    } else {
+                      pages.push(1);
+                      if (currentPage > 4) pages.push('ellipsis-start');
+                      const start = Math.max(2, currentPage - 2);
+                      const end = Math.min(totalPages - 1, currentPage + 2);
+                      for (let i = start; i <= end; i++) pages.push(i);
+                      if (currentPage < totalPages - 3) pages.push('ellipsis-end');
+                      pages.push(totalPages);
+                    }
+                    return pages.map((page, idx) =>
+                      typeof page === 'string' ? (
+                        <span key={page} style={{ padding: '6px 2px', fontSize: '13px', color: '#9ca3af', userSelect: 'none' }}>•••</span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          style={{
+                            padding: '6px 10px',
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            border: currentPage === page ? '2px solid #2196f3' : '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            background: currentPage === page ? '#2196f3' : 'white',
+                            color: currentPage === page ? 'white' : '#374151',
+                            cursor: 'pointer',
+                            minWidth: '34px',
+                          }}
+                        >
+                          {page}
+                        </button>
+                      )
+                    );
+                  })()}
+
+                  {/* Next */}
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
                     style={{
-                      padding: '8px 16px',
-                      fontSize: '14px',
+                      padding: '6px 12px',
+                      fontSize: '13px',
                       fontWeight: '600',
-                      border: '2px solid #e5e7eb',
-                      borderRadius: '8px',
-                      background: currentPage === totalPages ? '#f3f4f6' : 'white',
-                      color: currentPage === totalPages ? '#9ca3af' : '#374151',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      background: currentPage === totalPages ? '#f9fafb' : 'white',
+                      color: currentPage === totalPages ? '#d1d5db' : '#374151',
                       cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
-                      boxShadow: currentPage === totalPages ? 'none' : '0 1px 3px rgba(0,0,0,0.1)'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (currentPage !== totalPages) {
-                        e.currentTarget.style.background = '#f3f4f6';
-                        e.currentTarget.style.borderColor = '#d1d5db';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (currentPage !== totalPages) {
-                        e.currentTarget.style.background = 'white';
-                        e.currentTarget.style.borderColor = '#e5e7eb';
-                      }
                     }}
                   >
                     Suivant →
@@ -1302,3 +1529,4 @@ const BordereauxDashboard: React.FC = () => {
 };
 
 export default BordereauxDashboard;
+

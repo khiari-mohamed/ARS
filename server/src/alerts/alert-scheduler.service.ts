@@ -226,10 +226,10 @@ export class AlertSchedulerService {
         }
       });
 
-      // Get GESTIONNAIRE_SENIOR and RESPONSABLE_DEPARTEMENT (EXACT SAME AS SUPER ADMIN)
+      // Get GESTIONNAIRE_SENIOR only (RESPONSABLE_DEPARTEMENT excluded - they don't handle dossiers)
       const individualTeams = await this.prisma.user.findMany({
         where: {
-          role: { in: ['GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'] },
+          role: 'GESTIONNAIRE_SENIOR',
           active: true
         },
         include: {

@@ -63,6 +63,8 @@ function GestionnaireSeniorDashboard() {
   const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [seniorAssignments, setSeniorAssignments] = useState<any[]>([]);
+  const [reassignedDocuments, setReassignedDocuments] = useState<any[]>([]);
+  const [loadingReassigned, setLoadingReassigned] = useState(false);
   const { user } = useAuth();
   const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
   const [filterBordereaux, setFilterBordereaux] = useState({ reference: '', client: '', statut: '', dateFrom: '', dateTo: '' });
@@ -273,11 +275,32 @@ function GestionnaireSeniorDashboard() {
       if (seniorAssignmentsResponse.data) {
         setSeniorAssignments(seniorAssignmentsResponse.data);
       }
+      
+      // Load reassigned documents separately
+      if (user?.id) {
+        loadReassignedDocuments();
+      }
     } catch (error: any) {
       console.error('❌ Error loading dashboard data:', error);
       console.error('Error details:', error.response?.data || error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadReassignedDocuments = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setLoadingReassigned(true);
+      const response = await LocalAPI.get(`/super-admin/gestionnaire-senior/reassigned-documents?userId=${user.id}`);
+      if (response.data.success) {
+        setReassignedDocuments(response.data.documents || []);
+      }
+    } catch (error) {
+      console.error('Failed to load reassigned documents:', error);
+    } finally {
+      setLoadingReassigned(false);
     }
   };
 
@@ -303,19 +326,28 @@ function GestionnaireSeniorDashboard() {
         {/* Statistics Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', marginBottom: '24px' }}>
           {[
-            { key: 'prestation', label: 'Prestation', color: '#d52b36' },
-            { key: 'adhesion', label: 'Adhésion', color: '#d52b36' },
-            { key: 'complement', label: 'Complément de dossier', color: '#2196f3' },
-            { key: 'resiliation', label: 'Résiliation', color: '#d52b36' },
-            { key: 'reclamation', label: 'Réclamation', color: '#d52b36' },
-            { key: 'avenant', label: 'Avenant', color: '#d52b36' }
-          ].map(({ key, label, color }) => (
+            { key: 'prestation', label: 'Prestation', color: '#d52b36', docType: 'BULLETIN_SOIN' },
+            { key: 'adhesion', label: 'Adhésion', color: '#d52b36', docType: 'ADHESION' },
+            { key: 'complement', label: 'Complément de dossier', color: '#2196f3', docType: 'COMPLEMENT_INFORMATION' },
+            { key: 'resiliation', label: 'Résiliation', color: '#d52b36', docType: 'DEMANDE_RESILIATION' },
+            { key: 'reclamation', label: 'Réclamation', color: '#d52b36', docType: 'RECLAMATION' },
+            { key: 'avenant', label: 'Avenant', color: '#d52b36', docType: 'CONTRAT_AVENANT' }
+          ].map(({ key, label, color, docType }) => {
+            const reassignedCount = reassignedDocuments.filter(d => d.type === docType).length;
+            return (
             <div key={key} style={{ background: 'white', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '4px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>{label}</h3>
-                <span style={{ background: color, color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>
-                  {stats[key as keyof DossierStats]?.total || 0}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ background: color, color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold' }}>
+                    {stats[key as keyof DossierStats]?.total || 0}
+                  </span>
+                  {reassignedCount > 0 && (
+                    <span title="Documents réaffectés" style={{ background: '#1976d2', color: 'white', padding: '4px 7px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', border: '2px solid #90caf9' }}>
+                      +{reassignedCount} 🔄
+                    </span>
+                  )}
+                </div>
               </div>
               <div style={{ fontSize: '12px', color: '#666' }}>
                 {Object.entries(stats[key as keyof DossierStats]?.breakdown || {}).map(([k, v]) => (
@@ -325,7 +357,8 @@ function GestionnaireSeniorDashboard() {
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* My Senior Assignment Stats */}
@@ -345,8 +378,13 @@ function GestionnaireSeniorDashboard() {
                   <span style={{ fontSize: '18px' }}>👤</span>
                   {assignment.gestionnaire}
                 </div>
-                <div style={{ fontSize: '13px', color: '#388e3c', marginBottom: '8px', fontWeight: '600' }}>
-                  <strong>Total affectés:</strong> {assignment.totalAssigned}
+                <div style={{ fontSize: '13px', color: '#388e3c', marginBottom: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span><strong>Total affectés:</strong> {assignment.totalAssigned}</span>
+                  {reassignedDocuments.length > 0 && (
+                    <span title="Documents réaffectés (non inclus dans le total)" style={{ background: '#1976d2', color: 'white', padding: '3px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', border: '2px solid #90caf9' }}>
+                      +{reassignedDocuments.length} 🔄 réaffectés
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: '12px', marginBottom: '6px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
@@ -381,6 +419,125 @@ function GestionnaireSeniorDashboard() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Reassigned Documents Section - NEW */}
+        <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(33,150,243,0.2)', border: '2px solid #2196f3' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1565c0', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '24px' }}>🔄</span>
+              Documents Réaffectés à Moi
+            </h3>
+            <button
+              onClick={loadReassignedDocuments}
+              disabled={loadingReassigned}
+              style={{
+                background: '#2196f3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '6px 12px',
+                cursor: loadingReassigned ? 'not-allowed' : 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold'
+              }}
+            >
+              {loadingReassigned ? '⏳ Chargement...' : '🔄 Actualiser'}
+            </button>
+          </div>
+          
+          {loadingReassigned ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#1976d2' }}>
+              <div style={{ fontSize: '48px', marginBottom: '8px' }}>⏳</div>
+              <p style={{ margin: 0 }}>Chargement des documents réaffectés...</p>
+            </div>
+          ) : reassignedDocuments.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#64b5f6', fontSize: '14px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '8px' }}>📭</div>
+              <p style={{ margin: 0 }}>Aucun document réaffecté pour le moment</p>
+            </div>
+          ) : (
+            <div style={{ background: 'white', borderRadius: '8px', padding: '16px', border: '1px solid #90caf9' }}>
+              <div style={{ marginBottom: '12px', padding: '8px', background: '#e3f2fd', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#1565c0' }}>
+                  Total: {reassignedDocuments.length} document(s)
+                </span>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
+                  <span style={{ color: '#f44336', fontWeight: '600' }}>
+                    🔴 En retard: {reassignedDocuments.filter(d => d.isOverdue).length}
+                  </span>
+                  <span style={{ color: '#4caf50', fontWeight: '600' }}>
+                    🟢 À jour: {reassignedDocuments.filter(d => !d.isOverdue).length}
+                  </span>
+                </div>
+              </div>
+              
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#1976d2', color: 'white' }}>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>Document</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>Type</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>Bordereau</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>Client</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>Assigné le</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>Statut</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>Délai</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reassignedDocuments.map((doc, index) => (
+                      <tr key={doc.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f5f5f5', borderBottom: '1px solid #e0e0e0' }}>
+                        <td style={{ padding: '10px 8px', fontSize: '13px', fontWeight: '600', color: '#1976d2' }}>{doc.name}</td>
+                        <td style={{ padding: '10px 8px', fontSize: '12px' }}>
+                          <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '3px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold' }}>
+                            {doc.type}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 8px', fontSize: '13px', color: '#666' }}>{doc.bordereauReference}</td>
+                        <td style={{ padding: '10px 8px', fontSize: '13px' }}>{doc.clientName}</td>
+                        <td style={{ padding: '10px 8px', fontSize: '12px', color: '#666' }}>
+                          {doc.assignedAt ? new Date(doc.assignedAt).toLocaleDateString('fr-FR') : 'N/A'}
+                        </td>
+                        <td style={{ padding: '10px 8px' }}>
+                          <span style={{
+                            background: doc.status === 'TRAITE' ? '#4caf50' : doc.status === 'EN_COURS' ? '#ff9800' : '#2196f3',
+                            color: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 'bold'
+                          }}>
+                            {doc.status || 'NOUVEAU'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 8px' }}>
+                          {doc.isOverdue ? (
+                            <span style={{ background: '#f44336', color: 'white', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
+                              🔴 En retard
+                            </span>
+                          ) : doc.remainingDays !== undefined ? (
+                            <span style={{
+                              background: doc.remainingDays <= 3 ? '#ff9800' : '#4caf50',
+                              color: 'white',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: 'bold'
+                            }}>
+                              {doc.remainingDays}j restants
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: '#999' }}>-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Corbeille Stats */}
@@ -1108,12 +1265,35 @@ function GestionnaireSeniorDashboard() {
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button 
-                  onClick={() => {
-                    setShowPdfModal(false);
-                    handleModifyStatus(currentDossier, true);
+                  onClick={async () => {
+                    if (window.confirm('Êtes-vous sûr de vouloir marquer ce dossier comme Traité ?')) {
+                      try {
+                        const response = await LocalAPI.post('/bordereaux/gestionnaire-senior/modify-dossier-status', {
+                          dossierId: currentDossier.id,
+                          newStatus: 'Traité'
+                        });
+                        
+                        if (response.data.success) {
+                          setSuccessMessage('Dossier marqué comme Traité avec succès');
+                          setShowSuccessModal(true);
+                          setTimeout(() => setShowSuccessModal(false), 3000);
+                          
+                          setShowPdfModal(false);
+                          setPdfUrl(null);
+                          setCurrentDossier(null);
+                          
+                          await loadDashboardData();
+                        } else {
+                          alert('Erreur lors de la modification du statut');
+                        }
+                      } catch (error) {
+                        console.error('Status modification error:', error);
+                        alert('Erreur lors de la modification du statut');
+                      }
+                    }
                   }}
                   style={{
-                    background: '#9c27b0',
+                    background: '#4caf50',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -1123,7 +1303,7 @@ function GestionnaireSeniorDashboard() {
                     fontWeight: 'bold'
                   }}
                 >
-                  ✏️ Modifier Statut
+                  ✅ Traiter
                 </button>
                 <button 
                   onClick={() => {

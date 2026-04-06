@@ -20,14 +20,45 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
   const [rowsPerPage] = useState(10);
   const [reassignmentDialog, setReassignmentDialog] = useState<{ open: boolean; bordereau: any; aiResponse: any }>({ open: false, bordereau: null, aiResponse: null });
 
+  // Format document type for display
+  const formatDocumentType = (type: string) => {
+    // Convert enum format to readable format
+    // BULLETIN_SOIN -> BS
+    // COMPLEMENT_INFORMATION -> Complément Info
+    return type
+      .split('_')
+      .map((word, index) => {
+        if (index === 0 && word === 'BULLETIN') return 'BS';
+        if (word === 'SOIN') return '';
+        if (word === 'COMPLEMENT') return 'Complément';
+        if (word === 'INFORMATION') return 'Info';
+        return word.charAt(0) + word.slice(1).toLowerCase();
+      })
+      .filter(Boolean)
+      .join(' ')
+      .trim() || type;
+  };
+
   const loadSLARiskData = async () => {
     try {
       setLoading(true);
       
+      // Build filter params including user filters
+      const filterParams = {
+        ...dateRange,
+        clientId: filters.clientId,
+        gestionnaireId: filters.gestionnaireId,
+        gestionnaireSeniorId: filters.gestionnaireSeniorId,
+        chefEquipeId: filters.chefEquipeId,
+        slaStatus: filters.slaStatus
+      };
+      
+      console.log('🔍 [SLARiskTab] Loading with filters:', filterParams);
+      
       const [slaResponse, alertsResponse, capacityResponse] = await Promise.all([
-        LocalAPI.get('/analytics/sla/dashboard', { params: dateRange }),
-        LocalAPI.get('/analytics/alerts'),
-        LocalAPI.get('/analytics/sla/capacity')
+        LocalAPI.get('/analytics/sla/dashboard', { params: filterParams }),
+        LocalAPI.get('/analytics/alerts', { params: filterParams }),
+        LocalAPI.get('/analytics/sla/capacity', { params: filterParams })
       ]);
 
       const slaData = slaResponse.data;
@@ -79,6 +110,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
   };
 
   useEffect(() => {
+    console.log('🔄 [SLARiskTab] Filters or dateRange changed, reloading...', { filters, dateRange });
     loadSLARiskData();
   }, [filters, dateRange]);
 
@@ -171,20 +203,6 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 </CardContent>
               </Card>
             </Grid>
-            {/* COMMENTED OUT: Redundant À Risque - Not needed */}
-            {/* <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <WarningIcon color="warning" />
-                    <Box>
-                      <Typography variant="h4">{slaKpis.warningCount}</Typography>
-                      <Typography color="textSecondary">À Risque</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid> */}
             <Grid item xs={12} sm={6} md={3}>
               <Card>
                 <CardContent>
@@ -198,20 +216,6 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 </CardContent>
               </Card>
             </Grid>
-            {/* COMMENTED OUT: Redundant Conformité - Not needed */}
-            {/* <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <CheckCircleIcon color="success" />
-                    <Box>
-                      <Typography variant="h4">{slaKpis.complianceRate}%</Typography>
-                      <Typography color="textSecondary">Conformité</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid> */}
           </Grid>
         </Grid>
       )}
@@ -238,6 +242,8 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 <TableRow>
                   <TableCell>Référence</TableCell>
                   <TableCell>Client</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Nombre Documents</TableCell>
                   <TableCell>Assigné à</TableCell>
                   <TableCell>Status SLA</TableCell>
                   <TableCell>Jours Restants</TableCell>
@@ -253,6 +259,55 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                       <Typography variant="subtitle2">{item.reference}</Typography>
                     </TableCell>
                     <TableCell>{item.clientName || 'Client non défini'}</TableCell>
+                    <TableCell>
+                      <Box>
+                        {item.documentsByType && Object.keys(item.documentsByType).length > 0 ? (
+                          <Box>
+                            {Object.entries(item.documentsByType).map(([type, count]: [string, any], idx: number) => (
+                              <Chip 
+                                key={type}
+                                label={formatDocumentType(type)}
+                                size="small"
+                                color="primary"
+                                variant="outlined"
+                                sx={{ mr: 0.5, mb: 0.5 }}
+                              />
+                            ))}
+                          </Box>
+                        ) : (
+                          <Chip 
+                            label={formatDocumentType(item.type || 'BULLETIN_SOIN')} 
+                            size="small" 
+                            color="primary"
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>
+                          {item.nombreDocuments || 0} document(s)
+                        </Typography>
+                        {item.documentsByType && Object.keys(item.documentsByType).length > 0 ? (
+                          <Box sx={{ mt: 0.5 }}>
+                            {Object.entries(item.documentsByType).map(([type, count]: [string, any]) => (
+                              <Chip 
+                                key={type}
+                                label={`${formatDocumentType(type)}: ${count}`}
+                                size="small"
+                                sx={{ mr: 0.5, mb: 0.5, fontSize: '0.7rem' }}
+                                variant="outlined"
+                              />
+                            ))}
+                          </Box>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            Aucun document lié
+                          </Typography>
+                        )}
+                      </Box>
+                    </TableCell>
                     <TableCell>{item.assignedTo || 'Non assigné'}</TableCell>
                     <TableCell>{getSLAStatusChip(item.slaThreshold - item.daysSinceReception)}</TableCell>
                     <TableCell>
@@ -290,55 +345,7 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
         </Paper>
       </Grid>
 
-      {/* Workload Distribution - COMMENTED OUT: Redundant information */}
-      {/* <Grid item xs={12}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Analyse de la Charge de Travail</Typography>
-          <Grid container spacing={2}>
-            {data.workloadDistribution.map((team: any, index: number) => {
-              const percentage = Math.round((team.workload / team.capacity) * 100);
-              return (
-                <Grid item xs={12} md={4} key={index}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Box display="flex" alignItems="center" gap={2} sx={{ mb: 2 }}>
-                        <GroupIcon color={getWorkloadColor(percentage) as any} />
-                        <Typography variant="subtitle1">{team.team}</Typography>
-                      </Box>
-                      
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="h4" color={`${getWorkloadColor(percentage)}.main`}>
-                          {percentage}%
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {team.workload}/{team.capacity} dossiers
-                        </Typography>
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={Math.min(percentage, 100)} 
-                          color={getWorkloadColor(percentage) as any}
-                          sx={{ mt: 1, height: 8, borderRadius: 4 }}
-                        />
-                      </Box>
-                      
-                      <Chip 
-                        label={team.risk === 'high' ? 'Surcharge' : team.risk === 'medium' ? 'Attention' : 'Normal'}
-                        color={team.risk === 'high' ? 'error' : team.risk === 'medium' ? 'warning' : 'success'}
-                        size="small"
-                        sx={{ mb: 1 }}
-                      />
-                      
-                      <Typography variant="body2" color="textSecondary">
-                        {team.recommendation}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              );
-            })}
-          </Grid>
-        </Paper>
-      </Grid> */}
+     
 
       {/* AI Reassignment Confirmation Dialog */}
       <Dialog open={reassignmentDialog.open} onClose={() => setReassignmentDialog({ open: false, bordereau: null, aiResponse: null })} maxWidth="sm" fullWidth>
@@ -362,10 +369,11 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
                 <strong>Confiance IA:</strong> {reassignmentDialog.aiResponse.recommended_agent?.confidence === 'high' ? '85%' : '70%'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                <strong>Charge actuelle:</strong> {reassignmentDialog.aiResponse.recommended_agent?.current_workload || 0} bordereaux
+                <strong>Charge actuelle de {reassignmentDialog.aiResponse.recommended_agent?.agent_name || "l'agent"} :</strong>{' '}
+                {reassignmentDialog.aiResponse.recommended_agent?.current_workload || 0} bordereau(x) déjà en traitement
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Temps estimé:</strong> {reassignmentDialog.aiResponse.recommended_agent?.estimated_completion_hours || 24}h
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                ℹ️ Après réaffectation, ce bordereau viendra s'ajouter à sa charge actuelle.
               </Typography>
             </Box>
           )}

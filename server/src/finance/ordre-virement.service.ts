@@ -249,6 +249,13 @@ export class OrdreVirementService {
     if (filters.donneurOrdreId) where.donneurOrdreId = filters.donneurOrdreId;
     if (filters.dateStart) where.dateCreation = { gte: new Date(filters.dateStart) };
     if (filters.dateEnd) where.dateCreation = { ...where.dateCreation, lte: new Date(filters.dateEnd) };
+    
+    // GESTIONNAIRE_SENIOR & CHEF_EQUIPE: Filter by assigned clients
+    if (filters.clientIds && Array.isArray(filters.clientIds)) {
+      where.bordereau = {
+        clientId: { in: filters.clientIds }
+      };
+    }
 
     return await this.prisma.ordreVirement.findMany({
       where,
@@ -412,17 +419,24 @@ export class OrdreVirementService {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
+    const prefix = `VIR-${year}${month}${day}`;
     
-    const count = await this.prisma.ordreVirement.count({
+    // Find highest existing sequence number for today
+    const existingRefs = await this.prisma.ordreVirement.findMany({
       where: {
-        createdAt: {
-          gte: new Date(year, now.getMonth(), now.getDate()),
-          lt: new Date(year, now.getMonth(), now.getDate() + 1)
-        }
-      }
+        reference: { startsWith: prefix }
+      },
+      select: { reference: true }
     });
+    
+    let maxSeq = 0;
+    for (const ref of existingRefs) {
+      const seqStr = ref.reference.split('-').pop();
+      const seq = parseInt(seqStr || '0', 10);
+      if (seq > maxSeq) maxSeq = seq;
+    }
 
-    return `VIR-${year}${month}${day}-${String(count + 1).padStart(4, '0')}`;
+    return `${prefix}-${String(maxSeq + 1).padStart(4, '0')}`;
   }
 
   private async createHistoryEntry(

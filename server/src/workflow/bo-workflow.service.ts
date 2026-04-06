@@ -65,11 +65,27 @@ export class BOWorkflowService {
           statut: 'A_SCANNER',
           updatedAt: new Date()
         },
-        include: { client: true }
+        include: { 
+          client: true,
+          contract: {
+            include: {
+              teamLeader: true
+            }
+          }
+        }
       });
 
       // Notify SCAN team
       await this.notifyScanTeam(bordereau.id, bordereau.reference);
+
+      // ALSO notify Gestionnaire Senior if contract has one
+      if (bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR') {
+        await this.notifyGestionnaireSenior(
+          bordereau.contract.teamLeader.id,
+          bordereau.id,
+          bordereau.reference
+        );
+      }
 
       this.logger.log(`BO processed bordereau ${bordereau.reference} for scan`);
       
@@ -105,6 +121,28 @@ export class BOWorkflowService {
       this.logger.log(`Notified ${scanUsers.length} SCAN users about bordereau ${reference}`);
     } catch (error) {
       this.logger.error(`Error notifying SCAN team: ${error.message}`);
+    }
+  }
+
+  /**
+   * Notify Gestionnaire Senior when a new bordereau is created for their client
+   */
+  private async notifyGestionnaireSenior(seniorId: string, bordereauId: string, reference: string) {
+    try {
+      await this.prisma.notification.create({
+        data: {
+          userId: seniorId,
+          type: 'BORDEREAU_ASSIGNED',
+          title: 'Nouveau bordereau créé',
+          message: `Bordereau ${reference} a été créé pour votre client`,
+          data: { bordereauId, reference },
+          read: false
+        }
+      });
+
+      this.logger.log(`✅ Notified Gestionnaire Senior about new bordereau ${reference}`);
+    } catch (error) {
+      this.logger.error(`Error notifying Gestionnaire Senior: ${error.message}`);
     }
   }
 }

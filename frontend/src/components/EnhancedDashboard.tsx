@@ -1570,8 +1570,13 @@ const EnhancedDashboard: React.FC = () => {
                         <span style={{ fontSize: '18px' }}>👤</span>
                         {assignment.gestionnaire}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#388e3c', marginBottom: '8px', fontWeight: '600' }}>
-                        <strong>Total affectés:</strong> {assignment.totalAssigned}
+                      <div style={{ fontSize: '13px', color: '#388e3c', marginBottom: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span><strong>Total affectés:</strong> {assignment.totalAssigned}</span>
+                        {(assignment.reassignedCount || 0) > 0 && (
+                          <span title="Documents réaffectés (non inclus dans le total)" style={{ background: '#1976d2', color: 'white', padding: '3px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', border: '2px solid #90caf9' }}>
+                            +{assignment.reassignedCount} 🔄 réaffectés
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '12px', marginBottom: '6px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
@@ -1608,9 +1613,9 @@ const EnhancedDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Derniers Bordereaux Ajoutés */}
+              {/*  Tous les Bordereaux (triés par récents) */}
               <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>Derniers Bordereaux Ajoutés</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}> Tous les Bordereaux (triés par récents)</h3>
                 
                 {/* FILTERS */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
@@ -1639,7 +1644,7 @@ const EnhancedDashboard: React.FC = () => {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Type</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>% Finalisation</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>États Dossiers</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Date de réception</th>
                         {/* <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '14px', fontWeight: 'bold' }}>Actions</th> */}
                       </tr>
                     </thead>

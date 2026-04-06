@@ -20,7 +20,9 @@ import {
   Select,
   MenuItem,
   Button,
-  TablePagination
+  TablePagination,
+  TextField,
+  Autocomplete
 } from '@mui/material';
 import {
   Description,
@@ -82,15 +84,30 @@ const DocumentAnalyticsDashboard: React.FC = () => {
   useEffect(() => {
     loadDocumentAnalytics();
     loadUserLists();
-  }, [selectedType]);
+  }, [selectedType, filters.gestionnaire, filters.chefEquipe, filters.slaStatus]);
 
   const loadUserLists = async () => {
     try {
       const response = await LocalAPI.get('/super-admin/team-workload');
       const users = response.data || [];
       
-      setGestionnaires(users.filter((u: any) => u.role === 'GESTIONNAIRE' || u.role === 'GESTIONNAIRE_SENIOR'));
-      setChefs(users.filter((u: any) => u.role === 'CHEF_EQUIPE'));
+      console.log('👥 All users from team-workload:', users);
+      console.log('👥 User roles:', users.map((u: any) => ({ name: u.name, role: u.role })));
+      
+      // Include GESTIONNAIRE, GESTIONNAIRE_SENIOR only (exclude CHEF_EQUIPE from gestionnaires list)
+      // CHEF_EQUIPE should only appear in the "Chef d'équipe" filter
+      const gestionnairesList = users.filter((u: any) => 
+        (u.role === 'GESTIONNAIRE' || u.role === 'GESTIONNAIRE_SENIOR') &&
+        !u.name.startsWith('Équipe') // Exclude team entries like "Équipe Mohamed Frad"
+      );
+      
+      const chefsList = users.filter((u: any) => u.role === 'CHEF_EQUIPE');
+      
+      console.log('👥 Gestionnaires list:', gestionnairesList.map((g: any) => ({ name: g.name, role: g.role })));
+      console.log('👥 Chefs list:', chefsList.map((c: any) => ({ name: c.name, role: c.role })));
+      
+      setGestionnaires(gestionnairesList);
+      setChefs(chefsList);
     } catch (error) {
       console.error('Failed to load user lists:', error);
     }
@@ -99,6 +116,13 @@ const DocumentAnalyticsDashboard: React.FC = () => {
   const loadDocumentAnalytics = async () => {
     setLoading(true);
     try {
+      console.log('📊 [loadDocumentAnalytics] Fetching with filters:', {
+        documentType: selectedType !== 'ALL' ? selectedType : undefined,
+        gestionnaire: filters.gestionnaire || undefined,
+        chefEquipe: filters.chefEquipe || undefined,
+        slaStatus: filters.slaStatus || undefined
+      });
+      
       const [statsResponse, assignmentsResponse, hierarchyResponse] = await Promise.all([
         LocalAPI.get('/super-admin/documents/comprehensive-stats', {
           params: { documentType: selectedType !== 'ALL' ? selectedType : undefined }
@@ -132,6 +156,32 @@ const DocumentAnalyticsDashboard: React.FC = () => {
       const processedStats = allDocumentTypes.map(docType => {
         const stats = statsResponse.data[docType.type] || {};
         console.log(`Processing ${docType.type}:`, stats);
+        
+        // If gestionnaire or chefEquipe filter is active, calculate stats from filtered assignments
+        if (filters.gestionnaire || filters.chefEquipe) {
+          const filteredDocs = (assignmentsResponse.data.assignments || []).filter((a: any) => a.documentType === docType.type);
+          
+          const statusCounts = filteredDocs.reduce((acc: any, doc: any) => {
+            const status = doc.statut || 'UPLOADED';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+          }, {});
+          
+          return {
+            ...docType,
+            total: filteredDocs.length,
+            aScanner: statusCounts['UPLOADED'] || 0,
+            enCoursScan: statusCounts['EN_COURS'] || 0,
+            scanFinalise: statusCounts['SCANNE'] || 0,
+            enCoursTraitement: (statusCounts['EN_COURS'] || 0) + (statusCounts['SCANNE'] || 0),
+            traite: statusCounts['TRAITE'] || 0,
+            regle: statusCounts['TRAITE'] || 0, // Same as traite for documents
+            avgProcessingTime: stats.avgProcessingTime || 0, // Keep global avg
+            slaBreaches: docType.slaApplicable ? filteredDocs.filter((a: any) => a.slaStatus === 'OVERDUE').length : 0
+          };
+        }
+        
+        // Otherwise use global stats from backend
         return {
           ...docType,
           total: stats.total || 0,
@@ -146,7 +196,7 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         };
       });
 
-      console.log('📊 Processed Stats:', processedStats);
+      console.log('📊 Processed Stats (with filters applied):', processedStats);
       setDocumentStats(processedStats);
       setAssignmentStats(assignmentsResponse.data.assignments || []);
       setFaultyDataCount(assignmentsResponse.data.withIssues || 0);
@@ -268,36 +318,66 @@ const DocumentAnalyticsDashboard: React.FC = () => {
             </FormControl>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Gestionnaire</InputLabel>
-              <Select
-                value={filters.gestionnaire}
-                onChange={(e) => setFilters({ ...filters, gestionnaire: e.target.value })}
-                label="Gestionnaire"
-              >
-                <MenuItem value="">Tous</MenuItem>
-                <MenuItem value="NON ASSIGNÉ">❌ Non assigné</MenuItem>
-                {gestionnaires.map(g => (
-                  <MenuItem key={g.id} value={g.name}>{g.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              Gestionnaire
+            </Typography>
+            <Autocomplete
+              value={filters.gestionnaire}
+              onChange={(event, newValue) => setFilters({ ...filters, gestionnaire: newValue || '' })}
+              options={[
+                '',
+                'NON ASSIGNÉ',
+                ...gestionnaires.map(g => g.name)
+              ]}
+              getOptionLabel={(option) => {
+                if (option === '') return 'Tous';
+                if (option === 'NON ASSIGNÉ') return '❌ Non assigné';
+                return option;
+              }}
+              renderInput={(params) => (
+                <TextField 
+                  {...params} 
+                  placeholder="Tous les gestionnaires"
+                  size="small"
+                  sx={{ bgcolor: 'white' }}
+                />
+              )}
+              size="small"
+              fullWidth
+              clearOnEscape
+              disableClearable={false}
+            />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Chef d'équipe</InputLabel>
-              <Select
-                value={filters.chefEquipe}
-                onChange={(e) => setFilters({ ...filters, chefEquipe: e.target.value })}
-                label="Chef d'équipe"
-              >
-                <MenuItem value="">Tous</MenuItem>
-                <MenuItem value="AUCUN CHEF">❌ Aucun chef</MenuItem>
-                {chefs.map(c => (
-                  <MenuItem key={c.id} value={c.name}>{c.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              Chef d'équipe
+            </Typography>
+            <Autocomplete
+              value={filters.chefEquipe}
+              onChange={(event, newValue) => setFilters({ ...filters, chefEquipe: newValue || '' })}
+              options={[
+                '',
+                'AUCUN CHEF',
+                ...chefs.map(c => c.name)
+              ]}
+              getOptionLabel={(option) => {
+                if (option === '') return 'Tous';
+                if (option === 'AUCUN CHEF') return '❌ Aucun chef';
+                return option;
+              }}
+              renderInput={(params) => (
+                <TextField 
+                  {...params} 
+                  placeholder="Tous les chefs d'équipe"
+                  size="small"
+                  sx={{ bgcolor: 'white' }}
+                />
+              )}
+              size="small"
+              fullWidth
+              clearOnEscape
+              disableClearable={false}
+            />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <FormControl size="small" fullWidth>
@@ -317,20 +397,11 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         </Grid>
         <Box mt={2} display="flex" gap={1}>
           <Button 
-            variant="contained" 
-            onClick={() => {
-              setPage(0); // Reset to first page when applying filters
-              loadDocumentAnalytics();
-            }}
-            size="small"
-          >
-            Appliquer les filtres
-          </Button>
-          <Button 
             variant="outlined" 
             onClick={() => {
               setFilters({ gestionnaire: '', chefEquipe: '', slaStatus: '' });
               setSelectedType('ALL');
+              setPage(0);
             }}
             size="small"
           >
@@ -445,7 +516,7 @@ const DocumentAnalyticsDashboard: React.FC = () => {
                 <TableRow>
                   <TableCell>Référence</TableCell>
                   <TableCell>Type Document</TableCell>
-                  <TableCell>Gestionnaire</TableCell>
+                  <TableCell>Gestionnaire/Senior</TableCell>
                   <TableCell>Chef d'Équipe</TableCell>
                   <TableCell>Statut</TableCell>
                   <TableCell>SLA</TableCell>

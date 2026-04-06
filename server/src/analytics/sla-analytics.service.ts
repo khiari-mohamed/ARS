@@ -15,19 +15,43 @@ export class SLAAnalyticsService {
     if (user.role === 'GESTIONNAIRE') {
       where.assignedToUserId = user.id;
     } else if (user.role === 'CHEF_EQUIPE') {
-      // Get team members
-      // Get team members - simplified for now
       const teamMembers = await this.prisma.user.findMany({
-        where: { id: user.id }, // Just current user for now
+        where: { id: user.id },
         select: { id: true }
       });
       where.assignedToUserId = { in: teamMembers.map(m => m.id) };
     }
 
+    // Apply user filters
+    if (filters.gestionnaireId || filters.gestionnaireSeniorId || filters.chefEquipeId) {
+      const userIds: string[] = [];
+      if (filters.gestionnaireId) userIds.push(filters.gestionnaireId);
+      if (filters.gestionnaireSeniorId) userIds.push(filters.gestionnaireSeniorId);
+      if (filters.chefEquipeId) {
+        const chefTeam = await this.prisma.user.findMany({
+          where: { 
+            OR: [
+              { id: filters.chefEquipeId },
+              { teamLeaderId: filters.chefEquipeId }
+            ]
+          },
+          select: { id: true }
+        });
+        userIds.push(...chefTeam.map(u => u.id));
+      }
+      
+      if (userIds.length > 0) {
+        where.OR = [
+          { assignedToUserId: { in: userIds } },
+          { currentHandlerId: { in: userIds } },
+          { contract: { teamLeaderId: { in: userIds } } }
+        ];
+      }
+    }
+
     // Apply clientId filter
     if (filters.clientId) {
       where.clientId = filters.clientId;
-      // console.log('✅ SLA Dashboard applying clientId filter:', filters.clientId);
     }
 
     // Apply date filters
@@ -327,6 +351,11 @@ export class SLAAnalyticsService {
               }
             }
           }
+        },
+        _count: {
+          select: {
+            documents: true
+          }
         }
       }
     });
@@ -380,10 +409,19 @@ export class SLAAnalyticsService {
           }
         }
         
+        // Count documents by type
+        const documentsByType = bordereau.documents.reduce((acc, doc) => {
+          acc[doc.type] = (acc[doc.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
         alerts.push({
           bordereauId: bordereau.id,
           reference: bordereau.reference,
           clientName: bordereau.client?.name,
+          type: bordereau.type,
+          nombreDocuments: bordereau._count.documents,
+          documentsByType,
           assignedTo,
           alertLevel,
           message,

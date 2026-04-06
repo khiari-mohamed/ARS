@@ -209,10 +209,8 @@ export class BulletinSoinController {
   @Get('gestionnaires')
   @UseGuards(JwtAuthGuard)
   async getGestionnaires(@Req() req) {
-    console.log('🔍 Getting gestionnaires endpoint hit for user:', req.user?.role);
     try {
       const result = await this.bsService.getGestionnaires(req.user);
-      console.log('✅ Gestionnaires found:', result.length, result);
       return { data: result, success: true };
     } catch (error) {
       console.error('❌ Error in getGestionnaires controller:', error);

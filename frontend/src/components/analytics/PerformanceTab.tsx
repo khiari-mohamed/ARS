@@ -30,17 +30,23 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       const gestParams: any = {};
       if (appliedDateRange.fromDate) gestParams.fromDate = appliedDateRange.fromDate;
       if (appliedDateRange.toDate) gestParams.toDate = appliedDateRange.toDate;
+      // Apply parent filters to gestionnaires table
+      if (filters.gestionnaireId) gestParams.gestionnaireId = filters.gestionnaireId;
+      if (filters.gestionnaireSeniorId) gestParams.gestionnaireSeniorId = filters.gestionnaireSeniorId;
+      if (filters.chefEquipeId) gestParams.chefEquipeId = filters.chefEquipeId;
+      if (filters.clientId) gestParams.clientId = filters.clientId;
       
-      console.log('📅 Gestionnaire date params:', gestParams);
+      console.log('📅 Gestionnaire params with filters:', gestParams);
       
       // Apply parent filters to all API calls
       const apiParams = { ...dateRange };
       if (filters.clientId) apiParams.clientId = filters.clientId;
       if (filters.slaStatus) apiParams.slaStatus = filters.slaStatus;
+      if (filters.gestionnaireId) apiParams.gestionnaireId = filters.gestionnaireId;
+      if (filters.gestionnaireSeniorId) apiParams.gestionnaireSeniorId = filters.gestionnaireSeniorId;
+      if (filters.chefEquipeId) apiParams.chefEquipeId = filters.chefEquipeId;
       
-      console.log('🔍 Frontend apiParams being sent:', apiParams);
-      console.log('🔍 Frontend filters:', filters);
-      console.log('🔍 Frontend dateRange:', dateRange);
+      console.log('🔍 [PerformanceTab] Filters applied:', apiParams);
       
       const [performanceResponse, slaResponse, kpiResponse, gestionnairesDailyResponse, alertsResponse] = await Promise.all([
         LocalAPI.get('/analytics/performance/by-user', { params: apiParams }),
@@ -82,16 +88,20 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
       console.log('📊 Department Performance Data:', departmentPerformance);
       console.log('📊 Number of departments:', departmentPerformance.length);
       
-      // Process volume trend data from bsPerDay
-      const volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
+      // Process volume trend data from bsPerDay - filter by selected gestionnaire if applicable
+      let volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
         date: new Date(day.createdAt).toLocaleDateString('fr-FR'),
         volume: day._count?.id || 0
       })) || [];
+      
+      console.log('📊 Volume trend data points:', volumeTrend.length);
 
       // Calculate SLA distribution from alert data
       const slaCompliant = alertData.ok?.length || 0;
       const slaAtRisk = alertData.warning?.length || 0;
       const slaOverdue = alertData.critical?.length || 0;
+      
+      console.log('📊 SLA distribution:', { slaCompliant, slaAtRisk, slaOverdue });
       
       const slaDistribution = [
         { name: 'À temps', value: slaCompliant, color: '#4caf50' },

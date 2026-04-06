@@ -144,10 +144,9 @@ export class ChefEquipeTableauBordController {
           include: {
             client: { select: { id: true, name: true } },
             contract: { 
-              select: { 
-                id: true, 
-                clientName: true,
-                client: { select: { id: true, name: true } }
+              include: { 
+                client: { select: { id: true, name: true } },
+                teamLeader: { select: { id: true, fullName: true, role: true } }
               } 
             },
             documents: {
@@ -171,10 +170,9 @@ export class ChefEquipeTableauBordController {
           include: {
             client: { select: { id: true, name: true } },
             contract: { 
-              select: { 
-                id: true, 
-                clientName: true,
-                client: { select: { id: true, name: true } }
+              include: { 
+                client: { select: { id: true, name: true } },
+                teamLeader: { select: { id: true, fullName: true, role: true } }
               } 
             },
             documents: {
@@ -191,10 +189,9 @@ export class ChefEquipeTableauBordController {
         include: {
           client: { select: { id: true, name: true } },
           contract: { 
-            select: { 
-              id: true, 
-              clientName: true,
-              client: { select: { id: true, name: true } }
+            include: { 
+              client: { select: { id: true, name: true } },
+              teamLeader: { select: { id: true, fullName: true, role: true } }
             } 
           },
           documents: {
@@ -227,19 +224,25 @@ export class ChefEquipeTableauBordController {
       if (scanneDocuments > 0) states.push(`Scanné ${scanneDocuments}/${totalDocuments}`);
       if (uploadedDocuments > 0) states.push(`Nouveau ${uploadedDocuments}/${totalDocuments}`);
       
-      // Show gestionnaire who has documents assigned, not currentHandler
+      // Determine handler with priority: assignedTo > teamLeader > currentHandler
       let gestionnaireDisplay = 'Non assigné';
-      if (bordereau.documents.length > 0) {
-        // Get unique gestionnaires from assigned documents
-        const assignedGestionnaires = [...new Set(
-          bordereau.documents
-            .filter(doc => doc.assignedTo)
-            .map(doc => doc.assignedTo.fullName)
-        )];
-        
-        if (assignedGestionnaires.length > 0) {
-          gestionnaireDisplay = assignedGestionnaires.join(', ');
-        }
+      let gestionnaireRole: string | null = null;
+      
+      const assignedGestionnaires = [...new Set(
+        bordereau.documents
+          .filter(doc => doc.assignedTo)
+          .map(doc => doc.assignedTo.fullName)
+      )];
+      
+      if (assignedGestionnaires.length > 0) {
+        gestionnaireDisplay = assignedGestionnaires.join(', ');
+        gestionnaireRole = 'GESTIONNAIRE';
+      } else if (bordereau.contract?.teamLeader) {
+        gestionnaireDisplay = bordereau.contract.teamLeader.fullName;
+        gestionnaireRole = bordereau.contract.teamLeader.role;
+      } else if (bordereau.currentHandler) {
+        gestionnaireDisplay = bordereau.currentHandler.fullName;
+        gestionnaireRole = bordereau.currentHandler.role;
       }
       
       return {
@@ -249,6 +252,8 @@ export class ChefEquipeTableauBordController {
         type: documentTypes || 'Aucun document', // Show document types
         statut: this.getStatutLabel(bordereau.statut),
         gestionnaire: gestionnaireDisplay,
+        gestionnaireRole: gestionnaireRole,
+        documentCount: totalDocuments,
         date: bordereau.dateReception.toLocaleDateString('fr-FR'),
         completionPercentage,
         dossierStates: states.length > 0 ? states : ['Nouveau']
@@ -854,12 +859,12 @@ export class ChefEquipeTableauBordController {
           const totalDocs = allDocuments.length;
           const traitesDocs = allDocuments.filter(d => d.status === 'TRAITE').length;
           
-          console.log(`🔍 Checking bordereau completion: { documentId: ${body.dossierId}, newStatus: ${body.newStatus}, bordereauId: ${document.bordereauId} }`);
-          console.log(`📊 Bordereau ${document.bordereauId}: ${traitesDocs}/${totalDocs} documents TRAITE`);
+         // console.log(`🔍 Checking bordereau completion: { documentId: ${body.dossierId}, newStatus: ${body.newStatus}, bordereauId: ${document.bordereauId} }`);
+         // console.log(`📊 Bordereau ${document.bordereauId}: ${traitesDocs}/${totalDocs} documents TRAITE`);
           
           // If ALL documents are TRAITE → Auto-update bordereau
           if (totalDocs > 0 && traitesDocs === totalDocs) {
-            console.log(`✅ All documents TRAITE! Auto-updating bordereau status...`);
+           // console.log(`✅ All documents TRAITE! Auto-updating bordereau status...`);
             await this.prisma.bordereau.update({
               where: { id: document.bordereauId },
               data: {
@@ -867,7 +872,7 @@ export class ChefEquipeTableauBordController {
                 dateCloture: new Date()
               }
             });
-            console.log(`✅ Bordereau ${document.bordereauId} automatically marked as TRAITE with dateCloture: ${new Date().toISOString()}`);
+           // console.log(`✅ Bordereau ${document.bordereauId} automatically marked as TRAITE with dateCloture: ${new Date().toISOString()}`);
           }
         } catch (borderError) {
           console.error('❌ Failed to auto-complete bordereau:', borderError);
@@ -1127,7 +1132,17 @@ export class ChefEquipeTableauBordController {
             }
           },
           include: {
-            bordereau: { include: { client: true } },
+            bordereau: { 
+              include: { 
+                client: true,
+                contract: {
+                  include: {
+                    teamLeader: { select: { id: true, fullName: true, role: true } }
+                  }
+                },
+                currentHandler: { select: { id: true, fullName: true, role: true } }
+              } 
+            },
             assignedTo: true
           },
           orderBy: { uploadedAt: 'desc' }
@@ -1140,7 +1155,17 @@ export class ChefEquipeTableauBordController {
             bordereau: { archived: false }
           },
           include: {
-            bordereau: { include: { client: true } },
+            bordereau: { 
+              include: { 
+                client: true,
+                contract: {
+                  include: {
+                    teamLeader: { select: { id: true, fullName: true, role: true } }
+                  }
+                },
+                currentHandler: { select: { id: true, fullName: true, role: true } }
+              } 
+            },
             assignedTo: true
           },
           orderBy: { uploadedAt: 'desc' }
@@ -1153,7 +1178,16 @@ export class ChefEquipeTableauBordController {
           bordereau: { ...accessFilter, archived: false }
         },
         include: {
-          bordereau: { include: { client: true } },
+          bordereau: { 
+            include: { 
+              client: true,
+              contract: {
+                include: {
+                  teamLeader: { select: { id: true, fullName: true, role: true } }
+                }
+              }
+            } 
+          },
           assignedTo: true
         },
         orderBy: { uploadedAt: 'desc' }
@@ -1167,6 +1201,30 @@ export class ChefEquipeTableauBordController {
         displayStatus = 'En cours';
       }
       
+      // Determine gestionnaire with priority order:
+      // 1. assignedTo (regular gestionnaire)
+      // 2. contract.teamLeader (Gestionnaire Senior)
+      // 3. bordereau.currentHandler (Chef d'équipe, Responsable, etc.)
+      // 4. "Non assigné" (truly unassigned)
+      let gestionnaireDisplay = 'Non assigné';
+      
+      if (doc.assignedTo) {
+        // Priority 1: Regular gestionnaire assigned
+        gestionnaireDisplay = doc.assignedTo.fullName;
+      } else if (doc.bordereau?.contract?.teamLeader) {
+        // Priority 2: Check if team leader is a Gestionnaire Senior
+        const teamLeader = doc.bordereau.contract.teamLeader;
+        if (teamLeader.role === 'GESTIONNAIRE_SENIOR') {
+          gestionnaireDisplay = teamLeader.fullName;
+        } else {
+          // Team leader exists but is not a senior (could be Chef d'équipe)
+          gestionnaireDisplay = teamLeader.fullName;
+        }
+      } else if (doc.bordereau?.currentHandler) {
+        // Priority 3: Check currentHandler (Chef d'équipe, Responsable, etc.)
+        gestionnaireDisplay = doc.bordereau.currentHandler.fullName;
+      }
+      
       return {
         id: doc.id,
         reference: doc.name, // Show document name (like BS-5766831.pdf)
@@ -1174,7 +1232,7 @@ export class ChefEquipeTableauBordController {
         client: doc.bordereau?.client?.name || 'N/A',
         type: this.getDocumentTypeLabel(doc.type), // Show actual document type
         statut: displayStatus,
-        gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+        gestionnaire: gestionnaireDisplay,
         date: this.getRelativeTime(doc.uploadedAt),
         completionPercentage: this.calculateDocumentCompletion(doc),
         dossierStates: this.getDocumentStates(doc)
@@ -1245,6 +1303,10 @@ export class ChefEquipeTableauBordController {
         }
       }
 
+      const reassignedCount = await this.prisma.document.count({
+        where: { assignedToUserId: senior.id }
+      });
+
       assignments.push({
         gestionnaire: senior.fullName,
         totalAssigned: documents.length,
@@ -1252,7 +1314,8 @@ export class ChefEquipeTableauBordController {
         enCours,
         retournes,
         returnedBy,
-        documentsByType: docsByType
+        documentsByType: docsByType,
+        reassignedCount
       });
     }
 

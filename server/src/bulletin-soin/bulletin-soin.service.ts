@@ -227,7 +227,7 @@ export class BulletinSoinService {
   // GET GESTIONNAIRES: Get list of gestionnaires for assignment (with role-based filtering)
   async getGestionnaires(currentUser?: any) {
     try {
-      console.log('🔍 Querying users with GESTIONNAIRE role for user:', currentUser?.role);
+      //console.log('🔍 Querying users with GESTIONNAIRE role for user:', currentUser?.role);
       
       let whereClause: any = { 
         role: { in: ['GESTIONNAIRE', 'gestionnaire'] },
@@ -243,7 +243,7 @@ export class BulletinSoinService {
         where: whereClause,
         select: { id: true, fullName: true, email: true, role: true }
       });
-      console.log('✅ Found users:', users);
+     // console.log('✅ Found users:', users);
       return users;
     } catch (error) {
       console.error('❌ Database error for gestionnaires:', error);
@@ -274,16 +274,16 @@ export class BulletinSoinService {
 
   // TEAM WORKLOAD: Get team workload statistics (ALL document types)
   async getTeamWorkloadStats() {
-    console.log('\n📊 === WORKLOAD STATS DEBUG START ===');
+    //console.log('\n📊 === WORKLOAD STATS DEBUG START ===');
     const gestionnaires = await this.prisma.user.findMany({ 
       where: { role: { in: ['GESTIONNAIRE', 'gestionnaire'] }, active: true },
       select: { id: true, fullName: true }
     });
-    console.log(`👥 Found ${gestionnaires.length} gestionnaires`);
+    //console.log(`👥 Found ${gestionnaires.length} gestionnaires`);
 
     const workloadStats = await Promise.all(
       gestionnaires.map(async (g) => {
-        console.log(`\n🔍 Calculating workload for: ${g.fullName}`);
+        //console.log(`\n🔍 Calculating workload for: ${g.fullName}`);
         const now = new Date();
         
         // Count BulletinSoin
@@ -299,7 +299,7 @@ export class BulletinSoinService {
         const bsOverdue = await this.prisma.bulletinSoin.count({
           where: { ownerId: g.id, dueDate: { lt: now }, etat: { notIn: ['VALIDATED', 'REJECTED'] }, deletedAt: null }
         });
-        console.log(`  📄 BulletinSoin: ${bsInProgress} in progress, ${bsValidated} validated, ${bsRejected} rejected, ${bsOverdue} overdue`);
+        //console.log(`  📄 BulletinSoin: ${bsInProgress} in progress, ${bsValidated} validated, ${bsRejected} rejected, ${bsOverdue} overdue`);
         
         // Count Documents (all types)
         const docsInProgress = await this.prisma.document.count({
@@ -311,7 +311,7 @@ export class BulletinSoinService {
         const docsRejected = await this.prisma.document.count({
           where: { assignedToUserId: g.id, status: 'REJETE' }
         });
-        console.log(`  📁 Documents: ${docsInProgress} in progress, ${docsCompleted} completed, ${docsRejected} rejected`);
+        //console.log(`  📁 Documents: ${docsInProgress} in progress, ${docsCompleted} completed, ${docsRejected} rejected`);
         
         // Count Bordereaux
         const bordereauxInProgress = await this.prisma.bordereau.count({
@@ -320,7 +320,7 @@ export class BulletinSoinService {
         const bordereauxCompleted = await this.prisma.bordereau.count({
           where: { currentHandlerId: g.id, statut: { in: ['TRAITE', 'CLOTURE', 'PAYE'] } }
         });
-        console.log(`  📋 Bordereaux: ${bordereauxInProgress} in progress, ${bordereauxCompleted} completed`);
+        //console.log(`  📋 Bordereaux: ${bordereauxInProgress} in progress, ${bordereauxCompleted} completed`);
         
         // Count Reclamations
         const reclamationsInProgress = await this.prisma.reclamation.count({
@@ -329,7 +329,7 @@ export class BulletinSoinService {
         const reclamationsCompleted = await this.prisma.reclamation.count({
           where: { assignedToId: g.id, status: { in: ['RESOLVED', 'CLOSED'] } }
         });
-        console.log(`  🎫 Reclamations: ${reclamationsInProgress} in progress, ${reclamationsCompleted} completed`);
+        //console.log(`  🎫 Reclamations: ${reclamationsInProgress} in progress, ${reclamationsCompleted} completed`);
         
         // Calculate totals
         const activeWorkload = bsInProgress + docsInProgress + bordereauxInProgress + reclamationsInProgress;
@@ -337,7 +337,7 @@ export class BulletinSoinService {
         const totalRejected = bsRejected + docsRejected;
         const total = activeWorkload + totalValidated + totalRejected;
         
-        console.log(`  ✅ TOTAL ACTIVE WORKLOAD: ${activeWorkload} (BS:${bsInProgress} + Docs:${docsInProgress} + Bordereaux:${bordereauxInProgress} + Reclamations:${reclamationsInProgress})`);
+        //console.log(`  ✅ TOTAL ACTIVE WORKLOAD: ${activeWorkload} (BS:${bsInProgress} + Docs:${docsInProgress} + Bordereaux:${bordereauxInProgress} + Reclamations:${reclamationsInProgress})`);
         
         return {
           id: g.id,
@@ -360,14 +360,14 @@ export class BulletinSoinService {
       s.risk = s.workload > teamAvg * 1.5 ? 'HIGH' : s.workload > teamAvg * 1.2 ? 'MEDIUM' : 'LOW';
     });
     
-    console.log('\n📊 === WORKLOAD STATS DEBUG END ===\n');
+    //console.log('\n📊 === WORKLOAD STATS DEBUG END ===\n');
 
     return workloadStats;
   }
 
   // AI SUGGESTION: Suggest daily priorities for a gestionnaire (ALL document types)
   async suggestPriorities(gestionnaireId: string) {
-    console.log(`\n🎯 === PRIORITIES DEBUG START for gestionnaire: ${gestionnaireId} ===`);
+    //console.log(`\n🎯 === PRIORITIES DEBUG START for gestionnaire: ${gestionnaireId} ===`);
     const now = new Date();
     
     // Get BulletinSoin priorities
@@ -376,7 +376,7 @@ export class BulletinSoinService {
       orderBy: { dueDate: 'asc' },
       take: 10
     });
-    console.log(`📄 Found ${bsList.length} BulletinSoin priorities`);
+    //console.log(`📄 Found ${bsList.length} BulletinSoin priorities`);
     
     // Get Document priorities (all statuses)
     const docsList = await this.prisma.document.findMany({
@@ -397,7 +397,7 @@ export class BulletinSoinService {
       },
       take: 10
     });
-    console.log(`📁 Found ${docsList.length} Document priorities (all statuses)`);
+    //console.log(`📁 Found ${docsList.length} Document priorities (all statuses)`);
     
     // Get Bordereau priorities (all statuses)
     const bordereauxList = await this.prisma.bordereau.findMany({
@@ -419,7 +419,7 @@ export class BulletinSoinService {
       },
       take: 10
     });
-    console.log(`📋 Found ${bordereauxList.length} Bordereau priorities (all statuses)`);
+    //console.log(`📋 Found ${bordereauxList.length} Bordereau priorities (all statuses)`);
     
     // Get Reclamation priorities (all statuses)
     const reclamationsList = await this.prisma.reclamation.findMany({
@@ -441,7 +441,7 @@ export class BulletinSoinService {
       },
       take: 10
     });
-    console.log(`🎫 Found ${reclamationsList.length} Reclamation priorities (all statuses)`);
+    //console.log(`🎫 Found ${reclamationsList.length} Reclamation priorities (all statuses)`);
     
     // Combine and format all priorities
     const allPriorities = [
@@ -492,8 +492,8 @@ export class BulletinSoinService {
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
     
-    console.log(`✅ Total priorities: ${allPriorities.length}`);
-    console.log(`🎯 === PRIORITIES DEBUG END ===\n`);
+    //console.log(`✅ Total priorities: ${allPriorities.length}`);
+    //console.log(`🎯 === PRIORITIES DEBUG END ===\n`);
     
     return allPriorities.slice(0, 20); // Return top 20 priorities
   }
@@ -595,26 +595,26 @@ export class BulletinSoinService {
   // APPLY REBALANCING: Execute a BULK rebalancing suggestion with transaction safety
   async applyRebalancing(suggestionData: any, toUserId: string) {
     try {
-      console.log('\n🎯 === APPLY REBALANCING START ===');
-      console.log('📦 Suggestion Data:', JSON.stringify(suggestionData, null, 2));
-      console.log('👤 Target User ID:', toUserId);
+      //console.log('\n🎯 === APPLY REBALANCING START ===');
+     // console.log('📦 Suggestion Data:', JSON.stringify(suggestionData, null, 2));
+      //console.log('👤 Target User ID:', toUserId);
       
       // Check if this is bulk rebalancing (new format)
       if (suggestionData.documentIds && Array.isArray(suggestionData.documentIds)) {
         const documentIds = suggestionData.documentIds;
-        console.log(`📋 Document IDs to transfer: ${documentIds.length} documents`);
-        console.log('📋 First 5 IDs:', documentIds.slice(0, 5));
+       // console.log(`📋 Document IDs to transfer: ${documentIds.length} documents`);
+        //console.log('📋 First 5 IDs:', documentIds.slice(0, 5));
         
         const targetUser = await this.prisma.user.findUnique({ where: { id: toUserId } });
         
         if (!targetUser) {
-          console.log('❌ Target user not found:', toUserId);
+         // console.log('❌ Target user not found:', toUserId);
           throw new NotFoundException('Target user not found');
         }
 
-        console.log(`🔄 Starting BULK rebalancing: ${documentIds.length} documents to ${targetUser.fullName}`);
-        console.log(`📤 From: ${suggestionData.fromName} (${suggestionData.from})`);
-        console.log(`📥 To: ${targetUser.fullName} (${toUserId})`);
+        //console.log(`🔄 Starting BULK rebalancing: ${documentIds.length} documents to ${targetUser.fullName}`);
+        //console.log(`📤 From: ${suggestionData.fromName} (${suggestionData.from})`);
+        //console.log(`📥 To: ${targetUser.fullName} (${toUserId})`);
 
         // TRANSACTION: Ensure atomic operation (all or nothing)
         const updateResult = await this.prisma.$transaction(async (tx) => {
@@ -631,16 +631,16 @@ export class BulletinSoinService {
           });
         });
 
-        console.log(`✅ BULK rebalancing completed: ${updateResult.count} documents transferred`);
-        console.log(`📊 Expected: ${documentIds.length}, Actual: ${updateResult.count}`);
+        //console.log(`✅ BULK rebalancing completed: ${updateResult.count} documents transferred`);
+        //console.log(`📊 Expected: ${documentIds.length}, Actual: ${updateResult.count}`);
         
         if (updateResult.count !== documentIds.length) {
-          console.log(`⚠️ WARNING: Mismatch in transfer count!`);
-          console.log(`   Expected: ${documentIds.length}`);
-          console.log(`   Transferred: ${updateResult.count}`);
+          //console.log(`⚠️ WARNING: Mismatch in transfer count!`);
+          //console.log(`   Expected: ${documentIds.length}`);
+          //console.log(`   Transferred: ${updateResult.count}`);
         }
         
-        console.log('🎯 === APPLY REBALANCING END ===\n');
+        //console.log('🎯 === APPLY REBALANCING END ===\n');
 
         return { 
           success: true, 

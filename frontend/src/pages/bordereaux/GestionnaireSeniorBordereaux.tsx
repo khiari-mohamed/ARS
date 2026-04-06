@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { LocalAPI } from '../../services/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import { Autocomplete } from '@mui/material';
+import { Filter, Search } from 'lucide-react';
 import "../../styles/chef-equipe.css";
 
 function GestionnaireSeniorBordereaux() {
@@ -12,9 +14,21 @@ function GestionnaireSeniorBordereaux() {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [statsModalType, setStatsModalType] = useState<'en-cours' | 'traites' | 'non-affectes'>('en-cours');
   const [statsModalData, setStatsModalData] = useState<any[]>([]);
+  
+  // Filter states
+  const [clients, setClients] = useState<any[]>([]);
+  const [referenceFilter, setReferenceFilter] = useState('');
+  const [selectedClient, setSelectedClient] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [virementFilter, setVirementFilter] = useState('');
+  const [slaFilter, setSlaFilter] = useState<'all' | 'respecte' | 'a_risque' | 'en_retard'>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [filteredData, setFilteredData] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
+    loadClients();
   }, []);
 
   const loadData = async () => {
@@ -27,11 +41,23 @@ function GestionnaireSeniorBordereaux() {
       
       // Gestionnaire Senior has NO nonAffectes - everything goes to enCours
       setUnassignedBordereaux([]);
-      setTeamBordereaux([...data.enCours || [], ...data.traites || []]);
+      const allBordereaux = [...data.enCours || [], ...data.traites || []];
+      setTeamBordereaux(allBordereaux);
+      setFilteredData(allBordereaux);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadClients = async () => {
+    try {
+      const { fetchClients } = await import('../../services/clientService');
+      const clientsData = await fetchClients();
+      setClients(clientsData || []);
+    } catch (error) {
+      console.error('Error loading clients:', error);
     }
   };
 
@@ -54,24 +80,104 @@ function GestionnaireSeniorBordereaux() {
     setShowStatsModal(true);
   };
 
+  const calculateSLAStatus = (bordereau: any) => {
+    if (!bordereau.dateReception || !bordereau.delaiReglement) return 'UNKNOWN';
+    
+    const today = new Date();
+    const reception = new Date(bordereau.dateReception);
+    const daysElapsed = (today.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24);
+    const delai = bordereau.delaiReglement;
+    const percentElapsed = (daysElapsed / delai) * 100;
+    
+    if (percentElapsed > 100) return 'OVERDUE';
+    if (percentElapsed > 80) return 'AT_RISK';
+    return 'ON_TIME';
+  };
+
+  const applyFilters = () => {
+    let filtered = [...teamBordereaux];
+
+    if (referenceFilter) {
+      filtered = filtered.filter(b => 
+        b.reference?.toLowerCase().includes(referenceFilter.toLowerCase())
+      );
+    }
+
+    if (selectedClient) {
+      filtered = filtered.filter(b => b.clientId === selectedClient);
+    }
+
+    if (virementFilter) {
+      if (virementFilter === 'NONE') {
+        filtered = filtered.filter(b => !b.ordresVirement || b.ordresVirement.length === 0);
+      } else {
+        filtered = filtered.filter(b => 
+          b.ordresVirement && b.ordresVirement.length > 0 && b.ordresVirement[0].etatVirement === virementFilter
+        );
+      }
+    }
+
+    if (slaFilter !== 'all') {
+      filtered = filtered.filter(b => {
+        const slaStatus = calculateSLAStatus(b);
+        if (slaFilter === 'en_retard') return slaStatus === 'OVERDUE';
+        if (slaFilter === 'a_risque') return slaStatus === 'AT_RISK';
+        if (slaFilter === 'respecte') return slaStatus === 'ON_TIME';
+        return true;
+      });
+    }
+
+    if (dateFrom) {
+      filtered = filtered.filter(b => {
+        const receptionDate = new Date(b.dateReception);
+        return receptionDate >= new Date(dateFrom);
+      });
+    }
+    if (dateTo) {
+      filtered = filtered.filter(b => {
+        const receptionDate = new Date(b.dateReception);
+        return receptionDate <= new Date(dateTo);
+      });
+    }
+
+    setFilteredData(filtered);
+  };
+
+  const resetFilters = () => {
+    setReferenceFilter('');
+    setSelectedClient('');
+    setVirementFilter('');
+    setSlaFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setFilteredData(teamBordereaux);
+  };
+
+  useEffect(() => {
+    applyFilters();
+  }, [referenceFilter, selectedClient, virementFilter, slaFilter, dateFrom, dateTo, teamBordereaux]);
+
   const getTabData = () => {
+    const dataToFilter = filteredData;
+    
     switch (activeTab) {
       case 'en-cours':
-        return teamBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
+        return dataToFilter.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
       case 'traites':
-        return teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
+        return dataToFilter.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
       default:
         return [];
     }
   };
 
-  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean; warning?: string } => {
     if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
       return { days: null, isOnTime: true };
     }
     return { 
       days: bordereau.dureeTraitement, 
-      isOnTime: bordereau.dureeTraitementStatus === 'GREEN' 
+      isOnTime: bordereau.dureeTraitementStatus === 'GREEN',
+      warning: bordereau.dureeTraitementWarning || undefined
     };
   };
 
@@ -152,6 +258,75 @@ function GestionnaireSeniorBordereaux() {
           </div>
         </div>
 
+        {/* Filters Panel */}
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', border: '1px solid #f0f0f0', borderTop: '3px solid #2196f3' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
+            <div style={{ background: '#e3f2fd', borderRadius: '6px', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Filter style={{ width: '14px', height: '14px', color: '#1976d2' }} />
+            </div>
+            <span style={{ fontSize: '14px', fontWeight: '700', color: '#1a1a1a' }}>Filtres de recherche</span>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Référence</label>
+              <input type="text" placeholder="Rechercher..." value={referenceFilter} onChange={(e) => setReferenceFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '140px', color: '#374151' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Client</label>
+              <Autocomplete
+                options={clients}
+                getOptionLabel={(option) => option.name || ''}
+                value={clients.find(c => c.id === selectedClient) || null}
+                onChange={(e, newValue) => setSelectedClient(newValue?.id || '')}
+                renderInput={(params) => (
+                  <div ref={params.InputProps.ref}>
+                    <input
+                      {...params.inputProps}
+                      type="text"
+                      placeholder="Sélectionner..."
+                      style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '100%', color: '#374151' }}
+                    />
+                  </div>
+                )}
+                style={{ width: '180px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Statut Virement</label>
+              <select value={virementFilter} onChange={(e) => setVirementFilter(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '160px', color: '#374151' }}>
+                <option value="">Tous</option>
+                <option value="EXECUTE">✅ Exécuté</option>
+                <option value="EN_COURS">🔄 En cours</option>
+                <option value="EN_COURS_VALIDATION">⏳ En attente validation</option>
+                <option value="REJETE">❌ Rejeté</option>
+                <option value="NONE">Pas de virement</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA</label>
+              <select value={slaFilter} onChange={(e) => setSlaFilter(e.target.value as any)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '190px', color: '#374151' }}>
+                <option value="all">📊 Tous ({teamBordereaux.length})</option>
+                <option value="en_retard">● En retard ({teamBordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length})</option>
+                <option value="a_risque">▲ À risque ({teamBordereaux.filter(b => calculateSLAStatus(b) === 'AT_RISK').length})</option>
+                <option value="respecte">✓ Respecté ({teamBordereaux.filter(b => calculateSLAStatus(b) === 'ON_TIME').length})</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date début</label>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '142px', color: '#374151' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date fin</label>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', width: '142px', color: '#374151' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+              <button onClick={resetFilters} style={{ padding: '7px 14px', background: 'white', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>
+                Effacer
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Tabs */}
         <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', marginBottom: '24px' }}>
           <div className="chef-equipe-tabs">
@@ -202,6 +377,8 @@ function GestionnaireSeniorBordereaux() {
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Délais contractuels de règlement</th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de traitement</th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de règlement</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>SLA</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Statut Virement</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,18 +438,37 @@ function GestionnaireSeniorBordereaux() {
                           if (dureeTraitement.days === null || dureeTraitement.days === undefined) {
                             return <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>;
                           }
+                          
+                          const hasWarning = !!dureeTraitement.warning;
+                          const bgColor = hasWarning ? '#fff3e0' : (dureeTraitement.isOnTime ? '#e8f5e9' : '#ffebee');
+                          const textColor = hasWarning ? '#f57c00' : (dureeTraitement.isOnTime ? '#2e7d32' : '#c62828');
+                          
                           return (
-                            <span style={{ 
-                              background: dureeTraitement.isOnTime ? '#e8f5e9' : '#ffebee', 
-                              color: dureeTraitement.isOnTime ? '#2e7d32' : '#c62828', 
-                              padding: '4px 8px', 
-                              borderRadius: '12px', 
-                              fontSize: '12px', 
-                              fontWeight: 'bold',
-                              display: 'inline-block'
-                            }}>
-                              {dureeTraitement.days} jour{dureeTraitement.days !== 1 ? 's' : ''}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ 
+                                background: bgColor, 
+                                color: textColor, 
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '12px', 
+                                fontWeight: 'bold',
+                                display: 'inline-block'
+                              }}>
+                                {dureeTraitement.days} jour{dureeTraitement.days !== 1 ? 's' : ''}
+                              </span>
+                              {hasWarning && (
+                                <span 
+                                  title={dureeTraitement.warning}
+                                  style={{ 
+                                    cursor: 'help',
+                                    fontSize: '14px',
+                                    color: '#f57c00'
+                                  }}
+                                >
+                                  ⚠️
+                                </span>
+                              )}
+                            </div>
                           );
                         })()}
                       </td>
@@ -299,6 +495,82 @@ function GestionnaireSeniorBordereaux() {
                               {dureeReglement.days} jour{dureeReglement.days !== 1 ? 's' : ''}
                             </span>
                           );
+                        })()}
+                      </td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                        {(() => {
+                          const slaStatus = calculateSLAStatus(bordereau);
+                          if (slaStatus === 'UNKNOWN') {
+                            return <span style={{ color: '#999', fontSize: '12px' }}>-</span>;
+                          }
+                          return (
+                            <span style={{ 
+                              background: slaStatus === 'OVERDUE' ? '#ffebee' : slaStatus === 'AT_RISK' ? '#fff3e0' : '#e8f5e9',
+                              color: slaStatus === 'OVERDUE' ? '#c62828' : slaStatus === 'AT_RISK' ? '#f57c00' : '#2e7d32',
+                              padding: '4px 8px', 
+                              borderRadius: '12px', 
+                              fontSize: '12px', 
+                              fontWeight: 'bold',
+                              display: 'inline-block'
+                            }}>
+                              {slaStatus === 'OVERDUE' ? '● En retard' : slaStatus === 'AT_RISK' ? '▲ À risque' : '✓ Respecté'}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                        {(() => {
+                          // Check if virement exists
+                          if (bordereau.ordresVirement && bordereau.ordresVirement.length > 0) {
+                            const virement = bordereau.ordresVirement[0];
+                            const etat = virement.etatVirement;
+                            
+                            let bgColor = '#e3f2fd';
+                            let textColor = '#1976d2';
+                            let icon = '⏳';
+                            let label = 'En attente';
+                            
+                            if (etat === 'EXECUTE') {
+                              bgColor = '#e8f5e9';
+                              textColor = '#2e7d32';
+                              icon = '✅';
+                              label = 'Exécuté';
+                            } else if (etat === 'REJETE') {
+                              bgColor = '#ffebee';
+                              textColor = '#c62828';
+                              icon = '❌';
+                              label = 'Rejeté';
+                            } else if (etat === 'EN_COURS') {
+                              bgColor = '#fff3e0';
+                              textColor = '#f57c00';
+                              icon = '🔄';
+                              label = 'En cours';
+                            } else if (etat === 'EN_COURS_VALIDATION') {
+                              bgColor = '#e3f2fd';
+                              textColor = '#1976d2';
+                              icon = '⏳';
+                              label = 'En attente';
+                            }
+                            
+                            return (
+                              <span style={{ 
+                                background: bgColor, 
+                                color: textColor, 
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '11px', 
+                                fontWeight: 'bold',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                {icon} {label}
+                              </span>
+                            );
+                          }
+                          
+                          // No virement yet
+                          return <span style={{ color: '#999', fontSize: '12px' }}>Pas de virement</span>;
                         })()}
                       </td>
                     </tr>

@@ -164,16 +164,36 @@ export class ScanWorkflowService {
    */
   private async autoProgressToAssignment(bordereau: any) {
     try {
-      // Update status to ready for assignment
-      await this.prisma.bordereau.update({
-        where: { id: bordereau.id },
-        data: { statut: 'A_AFFECTER' }
+      // Check if Senior-managed
+      const contract = await this.prisma.contract.findUnique({
+        where: { id: bordereau.contractId },
+        include: { teamLeader: { select: { id: true, role: true } } }
       });
-
-      // Notify chef d'équipe based on client's chargé de compte
-      await this.notifyChefForAssignment(bordereau.id, bordereau.reference, bordereau.client);
-
-      this.logger.log(`Auto-progressed bordereau ${bordereau.reference} to assignment stage`);
+      
+      const isSeniorManaged = contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR';
+      
+      if (isSeniorManaged) {
+        // Senior-managed: Auto-transition to EN_COURS
+        await this.prisma.bordereau.update({
+          where: { id: bordereau.id },
+          data: { 
+            statut: 'EN_COURS',
+            dateReceptionSante: new Date(),
+            assignedToUserId: contract.teamLeaderId
+          }
+        });
+        this.logger.log(`✅ Senior-managed bordereau ${bordereau.reference}: Auto-transitioned to EN_COURS`);
+      } else {
+        // Regular flow: Update status to ready for assignment
+        await this.prisma.bordereau.update({
+          where: { id: bordereau.id },
+          data: { statut: 'A_AFFECTER' }
+        });
+        
+        // Notify chef d'équipe based on client's chargé de compte
+        await this.notifyChefForAssignment(bordereau.id, bordereau.reference, bordereau.client);
+        this.logger.log(`Auto-progressed bordereau ${bordereau.reference} to assignment stage`);
+      }
     } catch (error) {
       this.logger.error(`Error auto-progressing to assignment: ${error.message}`);
     }

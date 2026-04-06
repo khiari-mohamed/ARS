@@ -7,22 +7,22 @@ export enum StatusColor {
 }
 
 export class BordereauResponseDto {
-  id: string;
-  reference: string;
-  clientId: string;
-  contractId: string;
-  dateReception: Date;
+  id!: string;
+  reference!: string;
+  clientId!: string;
+  contractId!: string;
+  dateReception!: Date;
   dateDebutScan?: Date | null;
   dateFinScan?: Date | null;
   dateReceptionSante?: Date | null;
   dateCloture?: Date | null;
   dateDepotVirement?: Date | null;
   dateExecutionVirement?: Date | null;
-  delaiReglement: number;
-  statut: Statut;
-  nombreBS: number;
-  createdAt: Date;
-  updatedAt: Date;
+  delaiReglement!: number;
+  statut!: Statut;
+  nombreBS!: number;
+  createdAt!: Date;
+  updatedAt!: Date;
   
   // Additional fields for KPIs and tracking
   daysElapsed?: number;
@@ -35,6 +35,7 @@ export class BordereauResponseDto {
   dateReceptionBO?: Date | null;
   dureeTraitement?: number | null;
   dureeTraitementStatus?: 'GREEN' | 'RED' | null;
+  dureeTraitementWarning?: string | null; // Warning message for data inconsistency
   dureeReglement?: number | null;
   dureeReglementStatus?: 'GREEN' | 'RED' | null;
   dateAffectation?: Date | null;
@@ -117,37 +118,65 @@ export class BordereauResponseDto {
       response.totalDuration = totalDuration;
       response.isOverdue = daysRemaining <= 0;
       
-      // Calculate Durée de traitement (date de traitement - date BO)
-      // Use dateCloture if available, otherwise use current date for in-progress calculation
-      if (bordereau.dateReceptionBO) {
-        const dateBO = new Date(bordereau.dateReceptionBO);
+      // Calculate Durée de traitement (Date Clôture - Date Réception)
+      // When bordereau becomes TRAITÉ (processing completed)
+      // SAFEGUARD: Only use dateCloture if status is in a "finished" state
+      if (bordereau.dateReception) {
+        const isFinishedStatus = ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(bordereau.statut);
         
-        if (bordereau.dateCloture) {
-          const dateTraitement = new Date(bordereau.dateCloture);
+        if (bordereau.dateCloture && isFinishedStatus) {
+          // Happy path: dateCloture exists and status is finished
+          const dateReception = new Date(bordereau.dateReception);
+          const dateCloture = new Date(bordereau.dateCloture);
           response.dureeTraitement = Math.floor(
-            (dateTraitement.getTime() - dateBO.getTime()) / (1000 * 60 * 60 * 24)
+            (dateCloture.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
           );
           response.dureeTraitementStatus = response.dureeTraitement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
-        } else {
-          // In progress - calculate current duration
+          response.dureeTraitementWarning = null; // No warning
+        } else if (bordereau.statut === 'TRAITE' && !bordereau.dateCloture) {
+          // Fallback: TRAITÉ without dateCloture (manual status change)
+          // Use current date as approximation
           const now = new Date();
+          const dateReception = new Date(bordereau.dateReception);
           response.dureeTraitement = Math.floor(
-            (now.getTime() - dateBO.getTime()) / (1000 * 60 * 60 * 24)
+            (now.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
           );
-          response.dureeTraitementStatus = response.dureeTraitement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
+          response.dureeTraitementStatus = 'ORANGE' as any; // Special status for approximation
+          response.dureeTraitementWarning = 'Durée approximative - Date de clôture manquante';
+          
+          // Log data inconsistency for monitoring
+         // console.warn(`⚠️  Data inconsistency: Bordereau ${bordereau.reference} is TRAITÉ but missing dateCloture`);
+        } else if (bordereau.dateCloture && !isFinishedStatus) {
+          // Data inconsistency: has dateCloture but status is not finished
+          // Ignore the invalid dateCloture
+          response.dureeTraitement = null;
+          response.dureeTraitementStatus = null;
+          response.dureeTraitementWarning = null;
+          
+          // Log data inconsistency for monitoring
+          //console.warn(`⚠️  Data inconsistency: Bordereau ${bordereau.reference} has dateCloture but status is ${bordereau.statut}`);
+        } else {
+          // Normal case: not finished yet
+          response.dureeTraitement = null;
+          response.dureeTraitementStatus = null;
+          response.dureeTraitementWarning = null;
         }
       } else {
         response.dureeTraitement = null;
         response.dureeTraitementStatus = null;
       }
       
-      // Calculate Durée de règlement (date de règlement - date BO)
-      const dateExecutionVirement = bordereau.ordresVirement?.[0]?.dateEtatFinal || bordereau.ordresVirement?.[0]?.dateTraitement || bordereau.dateExecutionVirement;
-      if (bordereau.dateReceptionBO && dateExecutionVirement) {
-        const dateBO = new Date(bordereau.dateReceptionBO);
+      // Calculate Durée de règlement (Date Execution Virement - Date Réception)
+      // When virement is actually executed (payment sent)
+      const dateExecutionVirement = bordereau.ordresVirement?.[0]?.dateEtatFinal || 
+                                    bordereau.ordresVirement?.[0]?.dateTraitement || 
+                                    bordereau.dateExecutionVirement;
+      
+      if (bordereau.dateReception && dateExecutionVirement) {
+        const dateReception = new Date(bordereau.dateReception);
         const dateReglement = new Date(dateExecutionVirement);
         response.dureeReglement = Math.floor(
-          (dateReglement.getTime() - dateBO.getTime()) / (1000 * 60 * 60 * 24)
+          (dateReglement.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
         );
         response.dureeReglementStatus = response.dureeReglement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
       } else {

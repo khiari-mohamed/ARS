@@ -107,10 +107,8 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
 
   const handleBulkSelectInBordereau = (count: number | 'all') => {
     const unassignedDocs = documents.filter(doc => !doc.assignedToUserId);
-    console.log('Unassigned docs:', unassignedDocs.length, 'Total docs:', documents.length);
     const docsToSelect = count === 'all' ? unassignedDocs : unassignedDocs.slice(0, count);
     const docIds = docsToSelect.map(doc => doc.id);
-    console.log('Selecting doc IDs:', docIds);
     
     if (onBulkSelect) {
       onBulkSelect(docIds);
@@ -288,13 +286,6 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   useEffect(() => {
     loadDossiers();
     loadGestionnaires();
-    
-    // Periodic check for virement execution (every 30 seconds)
-    const virementCheckInterval = setInterval(() => {
-      checkVirementStatusForAllBordereaux();
-    }, 30000);
-    
-    return () => clearInterval(virementCheckInterval);
   }, [params]);
 
   const loadDossiers = async () => {
@@ -303,56 +294,32 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers');
       const items = response.data || [];
       
-      // Get additional document details for each dossier
-      const dossiersWithDocuments = await Promise.all(
-        items.map(async (item: any) => {
-          try {
-            const docResponse = await LocalAPI.get(`/bordereaux/${item.id}`, {
-              params: { include: 'documents,documents.assignedTo' }
-            });
-            const documents = docResponse.data.documents || [];
-            const assignedDocs = documents.filter((doc: any) => doc.assignedToUserId);
-            const assignedToUsers = [...new Set(assignedDocs.map((doc: any) => doc.assignedTo?.fullName).filter(Boolean))];
-            
-            return {
-              id: item.id,
-              reference: item.reference,
-              client: { name: item.client },
-              statut: item.statut,
-              dateReception: item.date,
-              nombreBS: documents.length,
-              bulletinSoins: [],
-              assignedToUserId: item.assignedToUserId,
-              documents: documents,
-              documentAssignments: {
-                total: documents.length,
-                assigned: assignedDocs.length,
-                unassigned: documents.length - assignedDocs.length,
-                assignedTo: assignedToUsers
-              }
-            };
-          } catch (error) {
-            console.error(`Error loading documents for ${item.id}:`, error);
-            return {
-              id: item.id,
-              reference: item.reference,
-              client: { name: item.client },
-              statut: item.statut,
-              dateReception: item.date,
-              nombreBS: 0,
-              bulletinSoins: [],
-              assignedToUserId: item.assignedToUserId,
-              documents: [],
-              documentAssignments: {
-                total: 0,
-                assigned: 0,
-                unassigned: 0,
-                assignedTo: []
-              }
-            };
+      // Map items directly - backend already provides gestionnaire!
+      const dossiersWithDocuments = items.map((item: any) => {
+        // Use gestionnaire from backend directly
+        const gestionnaireNames = item.gestionnaire && item.gestionnaire !== 'Non assigné' 
+          ? [item.gestionnaire] 
+          : [];
+        
+        return {
+          id: item.id,
+          reference: item.reference,
+          client: { name: item.client },
+          statut: item.statut,
+          dateReception: item.date,
+          nombreBS: item.documentCount || 0,
+          bulletinSoins: [],
+          assignedToUserId: item.assignedToUserId,
+          documents: [],
+          gestionnaireRole: item.gestionnaireRole,
+          documentAssignments: {
+            total: 0,
+            assigned: 0,
+            unassigned: 0,
+            assignedTo: gestionnaireNames
           }
-        })
-      );
+        };
+      });
       
       setDossiers(dossiersWithDocuments);
       setFilteredDossiers(dossiersWithDocuments);
@@ -362,7 +329,6 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         total: dossiersWithDocuments.length
       });
     } catch (error) {
-      console.error('Error loading dossiers:', error);
       message.error('Erreur lors du chargement des dossiers');
       setDossiers([]);
     } finally {
@@ -454,9 +420,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
 
   const loadGestionnaires = async () => {
     try {
-      console.log('Loading gestionnaires for user role:', user?.role);
       const response = await LocalAPI.get('/bulletin-soin/gestionnaires');
-      console.log('Gestionnaires response:', response.data);
       const gestionnaires = response.data?.data || response.data || [];
       setGestionnaires(gestionnaires);
     } catch (error) {
@@ -651,7 +615,6 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           
           if (virementExecuted && (response.data.statut === 'TRAITE' || response.data.statut === 'VIREMENT_EXECUTE')) {
             await LocalAPI.put(`/bordereaux/${bordereau.id}`, { statut: 'CLOTURE' });
-            console.log(`Bordereau ${bordereau.reference} automatically updated to CLOTURE`);
           }
         } catch (error) {
           console.error(`Error checking virement for bordereau ${bordereau.id}:`, error);
@@ -720,11 +683,8 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const handleBulkSelectInBordereau = (documentIds: string[]) => {
-    console.log('handleBulkSelectInBordereau called with:', documentIds);
     setSelectedBS(prev => {
-      // Remove duplicates and add new selections
       const uniqueIds = [...new Set([...prev, ...documentIds])];
-      console.log('Updated selectedBS:', uniqueIds);
       return uniqueIds;
     });
   };
@@ -816,8 +776,8 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       )
     },
     {
-      title: 'BS',
-      key: 'bs',
+      title: 'Documents',
+      key: 'documents',
       width: 80,
       render: (_: any, dossier: Dossier) => (
         <Badge count={dossier.nombreBS || 0} showZero />
@@ -828,56 +788,47 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       dataIndex: 'dateReception',
       key: 'dateReception',
       width: 120,
-      render: (date: string) => date ? new Date(date).toLocaleDateString('fr-FR') : '-'
+      render: (date: string) => date || '-'
     },
     {
       title: 'Assigné à',
       key: 'assignedTo',
       width: 200,
       render: (_: any, dossier: Dossier) => {
-        const documents = dossier.documents || [];
+        const assignedTo = dossier.documentAssignments?.assignedTo || [];
+        const role = (dossier as any).gestionnaireRole;
         
-        if (documents.length === 0) {
-          return <Text type="secondary">Aucun document</Text>;
-        }
-        
-        const assignedDocs = documents.filter(doc => doc.assignedToUserId);
-        const assignedToUsers = [...new Set(assignedDocs.map(doc => doc.assignedTo?.fullName || 'Assigné').filter(Boolean))];
-        
-        if (assignedDocs.length === 0) {
+        if (assignedTo.length === 0) {
           return <Text type="secondary">Non assigné</Text>;
         }
         
-        if (assignedDocs.length === documents.length) {
-          if (assignedToUsers.length === 1) {
-            return (
+        const getRoleBadge = (role: string) => {
+          const roleMap: Record<string, { label: string; color: string }> = {
+            'GESTIONNAIRE': { label: 'G', color: 'blue' },
+            'GESTIONNAIRE_SENIOR': { label: 'GS', color: 'purple' },
+            'CHEF_EQUIPE': { label: 'CE', color: 'orange' },
+            'RESPONSABLE_DEPARTEMENT': { label: 'RD', color: 'red' }
+          };
+          const roleInfo = roleMap[role] || { label: 'U', color: 'default' };
+          return <Tag color={roleInfo.color} style={{ marginRight: 4, fontSize: 10 }}>{roleInfo.label}</Tag>;
+        };
+        
+        if (assignedTo.length === 1) {
+          return (
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {role && getRoleBadge(role)}
               <Tag icon={<UserOutlined />} color="green">
-                {assignedToUsers[0]}
+                {assignedTo[0]}
               </Tag>
-            );
-          } else {
-            return (
-              <Tooltip title={assignedToUsers.join(', ')}>
-                <Tag icon={<UserOutlined />} color="green">
-                  {assignedToUsers.length} gestionnaires
-                </Tag>
-              </Tooltip>
-            );
-          }
+            </div>
+          );
         } else {
           return (
-            <div>
-              <Tag color="orange">
-                {assignedDocs.length}/{documents.length} assignés
+            <Tooltip title={assignedTo.join(', ')}>
+              <Tag icon={<UserOutlined />} color="green">
+                {assignedTo.length} gestionnaires
               </Tag>
-              {assignedToUsers.length > 0 && (
-                <Tooltip title={assignedToUsers.join(', ')}>
-                  <Tag icon={<UserOutlined />} color="blue">
-                    {assignedToUsers.length} gest.
-                  </Tag>
-                </Tooltip>
-              )}
-            </div>
+            </Tooltip>
           );
         }
       }

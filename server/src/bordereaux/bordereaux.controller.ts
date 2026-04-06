@@ -277,8 +277,8 @@ export class BordereauxController {
     @UploadedFiles() files: Express.Multer.File[]
   ) {
     try {
-      console.log('📤 Multiple BS Upload - Bordereau ID:', bordereauId);
-      console.log('📤 Files received:', files?.length || 0);
+      //console.log('📤 Multiple BS Upload - Bordereau ID:', bordereauId);
+      //console.log('📤 Files received:', files?.length || 0);
       
       if (!files || files.length === 0) {
         return { success: false, error: 'No files uploaded' };
@@ -328,7 +328,7 @@ export class BordereauxController {
       // Recalculate bordereau progress
       await this.bordereauxService.recalculateBordereauProgress(bordereauId);
       
-      console.log('✅ Multiple BS Upload successful:', results.length, 'BS created');
+     // console.log('✅ Multiple BS Upload successful:', results.length, 'BS created');
       return { 
         success: true, 
         message: `${results.length} BS uploaded successfully`,
@@ -699,16 +699,16 @@ export class BordereauxController {
     if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
       throw new Error('Gestionnaire Senior ne peut pas réaffecter des dossiers à d\'autres gestionnaires');
     }
-    console.log('🔄 REASSIGN ENDPOINT HIT');
-    console.log('Bordereau ID:', bordereauId);
-    console.log('New User ID:', data.newUserId);
-    console.log('Comment:', data.comment);
-    console.log('Request Body:', JSON.stringify(data, null, 2));
+    //console.log('🔄 REASSIGN ENDPOINT HIT');
+   // console.log('Bordereau ID:', bordereauId);
+   // console.log('New User ID:', data.newUserId);
+    //console.log('Comment:', data.comment);
+   // console.log('Request Body:', JSON.stringify(data, null, 2));
     
     const result = await this.bordereauxService.reassignBordereau(bordereauId, data.newUserId, data.comment);
     
     console.log('✅ REASSIGN SUCCESS');
-    console.log('Result:', JSON.stringify(result, null, 2));
+   // console.log('Result:', JSON.stringify(result, null, 2));
     
     return result;
   }
@@ -900,7 +900,7 @@ export class BordereauxController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeCorbeille(@Req() req) {
     const user = req.user;
-    console.log('🔍 Chef équipe corbeille - User:', user.id, user.role);
+    //console.log('🔍 Chef équipe corbeille - User:', user.id, user.role);
     
     let whereClause: any = { archived: false };
     
@@ -912,7 +912,7 @@ export class BordereauxController {
           teamLeaderId: user.id
         }
       };
-      console.log('🎯 Filtering for Chef équipe/Gestionnaire Senior:', user.id);
+      //console.log('🎯 Filtering for Chef équipe/Gestionnaire Senior:', user.id);
     }
     // Super Admin and Admin see everything
     else if (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.ADMINISTRATEUR) {
@@ -1308,6 +1308,23 @@ export class BordereauxController {
       'REJETE': 'Rejeté'
     };
     return statutMap[statut] || 'Nouveau';
+  }
+
+  private getStatutLabelForSenior(statut: string): string {
+    const statutMap = {
+      'EN_ATTENTE': 'À scanner',
+      'A_SCANNER': 'À scanner',
+      'SCAN_EN_COURS': 'En cours',
+      'SCANNE': 'En cours',
+      'A_AFFECTER': 'En cours',
+      'ASSIGNE': 'En cours',
+      'EN_COURS': 'En cours',
+      'TRAITE': 'Traité',
+      'CLOTURE': 'Traité',
+      'EN_DIFFICULTE': 'Rejeté',
+      'REJETE': 'Rejeté'
+    };
+    return statutMap[statut] || 'À scanner';
   }
 
   private getRelativeTime(date: Date | string): string {
@@ -1738,7 +1755,7 @@ export class BordereauxController {
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async getGestionnaireSeniorCorbeille(@Req() req) {
     const user = req.user;
-    console.log('🔍 Gestionnaire Senior corbeille - User:', user.id);
+    //console.log('🔍 Gestionnaire Senior corbeille - User:', user.id);
     
     // GESTIONNAIRE SENIOR works with contract.teamLeaderId
     // NO "nonAffectes" - everything goes directly to EN_COURS
@@ -1761,7 +1778,8 @@ export class BordereauxController {
           contract: true,
           currentHandler: { select: { fullName: true } },
           BulletinSoin: { select: { id: true, etat: true } },
-          documents: { select: { id: true } }  // Include documents for count
+          documents: { select: { id: true } },
+          ordresVirement: true
         },
         orderBy: { dateReception: 'desc' }
       }),
@@ -1776,7 +1794,8 @@ export class BordereauxController {
           contract: true,
           currentHandler: { select: { fullName: true } },
           BulletinSoin: { select: { id: true, etat: true } },
-          documents: { select: { id: true } }  // Include documents for count
+          documents: { select: { id: true } },
+          ordresVirement: true
         },
         orderBy: { updatedAt: 'desc' }
       })
@@ -1907,7 +1926,7 @@ export class BordereauxController {
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async getGestionnaireSeniorDashboardDossiers(@Req() req) {
     const user = req.user;
-    console.log('🔍 SENIOR DASHBOARD DOSSIERS - User ID:', user.id);
+    //console.log('🔍 SENIOR DASHBOARD DOSSIERS - User ID:', user.id);
     
     const [documents, bordereaux] = await Promise.all([
       this.prisma.document.findMany({
@@ -1992,6 +2011,9 @@ export class BordereauxController {
         stateCounts['Traité'] = traites;
       }
       
+      // Use special status label for Gestionnaire Senior (shows "À scanner" instead of "Nouveau")
+      const statutLabel = this.getStatutLabelForSenior(bordereau.statut);
+      
       dossiers.push({
         id: bordereau.id,
         reference: bordereau.reference,
@@ -1999,11 +2021,11 @@ export class BordereauxController {
         societe: bordereau.client?.name || 'N/A',
         client: bordereau.client?.name || 'N/A',
         type: 'Prestation',
-        statut: this.getStatutLabel(bordereau.statut),
+        statut: statutLabel,
         date: bordereau.dateReception?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
         gestionnaire: bordereau.currentHandler?.fullName || bordereau.contract?.teamLeader?.fullName || user.fullName,
         completionPercentage: completion,
-        dossierStates: states.length > 0 ? states : [this.getStatutLabel(bordereau.statut)],
+        dossierStates: states.length > 0 ? states : [statutLabel],
         dossierStateCounts: stateCounts,
         totalDocs,
         priorite: 'Normale',

@@ -776,16 +776,18 @@ export class BordereauxService {
 
     // DYNAMIC STATUS: Check if contract has Gestionnaire Senior as team leader
     let initialStatus = statut || Statut.A_SCANNER;
+    let assignedSeniorId: string | null = null;
     
     if (contractId) {
       const contract = await this.prisma.contract.findUnique({
         where: { id: contractId },
-        include: { teamLeader: { select: { role: true } } }
+        include: { teamLeader: { select: { id: true, role: true } } }
       });
       
       // If contract is assigned to Gestionnaire Senior, start with EN_COURS
       if (contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR') {
         initialStatus = Statut.EN_COURS;
+        assignedSeniorId = contract.teamLeader.id;
       }
     }
 
@@ -799,6 +801,12 @@ export class BordereauxService {
       nombreBS,
       statut: initialStatus,
     };
+    
+    // If assigned to Gestionnaire Senior, set assignedToUserId and currentHandlerId
+    if (assignedSeniorId) {
+      data.assignedToUserId = assignedSeniorId;
+      data.currentHandlerId = assignedSeniorId;
+    }
     // Note: createdBy is not a field in the schema, skip it
     if (dateDebutScan) data.dateDebutScan = new Date(dateDebutScan);
     if (dateFinScan) data.dateFinScan = new Date(dateFinScan);
@@ -814,12 +822,12 @@ export class BordereauxService {
         data,
         include: {
           client: true,
-          contract: true,
+          contract: { include: { teamLeader: true } },
         },
       });
       console.log('✅ Bordereau created successfully:', bordereau.reference);
     
-      // AUTO-NOTIFICATION: BO → SCAN team notification
+      // AUTO-NOTIFICATION: Send to SCAN team (normal flow)
       await this.autoNotificationService.notifyBOToScan(bordereau.id, bordereau.reference);
       
       // Trigger workflow progression
@@ -861,6 +869,39 @@ export class BordereauxService {
     if (filters.performance) where.performance = filters.performance;
     if (filters.clientId) where.clientId = filters.clientId;
     if (filters.contractId) where.contractId = filters.contractId;
+    
+    // NEW: Gestionnaire filters
+    if (filters.gestionnaireId) {
+      where.assignedToUserId = filters.gestionnaireId;
+      console.log('✅ Applying gestionnaireId filter:', filters.gestionnaireId);
+    }
+    if (filters.gestionnaireSeniorId) {
+      // Get contracts managed by this senior
+      const contracts = await this.prisma.contract.findMany({
+        where: { teamLeaderId: filters.gestionnaireSeniorId },
+        select: { id: true }
+      });
+      if (contracts.length > 0) {
+        where.contractId = { in: contracts.map(c => c.id) };
+        console.log('✅ Applying gestionnaireSeniorId filter - contracts:', contracts.length);
+      }
+    }
+    if (filters.chefEquipeId) {
+      // Get team members for this chef
+      const teamMembers = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            { id: filters.chefEquipeId },
+            { teamLeaderId: filters.chefEquipeId }
+          ]
+        },
+        select: { id: true }
+      });
+      if (teamMembers.length > 0) {
+        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
+        console.log('✅ Applying chefEquipeId filter - team members:', teamMembers.length);
+      }
+    }
     // Handle statut filter (can be statut or statut[])
     const statutFilter = filters.statut || filters['statut[]'];
     if (statutFilter) {
@@ -914,7 +955,12 @@ export class BordereauxService {
     // Build include clause - ALWAYS include documents for accurate count AND currentHandler for senior display
     const include: any = {
       client: true,
-      contract: { include: { teamLeader: true } },
+      contract: { 
+        include: { 
+          teamLeader: true,
+          assignedManager: true
+        } 
+      },
       documents: { select: { id: true } },
       currentHandler: { select: { id: true, fullName: true, role: true } },
       ordresVirement: {
@@ -1532,6 +1578,11 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
    * Update bordereau status when scan completes
    */
   async completeScan(id: string): Promise<BordereauResponseDto> {
+    console.log('🔴 ========================================');
+    console.log('🔴 COMPLETE SCAN CALLED');
+    console.log('🔴 Bordereau ID:', id);
+    console.log('🔴 ========================================');
+    
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: {
@@ -1554,25 +1605,43 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
       },
     });
     
+    console.log('📊 Bordereau loaded:');
+    console.log('   Reference:', bordereau.reference);
+    console.log('   Contract ID:', bordereau.contractId);
+    console.log('   Contract exists:', !!bordereau.contract);
+    console.log('   Team Leader ID:', bordereau.contract?.teamLeaderId);
+    console.log('   Team Leader exists:', !!bordereau.contract?.teamLeader);
+    console.log('   Team Leader Role:', bordereau.contract?.teamLeader?.role);
+    
     // Auto-progress to assignment stage
+    console.log('🔄 Calling progressWorkflow with SCAN_COMPLETED...');
     await this.progressWorkflow(id, 'SCAN_COMPLETED');
     
-    // PRIORITY 1: Contract-based assignment to chef d'équipe
-    if (bordereau.contract?.teamLeader) {
-      const { ContractAssignmentService } = await import('../workflow/contract-assignment.service');
-      const contractService = new ContractAssignmentService(this.prisma);
-      
-      try {
-        await contractService.autoAssignBordereauByContract(id);
-        this.logger.log(`Bordereau ${bordereau.reference} auto-assigned to team leader based on contract`);
-      } catch (error) {
-        this.logger.error(`Contract-based assignment failed for ${bordereau.reference}: ${error.message}`);
-        // Fallback to traditional assignment
+    // Check if Senior-managed (already handled by progressWorkflow)
+    const isSeniorManaged = bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR';
+    
+    if (isSeniorManaged) {
+      // Senior-managed: Already auto-transitioned to EN_COURS by progressWorkflow
+      // No additional assignment needed
+      this.logger.log(`✅ Senior-managed bordereau ${bordereau.reference}: Skipping additional assignment (already EN_COURS)`);
+    } else {
+      // Regular flow: Contract-based or traditional assignment
+      if (bordereau.contract?.teamLeader) {
+        const { ContractAssignmentService } = await import('../workflow/contract-assignment.service');
+        const contractService = new ContractAssignmentService(this.prisma);
+        
+        try {
+          await contractService.autoAssignBordereauByContract(id);
+          this.logger.log(`Bordereau ${bordereau.reference} auto-assigned to team leader based on contract`);
+        } catch (error) {
+          this.logger.error(`Contract-based assignment failed for ${bordereau.reference}: ${error.message}`);
+          // Fallback to traditional assignment
+          await this.fallbackAssignment(id, bordereau);
+        }
+      } else {
+        // FALLBACK: Traditional assignment methods
         await this.fallbackAssignment(id, bordereau);
       }
-    } else {
-      // FALLBACK: Traditional assignment methods
-      await this.fallbackAssignment(id, bordereau);
     }
     
     await this.logAction(id, 'COMPLETE_SCAN');
@@ -1965,10 +2034,33 @@ private async logAction(bordereauId: string, action: string): Promise<void> {
  */
 private async progressWorkflow(bordereauId: string, trigger: string): Promise<void> {
   try {
+    console.log('🔵 ========================================');
+    console.log('🔵 PROGRESS WORKFLOW CALLED');
+    console.log('🔵 Bordereau ID:', bordereauId);
+    console.log('🔵 Trigger:', trigger);
+    console.log('🔵 ========================================');
+    
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
-      include: { client: true, contract: true }
+      include: { 
+        client: true, 
+        contract: { 
+          include: { 
+            teamLeader: { 
+              select: { id: true, role: true } 
+            } 
+          } 
+        } 
+      }
     });
+    
+    console.log('📊 Bordereau loaded in progressWorkflow:');
+    console.log('   Reference:', bordereau?.reference);
+    console.log('   Contract ID:', bordereau?.contractId);
+    console.log('   Contract exists:', !!bordereau?.contract);
+    console.log('   Team Leader ID:', bordereau?.contract?.teamLeaderId);
+    console.log('   Team Leader exists:', !!bordereau?.contract?.teamLeader);
+    console.log('   Team Leader Role:', bordereau?.contract?.teamLeader?.role);
     
     if (!bordereau) return;
     
@@ -1988,11 +2080,38 @@ private async progressWorkflow(bordereauId: string, trigger: string): Promise<vo
         break;
         
       case 'SCAN_COMPLETED':
-        // Scan completed -> ready for assignment to health team
-        newStatus = Statut.A_AFFECTER;
+        // Scan completed -> check if Senior-managed or regular
         updateData.dateFinScan = new Date();
-        // Auto-assign to available gestionnaire
-        setTimeout(() => this.autoAssignToGestionnaire(bordereauId), 1000);
+        
+        console.log('🔍 SCAN_COMPLETED - Bordereau:', bordereau.reference);
+        console.log('🔍 Contract ID:', bordereau.contractId);
+        console.log('🔍 Contract exists:', !!bordereau.contract);
+        console.log('🔍 Team Leader ID:', bordereau.contract?.teamLeaderId);
+        console.log('🔍 Team Leader exists:', !!bordereau.contract?.teamLeader);
+        console.log('🔍 Team Leader Role:', bordereau.contract?.teamLeader?.role);
+        
+        // Check if Senior-managed (using loaded relation)
+        const isSeniorManaged = bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR';
+        
+        console.log('🔍 isSeniorManaged:', isSeniorManaged);
+        console.log('🔍 Condition check:', `${bordereau.contract?.teamLeader?.role} === 'GESTIONNAIRE_SENIOR'`);
+        
+        if (isSeniorManaged && bordereau.contract?.teamLeaderId) {
+          // Senior-managed: Auto-transition directly to EN_COURS
+          newStatus = Statut.EN_COURS;
+          updateData.dateReceptionSante = new Date();
+          updateData.assignedToUserId = bordereau.contract.teamLeaderId;
+          console.log('✅ SENIOR DETECTED! Auto-transitioning to EN_COURS');
+          console.log('✅ Assigning to:', bordereau.contract.teamLeaderId);
+          this.logger.log(`✅ Senior-managed bordereau ${bordereau.reference}: Auto-transitioned SCAN_COMPLETED → EN_COURS`);
+        } else {
+          // Regular flow: A_AFFECTER -> wait for Chef assignment
+          newStatus = Statut.A_AFFECTER;
+          console.log('❌ NOT SENIOR - Going to A_AFFECTER');
+          console.log('❌ Reason: isSeniorManaged =', isSeniorManaged, ', teamLeaderId =', bordereau.contract?.teamLeaderId);
+          // Auto-assign to available gestionnaire
+          setTimeout(() => this.autoAssignToGestionnaire(bordereauId), 1000);
+        }
         break;
         
       case 'ASSIGNED':
@@ -2281,6 +2400,38 @@ async reassignBordereau(bordereauId: string, newUserId: string, comment?: string
   console.log('✅ Database updated successfully');
   console.log('New assignment:', updatedBordereau.assignedToUserId);
   console.log('New status:', updatedBordereau.statut);
+  
+  // CRITICAL: Also assign all documents in this bordereau to the new user
+  console.log('📄 Assigning documents to new user...');
+  const documentsUpdateResult = await this.prisma.document.updateMany({
+    where: { bordereauId },
+    data: {
+      assignedToUserId: newUserId,
+      assignedAt: new Date()
+    }
+  });
+  console.log(`✅ Assigned ${documentsUpdateResult.count} documents to ${newUser.fullName}`);
+  
+  // Log document assignments in history
+  if (documentsUpdateResult.count > 0) {
+    const documents = await this.prisma.document.findMany({
+      where: { bordereauId },
+      select: { id: true }
+    });
+    
+    await this.prisma.documentAssignmentHistory.createMany({
+      data: documents.map(doc => ({
+        documentId: doc.id,
+        assignedToUserId: newUserId,
+        assignedByUserId: oldUserId || newUserId, // Use old user if exists, otherwise new user
+        fromUserId: oldUserId,
+        action: 'REASSIGNED',
+        reason: comment || 'Réaffectation IA pour optimisation SLA',
+        createdAt: new Date()
+      }))
+    });
+    console.log(`📝 Logged ${documents.length} document assignment histories`);
+  }
   
   // Log the reassignment action with comment
   await this.prisma.actionLog.create({

@@ -170,40 +170,31 @@ async def suggestions(complaint: Dict = Body(...), current_user = Depends(get_cu
 async def recommendations(payload: Dict = Body(...), current_user = Depends(get_current_active_user)):
     """Generate intelligent ARS recommendations based on payload data"""
     try:
-        # USE PAYLOAD DATA - NOT DATABASE
         bordereaux = payload.get('bordereaux', [])
         agents = payload.get('agents', [])
         
-        # CRITICAL: Filter out archived/closed bordereaux
+        # Filter out archived/closed bordereaux
         active_bordereaux = [
-            b for b in bordereaux 
+            b for b in bordereaux
             if b.get('statut') not in ['ARCHIVE', 'CLOTURE', 'ANNULE', 'SUPPRIME']
         ]
         
-        # Extract metrics from payload
         optimization_focus = payload.get('optimization_focus', ['workload', 'sla', 'performance'])
         metrics = payload.get('metrics', {})
         learning_context = payload.get('learning_context', {})
         current_workload = payload.get('currentWorkload', payload.get('current_workload', len(active_bordereaux)))
         staff_count = payload.get('staff_count', len(agents))
-        sla_breaches = payload.get('sla_breaches', 0)
-        capacity_utilization = payload.get('capacity_utilization', 0)
-            
-        # Calculate SLA metrics from ACTIVE bordereaux only
-        db_sla = active_bordereaux
-        db_agents = agents
-            
-        # Deep SLA Analysis from ACTIVE bordereaux
+        
+        # SLA Analysis from ACTIVE bordereaux
         sla_critical = len([item for item in active_bordereaux if item.get('days_remaining', 0) < 0])
         sla_at_risk = len([item for item in active_bordereaux if 0 <= item.get('days_remaining', 0) <= 2])
         sla_total = len(active_bordereaux)
         sla_breach_rate = (sla_critical / sla_total * 100) if sla_total > 0 else 0
         
-        # Log for debugging
         logger.info(f"📊 Recommendations: Total={len(bordereaux)}, Active={len(active_bordereaux)}, Archived={len(bordereaux)-len(active_bordereaux)}")
         logger.info(f"📊 SLA Analysis: Critical={sla_critical}, At Risk={sla_at_risk}, Total Active={sla_total}")
-            
-        # Workload Distribution Analysis from ACTIVE bordereaux only
+        
+        # Workload Distribution Analysis
         workload_by_status = {}
         workload_by_agent = {}
         for item in active_bordereaux:
@@ -214,8 +205,8 @@ async def recommendations(payload: Dict = Body(...), current_user = Depends(get_
                 workload_by_agent[agent_id] = workload_by_agent.get(agent_id, 0) + 1
         
         total_items = len(active_bordereaux)
-            
-        # Agent Performance Analysis from agents payload
+        
+        # Agent Performance Analysis
         agent_efficiency = []
         for agent in agents:
             total_b = agent.get('total_bordereaux', 0)
@@ -230,7 +221,7 @@ async def recommendations(payload: Dict = Body(...), current_user = Depends(get_
         
         avg_efficiency = sum(a['efficiency'] for a in agent_efficiency) / len(agent_efficiency) if agent_efficiency else 0
         low_performers = [a for a in agent_efficiency if a['efficiency'] < avg_efficiency * 0.7]
-            
+        
         # Capacity Analysis
         total_capacity = staff_count * 10 if staff_count > 0 else 1
         capacity_utilization = min(1.0, current_workload / total_capacity) if total_capacity > 0 else 0
@@ -246,10 +237,10 @@ async def recommendations(payload: Dict = Body(...), current_user = Depends(get_
         # Workload Imbalance Detection
         if workload_by_agent:
             workloads = list(workload_by_agent.values())
-            avg_workload = sum(workloads) / len(workloads)
+            avg_workload_val = sum(workloads) / len(workloads)
             max_workload = max(workloads)
             min_workload = min(workloads)
-            imbalance_ratio = (max_workload - min_workload) / avg_workload if avg_workload > 0 else 0
+            imbalance_ratio = (max_workload - min_workload) / avg_workload_val if avg_workload_val > 0 else 0
         else:
             imbalance_ratio = 0
             
@@ -393,273 +384,6 @@ async def recommendations(payload: Dict = Body(...), current_user = Depends(get_
         
     except Exception as e:
         logger.error(f"Recommendations generation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Recommendations generation failed: {str(e)}")
-
-# === AI LEARNING COMPONENTS ===
-        if bordereaux:
-            high_risk_count = 0
-            overdue_count = 0
-            
-            for bordereau in bordereaux:
-                days_remaining_raw = bordereau.get('days_remaining', 0)
-                try:
-                    days_remaining = float(days_remaining_raw) if days_remaining_raw is not None else 0
-                except (ValueError, TypeError):
-                    days_remaining = 0
-                
-                if days_remaining <= 2:
-                    high_risk_count += 1
-                if days_remaining <= 0:
-                    overdue_count += 1
-            
-            if overdue_count > 0:
-                recommendations.append({
-                    "type": "SLA_CRITICAL",
-                    "priority": "HIGH",
-                    "title": "Bordereaux en dépassement SLA",
-                    "description": f"{overdue_count} bordereaux ont dépassé leur délai SLA",
-                    "action": "Traitement d'urgence requis",
-                    "impact": "Risque contractuel élevé",
-                    "recommendation": f"Affecter immédiatement {overdue_count} bordereaux en dépassement à des gestionnaires expérimentés"
-                })
-            
-            if high_risk_count > len(bordereaux) * 0.2:  # More than 20% at risk
-                recommendations.append({
-                    "type": "CAPACITY_PLANNING",
-                    "priority": "MEDIUM",
-                    "title": "Charge de travail élevée",
-                    "description": f"{high_risk_count} bordereaux à risque SLA",
-                    "action": "Renforcement d'équipe recommandé",
-                    "impact": "Amélioration des délais de traitement",
-                    "recommendation": f"Ajouter 1-2 gestionnaires temporaires pour réduire la charge"
-                })
-        
-        # 2. Agent Performance Analysis
-        if agents:
-            low_performers = []
-            high_performers = []
-            
-            for agent in agents:
-                total_bordereaux = agent.get('total_bordereaux', 0)
-                sla_compliant = agent.get('sla_compliant', 0)
-                
-                # Ultra-safe conversion to integers
-                try:
-                    if isinstance(total_bordereaux, str) and total_bordereaux.replace('.', '').replace('-', '').isdigit():
-                        total_bordereaux = int(float(total_bordereaux))
-                    elif isinstance(total_bordereaux, (int, float)):
-                        total_bordereaux = int(total_bordereaux)
-                    else:
-                        total_bordereaux = 0
-                except:
-                    total_bordereaux = 0
-                
-                try:
-                    if isinstance(sla_compliant, str) and sla_compliant.replace('.', '').replace('-', '').isdigit():
-                        sla_compliant = int(float(sla_compliant))
-                    elif isinstance(sla_compliant, (int, float)):
-                        sla_compliant = int(sla_compliant)
-                    else:
-                        sla_compliant = 0
-                except:
-                    sla_compliant = 0
-                
-                if total_bordereaux > 0:
-                    compliance_rate = sla_compliant / total_bordereaux
-                    if compliance_rate < 0.7:  # Less than 70% SLA compliance
-                        low_performers.append(agent)
-                    elif compliance_rate > 0.9:  # More than 90% SLA compliance
-                        high_performers.append(agent)
-            
-            if low_performers:
-                recommendations.append({
-                    "type": "PERFORMANCE_IMPROVEMENT",
-                    "priority": "MEDIUM",
-                    "title": "Formation gestionnaires",
-                    "description": f"{len(low_performers)} gestionnaires avec performance en dessous de 70%",
-                    "action": "Programme de formation ciblé",
-                    "impact": "Amélioration de la qualité de traitement",
-                    "recommendation": "Organiser des sessions de formation sur les processus complexes"
-                })
-            
-            if high_performers:
-                recommendations.append({
-                    "type": "KNOWLEDGE_SHARING",
-                    "priority": "LOW",
-                    "title": "Partage de bonnes pratiques",
-                    "description": f"{len(high_performers)} gestionnaires avec excellente performance",
-                    "action": "Sessions de mentorat",
-                    "impact": "Élévation du niveau général de l'équipe",
-                    "recommendation": "Utiliser les meilleurs gestionnaires comme mentors pour l'équipe"
-                })
-        
-        # 3. Complaints Analysis
-        if complaints:
-            recent_complaints = []
-            try:
-                for c in complaints:
-                    created_at = c.get('createdAt', '')
-                    if created_at:
-                        try:
-                            created_date = datetime.fromisoformat(str(created_at).replace('Z', '+00:00').replace('+00:00', ''))
-                            if (datetime.now() - created_date).days <= 7:
-                                recent_complaints.append(c)
-                        except (ValueError, TypeError):
-                            continue
-            except Exception as e:
-                logger.debug(f"Complaints date parsing error: {e}")
-                recent_complaints = complaints[:len(complaints)//3]  # Fallback
-            
-            if len(recent_complaints) > len(complaints) * 0.3:  # More than 30% are recent
-                recommendations.append({
-                    "type": "QUALITY_CONTROL",
-                    "priority": "HIGH",
-                    "title": "Augmentation des réclamations",
-                    "description": f"{len(recent_complaints)} réclamations dans les 7 derniers jours",
-                    "action": "Analyse des causes racines",
-                    "impact": "Réduction des réclamations futures",
-                    "recommendation": "Analyser les processus causant l'augmentation des réclamations"
-                })
-        
-        # 4. Workload Distribution Analysis
-        workload_data = payload.get("workload", [])
-        if workload_data and len(workload_data) > 0:
-            workload_counts = []
-            for w in workload_data:
-                # Handle different workload data structures
-                if isinstance(w, dict):
-                    if "_count" in w and isinstance(w["_count"], dict):
-                        count_val = w["_count"].get("id", 0)
-                    else:
-                        count_val = w.get("workload_count", w.get("count", 0))
-                else:
-                    count_val = 0
-                
-                try:
-                    count_val = int(count_val) if count_val is not None else 0
-                except (ValueError, TypeError):
-                    count_val = 0
-                workload_counts.append(count_val)
-            
-            if workload_counts and sum(workload_counts) > 0:
-                total_workload = sum(workload_counts)
-                avg_workload = total_workload / len(workload_data)
-                
-                for i, w in enumerate(workload_data):
-                    count = workload_counts[i]
-                    team_id = str(w.get("teamId", w.get("team_id", "unknown")))
-                    
-                    if count > avg_workload * 1.5:  # 50% above average
-                        recommendations.append({
-                            "type": "WORKLOAD_BALANCING",
-                            "priority": "MEDIUM",
-                            "title": f"Surcharge équipe {team_id}",
-                            "description": f"Charge de travail: {count} (moyenne: {avg_workload:.0f})",
-                            "action": "Rééquilibrage des tâches",
-                            "impact": "Amélioration de l'efficacité globale",
-                            "recommendation": f"Redistribuer une partie de la charge vers d'autres équipes"
-                        })
-        
-        # 5. Generate recommendations based on system data
-        current_workload = payload.get('current_workload', 0)
-        staff_count = payload.get('staff_count', 0)
-        sla_breaches = payload.get('sla_breaches', 0)
-        capacity_utilization = payload.get('capacity_utilization', 0)
-        
-        # Workload-based recommendations
-        if current_workload > 0 and staff_count > 0:
-            workload_per_person = current_workload / staff_count
-            if workload_per_person > 10:  # More than 10 bordereaux per person
-                recommendations.append({
-                    "type": "CAPACITY_PLANNING",
-                    "priority": "HIGH",
-                    "title": "Charge de travail élevée détectée",
-                    "description": f"Ratio de {workload_per_person:.1f} bordereaux par gestionnaire",
-                    "action": "Augmenter l'effectif ou redistribuer la charge",
-                    "impact": "Réduction des délais de traitement",
-                    "recommendation": f"Ajouter {max(1, int(workload_per_person/10))} gestionnaire(s) supplémentaire(s)"
-                })
-        
-        # SLA breach recommendations
-        if sla_breaches > 0:
-            recommendations.append({
-                "type": "SLA_IMPROVEMENT",
-                "priority": "HIGH",
-                "title": "Dépassements SLA détectés",
-                "description": f"{sla_breaches} bordereaux en dépassement SLA",
-                "action": "Traitement prioritaire des dossiers en retard",
-                "impact": "Amélioration de la conformité contractuelle",
-                "recommendation": "Mettre en place un système d'alerte précoce pour les SLA"
-            })
-        
-        # Capacity utilization recommendations
-        if capacity_utilization > 0.9:  # Over 90% utilization
-            recommendations.append({
-                "type": "RESOURCE_OPTIMIZATION",
-                "priority": "MEDIUM",
-                "title": "Utilisation des ressources élevée",
-                "description": f"Taux d'utilisation à {capacity_utilization*100:.0f}%",
-                "action": "Optimiser les processus ou augmenter la capacité",
-                "impact": "Prévention de la surcharge",
-                "recommendation": "Analyser les goulots d'étranglement et optimiser les workflows"
-            })
-        
-        # Performance issues recommendations
-        performance_issues = payload.get('performance_issues', [])
-        if performance_issues:
-            recommendations.append({
-                "type": "PERFORMANCE_IMPROVEMENT",
-                "priority": "MEDIUM",
-                "title": "Problèmes de performance identifiés",
-                "description": f"{len(performance_issues)} problèmes détectés",
-                "action": "Investigation et résolution des problèmes",
-                "impact": "Amélioration de l'efficacité globale",
-                "recommendation": "Analyser les causes racines et mettre en place des actions correctives"
-            })
-        
-        # Bottleneck recommendations
-        bottlenecks = payload.get('bottlenecks', [])
-        if bottlenecks:
-            recommendations.append({
-                "type": "PROCESS_OPTIMIZATION",
-                "priority": "MEDIUM",
-                "title": "Goulots d'étranglement détectés",
-                "description": f"{len(bottlenecks)} goulots identifiés: {', '.join(bottlenecks[:2])}",
-                "action": "Optimisation des processus critiques",
-                "impact": "Fluidification des workflows",
-                "recommendation": "Automatiser ou paralléliser les étapes critiques"
-            })
-        
-        # Default recommendation if system is healthy
-        if not recommendations:
-            recommendations.append({
-                "type": "MONITORING",
-                "priority": "LOW",
-                "title": "Système en fonctionnement optimal",
-                "description": "Tous les indicateurs sont dans les normes acceptables",
-                "action": "Maintenir la surveillance continue",
-                "impact": "Stabilité opérationnelle",
-                "recommendation": "Continuer le monitoring proactif pour détecter les tendances"
-            })
-        
-        # Sort by priority
-        priority_order = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
-        recommendations.sort(key=lambda x: priority_order.get(x["priority"], 0), reverse=True)
-        
-        return {
-            "recommendations": recommendations[:5],  # Top 5 recommendations
-            "total_analyzed": {
-                "bordereaux": len(bordereaux) if bordereaux else 0,
-                "agents": len(agents) if agents else 0,
-                "complaints": len(complaints) if complaints else 0
-            },
-            "analysis_timestamp": datetime.now().isoformat(),
-            "summary": f"{len(recommendations)} recommandations générées basées sur l'analyse des données ARS"
-        }
-        
-    except Exception as e:
-        logger.error(f"Recommendations generation failed: {e}")
-        # No fallback - force proper implementation
         raise HTTPException(status_code=500, detail=f"Recommendations generation failed: {str(e)}")
 
 # === AI LEARNING COMPONENTS ===
@@ -1131,10 +855,11 @@ async def priorities(bordereaux: List[Dict], explain: bool = False, current_user
 async def reassignment(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
     """Real ARS bordereau reassignment using agent performance data"""
     try:
-        bordereau_id = data.get('bordereauId')
+        bordereau_id = data.get('bordereauId') or data.get('bordereau_id')
         reason = data.get('reason', 'MANUAL_REASSIGNMENT')
         
         if not bordereau_id:
+            logger.error(f"Reassignment called without bordereauId. Data: {data}")
             raise HTTPException(status_code=400, detail="bordereauId required")
         
         # Get real data from database
@@ -1302,8 +1027,7 @@ async def reassignment(data: Dict = Body(...), current_user = Depends(get_curren
                 'confidence': 'high' if best['total_score'] > 0.7 else 'medium',
                 'total_score': best['total_score'],
                 'current_workload': best['current_workload'],
-                'sla_compliance': best['sla_compliance'],
-                'estimated_completion_hours': best['avg_processing_hours']
+                'sla_compliance': best['sla_compliance']
             },
             'alternative_agents': [
                 {
@@ -1469,17 +1193,62 @@ async def diagnostic_optimisation(data: Dict = Body(...), current_user = Depends
             return result
         
         elif analysis_type == 'capacity_analysis':
-            # Return capacity analysis results
-            return {
-                'capacity_analysis': [
-                    {
-                        'resource': 'staff',
-                        'current_capacity': 25,
-                        'utilization': 0.75,
-                        'recommendation': 'Optimal capacity'
-                    }
-                ]
-            }
+            # Real capacity analysis from DB
+            try:
+                db = await get_db_manager()
+                agents = await db.get_agent_performance_metrics()
+                bordereaux = await db.get_bordereau_with_sla_data(limit=500)
+
+                total_staff = len(agents)
+                total_active = len(bordereaux)
+
+                # Real utilization: active bordereaux vs theoretical capacity (10 per agent)
+                theoretical_capacity = total_staff * 10 if total_staff > 0 else 1
+                utilization = min(1.0, total_active / theoretical_capacity) if theoretical_capacity > 0 else 0
+
+                # Per-agent workload
+                agent_loads = []
+                for agent in agents:
+                    workload = agent.get('total_bordereaux', 0)
+                    capacity = 10  # standard capacity per agent
+                    agent_util = min(1.0, workload / capacity)
+                    agent_loads.append({
+                        'agent_id': agent['id'],
+                        'agent_name': f"{agent.get('firstName', '')} {agent.get('lastName', '')}".strip(),
+                        'current_load': workload,
+                        'capacity': capacity,
+                        'utilization': round(agent_util, 2),
+                        'status': 'overloaded' if agent_util > 1.0 else 'high' if agent_util > 0.85 else 'normal'
+                    })
+
+                if utilization > 0.9:
+                    recommendation = 'Capacité critique - recrutement urgent requis'
+                elif utilization > 0.75:
+                    recommendation = 'Capacité élevée - surveiller et planifier renforcement'
+                elif utilization < 0.4:
+                    recommendation = 'Sous-utilisation - opportunité d\'optimisation'
+                else:
+                    recommendation = 'Capacité optimale'
+
+                return {
+                    'capacity_analysis': [
+                        {
+                            'resource': 'staff',
+                            'current_capacity': total_staff,
+                            'theoretical_max': theoretical_capacity,
+                            'active_bordereaux': total_active,
+                            'utilization': round(utilization, 2),
+                            'recommendation': recommendation,
+                            'agent_details': agent_loads
+                        }
+                    ]
+                }
+            except Exception as e:
+                logger.error(f"Capacity analysis failed: {e}")
+                return {
+                    'capacity_analysis': [],
+                    'error': f'Capacity analysis failed: {str(e)}'
+                }
         
         else:
             return {'root_causes': [], 'capacity_analysis': [], 'message': f'Analysis type {analysis_type} completed'}
@@ -1874,12 +1643,40 @@ async def anomaly_detection(data: Dict = Body(...), current_user = Depends(get_c
 
 
 
+async def calculate_overall_capacity_gap(staffing_recommendations: List[Dict], db_manager) -> Dict:
+    """Calculate overall staffing capacity gap from recommendations"""
+    try:
+        if not staffing_recommendations:
+            return {'gap': 0, 'status': 'unknown', 'recommendations': []}
+
+        total_needed = sum(r.get('staff_needed', 0) for r in staffing_recommendations)
+        total_available = sum(r.get('staff_available', 0) for r in staffing_recommendations)
+        gap = total_needed - total_available
+
+        # Get real agent count from DB
+        try:
+            agents = await db_manager.get_agent_performance_metrics()
+            actual_staff = len(agents)
+        except Exception:
+            actual_staff = total_available
+
+        return {
+            'gap': gap,
+            'total_needed': total_needed,
+            'total_available': actual_staff,
+            'status': 'understaffed' if gap > 0 else 'overstaffed' if gap < -2 else 'balanced',
+            'recommendations': staffing_recommendations[:5]
+        }
+    except Exception as e:
+        logger.error(f"Capacity gap calculation failed: {e}")
+        return {'gap': 0, 'status': 'unknown', 'recommendations': []}
+
 @app.post("/forecast_client_load")
 @log_endpoint_call("forecast_client_load")
 async def forecast_client_load(client_id: int = None, forecast_days: int = 30, current_user = Depends(get_current_active_user)):
     """Real ARS client load forecasting and capacity planning"""
     try:
-        from ars_forecasting import generate_client_forecast, calculate_staffing_requirements, aggregate_client_forecasts, calculate_overall_capacity_gap
+        from ars_forecasting import generate_client_forecast, calculate_staffing_requirements, aggregate_client_forecasts
         
         db = await get_db_manager()
         
@@ -1933,7 +1730,7 @@ async def forecast_client_load(client_id: int = None, forecast_days: int = 30, c
         # Aggregate results
         total_forecast = aggregate_client_forecasts(client_forecasts)
         
-        # Calculate overall capacity gap
+        # Calculate overall capacity gap using local function
         overall_capacity = await calculate_overall_capacity_gap(staffing_recommendations, db)
         
         return {
@@ -2888,56 +2685,172 @@ async def make_automated_decision(data: Dict = Body(...), current_user = Depends
 @app.post("/patterns/analyze")
 @log_endpoint_call("patterns_analyze")
 async def analyze_patterns(data: Dict = Body(...)):
-    """Analyze patterns in reclamation data"""
+    """Analyze patterns in reclamation data using real DB data"""
     try:
         analysis_type = data.get('type', 'ai_patterns')
         parameters = data.get('parameters', {})
-        
+
         if analysis_type == 'ai_patterns':
-            # AI-powered pattern analysis
+            # Pull real complaints and bordereau data from DB
+            try:
+                db = await get_db_manager()
+                complaints = await db.get_live_complaints(limit=500)
+                bordereaux = await db.get_bordereau_with_sla_data(limit=200)
+            except Exception as e:
+                logger.warning(f"DB fetch failed for pattern analysis: {e}")
+                complaints = []
+                bordereaux = []
+
+            patterns_found = []
+            pattern_id = 1
+
+            # --- TEMPORAL PATTERN: Peak complaint hours ---
+            if complaints:
+                hour_counts = {}
+                day_counts = {}
+                for c in complaints:
+                    try:
+                        created = c.get('createdAt')
+                        if created:
+                            dt = created if isinstance(created, datetime) else datetime.fromisoformat(str(created).replace('Z', '').replace('+00:00', ''))
+                            h = dt.hour
+                            d = dt.strftime('%A')
+                            hour_counts[h] = hour_counts.get(h, 0) + 1
+                            day_counts[d] = day_counts.get(d, 0) + 1
+                    except Exception:
+                        continue
+
+                if hour_counts:
+                    avg_hour = len(complaints) / max(len(hour_counts), 1)
+                    peak_hours = [h for h, cnt in hour_counts.items() if cnt > avg_hour * 1.3]
+                    if peak_hours:
+                        peak_str = ', '.join(f"{h:02d}:00-{h+1:02d}:00" for h in sorted(peak_hours)[:3])
+                        patterns_found.append({
+                            'id': f'pattern_{pattern_id}',
+                            'type': 'temporal',
+                            'description': f'Pic de réclamations à: {peak_str}',
+                            'confidence': round(min(0.99, 0.6 + len(peak_hours) * 0.05), 2),
+                            'impact': 'high' if len(peak_hours) > 3 else 'medium',
+                            'frequency': 'daily',
+                            'data_points': len(complaints)
+                        })
+                        pattern_id += 1
+
+                if day_counts:
+                    avg_day = len(complaints) / max(len(day_counts), 1)
+                    peak_days = [d for d, cnt in day_counts.items() if cnt > avg_day * 1.2]
+                    if peak_days:
+                        patterns_found.append({
+                            'id': f'pattern_{pattern_id}',
+                            'type': 'temporal',
+                            'description': f'Jours de pointe: {", ".join(peak_days[:3])}',
+                            'confidence': round(min(0.95, 0.55 + len(peak_days) * 0.05), 2),
+                            'impact': 'medium',
+                            'frequency': 'weekly',
+                            'data_points': len(complaints)
+                        })
+                        pattern_id += 1
+
+            # --- CATEGORICAL PATTERN: Complaint type frequency ---
+            if complaints:
+                type_counts = {}
+                for c in complaints:
+                    t = c.get('type', 'UNKNOWN')
+                    type_counts[t] = type_counts.get(t, 0) + 1
+
+                total = len(complaints)
+                for ctype, count in sorted(type_counts.items(), key=lambda x: -x[1])[:3]:
+                    pct = count / total * 100
+                    if pct > 15:
+                        patterns_found.append({
+                            'id': f'pattern_{pattern_id}',
+                            'type': 'categorical',
+                            'description': f'Type dominant: {ctype} ({pct:.0f}% des réclamations)',
+                            'confidence': round(min(0.97, 0.5 + pct / 100), 2),
+                            'impact': 'high' if pct > 40 else 'medium',
+                            'frequency': 'ongoing',
+                            'count': count,
+                            'percentage': round(pct, 1)
+                        })
+                        pattern_id += 1
+
+            # --- SLA PATTERN: Bordereau overdue correlation ---
+            if bordereaux:
+                overdue = [b for b in bordereaux if b.get('days_remaining', 1) < 0]
+                at_risk = [b for b in bordereaux if 0 <= b.get('days_remaining', 999) <= 2]
+                total_b = len(bordereaux)
+
+                if overdue:
+                    overdue_pct = len(overdue) / total_b * 100
+                    patterns_found.append({
+                        'id': f'pattern_{pattern_id}',
+                        'type': 'sla_breach',
+                        'description': f'{len(overdue)} bordereaux en dépassement SLA ({overdue_pct:.0f}%)',
+                        'confidence': 0.99,
+                        'impact': 'high' if overdue_pct > 20 else 'medium',
+                        'frequency': 'ongoing',
+                        'count': len(overdue),
+                        'percentage': round(overdue_pct, 1)
+                    })
+                    pattern_id += 1
+
+                if at_risk:
+                    patterns_found.append({
+                        'id': f'pattern_{pattern_id}',
+                        'type': 'sla_risk',
+                        'description': f'{len(at_risk)} bordereaux à risque SLA imminent (≤2 jours)',
+                        'confidence': 0.97,
+                        'impact': 'high',
+                        'frequency': 'ongoing',
+                        'count': len(at_risk)
+                    })
+                    pattern_id += 1
+
+            # Build recommendations from real patterns
+            recommendations = []
+            for p in patterns_found:
+                if p['type'] == 'temporal' and 'Pic' in p['description']:
+                    recommendations.append("Renforcer l'équipe pendant les heures de pointe identifiées")
+                elif p['type'] == 'categorical':
+                    recommendations.append(f"Traiter en priorité les réclamations de type {p['description'].split(':')[1].split('(')[0].strip()}")
+                elif p['type'] == 'sla_breach':
+                    recommendations.append(f"Action urgente: résoudre les {p['count']} dépassements SLA")
+                elif p['type'] == 'sla_risk':
+                    recommendations.append(f"Surveiller les {p['count']} bordereaux à risque imminent")
+
+            if not recommendations:
+                recommendations.append('Aucune anomalie significative détectée - continuer la surveillance')
+
+            high_confidence = [p for p in patterns_found if p['confidence'] >= 0.8]
+
             result = {
                 'analysis_complete': True,
-                'patterns_found': [
-                    {
-                        'id': 'pattern_1',
-                        'type': 'temporal',
-                        'description': 'Pic de réclamations les lundis matins',
-                        'confidence': 0.89,
-                        'impact': 'medium',
-                        'frequency': 'weekly'
-                    },
-                    {
-                        'id': 'pattern_2', 
-                        'type': 'categorical',
-                        'description': 'Corrélation entre délais et insatisfaction',
-                        'confidence': 0.92,
-                        'impact': 'high',
-                        'frequency': 'daily'
-                    }
-                ],
+                'patterns_found': patterns_found,
                 'insights': {
-                    'total_patterns': 2,
-                    'high_confidence': 2,
-                    'actionable_insights': 1
+                    'total_patterns': len(patterns_found),
+                    'high_confidence': len(high_confidence),
+                    'actionable_insights': len([p for p in patterns_found if p['impact'] == 'high']),
+                    'data_sources': {
+                        'complaints_analyzed': len(complaints),
+                        'bordereaux_analyzed': len(bordereaux)
+                    }
                 },
-                'recommendations': [
-                    'Renforcer l\'équipe le lundi matin',
-                    'Améliorer les processus de délais'
-                ]
+                'recommendations': recommendations[:5]
             }
-            
+
             return {
                 'success': True,
                 'analysis_type': analysis_type,
                 'result': result,
-                'summary': f'Analyse IA terminée - {len(result["patterns_found"])} patterns détectés'
+                'summary': f'Analyse IA terminée - {len(patterns_found)} patterns détectés sur {len(complaints)} réclamations et {len(bordereaux)} bordereaux'
             }
+
         else:
             return {
                 'success': False,
                 'error': f'Type d\'analyse non supporté: {analysis_type}'
             }
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pattern analysis failed: {str(e)}")
 
@@ -3028,43 +2941,119 @@ async def test_analyze(data: Dict = Body(...)):
 @log_endpoint_call("ged_process_document")
 async def process_document_manual(file: UploadFile = File(...), current_user = Depends(get_current_active_user)):
     """Process uploaded document with OCR for ARS bordereau"""
+    import re
+    import time as time_module
     try:
         if not file:
             raise HTTPException(status_code=400, detail="No file uploaded")
-        
-        # Read file content
+
         file_content = await file.read()
-        
-        # Mock OCR processing (in production, use actual OCR service)
-        ocr_result = {
-            'text': f"Document processed: {file.filename}\nReference: BORD-2025-001\nClient: Test Client\nDate: 10/09/2025\nMontant: 1500.00 TND\nBS: 001, 002, 003",
-            'confidence': 0.92,
-            'extracted_data': {
-                'reference': 'BORD-2025-001',
-                'client_name': 'Test Client',
-                'date': '10/09/2025',
-                'amount': 1500.00,
-                'bs_numbers': ['001', '002', '003']
-            },
-            'processing_time': 2.3
-        }
-        
-        # Enhanced OCR with AI analysis
+        filename_lower = file.filename.lower() if file.filename else ''
+        start_time = time_module.time()
+
+        extracted_text = ""
+        extracted_data = {}
+        confidence = 0.0
+
+        # Determine document type from filename and content-type
+        if 'bordereau' in filename_lower:
+            doc_type = 'BORDEREAU'
+            workflow_trigger = 'SCAN_COMPLETED'
+        elif 'bulletin' in filename_lower or 'bs' in filename_lower:
+            doc_type = 'BULLETIN_SOIN'
+            workflow_trigger = 'BS_PROCESSED'
+        else:
+            doc_type = 'DOCUMENT'
+            workflow_trigger = 'DOCUMENT_UPLOADED'
+
+        # Try real OCR via ars_ocr_ged module if available
         try:
-            # Analyze document type
-            doc_type = 'BORDEREAU' if 'bordereau' in file.filename.lower() else 'BULLETIN_SOIN'
-            
-            # Extract key information based on document type
-            if doc_type == 'BORDEREAU':
-                ocr_result['document_type'] = 'BORDEREAU'
-                ocr_result['workflow_trigger'] = 'SCAN_COMPLETED'
-            else:
-                ocr_result['document_type'] = 'BULLETIN_SOIN'
-                ocr_result['workflow_trigger'] = 'BS_PROCESSED'
-                
+            from ars_ocr_ged import extract_text_from_file
+            extracted_text, confidence = await extract_text_from_file(file_content, file.content_type, filename_lower)
+        except ImportError:
+            # Fallback: attempt basic text extraction for PDFs using pdfplumber/PyPDF2
+            try:
+                import io
+                if file.content_type == 'application/pdf' or filename_lower.endswith('.pdf'):
+                    try:
+                        import pdfplumber
+                        with pdfplumber.open(io.BytesIO(file_content)) as pdf:
+                            pages_text = [page.extract_text() or '' for page in pdf.pages]
+                            extracted_text = '\n'.join(pages_text).strip()
+                            confidence = 0.85 if extracted_text else 0.0
+                    except ImportError:
+                        try:
+                            import PyPDF2
+                            reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+                            extracted_text = '\n'.join(
+                                page.extract_text() or '' for page in reader.pages
+                            ).strip()
+                            confidence = 0.80 if extracted_text else 0.0
+                        except ImportError:
+                            extracted_text = ''
+                            confidence = 0.0
+                elif file.content_type and file.content_type.startswith('text/'):
+                    extracted_text = file_content.decode('utf-8', errors='replace')
+                    confidence = 0.95
+            except Exception as e:
+                logger.warning(f"Text extraction fallback failed: {e}")
+                extracted_text = ''
+                confidence = 0.0
+
+        # Extract structured data using regex patterns on real text
+        if extracted_text:
+            # Reference patterns: BORD-YYYY-NNNN or similar
+            ref_match = re.search(r'(BORD[-\s]?\d{4}[-\s]?\d{3,6})', extracted_text, re.IGNORECASE)
+            if ref_match:
+                extracted_data['reference'] = ref_match.group(1).replace(' ', '-').upper()
+
+            # Date patterns: DD/MM/YYYY
+            date_matches = re.findall(r'\b(\d{2}/\d{2}/\d{4})\b', extracted_text)
+            if date_matches:
+                extracted_data['date'] = date_matches[0]
+
+            # Amount patterns: digits followed by TND or DT
+            amount_match = re.search(r'(\d[\d\s]*(?:\.\d{1,3})?)\s*(?:TND|DT|Dinars?)', extracted_text, re.IGNORECASE)
+            if amount_match:
+                try:
+                    extracted_data['amount'] = float(amount_match.group(1).replace(' ', ''))
+                except ValueError:
+                    pass
+
+            # BS numbers
+            bs_matches = re.findall(r'\bBS[-\s]?(\d{3,6})\b', extracted_text, re.IGNORECASE)
+            if bs_matches:
+                extracted_data['bs_numbers'] = list(set(bs_matches))
+
+            # Client name heuristic: line after "Client:" label
+            client_match = re.search(r'Client\s*[:\-]\s*(.+)', extracted_text, re.IGNORECASE)
+            if client_match:
+                extracted_data['client_name'] = client_match.group(1).strip()[:100]
+
+        processing_time = round(time_module.time() - start_time, 3)
+
+        ocr_result = {
+            'text': extracted_text,
+            'confidence': confidence,
+            'extracted_data': extracted_data,
+            'processing_time': processing_time,
+            'document_type': doc_type,
+            'workflow_trigger': workflow_trigger,
+            'pages_processed': extracted_text.count('\n\n') + 1 if extracted_text else 0
+        }
+
+        # Save OCR result to DB for audit
+        try:
+            db = await get_db_manager()
+            await db.save_prediction_result(
+                "ged_ocr",
+                {'filename': file.filename, 'doc_type': doc_type, 'size': len(file_content)},
+                ocr_result,
+                current_user.username
+            )
         except Exception as e:
-            logger.debug(f"Enhanced OCR analysis failed: {e}")
-        
+            logger.debug(f"OCR result save failed: {e}")
+
         return {
             'success': True,
             'processing_result': ocr_result,
@@ -3075,7 +3064,7 @@ async def process_document_manual(file: UploadFile = File(...), current_user = D
                 'content_type': file.content_type
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Document OCR processing failed: {e}")
         raise HTTPException(status_code=500, detail=f"Document processing failed: {str(e)}")
@@ -3085,57 +3074,108 @@ async def process_document_manual(file: UploadFile = File(...), current_user = D
 async def search_documents(criteria: Dict = Body(...), current_user = Depends(get_current_active_user)):
     """Search ARS indexed documents with OCR content"""
     try:
-        query = criteria.get('query', '')
+        query = criteria.get('query', '').strip()
         document_type = criteria.get('document_type', 'ALL')
         date_range = criteria.get('date_range', {})
-        
-        # Mock search results with OCR content
-        mock_documents = [
-            {
-                'id': 'doc_001',
-                'filename': 'bordereau_client_A.pdf',
-                'document_type': 'BORDEREAU',
-                'ocr_text': f'Bordereau reference BORD-2025-001 Client Test A Date 10/09/2025 Montant 1500 TND',
+        limit = int(criteria.get('limit', 50))
+
+        db = await get_db_manager()
+
+        # Fetch documents from DB via bordereau + document tables
+        try:
+            bordereaux = await db.get_bordereau_with_sla_data(limit=500)
+        except Exception as e:
+            logger.warning(f"Could not fetch bordereaux for search: {e}")
+            bordereaux = []
+
+        results = []
+        query_lower = query.lower() if query else ''
+
+        for b in bordereaux:
+            # Build searchable text from real bordereau fields
+            searchable_text = ' '.join(filter(None, [
+                str(b.get('reference', '')),
+                str(b.get('client_name', '')),
+                str(b.get('statut', '')),
+                str(b.get('assigned_to_name', '')),
+            ])).lower()
+
+            # Determine doc type mapping
+            b_doc_type = 'BORDEREAU'
+
+            # Filter by document_type
+            if document_type != 'ALL' and b_doc_type != document_type:
+                continue
+
+            # Date range filter
+            if date_range:
+                date_from = date_range.get('from')
+                date_to = date_range.get('to')
+                reception = b.get('dateReception')
+                if reception and date_from:
+                    try:
+                        r_date = reception if isinstance(reception, datetime) else datetime.fromisoformat(str(reception).replace('Z', ''))
+                        f_date = datetime.fromisoformat(str(date_from).replace('Z', ''))
+                        if r_date < f_date:
+                            continue
+                    except Exception:
+                        pass
+                if reception and date_to:
+                    try:
+                        r_date = reception if isinstance(reception, datetime) else datetime.fromisoformat(str(reception).replace('Z', ''))
+                        t_date = datetime.fromisoformat(str(date_to).replace('Z', ''))
+                        if r_date > t_date:
+                            continue
+                    except Exception:
+                        pass
+
+            # Relevance scoring
+            if query_lower:
+                if query_lower in searchable_text:
+                    # Count occurrences for relevance
+                    hits = searchable_text.count(query_lower)
+                    relevance_score = min(1.0, 0.5 + hits * 0.1)
+                else:
+                    # Partial word match
+                    words = query_lower.split()
+                    matched = sum(1 for w in words if w in searchable_text)
+                    if matched == 0:
+                        continue
+                    relevance_score = matched / len(words) * 0.5
+            else:
+                relevance_score = 1.0
+
+            results.append({
+                'id': str(b.get('id', '')),
+                'filename': f"bordereau_{b.get('reference', 'unknown')}.pdf",
+                'document_type': b_doc_type,
+                'reference': b.get('reference'),
+                'client_name': b.get('client_name'),
+                'statut': b.get('statut'),
+                'assigned_to': b.get('assigned_to_name'),
+                'days_remaining': b.get('days_remaining'),
+                'ocr_text': searchable_text,
                 'extracted_data': {
-                    'reference': 'BORD-2025-001',
-                    'client': 'Test A',
-                    'amount': 1500
+                    'reference': b.get('reference'),
+                    'client': b.get('client_name'),
+                    'statut': b.get('statut'),
                 },
-                'relevance_score': 0.95 if query.lower() in 'bordereau client test' else 0.3,
-                'indexed_at': datetime.now().isoformat()
-            },
-            {
-                'id': 'doc_002', 
-                'filename': 'bulletin_soin_002.pdf',
-                'document_type': 'BULLETIN_SOIN',
-                'ocr_text': f'Bulletin de soin BS-002 Patient Jean Dupont Acte consultation Date 09/09/2025',
-                'extracted_data': {
-                    'bs_number': 'BS-002',
-                    'patient': 'Jean Dupont',
-                    'acte': 'consultation'
-                },
-                'relevance_score': 0.85 if query.lower() in 'bulletin soin patient' else 0.2,
-                'indexed_at': datetime.now().isoformat()
-            }
-        ]
-        
-        # Filter by document type
-        if document_type != 'ALL':
-            mock_documents = [doc for doc in mock_documents if doc['document_type'] == document_type]
-        
-        # Filter by query relevance
-        if query:
-            mock_documents = [doc for doc in mock_documents if doc['relevance_score'] > 0.5]
-            mock_documents.sort(key=lambda x: x['relevance_score'], reverse=True)
-        
+                'relevance_score': round(relevance_score, 3),
+                'indexed_at': b.get('dateReception').isoformat() if isinstance(b.get('dateReception'), datetime) else str(b.get('dateReception', ''))
+            })
+
+        # Sort by relevance
+        results.sort(key=lambda x: x['relevance_score'], reverse=True)
+        results = results[:limit]
+
         return {
             'success': True,
-            'documents': mock_documents,
-            'total_found': len(mock_documents),
+            'documents': results,
+            'total_found': len(results),
             'search_criteria': criteria,
             'ocr_enabled': True
         }
-        
+
     except Exception as e:
         logger.error(f"Document search failed: {e}")
         raise HTTPException(status_code=500, detail=f"Document search failed: {str(e)}")
@@ -3143,43 +3183,87 @@ async def search_documents(criteria: Dict = Body(...), current_user = Depends(ge
 @app.get("/ged/stats")
 @log_endpoint_call("ged_stats")
 async def get_ged_stats(current_user = Depends(get_current_active_user)):
-    """Get ARS GED and OCR processing statistics"""
+    """Get ARS GED and OCR processing statistics from real database"""
     try:
-        # Mock GED/OCR statistics
+        db = await get_db_manager()
+
+        # Real document counts by type from Document table
+        docs_by_type = {'BORDEREAU': 0, 'BULLETIN_SOIN': 0, 'OTHER': 0}
+        total_docs = 0
+        ocr_processed = 0
+        ocr_success = 0
+        daily_count = 0
+
+        try:
+            if db.pool:
+                async with db.pool.acquire() as conn:
+                    # Total documents
+                    total_row = await conn.fetchrow('SELECT COUNT(*) as cnt FROM "Document"')
+                    total_docs = int(total_row['cnt']) if total_row else 0
+
+                    # Documents with OCR result (ocrResult not null)
+                    ocr_row = await conn.fetchrow('SELECT COUNT(*) as cnt FROM "Document" WHERE "ocrResult" IS NOT NULL')
+                    ocr_processed = int(ocr_row['cnt']) if ocr_row else 0
+
+                    # Documents with non-null ocrText (successful OCR)
+                    ocr_ok_row = await conn.fetchrow('SELECT COUNT(*) as cnt FROM "Document" WHERE "ocrText" IS NOT NULL AND "ocrText" != \'\'')  
+                    ocr_success = int(ocr_ok_row['cnt']) if ocr_ok_row else 0
+
+                    # Documents by type
+                    type_rows = await conn.fetch('SELECT type::text, COUNT(*) as cnt FROM "Document" GROUP BY type')
+                    for row in type_rows:
+                        t = row['type']
+                        if t == 'BULLETIN_SOIN':
+                            docs_by_type['BULLETIN_SOIN'] = int(row['cnt'])
+                        else:
+                            docs_by_type.setdefault(t, int(row['cnt']))
+                        total_docs = total_docs  # already fetched
+
+                    # Bordereau count as proxy for bordereau-type documents
+                    b_row = await conn.fetchrow('SELECT COUNT(*) as cnt FROM "Bordereau"')
+                    docs_by_type['BORDEREAU'] = int(b_row['cnt']) if b_row else 0
+
+                    # Daily throughput: docs uploaded today
+                    daily_row = await conn.fetchrow(
+                        'SELECT COUNT(*) as cnt FROM "Document" WHERE "uploadedAt" >= CURRENT_DATE'
+                    )
+                    daily_count = int(daily_row['cnt']) if daily_row else 0
+
+                    # OCR log stats
+                    ocr_log_rows = await conn.fetch(
+                        'SELECT status, COUNT(*) as cnt FROM "OCRLog" GROUP BY status'
+                    )
+                    ocr_log = {row['status']: int(row['cnt']) for row in ocr_log_rows}
+
+        except Exception as e:
+            logger.warning(f"GED stats DB query failed: {e}")
+
+        ocr_success_rate = round((ocr_success / ocr_processed * 100), 1) if ocr_processed > 0 else 0.0
+
         stats = {
-            'total_documents_processed': 1247,
-            'ocr_success_rate': 94.2,
-            'average_processing_time': 2.8,
-            'documents_by_type': {
-                'BORDEREAU': 856,
-                'BULLETIN_SOIN': 312,
-                'FACTURE': 79
-            },
-            'ocr_confidence_distribution': {
-                'high_confidence': 89.3,  # >90%
-                'medium_confidence': 8.1,  # 70-90%
-                'low_confidence': 2.6     # <70%
-            },
-            'processing_errors': {
-                'file_format_unsupported': 12,
-                'ocr_failed': 8,
-                'extraction_failed': 5
+            'total_documents_processed': total_docs,
+            'ocr_success_rate': ocr_success_rate,
+            'average_processing_time': 0.0,  # would need timing data in OCRLog
+            'documents_by_type': docs_by_type,
+            'ocr_stats': {
+                'total_ocr_processed': ocr_processed,
+                'successful': ocr_success,
+                'failed': ocr_processed - ocr_success if ocr_processed > ocr_success else 0
             },
             'daily_throughput': {
-                'documents_per_day': 45,
-                'peak_hours': ['09:00-11:00', '14:00-16:00']
+                'documents_today': daily_count,
             },
-            'search_index_size': 15420,  # indexed terms
+            'search_index_size': total_docs,
             'last_updated': datetime.now().isoformat()
         }
-        
+
         return {
             'success': True,
             'ged_statistics': stats,
             'ocr_enabled': True,
             'timestamp': datetime.now().isoformat()
         }
-        
+
     except Exception as e:
         logger.error(f"Getting GED stats failed: {e}")
         raise HTTPException(status_code=500, detail=f"Getting GED stats failed: {str(e)}")
@@ -3507,9 +3591,10 @@ async def optimize_learning(current_user = Depends(get_current_active_user)):
 
 # Background task scheduler with learning optimization
 def run_scheduler():
+    import time
     while True:
         schedule.run_pending()
-        asyncio.sleep(60)  # Check every minute
+        time.sleep(60)  # Check every minute
 
 # Schedule periodic tasks for continuous learning
 schedule.every(10).minutes.do(lambda: logger.info("AI service health check"))
@@ -3537,16 +3622,22 @@ async def analytics_ai_reassign_suggestion(data: Dict = Body(...), current_user 
         
         db = await get_db_manager()
         
-        # Get ALL agents with real performance metrics
+        # Get ALL agents with real performance metrics (exclude non-operational roles)
         agents = await db.get_agent_performance_metrics()
         
-        if not agents or len(agents) == 0:
-            raise HTTPException(status_code=404, detail="No agents available")
+        # Filter out SUPER_ADMIN and RESPONSABLE_DEPARTEMENT (they don't handle documents)
+        operational_agents = [
+            agent for agent in agents 
+            if agent.get('role') not in ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT']
+        ]
         
-        # Advanced AI scoring algorithm
+        if not operational_agents or len(operational_agents) == 0:
+            raise HTTPException(status_code=404, detail="No operational agents available (only admins/managers found)")
+        
+        # Advanced AI scoring algorithm (only for operational agents)
         scored_suggestions = []
         
-        for agent in agents:
+        for agent in operational_agents:
             # Skip current handler
             if current_handler_id and agent['id'] == current_handler_id:
                 continue
@@ -3664,6 +3755,7 @@ async def analytics_ai_reassign_suggestion(data: Dict = Body(...), current_user 
         
         # Log AI decision
         logger.info(f"🤖 AI Reassignment for bordereau {bordereau_id}:")
+        logger.info(f"   Total agents: {len(agents)}, Operational: {len(operational_agents)}")
         logger.info(f"   Top choice: {top_suggestions[0]['name']} (score: {top_suggestions[0]['ai_score']:.1f})")
         logger.info(f"   Reasoning: {top_suggestions[0]['reasoning']}")
         
@@ -3679,7 +3771,8 @@ async def analytics_ai_reassign_suggestion(data: Dict = Body(...), current_user 
             'success': True,
             'bordereau_id': bordereau_id,
             'suggestions': top_suggestions,
-            'total_analyzed': len(agents),
+            'total_analyzed': len(operational_agents),
+            'excluded_roles': ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT'],
             'algorithm': 'advanced_weighted_scoring',
             'factors_considered': [
                 'SLA compliance history (40%)',
@@ -3701,7 +3794,7 @@ async def analytics_ai_reassign_suggestion(data: Dict = Body(...), current_user 
 @app.post("/alert_solution")
 @log_endpoint_call("alert_solution")
 async def generate_alert_solution(data: Dict = Body(...), current_user = Depends(get_current_active_user)):
-    """Generate AI-powered solution for SLA alerts using historical data and real-time context"""
+    """Generate AI-powered solution for SLA alerts using historical data and real-time context, including document details."""
     try:
         bordereau_id = data.get('bordereau_id')
         reference = data.get('reference')
@@ -3710,6 +3803,16 @@ async def generate_alert_solution(data: Dict = Body(...), current_user = Depends
         sla_days = data.get('sla_days', 0)
         alert_level = data.get('alert_level', 'red')
         reason = data.get('reason', 'SLA breach')
+        
+        # --- NEW: Document info with full details ---
+        doc_count = data.get('document_count', 0)
+        doc_types = data.get('document_types', [])
+        doc_summary = data.get('document_summary', f"{doc_count} document(s)" if doc_count else "Aucun document")
+        documents = data.get('documents', [])  # Full document list with names, types, statuses
+        
+        # Additional context
+        current_handler = data.get('current_handler')
+        team_leader = data.get('team_leader')
 
         # Default values
         root_cause = None
@@ -3725,9 +3828,7 @@ async def generate_alert_solution(data: Dict = Body(...), current_user = Depends
         agent_workload = None
         if bordereau_id:
             try:
-                # Fetch bordereau details (assumed function exists)
                 bordereau_details = await db.get_bordereau_by_id(bordereau_id)
-                # Fetch current workload of assigned agent if any
                 if bordereau_details and bordereau_details.get('assignedToUserId'):
                     agent_id = bordereau_details['assignedToUserId']
                     workload = await db.get_agent_current_workload(agent_id)
@@ -3735,35 +3836,33 @@ async def generate_alert_solution(data: Dict = Body(...), current_user = Depends
             except Exception as e:
                 logger.warning(f"Could not fetch additional context: {e}")
 
-        # 1. Attempt to find similar past alerts
+        # 1. Attempt to find similar past alerts (include document context in features)
         try:
-            # Fetch historical alert resolutions (last 90 days, successful)
             history = await db.get_historical_alert_resolutions(days=90, limit=1000)
             if history and len(history) > 5:
-                # Build similarity features
-                current_features = f"{statut} {client} {reason} {alert_level} {sla_days//7}week"
+                # Build similarity features including document count and types
+                current_features = f"{statut} {client} {reason} {alert_level} {sla_days//7}week docs:{doc_count} types:{','.join(doc_types)}"
                 hist_texts = []
                 for h in history:
-                    text = f"{h.get('statut','')} {h.get('client','')} {h.get('reason','')} {h.get('alert_level','')} {h.get('sla_days',0)//7}week"
+                    # If historical records store document info, use it; otherwise fallback
+                    hist_doc_count = h.get('document_count', 0)
+                    hist_doc_types = h.get('document_types', [])
+                    text = f"{h.get('statut','')} {h.get('client','')} {h.get('reason','')} {h.get('alert_level','')} {h.get('sla_days',0)//7}week docs:{hist_doc_count} types:{','.join(hist_doc_types)}"
                     hist_texts.append(text)
 
-                # Vectorize
                 from sklearn.feature_extraction.text import TfidfVectorizer
                 vectorizer = TfidfVectorizer(max_features=100, stop_words='french')
                 hist_vectors = vectorizer.fit_transform(hist_texts)
                 current_vector = vectorizer.transform([current_features])
 
-                # Compute cosine similarities
                 from sklearn.metrics.pairwise import cosine_similarity
                 similarities = cosine_similarity(current_vector, hist_vectors).flatten()
 
-                # Get top similar cases (threshold > 0.3)
                 similar_indices = [i for i, sim in enumerate(similarities) if sim > 0.3]
                 similar_cases = [history[i] for i in similar_indices]
                 similar_cases_used = len(similar_cases)
 
                 if similar_cases_used >= 3:
-                    # Aggregate root causes and actions
                     from collections import Counter
                     root_causes_counter = Counter([c.get('root_cause', '') for c in similar_cases])
                     actions_counter = Counter()
@@ -3773,85 +3872,272 @@ async def generate_alert_solution(data: Dict = Body(...), current_user = Depends
 
                     root_cause = root_causes_counter.most_common(1)[0][0]
                     actions = [act for act, _ in actions_counter.most_common(5)]
-                    # Priority: most common among similar cases
                     priority_counter = Counter([c.get('priority', 'MEDIUM') for c in similar_cases])
                     priority = priority_counter.most_common(1)[0][0]
-                    # Confidence based on average similarity and count
                     avg_sim = sum(similarities[i] for i in similar_indices) / similar_cases_used
                     confidence = min(0.5 + 0.1 * similar_cases_used + 0.3 * avg_sim, 0.98)
-                    reasoning = f"Basé sur {similar_cases_used} cas similaires résolus avec succès."
+                    reasoning = f"Basé sur {similar_cases_used} cas similaires résolus avec succès, incluant des dossiers avec {doc_summary}."
         except Exception as e:
             logger.warning(f"Similarity search failed: {e}, falling back to rule-based")
 
-        # 2. If insufficient similar cases, fallback to rule-based + real-time enhancements
+        # 2. ALWAYS analyze documents and generate dynamic actions (regardless of similarity)
+        # === DATA-DRIVEN DOCUMENT ANALYSIS ===
+        bs_docs = [d for d in documents if d.get('type') == 'BULLETIN_SOIN']
+        comp_docs = [d for d in documents if d.get('type') == 'COMPLEMENT_INFORMATION']
+        reclamation_docs = [d for d in documents if d.get('type') == 'RECLAMATION']
+        adhesion_docs = [d for d in documents if d.get('type') == 'ADHESION']
+        contrat_docs = [d for d in documents if d.get('type') == 'CONTRAT_AVENANT']
+        resiliation_docs = [d for d in documents if d.get('type') == 'DEMANDE_RESILIATION']
+        tiers_payant_docs = [d for d in documents if d.get('type') == 'CONVENTION_TIERS_PAYANT']
+        
+        # Count by status
+        bs_en_cours = sum(1 for d in bs_docs if d.get('status') == 'EN_COURS')
+        bs_traite = sum(1 for d in bs_docs if d.get('status') == 'TRAITE')
+        bs_rejete = sum(1 for d in bs_docs if d.get('status') == 'REJETE')
+        
+        comp_en_cours = sum(1 for d in comp_docs if d.get('status') == 'EN_COURS')
+        comp_traite = sum(1 for d in comp_docs if d.get('status') == 'TRAITE')
+        
+        # Build root cause analysis
+        root_causes_list = []
+        if statut == 'A_AFFECTER':
+            root_causes_list.append("Bordereau non affecté - Aucun gestionnaire assigné")
+        elif statut == 'ASSIGNE':
+            root_causes_list.append("Bordereau assigné mais non traité - Possible surcharge gestionnaire")
+        elif statut == 'EN_COURS':
+            root_causes_list.append("Traitement en cours mais lent - Complexité ou manque de ressources")
+
+        if sla_days > 30:
+            root_causes_list.append(f"Retard critique de {sla_days} jours - Problème systémique")
+        elif sla_days > 14:
+            root_causes_list.append(f"Retard majeur de {sla_days} jours - Action urgente requise")
+        
+        # Document-based root causes
+        if doc_count == 0:
+            root_causes_list.append("Aucun document associé au bordereau - Vérifier l'intégrité des données")
+        elif len(bs_docs) > 0 and bs_en_cours == len(bs_docs):
+            root_causes_list.append(f"TOUS les {len(bs_docs)} BS sont EN_COURS - Aucun finalisé")
+        elif len(bs_docs) > 0 and bs_rejete > 0:
+            root_causes_list.append(f"{bs_rejete} BS rejetés sur {len(bs_docs)} - Problèmes de qualité des documents")
+        elif len(reclamation_docs) > 0:
+            root_causes_list.append(f"Réclamation active - Traitement prioritaire requis")
+        elif len(resiliation_docs) > 0:
+            root_causes_list.append(f"Demande de résiliation - Délai légal à respecter")
+        elif doc_count > 15:
+            root_causes_list.append(f"Volume élevé de documents ({doc_count}) - Nécessite plus de temps de traitement")
+
+        # Set root cause (use similarity if available, otherwise build from analysis)
+        if not root_cause:
+            root_cause = ' | '.join(root_causes_list) if root_causes_list else f"Bordereau {reference} en retard de {sla_days} jours ({doc_summary})"
+        
+        # Generate dynamic document-driven actions (always, regardless of similarity)
+        dynamic_actions = []
+        
+        # Add status-based baseline actions if not from similarity
         if not actions:
-            # Rule-based root causes
-            root_causes_list = []
             if statut == 'A_AFFECTER':
-                root_causes_list.append("Bordereau non affecté - Aucun gestionnaire assigné")
-            elif statut == 'ASSIGNE':
-                root_causes_list.append("Bordereau assigné mais non traité - Possible surcharge gestionnaire")
-            elif statut == 'EN_COURS':
-                root_causes_list.append("Traitement en cours mais lent - Complexité ou manque de ressources")
-
-            if sla_days > 30:
-                root_causes_list.append(f"Retard critique de {sla_days} jours - Problème systémique")
-            elif sla_days > 14:
-                root_causes_list.append(f"Retard majeur de {sla_days} jours - Action urgente requise")
-
-            root_cause = ' | '.join(root_causes_list) if root_causes_list else f"Bordereau {reference} en retard de {sla_days} jours"
-
-            # Rule-based actions, enriched with real-time data
-            actions = []
-            if statut == 'A_AFFECTER':
-                # Use smart router to suggest best agent
                 try:
                     suggestion = await smart_router.suggest_optimal_assignment(
-                        {'id': bordereau_id, 'client': client, 'sla_days': sla_days},
+                        {'id': bordereau_id, 'client': client, 'sla_days': sla_days, 'document_count': doc_count},
                         db
                     )
                     if suggestion and suggestion.get('recommended_assignment'):
                         agent = suggestion['recommended_assignment']
-                        actions.append(f"Affecter immédiatement à {agent['agent_name']} (score: {agent['total_score']:.2f})")
+                        dynamic_actions.append(f"Affecter immédiatement à {agent['agent_name']} (score: {agent['total_score']:.2f})")
                     else:
-                        actions.append("Affecter immédiatement à un gestionnaire disponible")
+                        dynamic_actions.append("Affecter immédiatement à un gestionnaire disponible")
                 except:
-                    actions.append("Affecter immédiatement à un gestionnaire disponible")
-                actions.append("Utiliser l'affectation automatique IA pour sélectionner le meilleur gestionnaire")
-                actions.append("Notifier le chef d'équipe de l'urgence")
+                    dynamic_actions.append("Affecter immédiatement à un gestionnaire disponible")
+                dynamic_actions.append("Utiliser l'affectation automatique IA pour sélectionner le meilleur gestionnaire")
             elif statut in ['ASSIGNE', 'EN_COURS']:
                 if agent_workload is not None:
                     if agent_workload > 50:
-                        actions.append(f"Agent actuel surchargé ({agent_workload} bordereaux) - Réaffectation recommandée")
+                        dynamic_actions.append(f"Agent actuel surchargé ({agent_workload} bordereaux) - Réaffectation recommandée")
                     else:
-                        actions.append(f"Vérifier la charge de travail du gestionnaire actuel ({agent_workload} bordereaux)")
+                        dynamic_actions.append(f"Vérifier la charge de travail du gestionnaire actuel ({agent_workload} bordereaux)")
                 else:
-                    actions.append("Vérifier la charge de travail du gestionnaire actuel")
-                actions.append("Considérer une réaffectation si le gestionnaire est surchargé")
-                actions.append("Escalader au chef d'équipe pour priorisation")
+                    dynamic_actions.append("Vérifier la charge de travail du gestionnaire actuel")
+                dynamic_actions.append("Considérer une réaffectation si le gestionnaire est surchargé")
 
-            if sla_days > 14:
-                actions.append("Traitement en priorité absolue - Avant tous les autres dossiers")
-                actions.append("Notification client du retard avec plan d'action")
-
-            # Determine priority
-            if sla_days > 30 or alert_level == 'red':
-                priority = 'URGENT'
-                reasoning = f"Retard critique de {sla_days} jours - Risque contractuel majeur - Action immédiate obligatoire"
-            elif sla_days > 14:
-                priority = 'HIGH'
-                reasoning = f"Retard important de {sla_days} jours - Intervention rapide nécessaire"
+        # === TRULY DYNAMIC DOCUMENT-DRIVEN ACTIONS (ALWAYS EXECUTED) ===
+            # Generate completely different action structures based on actual document composition
+            
+        if doc_count == 0:
+            # SCENARIO 1: No documents - completely different structure
+            dynamic_actions.append("🚨 ALERTE CRITIQUE: Bordereau vide sans aucun document")
+            dynamic_actions.append(f"📞 APPEL CLIENT URGENT: Demander l'envoi immédiat des pièces pour {reference}")
+            dynamic_actions.append("⏰ Délai maximum: 24h pour réception des documents")
+            dynamic_actions.append("📧 Email de relance automatique si pas de réponse sous 12h")
+            dynamic_actions.append("🔴 Bloquer le bordereau jusqu'à réception des pièces justificatives")
+        
+        elif len(reclamation_docs) > 0:
+            # SCENARIO 2: Reclamation detected - priority escalation structure
+            reclamation_names = [d['name'] for d in reclamation_docs]
+            dynamic_actions.append(f"🚨 RÉCLAMATION CLIENT ACTIVE: {', '.join(reclamation_names)}")
+            dynamic_actions.append(f"⏱️ TRAITEMENT IMMÉDIAT REQUIS - Délai légal: 48h maximum")
+            dynamic_actions.append(f"👔 Escalade automatique au responsable réclamations")
+            dynamic_actions.append(f"📧 Accusé de réception envoyé au client: {client}")
+            dynamic_actions.append(f"📊 Ouvrir un dossier de suivi réclamation dans le CRM")
+            if len(bs_docs) > 0:
+                dynamic_actions.append(f"⚡ Analyser les {len(bs_docs)} BS associés pour identifier la cause")
+            dynamic_actions.append(f"📞 Appel client prévu dans les 4h pour résolution amiable")
+        
+        elif len(resiliation_docs) > 0:
+            # SCENARIO 3: Resiliation - legal compliance structure
+            resiliation_names = [d['name'] for d in resiliation_docs]
+            dynamic_actions.append(f"📛 DEMANDE DE RÉSILIATION CONTRACTUELLE: {', '.join(resiliation_names)}")
+            dynamic_actions.append(f"⚖️ PROCÉDURE LÉGALE: Respecter le délai de traitement de 30 jours")
+            dynamic_actions.append(f"📞 Contact service juridique pour validation de la demande")
+            dynamic_actions.append(f"💰 Calcul du solde de tout compte et remboursements éventuels")
+            dynamic_actions.append(f"📧 Lettre de confirmation de résiliation à envoyer en recommandé")
+            if len(bs_docs) > 0:
+                dynamic_actions.append(f"✅ Finaliser le traitement des {len(bs_docs)} BS en cours avant clôture")
+            dynamic_actions.append(f"🔒 Archivage du dossier après confirmation de résiliation")
+        
+        elif bs_en_cours == len(bs_docs) and len(bs_docs) > 0:
+            # SCENARIO 4: All BS pending - batch processing structure
+            dynamic_actions.append(f"📊 ANALYSE: {len(bs_docs)} bulletins de soins TOUS en attente de traitement")
+            dynamic_actions.append(f"⚠️ AUCUN BS finalisé - Blocage complet du dossier détecté")
+            
+            if len(bs_docs) > 20:
+                # Large volume - specific batch strategy
+                batch_size = 5
+                num_batches = (len(bs_docs) + batch_size - 1) // batch_size
+                sample_names = [d['name'] for d in bs_docs[:3]]
+                dynamic_actions.append(f"⚡ STRATÉGIE: Traitement par lots de {batch_size} BS")
+                dynamic_actions.append(f"📅 Planning: {num_batches} sessions de 1h sur 3 jours")
+                dynamic_actions.append(f"🎯 Lot 1 (prioritaire): {', '.join(sample_names)}")
+                dynamic_actions.append(f"👥 Mobiliser 2 gestionnaires pour traitement parallèle")
+                dynamic_actions.append(f"📈 Objectif: 50% traités sous 48h, 100% sous 5 jours")
+            elif len(bs_docs) > 10:
+                # Medium volume - focused approach
+                sample_names = [d['name'] for d in bs_docs[:5]]
+                dynamic_actions.append(f"⏰ PLAN D'ACTION: Bloquer 3h de traitement continu aujourd'hui")
+                dynamic_actions.append(f"🎯 Commencer par: {', '.join(sample_names)}")
+                dynamic_actions.append(f"✅ Objectif: Finaliser tous les BS avant 17h")
+                dynamic_actions.append(f"📞 Notification au client de l'avancement à 16h")
             else:
-                priority = 'MEDIUM'
+                # Small volume - immediate action
+                all_names = [d['name'] for d in bs_docs]
+                dynamic_actions.append(f"🚀 TRAITEMENT IMMÉDIAT des {len(bs_docs)} BS: {', '.join(all_names)}")
+                dynamic_actions.append(f"⏱️ Durée estimée: {len(bs_docs) * 15} minutes")
+                dynamic_actions.append(f"✅ Finalisation complète possible aujourd'hui avant 12h")
+        
+        elif bs_rejete > 0:
+            # SCENARIO 5: Rejected documents - correction workflow
+            rejected_names = [d['name'] for d in bs_docs if d.get('status') == 'REJETE']
+            dynamic_actions.append(f"❌ DOCUMENTS REJETÉS: {bs_rejete} BS non conformes")
+            dynamic_actions.append(f"📋 Liste des rejets: {', '.join(rejected_names)}")
+            dynamic_actions.append(f"🔍 Analyser les motifs de rejet pour chaque document")
+            dynamic_actions.append(f"📧 Email détaillé au client {client} avec liste des corrections requises")
+            dynamic_actions.append(f"⏰ Délai de correction: 5 jours ouvrés")
+            dynamic_actions.append(f"🔄 Mise en attente du bordereau jusqu'à réception des corrections")
+            if bs_traite > 0:
+                dynamic_actions.append(f"✅ Conserver les {bs_traite} BS déjà validés en attente de compléments")
+        
+        elif len(comp_docs) > 0 and comp_en_cours > 0:
+            # SCENARIO 6: Pending complements - verification workflow
+            comp_names = [d['name'] for d in comp_docs if d.get('status') == 'EN_COURS']
+            dynamic_actions.append(f"🔍 COMPLÉMENTS D'INFORMATION EN ATTENTE: {len(comp_names)} document(s)")
+            dynamic_actions.append(f"📄 Documents concernés: {', '.join(comp_names)}")
+            dynamic_actions.append(f"✅ Vérifier l'exhaustivité et la validité de chaque complément")
+            dynamic_actions.append(f"📞 Appel client si informations manquantes ou incohérentes")
+            if len(bs_docs) > 0:
+                dynamic_actions.append(f"⚡ Débloquer le traitement des {len(bs_docs)} BS après validation des compléments")
+            dynamic_actions.append(f"⏰ Validation des compléments à finaliser sous 24h")
+        
+        elif len(adhesion_docs) > 0:
+            # SCENARIO 7: New adhesion - onboarding workflow
+            adhesion_names = [d['name'] for d in adhesion_docs]
+            dynamic_actions.append(f"📝 NOUVEAU DOSSIER D'ADHÉSION: {', '.join(adhesion_names)}")
+            dynamic_actions.append(f"✅ Vérifier la complétude du dossier (pièces d'identité, RIB, formulaires)")
+            dynamic_actions.append(f"🔐 Créer le compte adhérent dans le système")
+            dynamic_actions.append(f"📧 Email de bienvenue avec identifiants d'accès")
+            if len(bs_docs) == 0:
+                dynamic_actions.append(f"⚠️ Aucun BS associé - Dossier d'adhésion pure (pas de remboursement immédiat)")
+            else:
+                dynamic_actions.append(f"💰 {len(bs_docs)} BS à traiter après validation de l'adhésion")
+            dynamic_actions.append(f"📞 Appel de bienvenue au nouveau client sous 48h")
+        
+        elif len(contrat_docs) > 0:
+            # SCENARIO 8: Contract/amendment - compliance check
+            contrat_names = [d['name'] for d in contrat_docs]
+            dynamic_actions.append(f"📜 CONTRAT/AVENANT DÉTECTÉ: {', '.join(contrat_names)}")
+            dynamic_actions.append(f"⚖️ Vérification de conformité avec les conditions générales")
+            dynamic_actions.append(f"💰 Contrôle des garanties et plafonds de remboursement")
+            if len(bs_docs) > 0:
+                dynamic_actions.append(f"✅ Appliquer les nouvelles conditions aux {len(bs_docs)} BS en traitement")
+            dynamic_actions.append(f"📧 Confirmation des modifications contractuelles au client")
+            dynamic_actions.append(f"🔄 Mise à jour du système avec les nouveaux paramètres")
+        
+        elif bs_traite > 0 and bs_en_cours > 0:
+            # SCENARIO 9: Partial progress - completion push
+            remaining_names = [d['name'] for d in bs_docs if d.get('status') == 'EN_COURS'][:5]
+            progress_pct = int((bs_traite / len(bs_docs)) * 100)
+            dynamic_actions.append(f"📊 PROGRESSION: {bs_traite}/{len(bs_docs)} BS traités ({progress_pct}%)")
+            dynamic_actions.append(f"⚡ FINALISER les {bs_en_cours} BS restants en priorité")
+            dynamic_actions.append(f"📋 BS à compléter: {', '.join(remaining_names)}")
+            dynamic_actions.append(f"⏰ Objectif: 100% finalisé sous 24h")
+            dynamic_actions.append(f"✅ Préparer le virement dès que tous les BS sont validés")
+        
+        elif doc_count > 20:
+            # SCENARIO 10: High volume - resource allocation
+            dynamic_actions.append(f"📊 VOLUME ÉLEVÉ: {doc_count} documents à traiter")
+            dynamic_actions.append(f"👥 MOBILISATION: Affecter 2 gestionnaires en parallèle")
+            dynamic_actions.append(f"📅 PLANNING: Répartir sur 3 sessions de 2h")
+            dynamic_actions.append(f"🎯 Session 1: Documents prioritaires (réclamations, résiliations)")
+            dynamic_actions.append(f"🎯 Session 2: Bulletins de soins par ordre chronologique")
+            dynamic_actions.append(f"🎯 Session 3: Compléments et documents administratifs")
+            dynamic_actions.append(f"📈 Suivi d'avancement toutes les 2h")
+        
+        else:
+            # SCENARIO 11: Standard processing - default workflow
+            dynamic_actions.append(f"📄 Traitement standard: {doc_count} document(s) à finaliser")
+            if len(bs_docs) > 0:
+                dynamic_actions.append(f"✅ Valider les {len(bs_docs)} bulletins de soins")
+            if len(comp_docs) > 0:
+                dynamic_actions.append(f"🔍 Vérifier les {len(comp_docs)} compléments d'information")
+            dynamic_actions.append(f"⏰ Finalisation prévue sous 48h")
+        
+        # Merge dynamic actions with similarity-based actions (avoid duplicates)
+        for action in dynamic_actions:
+            if action not in actions:
+                actions.append(action)
+        # Add SLA-based urgency actions and set priority (only if not already set by similarity)
+        if not priority or priority == 'MEDIUM':
+            if sla_days > 30:
+                if "🔴 PRIORITÉ ABSOLUE" not in ' '.join(actions):
+                    actions.append("🔴 PRIORITÉ ABSOLUE - Traiter AVANT tous les autres dossiers")
+                    actions.append(f"📧 Notification client obligatoire: expliquer le retard de {sla_days} jours et fournir un plan d'action")
+                    if team_leader:
+                        actions.append(f"👔 Escalader immédiatement au chef d'équipe: {team_leader}")
+                    actions.append("📊 Ajouter ce dossier au rapport de direction (risque contractuel)")
+                priority = "URGENT"
+                reasoning = f"Retard critique de {sla_days} jours avec {doc_count} document(s) - Risque de pénalités contractuelles"
+            elif sla_days > 14:
+                if "🟠 HAUTE PRIORITÉ" not in ' '.join(actions):
+                    actions.append("🟠 HAUTE PRIORITÉ - Traiter dans les 48h maximum")
+                    actions.append(f"⏰ Bloquer 2h de temps dédié pour finaliser ce bordereau")
+                priority = "HIGH"
+                reasoning = f"Retard de {sla_days} jours - Action rapide nécessaire pour éviter pénalités"
+            elif sla_days > 7:
+                if "🟡 Planifier" not in ' '.join(actions):
+                    actions.append("🟡 Planifier le traitement cette semaine (avant vendredi)")
+                priority = "MEDIUM"
                 reasoning = f"Retard de {sla_days} jours - Surveillance et action recommandées"
+            else:
+                if not reasoning:
+                    reasoning = f"Bordereau avec {doc_count} document(s) - Traitement standard"
+        
+        # Set confidence if not already set
+        if confidence == 0.5:
+            confidence = 0.7  # rule-based + document analysis
 
-            confidence = 0.7  # rule-based confidence
-
-        # 3. Final enhancements: if still URGENT, add reassignment suggestion from smart router
-        if priority == 'URGENT' and bordereau_id:
+        # 3. Final enhancements: if URGENT, add reassignment suggestion from smart router with document context
+        if priority == 'URGENT' and bordereau_id and "Réaffectation d'urgence" not in ' '.join(actions):
             try:
                 suggestion = await smart_router.suggest_optimal_assignment(
-                    {'id': bordereau_id, 'client': client, 'sla_days': sla_days},
+                    {'id': bordereau_id, 'client': client, 'sla_days': sla_days, 'document_count': doc_count},
                     db
                 )
                 if suggestion and suggestion.get('recommended_assignment'):
@@ -3860,21 +4146,25 @@ async def generate_alert_solution(data: Dict = Body(...), current_user = Depends
             except:
                 pass
 
-        # 4. Prepare final response
+        # Prepare final response
         result = {
             'root_cause': root_cause,
-            'recommended_actions': actions[:5],  # keep max 5 actions
+            'recommended_actions': actions[:5],
             'priority': priority,
             'reasoning': reasoning,
-            'analysis': f"Client: {client} | Statut: {statut} | Retard: {sla_days} jours",
-            'confidence': round(confidence, 2)
+            'analysis': f"Client: {client} | Statut: {statut} | Retard: {sla_days} jours | Documents: {doc_summary}",
+            'confidence': round(confidence, 2),
+            'document_details': {
+                'count': doc_count,
+                'types': doc_types,
+                'summary': doc_summary
+            }
         }
 
-        # Add extra metadata if similar cases were used
         if similar_cases_used > 0:
             result['similar_cases_used'] = similar_cases_used
 
-        # Save to learning database for future improvements
+        # Save to learning database
         try:
             await db.save_alert_solution(
                 bordereau_id=bordereau_id,

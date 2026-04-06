@@ -42,14 +42,32 @@ export class ContractAssignmentService {
       
       this.logger.log(`Auto-assigning bordereau ${bordereau.reference} to chef d'équipe ${chefEquipe.fullName} based on contract`);
 
-      // Update bordereau to assign to chef's team
-      await this.prisma.bordereau.update({
-        where: { id: bordereauId },
-        data: {
-          teamId: chefEquipe.id,
-          statut: 'A_AFFECTER' // Ready for chef to assign to gestionnaires
-        }
-      });
+      // Check if team leader is Gestionnaire Senior
+      const isSeniorManaged = chefEquipe.role === 'GESTIONNAIRE_SENIOR';
+      
+      if (isSeniorManaged) {
+        // Senior-managed: Auto-transition to EN_COURS
+        await this.prisma.bordereau.update({
+          where: { id: bordereauId },
+          data: {
+            teamId: chefEquipe.id,
+            assignedToUserId: chefEquipe.id,
+            statut: 'EN_COURS',
+            dateReceptionSante: new Date()
+          }
+        });
+        
+        this.logger.log(`✅ Senior-managed bordereau ${bordereau.reference}: Auto-transitioned to EN_COURS`);
+      } else {
+        // Regular Chef d'équipe: Update bordereau to assign to chef's team
+        await this.prisma.bordereau.update({
+          where: { id: bordereauId },
+          data: {
+            teamId: chefEquipe.id,
+            statut: 'A_AFFECTER' // Ready for chef to assign to gestionnaires
+          }
+        });
+      }
 
       // Notify chef d'équipe
       await this.prisma.notification.create({

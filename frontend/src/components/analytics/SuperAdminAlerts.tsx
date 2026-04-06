@@ -29,7 +29,11 @@ import {
   Select,
   MenuItem,
   TextField,
-  Stack
+  Stack,
+  Checkbox,
+  FormControlLabel,
+  Divider,
+  Autocomplete
 } from '@mui/material';
 import {
   Warning,
@@ -83,6 +87,7 @@ const SuperAdminAlerts: React.FC = () => {
   const [alertDetailDialog, setAlertDetailDialog] = useState<{ open: boolean; alert: any | null; aiSolution: any | null; loadingAI: boolean }>({ open: false, alert: null, aiSolution: null, loadingAI: false });
   const [clientFilter, setClientFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
+  const [gestionnaireFilter, setGestionnaireFilter] = useState('');
   const [reassignDialog, setReassignDialog] = useState<{ open: boolean; bordereau: any | null; currentHandler: string }>({ open: false, bordereau: null, currentHandler: '' });
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState('');
@@ -92,6 +97,18 @@ const SuperAdminAlerts: React.FC = () => {
   const [notifyClientDialog, setNotifyClientDialog] = useState<{ open: boolean; bordereau: any | null; aiSolution: any | null; slaDays: number }>({ open: false, bordereau: null, aiSolution: null, slaDays: 0 });
   const [emailMessage, setEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [reassignPlanDialog, setReassignPlanDialog] = useState<{ open: boolean; recommendation: any | null }>({ open: false, recommendation: null });
+  const [confirmationDialog, setConfirmationDialog] = useState<{ open: boolean; payload: any | null; summary: string; documentDetails?: any[] }>({ open: false, payload: null, summary: '' });
+  const [splitAssignments, setSplitAssignments] = useState<Array<{ teamId: string; targetTeamName: string; count: number; selected: boolean }>>([]);
+  const [documentPreview, setDocumentPreview] = useState<any[]>([]);
+  const [loadingDocumentPreview, setLoadingDocumentPreview] = useState(false);
+  const [manualReassignDialog, setManualReassignDialog] = useState<{ open: boolean; teamId: string; teamName: string }>({ open: false, teamId: '', teamName: '' });
+  const [manualDocs, setManualDocs] = useState<any[]>([]);
+  const [loadingManualDocs, setLoadingManualDocs] = useState(false);
+  const [selectedDocId, setSelectedDocId] = useState('');
+  const [manualTargetUser, setManualTargetUser] = useState('');
+  const [manualReassignLoading, setManualReassignLoading] = useState(false);
+  const [resolveConfirmDialog, setResolveConfirmDialog] = useState<{ open: boolean; alert: any | null }>({ open: false, alert: null });
 
   // Import alerts from Alert Module - use history for resolved
   const { data: alertsResponse, refetch: refetchAlerts } = useAlertsDashboard({});
@@ -109,7 +126,9 @@ const SuperAdminAlerts: React.FC = () => {
     try {
       const response = await LocalAPI.get('/users');
       const users = response.data.filter((u: any) => 
-        u.role === 'GESTIONNAIRE' || u.role === 'CHEF_EQUIPE'
+        ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'].includes(u.role) &&
+        u.role !== 'SUPER_ADMIN' &&
+        u.role !== 'RESPONSABLE_DEPARTEMENT'
       );
       setAvailableUsers(users);
     } catch (error) {
@@ -169,28 +188,33 @@ const SuperAdminAlerts: React.FC = () => {
     }
   };
 
+  const fetchTeamAiSuggestions = async (alertOverride?: OverloadAlert | null) => {
+    const alertToUse = alertOverride || selectedAlert;
+    if (!alertToUse) return null;
+
+    setLoadingSuggestions(true);
+    try {
+      const response = await LocalAPI.post('/super-admin/ai-suggestions', {
+        teamId: alertToUse.team.id,
+        teamName: alertToUse.team.fullName,
+        workload: alertToUse.count,
+        utilizationRate: teamWorkload.find(t => t.name === alertToUse.team.fullName)?.utilizationRate || 0
+      });
+      setAiSuggestions(response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to load AI suggestions:', error);
+      setAiSuggestions(null);
+      return null;
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
   const handleTakeAction = async () => {
     setDetailsOpen(false);
     setActionDialogOpen(true);
-    
-    // Load AI suggestions for this specific team
-    if (selectedAlert) {
-      setLoadingSuggestions(true);
-      try {
-        const response = await LocalAPI.post('/super-admin/ai-suggestions', {
-          teamId: selectedAlert.team.id,
-          teamName: selectedAlert.team.fullName,
-          workload: selectedAlert.count,
-          utilizationRate: teamWorkload.find(t => t.name === selectedAlert.team.fullName)?.utilizationRate || 0
-        });
-        setAiSuggestions(response.data);
-      } catch (error) {
-        console.error('Failed to load AI suggestions:', error);
-        setAiSuggestions(null);
-      } finally {
-        setLoadingSuggestions(false);
-      }
-    }
+    await fetchTeamAiSuggestions();
   };
 
   const handleViewDetails = (alert: OverloadAlert) => {
@@ -266,12 +290,240 @@ const SuperAdminAlerts: React.FC = () => {
     }
   }, [notifyClientDialog.open]);
 
+  const buildInitialSplitAssignments = (recommendation: any) => {
+    const splitRecommendation = aiSuggestions?.recommendations?.find((r: any) => r.type === 'REASSIGNMENT_SPLIT');
+    const splits = (splitRecommendation?.splits || recommendation?.splits || []).map((split: any, index: number) => ({
+      teamId: split.targetTeamId,
+      targetTeamName: split.target,
+      count: split.count,
+      selected: index === 0 || !!splitRecommendation
+    }));
+
+    if (splits.length === 0 && recommendation?.targetTeamId) {
+      return [{
+        teamId: recommendation.targetTeamId,
+        targetTeamName: recommendation.target,
+        count: recommendation.count || 1,
+        selected: true
+      }];
+    }
+
+    return splits;
+  };
+
+  const openReassignPlanDialog = async () => {
+    console.log('🔵 [FRONTEND] openReassignPlanDialog called');
+    let currentSuggestions = aiSuggestions;
+
+    if (!currentSuggestions && !loadingSuggestions) {
+      console.log('🔵 [FRONTEND] No suggestions loaded, fetching...');
+      currentSuggestions = await fetchTeamAiSuggestions();
+    }
+
+    console.log('🔵 [FRONTEND] Current suggestions:', currentSuggestions);
+    console.log('🔵 [FRONTEND] Recommendations:', currentSuggestions?.recommendations);
+    console.log('🔵 [FRONTEND] Recommendation types:', currentSuggestions?.recommendations?.map((r: any) => r.type));
+
+    if (!currentSuggestions?.recommendations?.length) {
+      console.error('❌ [FRONTEND] No recommendations found');
+      alert('⚠️ Impossible de charger les recommandations IA');
+      return;
+    }
+
+    // Try REASSIGNMENT first
+    let recommendation = currentSuggestions.recommendations.find((r: any) => r.type === 'REASSIGNMENT');
+    console.log('🔵 [FRONTEND] REASSIGNMENT recommendation:', recommendation);
+    
+    // If not found, try REASSIGNMENT_SPLIT
+    if (!recommendation || !recommendation.targetTeamId) {
+      console.log('🔵 [FRONTEND] No REASSIGNMENT found, trying REASSIGNMENT_SPLIT...');
+      const splitRec = currentSuggestions.recommendations.find((r: any) => r.type === 'REASSIGNMENT_SPLIT');
+      
+      if (splitRec && splitRec.splits?.length) {
+        console.log('🔵 [FRONTEND] Found REASSIGNMENT_SPLIT with', splitRec.splits.length, 'splits');
+        const splits = splitRec.splits.map((split: any, idx: number) => ({
+          teamId: split.targetTeamId,
+          targetTeamName: split.target,
+          count: split.count,
+          selected: idx === 0
+        }));
+        setSplitAssignments(splits);
+        setReassignPlanDialog({ open: true, recommendation: splitRec });
+        console.log('✅ [FRONTEND] Dialog opened with REASSIGNMENT_SPLIT');
+        return;
+      }
+    }
+    
+    // Still no valid recommendation
+    if (!recommendation || !recommendation.targetTeamId) {
+      console.error('❌ [FRONTEND] No valid REASSIGNMENT or REASSIGNMENT_SPLIT recommendation');
+      alert('⚠️ Aucune équipe cible éligible trouvée pour la réaffectation');
+      return;
+    }
+
+    const initialSplits = buildInitialSplitAssignments(recommendation);
+    console.log('🔵 [FRONTEND] Initial splits:', initialSplits);
+    
+    if (!initialSplits.length) {
+      console.error('❌ [FRONTEND] No splits built');
+      alert('⚠️ Aucune équipe disponible pour la réaffectation');
+      return;
+    }
+
+    setSplitAssignments(initialSplits);
+    setReassignPlanDialog({ open: true, recommendation });
+    console.log('✅ [FRONTEND] Dialog opened successfully');
+  };
+
+  const handleSplitToggle = (teamId: string, checked: boolean) => {
+    setSplitAssignments(prev => prev.map(split => {
+      if (split.teamId !== teamId) return split;
+      return { ...split, selected: checked };
+    }));
+  };
+
+  const handleSplitCountChange = (teamId: string, value: string) => {
+    const parsed = Math.max(0, parseInt(value || '0', 10) || 0);
+    setSplitAssignments(prev => prev.map(split => (
+      split.teamId === teamId ? { ...split, count: parsed } : split
+    )));
+  };
+
+  const prepareReassignConfirmation = async (mode: 'single' | 'split') => {
+    if (!selectedAlert) return;
+
+    const recommendation = reassignPlanDialog.recommendation || aiSuggestions?.recommendations?.find((r: any) => r.type === 'REASSIGNMENT');
+    if (!recommendation) {
+      alert('⚠️ Aucune recommandation de réaffectation disponible');
+      return;
+    }
+
+    let payload: any;
+    let summary = '';
+    let totalCount = 0;
+
+    if (mode === 'single') {
+      payload = {
+        action: 'REASSIGN',
+        sourceTeamId: selectedAlert.team.id,
+        teamId: recommendation.targetTeamId,
+        targetTeamName: recommendation.target,
+        count: recommendation.count
+      };
+      totalCount = recommendation.count;
+      summary = `Confirmer la réaffectation de ${recommendation.count} document(s) vers ${recommendation.target} ?`;
+    } else {
+      const selectedSplits = splitAssignments
+        .filter(split => split.selected && split.count > 0)
+        .map(split => ({
+          teamId: split.teamId,
+          targetTeamName: split.targetTeamName,
+          count: split.count
+        }));
+
+      if (selectedSplits.length === 0) {
+        alert('⚠️ Sélectionnez au moins une équipe cible avec un volume supérieur à 0');
+        return;
+      }
+
+      payload = {
+        action: 'REASSIGN',
+        sourceTeamId: selectedAlert.team.id,
+        splits: selectedSplits
+      };
+      totalCount = selectedSplits.reduce((sum: number, split: any) => sum + split.count, 0);
+      summary = `Confirmer la réaffectation répartie de ${totalCount} document(s) vers ${selectedSplits.map((split: any) => `${split.targetTeamName} (${split.count})`).join(', ')} ?`;
+    }
+
+    // Fetch document details to show in confirmation
+    try {
+      setLoadingDocumentPreview(true);
+      const response = await LocalAPI.post('/super-admin/get-documents-preview', {
+        teamId: selectedAlert.team.id,
+        count: totalCount
+      });
+      setDocumentPreview(response.data.documents || []);
+      setConfirmationDialog({ open: true, payload, summary, documentDetails: response.data.documents || [] });
+    } catch (error) {
+      console.error('Failed to load document preview:', error);
+      setConfirmationDialog({ open: true, payload, summary, documentDetails: [] });
+    } finally {
+      setLoadingDocumentPreview(false);
+    }
+  };
+
+  const executeConfirmedReassignment = async () => {
+    if (!confirmationDialog.payload) return;
+
+    try {
+      const response = await LocalAPI.post('/super-admin/execute-action', confirmationDialog.payload);
+      setConfirmationDialog({ open: false, payload: null, summary: '' });
+      setReassignPlanDialog({ open: false, recommendation: null });
+      setActionDialogOpen(false);
+
+      if (response.data.success) {
+        const message = response.data.targets?.length > 1
+          ? `✅ ${response.data.reassignedCount} document(s) réaffecté(s): ${response.data.targets.map((target: any) => `${target.name} (${target.count})`).join(', ')}`
+          : `✅ ${response.data.reassignedCount} document(s) réaffecté(s) vers ${response.data.targetTeam?.name || response.data.targetTeam?.fullName || 'la cible recommandée'}`;
+        alert(message);
+        loadAlerts();
+      } else {
+        alert(`❌ ${response.data.message}`);
+      }
+    } catch (error: any) {
+      console.error('Failed to execute reassignment:', error);
+      alert(`❌ ${error?.response?.data?.message || 'Erreur lors de la réaffectation'}`);
+    }
+  };
+
+  const openManualReassignDialog = async (teamId: string, teamName: string) => {
+    setManualReassignDialog({ open: true, teamId, teamName });
+    setSelectedDocId('');
+    setManualTargetUser('');
+    setLoadingManualDocs(true);
+    try {
+      const response = await LocalAPI.post('/super-admin/get-documents-preview', { teamId, count: 50 });
+      setManualDocs(response.data.documents || []);
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      setManualDocs([]);
+    } finally {
+      setLoadingManualDocs(false);
+    }
+  };
+
+  const handleManualReassign = async () => {
+    if (!manualTargetUser) return;
+    setManualReassignLoading(true);
+    try {
+      const response = await LocalAPI.post('/super-admin/execute-action', {
+        action: 'REASSIGN',
+        sourceTeamId: manualReassignDialog.teamId,
+        splits: [{ teamId: manualTargetUser, count: 1 }]
+      });
+      if (response.data.success) {
+        alert(`✅ Document réaffecté avec succès vers ${response.data.targetTeam?.name || manualTargetUser}`);
+        setManualReassignDialog({ open: false, teamId: '', teamName: '' });
+        loadAlerts();
+      } else {
+        alert(`❌ ${response.data.message}`);
+      }
+    } catch (error: any) {
+      alert(`❌ ${error?.response?.data?.message || 'Erreur lors de la réaffectation'}`);
+    } finally {
+      setManualReassignLoading(false);
+    }
+  };
+
   const handleResolveAlert = async (alert: any) => {
     try {
       await resolveMutation.mutateAsync(alert.bordereau.id);
+      setResolveConfirmDialog({ open: false, alert: null });
       refetchAlerts();
+      alert('✅ Alerte marquée comme résolue avec succès!');
     } catch (error) {
       console.error('Failed to resolve alert:', error);
+      alert('❌ Erreur lors de la résolution de l\'alerte');
     }
   };
 
@@ -385,13 +637,24 @@ const SuperAdminAlerts: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => handleViewDetails(alert)}
-                      >
-                        Détails
-                      </Button>
+                      <Box display="flex" gap={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => handleViewDetails(alert)}
+                        >
+                          Détails
+                        </Button>
+                        {/* Réaffecter button commented out - full reassignment logic available in detail popup */}
+                        {/* <Button
+                          size="small"
+                          variant="contained"
+                          color="warning"
+                          onClick={() => openManualReassignDialog(alert.team.id, alert.team.fullName)}
+                        >
+                          Réaffecter
+                        </Button> */}
+                      </Box>
                     </TableCell>
                   </TableRow>
                   );
@@ -523,24 +786,49 @@ const SuperAdminAlerts: React.FC = () => {
           <Box sx={{ p: 2, display: 'flex', gap: 2, borderBottom: '1px solid #e0e0e0' }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="caption" color="text.secondary">Client/Société</Typography>
-              <select
+              <Autocomplete
                 value={clientFilter}
-                onChange={(e) => setClientFilter(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="">Tous les clients</option>
-                {Array.from(new Set(activeAlerts.map((alert: any) => 
+                onChange={(event, newValue) => setClientFilter(newValue || '')}
+                options={Array.from(new Set(activeAlerts.map((alert: any) => 
                   alert.bordereau.contract?.client?.name || alert.bordereau.client?.name || 'N/A'
-                )) as Set<string>).sort().map((client) => (
-                  <option key={client} value={client}>{client}</option>
-                ))}
-              </select>
+                )) as Set<string>).sort()}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    placeholder="Tous les clients"
+                    size="small"
+                    sx={{ bgcolor: 'white' }}
+                  />
+                )}
+                size="small"
+                fullWidth
+                clearOnEscape
+                disableClearable={false}
+              />
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="caption" color="text.secondary">Gestionnaire</Typography>
+              <Autocomplete
+                value={gestionnaireFilter}
+                onChange={(event, newValue) => setGestionnaireFilter(newValue || '')}
+                options={Array.from(new Set(activeAlerts.map((alert: any) => 
+                  alert.bordereau.contract?.teamLeader?.fullName || 
+                  alert.bordereau.currentHandler?.fullName || 
+                  'Non assigné'
+                )) as Set<string>).sort()}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    placeholder="Tous les gestionnaires"
+                    size="small"
+                    sx={{ bgcolor: 'white' }}
+                  />
+                )}
+                size="small"
+                fullWidth
+                clearOnEscape
+                disableClearable={false}
+              />
             </Box>
             <Box sx={{ minWidth: 200 }}>
               <Typography variant="caption" color="text.secondary">Urgence</Typography>
@@ -568,6 +856,7 @@ const SuperAdminAlerts: React.FC = () => {
                   <TableCell>ID</TableCell>
                   <TableCell>Client/Société</TableCell>
                   <TableCell>Type</TableCell>
+                  <TableCell>Types de Documents</TableCell>
                   <TableCell>Urgence</TableCell>
                   <TableCell>Statut</TableCell>
                   <TableCell>Assigné à</TableCell>
@@ -581,9 +870,16 @@ const SuperAdminAlerts: React.FC = () => {
                   .filter((alert: any) => {
                     const clientName = alert.bordereau.contract?.client?.name || alert.bordereau.client?.name || 'N/A';
                     const matchesClient = !clientFilter || clientName === clientFilter;
+                    
+                    const gestionnaireNameFromAlert = alert.bordereau.contract?.teamLeader?.fullName || 
+                                                       alert.bordereau.currentHandler?.fullName || 
+                                                       'Non assigné';
+                    const matchesGestionnaire = !gestionnaireFilter || gestionnaireNameFromAlert === gestionnaireFilter;
+                    
                     const alertSeverity = alert.alertLevel || alert.severity || alert.level;
                     const matchesSeverity = !severityFilter || alertSeverity === severityFilter;
-                    return matchesClient && matchesSeverity;
+                    
+                    return matchesClient && matchesGestionnaire && matchesSeverity;
                   })
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((alert: any) => (
@@ -598,6 +894,28 @@ const SuperAdminAlerts: React.FC = () => {
                       {alert.reason === 'SLA breach' ? 'Dépassement SLA' : 
                        alert.reason === 'Risk of delay' ? 'Risque de retard' : 
                        alert.reason}
+                    </TableCell>
+                    <TableCell>
+                      <Box display="flex" flexWrap="wrap" gap={0.5}>
+                        {(() => {
+                          const docTypes = alert.bordereau.documents?.reduce((acc: any, doc: any) => {
+                            const type = doc.type || 'Autre';
+                            acc[type] = (acc[type] || 0) + 1;
+                            return acc;
+                          }, {}) || {};
+                          return Object.entries(docTypes).map(([type, count]) => (
+                            <Chip 
+                              key={type} 
+                              label={`${type}: ${count}`} 
+                              size="small" 
+                              variant="outlined"
+                            />
+                          ));
+                        })()}
+                        {(!alert.bordereau.documents || alert.bordereau.documents.length === 0) && (
+                          <Typography variant="caption" color="text.secondary">Aucun</Typography>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -664,7 +982,7 @@ const SuperAdminAlerts: React.FC = () => {
                           <IconButton 
                             size="small"
                             color="success"
-                            onClick={() => handleResolveAlert(alert)}
+                            onClick={() => setResolveConfirmDialog({ open: true, alert })}
                           >
                             <CheckCircle />
                           </IconButton>
@@ -681,9 +999,16 @@ const SuperAdminAlerts: React.FC = () => {
             count={activeAlerts.filter((alert: any) => {
               const clientName = alert.bordereau.contract?.client?.name || alert.bordereau.client?.name || 'N/A';
               const matchesClient = !clientFilter || clientName === clientFilter;
+              
+              const gestionnaireNameFromAlert = alert.bordereau.contract?.teamLeader?.fullName || 
+                                                 alert.bordereau.currentHandler?.fullName || 
+                                                 'Non assigné';
+              const matchesGestionnaire = !gestionnaireFilter || gestionnaireNameFromAlert === gestionnaireFilter;
+              
               const alertSeverity = alert.alertLevel || alert.severity || alert.level;
               const matchesSeverity = !severityFilter || alertSeverity === severityFilter;
-              return matchesClient && matchesSeverity;
+              
+              return matchesClient && matchesGestionnaire && matchesSeverity;
             }).length}
             page={page}
             onPageChange={(_, newPage) => setPage(newPage)}
@@ -697,6 +1022,102 @@ const SuperAdminAlerts: React.FC = () => {
       {/* Tab 2: Resolved Alerts Table */}
       {activeTab === 2 && (
         <Paper>
+          <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderBottom: '1px solid #e0e0e0' }}>
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              📊 Qu'est-ce qu'une alerte résolue ?
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Une alerte est marquée comme <strong>résolue</strong> lorsqu'un utilisateur <strong>prend une action concrète</strong> pour traiter le problème :
+            </Typography>
+            <Box component="ul" sx={{ mt: 1, mb: 0, pl: 3 }}>
+              <Typography component="li" variant="body2" color="text.secondary">
+                🔄 <strong>Réaffectation</strong> du bordereau à un autre gestionnaire
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                📧 <strong>Notification</strong> envoyée au client ou à l'équipe
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                ⚡ <strong>Escalade</strong> vers le chef d'équipe ou responsable
+                <Tooltip 
+                  title={
+                    <Box sx={{ p: 1 }}>
+                      <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                        🎯 Qu'est-ce que l'Escalade ?
+                      </Typography>
+                      <Typography variant="body2" paragraph>
+                        <strong>Escalade = Remonter un problème vers la hiérarchie supérieure</strong> quand il ne peut pas être résolu au niveau actuel.
+                      </Typography>
+                      
+                      <Typography variant="caption" fontWeight={600} display="block" sx={{ mt: 1, mb: 0.5 }}>
+                        📊 Hiérarchie d'Escalade:
+                      </Typography>
+                      <Typography variant="caption" display="block" sx={{ pl: 1 }}>
+                        1️⃣ Gestionnaire → 2️⃣ Chef d'Équipe → 3️⃣ Responsable Département → 4️⃣ Super Admin
+                      </Typography>
+                      
+                      <Typography variant="caption" fontWeight={600} display="block" sx={{ mt: 1, mb: 0.5 }}>
+                        🔥 Quand escalader ?
+                      </Typography>
+                      <Typography variant="caption" display="block" sx={{ pl: 1 }}>
+                        • Dépassement SLA critique (100%+)<br/>
+                        • Gestionnaire surchargé<br/>
+                        • Dossier bloqué (documents manquants)<br/>
+                        • Réclamation client importante<br/>
+                        • Retards répétés
+                      </Typography>
+                      
+                      <Typography variant="caption" fontWeight={600} display="block" sx={{ mt: 1, mb: 0.5 }}>
+                        ⚡ Que se passe-t-il ?
+                      </Typography>
+                      <Typography variant="caption" display="block" sx={{ pl: 1 }}>
+                        ✅ Notification au manager<br/>
+                        ✅ Priorité augmentée<br/>
+                        ✅ Visibilité management<br/>
+                        ✅ Action requise<br/>
+                        ✅ Traçabilité complète
+                      </Typography>
+                      
+                      <Alert severity="info" sx={{ mt: 1, fontSize: '0.75rem' }}>
+                        <Typography variant="caption">
+                          💡 <strong>Exemple:</strong> Bordereau 74 jours en retard → Escalade au Chef → Chef réaffecte ou contacte client directement
+                        </Typography>
+                      </Alert>
+                    </Box>
+                  }
+                  arrow
+                  placement="right"
+                  componentsProps={{
+                    tooltip: {
+                      sx: {
+                        maxWidth: 450,
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        boxShadow: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        '& .MuiTooltip-arrow': {
+                          color: 'background.paper',
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <IconButton size="small" color="info" sx={{ ml: 0.5 }}>
+                    <Info fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                📝 <strong>Commentaire/Action</strong> documenté dans le système
+              </Typography>
+            </Box>
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <Typography variant="caption">
+                ⚠️ <strong>Important:</strong> Résoudre une alerte ne clôture PAS le bordereau. 
+                Le bordereau atteint le statut CLOTURE uniquement via le workflow Finance (après paiement).
+              </Typography>
+            </Alert>
+          </Box>
           <TableContainer>
             <Table>
               <TableHead>
@@ -704,68 +1125,241 @@ const SuperAdminAlerts: React.FC = () => {
                   <TableCell>Client</TableCell>
                   <TableCell>Bordereau</TableCell>
                   <TableCell>Type</TableCell>
-                  <TableCell>Niveau</TableCell>
+                  <TableCell>Niveau Initial</TableCell>
                   <TableCell>Message</TableCell>
+                  <TableCell>Créé le</TableCell>
                   <TableCell>Résolu par</TableCell>
                   <TableCell>Résolu le</TableCell>
+                  <TableCell>Temps de Résolution</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {resolvedAlerts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      <Typography variant="body2" color="text.secondary">
-                        Aucune alerte résolue
-                      </Typography>
+                    <TableCell colSpan={9} align="center">
+                      <Box sx={{ py: 4 }}>
+                        <CheckCircle sx={{ fontSize: 48, color: 'success.main', mb: 2 }} />
+                        <Typography variant="body1" fontWeight={600} gutterBottom>
+                          Aucune alerte résolue récemment
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Les alertes résolues apparaîtront ici avec leur historique complet
+                        </Typography>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ) : (
                   resolvedAlerts
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((alert: any) => (
-                    <TableRow key={alert.id}>
-                      <TableCell>
-                        {alert.bordereau?.contract?.client?.name || 
-                         alert.bordereau?.client?.name || 
-                         'N/A'}
-                      </TableCell>
-                      <TableCell>{alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id || '-'}</TableCell>
-                      <TableCell>{alert.alertType || alert.reason}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={alertLevelLabel(alert.alertLevel)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                          {alert.message}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {alert.user?.fullName || alert.userId || 'Système'}
-                      </TableCell>
-                      <TableCell>
-                        {alert.resolvedAt 
-                          ? new Date(alert.resolvedAt).toLocaleDateString()
-                          : 'N/A'}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                    .map((alert: any) => {
+                      // Calculate resolution time
+                      const createdDate = new Date(alert.createdAt);
+                      const resolvedDate = alert.resolvedAt ? new Date(alert.resolvedAt) : new Date();
+                      const resolutionHours = Math.round((resolvedDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60));
+                      const resolutionDays = Math.floor(resolutionHours / 24);
+                      const remainingHours = resolutionHours % 24;
+                      
+                      let resolutionTimeDisplay = '';
+                      let resolutionColor = 'success.main';
+                      
+                      if (resolutionDays > 0) {
+                        resolutionTimeDisplay = `${resolutionDays}j ${remainingHours}h`;
+                        if (resolutionDays > 7) resolutionColor = 'error.main';
+                        else if (resolutionDays > 3) resolutionColor = 'warning.main';
+                      } else {
+                        resolutionTimeDisplay = `${resolutionHours}h`;
+                        if (resolutionHours > 48) resolutionColor = 'warning.main';
+                      }
+                      
+                      return (
+                      <TableRow key={alert.id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {alert.bordereau?.contract?.client?.name || 
+                             alert.bordereau?.client?.name || 
+                             'N/A'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {alert.bordereau?.reference || alert.bordereauId || alert.bordereau?.id || '-'}
+                          </Typography>
+                          {alert.bordereau?.statut && (
+                            <Chip 
+                              label={alert.bordereau.statut} 
+                              size="small" 
+                              color="success"
+                              sx={{ mt: 0.5 }}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Box>
+                            <Typography variant="body2" fontWeight={600}>
+                              {alert.alertType === 'SLA_RISK' ? '⏰ Risque SLA' :
+                               alert.alertType === 'SLA_BREACH' ? '🚨 Dépassement SLA' :
+                               alert.alertType === 'TEAM_OVERLOAD' ? '👥 Surcharge Équipe' :
+                               alert.alertType || alert.reason || 'Alerte'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {alert.reason || 'Alerte système'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={alertLevelLabel(alert.alertLevel)}
+                            size="small"
+                            sx={{
+                              bgcolor: alertLevelColor(alert.alertLevel),
+                              color: '#fff'
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ maxWidth: 250 }}>
+                            {alert.message}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {new Date(alert.createdAt).toLocaleDateString('fr-FR')}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(alert.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <People fontSize="small" color="primary" />
+                            <Box>
+                              <Typography variant="body2" fontWeight={600}>
+                                {alert.user?.fullName || alert.resolvedBy || 'Système'}
+                              </Typography>
+                              {alert.user?.role && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {alert.user.role}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {alert.resolvedAt 
+                              ? new Date(alert.resolvedAt).toLocaleDateString('fr-FR')
+                              : 'N/A'}
+                          </Typography>
+                          {alert.resolvedAt && (
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(alert.resolvedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <HourglassEmptyIcon fontSize="small" sx={{ color: resolutionColor }} />
+                            <Box>
+                              <Typography variant="body2" fontWeight={600} sx={{ color: resolutionColor }}>
+                                {resolutionTimeDisplay}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {resolutionHours < 24 ? '🟢 Rapide' :
+                                 resolutionHours < 72 ? '🟡 Normal' :
+                                 resolutionHours < 168 ? '🟠 Long' : '🔴 Très long'}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                      );
+                    })
                 )}
               </TableBody>
             </Table>
           </TableContainer>
           {resolvedAlerts.length > 0 && (
-            <TablePagination
-              component="div"
-              count={resolvedAlerts.length}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => setRowsPerPage(parseInt(e.target.value, 10))}
-              labelRowsPerPage="Lignes par page:"
-            />
+            <>
+              <TablePagination
+                component="div"
+                count={resolvedAlerts.length}
+                page={page}
+                onPageChange={(_, newPage) => setPage(newPage)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(e) => setRowsPerPage(parseInt(e.target.value, 10))}
+                labelRowsPerPage="Lignes par page:"
+              />
+              <Box sx={{ p: 2, bgcolor: '#e8f5e9', borderTop: '1px solid #4caf50' }}>
+                <Typography variant="subtitle2" fontWeight={600} color="success.dark" gutterBottom>
+                  📈 Statistiques de Résolution
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={3}>
+                    <Box textAlign="center">
+                      <Typography variant="h4" color="success.main">
+                        {resolvedAlerts.length}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Total Résolues
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Box textAlign="center">
+                      <Typography variant="h4" color="info.main">
+                        {(() => {
+                          const avgHours = resolvedAlerts.reduce((sum: number, alert: any) => {
+                            const created = new Date(alert.createdAt).getTime();
+                            const resolved = alert.resolvedAt ? new Date(alert.resolvedAt).getTime() : Date.now();
+                            return sum + ((resolved - created) / (1000 * 60 * 60));
+                          }, 0) / (resolvedAlerts.length || 1);
+                          return Math.round(avgHours) + 'h';
+                        })()}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Temps Moyen
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Box textAlign="center">
+                      <Typography variant="h4" color="success.main">
+                        {(() => {
+                          const fast = resolvedAlerts.filter((alert: any) => {
+                            const created = new Date(alert.createdAt).getTime();
+                            const resolved = alert.resolvedAt ? new Date(alert.resolvedAt).getTime() : Date.now();
+                            const hours = (resolved - created) / (1000 * 60 * 60);
+                            return hours < 24;
+                          }).length;
+                          return Math.round((fast / (resolvedAlerts.length || 1)) * 100) + '%';
+                        })()}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Résolues &lt;24h
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Box textAlign="center">
+                      <Typography variant="h4" color="warning.main">
+                        {(() => {
+                          const slow = resolvedAlerts.filter((alert: any) => {
+                            const created = new Date(alert.createdAt).getTime();
+                            const resolved = alert.resolvedAt ? new Date(alert.resolvedAt).getTime() : Date.now();
+                            const hours = (resolved - created) / (1000 * 60 * 60);
+                            return hours > 168;
+                          }).length;
+                          return slow;
+                        })()}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Résolues &gt;7j
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+            </>
           )}
         </Paper>
       )}
@@ -783,6 +1377,61 @@ const SuperAdminAlerts: React.FC = () => {
               <Typography><strong>Date réception:</strong> {alertDetailDialog.alert.bordereau.dateReception ? new Date(alertDetailDialog.alert.bordereau.dateReception).toLocaleDateString() : 'N/A'}</Typography>
               <Typography><strong>Statut:</strong> {alertDetailDialog.alert.bordereau.statut}</Typography>
               <Typography><strong>SLA dépassé:</strong> {getSLAStatus(alertDetailDialog.alert)} jours</Typography>
+              
+              {alertDetailDialog.aiSolution && alertDetailDialog.aiSolution.document_details && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1, border: '1px solid #2196f3' }}>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    📄 Documents du Bordereau
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Nombre:</strong> {alertDetailDialog.aiSolution.document_details.count} document(s)
+                  </Typography>
+                  {alertDetailDialog.aiSolution.document_details.types && alertDetailDialog.aiSolution.document_details.types.length > 0 && (
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      <strong>Types:</strong> {alertDetailDialog.aiSolution.document_details.types.join(', ')}
+                    </Typography>
+                  )}
+                  
+                  {alertDetailDialog.aiSolution.document_details.documents && alertDetailDialog.aiSolution.document_details.documents.length > 0 && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+                        Liste détaillée:
+                      </Typography>
+                      <Box sx={{ maxHeight: 200, overflow: 'auto', bgcolor: 'white', borderRadius: 1, p: 1 }}>
+                        {alertDetailDialog.aiSolution.document_details.documents.map((doc: any, idx: number) => (
+                          <Box 
+                            key={doc.id} 
+                            sx={{ 
+                              p: 1, 
+                              mb: 0.5, 
+                              bgcolor: '#f5f5f5', 
+                              borderRadius: 0.5,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant="caption" fontWeight={600}>
+                                {idx + 1}. {doc.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                Type: {doc.type}
+                              </Typography>
+                            </Box>
+                            <Chip 
+                              label={doc.status || 'N/A'} 
+                              size="small" 
+                              color={doc.status === 'TRAITE' ? 'success' : doc.status === 'EN_COURS' ? 'warning' : 'default'}
+                              sx={{ ml: 1 }}
+                            />
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
               
               <Box sx={{ mt: 3, p: 2, bgcolor: '#f0f7ff', borderRadius: 1, border: '1px solid #2196f3' }}>
                 <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -836,10 +1485,14 @@ const SuperAdminAlerts: React.FC = () => {
                           fullWidth
                           startIcon={<People />}
                           onClick={async () => {
+                            const bordereau = alertDetailDialog.alert.bordereau;
+                            // The correct assigned user is in contract.teamLeader, NOT currentHandler
+                            const currentHandler = bordereau.contract?.teamLeader?.fullName || 'Non assigné';
+                            
                             setReassignDialog({
                               open: true,
-                              bordereau: alertDetailDialog.alert.bordereau,
-                              currentHandler: alertDetailDialog.alert.bordereau.currentHandler?.fullName || 'Non assigné'
+                              bordereau: bordereau,
+                              currentHandler: currentHandler
                             });
                             
                             // Load AI suggestions for reassignment
@@ -1025,25 +1678,8 @@ const SuperAdminAlerts: React.FC = () => {
                   <Card 
                     variant="outlined" 
                     sx={{ p: 2, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
-                    onClick={async () => {
-                      setActionDialogOpen(false);
-                      try {
-                        const reassignRec = aiSuggestions?.recommendations?.find((r: any) => r.type === 'REASSIGNMENT');
-                        if (reassignRec) {
-                          await LocalAPI.post('/super-admin/execute-action', {
-                            action: 'REASSIGN',
-                            sourceTeamId: selectedAlert.team.id,
-                            targetTeamName: reassignRec.target,
-                            count: reassignRec.count
-                          });
-                          alert(`✅ ${reassignRec.count} documents réaffectés vers ${reassignRec.target}`);
-                          loadAlerts();
-                        } else {
-                          alert('⚠️ Aucune équipe disponible pour la réaffectation');
-                        }
-                      } catch (error) {
-                        alert('❌ Erreur lors de la réaffectation');
-                      }
+                    onClick={() => {
+                      openReassignPlanDialog();
                     }}
                   >
                     <Box display="flex" alignItems="center" gap={2}>
@@ -1103,44 +1739,7 @@ const SuperAdminAlerts: React.FC = () => {
                   </Card>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
-                  <Card 
-                    variant="outlined" 
-                    sx={{ p: 2, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
-                    onClick={async () => {
-                      setActionDialogOpen(false);
-                      try {
-                        const priorityRec = aiSuggestions?.recommendations?.find((r: any) => r.type === 'PRIORITIZATION');
-                        if (priorityRec) {
-                          await LocalAPI.post('/super-admin/execute-action', {
-                            action: 'PRIORITIZE',
-                            teamId: selectedAlert.team.id,
-                            urgentCount: priorityRec.urgentCount,
-                            overdueCount: priorityRec.overdueCount
-                          });
-                          alert(`✅ ${priorityRec.urgentCount + priorityRec.overdueCount} documents prioritaires marqués`);
-                          loadAlerts();
-                        } else {
-                          alert('⚠️ Aucun document urgent à prioriser');
-                        }
-                      } catch (error) {
-                        alert('❌ Erreur lors de la priorisation');
-                      }
-                    }}
-                  >
-                    <Box display="flex" alignItems="center" gap={2}>
-                      <Warning color="warning" sx={{ fontSize: 40 }} />
-                      <Box flex={1}>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          Prioriser les Urgents
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Traiter d'abord les documents avec délais courts
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Card>
-                </Grid>
+
 
                 <Grid item xs={12} md={6}>
                   <Card 
@@ -1149,11 +1748,12 @@ const SuperAdminAlerts: React.FC = () => {
                     onClick={async () => {
                       setActionDialogOpen(false);
                       try {
+                        const currentTeamMember = teamWorkload.find(t => t.name === selectedAlert.team.fullName);
                         const response = await LocalAPI.post('/super-admin/execute-action', {
                           action: 'NOTIFY',
                           teamId: selectedAlert.team.id,
                           teamName: selectedAlert.team.fullName,
-                          message: `Alerte: Votre équipe est surchargée (${teamMember?.utilizationRate}%)`
+                          message: `Alerte: Votre équipe est surchargée (${currentTeamMember?.utilizationRate || 0}%)`
                         });
                         
                         if (response.data.success) {
@@ -1192,21 +1792,58 @@ const SuperAdminAlerts: React.FC = () => {
                 ) : aiSuggestions ? (
                   <Box>
                     {aiSuggestions.suggestions?.map((suggestion: string, idx: number) => (
-                      <Typography key={idx} variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      <Typography key={idx} variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                         • {suggestion}
                       </Typography>
                     ))}
                     {aiSuggestions.recommendations?.map((rec: any, idx: number) => (
-                      <Typography key={`rec-${idx}`} variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        • {rec.message || rec.action || rec.recommendation}
-                      </Typography>
+                      <Box key={`rec-${idx}`} sx={{ mb: 1.5, p: 1.25, bgcolor: 'white', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                        <Typography variant="body2" fontWeight={600}>
+                          • {rec.action || rec.recommendation}
+                        </Typography>
+                        {rec.rationale && (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            {rec.rationale}
+                          </Typography>
+                        )}
+                        {rec.type === 'REASSIGNMENT' && (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            Cible: {rec.target} ({rec.targetRole}) • Charge actuelle: {rec.targetUtilizationRate}% • Performance: {rec.targetPerformanceScore} • Projection source: ~{rec.projectedSourceRate}%
+                          </Typography>
+                        )}
+                        {rec.type === 'CAPACITY_INCREASE' && (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            +{rec.additionalCapacityUnits} doc/jour estimés • {rec.estimatedPeople} ressource(s) • Hausse: {rec.percentage}%
+                          </Typography>
+                        )}
+                        {rec.type === 'PRIORITIZATION' && (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            {rec.overdueCount} en retard • {rec.urgentCount} à moins de 3 jours
+                          </Typography>
+                        )}
+                        {rec.type === 'REASSIGNMENT_ALTERNATIVES' && rec.options?.length > 0 && (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            Alternatives: {rec.options.map((option: any) => `${option.name} (${option.role}, ${option.utilizationRate}%)`).join(' | ')}
+                          </Typography>
+                        )}
+                      </Box>
                     ))}
+                    {aiSuggestions.analysis && (
+                      <Alert severity={aiSuggestions.analysis.status === 'CRITICAL' ? 'error' : 'info'} sx={{ mt: 1 }}>
+                        <Typography variant="caption" display="block">
+                          Analyse: {aiSuggestions.analysis.totalDocuments} docs • {aiSuggestions.analysis.urgentDocuments} urgents • {aiSuggestions.analysis.overdueDocuments} en retard • {aiSuggestions.analysis.availableTeams} cible(s) éligible(s)
+                        </Typography>
+                        {aiSuggestions.analysis.bestTargetTeam && (
+                          <Typography variant="caption" display="block">
+                            Meilleure cible détectée: {aiSuggestions.analysis.bestTargetTeam.name} ({aiSuggestions.analysis.bestTargetTeam.role}) - {aiSuggestions.analysis.bestTargetTeam.utilizationRate}% de charge
+                          </Typography>
+                        )}
+                      </Alert>
+                    )}
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
-                    • Réaffecter {Math.ceil(selectedAlert.count * 0.3)} documents vers des équipes disponibles<br/>
-                    • Augmenter temporairement la capacité de {Math.ceil((teamMember?.utilizationRate || 100) - 90)}%<br/>
-                    • Prioriser les {Math.ceil(selectedAlert.count * 0.2)} documents les plus urgents
+                    Analyse IA indisponible.
                   </Typography>
                 )}
               </Box>
@@ -1218,22 +1855,32 @@ const SuperAdminAlerts: React.FC = () => {
           <Button onClick={() => setActionDialogOpen(false)}>
             Annuler
           </Button>
-          <Button 
-            variant="outlined" 
-            onClick={() => {
+          <Button
+            variant="outlined"
+            onClick={async () => {
+              if (!selectedAlert) return;
+              const currentTeamMember = teamWorkload.find(t => t.name === selectedAlert.team.fullName);
               setActionDialogOpen(false);
-              alert('📧 Notification envoyée au chef d\'\u00e9quipe');
+              try {
+                const response = await LocalAPI.post('/super-admin/execute-action', {
+                  action: 'NOTIFY',
+                  teamId: selectedAlert.team.id,
+                  teamName: selectedAlert.team.fullName,
+                  message: `Alerte: Votre équipe est surchargée (${currentTeamMember?.utilizationRate || 0}%)`
+                });
+                alert(response.data.success ? `✅ ${response.data.message}` : `❌ ${response.data.message}`);
+              } catch (error) {
+                alert('❌ Erreur lors de l\'envoi de la notification');
+              }
             }}
           >
             Notifier
           </Button>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             color="primary"
             onClick={() => {
-              setActionDialogOpen(false);
-              alert('✅ Redirection vers l\'affectation des documents...');
-              // TODO: Navigate to document assignment page
+              openReassignPlanDialog();
             }}
           >
             Réaffecter Documents
@@ -1241,6 +1888,231 @@ const SuperAdminAlerts: React.FC = () => {
         </DialogActions>
       </Dialog>
       
+      <Dialog
+        open={reassignPlanDialog.open}
+        onClose={() => setReassignPlanDialog({ open: false, recommendation: null })}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Plan de Réaffectation Intelligent</DialogTitle>
+        <DialogContent>
+          {reassignPlanDialog.recommendation && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>Cible principale recommandée:</strong> {reassignPlanDialog.recommendation.target} • {reassignPlanDialog.recommendation.targetUtilizationRate}% de charge • score {reassignPlanDialog.recommendation.targetPerformanceScore}
+                </Typography>
+                <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                  {reassignPlanDialog.recommendation.rationale}
+                </Typography>
+              </Alert>
+
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                Meilleures options de réaffectation
+              </Typography>
+
+              <Stack spacing={1.5}>
+                {splitAssignments.map((split) => (
+                  <Paper key={split.teamId} variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" gap={2} flexWrap="wrap">
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={split.selected}
+                            onChange={(e) => handleSplitToggle(split.teamId, e.target.checked)}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant="body2" fontWeight={600}>
+                              {split.targetTeamName}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                      <TextField
+                        type="number"
+                        size="small"
+                        label="Nb documents"
+                        value={split.count}
+                        onChange={(e) => handleSplitCountChange(split.teamId, e.target.value)}
+                        disabled={!split.selected}
+                        inputProps={{ min: 0 }}
+                        sx={{ width: 140 }}
+                      />
+                    </Box>
+                  </Paper>
+                ))}
+              </Stack>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Alert severity="success" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  <strong>Mode 1:</strong> tout envoyer à la meilleure cible recommandée.
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Mode 2:</strong> répartir les documents entre plusieurs équipes pour réduire plus vite la surcharge.
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReassignPlanDialog({ open: false, recommendation: null })}>
+            Annuler
+          </Button>
+          <Button variant="outlined" onClick={() => prepareReassignConfirmation('single')}>
+            Affecter tout à la meilleure cible
+          </Button>
+          <Button variant="contained" onClick={() => prepareReassignConfirmation('split')}>
+            Confirmer la répartition
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmationDialog.open}
+        onClose={() => setConfirmationDialog({ open: false, payload: null, summary: '' })}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Confirmation finale - Réaffectation de Documents</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+            <Typography variant="body2" fontWeight={600}>{confirmationDialog.summary}</Typography>
+          </Alert>
+
+          {loadingDocumentPreview ? (
+            <Box sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">Chargement des documents...</Typography>
+            </Box>
+          ) : confirmationDialog.documentDetails && confirmationDialog.documentDetails.length > 0 ? (
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                📄 Documents à réaffecter ({confirmationDialog.documentDetails.length}):
+              </Typography>
+              <Paper variant="outlined" sx={{ maxHeight: 300, overflow: 'auto', p: 1 }}>
+                {confirmationDialog.documentDetails.map((doc: any, idx: number) => (
+                  <Box 
+                    key={doc.id} 
+                    sx={{ 
+                      p: 1.5, 
+                      mb: 1, 
+                      bgcolor: doc.isOverdue ? '#ffebee' : doc.isUrgent ? '#fff3e0' : '#f5f5f5',
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: doc.isOverdue ? '#ef5350' : doc.isUrgent ? '#ff9800' : '#e0e0e0'
+                    }}
+                  >
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Box flex={1}>
+                        <Typography variant="body2" fontWeight={600}>
+                          {idx + 1}. {doc.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Type: {doc.type} • Bordereau: {doc.bordereauReference}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        {doc.isOverdue ? (
+                          <Chip label="En retard" color="error" size="small" />
+                        ) : doc.isUrgent ? (
+                          <Chip label="Urgent" color="warning" size="small" />
+                        ) : (
+                          <Chip label={`${doc.remainingDays}j restants`} color="success" size="small" />
+                        )}
+                      </Box>
+                    </Box>
+                  </Box>
+                ))}
+              </Paper>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="caption">
+                  ℹ️ Ces documents seront réaffectés au niveau document (pas bordereau). Chaque document sera traité individuellement.
+                </Typography>
+              </Alert>
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmationDialog({ open: false, payload: null, summary: '' })}>
+            Retour
+          </Button>
+          <Button variant="contained" color="error" onClick={executeConfirmedReassignment}>
+            Confirmer et Exécuter
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manual Reassign Dialog */}
+      <Dialog open={manualReassignDialog.open} onClose={() => !manualReassignLoading && setManualReassignDialog({ open: false, teamId: '', teamName: '' })} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <People color="warning" />
+            <Typography variant="h6">Réaffectation Manuelle — {manualReassignDialog.teamName}</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 1 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Sélectionnez un document à réaffecter et choisissez le nouveau responsable.
+          </Alert>
+
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Document à réaffecter:</Typography>
+          {loadingManualDocs ? (
+            <Typography variant="body2" color="text.secondary">Chargement des documents...</Typography>
+          ) : (
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Document</InputLabel>
+              <Select value={selectedDocId} onChange={(e) => setSelectedDocId(e.target.value)} label="Document" disabled={manualReassignLoading}>
+                <MenuItem value=""><em>-- Sélectionner un document --</em></MenuItem>
+                {manualDocs.map((doc: any) => (
+                  <MenuItem key={doc.id} value={doc.id}>
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>{doc.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {doc.type} • Bordereau: {doc.bordereauReference} •{' '}
+                        {doc.isOverdue ? '🔴 En retard' : doc.isUrgent ? '🟠 Urgent' : `🟢 ${doc.remainingDays}j restants`}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Nouveau responsable:</Typography>
+          <FormControl fullWidth>
+            <InputLabel>Utilisateur cible</InputLabel>
+            <Select value={manualTargetUser} onChange={(e) => setManualTargetUser(e.target.value)} label="Utilisateur cible" disabled={manualReassignLoading}>
+              <MenuItem value=""><em>-- Sélectionner --</em></MenuItem>
+              {availableUsers.map((user: any) => (
+                <MenuItem key={user.id} value={user.id}>
+                  <Box>
+                    <Typography variant="body2">{user.fullName}</Typography>
+                    <Typography variant="caption" color="text.secondary">{user.role} — {user.email}</Typography>
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setManualReassignDialog({ open: false, teamId: '', teamName: '' })} disabled={manualReassignLoading}>
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleManualReassign}
+            disabled={!manualTargetUser || manualReassignLoading}
+            startIcon={manualReassignLoading ? <HourglassEmptyIcon /> : <People />}
+          >
+            {manualReassignLoading ? 'Réaffectation...' : 'Confirmer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Reassign Bordereau Dialog */}
       <Dialog open={reassignDialog.open} onClose={() => !reassignLoading && setReassignDialog({ open: false, bordereau: null, currentHandler: '' })} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
@@ -1438,6 +2310,103 @@ const SuperAdminAlerts: React.FC = () => {
             startIcon={sendingEmail ? <HourglassEmptyIcon /> : <Notifications />}
           >
             {sendingEmail ? 'Envoi...' : 'Envoyer la Notification'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Resolve Alert Confirmation Dialog */}
+      <Dialog 
+        open={resolveConfirmDialog.open} 
+        onClose={() => setResolveConfirmDialog({ open: false, alert: null })} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: 'success.main', color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CheckCircle />
+          <Typography variant="h6">Confirmer la Résolution</Typography>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {resolveConfirmDialog.alert && (
+            <Box>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="body2" fontWeight={600}>
+                  ⚠️ Êtes-vous sûr de vouloir marquer cette alerte comme résolue ?
+                </Typography>
+              </Alert>
+              
+              <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderRadius: 1, mb: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                  📄 Détails de l'Alerte
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  <strong>Bordereau:</strong> {resolveConfirmDialog.alert.bordereau.reference || resolveConfirmDialog.alert.bordereau.id}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  <strong>Client:</strong> {resolveConfirmDialog.alert.bordereau.contract?.client?.name || resolveConfirmDialog.alert.bordereau.client?.name || 'N/A'}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  <strong>Type:</strong> {resolveConfirmDialog.alert.reason === 'SLA breach' ? 'Dépassement SLA' : resolveConfirmDialog.alert.reason}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  <strong>Niveau:</strong> <Chip 
+                    label={alertLevelLabel(resolveConfirmDialog.alert.alertLevel)} 
+                    size="small"
+                    sx={{ bgcolor: alertLevelColor(resolveConfirmDialog.alert.alertLevel), color: 'white' }}
+                  />
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Statut actuel:</strong> {resolveConfirmDialog.alert.bordereau.statut}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ p: 2, bgcolor: '#e8f5e9', borderRadius: 1, border: '1px solid #4caf50' }}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  ✅ Ce que fait "Marquer Résolu"
+                </Typography>
+                <Box component="ul" sx={{ pl: 2, mb: 0 }}>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    <strong>Archive l'alerte</strong> - L'alerte disparaît de la liste "Alertes Actives"
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    <strong>Enregistre l'action</strong> - Votre nom et la date de résolution sont enregistrés
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    <strong>Apparaît dans l'historique</strong> - L'alerte sera visible dans l'onglet "Alertes Résolues"
+                  </Typography>
+                  <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                    <strong>Traçabilité complète</strong> - Temps de résolution et statistiques calculés automatiquement
+                  </Typography>
+                </Box>
+              </Box>
+              
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="caption">
+                  💡 <strong>Important:</strong> Marquer une alerte comme résolue signifie que vous avez pris une action concrète (réaffectation, notification, escalade, etc.). Le bordereau lui-même reste dans son statut actuel jusqu'à ce qu'il soit traité complètement via le workflow normal.
+                </Typography>
+              </Alert>
+              
+              <Box sx={{ mt: 2, p: 1.5, bgcolor: '#fff3e0', borderRadius: 1, border: '1px solid #ff9800' }}>
+                <Typography variant="caption" color="text.secondary">
+                  ⚠️ <strong>Rappel:</strong> Cette action ne peut pas être annulée. L'alerte restera dans l'historique mais ne pourra plus être réactivée.
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setResolveConfirmDialog({ open: false, alert: null })}
+            variant="outlined"
+          >
+            Annuler
+          </Button>
+          <Button 
+            onClick={() => resolveConfirmDialog.alert && handleResolveAlert(resolveConfirmDialog.alert)}
+            variant="contained"
+            color="success"
+            startIcon={<CheckCircle />}
+          >
+            Confirmer la Résolution
           </Button>
         </DialogActions>
       </Dialog>

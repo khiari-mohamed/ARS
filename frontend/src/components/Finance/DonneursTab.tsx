@@ -8,6 +8,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DonneurOrdre {
   id: string;
@@ -19,6 +20,8 @@ interface DonneurOrdre {
 }
 
 const DonneursTab: React.FC = () => {
+  const { user } = useAuth();
+  const isViewOnly = user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE';
   const [donneurs, setDonneurs] = useState<DonneurOrdre[]>([]);
   const [dialog, setDialog] = useState<{open: boolean, donneur: DonneurOrdre | null}>({
     open: false, donneur: null
@@ -179,14 +182,16 @@ const DonneursTab: React.FC = () => {
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Liste des Donneurs ({donneurs.length})
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            size="large"
-          >
-            + Ajouter un Donneur
-          </Button>
+          {!isViewOnly && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              size="large"
+            >
+              + Ajouter un Donneur
+            </Button>
+          )}
         </Grid>
 
       <Box sx={{ overflowX: 'auto', width: '100%' }}>
@@ -198,7 +203,7 @@ const DonneursTab: React.FC = () => {
               <TableCell><strong>RIB (20 chiffres)</strong></TableCell>
               <TableCell><strong>Structure fichier TXT associée</strong></TableCell>
               <TableCell><strong>Statut actif/inactif</strong></TableCell>
-              <TableCell><strong>Actions</strong></TableCell>
+              {!isViewOnly && <TableCell><strong>Actions</strong></TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -226,27 +231,29 @@ const DonneursTab: React.FC = () => {
                   />
                 </TableCell>
                 <TableCell>{getStatusChip(donneur.status)}</TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                      size="small"
-                      startIcon={<EditIcon />}
-                      onClick={() => handleEdit(donneur)}
-                      variant="outlined"
-                    >
-                      Modifier
-                    </Button>
-                    <Button
-                      size="small"
-                      startIcon={<DeleteIcon />}
-                      onClick={() => handleDelete(donneur.id)}
-                      color="error"
-                      variant="outlined"
-                    >
-                      Supprimer
-                    </Button>
-                  </Box>
-                </TableCell>
+                {!isViewOnly && (
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={() => handleEdit(donneur)}
+                        variant="outlined"
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        size="small"
+                        startIcon={<DeleteIcon />}
+                        onClick={() => handleDelete(donneur.id)}
+                        color="error"
+                        variant="outlined"
+                      >
+                        Supprimer
+                      </Button>
+                    </Box>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

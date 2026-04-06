@@ -37,82 +37,161 @@ export class PdfGenerationService {
   constructor(private prisma: PrismaService) {}
 
   private getImagePath(imageName: string): string {
-    // Try multiple possible paths for cross-platform compatibility
     const possiblePaths = [
-      // Production Ubuntu: server and frontend are siblings
+      // PROD: Absolute path to frontend public
+      path.join('/home', 'yourapp', 'frontend', 'public', imageName),
+      // PROD: Server and frontend are siblings
       path.join(process.cwd(), '..', 'frontend', 'public', imageName),
-      // Alternative: if running from server directory
+      // PROD: Images stored in server/public/assets
+      path.join(process.cwd(), 'public', 'assets', imageName),
+      // PROD: Alternative server/uploads location
+      path.join(process.cwd(), 'uploads', 'assets', imageName),
+      // DEV: Frontend public folder
       path.join(__dirname, '..', '..', '..', 'frontend', 'public', imageName),
-      // Alternative: if frontend is served from server/public
-      path.join(process.cwd(), 'public', imageName),
-      // Dev Windows path
+      // DEV Windows absolute path
       path.join('D:', 'ARS', 'frontend', 'public', imageName),
     ];
 
     for (const imagePath of possiblePaths) {
       if (fs.existsSync(imagePath)) {
-        console.log(`Found image at: ${imagePath}`);
+        console.log(`✅ Found image at: ${imagePath}`);
         return imagePath;
       }
     }
 
-    console.warn(`Image ${imageName} not found in any of these paths:`, possiblePaths);
-    return ''; // Return empty string if not found
+    console.error(`❌ Image ${imageName} NOT FOUND in any of these paths:`);
+    possiblePaths.forEach(p => console.error(`   - ${p}`));
+    console.error(`   Current working directory: ${process.cwd()}`);
+    console.error(`   __dirname: ${__dirname}`);
+    return '';
   }
 
-  async generateOVPdf(data: OVPdfData): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      try {
-        // Validate data
-        if (!data.virements || data.virements.length === 0) {
-          throw new Error('No virements data provided for PDF generation');
-        }
-        
-        const doc = new PDFDocument({ 
-          size: 'A4',
-          margins: { top: 50, bottom: 50, left: 50, right: 50 },
-          autoFirstPage: false,
-          bufferPages: false // CRITICAL: Disable buffering to prevent extra pages
-        });
-        
-        const chunks: Buffer[] = [];
-        doc.on('data', chunk => chunks.push(chunk));
-        doc.on('end', () => resolve(Buffer.concat(chunks)));
-        doc.on('error', reject);
-        
-        // Add single page manually
-        doc.addPage();
-        
-        // Header
-        this.addPageHeader(doc, data, 1, 1);
-        
-        // Table
-        this.addVirementTable(doc, data, null);
-        
-        // Footer info
-        this.addFooterInfo(doc, data);
-        
-        // Bottom logo at fixed position
-        const bottomLogoPath = this.getImagePath('Image3.jpg');
-        if (bottomLogoPath) {
-          try {
-            doc.image(bottomLogoPath, 50, doc.page.height - 80, { width: doc.page.width - 100, height: 30 });
-          } catch (e) {
-            console.warn('Failed to load bottom logo:', e.message);
-          }
-        }
-        
-        // REMOVED: Page number that was causing second page
-        // doc.fontSize(7).font('Helvetica').text('Page 1 sur 1', 0, doc.page.height - 40, { width: doc.page.width, align: 'center' });
-
-        // CRITICAL: End immediately without any flush or additional operations
-        doc.end();
-      } catch (error) {
-        reject(error);
+async generateOVPdf(data: OVPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!data.virements || data.virements.length === 0) {
+        throw new Error('No virements data provided for PDF generation');
       }
-    });
-  }
 
+      const doc = new PDFDocument({
+        size: 'A4',
+        margins: { top: 50, bottom: 50, left: 50, right: 50 },
+        autoFirstPage: true,
+        bufferPages: false
+      });
+
+      const chunks: Buffer[] = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const rowHeight = 12;
+      // Optimized header heights for better space utilization
+      const headerHeightFirst = 250;   // first page header
+      const headerHeightOther = 60;    // continuation pages (minimal)
+      const pageHeight = 841.89;
+      const marginBottom = 100; // Reduced margin for footer (footer uses flow positioning)
+
+      // Available space for rows on each page type
+      const availableRowsFirst = Math.floor((pageHeight - 50 - headerHeightFirst - marginBottom) / rowHeight);
+      const availableRowsOther = Math.floor((pageHeight - 50 - headerHeightOther - marginBottom) / rowHeight);
+
+      // Use the smaller value for uniform rows-per-page (no extra buffer needed)
+      const maxRowsPerPage = Math.min(availableRowsFirst, availableRowsOther);
+      const totalPages = Math.ceil(data.virements.length / maxRowsPerPage);
+      
+      console.log(`📊 Pagination calculation:`, {
+        availableRowsFirst,
+        availableRowsOther,
+        maxRowsPerPage,
+        totalItems: data.virements.length,
+        totalPages
+      });
+
+      // Single pass: create pages with header, table, AND footer elements
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        if (pageNum > 1) doc.addPage();
+
+        const startIdx = (pageNum - 1) * maxRowsPerPage;
+        const endIdx = Math.min(startIdx + maxRowsPerPage, data.virements.length);
+        const pageData = data.virements.slice(startIdx, endIdx);
+
+        this.addPageHeader(doc, data, pageNum, totalPages);
+        this.addVirementTable(doc, { ...data, virements: pageData }, null);
+        
+        // Footer info only on last page
+        if (pageNum === totalPages) {
+          this.addFooterInfo(doc, data);
+        }
+        
+        // // Bottom logo only on last page
+        // if (pageNum === totalPages) {
+        //   const bottomLogoPath = this.getImagePath('Image3.jpg');
+        //   if (bottomLogoPath) {
+        //     try {
+        //       doc.save();
+        //       doc.image(bottomLogoPath, 50, doc.page.height - 80, {
+        //         width: doc.page.width - 100,
+        //         height: 30
+        //       });
+        //       doc.restore();
+        //     } catch (e) {
+        //       console.warn('Failed to load bottom logo:', e.message);
+        //     }
+        //   }
+        // }
+        
+        // // Page number on all pages
+        // doc.save();
+        // doc.fontSize(7).font('Helvetica');
+        // doc.text(`Page ${pageNum} sur ${totalPages}`, 50, doc.page.height - 40, {
+        //   width: 495,
+        //   align: 'center',
+        //   lineBreak: false,
+        //   continued: false
+        // });
+        // doc.restore();
+      }
+      
+      console.log(`✅ PDF complete: ${totalPages} pages`);
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// New method for absolute footer info
+private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
+  // Position near bottom of page, independent of flow
+  let currentY = doc.page.height - 180; // adjust as needed
+
+  // Total line
+  doc.fontSize(7).font('Helvetica-Bold').text('TOTAL', 50, currentY);
+  const totalFormatted = data.montantTotal.toFixed(3).replace('.', ',');
+  doc.text(totalFormatted, 430, currentY, { width: 115, align: 'right' });
+  currentY += 10;
+
+  // Amount in words
+  const amountInWords = this.convertAmountToWords(data.montantTotal);
+  doc.fontSize(7).font('Helvetica-Bold').text('MONTANT EN TOUTES LETTRES :', 50, currentY);
+  currentY += 8;
+  doc.font('Helvetica').text(amountInWords, 50, currentY, { width: 495 });
+  currentY += 10;
+
+  // Metadata
+  const bordereauRef = data.bordereauReference || data.reference || `BR-${Date.now().toString().slice(-8)}`;
+  const contractNum = data.contractNumber || `CT-${Date.now().toString().slice(-8)}`;
+  const clientName = data.companyReference || 'ARS TUNISIE';
+  const userName = data.createdBy || 'SYSTEM USER';
+
+  doc.fontSize(7).font('Helvetica');
+  doc.text(`Réf Bordereau : ${bordereauRef}`, 50, currentY); currentY += 8;
+  doc.text(`N° Contrat : ${contractNum}`, 50, currentY); currentY += 8;
+  doc.text(`Nom du Client : ${clientName}`, 50, currentY); currentY += 8;
+  doc.text(`Date Injection OV : ${data.dateEmission.toLocaleDateString('fr-FR')}`, 50, currentY); currentY += 8;
+  doc.text(`Saisie par : ${userName}`, 50, currentY);
+}
   private addPageHeader(doc: any, data: OVPdfData, pageNum: number, totalPages: number) {
     const startY = 20;
     
@@ -251,7 +330,7 @@ export class PdfGenerationService {
     
     currentY += rowHeight;
     
-    // Data rows with borders
+    // Data rows with borders - NO OVERFLOW CHECKS (pagination handles this)
     doc.fontSize(6).font('Helvetica');
     
     for (let i = 0; i < data.virements.length; i++) {
@@ -309,9 +388,7 @@ export class PdfGenerationService {
   }
 
   private addFooterInfo(doc: any, data: OVPdfData) {
-    // Prevent PDFKit from creating an extra page due to overflow
-    if (doc.y > doc.page.height - 120) return;
-
+    // Use flow-based positioning (continue from current Y)
     let currentY = doc.y;
     
     // Total line
@@ -327,11 +404,11 @@ export class PdfGenerationService {
     doc.font('Helvetica').text(amountInWords, 50, currentY, { width: 495 });
     currentY += 10;
     
-    // Compact info section
-    const bordereauRef = data.bordereauReference || data.reference || `BR-${Date.now().toString().slice(-8)}`;
-    const contractNum = data.contractNumber || `CT-${Date.now().toString().slice(-8)}`;
-    const clientName = data.companyReference || 'ARS TUNISIE';
-    const userName = data.createdBy || 'SYSTEM USER';
+    // Compact info section - NO FALLBACKS, must have real data
+    const bordereauRef = data.bordereauReference || data.reference;
+    const contractNum = data.contractNumber;
+    const clientName = data.companyReference;
+    const userName = data.createdBy;
     
     doc.fontSize(7).font('Helvetica');
     doc.text(`Réf Bordereau : ${bordereauRef}`, 50, currentY); currentY += 8;
@@ -342,10 +419,7 @@ export class PdfGenerationService {
   }
   
   private addPageFooter(doc: any, data: OVPdfData, currentPage: number, totalPages: number) {
-    // Calculate safe footer position to avoid triggering new page
     const maxY = doc.page.height - 100; // Leave 100px from bottom
-    
-    // Only add footer if we have space, otherwise skip logos
     if (doc.y < maxY) {
       // Bottom logo
       const bottomLogoPath = 'D:\\ARS\\frontend\\public\\Image3.jpg';
@@ -508,14 +582,38 @@ export class PdfGenerationService {
       items: ordreVirement.items
     });
     
-    // Get proper contract number from bordereau reference or contract
-    const contractNumber = ordreVirement.bordereau?.contract?.codeAssure 
-      || ordreVirement.bordereau?.reference 
-      || ordreVirement.reference
-      || 'N/A';
+    // Get proper contract number and client info
+    let contractNumber: string | undefined;
+    let clientName: string | undefined;
+    let bordereauRef: string | undefined;
     
-    // Get proper user name
-    const createdByName = createdByUser?.fullName || createdByUser?.email || 'SYSTEM USER';
+    if (ordreVirement.bordereau) {
+      // Bordereau-linked OV
+      contractNumber = ordreVirement.bordereau.contract?.codeAssure || undefined;
+      clientName = ordreVirement.bordereau.client?.name || undefined;
+      bordereauRef = ordreVirement.bordereau.reference || undefined;
+    } else if (ordreVirement.clientName) {
+      // Manual entry - get client and contract from clientName
+      const client = await this.prisma.client.findFirst({
+        where: { name: ordreVirement.clientName },
+        include: {
+          contracts: {
+            take: 1,
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      });
+      
+      if (client) {
+        clientName = client.name;
+        contractNumber = client.contracts?.[0]?.codeAssure || undefined;
+      }
+      
+      bordereauRef = 'Entrée manuelle';
+    }
+    
+    // Get proper user name - must exist
+    const createdByName = createdByUser?.fullName || createdByUser?.email || undefined;
     
     const pdfData: OVPdfData = {
       ordreVirementId,
@@ -529,18 +627,18 @@ export class PdfGenerationService {
       },
       reference: ordreVirement.reference,
       contractNumber: contractNumber,
-      companyReference: ordreVirement.bordereau?.client?.name,
-      bordereauReference: ordreVirement.bordereau?.reference,
+      companyReference: clientName,
+      bordereauReference: bordereauRef,
       createdBy: createdByName,
       virements: ordreVirement.items
         ?.filter(item => item.statut === 'VALIDE') // Only valid items
         ?.map(item => ({
-          societe: item.adherent?.client?.name || 'ARS TUNISIE',
-          numContrat: 'CT-' + (item.adherent?.clientId?.substring(0, 8) || '12345678'),
-          matricule: item.adherent?.matricule || `MAT${item.adherentId.substring(0, 6)}`,
-          nom: item.adherent?.nom || 'NOM_INCONNU',
-          prenom: item.adherent?.prenom || 'PRENOM_INCONNU',
-          rib: item.adherent?.rib || '00000000000000000000',
+          societe: item.adherent?.client?.name || '',
+          numContrat: item.adherent?.clientId ? 'CT-' + item.adherent.clientId.substring(0, 8) : '',
+          matricule: item.adherent?.matricule || '',
+          nom: item.adherent?.nom || '',
+          prenom: item.adherent?.prenom || '',
+          rib: item.adherent?.rib || '',
           montant: item.montant || 0
         })) || [],
       montantTotal: ordreVirement.montantTotal || 0,

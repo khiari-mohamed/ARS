@@ -1,0 +1,963 @@
+{
+  "ordreVirement": {
+    "reference": "VIR-20260323-0003",
+    "montantTotal": 22844.068,
+    "dateCreation": "2026-03-23T16:08:34.550Z",
+    "etatVirement": "EXECUTE",
+    "validationStatus": "VALIDE",
+    "utilisateurSante": "c802a2d2-fac4-4a15-adfe-16ede47decb4"
+  },
+  "donneurOrdre": {
+    "nom": "BTK COMAR",
+    "rib": "20003032210059758029",
+    "banque": "BTK",
+    "agence": null,
+    "address": null
+  },
+  "bordereau": {
+    "reference": "BTK BR 2026721437",
+    "nombreBS": 1,
+    "dateReception": "2026-03-23T00:00:00.000Z",
+    "statut": "VIREMENT_EXECUTE",
+    "client": {
+      "name": "BTK",
+      "email": ""
+    },
+    "contract": {
+      "codeAssure": "10205",
+      "delaiReglement": 7
+    }
+  },
+  "items": [
+    {
+      "adherent": {
+        "matricule": "215",
+        "nom": "KHEMIS ",
+        "prenom": "HALLOUMA",
+        "rib": "20000000001140021566",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 349.989,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "216",
+        "nom": "ELKOUCH",
+        "prenom": "MOURAD",
+        "rib": "20000000001140021663",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 160,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "260",
+        "nom": "ZHANI ",
+        "prenom": "TRAKI",
+        "rib": "20000000001140026028",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 178.705,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "267",
+        "nom": "BECHOUEL ",
+        "prenom": " MOUNA",
+        "rib": "20000000002540026737",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 445.112,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "269",
+        "nom": "DHIFI",
+        "prenom": "LATIFA",
+        "rib": "20000000001140026901",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 381.245,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "274",
+        "nom": "JEGHAM",
+        "prenom": "SKANDER",
+        "rib": "20000000001140027483",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 89.04,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "277",
+        "nom": "DARDOURI ",
+        "prenom": " WICEM",
+        "rib": "20000000001140027774",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 308.945,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "292",
+        "nom": "ETTIR",
+        "prenom": "HAIFA",
+        "rib": "20000000001140029229",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 367.068,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "300",
+        "nom": "RIAHI",
+        "prenom": "HEDI",
+        "rib": "20000000001140030005",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 133.3,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "308",
+        "nom": "AYARI",
+        "prenom": "TAIEB",
+        "rib": "20000000001140030878",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 40.648,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "318",
+        "nom": "MAGOURI",
+        "prenom": "TAREK",
+        "rib": "20000000001140031848",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 89.94,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "323",
+        "nom": "BEN",
+        "prenom": "KHAOULA",
+        "rib": "20000000001140032333",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 120.45,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "337",
+        "nom": "EL",
+        "prenom": "ANIS",
+        "rib": "20000000001140033788",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 984,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "352",
+        "nom": "KOOLI",
+        "prenom": "AMIRA",
+        "rib": "20000000001140035243",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 281.481,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "378",
+        "nom": "LAATIRI",
+        "prenom": "MEHDI",
+        "rib": "20000000001140037862",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 377.557,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "381",
+        "nom": "ZINE",
+        "prenom": "SELMA",
+        "rib": "20000000002540038183",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 273.019,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "389",
+        "nom": "KAMOUN",
+        "prenom": "MOURAD",
+        "rib": "20000000001140038929",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 246.404,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "403",
+        "nom": "MILED",
+        "prenom": "MAROUENE",
+        "rib": "20000000001140040384",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 180.346,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "417",
+        "nom": "LABESSI",
+        "prenom": "FAOUZI",
+        "rib": "20000000001140041742",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 1036.9,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "418",
+        "nom": "HARIZ",
+        "prenom": "GHADA",
+        "rib": "20000000001140041839",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 156.46,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "420",
+        "nom": "MANAA",
+        "prenom": "SALMA",
+        "rib": "20000000001140042033",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 96.782,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "430",
+        "nom": "CHOUAIBI",
+        "prenom": "MOEZ",
+        "rib": "20000000001140043003",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 261.391,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "444",
+        "nom": "BEL",
+        "prenom": "NOUREDDINE",
+        "rib": "20000000001140044458",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 244.542,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "464",
+        "nom": "REZGUI",
+        "prenom": "LILIA",
+        "rib": "20000000001140046495",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 157.003,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "469",
+        "nom": "OUERTANI",
+        "prenom": "KAIS",
+        "rib": "20000000001140046980",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 366.153,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "486",
+        "nom": "ZAKRAOUI",
+        "prenom": "FADWA",
+        "rib": "20000000001140048629",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 149.133,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "507",
+        "nom": "TOUATI",
+        "prenom": "NIZAR",
+        "rib": "20000000001140050763",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 247.876,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "524",
+        "nom": "MOKHTARI",
+        "prenom": "SEIFEDDINE",
+        "rib": "20000000001140052412",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 393.2,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "527",
+        "nom": "TAHARI",
+        "prenom": "YOSRA",
+        "rib": "20000000001140052703",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 93.946,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "532",
+        "nom": "BEN",
+        "prenom": "HAMED",
+        "rib": "20000000001140053285",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 153.683,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "538",
+        "nom": "ABDELAZIZ",
+        "prenom": "MERIAM",
+        "rib": "20000000001140053867",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 100.87,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "544",
+        "nom": "NACEF",
+        "prenom": "TAYCIR",
+        "rib": "20000000001140054449",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 163.115,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "560",
+        "nom": "LASSOUED",
+        "prenom": "SAMI",
+        "rib": "20000000001140056001",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 104.77,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "561",
+        "nom": "SFAXI",
+        "prenom": "AYATOLLAH",
+        "rib": "20000000001140056195",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 254.25,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "562",
+        "nom": "BAGGA",
+        "prenom": "AYMEN",
+        "rib": "20000000001140056292",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 106.859,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "565",
+        "nom": "LAOUINI",
+        "prenom": "AYMEN",
+        "rib": "20000000001140056583",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 167.27,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "576",
+        "nom": "ACHOUR",
+        "prenom": "ELWALID",
+        "rib": "20000000001140057650",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 726,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "626",
+        "nom": "TRABELSI",
+        "prenom": "SIRINE",
+        "rib": "20000002229995214020",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 140.036,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "633",
+        "nom": "BEN",
+        "prenom": "SARRA",
+        "rib": "20000002229996241929",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 1548.085,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "641",
+        "nom": "BEN",
+        "prenom": "ABDELWAHED",
+        "rib": "20000002220013029477",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 305.04,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "671",
+        "nom": "ZAIDI",
+        "prenom": "HAMADI",
+        "rib": "20000002220012803952",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 605.8199999999999,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "678",
+        "nom": "MRAIDI",
+        "prenom": "SLIM",
+        "rib": "20000002220013815759",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 197.45,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "685",
+        "nom": "CHOUIKH",
+        "prenom": "HANA",
+        "rib": "20000002220014347804",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 159.625,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "719",
+        "nom": "RAFRAFI",
+        "prenom": "MHAMMED",
+        "rib": "20000002220019786885",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 116.703,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "720",
+        "nom": "GUERMAZI",
+        "prenom": "ICHRAF",
+        "rib": "20000002220019786497",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 159.382,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "721",
+        "nom": "BEN",
+        "prenom": "YASMIN",
+        "rib": "20000002220019786012",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 146.06,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "738",
+        "nom": "BEN",
+        "prenom": "INES",
+        "rib": "20000002220034744285",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 262.8,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "547",
+        "nom": "MANAA",
+        "prenom": "HAJER",
+        "rib": "20000000001140054740",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 33,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "595",
+        "nom": "KAOUACH",
+        "prenom": "MOHAMED",
+        "rib": "20000000001141009802",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 894.7739999999999,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "596",
+        "nom": "GHARBI",
+        "prenom": "FATMA",
+        "rib": "20000000001141009026",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 1827.472,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "602",
+        "nom": "BEN",
+        "prenom": "WIEM",
+        "rib": "20000000001141010481",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 1056.9,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "604",
+        "nom": "BEN",
+        "prenom": "SOUFIANE",
+        "rib": "20000002229999587653",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 216.904,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "605",
+        "nom": "BEN",
+        "prenom": "HABIB",
+        "rib": "20000002229999631012",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 355.634,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "686",
+        "nom": "BEN MNA",
+        "prenom": "ASMA",
+        "rib": "20000002220014040217",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 2683.569,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "708",
+        "nom": "MKAOUAR",
+        "prenom": "HAMDA",
+        "rib": "20000002220017686544",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 127.234,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "710",
+        "nom": "RIAHI",
+        "prenom": "HANI",
+        "rib": "20000002220018178140",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 87.465,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "718",
+        "nom": "ABDELKADER",
+        "prenom": "KHOULOUD",
+        "rib": "20000002220019787952",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 175.271,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "740",
+        "nom": "SAHLI",
+        "prenom": "SABRINE",
+        "rib": "20000002220025301723",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 300.458,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "768",
+        "nom": "MKAOUAR",
+        "prenom": "FATMA",
+        "rib": "20000002220037865745",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 749.513,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "771",
+        "nom": "SAADAOUI",
+        "prenom": "SALAH",
+        "rib": "20000002220055532064",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 318.623,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "773",
+        "nom": "AYADI",
+        "prenom": "MARIEM",
+        "rib": "20000002220057474586",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 245.949,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    },
+    {
+      "adherent": {
+        "matricule": "785",
+        "nom": "FARJALLAH",
+        "prenom": "AIDA",
+        "rib": "20000002220079255257",
+        "statut": "ACTIF",
+        "client": {
+          "name": "BTK"
+        }
+      },
+      "montant": 142.849,
+      "statut": "VALIDE",
+      "erreur": "{}"
+    }
+  ]
+}

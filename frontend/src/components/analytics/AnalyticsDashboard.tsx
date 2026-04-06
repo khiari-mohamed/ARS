@@ -32,12 +32,18 @@ interface AnalyticsFilters {
   teamId?: string;
   status?: string;
   slaStatus?: string;
+  gestionnaireId?: string;
+  gestionnaireSeniorId?: string;
+  chefEquipeId?: string;
 }
 
 interface FilterOptions {
   clients: { id: string; name: string; companyName?: string }[];
   departments: { id: string; name: string; code?: string }[];
   teams: { id: string; name: string }[];
+  gestionnaires: { id: string; name: string; role: string }[];
+  gestionnaireSeniors: { id: string; name: string; role: string }[];
+  chefsEquipe: { id: string; name: string; role: string }[];
 }
 
 const AnalyticsDashboard: React.FC = () => {
@@ -51,7 +57,10 @@ const AnalyticsDashboard: React.FC = () => {
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     clients: [],
     departments: [],
-    teams: []
+    teams: [],
+    gestionnaires: [],
+    gestionnaireSeniors: [],
+    chefsEquipe: []
   });
   const [loading, setLoading] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState<string[]>([]);
@@ -84,34 +93,57 @@ const AnalyticsDashboard: React.FC = () => {
 
   const loadFilterOptions = async () => {
     try {
-      const [clientsResponse, departmentsResponse, teamsResponse] = await Promise.all([
+      const [clientsResponse, usersResponse] = await Promise.all([
         LocalAPI.get('/clients'),
-        LocalAPI.get('/analytics/filter-options/departments'),
-        LocalAPI.get('/analytics/filter-options/teams')
+        LocalAPI.get('/users')
       ]);
+
+      const users = usersResponse.data || [];
+      
+      console.log('👥 [Analytics] Loaded users:', users.length);
+      console.log('👥 [Analytics] Sample user:', users[0]);
+      
+      // Filter and map users by role
+      const gestionnaires = users.filter((u: any) => 
+        u.role === 'GESTIONNAIRE' && u.active
+      ).map((u: any) => ({ id: u.id, name: u.fullName, role: u.role }));
+      
+      const gestionnaireSeniors = users.filter((u: any) => 
+        u.role === 'GESTIONNAIRE_SENIOR' && u.active
+      ).map((u: any) => ({ id: u.id, name: u.fullName, role: u.role }));
+      
+      const chefsEquipe = users.filter((u: any) => 
+        u.role === 'CHEF_EQUIPE' && u.active
+      ).map((u: any) => ({ id: u.id, name: u.fullName, role: u.role }));
+
+      console.log('👥 [Analytics] Gestionnaires:', gestionnaires.length);
+      console.log('👥 [Analytics] Gestionnaires Seniors:', gestionnaireSeniors.length);
+      console.log('👥 [Analytics] Chefs d\'\u00e9quipe:', chefsEquipe.length);
 
       setFilterOptions({
         clients: clientsResponse.data || [],
-        departments: departmentsResponse.data || [],
-        teams: teamsResponse.data || []
+        departments: [],
+        teams: [],
+        gestionnaires,
+        gestionnaireSeniors,
+        chefsEquipe
       });
     } catch (error) {
       console.error('Failed to load filter options:', error);
-      throw error;
     }
   };
 
   const loadAnalyticsData = async () => {
     setLoading(true);
     try {
-      const dateRange = getDateRange();
       const filterParams = {
-        ...dateRange,
         clientId: filters.clientId,
-        slaStatus: filters.slaStatus
+        slaStatus: filters.slaStatus,
+        gestionnaireId: filters.gestionnaireId,
+        gestionnaireSeniorId: filters.gestionnaireSeniorId,
+        chefEquipeId: filters.chefEquipeId
       };
 
-      // NEW: Load analytics for all document types with SLA exclusions
       const [kpisResponse, documentStatsResponse] = await Promise.all([
         LocalAPI.get('/analytics/kpis/daily', { params: filterParams }),
         LocalAPI.get('/analytics/documents/all-types', { params: filterParams })
@@ -174,15 +206,24 @@ const AnalyticsDashboard: React.FC = () => {
   const updateAppliedFilters = () => {
     const applied: string[] = [];
     
-    if (filters.fromDate && filters.toDate) {
-      const from = filters.fromDate.toLocaleDateString('fr-FR');
-      const to = filters.toDate.toLocaleDateString('fr-FR');
-      applied.push(`Période: ${from} - ${to}`);
-    }
-    
     if (filters.clientId) {
       const client = filterOptions.clients.find(c => c.id === filters.clientId);
       applied.push(`Client: ${client?.name || filters.clientId}`);
+    }
+    
+    if (filters.gestionnaireId) {
+      const gest = filterOptions.gestionnaires.find(g => g.id === filters.gestionnaireId);
+      applied.push(`Gestionnaire: ${gest?.name || filters.gestionnaireId}`);
+    }
+    
+    if (filters.gestionnaireSeniorId) {
+      const gestSenior = filterOptions.gestionnaireSeniors.find(g => g.id === filters.gestionnaireSeniorId);
+      applied.push(`Gestionnaire Senior: ${gestSenior?.name || filters.gestionnaireSeniorId}`);
+    }
+    
+    if (filters.chefEquipeId) {
+      const chef = filterOptions.chefsEquipe.find(c => c.id === filters.chefEquipeId);
+      applied.push(`Chef d'équipe: ${chef?.name || filters.chefEquipeId}`);
     }
     
     if (filters.slaStatus) {
@@ -220,10 +261,14 @@ const AnalyticsDashboard: React.FC = () => {
   const removeFilter = (filterToRemove: string) => {
     if (filterToRemove.includes('Client:')) {
       setFilters(prev => ({ ...prev, clientId: undefined }));
+    } else if (filterToRemove.includes('Gestionnaire:') && !filterToRemove.includes('Senior')) {
+      setFilters(prev => ({ ...prev, gestionnaireId: undefined }));
+    } else if (filterToRemove.includes('Gestionnaire Senior:')) {
+      setFilters(prev => ({ ...prev, gestionnaireSeniorId: undefined }));
+    } else if (filterToRemove.includes('Chef d\'équipe:')) {
+      setFilters(prev => ({ ...prev, chefEquipeId: undefined }));
     } else if (filterToRemove.includes('SLA:')) {
       setFilters(prev => ({ ...prev, slaStatus: undefined }));
-    } else if (filterToRemove.includes('Période:')) {
-      setFilters(prev => ({ ...prev, fromDate: null, toDate: null }));
     }
   };
 
@@ -270,9 +315,9 @@ const AnalyticsDashboard: React.FC = () => {
               {tabLabels[tab]}
             </Typography>
             <Box>
-              {tab === 0 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 1 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 2 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 0 && <PerformanceTab filters={filters} dateRange={{}} />}
+              {tab === 1 && <SLARiskTab filters={filters} dateRange={{}} />}
+              {tab === 2 && <ForecastingTab filters={filters} dateRange={{}} />}
             </Box>
           </Paper>
         </>
@@ -284,36 +329,45 @@ const AnalyticsDashboard: React.FC = () => {
           {/* Filters Bar */}
           <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
             <Stack spacing={2}>
-              {/* Filter Controls */}
               <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                <TextField
-                  label="Du"
-                  type="date"
-                  size="small"
-                  sx={{ minWidth: 150 }}
-                  value={filters.fromDate ? filters.fromDate.toISOString().split('T')[0] : ''}
-                  onChange={(e) => handleFromDateChange(e.target.value ? new Date(e.target.value) : null)}
-                  InputLabelProps={{ shrink: true }}
-                />
-
-                <TextField
-                  label="Au"
-                  type="date"
-                  size="small"
-                  sx={{ minWidth: 150 }}
-                  value={filters.toDate ? filters.toDate.toISOString().split('T')[0] : ''}
-                  onChange={(e) => handleToDateChange(e.target.value ? new Date(e.target.value) : null)}
-                  InputLabelProps={{ shrink: true }}
-                />
-
                 <Autocomplete
                   size="small"
-                  sx={{ minWidth: 150 }}
+                  sx={{ minWidth: 200 }}
                   options={filterOptions.clients}
                   getOptionLabel={(option) => option.name || option.companyName || 'Client'}
                   value={filterOptions.clients.find(c => c.id === filters.clientId) || null}
                   onChange={(_, value) => handleFilterChange('clientId', value?.id)}
-                  renderInput={(params) => <TextField {...params} label="Client" placeholder="Sélectionner un client" />}
+                  renderInput={(params) => <TextField {...params} label="Client" placeholder="Sélectionner" />}
+                />
+
+                <Autocomplete
+                  size="small"
+                  sx={{ minWidth: 200 }}
+                  options={filterOptions.gestionnaires}
+                  getOptionLabel={(option) => option.name}
+                  value={filterOptions.gestionnaires.find(g => g.id === filters.gestionnaireId) || null}
+                  onChange={(_, value) => handleFilterChange('gestionnaireId', value?.id)}
+                  renderInput={(params) => <TextField {...params} label="Gestionnaire" placeholder="Sélectionner" />}
+                />
+
+                <Autocomplete
+                  size="small"
+                  sx={{ minWidth: 200 }}
+                  options={filterOptions.gestionnaireSeniors}
+                  getOptionLabel={(option) => option.name}
+                  value={filterOptions.gestionnaireSeniors.find(g => g.id === filters.gestionnaireSeniorId) || null}
+                  onChange={(_, value) => handleFilterChange('gestionnaireSeniorId', value?.id)}
+                  renderInput={(params) => <TextField {...params} label="Gestionnaire Senior" placeholder="Sélectionner" />}
+                />
+
+                <Autocomplete
+                  size="small"
+                  sx={{ minWidth: 200 }}
+                  options={filterOptions.chefsEquipe}
+                  getOptionLabel={(option) => option.name}
+                  value={filterOptions.chefsEquipe.find(c => c.id === filters.chefEquipeId) || null}
+                  onChange={(_, value) => handleFilterChange('chefEquipeId', value?.id)}
+                  renderInput={(params) => <TextField {...params} label="Chef d'équipe" placeholder="Sélectionner" />}
                 />
 
                 <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -323,7 +377,7 @@ const AnalyticsDashboard: React.FC = () => {
                     onChange={(e) => handleFilterChange('slaStatus', e.target.value)}
                     label="Status SLA"
                   >
-                    <MenuItem value="">Tous les statuts</MenuItem>
+                    <MenuItem value="">Tous</MenuItem>
                     <MenuItem value="ontime">À temps</MenuItem>
                     <MenuItem value="atrisk">À risque</MenuItem>
                     <MenuItem value="overdue">En retard</MenuItem>
@@ -383,9 +437,9 @@ const AnalyticsDashboard: React.FC = () => {
             </Tabs>
 
             <Box>
-              {tab === 0 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 1 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
-              {tab === 2 && <ForecastingTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 0 && <PerformanceTab filters={filters} dateRange={{}} />}
+              {tab === 1 && <SLARiskTab filters={filters} dateRange={{}} />}
+              {tab === 2 && <ForecastingTab filters={filters} dateRange={{}} />}
             </Box>
           </Paper>
         </>

@@ -75,6 +75,7 @@ const TrackingTab: React.FC = () => {
   const [createForm, setCreateForm] = useState({
     reference: '',
     clientName: '',
+    clientId: '',
     donneurOrdreId: '',
     montantTotal: '',
     nombreAdherents: ''
@@ -293,6 +294,7 @@ const TrackingTab: React.FC = () => {
     sessionStorage.setItem('manualOVData', JSON.stringify({
       reference: createForm.reference,
       clientName: createForm.clientName,
+      clientId: createForm.clientId,
       montantTotal: montantTotal,
       nombreAdherents: parseInt(createForm.nombreAdherents) || 0,
       isManual: true,
@@ -1081,7 +1083,7 @@ const TrackingTab: React.FC = () => {
               getOptionLabel={(option) => option.name}
               value={clients.find(c => c.name === createForm.clientName) || null}
               onChange={(event, newValue) => {
-                setCreateForm({...createForm, clientName: newValue?.name || ''});
+                setCreateForm({...createForm, clientName: newValue?.name || '', clientId: newValue?.id || ''});
               }}
               renderInput={(params) => (
                 <TextField
@@ -1126,7 +1128,7 @@ const TrackingTab: React.FC = () => {
           <Button 
             onClick={handleCreateManualEntry} 
             variant="contained"
-            disabled={!createForm.reference || !createForm.clientName || !createForm.montantTotal || parseFloat(createForm.montantTotal.replace(/[\s,\.]/g, '')) <= 0}
+            disabled={!createForm.reference || !createForm.clientName || !createForm.clientId || !createForm.montantTotal || parseFloat(createForm.montantTotal.replace(/[\s,\.]/g, '')) <= 0}
             startIcon={<AddIcon />}
           >
             Créer l'entrée

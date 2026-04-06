@@ -243,7 +243,22 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   const [validationModalOpen, setValidationModalOpen] = useState(false);
   const [selectedOV, setSelectedOV] = useState<{ id: string; reference: string } | null>(null);
   
-  const handleNotificationClick = (notif: NotificationItem, index: number) => {
+  const handleNotificationClick = async (notif: NotificationItem, index: number) => {
+    // AUTOMATICALLY mark as read when clicked
+    if (!notif.read && notif.id) {
+      try {
+        if (notif._type === 'reclamation') {
+          await LocalAPI.patch(`/reclamations/alerts/${notif.id}/read`);
+        } else {
+          await LocalAPI.patch(`/users/${user?.id}/notifications/${notif.id}/read`);
+        }
+        // Update local state immediately
+        setNotifications(prev => prev.map((n, i) => i === index ? {...n, read: true} : n));
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
+    }
+    
     // EXACT SPEC: Open validation modal for OV_PENDING_VALIDATION notifications
     if (notif._type === 'OV_PENDING_VALIDATION' && notif.data?.ordreVirementId) {
       setSelectedOV({
@@ -262,9 +277,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   };
   
   const handleDetailModalMarkAsRead = () => {
-    if (selectedNotificationIndex >= 0) {
-      markAsRead(selectedNotificationIndex);
-    }
+    // No need to mark as read again since it's already done in handleNotificationClick
     setDetailModalOpen(false);
     setSelectedNotification(null);
     setSelectedNotificationIndex(-1);

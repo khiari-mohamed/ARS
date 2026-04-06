@@ -42,6 +42,30 @@ const FinanceModule: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
 
+  // Clear OV sessionStorage when manually switching tabs (not from redirect)
+  const handleTabChange = (newTab: number) => {
+    // If switching away from tab 2 and not coming from a redirect, clear OV data
+    if (tab === 2 && newTab !== 2) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isFromRedirect = urlParams.get('tab') === '2';
+      
+      if (!isFromRedirect) {
+        console.log('🧽 Clearing OV sessionStorage (manual tab switch)');
+        sessionStorage.removeItem('manualOVData');
+        sessionStorage.removeItem('selectedBordereaux');
+      }
+    }
+    
+    // If manually clicking tab 2 for CHEF_EQUIPE, clear OV data to show Donneur tab
+    if (newTab === 2 && (user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR')) {
+      console.log('🧽 Clearing OV sessionStorage (manual click on Donneur tab)');
+      sessionStorage.removeItem('manualOVData');
+      sessionStorage.removeItem('selectedBordereaux');
+    }
+    
+    setTab(newTab);
+  };
+
   // Get alerts count for badge
   const [alerts, setAlerts] = React.useState<any[]>([]);
   
@@ -53,11 +77,11 @@ const FinanceModule: React.FC = () => {
 
   const alertsCount = Array.isArray(alerts) ? alerts.filter((a: any) => a.level === 'CRITIQUE' || a.level === 'DEPASSEMENT').length : 0;
 
-  // EXACT SPEC: 6 tabs as per requirements
+  // EXACT SPEC: 6 tabs as per requirements (hide OV tab for GESTIONNAIRE_SENIOR and CHEF_EQUIPE)
   const tabLabels = [
     'Tableau de Bord',           // TAB 1: Dashboard with filters & recent OV
     'Suivi & Statut',            // TAB 2: Bordereaux Traités tracking
-    'Ordre de Virement',         // TAB 3: OV Processing wizard
+    ...(user?.role !== 'GESTIONNAIRE_SENIOR' && user?.role !== 'CHEF_EQUIPE' ? ['Ordre de Virement'] : []),         // TAB 3: OV Processing wizard
     'Donneur d\'Ordre',          // TAB 4: Bank account management
     'Adhérents',                 // TAB 5: Adherent database
     'Historique & Archives'      // TAB 6: Historical records
@@ -95,7 +119,7 @@ const FinanceModule: React.FC = () => {
       {/* Mobile View */}
       {isMobile && (
         <>
-          <FinanceMobileView onTabChange={setTab} />
+          <FinanceMobileView onTabChange={handleTabChange} />
           
           {/* Mobile Tab Content */}
           <Paper elevation={2} sx={{ p: 2, mt: 2 }}>
@@ -106,10 +130,11 @@ const FinanceModule: React.FC = () => {
               {/* Mobile: Same 6 tabs */}
               {tab === 0 && <FinanceDashboard />}
               {tab === 1 && <TrackingTab />}
-              {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
-              {tab === 3 && <DonneursTab />}
-              {tab === 4 && <AdherentsTab />}
-              {tab === 5 && <ReportsTab />}
+              {/* TAB 3: OV Processing - accessible via redirect only for CHEF_EQUIPE/GESTIONNAIRE_SENIOR */}
+              {tab === 2 && <OVProcessingTab onSwitchToTab={handleTabChange} />}
+              {tab === (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE' ? 2 : 3) && <DonneursTab />}
+              {tab === (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE' ? 3 : 4) && <AdherentsTab />}
+              {tab === (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE' ? 4 : 5) && <ReportsTab />}
             </Box>
           </Paper>
         </>
@@ -120,7 +145,7 @@ const FinanceModule: React.FC = () => {
         <Paper elevation={2} sx={{ p: 3 }}>
           <Tabs
             value={tab}
-            onChange={(_, v) => setTab(v)}
+            onChange={(_, v) => handleTabChange(v)}
             sx={{ mb: 3 }}
             variant="scrollable"
             scrollButtons="auto"
@@ -146,17 +171,42 @@ const FinanceModule: React.FC = () => {
             {/* TAB 2: Suivi & Statut - Bordereaux Traités */}
             {tab === 1 && <TrackingTab />}
             
-            {/* TAB 3: Ordre de Virement - Processing Wizard */}
-            {tab === 2 && <OVProcessingTab onSwitchToTab={setTab} />}
+            {/* TAB 2/3: Smart routing based on role and context */}
+            {tab === 2 && (() => {
+              // Check if coming from OV creation flow (manual OV or bordereau OV)
+              const hasManualOVData = sessionStorage.getItem('manualOVData');
+              const hasSelectedBordereaux = sessionStorage.getItem('selectedBordereaux');
+              const isOVFlow = hasManualOVData || hasSelectedBordereaux;
+              
+              console.log('🔍 TAB 2 RENDER:', {
+                role: user?.role,
+                hasManualOVData: !!hasManualOVData,
+                hasSelectedBordereaux: !!hasSelectedBordereaux,
+                isOVFlow,
+                willShow: (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') 
+                  ? (isOVFlow ? 'OVProcessingTab' : 'DonneursTab')
+                  : 'OVProcessingTab'
+              });
+              
+              // For CHEF_EQUIPE/GESTIONNAIRE_SENIOR:
+              // - If coming from OV flow: show OV tab
+              // - Otherwise: show Donneur d'Ordre tab
+              if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
+                return isOVFlow ? <OVProcessingTab onSwitchToTab={setTab} /> : <DonneursTab />;
+              }
+              
+              // For other roles: always show OV tab at index 2
+              return <OVProcessingTab onSwitchToTab={handleTabChange} />;
+            })()}
             
-            {/* TAB 4: Donneur d'Ordre Management */}
-            {tab === 3 && <DonneursTab />}
+            {/* TAB 3: Donneur d'Ordre Management - only for non-CHEF/SENIOR roles */}
+            {tab === 3 && (user?.role !== 'GESTIONNAIRE_SENIOR' && user?.role !== 'CHEF_EQUIPE') && <DonneursTab />}
             
-            {/* TAB 5: Adhérents Database */}
-            {tab === 4 && <AdherentsTab />}
+            {/* TAB 3/4: Adhérents Database */}
+            {tab === (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE' ? 3 : 4) && <AdherentsTab />}
             
-            {/* TAB 6: Historique & Archives */}
-            {tab === 5 && <ReportsTab />}
+            {/* TAB 4/5: Historique & Archives */}
+            {tab === (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE' ? 4 : 5) && <ReportsTab />}
           </Box>
         </Paper>
       )}

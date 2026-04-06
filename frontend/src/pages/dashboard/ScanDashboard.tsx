@@ -111,9 +111,15 @@ const ScanDashboard: React.FC = () => {
   const handleFinalizeScan = async (bordereauId: string) => {
     try {
       const { LocalAPI } = await import('../../services/axios');
+      
+      // SAFE APPROACH: Call both endpoints
+      // 1. Update scan status (for scan team tracking)
       await LocalAPI.put(`/bordereaux/${bordereauId}/scan-status`, {
         scanStatus: 'SCAN_FINALISE'
       });
+      
+      // 2. Trigger workflow completion (for Senior auto-transition)
+      await LocalAPI.post(`/bordereaux/${bordereauId}/complete-scan`);
       
       message.success('Scan finalisé avec succès');
       // Refresh data

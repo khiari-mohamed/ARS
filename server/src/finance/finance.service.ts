@@ -1354,7 +1354,7 @@ Document généré automatiquement par ARS`;
     this.checkFinanceRole(user);
     
     try {
-      // Use same access filter logic as chef d'équipe dashboard
+      // EXACT SPEC: GESTIONNAIRE_SENIOR sees only their assigned contracts
       const accessFilter = this.buildAccessFilter(user);
       
       // KEEP bordereaux visible even after OV is created

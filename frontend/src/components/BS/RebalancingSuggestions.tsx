@@ -11,6 +11,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useRebalancingSuggestions, useApplyRebalancing } from '../../hooks/useBS';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface RebalancingSuggestion {
   from: string;
@@ -27,6 +28,8 @@ interface RebalancingSuggestion {
 export const RebalancingSuggestions: React.FC = () => {
   const { data: suggestions, isLoading, error, refetch } = useRebalancingSuggestions();
   const applyRebalancingMutation = useApplyRebalancing();
+  const { user } = useAuth();
+  const isReadOnly = user?.role === 'GESTIONNAIRE';
   const [showResultModal, setShowResultModal] = useState(false);
   const [rebalancingResult, setRebalancingResult] = useState<any>(null);
 
@@ -154,7 +157,7 @@ export const RebalancingSuggestions: React.FC = () => {
                     display: 'flex',
                     gap: 0,
                   }}
-                  actions={[
+                  actions={isReadOnly ? [] : [
                     <Button
                       key="apply"
                       type="primary"

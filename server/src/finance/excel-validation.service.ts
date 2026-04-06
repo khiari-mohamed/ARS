@@ -26,6 +26,7 @@ export interface VirementValidationItem {
   status: 'VALIDE' | 'ERREUR' | 'ALERTE';
   erreurs: string[];
   adherentId?: string;
+  criticalDuplicate?: boolean; // NEW: Flag for exact amount + matricule match
 }
 
 export interface ValidationError {
@@ -128,23 +129,19 @@ export class ExcelValidationService {
       }
     }
     
-    console.log(`Total items before consolidation: ${results.length}`);
+    console.log(`Total items: ${results.length}`);
 
-    // Additionner les montants pour les adhérents qui apparaissent plusieurs fois
-    const consolidatedResults = this.consolidateAmounts(results);
-    console.log(`Total items after consolidation: ${consolidatedResults.length}`);
-    
     // 🚨 LEVEL 2: Recent Payment Detection (Warn about recent payments)
     if (bordereauClientId || actualClientId) {
-      await this.checkRecentPayments(consolidatedResults, bordereauClientId || actualClientId, recentDuplicateFile);
+      await this.checkRecentPayments(results, bordereauClientId || actualClientId, recentDuplicateFile);
     }
 
     const summary = {
-      total: consolidatedResults.length,
-      valid: consolidatedResults.filter(r => r.status === 'VALIDE').length,
-      warnings: consolidatedResults.filter(r => r.status === 'ALERTE').length,
-      errors: consolidatedResults.filter(r => r.status === 'ERREUR').length,
-      totalAmount: consolidatedResults
+      total: results.length,
+      valid: results.filter(r => r.status === 'VALIDE').length,
+      warnings: results.filter(r => r.status === 'ALERTE').length,
+      errors: results.filter(r => r.status === 'ERREUR').length,
+      totalAmount: results
         .filter(r => r.status !== 'ERREUR')
         .reduce((sum, r) => sum + r.montant, 0)
     };
@@ -161,7 +158,7 @@ export class ExcelValidationService {
 
     return {
       valid: errors.filter(e => e.type === 'ERROR').length === 0,
-      data: consolidatedResults,
+      data: results,
       errors,
       summary
     };
@@ -188,6 +185,11 @@ export class ExcelValidationService {
           if (item.status === 'ALERTE' && existing.status === 'VALIDE') {
             existing.status = 'ALERTE';
           }
+        }
+        
+        // CRITICAL FIX: Merge criticalDuplicate flag (true if any item is critical)
+        if (item.criticalDuplicate) {
+          existing.criticalDuplicate = true;
         }
       } else {
         consolidated.set(key, { ...item });
@@ -610,7 +612,8 @@ export class ExcelValidationService {
     }
   }
   
-  // 🚨 LEVEL 2: Check if matricules were used in ANY previous OV (regardless of time)
+  // 🚨 LEVEL 2 & 3: Check if matricules were used in ANY previous OV (regardless of time)
+  // LEVEL 3: Detect EXACT amount + matricule matches (critical duplicates)
   private async checkRecentPayments(items: VirementValidationItem[], clientId: string, skipIfDuplicateFile: any): Promise<void> {
     try {
       // If duplicate file already detected, skip individual checks (avoid noise)
@@ -652,8 +655,8 @@ export class ExcelValidationService {
         orderBy: { dateCreation: 'desc' }
       });
       
-      // Group by matricule and collect ALL OVs for each
-      const allOVsByMatricule = new Map<string, any[]>();
+      // Group by matricule and collect ALL OVs for each with amount details
+      const allOVsByMatricule = new Map<string, Array<{ ovReference: string; ovDate: Date; amount: number }>>();
       
       for (const ov of allOVs) {
         for (const item of ov.items) {
@@ -671,43 +674,66 @@ export class ExcelValidationService {
         }
       }
       
-      // Add warnings to items showing ALL previous OV usage
-      for (const item of items) {
-        if (item.status === 'ERREUR') continue;
+      // Process each current item
+      for (const currentItem of items) {
+        if (currentItem.status === 'ERREUR') continue;
         
-        const previousOVs = allOVsByMatricule.get(item.matricule);
-        if (previousOVs && previousOVs.length > 0) {
-          // Show all previous usages
-          for (const ov of previousOVs) {
-            // Calculate time difference
-            const timeDiffMs = new Date().getTime() - new Date(ov.ovDate).getTime();
-            const hoursSincePayment = Math.floor(timeDiffMs / (1000 * 60 * 60));
-            const daysSincePayment = Math.floor(timeDiffMs / (1000 * 60 * 60 * 24));
-            
-            // Format time message
-            let timeMessage: string;
-            if (hoursSincePayment < 1) {
-              timeMessage = `il y a moins d'une heure`;
-            } else if (hoursSincePayment < 24) {
-              timeMessage = `il y a ${hoursSincePayment} heure(s)`;
-            } else if (daysSincePayment === 1) {
-              timeMessage = `il y a 1 jour`;
-            } else {
-              timeMessage = `il y a ${daysSincePayment} jours`;
-            }
-            
-            item.erreurs.push(
-              `⚠️ Matricule déjà utilisé: ${ov.amount} TND dans OV ${ov.ovReference} (créé ${timeMessage})`
-            );
-          }
+        const previousOrders = allOVsByMatricule.get(currentItem.matricule);
+        if (!previousOrders || previousOrders.length === 0) continue;
+        
+        // 🚨 LEVEL 3: Separate exact amount matches from other occurrences
+        // Use tolerance for floating-point comparison (0.001 TND = 1 millime)
+        const exactMatches = previousOrders.filter(order => Math.abs(order.amount - currentItem.montant) < 0.001);
+        const otherMatches = previousOrders.filter(order => Math.abs(order.amount - currentItem.montant) >= 0.001);
+        
+        // Add CRITICAL warning if exact amount match exists
+        if (exactMatches.length > 0) {
+          currentItem.criticalDuplicate = true;
           
-          if (item.status === 'VALIDE') {
-            item.status = 'ALERTE';
+          // Create critical message for all exact matches
+          const matchDetails = exactMatches
+            .map(order => {
+              const timeMessage = this.formatTimeSince(order.ovDate);
+              return `même montant (${order.amount.toFixed(3)} TND) dans OV ${order.ovReference} (${timeMessage})`;
+            })
+            .join(', ');
+          
+          currentItem.erreurs.push(
+            `🔴 DOUBLON CRITIQUE : ${matchDetails}. Vérifiez qu'il ne s'agit pas d'un paiement en double.`
+          );
+          
+          // Change status to ALERTE if it was VALIDE
+          if (currentItem.status === 'VALIDE') {
+            currentItem.status = 'ALERTE';
+          }
+        }
+        
+        // Add normal warnings for other previous orders (different amounts)
+        for (const order of otherMatches) {
+          const timeMessage = this.formatTimeSince(order.ovDate);
+          currentItem.erreurs.push(
+            `⚠️ Matricule déjà utilisé: ${order.amount.toFixed(3)} TND dans OV ${order.ovReference} (créé ${timeMessage})`
+          );
+          if (currentItem.status === 'VALIDE') {
+            currentItem.status = 'ALERTE';
           }
         }
       }
     } catch (error) {
       console.error('Error checking recent payments:', error);
     }
+  }
+  
+  // Helper to format time elapsed
+  private formatTimeSince(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - new Date(date).getTime();
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (hours < 1) return `il y a moins d'une heure`;
+    if (hours < 24) return `il y a ${hours} heure(s)`;
+    if (days === 1) return `il y a 1 jour`;
+    return `il y a ${days} jours`;
   }
 }

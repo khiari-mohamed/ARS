@@ -43,7 +43,7 @@ export class AlertsService {
       });
       
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('AI service unavailable, using fallback:', error.message);
       return this.getBasicSlaPrediction(items);
     }
@@ -151,7 +151,15 @@ export class AlertsService {
       where,
       include: { 
         courriers: true, 
-        virement: true, 
+        virement: true,
+        documents: {
+          select: {
+            id: true,
+            type: true,
+            name: true,
+            status: true
+          }
+        },
         contract: { 
           include: { 
             teamLeader: { 
@@ -609,7 +617,7 @@ export class AlertsService {
           timeout: 300000
         });
         
-      } catch (aiError) {
+      } catch (aiError: any) {
         this.logger.error('AI service unavailable:', aiError.message);
         throw new Error(`AI microservice unavailable: ${aiError.message}`);
       }
@@ -646,7 +654,7 @@ export class AlertsService {
         data_points_analyzed: trendData.length,
         forecast_reliability: this.assessForecastReliability(forecast.forecast || [], trendData)
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('AI delay prediction failed:', error.response?.data || error.message);
       throw error;
     }
@@ -1073,33 +1081,53 @@ export class AlertsService {
 
   /**
    * 5c. Mark alert as resolved
+   * IMPORTANT: This only marks the ALERT as resolved (acknowledged + action taken)
+   * It does NOT change the bordereau status or set closure dates
+   * The bordereau reaches CLOTURE only through the proper Finance workflow
    */
-  async resolveAlert(bordereauId: string, user: any) {
+  async resolveAlert(bordereauId: string, user: any, actionTaken?: string) {
     this.checkAlertsRole(user);
     
-    // Update bordereau status to resolved
-    const bordereau = await this.prisma.bordereau.update({
+    const now = new Date();
+    
+    // Get the bordereau to verify it exists
+    const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
-      data: { 
-        statut: 'CLOTURE',
-        updatedAt: new Date()
-      }
+      select: { id: true, reference: true, statut: true }
     });
     
-    // Mark related alert logs as resolved with user info
-    await this.prisma.alertLog.updateMany({
+    if (!bordereau) {
+      throw new Error(`Bordereau ${bordereauId} not found`);
+    }
+    
+    // Mark related alert logs as resolved with user info and action taken
+    const updatedAlerts = await this.prisma.alertLog.updateMany({
       where: { 
         bordereauId: bordereauId,
         resolved: false
       },
       data: { 
         resolved: true, 
-        resolvedAt: new Date(),
-        userId: user.id
+        resolvedAt: now,
+        userId: user.id,
+        // Store action taken in message if provided
+        ...(actionTaken && { 
+          message: `[RESOLVED] ${actionTaken}` 
+        })
       }
     });
     
-    return bordereau;
+    this.logger.log(`✅ Alert resolved for bordereau ${bordereau.reference} by ${user.fullName || user.email}. Action: ${actionTaken || 'Not specified'}. Alerts updated: ${updatedAlerts.count}`);
+    
+    // Return the bordereau WITHOUT modifying its status
+    return {
+      success: true,
+      bordereau: bordereau,
+      alertsResolved: updatedAlerts.count,
+      resolvedBy: user.fullName || user.email,
+      actionTaken: actionTaken || 'Alert acknowledged',
+      message: `Alert resolved. Bordereau status remains ${bordereau.statut}. Closure must be done through Finance workflow.`
+    };
   }
 
   /**

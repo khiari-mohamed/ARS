@@ -33,6 +33,7 @@ interface ValidationResult {
   status: 'ok' | 'error' | 'warning';
   notes: string;
   memberId?: string;
+  criticalDuplicate?: boolean;
 }
 
 interface OVProcessingTabProps {
@@ -528,20 +529,26 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       if (clientsResponse.ok) {
         const clients = await clientsResponse.json();
         if (clients && clients.length > 0) {
-          // If manual OV, find client by name
           if (clientName) {
+            // Manual OV: must find exact client by name — no fallback
             const matchedClient = clients.find((c: any) => c.name === clientName);
             if (matchedClient) {
               clientId = matchedClient.id;
               console.log('✅ Using manual OV clientId for validation:', clientId, '(', clientName, ')');
             } else {
-              console.warn('⚠️ Client not found:', clientName, '- using first client');
-              clientId = clients[0].id;
+              setProcessing(false);
+              alert(`❌ Client "${clientName}" introuvable dans la base. Veuillez vérifier le nom du client dans l'entrée manuelle.`);
+              return;
             }
+          } else if (selectedBordereauId) {
+            // BRDX flow: clientId will be resolved server-side from bordereauId — use placeholder
+            clientId = 'from-bordereau';
+            console.log('✅ BRDX flow: clientId will be resolved from bordereauId:', selectedBordereauId);
           } else {
-            // Normal flow: use first client
-            clientId = clients[0].id;
-            console.log('✅ Using clientId for validation:', clientId);
+            // No client context at all — block
+            setProcessing(false);
+            alert('❌ Aucun client sélectionné. Veuillez sélectionner un bordereau ou créer une entrée manuelle avec un client.');
+            return;
           }
         }
       }
@@ -573,7 +580,8 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           amount: item.montant || 0,
           status: item.status === 'VALIDE' ? 'ok' : item.status === 'ALERTE' ? 'warning' : 'error',
           notes: item.erreurs?.join(', ') || '',
-          memberId: item.adherentId
+          memberId: item.adherentId,
+          criticalDuplicate: item.criticalDuplicate || false
         }));
         setValidationResults(transformedResults);
         
@@ -925,18 +933,31 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                 <TableBody>
                   {validationResults.map((result, index) => (
                     <React.Fragment key={index}>
-                      <TableRow sx={{ bgcolor: result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white' }}>
+                      <TableRow sx={{ 
+                        bgcolor: result.criticalDuplicate ? '#ffcdd2' : result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white',
+                        border: result.criticalDuplicate ? '3px solid #d32f2f' : 'none',
+                        '& td': { fontWeight: result.criticalDuplicate ? 600 : 400 }
+                      }}>
                         <TableCell>{result.society}</TableCell>
                         <TableCell>{result.matricule}</TableCell>
                         <TableCell>{result.name}</TableCell>
                         <TableCell>{result.rib || 'N/A'}</TableCell>
-                        <TableCell><strong>{result.amount.toFixed(2)} TND</strong></TableCell>
+                        <TableCell sx={{ 
+                          bgcolor: result.criticalDuplicate ? '#ef5350' : 'transparent',
+                          color: result.criticalDuplicate ? 'white' : 'inherit',
+                          fontWeight: result.criticalDuplicate ? 700 : 600
+                        }}>
+                          <strong>{result.amount.toFixed(2)} TND</strong>
+                        </TableCell>
                         <TableCell>{getStatusChip(result.status)}</TableCell>
                       </TableRow>
                       {result.notes && (
-                        <TableRow sx={{ bgcolor: result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white' }}>
+                        <TableRow sx={{ 
+                          bgcolor: result.criticalDuplicate ? '#ffcdd2' : result.status === 'error' ? '#ffebee' : result.status === 'warning' ? '#fff3e0' : 'white',
+                          border: result.criticalDuplicate ? '3px solid #d32f2f' : 'none'
+                        }}>
                           <TableCell colSpan={6} sx={{ py: 1, px: 2 }}>
-                            <Alert severity={result.status === 'error' ? 'error' : 'warning'} sx={{ py: 0 }}>
+                            <Alert severity={result.criticalDuplicate ? 'error' : result.status === 'error' ? 'error' : 'warning'} sx={{ py: 0 }}>
                               <Typography variant="caption">
                                 <strong>Détails:</strong> {result.notes}
                               </Typography>

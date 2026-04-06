@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json
 import logging
+import os
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -301,6 +302,105 @@ class DatabaseManager:
             logger.error(f"Error fetching performance data: {e}")
             return []
     
+    async def get_bordereau_by_id(self, bordereau_id: str) -> Optional[Dict]:
+        """Get a single bordereau by ID with full SLA context"""
+        if not self.pool:
+            return None
+        query = """
+        SELECT b.id, b.reference, b."dateReception", b."dateCloture", b."delaiReglement",
+               b.statut, b."assignedToUserId", b."nombreBS", b.priority,
+               c.name as client_name,
+               u."fullName" as assigned_to_name,
+               CASE
+                   WHEN b."dateCloture" IS NULL THEN
+                       b."delaiReglement" - EXTRACT(EPOCH FROM (NOW() - b."dateReception"))/86400
+                   ELSE 0
+               END as days_remaining
+        FROM "Bordereau" b
+        LEFT JOIN "Client" c ON b."clientId" = c.id
+        LEFT JOIN "User" u ON b."assignedToUserId" = u.id
+        WHERE b.id = $1
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(query, bordereau_id)
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Error fetching bordereau by id {bordereau_id}: {e}")
+            return None
+
+    async def get_agent_current_workload(self, agent_id: str) -> Dict:
+        """Get current active bordereau count for a specific agent"""
+        if not self.pool:
+            return {'count': 0}
+        query = """
+        SELECT COUNT(*) as count
+        FROM "Bordereau"
+        WHERE "assignedToUserId" = $1
+          AND statut NOT IN ('CLOTURE', 'PAYE', 'ANNULE')
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(query, agent_id)
+                return {'count': int(row['count']) if row else 0}
+        except Exception as e:
+            logger.error(f"Error fetching agent workload for {agent_id}: {e}")
+            return {'count': 0}
+
+    async def get_historical_alert_resolutions(self, days: int = 90, limit: int = 1000) -> List[Dict]:
+        """Get historical alert resolutions from AlertLog for ML similarity search"""
+        if not self.pool:
+            return []
+        query = """
+        SELECT al.id, al."bordereauId" as bordereau_id, al."alertType" as alert_level,
+               al.message as reason, al."resolvedAt",
+               b.statut, b."delaiReglement" as sla_days,
+               c.name as client,
+               EXTRACT(EPOCH FROM (al."resolvedAt" - al."createdAt"))/3600 as resolution_hours
+        FROM "AlertLog" al
+        LEFT JOIN "Bordereau" b ON al."bordereauId" = b.id
+        LEFT JOIN "Client" c ON b."clientId" = c.id
+        WHERE al.resolved = true
+          AND al."createdAt" >= NOW() - ($1 * INTERVAL '1 day')
+        ORDER BY al."resolvedAt" DESC
+        LIMIT $2
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(query, days, limit)
+                results = []
+                for row in rows:
+                    results.append({
+                        'id': str(row['id']),
+                        'bordereau_id': str(row['bordereau_id']) if row['bordereau_id'] else None,
+                        'alert_level': row['alert_level'],
+                        'reason': row['reason'] or '',
+                        'statut': row['statut'] or '',
+                        'sla_days': int(row['sla_days'] or 0),
+                        'client': row['client'] or '',
+                        'resolution_hours': float(row['resolution_hours'] or 0),
+                        'root_cause': '',   # enriched via AI if needed
+                        'actions': [],      # enriched via AI if needed
+                        'priority': 'MEDIUM'
+                    })
+                return results
+        except Exception as e:
+            logger.error(f"Error fetching historical alert resolutions: {e}")
+            return []
+
+    async def save_alert_solution(self, bordereau_id: str, input_data: Dict, output_result: Dict, user: str):
+        """Persist alert solution for future learning"""
+        try:
+            await self.save_ai_output(
+                endpoint="alert_solution",
+                input_data={**input_data, 'bordereau_id': bordereau_id},
+                result=output_result,
+                user_id=user,
+                confidence=output_result.get('confidence')
+            )
+        except Exception as e:
+            logger.debug(f"save_alert_solution failed: {e}")
+    
     async def save_ai_output(self, endpoint: str, input_data: Dict, result: Dict, user_id: str, confidence: float = None):
         """Save all AI outputs to database for learning and reuse"""
         try:
@@ -530,7 +630,7 @@ async def get_db_manager():
     global db_manager
     if db_manager is None:
         # Use actual ARS database connection string - SAME AS BACKEND
-        connection_string = "postgresql://postgres:23044943@localhost:5432/ars_db"
+        connection_string = os.getenv('DATABASE_URL', "postgresql://postgres:23044943@10.34.60.63:5432/ars_db")
         db_manager = DatabaseManager(connection_string)
         await db_manager.initialize()
     return db_manager

@@ -293,7 +293,7 @@ export class AnalyticsService {
 
   async getDailyKpis(query: AnalyticsKpiDto, user: any) {
     this.checkAnalyticsRole(user);
-    // console.log('📊 getDailyKpis filters:', query);
+    console.log('📊 getDailyKpis filters:', query);
     
     const where: any = { archived: false };
     
@@ -309,16 +309,52 @@ export class AnalyticsService {
     
     if (query.clientId) {
       where.clientId = query.clientId;
-      // console.log('✅ Applying clientId filter:', query.clientId);
+      console.log('✅ Applying clientId filter:', query.clientId);
     }
+    
+    // NEW: Support for gestionnaire filters
+    if ((query as any).gestionnaireId) {
+      where.assignedToUserId = (query as any).gestionnaireId;
+      console.log('✅ Applying gestionnaireId filter:', (query as any).gestionnaireId);
+    }
+    if ((query as any).gestionnaireSeniorId) {
+      // Get contracts managed by this senior
+      const contracts = await this.prisma.contract.findMany({
+        where: { teamLeaderId: (query as any).gestionnaireSeniorId },
+        select: { id: true }
+      });
+      if (contracts.length > 0) {
+        where.contractId = { in: contracts.map(c => c.id) };
+        console.log('✅ Applying gestionnaireSeniorId filter - contracts:', contracts.length);
+      }
+    }
+    if ((query as any).chefEquipeId) {
+      // Get team members for this chef
+      const teamMembers = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            { id: (query as any).chefEquipeId },
+            { teamLeaderId: (query as any).chefEquipeId }
+          ]
+        },
+        select: { id: true }
+      });
+      if (teamMembers.length > 0) {
+        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
+        console.log('✅ Applying chefEquipeId filter - team members:', teamMembers.length);
+      }
+    }
+    
     if (query.teamId) where.teamId = query.teamId;
     if (query.userId) where.assignedToUserId = query.userId;
     if (query.fromDate || query.toDate) {
       where.createdAt = {};
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
-      // console.log('✅ Applying date filter:', query.fromDate, '-', query.toDate);
+      console.log('✅ Applying date filter:', query.fromDate, '-', query.toDate);
     }
+    
+    console.log('🔍 Final where clause:', JSON.stringify(where, null, 2));
     
     // console.log('🔍 Final where clause:', JSON.stringify(where, null, 2));
     
@@ -394,6 +430,37 @@ export class AnalyticsService {
     if (query.teamId) where.teamId = query.teamId;
     if (query.userId) where.userId = query.userId;
     if (query.role) where.role = query.role;
+    
+    // NEW: Support for gestionnaire filters
+    if ((query as any).gestionnaireId) {
+      where.assignedToUserId = (query as any).gestionnaireId;
+    }
+    if ((query as any).gestionnaireSeniorId) {
+      // Get contracts managed by this senior
+      const contracts = await this.prisma.contract.findMany({
+        where: { teamLeaderId: (query as any).gestionnaireSeniorId },
+        select: { id: true }
+      });
+      if (contracts.length > 0) {
+        where.contractId = { in: contracts.map(c => c.id) };
+      }
+    }
+    if ((query as any).chefEquipeId) {
+      // Get team members for this chef
+      const teamMembers = await this.prisma.user.findMany({
+        where: { 
+          OR: [
+            { id: (query as any).chefEquipeId },
+            { teamLeaderId: (query as any).chefEquipeId }
+          ]
+        },
+        select: { id: true }
+      });
+      if (teamMembers.length > 0) {
+        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
+      }
+    }
+    
     if (query.fromDate || query.toDate) {
       where.createdAt = {};
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
@@ -415,23 +482,57 @@ export class AnalyticsService {
 
   async getAlerts(user: any, filters: any = {}) {
     this.checkAnalyticsRole(user);
-    // console.log('🚨 getAlerts filters:', filters);
+    console.log('🚨 getAlerts filters:', filters);
     
     const where: any = { archived: false };
     
     // Apply database filters
     if (filters.clientId) {
       where.clientId = filters.clientId;
-      // console.log('✅ Applying clientId filter to alerts:', filters.clientId);
+      console.log('✅ Applying clientId filter to alerts:', filters.clientId);
     }
+    
+    // NEW: Support for gestionnaire filters
+    if (filters.gestionnaireId) {
+      where.assignedToUserId = filters.gestionnaireId;
+      console.log('✅ Applying gestionnaireId filter to alerts:', filters.gestionnaireId);
+    }
+    if (filters.gestionnaireSeniorId) {
+      // Get contracts managed by this senior
+      const contracts = await this.prisma.contract.findMany({
+        where: { teamLeaderId: filters.gestionnaireSeniorId },
+        select: { id: true }
+      });
+      if (contracts.length > 0) {
+        where.contractId = { in: contracts.map(c => c.id) };
+        console.log('✅ Applying gestionnaireSeniorId filter to alerts - contracts:', contracts.length);
+      }
+    }
+    if (filters.chefEquipeId) {
+      // Get team members for this chef
+      const teamMembers = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            { id: filters.chefEquipeId },
+            { teamLeaderId: filters.chefEquipeId }
+          ]
+        },
+        select: { id: true }
+      });
+      if (teamMembers.length > 0) {
+        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
+        console.log('✅ Applying chefEquipeId filter to alerts - team members:', teamMembers.length);
+      }
+    }
+    
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
       if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
       if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
-      // console.log('✅ Applying date filter to alerts:', filters.fromDate, '-', filters.toDate);
+      console.log('✅ Applying date filter to alerts:', filters.fromDate, '-', filters.toDate);
     }
     
-    // console.log('🔍 Alerts where clause:', JSON.stringify(where, null, 2));
+    console.log('🔍 Alerts where clause:', JSON.stringify(where, null, 2));
     
     const allBordereaux = await this.prisma.bordereau.findMany({
       where,
@@ -668,8 +769,8 @@ export class AnalyticsService {
       
       return response.data;
       
-    } catch (error) {
-      console.error('AI Performance analysis failed:', error);
+    } catch (error: any) {
+      console.error('AI Performance analysis failed:', error.message || error);
       throw new Error('AI performance analysis unavailable');
     }
   }
@@ -1018,7 +1119,7 @@ export class AnalyticsService {
         avgPerDay: Math.round((forecastData.reduce((sum, d) => sum + d.value, 0) / forecastData.length) * 10) / 10
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ AI Forecast failed:', error);
       throw new Error(`AI forecasting failed: ${error.message}`);
     }
@@ -1196,7 +1297,7 @@ export class AnalyticsService {
       return {
         recommendations
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ AI recommendations failed:', error.message);
       console.error('❌ Full error:', error);
       // Return default recommendations instead of empty array
@@ -1501,6 +1602,23 @@ export class AnalyticsService {
   async getAIAlertSolution(payload: any): Promise<any> {
     const token = await this.getAIToken();
     
+    // Fetch documents for this bordereau to get count, types, and full details
+    let documents: Array<{ id: string; name: string; type: any; status: any }> = [];
+    let documentCount = 0;
+    let documentTypes: string[] = [];
+    
+    try {
+      documents = await this.prisma.document.findMany({
+        where: { bordereauId: payload.bordereau.id },
+        select: { id: true, name: true, type: true, status: true },
+        orderBy: { uploadedAt: 'asc' }
+      }) as Array<{ id: string; name: string; type: any; status: any }>;
+      documentCount = documents.length;
+      documentTypes = [...new Set(documents.map(d => d.type))].filter(Boolean) as string[];
+    } catch (error: any) {
+      console.error('Failed to fetch documents for bordereau:', error);
+    }
+    
     const aiPayload = {
       bordereau_id: payload.bordereau.id,
       reference: payload.bordereau.reference,
@@ -1511,7 +1629,15 @@ export class AnalyticsService {
       alert_level: payload.alertLevel,
       reason: payload.reason,
       current_handler: payload.bordereau.currentHandler?.fullName,
-      team_leader: payload.bordereau.contract?.teamLeader?.fullName
+      team_leader: payload.bordereau.contract?.teamLeader?.fullName,
+      document_count: documentCount,
+      document_types: documentTypes,
+      documents: documents.map(d => ({
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        status: d.status
+      }))
     };
     
     const response = await axios.post(`${AI_MICROSERVICE_URL}/alert_solution`, aiPayload, {
@@ -1526,7 +1652,18 @@ export class AnalyticsService {
       rootCause: response.data.root_cause,
       actions: response.data.recommended_actions,
       priority: response.data.priority,
-      reasoning: response.data.reasoning
+      reasoning: response.data.reasoning,
+      document_details: {
+        count: documentCount,
+        types: documentTypes,
+        summary: `${documentCount} document(s)${documentTypes.length > 0 ? ' - Types: ' + documentTypes.join(', ') : ''}`,
+        documents: documents.map(d => ({
+          id: d.id,
+          name: d.name,
+          type: d.type,
+          status: d.status
+        }))
+      }
     };
   }
 
@@ -1549,8 +1686,8 @@ export class AnalyticsService {
       
       return response.data.root_causes || [];
       
-    } catch (error) {
-      console.error('Root cause analysis failed:', error);
+    } catch (error: any) {
+      console.error('Root cause analysis failed:', error.message || error);
       // Return empty array instead of fallback to force proper AI implementation
       return [];
     }
@@ -2271,13 +2408,39 @@ export class AnalyticsService {
   async getGestionnairesDailyPerformance(user: any, query: any): Promise<Array<{ id: string; name: string; documentsProcessed: number; documentsTraites: number; documentsLast24h: number }>> {
     this.checkAnalyticsRole(user);
     
-    // console.log('📊 getGestionnairesDailyPerformance query:', query);
+    console.log('📊 getGestionnairesDailyPerformance query:', query);
+    
+    // Build where clause for filtering gestionnaires
+    const gestionnaireWhere: any = {
+      role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'] },
+      active: true
+    };
+    
+    // Apply gestionnaire filters
+    if (query.gestionnaireId) {
+      gestionnaireWhere.id = query.gestionnaireId;
+    }
+    if (query.gestionnaireSeniorId) {
+      gestionnaireWhere.id = query.gestionnaireSeniorId;
+    }
+    if (query.chefEquipeId) {
+      // Get team members for this chef
+      const teamMembers = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            { id: query.chefEquipeId },
+            { teamLeaderId: query.chefEquipeId }
+          ]
+        },
+        select: { id: true }
+      });
+      if (teamMembers.length > 0) {
+        gestionnaireWhere.id = { in: teamMembers.map(m => m.id) };
+      }
+    }
     
     const gestionnaires = await this.prisma.user.findMany({
-      where: {
-        role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'] },
-        active: true
-      },
+      where: gestionnaireWhere,
       select: {
         id: true,
         fullName: true,
@@ -2296,8 +2459,15 @@ export class AnalyticsService {
       
       if (gest.role === 'GESTIONNAIRE_SENIOR') {
         // For GESTIONNAIRE_SENIOR: count documents from contracts assigned to them via teamLeaderId
+        const contractWhere: any = { teamLeaderId: gest.id };
+        
+        // Apply client filter to contracts
+        if (query.clientId) {
+          contractWhere.clientId = query.clientId;
+        }
+        
         const contracts = await this.prisma.contract.findMany({
-          where: { teamLeaderId: gest.id },
+          where: contractWhere,
           select: { id: true }
         });
         
@@ -2348,12 +2518,19 @@ export class AnalyticsService {
         }
       } else {
         // For regular GESTIONNAIRE: count directly assigned documents
+        const docWhere: any = { assignedToUserId: gest.id };
+        
+        // Apply client filter via bordereau
+        if (query.clientId) {
+          docWhere.bordereau = { clientId: query.clientId };
+        }
+        
         documentsProcessed = await this.prisma.document.count({
-          where: { assignedToUserId: gest.id }
+          where: docWhere
         });
         
         if (query.fromDate || query.toDate) {
-          const dateWhere: any = { assignedToUserId: gest.id };
+          const dateWhere: any = { ...docWhere };
           if (query.fromDate) {
             const fromDate = new Date(query.fromDate);
             fromDate.setHours(0, 0, 0, 0);
@@ -2379,7 +2556,7 @@ export class AnalyticsService {
         } else {
           documentsTraites = await this.prisma.document.count({
             where: {
-              assignedToUserId: gest.id,
+              ...docWhere,
               status: 'TRAITE'
             }
           });
@@ -2387,7 +2564,7 @@ export class AnalyticsService {
         
         documentsLast24h = await this.prisma.document.count({
           where: {
-            assignedToUserId: gest.id,
+            ...docWhere,
             uploadedAt: { gte: last24h }
           }
         });

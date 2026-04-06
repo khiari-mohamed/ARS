@@ -4,6 +4,7 @@ import { fetchUserBordereaux } from "../../services/bordereauxService";
 import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
 import "../../styles/gestionnaire.css";
+import "../../styles/chef-equipe.css";
 
 function GestionnaireBordereaux() {
   const { user } = useAuth();
@@ -12,6 +13,7 @@ function GestionnaireBordereaux() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'all' | 'a-traiter' | 'traites' | 'retournes'>('all');
   const [modalData, setModalData] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'en-cours' | 'traites'>('en-cours');
 
   const handleProcessBordereau = async (bordereauId: string) => {
     const loadingMessage = message.loading('Traitement en cours...', 0);
@@ -46,6 +48,39 @@ function GestionnaireBordereaux() {
       fetchUserBordereaux(userId).then(data => setUserBordereaux(data || [])).catch(() => setUserBordereaux([]));
     }
   }, [userId]);
+
+  const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return {
+      days: bordereau.dureeTraitement,
+      isOnTime: bordereau.dureeTraitementStatus === 'GREEN'
+    };
+  };
+
+  const getDureeReglement = (bordereau: any): { days: number | null; isOnTime: boolean } => {
+    if (bordereau.dureeReglement === null || bordereau.dureeReglement === undefined) {
+      return { days: null, isOnTime: true };
+    }
+    return {
+      days: bordereau.dureeReglement,
+      isOnTime: bordereau.dureeReglementStatus === 'GREEN'
+    };
+  };
+
+  const getTabData = () => {
+    switch (activeTab) {
+      case 'en-cours':
+        return userBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
+      case 'traites':
+        return userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut));
+      default:
+        return [];
+    }
+  };
+
+  const tabData = getTabData();
 
   return (
     <div className="gestionnaire-container">
@@ -139,6 +174,89 @@ function GestionnaireBordereaux() {
               </div>
               )}
             </div>
+
+            {/* Tabs */}
+            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', marginBottom: '24px' }}>
+              <div className="chef-equipe-tabs">
+                <button
+                  className={`chef-equipe-tab ${activeTab === 'en-cours' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('en-cours')}
+                >
+                  En cours ({userBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
+                </button>
+                <button
+                  className={`chef-equipe-tab ${activeTab === 'traites' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('traites')}
+                >
+                  Traités ({userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
+                </button>
+              </div>
+
+              {tabData.length === 0 ? (
+                <div className="chef-equipe-empty">
+                  <div className="chef-equipe-empty-icon">📋</div>
+                  <h3 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '16px', letterSpacing: '-0.5px' }}>
+                    Aucun dossier {activeTab === 'en-cours' ? 'en cours' : 'traité'}
+                  </h3>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8f9fa' }}>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Client / Prestataire</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Référence Bordereau</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date réception BO</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Bulletin de soins</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date fin de Scannérisation</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Délais contractuels de règlement</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de traitement</th>
+                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de règlement</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tabData.map((bordereau, index) => {
+                        const dt = getDureeTraitement(bordereau);
+                        const dr = getDureeReglement(bordereau);
+                        return (
+                          <tr key={bordereau.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>{bordereau.client?.name || 'N/A'}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc', borderBottom: '1px solid #dee2e6' }}>{bordereau.reference}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>{bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{bordereau.nombreBS || 0} BS</span>
+                                {bordereau.BulletinSoin && bordereau.BulletinSoin.length > 0 && (
+                                  <span style={{ fontSize: '12px', color: '#666' }}>({bordereau.BulletinSoin.filter((bs: any) => bs.etat === 'VALIDATED').length} traités)</span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>{bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                              <span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{bordereau.delaiReglement || 0} jours</span>
+                            </td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                              {dt.days === null || dt.days === undefined
+                                ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>
+                                : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', display: 'inline-block' }}>{dt.days} jour{dt.days !== 1 ? 's' : ''}</span>
+                              }
+                            </td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                              {bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE'
+                                ? <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span>
+                                : dr.days === null || dr.days === undefined
+                                  ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>
+                                  : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', display: 'inline-block' }}>{dr.days} jour{dr.days !== 1 ? 's' : ''}</span>
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -200,14 +318,12 @@ function GestionnaireBordereaux() {
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Délai</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Durée Traitement</th>
                         <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Durée Règlement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {modalData.map((b, i) => {
-                        const getDT = (bd: any) => bd.dureeTraitement === null ? { days: null, isOnTime: true } : { days: bd.dureeTraitement, isOnTime: bd.dureeTraitementStatus === 'GREEN' };
-                        const getDR = (bd: any) => bd.dureeReglement === null ? { days: null, isOnTime: true } : { days: bd.dureeReglement, isOnTime: bd.dureeReglementStatus === 'GREEN' };
-                        const dt = getDT(b); const dr = getDR(b);
+                        const dt = getDureeTraitement(b);
+                        const dr = getDureeReglement(b);
                         return (
                           <tr key={b.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: i % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.client?.name || 'N/A'}</td>
@@ -218,15 +334,6 @@ function GestionnaireBordereaux() {
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}><span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{b.delaiReglement || 0}j</span></td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}</td>
                             <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.statut === 'VIREMENT_EXECUTE' || b.statut === 'CLOTURE' || b.statut === 'PAYE' ? <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span> : dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                              {['EN_COURS', 'ASSIGNE'].includes(b.statut) && (
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <span style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #4caf50', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>✓ Traiter</span>
-                                  <span style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ff9800', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>↩ Retour</span>
-                                </div>
-                              )}
-                              {['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut) && <span style={{ fontSize: '12px', color: '#4caf50', fontWeight: 'bold' }}>✓ Complété</span>}
-                            </td>
                           </tr>
                         );
                       })}

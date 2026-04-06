@@ -186,8 +186,13 @@ export class BOService {
           const bordereau = await this.prisma.bordereau.create({
             data: bordereauData,
             include: {
-              client: true,
-              contract: contractId ? true : false
+              client: {
+                include: {
+                  chargeCompte: true
+                }
+              },
+              contract: contractId ? true : false,
+              currentHandler: true
             }
           });
           
@@ -197,6 +202,31 @@ export class BOService {
             'CREATED', 
             'A_SCANNER'
           );
+          
+          // Notify Gestionnaire Senior if bordereau is assigned to them
+          if (bordereau.client?.chargeCompte && bordereau.client.chargeCompte.role === 'GESTIONNAIRE_SENIOR') {
+            try {
+              await this.prisma.notification.create({
+                data: {
+                  userId: bordereau.client.chargeCompte.id,
+                  type: 'NEW_BORDEREAU_ASSIGNED',
+                  title: 'Nouveau bordereau assigné',
+                  message: `Un nouveau bordereau ${bordereau.reference} du client ${bordereau.client.name} vous a été assigné`,
+                  data: {
+                    bordereauId: bordereau.id,
+                    reference: bordereau.reference,
+                    clientName: bordereau.client.name,
+                    nombreBS: bordereau.nombreBS,
+                    dateReception: bordereau.dateReception.toISOString()
+                  },
+                  read: false
+                }
+              });
+              console.log(`✅ Notification sent to Gestionnaire Senior ${bordereau.client.chargeCompte.fullName} for bordereau ${bordereau.reference}`);
+            } catch (error) {
+              console.error('Failed to create notification for Gestionnaire Senior:', error);
+            }
+          }
           
           // Audit logging removed to prevent foreign key constraint errors
           // await this.logBOActivity(userId, 'CREATE_ENTRY', {

@@ -162,15 +162,16 @@ export class FinanceController {
   }
 
   @Get('adherents')
-  async getAdherents(@Query('clientId') clientId?: string, @Query('search') search?: string) {
+  async getAdherents(@Query('clientId') clientId?: string, @Query('search') search?: string, @Req() req?: any) {
+    const user = req ? getUserFromRequest(req) : undefined;
     if (search !== undefined) {
-      return this.adherentService.searchAdherents(search, clientId);
+      return this.adherentService.searchAdherents(search, clientId, user);
     }
     if (clientId !== undefined) {
       return this.adherentService.findAdherentsByClient(clientId);
     }
     // Return all adherents if no parameters
-    return this.adherentService.searchAdherents('', '');
+    return this.adherentService.searchAdherents('', '', user);
   }
 
   @Get('adherents/:id')
@@ -261,13 +262,13 @@ export class FinanceController {
       let imported = 0;
       let skipped = 0;
       const errors: string[] = [];
+      const blockedDuplicates: any[] = [];
       
       console.log(`📊 Total rows in Excel: ${data.length}`);
       
       for (let i = 0; i < data.length; i++) {
         const row = data[i] as any;
         try {
-          // FIXED: Read correct column names from Excel (EXACT MATCH)
           const matricule = row['Matricule'];
           const societe = row['Société'];
           const nom = row['Nom'];
@@ -292,7 +293,6 @@ export class FinanceController {
             continue;
           }
           
-          // FIXED: Find client by matching société column (not assurance)
           let targetClient = await this.prisma.client.findFirst({
             where: {
               OR: [
@@ -303,7 +303,6 @@ export class FinanceController {
             include: { compagnieAssurance: true }
           });
           
-          // REJECT if client doesn't exist - DO NOT auto-create
           if (!targetClient) {
             skipped++;
             const errorMsg = `Ligne ${i + 1}: Client "${societe}" n'existe pas dans le système. Veuillez créer le client d'abord.`;
@@ -314,17 +313,70 @@ export class FinanceController {
           
           console.log(`✅ Row ${i + 1}: Matched client "${targetClient.name}" for société "${societe}"`);
           
-          // FIXED: Use separate nom and prenom columns
+          // Check matricule duplicate
+          const existingAdherent = await this.prisma.adherent.findFirst({
+            where: { matricule: String(matricule), clientId: targetClient.id }
+          });
+          
+          if (existingAdherent) {
+            console.log(`❌ Row ${i + 1} failed: Matricule ${matricule} already exists for this client`);
+            skipped++;
+            continue;
+          }
+          
+          // Check duplicate RIB
+          const duplicateRib = await this.prisma.adherent.findFirst({
+            where: { rib },
+            include: { client: true }
+          });
+          
+          if (duplicateRib) {
+            console.log(`❌ Row ${i + 1} failed: RIB ${rib} already exists`);
+            blockedDuplicates.push({
+              newAdherent: {
+                matricule: String(matricule),
+                nom,
+                prenom,
+                rib,
+                clientId: targetClient.id,
+                clientName: targetClient.name,
+                codeAssure: codeAssure || undefined,
+                numeroContrat: numeroContrat || undefined
+              },
+              existingAdherent: {
+                id: duplicateRib.id,
+                matricule: duplicateRib.matricule,
+                nom: duplicateRib.nom,
+                prenom: duplicateRib.prenom,
+                rib: duplicateRib.rib,
+                clientName: duplicateRib.client.name
+              },
+              pendingData: {
+                matricule: String(matricule),
+                nom,
+                prenom,
+                rib,
+                clientId: targetClient.id,
+                codeAssure: codeAssure || undefined,
+                numeroContrat: numeroContrat || undefined,
+                assurance: assuranceCompany || undefined,
+                statut
+              }
+            });
+            skipped++;
+            continue;
+          }
+          
           const adherentData = {
             matricule: String(matricule),
-            nom: nom,
-            prenom: prenom,
+            nom,
+            prenom,
             clientId: targetClient.id,
-            rib: rib,
-            codeAssure: codeAssure,
-            numeroContrat: numeroContrat,
+            rib,
+            codeAssure,
+            numeroContrat,
             assurance: assuranceCompany,
-            statut: statut
+            statut
           };
           
           await this.adherentService.createAdherent(adherentData, user.id);
@@ -337,15 +389,27 @@ export class FinanceController {
         }
       }
       
-      console.log(`📊 Import summary: ${imported} imported, ${skipped} skipped, ${data.length} total`);
+      // Send ONE notification with ALL duplicates
+      if (blockedDuplicates.length > 0) {
+        await this.adherentService['notifyDuplicateRibBlocked'](
+          user.id,
+          blockedDuplicates,
+          imported,
+          skipped - blockedDuplicates.length
+        );
+      }
+      
+      const blockedCount = blockedDuplicates.length;
+      console.log(`📊 Import summary: ${imported} imported, ${skipped} skipped (${blockedCount} duplicate RIBs), ${data.length} total`);
       
       return {
         success: true,
         imported,
         skipped,
+        blocked: blockedCount,
         total: data.length,
         errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
-        message: `${imported} adhérent(s) importé(s) sur ${data.length}. ${skipped} ignoré(s).`
+        message: `${imported} adhérent(s) importé(s) sur ${data.length}. ${skipped} ignoré(s) (dont ${blockedCount} RIB dupliqués).`
       };
     } catch (error) {
       throw new BadRequestException('Failed to process file: ' + error.message);
@@ -434,7 +498,23 @@ export class FinanceController {
   }
 
   @Get('ordres-virement')
-  async getOrdresVirement(@Query() filters: any) {
+  async getOrdresVirement(@Query() filters: any, @Req() req?: any) {
+    const user = req ? getUserFromRequest(req) : undefined;
+    
+    // GESTIONNAIRE_SENIOR & CHEF_EQUIPE: Filter by assigned contracts
+    if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
+      const assignedContracts = await this.prisma.contract.findMany({
+        where: { teamLeaderId: user.id },
+        select: { clientId: true }
+      });
+      const clientIds = assignedContracts.map(c => c.clientId);
+      
+      // Add client filter to existing filters
+      if (!filters.clientId) {
+        filters.clientIds = clientIds;
+      }
+    }
+    
     return this.ordreVirementService.findOrdreVirements(filters);
   }
 
@@ -1104,6 +1184,11 @@ export class FinanceController {
     const where: any = {
       bordereauId: null  // Only manual entries without bordereau
     };
+    
+    // EXACT SPEC: GESTIONNAIRE_SENIOR sees only their created manual OVs
+    if (user.role === 'GESTIONNAIRE_SENIOR' || user.role === 'CHEF_EQUIPE') {
+      where.utilisateurSante = user.id;
+    }
     
     if (filters.client) {
       where.clientName = { contains: filters.client, mode: 'insensitive' };
@@ -1884,5 +1969,41 @@ export class FinanceController {
   ) {
     const user = getUserFromRequest(req);
     return this.financeService.exportOVDetailsExcel(id, res, user as any);
+  }
+
+  // === DUPLICATE RIB APPROVAL ENDPOINTS ===
+  @Post('adherents/duplicate-rib/approve/:notificationId/:duplicateId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async approveDuplicateRib(
+    @Param('notificationId') notificationId: string,
+    @Param('duplicateId') duplicateId: string,
+    @Body() body: { justification?: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.adherentService.approveDuplicateRib(notificationId, duplicateId, user.id, body.justification);
+  }
+
+  @Post('adherents/duplicate-rib/reject/:notificationId/:duplicateId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async rejectDuplicateRib(
+    @Param('notificationId') notificationId: string,
+    @Param('duplicateId') duplicateId: string,
+    @Body() body: { reason?: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.adherentService.rejectDuplicateRib(notificationId, duplicateId, user.id, body.reason);
+  }
+
+  @Post('adherents/duplicate-rib/approve-all/:notificationId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async approveAllDuplicateRibs(
+    @Param('notificationId') notificationId: string,
+    @Body() body: { justification?: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.adherentService.approveAllDuplicateRibs(notificationId, user.id, body.justification);
   }
 }

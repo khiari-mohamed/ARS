@@ -51,12 +51,12 @@ function GestionnaireDashboardNew() {
       case 'À scanner': return '#9e9e9e';
       case 'En cours de Scan': return '#2196f3';
       case 'A_AFFECTER': return '#ff9800';
-      case 'Traité': return '#4caf50';
-      case 'En cours de traitement': return '#ff9800';
+      case 'Traité': case 'TRAITE': return '#4caf50';
+      case 'En cours de traitement': case 'EN_COURS': return '#ff9800';
       case 'En cours': return '#ff9800';
-      case 'Retourné': return '#f44336';
-      case 'Nouveau': return '#2196f3';
-      case 'Scanné': return '#2196f3';
+      case 'Retourné': case 'RETOURNE': return '#f44336';
+      case 'Nouveau': case 'UPLOADED': return '#2196f3';
+      case 'Scanné': case 'SCANNE': return '#2196f3';
       case 'Rejeté': return '#f44336';
       default: return '#9e9e9e';
     }
@@ -93,6 +93,10 @@ function GestionnaireDashboardNew() {
   const [gestionnaireAssignments, setGestionnaireAssignments] = useState<GestionnaireAssignment[]>([]);
   const [gestionnaireFilter, setGestionnaireFilter] = useState('Tous');
   const [availableGestionnaires, setAvailableGestionnaires] = useState<string[]>([]);
+  const [reassignedDocs, setReassignedDocs] = useState<any[]>([]);
+  const [loadingReassigned, setLoadingReassigned] = useState(false);
+  const [reassignedDocsPage, setReassignedDocsPage] = useState(1);
+  const REASSIGNED_PAGE_SIZE = 10;
 
   // Table-specific filters
   const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
@@ -112,7 +116,8 @@ function GestionnaireDashboardNew() {
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+    loadReassignedDocuments();
+  }, []);;
 
   useEffect(() => {
     applyFilters();
@@ -159,6 +164,26 @@ function GestionnaireDashboardNew() {
   // useEffect(() => {
   //   console.log('🔍 filteredDocuments updated:', filteredDocuments.length);
   // }, [filteredDocuments]);
+
+  const loadReassignedDocuments = async () => {
+    if (!user?.id) return;
+    setLoadingReassigned(true);
+    try {
+      const response = await fetch(`/api/super-admin/gestionnaire/reassigned-documents?userId=${user.id}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📄 Reassigned documents response:', data);
+        setReassignedDocs(data.documents || []);
+        setReassignedDocsPage(1);
+      }
+    } catch (error) {
+      console.error('Error loading reassigned documents:', error);
+    } finally {
+      setLoadingReassigned(false);
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -706,6 +731,10 @@ function GestionnaireDashboardNew() {
                       <span style={{ color: '#dc3545' }}>↩ Retournés:</span>
                       <span style={{ fontWeight: 'bold' }}>{assignment.retournes || 0}</span>
                     </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ color: '#2196f3' }}>🔄 Réaffectés:</span>
+                      <span style={{ fontWeight: 'bold', color: '#2196f3' }}>{reassignedDocs.length}</span>
+                    </div>
                     {assignment.returnedBy && (assignment.retournes || 0) > 0 && (
                       <div style={{ fontSize: '11px', color: '#dc3545', fontWeight: 'bold', marginLeft: '16px', marginTop: '2px' }}>
                         → Retourné par: {assignment.returnedBy}
@@ -1082,7 +1111,79 @@ function GestionnaireDashboardNew() {
           )}
         </div>
 
-        {/* IA & Suggestions Section */}
+        {/* Documents Réaffectés Section */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#2196f3', margin: 0 }}>🔄 Documents Réaffectés à Moi</h3>
+            <button onClick={loadReassignedDocuments} style={{ background: '#2196f3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>🔄 Actualiser</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px', padding: '12px', background: '#e3f2fd', borderRadius: '6px' }}>
+            <div style={{ textAlign: 'center' }}><strong>Total:</strong> {reassignedDocs.length} document(s)</div>
+            <div style={{ textAlign: 'center', color: '#f44336' }}><strong>🔴 En retard:</strong> {reassignedDocs.filter(d => d.isOverdue).length}</div>
+            <div style={{ textAlign: 'center', color: '#4caf50' }}><strong>🟢 À jour:</strong> {reassignedDocs.filter(d => !d.isOverdue).length}</div>
+          </div>
+          {loadingReassigned ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Chargement...</div>
+          ) : reassignedDocs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#999', background: '#f8f9fa', borderRadius: '6px' }}>Aucun document réaffecté</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #2196f3' }}>
+                    <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Document</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Type</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Bordereau</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Assigné le</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reassignedDocs.slice((reassignedDocsPage - 1) * REASSIGNED_PAGE_SIZE, reassignedDocsPage * REASSIGNED_PAGE_SIZE).map((doc, index) => (
+                    <tr key={doc.id} style={{ borderBottom: '1px solid #f0f0f0', background: doc.isOverdue ? '#fff5f5' : index % 2 === 0 ? '#fff' : '#fafafa' }}>
+                      <td style={{ padding: '10px 8px', fontSize: '13px', fontWeight: '500' }}>{doc.name}</td>
+                      <td style={{ padding: '10px 8px', fontSize: '13px' }}>{doc.type}</td>
+                      <td style={{ padding: '10px 8px', fontSize: '13px', color: '#9c27b0' }}>{doc.bordereauReference}</td>
+                      <td style={{ padding: '10px 8px', fontSize: '13px' }}>{doc.clientName}</td>
+                      <td style={{ padding: '10px 8px', fontSize: '13px', color: '#666' }}>{doc.assignedAt ? new Date(doc.assignedAt).toLocaleDateString('fr-FR') : doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('fr-FR') : '-'}</td>
+                      <td style={{ padding: '10px 8px' }}>
+                        <span style={{ background: getStatusColor(doc.status), color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold' }}>{doc.status}</span>
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>
+                        <span style={{ background: doc.isOverdue ? '#f44336' : '#4caf50', color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold' }}>
+                          {doc.remainingDays !== undefined && doc.remainingDays !== null ? `${doc.remainingDays}j restants` : 'N/A'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {reassignedDocs.length > REASSIGNED_PAGE_SIZE && (
+            <div style={{ padding: '12px 0 0 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+              <button
+                onClick={() => setReassignedDocsPage(p => Math.max(1, p - 1))}
+                disabled={reassignedDocsPage === 1}
+                style={{ padding: '4px 10px', border: '1px solid #ddd', borderRadius: '4px', cursor: reassignedDocsPage === 1 ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                ← Précédent
+              </button>
+              <span style={{ fontSize: '12px', color: '#666' }}>
+                Page {reassignedDocsPage} sur {Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE)}
+              </span>
+              <button
+                onClick={() => setReassignedDocsPage(p => Math.min(Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE), p + 1))}
+                disabled={reassignedDocsPage >= Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE)}
+                style={{ padding: '4px 10px', border: '1px solid #ddd', borderRadius: '4px', cursor: reassignedDocsPage >= Math.ceil(reassignedDocs.length / REASSIGNED_PAGE_SIZE) ? 'not-allowed' : 'pointer', fontSize: '12px' }}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
+        </div>
         <div style={{ background: 'white', borderRadius: '8px', padding: '20px', marginBottom: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <BSAIPage />
         </div>

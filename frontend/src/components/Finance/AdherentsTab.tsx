@@ -28,7 +28,10 @@ interface Adherent {
   duplicateRib?: boolean;
 }
 
+import { useAuth } from '../../contexts/AuthContext';
+
 const AdherentsTab: React.FC = () => {
+  const { user } = useAuth();
   const [adherents, setAdherents] = useState<Adherent[]>([]);
   const [filteredAdherents, setFilteredAdherents] = useState<Adherent[]>([]);
   const [filters, setFilters] = useState({
@@ -62,6 +65,7 @@ const AdherentsTab: React.FC = () => {
   const [uniqueSocieties, setUniqueSocieties] = useState<Array<{name: string, count: number}>>([]);
   const [deleteDialog, setDeleteDialog] = useState<{open: boolean, count: number}>({open: false, count: 0});
   const [showTips, setShowTips] = useState(false);
+  const [duplicateRibDialog, setDuplicateRibDialog] = useState<{open: boolean, data: any}>({open: false, data: null});
 
   useEffect(() => {
     loadAdherents();
@@ -180,11 +184,15 @@ const AdherentsTab: React.FC = () => {
     }
     
     if (filters.search) {
-      filtered = filtered.filter(a => 
-        a.matricule.includes(filters.search) ||
-        a.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-        a.surname.toLowerCase().includes(filters.search.toLowerCase())
-      );
+      if (filters.search === '__DUPLICATE_RIB__') {
+        filtered = filtered.filter(a => a.duplicateRib);
+      } else {
+        filtered = filtered.filter(a => 
+          a.matricule.includes(filters.search) ||
+          a.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+          a.surname.toLowerCase().includes(filters.search.toLowerCase())
+        );
+      }
     }
     
     setFilteredAdherents(filtered);
@@ -257,6 +265,19 @@ const AdherentsTab: React.FC = () => {
         
         if (!response.ok) {
           const errorData = await response.json();
+          
+          if (errorData.message && errorData.message.includes('already exists for adherent')) {
+            const match = errorData.message.match(/RIB (.+) already exists for adherent (.+) \(Matricule: (.+), Société: (.+)\)/);
+            if (match) {
+              const [, rib, existingName, existingMatricule, existingSociete] = match;
+              setDuplicateRibDialog({
+                open: true,
+                data: { rib, existingName, existingMatricule, existingSociete, newName: `${form.name} ${form.surname}`, newMatricule: form.matricule, newSociete: form.society }
+              });
+              return;
+            }
+          }
+          
           throw new Error(errorData.message || 'Failed to update adherent');
         }
       } else {
@@ -272,12 +293,24 @@ const AdherentsTab: React.FC = () => {
         
         if (!response.ok) {
           const errorData = await response.json();
+          
+          if (errorData.message && errorData.message.includes('already exists for adherent')) {
+            const match = errorData.message.match(/RIB (.+) already exists for adherent (.+) \(Matricule: (.+), Société: (.+)\)/);
+            if (match) {
+              const [, rib, existingName, existingMatricule, existingSociete] = match;
+              setDuplicateRibDialog({
+                open: true,
+                data: { rib, existingName, existingMatricule, existingSociete, newName: `${form.name} ${form.surname}`, newMatricule: form.matricule, newSociete: form.society }
+              });
+              return;
+            }
+          }
+          
           throw new Error(errorData.message || 'Failed to create adherent');
         }
       }
       
       setDialog({open: false, adherent: null});
-      // Reload data from backend
       await loadAdherents();
     } catch (error) {
       console.error('Failed to save adherent:', error);
@@ -363,19 +396,36 @@ const AdherentsTab: React.FC = () => {
       const result = await response.json();
       
       if (!response.ok) {
-        // Show detailed error message from backend
         const errorMsg = result.message || 'Import failed';
         alert(`❌ ERREUR D'IMPORT\n\n${errorMsg}`);
         throw new Error(errorMsg);
       }
       
-      alert(`✅ Import réussi!\n\n${result.imported || 0} adhérent(s) importé(s)\n${result.skipped || 0} ignoré(s)\n\n${result.message || ''}`);
+      // Build detailed message
+      const imported = result.imported || 0;
+      const blocked = result.blocked || 0;
+      const skipped = result.skipped || 0;
+      const total = result.total || 0;
+      
+      console.log('📊 Import result:', { imported, blocked, skipped, total, result });
+      
+      // Show result in dialog instead of alert
+      setDuplicateRibDialog({
+        open: true,
+        data: {
+          isBulkImport: true,
+          imported,
+          blocked,
+          skipped,
+          total,
+          otherErrors: skipped - blocked
+        }
+      });
       setImportDialog(false);
       setImportFile(null);
       await loadAdherents();
     } catch (error) {
       console.error('Import failed:', error);
-      // Error already shown in alert above
     } finally {
       setImporting(false);
     }
@@ -421,6 +471,13 @@ const AdherentsTab: React.FC = () => {
         <Alert severity="warning" sx={{ mb: 2 }} icon={<WarningIcon />}>
           {duplicateRibCount} adhérent(s) avec des RIB dupliqués détecté(s). 
           Vérifiez les justifications nécessaires.
+        </Alert>
+      )}
+      
+      {/* Role-specific filter message */}
+      {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR') && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Affichage limité à vos clients uniquement
         </Alert>
       )}
 
@@ -486,6 +543,27 @@ const AdherentsTab: React.FC = () => {
           <Typography variant="caption" sx={{ alignSelf: 'center', mr: 1, fontWeight: 600 }}>
             Filtres rapides:
           </Typography>
+          
+          {/* RIB Dupliqués Filter - PRIORITY */}
+          {duplicateRibCount > 0 && (
+            <Button 
+              size="small" 
+              variant={filters.search === '__DUPLICATE_RIB__' ? 'contained' : 'outlined'}
+              color="warning"
+              onClick={() => {
+                if (filters.search === '__DUPLICATE_RIB__') {
+                  setFilters({...filters, search: ''});
+                } else {
+                  setFilters({...filters, search: '__DUPLICATE_RIB__'});
+                }
+              }}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+              startIcon={<WarningIcon />}
+            >
+              ⚠️ RIB Dupliqués ({duplicateRibCount})
+            </Button>
+          )}
+          
           {uniqueSocieties.map((society) => (
             <Button 
               key={society.name}
@@ -1096,6 +1174,161 @@ const AdherentsTab: React.FC = () => {
             startIcon={<DeleteIcon />}
           >
             🗑️ Supprimer définitivement
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Duplicate RIB Dialog */}
+      <Dialog 
+        open={duplicateRibDialog.open} 
+        onClose={() => setDuplicateRibDialog({open: false, data: null})}
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: duplicateRibDialog.data?.isBulkImport ? 'info.light' : 'warning.light' }}>
+          {duplicateRibDialog.data?.isBulkImport ? (
+            <InfoIcon color="info" fontSize="large" />
+          ) : (
+            <WarningIcon color="warning" fontSize="large" />
+          )}
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            {duplicateRibDialog.data?.isBulkImport ? '📊 Résultat de l\'Import' : '🚨 RIB Dupliqué Détecté'}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {duplicateRibDialog.data?.isBulkImport ? (
+            <Box>
+              {/* Bulk Import Result */}
+              {duplicateRibDialog.data.imported > 0 && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    ✅ {duplicateRibDialog.data.imported} adhérent(s) importé(s) avec succès
+                  </Typography>
+                </Alert>
+              )}
+              
+              {duplicateRibDialog.data.imported === 0 && duplicateRibDialog.data.total > 0 && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    ℹ️ Aucun adhérent importé
+                  </Typography>
+                  <Typography variant="body2">
+                    Tous les adhérents ont été rejetés (RIB dupliqués ou autres erreurs).
+                  </Typography>
+                </Alert>
+              )}
+              
+              {duplicateRibDialog.data.blocked > 0 && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                    ❌ {duplicateRibDialog.data.blocked} adhérent(s) bloqué(s) (RIB dupliqués)
+                  </Typography>
+                  <Typography variant="body2">
+                    Ces adhérents ont été bloqués car leurs RIBs sont déjà utilisés par d'autres adhérents.
+                  </Typography>
+                </Alert>
+              )}
+              
+              {duplicateRibDialog.data.otherErrors > 0 && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    ⚠️ {duplicateRibDialog.data.otherErrors} autre(s) erreur(s)
+                  </Typography>
+                  <Typography variant="body2">
+                    Matricule dupliqué, client introuvable, RIB invalide, etc.
+                  </Typography>
+                </Alert>
+              )}
+              
+              <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#f5f5f5' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>📊 Résumé:</Typography>
+                <Typography variant="body2">• Total traité: {duplicateRibDialog.data.total} ligne(s)</Typography>
+                <Typography variant="body2" color="success.main">• Importés: {duplicateRibDialog.data.imported}</Typography>
+                <Typography variant="body2" color="warning.main">• Bloqués (RIB dupliqués): {duplicateRibDialog.data.blocked}</Typography>
+                <Typography variant="body2" color="error.main">• Autres erreurs: {duplicateRibDialog.data.otherErrors}</Typography>
+              </Paper>
+              
+              {duplicateRibDialog.data.blocked > 0 && (
+                <Alert severity="info">
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    🔔 Notification envoyée
+                  </Typography>
+                  <Typography variant="body2">
+                    Une notification a été automatiquement envoyée au <strong>SUPER_ADMIN</strong> et <strong>RESPONSABLE_DEPARTEMENT</strong> pour approbation.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    💡 <strong>Cas possibles:</strong> Compte conjoint (mari/femme), compte familial, compte partagé.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          ) : (
+            <Box>
+              {/* Single Entry Duplicate */}
+              <Alert severity="error" sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  ⚠️ Cette opération a été bloquée
+                </Typography>
+                <Typography variant="body2">
+                  Le RIB que vous tentez d'ajouter est déjà utilisé par un autre adhérent.
+                </Typography>
+              </Alert>
+
+              {duplicateRibDialog.data && (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+                    📋 Détails du conflit:
+                  </Typography>
+                  
+                  <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#fff3cd' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>RIB en conflit:</Typography>
+                    <Typography variant="body1" sx={{ fontFamily: 'monospace', fontSize: '1.1rem', color: 'error.main' }}>
+                      {duplicateRibDialog.data.rib}
+                    </Typography>
+                  </Paper>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Paper variant="outlined" sx={{ p: 2, bgcolor: '#f8d7da' }}>
+                        <Typography variant="caption" color="error" sx={{ fontWeight: 600 }}>❌ ADHÉRENT EXISTANT</Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}><strong>Nom:</strong> {duplicateRibDialog.data.existingName}</Typography>
+                        <Typography variant="body2"><strong>Matricule:</strong> {duplicateRibDialog.data.existingMatricule}</Typography>
+                        <Typography variant="body2"><strong>Société:</strong> {duplicateRibDialog.data.existingSociete}</Typography>
+                      </Paper>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Paper variant="outlined" sx={{ p: 2, bgcolor: '#d1ecf1' }}>
+                        <Typography variant="caption" color="info" sx={{ fontWeight: 600 }}>🆕 NOUVEL ADHÉRENT (Bloqué)</Typography>
+                        <Typography variant="body2" sx={{ mt: 1 }}><strong>Nom:</strong> {duplicateRibDialog.data.newName}</Typography>
+                        <Typography variant="body2"><strong>Matricule:</strong> {duplicateRibDialog.data.newMatricule}</Typography>
+                        <Typography variant="body2"><strong>Société:</strong> {duplicateRibDialog.data.newSociete}</Typography>
+                      </Paper>
+                    </Grid>
+                  </Grid>
+
+                  <Alert severity="info" sx={{ mt: 3 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                      🔔 Notification envoyée
+                    </Typography>
+                    <Typography variant="body2">
+                      Une notification a été automatiquement envoyée au <strong>SUPER_ADMIN</strong> et <strong>RESPONSABLE_DEPARTEMENT</strong> pour approbation.
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      💡 <strong>Cas possibles:</strong> Compte conjoint (mari/femme), compte familial, compte partagé.
+                    </Typography>
+                  </Alert>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button 
+            onClick={() => setDuplicateRibDialog({open: false, data: null})} 
+            variant="contained"
+            size="large"
+          >
+            ✅ J'ai compris
           </Button>
         </DialogActions>
       </Dialog>

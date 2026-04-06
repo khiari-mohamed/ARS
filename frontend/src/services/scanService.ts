@@ -118,6 +118,12 @@ export const validateScanning = async (bordereauId: string) => {
   return data;
 };
 
+// NEW: Complete scan with workflow progression (triggers Senior auto-transition)
+export const completeScanWithWorkflow = async (bordereauId: string) => {
+  const { data } = await LocalAPI.post(`/bordereaux/${bordereauId}/complete-scan`);
+  return data;
+};
+
 export const checkScanOverload = async () => {
   const { data } = await LocalAPI.get('/scan/overload-check');
   return data;

@@ -350,6 +350,55 @@ export class AutoNotificationService {
   }
 
   /**
+   * BO → GESTIONNAIRE SENIOR: Notify senior when new bordereau is created and assigned
+   */
+  async notifyBOToGestionnaireSenior(bordereauId: string, reference: string, seniorId: string): Promise<void> {
+    try {
+      const senior = await this.prisma.user.findUnique({
+        where: { id: seniorId }
+      });
+
+      if (!senior) {
+        this.logger.warn(`Gestionnaire Senior ${seniorId} not found`);
+        return;
+      }
+
+      await this.prisma.notification.create({
+        data: {
+          userId: seniorId,
+          type: 'BORDEREAU_ASSIGNED',
+          title: 'Nouveau bordereau assigné',
+          message: `Bordereau ${reference} vous a été assigné automatiquement`,
+          data: { 
+            bordereauId, 
+            reference,
+            source: 'BO',
+            autoAssigned: true
+          },
+          read: false
+        }
+      }).catch(() => this.logger.warn('Failed to create senior notification'));
+
+      // Create workflow notification
+      await this.prisma.workflowNotification.create({
+        data: {
+          fromService: 'BO',
+          toService: 'GESTIONNAIRE_SENIOR',
+          bordereauId,
+          userId: seniorId,
+          message: `Bordereau ${reference} créé et assigné à ${senior.fullName}`,
+          type: 'BORDEREAU_ASSIGNED',
+          status: 'SENT'
+        }
+      }).catch(() => this.logger.warn('Failed to create workflow notification'));
+
+      this.logger.log(`✅ Notified Gestionnaire Senior ${senior.fullName} about new bordereau ${reference}`);
+    } catch (error) {
+      this.logger.error(`Error notifying Gestionnaire Senior: ${error.message}`);
+    }
+  }
+
+  /**
    * SLA BREACH: Notify relevant users about SLA breaches
    */
   async notifySLABreach(bordereauId: string, reference: string, daysOverdue: number): Promise<void> {

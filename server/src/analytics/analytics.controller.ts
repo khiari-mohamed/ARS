@@ -270,7 +270,7 @@ export class AnalyticsController {
     }
     try {
       return await this.analyticsService.getComparePerformanceAI(payload);
-    } catch (e) {
+    } catch (e: any) {
       throw new BadGatewayException('AI microservice error: ' + (e?.message || e));
     }
   }

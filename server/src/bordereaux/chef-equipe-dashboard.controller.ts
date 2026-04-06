@@ -17,7 +17,7 @@ export class ChefEquipeDashboardController {
   @Get('gestionnaire-assignments-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireAssignmentsDossiers(@Req() req) {
-    console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
+    //console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
     
     // Filter gestionnaires based on user role
@@ -125,14 +125,14 @@ export class ChefEquipeDashboardController {
     // Filter out gestionnaires with 0 assignments
     const filteredAssignments = assignments.filter(a => a.totalAssigned > 0);
     
-    console.log('🔍 [BACKEND] Returning assignments:', filteredAssignments.length, 'gestionnaires (filtered from', assignments.length, 'total)');
+    //console.log('🔍 [BACKEND] Returning assignments:', filteredAssignments.length, 'gestionnaires (filtered from', assignments.length, 'total)');
     return filteredAssignments;
   }
 
   @Get('dashboard-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDashboardDossiers(@Req() req) {
-    console.log('📄 [BACKEND] Getting dashboard dossiers...');
+    //console.log('📄 [BACKEND] Getting dashboard dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
     const documents = await this.prisma.document.findMany({
       where: {
@@ -163,7 +163,7 @@ export class ChefEquipeDashboardController {
       dossierStates: this.getDocumentStates(doc.status)
     }));
 
-    console.log('📄 [BACKEND] Returning dossiers:', dossiers.length, 'items');
+   // console.log('📄 [BACKEND] Returning dossiers:', dossiers.length, 'items');
     return dossiers;
   }
 
@@ -211,7 +211,7 @@ export class ChefEquipeDashboardController {
   @Get('dashboard-stats-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDashboardStatsDossiers(@Req() req) {
-    console.log('📊 [BACKEND] Getting dashboard stats dossiers...');
+    //console.log('📊 [BACKEND] Getting dashboard stats dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
     // Get document statistics grouped by type
     const docsByType = await this.prisma.document.groupBy({
@@ -282,7 +282,7 @@ export class ChefEquipeDashboardController {
       stats[category].gestionnaireBreakdown[gestionnaireName]++;
     });
 
-    console.log('📊 [BACKEND] Returning stats:', stats);
+    //console.log('📊 [BACKEND] Returning stats:', stats);
     return stats;
   }
 
@@ -481,11 +481,11 @@ export class GestionnaireSeniorDashboardController {
   @Get('dashboard-dossiers')
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async getDashboardDossiers(@Req() req) {
-    console.log('\n\n==============================================');
-    console.log('🚀🚀🚀 GESTIONNAIRE SENIOR ENDPOINT CALLED 🚀🚀🚀');
-    console.log('🔍 User ID:', req.user.id);
-    console.log('🔍 User Role:', req.user.role);
-    console.log('==============================================\n');
+    //console.log('\n\n==============================================');
+    //console.log('🚀🚀🚀 GESTIONNAIRE SENIOR ENDPOINT CALLED 🚀🚀🚀');
+    //console.log('🔍 User ID:', req.user.id);
+    //console.log('🔍 User Role:', req.user.role);
+   // console.log('==============================================\n');
     
     // Get ALL documents from bordereaux where contract.teamLeaderId matches this senior
     const documents = await this.prisma.document.findMany({
@@ -507,9 +507,9 @@ export class GestionnaireSeniorDashboardController {
       orderBy: { uploadedAt: 'desc' }
     });
     
-    console.log('📄 Total documents fetched:', documents.length);
-    console.log('📄 UTSS Documents in raw fetch:', documents.filter(d => d.bordereau?.client?.name?.includes('UTSS')).length);
-    console.log('📄 U-BULLETIN Documents:', documents.filter(d => d.bordereau?.reference?.includes('U-BULLETIN')).length);
+    //console.log('📄 Total documents fetched:', documents.length);
+    //console.log('📄 UTSS Documents in raw fetch:', documents.filter(d => d.bordereau?.client?.name?.includes('UTSS')).length);
+    //console.log('📄 U-BULLETIN Documents:', documents.filter(d => d.bordereau?.reference?.includes('U-BULLETIN')).length);
     if (documents.length > 0) {
       const sample = documents.find(d => d.bordereau?.reference?.includes('U-BULLETIN'));
       if (sample) {
@@ -544,7 +544,7 @@ export class GestionnaireSeniorDashboardController {
       
       // Log UTSS documents
       if (doc.bordereau?.client?.name?.includes('UTSS') || doc.bordereau?.reference?.includes('U-BULLETIN')) {
-        console.log('🔵 Adding UTSS/U-BULLETIN document to result:', docItem);
+        //console.log('🔵 Adding UTSS/U-BULLETIN document to result:', docItem);
       }
     });
     
@@ -597,14 +597,14 @@ export class GestionnaireSeniorDashboardController {
       });
     });
     
-    console.log('\n==============================================');
-    console.log('📦 Total Documents:', documents.length);
-    console.log('📦 Total Bordereaux:', bordereaux.length);
-    console.log('📦 Total Result Items:', result.length);
-    console.log('📦 Documents in result (isDocument=true):', result.filter(r => r.isDocument).length);
-    console.log('📦 Bordereaux in result (isBordereau=true):', result.filter(r => r.isBordereau).length);
-    console.log('📦 UTSS Documents in result:', result.filter(r => r.isDocument && (r.client?.includes('UTSS') || r.bordereauReference?.includes('U-BULLETIN'))).length);
-    console.log('📦 UTSS Bordereaux in result:', result.filter(r => r.isBordereau && r.reference?.includes('U-BULLETIN')).length);
+    //console.log('\n==============================================');
+    //console.log('📦 Total Documents:', documents.length);
+    //console.log('📦 Total Bordereaux:', bordereaux.length);
+    //console.log('📦 Total Result Items:', result.length);
+    //console.log('📦 Documents in result (isDocument=true):', result.filter(r => r.isDocument).length);
+    //console.log('📦 Bordereaux in result (isBordereau=true):', result.filter(r => r.isBordereau).length);
+    //console.log('📦 UTSS Documents in result:', result.filter(r => r.isDocument && (r.client?.includes('UTSS') || r.bordereauReference?.includes('U-BULLETIN'))).length);
+    //console.log('📦 UTSS Bordereaux in result:', result.filter(r => r.isBordereau && r.reference?.includes('U-BULLETIN')).length);
     const uBulletinBordereau = bordereaux.find(b => b.reference?.includes('U-BULLETIN'));
     if (uBulletinBordereau) {
       console.log('🔴 U-BULLETIN Bordereau found:', {
@@ -614,7 +614,7 @@ export class GestionnaireSeniorDashboardController {
         sampleDocIds: uBulletinBordereau.documents?.slice(0, 3).map(d => d.id) || []
       });
     }
-    console.log('==============================================\n');
+    //console.log('==============================================\n');
 
     return result;
   }

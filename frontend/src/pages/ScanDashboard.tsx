@@ -52,7 +52,7 @@ import DirectManualScanInterface from '../components/DirectManualScanInterface';
 import DocumentTypeModal from '../components/DocumentTypeModal';
 import ScanRejectionHandler from '../components/Workflow/ScanRejectionHandler';
 import ReturnedBordereauHandler from '../components/Workflow/ReturnedBordereauHandler';
-import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
+import { fetchScanStatus, fetchScanActivity, initializeScanners, processScanQueue, triggerPaperStreamImport, getDashboardStats, getScanQueue, getBordereauForScan, startScanning, validateScanning, completeScanWithWorkflow, checkScanOverload, getScanActivityChart, debugBordereaux } from '../services/scanService';
 import { getBordereauForManualScan, uploadManualDocuments, finalizeScanProcess } from '../services/manualScanService';
 import { useAuthContext } from '../contexts/AuthContext';
 import ScanEntryForm from '../components/ScanEntryForm';
@@ -236,7 +236,7 @@ const ScanDashboard: React.FC = () => {
 
   const handleValidateScanning = async (bordereauId: string) => {
     try {
-      await validateScanning(bordereauId);
+      await completeScanWithWorkflow(bordereauId);
       setActiveDialog(null);
       await loadDashboard();
     } catch (error) {

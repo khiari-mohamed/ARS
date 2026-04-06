@@ -513,7 +513,9 @@ const RealTimeSuperAdminDashboard: React.FC<RealTimeSuperAdminDashboardProps> = 
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(realTimeData as any)?.teamWorkloadDetails?.map((team: any) => (
+                {(realTimeData as any)?.teamWorkloadDetails
+                  ?.filter((team: any) => ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE'].includes(team.role))
+                  ?.map((team: any) => (
                   <TableRow key={team.id}>
                     <TableCell>{team.name}</TableCell>
                     <TableCell>{team.role}</TableCell>
