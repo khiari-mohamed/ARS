@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+/*import { IsString, IsOptional, IsEnum } from 'class-validator';
 
 export enum AlertType {
   SLA_BREACH = 'SLA_BREACH',
@@ -24,15 +24,16 @@ export class CreateAlertDto {
   documentId?: string;
 
   @IsEnum(AlertType)
-  alertType: AlertType;
+  alertType!: AlertType;
 
   @IsEnum(AlertLevel)
-  alertLevel: AlertLevel;
+  alertLevel!: AlertLevel;
 
   @IsString()
-  message: string;
+  message!: string;
 
   @IsOptional()
   @IsString()
   assignedToId?: string;
 }
+  */

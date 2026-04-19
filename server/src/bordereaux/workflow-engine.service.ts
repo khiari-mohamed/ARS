@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { Statut } from '@prisma/client';
+import { calculateSLA } from '../utils/sla-calculator';
 
 @Injectable()
 export class WorkflowEngineService {
@@ -141,7 +142,7 @@ export class WorkflowEngineService {
       }
       
       return bordereau;
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Error in workflow progression for ${bordereauId}: ${error.message}`);
       throw error;
     }
@@ -178,7 +179,7 @@ export class WorkflowEngineService {
       await this.progressBordereauWorkflow(bordereauId, 'CHEF_ASSIGNED', selectedUser.id);
       
       this.logger.log(`Auto-assigned bordereau ${bordereauId} to gestionnaire ${selectedUser.id}`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Error auto-assigning to gestionnaire: ${error.message}`);
     }
   }
@@ -215,7 +216,7 @@ export class WorkflowEngineService {
         bsId: bordereauId,
       });
 
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Error sending workflow notification: ${error.message}`);
     }
   }
@@ -245,7 +246,7 @@ export class WorkflowEngineService {
           }
         }
       });
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Error logging workflow action: ${error.message}`);
     }
   }
@@ -316,14 +317,14 @@ export class WorkflowEngineService {
       };
 
       return workflowStats;
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Error getting workflow statistics: ${error.message}`);
       return {};
     }
   }
 
   /**
-   * Check for SLA breaches and send alerts
+   * Check for SLA breaches and send alerts (using centralized calculator)
    */
   async checkSLABreaches(): Promise<void> {
     try {
@@ -331,31 +332,34 @@ export class WorkflowEngineService {
         where: {
           statut: { not: 'CLOTURE' }
         },
-        include: { client: true, contract: true }
+        include: { 
+          client: true, 
+          contract: true,
+          ordresVirement: true
+        }
       });
-
-      const today = new Date();
       
       for (const bordereau of bordereaux) {
-        const daysElapsed = Math.floor(
-          (today.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
-        );
+        const slaData = calculateSLA(bordereau);
         
-        const slaThreshold = bordereau.delaiReglement;
+        // Skip frozen bordereaux (already paid)
+        if (slaData.isFrozen) {
+          continue;
+        }
         
-        if (daysElapsed > slaThreshold) {
+        if (slaData.percentElapsed > 100) {
           await this.alertsService.triggerAlert({
             type: 'SLA_BREACH',
             bsId: bordereau.id,
           });
-        } else if (daysElapsed > slaThreshold - 3) {
+        } else if (slaData.percentElapsed > 90) {
           await this.alertsService.triggerAlert({
             type: 'SLA_WARNING',
             bsId: bordereau.id,
           });
         }
       }
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Error checking SLA breaches: ${error.message}`);
     }
   }

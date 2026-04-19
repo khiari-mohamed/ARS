@@ -11,7 +11,7 @@ export enum OVStatus {
 export class UpdateOVStatusDto {
   @IsNotEmpty()
   @IsEnum(OVStatus)
-  status: OVStatus;
+  status!: OVStatus;
 
   @IsOptional()
   @IsString()
@@ -23,5 +23,5 @@ export class UpdateOVStatusDto {
 
   @IsNotEmpty()
   @IsString()
-  updatedBy: string;
+  updatedBy!: string;
 }

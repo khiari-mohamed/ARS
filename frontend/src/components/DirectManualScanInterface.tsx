@@ -221,7 +221,7 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
           Cliquez pour sélectionner des documents (multiple)
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Formats: PDF, JPEG, PNG, TIFF (max 5GB par fichier, 1000 fichiers max)
+          Formats: PDF, JPEG, PNG, TIFF (max 50MB par fichier, 1000 fichiers max)
         </Typography>
         <Typography variant="body2" color="primary" sx={{ mt: 1, fontWeight: 'bold' }}>
           ✅ Téléversement multiple de PDF autorisé

@@ -10,6 +10,13 @@ export interface Client {
   reglementDelay: number;
   reclamationDelay: number;
   slaConfig?: any;
+  modeRecuperation?: 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE';
+  chargeCompte?: {
+    id: string;
+    fullName: string;
+    email?: string;
+    role?: string;
+  };
   compagnieAssurance?: {
     id: string;
     nom: string;
@@ -42,6 +49,12 @@ export interface Client {
     status: string;
     createdAt: string;
     severity: string;
+  }>;
+  adherents?: Array<{
+    id: string;
+    matricule: string;
+    nom: string;
+    prenom: string;
   }>;
 }
 

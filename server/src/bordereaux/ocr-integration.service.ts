@@ -49,7 +49,7 @@ export class OCRIntegrationService {
         extracted_data: extractedData,
         confidence: ocrResult.confidence || 0.85
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`OCR processing failed for document ${documentId}:`, error.message);
       return { success: false, error: error.message };
     }
@@ -91,7 +91,7 @@ export class OCRIntegrationService {
         failed: documents.length - successCount,
         results
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Batch OCR processing failed:`, error.message);
       return { processed: 0, error: error.message };
     }
@@ -128,7 +128,7 @@ export class OCRIntegrationService {
         ocr_excerpt: this.extractRelevantText(doc.ocrText || '', query),
         relevance_score: this.calculateRelevanceScore(doc.ocrText || '', query)
       })).sort((a, b) => b.relevance_score - a.relevance_score);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('OCR search failed:', error.message);
       return [];
     }
@@ -157,7 +157,7 @@ export class OCRIntegrationService {
         completion_rate: totalDocuments > 0 ? (ocrProcessed / totalDocuments) * 100 : 0,
         extracted_data: extractedDataSummary
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('OCR stats failed:', error.message);
       return { total_documents: 0, ocr_processed: 0, ocr_pending: 0 };
     }
@@ -186,7 +186,7 @@ export class OCRIntegrationService {
       });
 
       return response.data.processing_result || { text: '', confidence: 0.5 };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.warn('AI OCR failed, using fallback:', error.message);
       
       // Fallback: basic text extraction (mock)
@@ -241,7 +241,7 @@ export class OCRIntegrationService {
       // Store in search index (could be separate table or search service)
       // Skip search index - table doesn't exist in schema
       this.logger.debug('Search index skipped - table not in schema');
-    } catch (error) {
+    } catch (error : any) {
       this.logger.debug('Document indexing failed:', error.message);
     }
   }
@@ -252,7 +252,7 @@ export class OCRIntegrationService {
       
       // OCR status fields don't exist in schema
       this.logger.debug(`OCR processing: ${processed}/${total} documents completed`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.debug('OCR status update failed:', error.message);
     }
   }
@@ -314,7 +314,7 @@ export class OCRIntegrationService {
         unique_bs_numbers: Array.from(summary.bs_numbers),
         unique_dates: Array.from(summary.dates_found)
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.debug('Extracted data summary failed:', error.message);
       return {};
     }

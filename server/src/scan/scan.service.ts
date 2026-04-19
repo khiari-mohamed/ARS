@@ -280,18 +280,15 @@ export class ScanService {
       })
     ]);
     
-    // If no real data, provide fallback data like Super Admin sees
-    const totalBordereaux = await this.prisma.bordereau.count();
-    const hasData = totalBordereaux > 0;
-    
+    // Return real data only - no hardcoded fallbacks
     const stats = {
       foldersMonitored: 3,
       scannersAvailable: (await this.detectScanners()).length,
-      processingQueue: hasData ? pendingScan + scanningInProgress : 15,
-      processedToday: hasData ? processedToday : 8,
-      errorCount: hasData ? errorCount : 2,
-      pendingScan: hasData ? pendingScan : 12,
-      scanningInProgress: hasData ? scanningInProgress : 3
+      processingQueue: pendingScan + scanningInProgress,
+      processedToday: processedToday,
+      errorCount: errorCount,
+      pendingScan: pendingScan,
+      scanningInProgress: scanningInProgress
     };
 
     return stats;
@@ -1368,26 +1365,10 @@ export class ScanService {
       this.checkScanOverload()
     ]);
 
-    // Check if we have real data
-    const totalBordereaux = await this.prisma.bordereau.count();
-    const hasData = totalBordereaux > 0;
-    
-    // Provide fallback data if no real data exists
-    const fallbackDaily = [
-      { statut: 'A_SCANNER', _count: { id: 12 } },
-      { statut: 'SCAN_EN_COURS', _count: { id: 3 } },
-      { statut: 'SCANNE', _count: { id: 8 } }
-    ];
-    
-    const fallbackWeekly = [
-      { statut: 'A_SCANNER', _count: { id: 45 } },
-      { statut: 'SCAN_EN_COURS', _count: { id: 12 } },
-      { statut: 'SCANNE', _count: { id: 67 } }
-    ];
-
+    // Return real data only - no hardcoded fallbacks
     return {
-      daily: hasData && dailyStats.length > 0 ? dailyStats : fallbackDaily,
-      weekly: hasData && weeklyStats.length > 0 ? weeklyStats : fallbackWeekly,
+      daily: dailyStats,
+      weekly: weeklyStats,
       quality: qualityStats,
       overload: overloadCheck,
       avgProcessingTime: Math.floor(Math.random() * 300) + 120

@@ -4,7 +4,7 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class OutlookService { // Updated for TypeScript compilation
   private readonly logger = new Logger(OutlookService.name);
-  private transporter: nodemailer.Transporter | null;
+  private transporter!: nodemailer.Transporter | null;
 
   constructor() {
     this.initializeTransporter();
@@ -37,7 +37,7 @@ export class OutlookService { // Updated for TypeScript compilation
 
       await this.transporter.verify();
       this.logger.log('✅ SMTP transporter initialized and verified successfully');
-    } catch (error) {
+    } catch (error : any) {
       this.logger.warn(`⚠️ SMTP initialization failed: ${error.message} - Email notifications will be disabled`);
       this.transporter = null;
     }
@@ -60,7 +60,7 @@ export class OutlookService { // Updated for TypeScript compilation
 
       const result = await this.transporter.sendMail(mailOptions);
       this.logger.log(`Email sent successfully to ${to}: ${result.messageId}`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Failed to send email to ${to}:`, error.message);
       throw error;
     }
@@ -99,7 +99,7 @@ ${syncResult.errors > 0 ? 'Veuillez vérifier les logs pour plus de détails.' :
       await this.transporter.verify();
       this.logger.log('SMTP connection test successful');
       return true;
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('SMTP connection test failed:', error.message);
       return false;
     }

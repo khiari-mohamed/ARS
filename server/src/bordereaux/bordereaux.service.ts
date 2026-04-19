@@ -19,6 +19,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import axios from 'axios';
 import { UpdateBulletinSoinDto } from 'src/bulletin-soin/dto/update-bulletin-soin.dto';
+import { isSLACompliant } from '../utils/sla-calculator';
+
 
 
 type BordereauWithMontant = { montant?: number } & any;
@@ -113,7 +115,7 @@ export class BordereauxService {
     
     const bordereaux = await this.prisma.bordereau.findMany({
       where: whereClause,
-      include: { client: true, contract: true }
+      include: { client: true, contract: true, ordresVirement: true }
     });
     
     const analytics = {
@@ -129,7 +131,6 @@ export class BordereauxService {
     let totalDays = 0;
     let slaCompliant = 0;
     let slaEvaluated = 0;
-    const today = new Date();
     
     bordereaux.forEach(b => {
       // Status distribution
@@ -141,20 +142,19 @@ export class BordereauxService {
         totalDays += days;
       }
       
-      // UNIFIED SLA COMPLIANCE: Use percentage elapsed logic (same as frontend)
+      // ✅ USE CENTRALIZED SLA CALCULATOR
       if (b.dateReception && b.delaiReglement) {
         slaEvaluated++;
-        const daysElapsed = Math.floor((today.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
-        const percentElapsed = (daysElapsed / b.delaiReglement) * 100;
-        
-        // Compliant if <= 80% of delay elapsed (matches frontend logic)
-        if (percentElapsed <= 80) {
+        if (isSLACompliant({
+          dateReception: b.dateReception,
+          delaiReglement: b.delaiReglement,
+          statut: b.statut,
+          dateCloture: b.dateCloture,
+          dateExecutionVirement: b.dateExecutionVirement,
+          ordresVirement: b.ordresVirement,
+        })) {
           slaCompliant++;
         }
-        // else if (slaEvaluated <= 3) {
-        //   // DEBUG: Log first 3 non-compliant
-        //   console.log(`❌ Non-compliant: ${b.reference} - ${daysElapsed}d elapsed / ${b.delaiReglement}d delay = ${percentElapsed.toFixed(0)}%`);
-        // }
       }
       
       // Client performance
@@ -836,7 +836,7 @@ export class BordereauxService {
       await this.logAction(bordereau.id, 'CREATE_BORDEREAU');
       console.log('🎉 Bordereau creation completed successfully');
       return BordereauResponseDto.fromEntity(bordereau);
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Error creating bordereau:', error);
       console.error('Error details:', error.message);
       console.error('Stack trace:', error.stack);
@@ -1315,7 +1315,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
           
           return { success: true, assignedTo: recommendedAgent.fullName, method: 'AI' };
         }
-      } catch (aiError) {
+      } catch (aiError : any ) {
         console.log('⚠️ AI assignment failed, using fallback:', aiError.message);
       }
       
@@ -1328,7 +1328,7 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       
       return { success: true, assignedTo: optimalGestionnaire.fullName, method: 'Workload-based' };
       
-    } catch (error) {
+    } catch (error:any ) {
       this.logger.error(`Auto-assignment failed for bordereau ${bordereauId}: ${error.message}`);
       return { success: false, error: error.message };
     }
@@ -1633,7 +1633,7 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
         try {
           await contractService.autoAssignBordereauByContract(id);
           this.logger.log(`Bordereau ${bordereau.reference} auto-assigned to team leader based on contract`);
-        } catch (error) {
+        } catch (error:any) {
           this.logger.error(`Contract-based assignment failed for ${bordereau.reference}: ${error.message}`);
           // Fallback to traditional assignment
           await this.fallbackAssignment(id, bordereau);
@@ -1940,7 +1940,7 @@ async analyzeReclamationsAI(): Promise<any> {
       timeout: 300000
     });
     return data;
-  } catch (error) {
+  } catch (error :any) {
     this.logger.error('AI reclamation analysis failed:', error.message);
     return { recurrent: [], summary: 'Service IA indisponible' };
   }
@@ -1973,7 +1973,7 @@ async getReclamationSuggestions(id: string): Promise<any> {
       timeout: 300000
     });
     return data;
-  } catch (error) {
+  } catch (error : any) {
     this.logger.error('AI suggestion failed:', error.message);
     return { suggestion: 'Service IA indisponible pour les suggestions' };
   }
@@ -2009,7 +2009,7 @@ async getTeamRecommendations(): Promise<any> {
       timeout: 300000
     });
     return data;
-  } catch (error) {
+  } catch (error : any) {
     this.logger.error('AI team recommendations failed:', error.message);
     return { 
       message: 'Service IA indisponible pour les recommandations d\'équipe', 
@@ -2162,7 +2162,7 @@ private async progressWorkflow(bordereauId: string, trigger: string): Promise<vo
       
       this.logger.log(`Workflow progression: ${bordereau.statut} -> ${newStatus} for bordereau ${bordereauId}`);
     }
-  } catch (error) {
+  } catch (error : any) {
     this.logger.error(`Error in workflow progression for ${bordereauId}: ${error.message}`);
   }
 }
@@ -2233,7 +2233,7 @@ private async autoAssignToGestionnaire(bordereauId: string): Promise<void> {
     });
     
     this.logger.log(`Auto-assigned bordereau ${bordereauId} to gestionnaire ${selectedUser.fullName} (workload: ${workloads[0].count})`);
-  } catch (error) {
+  } catch (error : any) {
     this.logger.error(`Error auto-assigning to gestionnaire: ${error.message}`);
   }
 }
@@ -2505,7 +2505,7 @@ async getPredictResourcesAI(payload: any): Promise<any> {
       timeout: 300000
     });
     return data;
-  } catch (error) {
+  } catch (error :any) {
     this.logger.error('AI resource prediction failed:', error.message);
     return { message: 'AI microservice unavailable', error: error.message };
   }
@@ -2563,7 +2563,7 @@ async analyzeComplaintsAI(): Promise<{ message: string; analysis?: any }> {
       }
     };
 
-  } catch (error) {
+  } catch (error : any) {
     this.logger.error('AI complaint analysis failed:', error.message);
     return { 
       message: 'Service IA indisponible pour l\'analyse des réclamations',
@@ -2641,7 +2641,7 @@ async getAIRecommendations(): Promise<{ message: string; recommendations?: any[]
       recommendations
     };
 
-  } catch (error) {
+  } catch (error : any) {
     this.logger.error('AI recommendations failed:', error.message);
     
     // Fallback to basic scoring only if AI service is unavailable
@@ -2780,7 +2780,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
           ai_powered: true
         };
 
-      } catch (aiError) {
+      } catch (aiError: any ) {
         this.logger.warn('AI SLA analysis failed, using fallback:', aiError.message);
         
         // Fallback to basic calculation
@@ -2800,7 +2800,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
 
         return { risks, total_analyzed: bordereaux.length };
       }
-    } catch (error) {
+    } catch (error : any ) {
       return { risks: [], error: error.message };
     }
   }
@@ -2826,7 +2826,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         additional_managers_needed: additionalNeeded,
         utilization_rate: availableManagers > 0 ? (activeBordereaux / (availableManagers * avgProcessingRate)) * 100 : 0
       };
-    } catch (error) {
+    } catch (error : any) {
       return { additional_managers_needed: 0, error: error.message };
     }
   }
@@ -2853,7 +2853,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         }));
 
       return { suggestions, analyzed_managers: managers.length };
-    } catch (error) {
+    } catch (error : any ) {
       return { suggestions: [], error: error.message };
     }
   }
@@ -2930,7 +2930,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
           method: 'isolation_forest'
         };
 
-      } catch (aiError) {
+      } catch (aiError : any ) {
         this.logger.warn('AI anomaly detection failed, using fallback:', aiError.message);
         
         // Fallback to basic anomaly detection
@@ -2952,7 +2952,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
 
         return { anomalies, analyzed_period: '30 days', total_bordereaux: recentBordereaux.length };
       }
-    } catch (error) {
+    } catch (error :any) {
       return { anomalies: [], error: error.message };
     }
   }
@@ -3036,7 +3036,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
             score: aiRecommendation.score
           };
         }
-      } catch (aiError) {
+      } catch (aiError : any ) {
         this.logger.warn('AI routing failed, using fallback:', aiError.message);
       }
 
@@ -3059,7 +3059,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
         reason: `Charge de travail optimale: ${optimalGestionnaire.bordereaux.length} dossiers actifs`,
         confidence: 'medium'
       };
-    } catch (error) {
+    } catch (error :any) {
       return { success: false, error: error.message };
     }
   }
@@ -3141,7 +3141,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
           risk_level: prediction.risk_level
         };
 
-      } catch (aiError) {
+      } catch (aiError : any) {
         this.logger.warn('AI prioritization failed, using fallback:', aiError.message);
         
         // Fallback logic
@@ -3171,7 +3171,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
           daysLeft
         };
       }
-    } catch (error) {
+    } catch (error : any) {
       return { success: false, error: error.message };
     }
   }
@@ -3240,7 +3240,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
           ai_prediction: true
         };
 
-      } catch (aiError) {
+      } catch (aiError : any) {
         this.logger.warn('AI resource prediction failed, using fallback:', aiError.message);
         
         // Fallback calculation
@@ -3280,7 +3280,7 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
           alert_sent: shortage > 0
         };
       }
-    } catch (error) {
+    } catch (error : any) {
       return { success: false, error: error.message };
     }
   }

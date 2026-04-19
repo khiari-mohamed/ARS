@@ -1,6 +1,6 @@
 export class OcrResponseDto {
-  rawText: string;
-  extracted: {
+  rawText!: string;
+  extracted!: {
     reference?: string;
     client?: string;
     date?: string;
@@ -14,7 +14,7 @@ export class OcrResponseDto {
     montant?: number;
     [key: string]: any;
   };
-  ocrAt: string;
-  status: 'SUCCESS' | 'FAILED';
+  ocrAt!: string;
+  status!: 'SUCCESS' | 'FAILED';
   error?: string;
 }

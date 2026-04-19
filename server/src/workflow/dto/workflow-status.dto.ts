@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+/*import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsOptional } from 'class-validator';
 
 export class WorkflowStatusDto {
@@ -15,3 +15,4 @@ export class WorkflowStatusDto {
   @IsOptional()
   notes?: string;
 }
+  */

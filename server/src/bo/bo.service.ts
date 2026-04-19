@@ -242,7 +242,7 @@ export class BOService {
             reference: bordereau.reference
           };
           
-        } catch (error) {
+        } catch (error: any) {
           return {
             index,
             success: false,
@@ -675,7 +675,7 @@ export class BOService {
             fileName: file.originalname
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         results.push({
           success: false,
           error: error.message,

@@ -66,7 +66,7 @@ export class FinanceIntegrationService {
       this.logger.log(`Created virement ${virement.id} for bordereau ${bordereauId}`);
       return virement;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to create virement for bordereau ${bordereauId}: ${error.message}`);
       throw error;
     }
@@ -106,7 +106,7 @@ export class FinanceIntegrationService {
       }
 
       this.logger.log(`Notified finance team for bordereau ${bordereauId}`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Failed to notify finance team: ${error.message}`);
     }
   }
@@ -149,7 +149,7 @@ export class FinanceIntegrationService {
       });
 
       this.logger.log(`Updated bordereau ${virement.bordereauId} status to ${bordereauStatus}`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Failed to update bordereau from virement: ${error.message}`);
     }
   }

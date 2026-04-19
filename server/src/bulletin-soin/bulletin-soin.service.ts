@@ -963,7 +963,7 @@ export class BulletinSoinService {
       const tuniclaimService = new TuniclaimService(this.prisma, outlookService);
       
       await tuniclaimService.pushStatusUpdate(bordereauId, statusData);
-    } catch (error) {
+    } catch (error : any) {
       console.error('Failed to push status to MY TUNICLAIM:', error.message);
     }
   }
@@ -977,7 +977,7 @@ export class BulletinSoinService {
       const tuniclaimService = new TuniclaimService(this.prisma, outlookService);
       
       await tuniclaimService.pushPaymentUpdate(bordereauId, paymentData);
-    } catch (error) {
+    } catch (error : any) {
       console.error('Failed to push payment to MY TUNICLAIM:', error.message);
     }
   }

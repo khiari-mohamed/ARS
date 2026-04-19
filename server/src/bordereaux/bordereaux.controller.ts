@@ -335,7 +335,7 @@ export class BordereauxController {
         bsCreated: results.length,
         results 
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Multiple BS Upload error:', error);
       return { success: false, error: error.message };
     }
@@ -362,7 +362,7 @@ export class BordereauxController {
         updated: results.length,
         results
       };
-    } catch (error) {
+    } catch (error : any) {
       return { success: false, error: error.message };
     }
   }
@@ -1320,6 +1320,9 @@ export class BordereauxController {
       'ASSIGNE': 'En cours',
       'EN_COURS': 'En cours',
       'TRAITE': 'Traité',
+      'PRET_VIREMENT': 'Prêt pour Virement',
+      'VIREMENT_EN_COURS': 'Virement en Cours',
+      'VIREMENT_EXECUTE': 'Virement Exécuté',
       'CLOTURE': 'Traité',
       'EN_DIFFICULTE': 'Rejeté',
       'REJETE': 'Rejeté'

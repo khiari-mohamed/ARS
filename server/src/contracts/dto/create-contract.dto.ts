@@ -4,11 +4,11 @@ import { Type } from 'class-transformer';
 export class CreateContractDto {
   @IsNotEmpty()
   @IsString()
-  clientId: string;
+  clientId!: string;
 
   @IsNotEmpty()
   @IsString()
-  contractNumber: string;
+  contractNumber!: string;
 
   @IsOptional()
   @IsString()
@@ -17,17 +17,17 @@ export class CreateContractDto {
   @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
-  treatmentDelay: number; // SLA Treatment delay
+  treatmentDelay!: number; // SLA Treatment delay
 
   @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
-  claimsReplyDelay: number; // SLA Claims reply delay
+  claimsReplyDelay!: number; // SLA Claims reply delay
 
   @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
-  paymentDelay: number; // SLA Payment delay
+  paymentDelay!: number; // SLA Payment delay
 
   @IsOptional()
   @Type(() => Number)
@@ -45,7 +45,7 @@ export class CreateContractDto {
 
   @IsNotEmpty()
   @IsString()
-  accountOwnerId: string; // Chargé de compte
+  accountOwnerId!: string; // Chargé de compte
 
   @IsOptional()
   @IsString()
@@ -53,11 +53,11 @@ export class CreateContractDto {
 
   @IsNotEmpty()
   @IsDateString()
-  startDate: string;
+  startDate!: string;
 
   @IsNotEmpty()
   @IsDateString()
-  endDate: string;
+  endDate!: string;
 
   @IsOptional()
   @IsObject()

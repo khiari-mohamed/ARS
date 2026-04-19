@@ -16,20 +16,20 @@ export class ClientAnalyticsDto {
 }
 
 export class BulkImportResultDto {
-  success: Array<{ line: number; name: string }>;
-  errors: Array<{ line: number; error: string }>;
-  total: number;
+  success!: Array<{ line: number; name: string }>;
+  errors!: Array<{ line: number; error: string }>;
+  total!: number;
 }
 
 export class CommunicationLogDto {
   @IsString()
-  type: string;
+  type!: string;
 
   @IsString()
-  subject: string;
+  subject!: string;
 
   @IsString()
-  content: string;
+  content!: string;
 
   @IsOptional()
   @IsString()

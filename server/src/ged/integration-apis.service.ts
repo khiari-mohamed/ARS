@@ -218,7 +218,7 @@ export class IntegrationApisService {
       });
 
       return result;
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('Connector sync failed:', error);
       return {
         connectorId,

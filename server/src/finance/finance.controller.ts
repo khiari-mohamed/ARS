@@ -142,7 +142,7 @@ export class FinanceController {
           } : null
         }
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Error fetching client autofill data:', error);
       throw new BadRequestException('Failed to fetch client data: ' + error.message);
     }
@@ -411,7 +411,7 @@ export class FinanceController {
         errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
         message: `${imported} adhérent(s) importé(s) sur ${data.length}. ${skipped} ignoré(s) (dont ${blockedCount} RIB dupliqués).`
       };
-    } catch (error) {
+    } catch (error : any) {
       throw new BadRequestException('Failed to process file: ' + error.message);
     }
   }
@@ -913,7 +913,7 @@ export class FinanceController {
         timestamp: new Date().toISOString()
       };
       
-    } catch (error) {
+    } catch (error : any) {
       console.error('Failed to process statement:', error);
       throw new BadRequestException('Failed to process statement: ' + error.message);
     }
@@ -990,7 +990,7 @@ export class FinanceController {
         timestamp: new Date().toISOString()
       };
       
-    } catch (error) {
+    } catch (error : any) {
       console.error('Failed to resolve exception:', error);
       throw new BadRequestException('Failed to resolve exception: ' + error.message);
     }
@@ -1461,7 +1461,7 @@ export class FinanceController {
         message: 'Statut mis à jour avec succès',
         ordreVirement: updatedOV
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Failed to update OV status:', error);
       throw new BadRequestException('Failed to update status: ' + error.message);
     }
@@ -1606,7 +1606,7 @@ export class FinanceController {
           ordreVirementId: ordreVirement?.id || null
         }
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Failed to upload PDF document:', error);
       throw new BadRequestException('Failed to upload PDF document: ' + error.message);
     }
@@ -1630,7 +1630,7 @@ export class FinanceController {
         message: 'PDF généré et stocké avec succès',
         ordreVirementId: id
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error generating and storing PDF:', error);
       throw new BadRequestException('Failed to generate PDF: ' + error.message);
     }
@@ -1653,7 +1653,7 @@ export class FinanceController {
         message: 'TXT généré et stocké avec succès',
         ordreVirementId: id
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error generating and storing TXT:', error);
       throw new BadRequestException('Failed to generate TXT: ' + error.message);
     }
@@ -1751,7 +1751,7 @@ export class FinanceController {
       
       console.log('❌ Not found in:', pathsToTry);
       throw new BadRequestException(`PDF file not found: ${document.name}`);
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Error viewing OV document PDF:', error);
       res.status(500).json({ error: 'Failed to load PDF', details: error.message });
     }
@@ -1870,7 +1870,7 @@ export class FinanceController {
       
       console.error('❌ ALL PRIORITIES FAILED - No uploaded PDF found for OV:', id);
       throw new BadRequestException('No uploaded PDF found for this OV');
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Error viewing uploaded PDF:', error);
       res.status(500).json({ error: 'Failed to load PDF', details: error.message });
     }
@@ -1916,7 +1916,7 @@ export class FinanceController {
         filePath: relativePath,
         filename: file.originalname
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Failed to upload manual OV PDF:', error);
       throw new BadRequestException('Failed to upload PDF: ' + error.message);
     }

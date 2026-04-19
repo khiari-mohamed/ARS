@@ -2,7 +2,7 @@ import { IsString, IsUUID, IsOptional } from 'class-validator';
 
 export class AssignBordereauDto {
   @IsUUID()
-  bordereauId: string;
+  bordereauId!: string;
 
   @IsOptional()
   @IsString()

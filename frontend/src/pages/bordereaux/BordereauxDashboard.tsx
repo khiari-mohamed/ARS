@@ -328,14 +328,20 @@ const BordereauxDashboard: React.FC = () => {
     };
   };
 
-  // UNIFIED SLA LOGIC - Calculate days elapsed from dateReception (matches script)
+  // ✅ UNIFIED SLA LOGIC WITH FREEZE - Calculate from dateReception, freeze when virement executed
   const calculateSLAStatus = (bordereau: any) => {
     if (!bordereau.dateReception || !bordereau.delaiReglement) return 'UNKNOWN';
     
     const today = new Date();
     const reception = new Date(bordereau.dateReception);
-    const daysElapsed = (today.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24);
     const delai = bordereau.delaiReglement;
+    
+    // ✅ FREEZE LOGIC: Stop calculation when virement is executed
+    const isFrozen = ['VIREMENT_EXECUTE', 'PAYE', 'CLOTURE'].includes(bordereau.statut);
+    const freezeDate = bordereau.dateExecutionVirement || bordereau.dateCloture;
+    
+    const effectiveEndDate = isFrozen && freezeDate ? new Date(freezeDate) : today;
+    const daysElapsed = (effectiveEndDate.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24);
     const percentElapsed = (daysElapsed / delai) * 100;
     
     if (percentElapsed > 100) return 'OVERDUE';  // En retard

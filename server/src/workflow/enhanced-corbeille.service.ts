@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowNotificationsService } from './workflow-notifications.service';
 import { TeamRoutingService } from './team-routing.service';
+import { calculateSLA } from '../utils/sla-calculator';
 
 @Injectable()
 export class EnhancedCorbeilleService {
@@ -58,15 +59,14 @@ export class EnhancedCorbeilleService {
         })
       ]);
 
-      // Calculate SLA status for each item
-      const now = new Date();
+      // Calculate SLA status for each item using centralized calculator
       const processItems = (items: any[]) => items.map(item => {
-        const daysSinceReception = Math.floor((now.getTime() - new Date(item.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+        const slaData = calculateSLA(item);
         const slaLimit = item.delaiReglement || item.contract?.delaiReglement || 30;
-        const remainingTime = Math.max(0, (slaLimit - daysSinceReception) * 24);
+        const remainingTime = Math.max(0, (slaLimit - slaData.daysElapsed) * 24);
 
         let slaStatus: 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL';
-        if (daysSinceReception > slaLimit) slaStatus = 'OVERDUE';
+        if (slaData.percentElapsed > 100) slaStatus = 'OVERDUE';
         else if (remainingTime <= 24) slaStatus = 'CRITICAL';
         else if (remainingTime <= 72) slaStatus = 'AT_RISK';
         else slaStatus = 'ON_TIME';
@@ -77,7 +77,7 @@ export class EnhancedCorbeilleService {
           reference: item.reference,
           clientName: item.client?.name || 'Unknown',
           subject: `${item.nombreBS || 0} BS - ${item.client?.name}`,
-          priority: this.calculatePriority(item, daysSinceReception, slaLimit),
+          priority: this.calculatePriority(item, slaData.daysElapsed, slaLimit),
           status: item.statut,
           createdAt: item.dateReception,
           assignedTo: item.currentHandler?.fullName,
@@ -162,14 +162,13 @@ export class EnhancedCorbeilleService {
         })
       ]);
 
-      const now = new Date();
       const processItems = (items: any[]) => items.map(item => {
-        const daysSinceReception = Math.floor((now.getTime() - new Date(item.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+        const slaData = calculateSLA(item);
         const slaLimit = item.delaiReglement || item.contract?.delaiReglement || 30;
-        const remainingTime = Math.max(0, (slaLimit - daysSinceReception) * 24);
+        const remainingTime = Math.max(0, (slaLimit - slaData.daysElapsed) * 24);
 
         let slaStatus: 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL';
-        if (daysSinceReception > slaLimit) slaStatus = 'OVERDUE';
+        if (slaData.percentElapsed > 100) slaStatus = 'OVERDUE';
         else if (remainingTime <= 24) slaStatus = 'CRITICAL';
         else if (remainingTime <= 72) slaStatus = 'AT_RISK';
         else slaStatus = 'ON_TIME';
@@ -179,7 +178,7 @@ export class EnhancedCorbeilleService {
           reference: item.reference,
           clientName: item.client?.name || 'Unknown',
           subject: `${item.nombreBS || 0} BS - ${item.client?.name}`,
-          priority: this.calculatePriority(item, daysSinceReception, slaLimit),
+          priority: this.calculatePriority(item, slaData.daysElapsed, slaLimit),
           status: item.statut,
           createdAt: item.dateReception,
           slaStatus,

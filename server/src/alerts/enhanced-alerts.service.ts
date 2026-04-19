@@ -14,7 +14,7 @@ interface AlertRule {
 @Injectable()
 export class EnhancedAlertsService {
   private readonly logger = new Logger(EnhancedAlertsService.name);
-  private emailTransporter: nodemailer.Transporter | null;
+  private emailTransporter!: nodemailer.Transporter | null;
 
   private alertRules: AlertRule[] = [
     {

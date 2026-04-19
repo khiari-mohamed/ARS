@@ -42,8 +42,8 @@ export class ManualScanController {
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
   @UseInterceptors(FilesInterceptor('files', 1000, {
     limits: {
-      fileSize: 5 * 1024 * 1024 * 1024, // 5GB per file (matches nginx config)
-      files: 1000 // Max 1000 files
+      fileSize: 50 * 1024 * 1024, // 50MB per file
+      files: 1000 // Max 1000 files (total 50GB per upload)
     },
     fileFilter: (req, file, callback) => {
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];
@@ -98,8 +98,8 @@ export class ManualScanController {
   @Roles(UserRole.SCAN_TEAM, UserRole.SUPER_ADMIN)
   @UseInterceptors(FilesInterceptor('files', 1000, {
     limits: {
-      fileSize: 5 * 1024 * 1024 * 1024, // 5GB per file (matches nginx config)
-      files: 1000 // Max 1000 files
+      fileSize: 50 * 1024 * 1024, // 50MB per file
+      files: 1000 // Max 1000 files (total 50GB per upload)
     },
     fileFilter: (req, file, callback) => {
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff'];

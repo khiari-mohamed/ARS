@@ -27,7 +27,7 @@ export class IntegrationModule implements OnModuleInit {
       } else {
         console.warn('⚠️ SMTP connection failed - email notifications disabled');
       }
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ SMTP initialization error:', error.message);
     }
 

@@ -1,13 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  fetchClients, 
-  createClient, 
-  updateClient, 
-  deleteClient, 
-  exportClientsAdvanced, 
-  fetchAvailableGestionnaires,
-  uploadClientContract,
-  downloadClientContract,
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  fetchClients,
+  createClient,
+  updateClient,
+  deleteClient,
+  exportClientsAdvanced,
   fetchClientSLAStatus,
   updateClientSLAConfig,
   fetchBordereauxByClient,
@@ -37,22 +34,30 @@ const ClientListPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const loadClients = async () => {
     setLoading(true);
     try {
       const filters: any = { name: searchTerm, status: statusFilter };
-      
-      // Filter by assigned clients for CHEF_EQUIPE and GESTIONNAIRE
+
       if (user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE') {
         filters.gestionnaireId = user.id;
       }
-      
+
       const data = await fetchClients(filters);
       setClients(data);
-      if (!selectedClient && data.length > 0) {
-        setSelectedClient(data[0]);
+
+      if (data.length === 0) {
+        setSelectedClient(null);
+        return;
       }
+
+      setSelectedClient((current) => {
+        if (!current) return data[0];
+        return data.find((client: Client) => client.id === current.id) || data[0];
+      });
     } catch (error) {
       notify('Erreur lors du chargement des clients', 'error');
     } finally {
@@ -62,6 +67,7 @@ const ClientListPage: React.FC = () => {
 
   useEffect(() => {
     loadClients();
+    setCurrentPage(1); // Reset to first page when filters change
   }, [searchTerm, statusFilter]);
 
   const handleAddClient = () => {
@@ -76,7 +82,7 @@ const ClientListPage: React.FC = () => {
 
   const handleDeleteClient = async (id: string) => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce client ?')) return;
-    
+
     try {
       await deleteClient(id);
       notify('Client supprimé avec succès', 'success');
@@ -91,7 +97,6 @@ const ClientListPage: React.FC = () => {
 
   const handleSubmitClient = async (data: any) => {
     try {
-      console.log('🔍 Submitting client data:', data);
       if (editingClient) {
         await updateClient(editingClient.id, data);
         notify('Client modifié avec succès', 'success');
@@ -102,41 +107,20 @@ const ClientListPage: React.FC = () => {
       setShowForm(false);
       loadClients();
     } catch (error) {
-      console.error('❌ Error submitting client:', error);
       notify('Erreur lors de la sauvegarde', 'error');
     }
   };
 
-  const handleSelectClient = (client: Client) => {
-    setSelectedClient(client);
-  };
-
-  const handleExport = async (format: 'csv' | 'excel' | 'pdf') => {
-    try {
-      const blob = await exportClientsAdvanced(format, { name: searchTerm, status: statusFilter });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `clients-${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'xlsx' : format}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      notify(`Export ${format.toUpperCase()} réussi`, 'success');
-    } catch (error) {
-      notify('Erreur lors de l\'export', 'error');
-    }
-  };
-
   const filteredClients = clients
-    .filter(client => 
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (statusFilter === 'all' || client.status === statusFilter)
+    .filter(
+      (client) =>
+        client.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (statusFilter === 'all' || client.status === statusFilter)
     )
     .sort((a, b) => {
       const aVal = a[sortBy as keyof Client];
       const bVal = b[sortBy as keyof Client];
-      
+
       let comparison = 0;
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         comparison = aVal.localeCompare(bVal);
@@ -145,22 +129,30 @@ const ClientListPage: React.FC = () => {
       } else {
         comparison = String(aVal).localeCompare(String(bVal));
       }
-      
+
       return sortOrder === 'asc' ? comparison : -comparison;
     });
+
+  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedClients = filteredClients.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    document.querySelector('.client-cards')?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const canManageClients = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'].includes(user?.role || '');
 
   return (
     <div className="client-module">
-      {/* Header */}
       <div className="client-header">
         <div className="client-header-content">
           <h1 className="client-title">📋 Module Client</h1>
           <p className="client-subtitle">Base de données centrale des compagnies d'assurance</p>
         </div>
-        
-        {/* Search and Filters */}
+
         <div className="client-search-bar">
           <div className="search-input-group">
             <input
@@ -178,22 +170,16 @@ const ClientListPage: React.FC = () => {
               <option value="all">Tous les statuts</option>
               <option value="active">Actif</option>
               <option value="inactive">Inactif</option>
+              <option value="suspended">Suspendu</option>
             </select>
           </div>
-          
-          {/* Action Buttons */}
+
           {canManageClients && (
             <div className="action-buttons">
-              <button
-                onClick={handleAddClient}
-                className="btn btn-primary"
-              >
+              <button onClick={handleAddClient} className="btn btn-primary">
                 ➕ Ajouter Client
               </button>
-              <button
-                onClick={() => handleExport('excel')}
-                className="btn btn-secondary"
-              >
+              <button onClick={() => handleExport('excel')} className="btn btn-secondary">
                 📊 Exporter Excel
               </button>
             </div>
@@ -202,7 +188,6 @@ const ClientListPage: React.FC = () => {
       </div>
 
       <div className="client-layout">
-        {/* Client List */}
         <div className="client-list-panel">
           <div className="client-list-header">
             <h3>Liste des Clients ({filteredClients.length})</h3>
@@ -224,7 +209,7 @@ const ClientListPage: React.FC = () => {
               </button>
             </div>
           </div>
-          
+
           {loading ? (
             <div className="loading-state">
               <div className="spinner"></div>
@@ -232,67 +217,104 @@ const ClientListPage: React.FC = () => {
             </div>
           ) : (
             <div className="client-cards">
-              {filteredClients.map(client => (
-                <div
-                  key={client.id}
-                  className={`client-card ${selectedClient?.id === client.id ? 'selected' : ''}`}
-                  onClick={() => handleSelectClient(client)}
-                >
-                  <div className="client-card-header">
-                    <h4 className="client-name">{client.name}</h4>
-                    <span className={`status-badge ${client.status || 'active'}`}>
-                      {client.status === 'active' ? 'Actif' : client.status === 'inactive' ? 'Inactif' : 'Suspendu'}
-                    </span>
-                  </div>
-                  
-                  <div className="client-card-info">
-                    <div className="info-item">
-                      <span className="label">Chargé de Compte:</span>
-                      <span className="value">{client.gestionnaires?.[0]?.fullName || 'Non assigné'}</span>
-                    </div>
-                    <div className="info-row">
-                      <div className="info-item">
-                        <span className="label">Délai Règlement:</span>
-                        <span className="value">{client.reglementDelay}j</span>
+              {paginatedClients.map((client) => {
+                const contractCount = client.contracts?.length || 0;
+                const bordereauCount = client.bordereaux?.length || 0;
+                const reclamationCount = client.reclamations?.length || 0;
+
+                return (
+                  <div
+                    key={client.id}
+                    className={`client-card ${selectedClient?.id === client.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedClient(client)}
+                  >
+                    <div className="client-card-header">
+                      <div>
+                        <h4 className="client-name">{client.name}</h4>
+                        <p className="client-card-company">
+                          {client.compagnieAssurance?.nom || 'Compagnie non renseignée'}
+                        </p>
                       </div>
+                      <span className={`status-badge ${client.status || 'active'}`}>
+                        {getStatusLabel(client.status)}
+                      </span>
+                    </div>
+
+                    <div className="client-card-info">
                       <div className="info-item">
-                        <span className="label">Délai Réclamation:</span>
-                        <span className="value">{client.reclamationDelay}h</span>
+                        <span className="label">Chef d'équipe:</span>
+                        <span className="value">{client.chargeCompte?.fullName || 'Non assigné'}</span>
+                      </div>
+                      <div className="info-row">
+                        <div className="info-item">
+                          <span className="label">Règlement:</span>
+                          <span className="value">{client.reglementDelay}j</span>
+                        </div>
+                        <div className="info-item">
+                          <span className="label">Réclamation:</span>
+                          <span className="value">{client.reclamationDelay}h</span>
+                        </div>
+                      </div>
+                      <div className="client-card-metrics">
+                        <span>{contractCount} contrat{contractCount > 1 ? 's' : ''}</span>
+                        <span>{bordereauCount} bordereau{bordereauCount > 1 ? 'x' : ''}</span>
+                        <span>{reclamationCount} réclamation{reclamationCount > 1 ? 's' : ''}</span>
                       </div>
                     </div>
+
+                    {canManageClients && (
+                      <div className="client-card-actions">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClient(client);
+                          }}
+                          className="btn-icon btn-edit"
+                          title="Modifier"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClient(client.id);
+                          }}
+                          className="btn-icon btn-delete"
+                          title="Supprimer"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  
-                  {canManageClients && (
-                    <div className="client-card-actions">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditClient(client);
-                        }}
-                        className="btn-icon btn-edit"
-                        title="Modifier"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClient(client.id);
-                        }}
-                        className="btn-icon btn-delete"
-                        title="Supprimer"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
+            </div>
+          )}
+
+          {filteredClients.length > itemsPerPage && (
+            <div className="pagination">
+              <button
+                className="pagination-btn"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                ← Précédent
+              </button>
+              <div className="pagination-info">
+                Page {currentPage} sur {totalPages} ({startIndex + 1}-{Math.min(endIndex, filteredClients.length)} sur {filteredClients.length})
+              </div>
+              <button
+                className="pagination-btn"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                Suivant →
+              </button>
             </div>
           )}
         </div>
 
-        {/* Client Details */}
         <div className="client-detail-panel">
           {selectedClient ? (
             <ClientDetailViewFixed client={selectedClient} onUpdate={loadClients} />
@@ -308,7 +330,6 @@ const ClientListPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Client Form Modal */}
       {showForm && (
         <ClientFormModal
           client={editingClient}
@@ -318,165 +339,126 @@ const ClientListPage: React.FC = () => {
       )}
     </div>
   );
+
+ async function handleExport(format: 'csv' | 'excel' | 'pdf') {
+  if (format !== 'excel') {
+    // Keep existing CSV / PDF paths unchanged
+    try {
+      const blob = await exportClientsAdvanced(format, { name: searchTerm, status: statusFilter });
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `clients-${new Date().toISOString().split('T')[0]}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      notify(`Export ${format.toUpperCase()} réussi`, 'success');
+    } catch {
+      notify("Erreur lors de l'export", 'error');
+    }
+    return;
+  }
+ 
+  // ── Excel path ──────────────────────────────────────────────────────────────
+  notify('Génération du rapport Excel en cours…', 'info');
+  try {
+    const blob = await exportClientsAdvanced('excel', {
+      name:   searchTerm,
+      status: statusFilter !== 'all' ? statusFilter : undefined,
+    });
+ 
+    const url      = window.URL.createObjectURL(blob);
+    const a        = document.createElement('a');
+    a.href         = url;
+    a.download     = `clients_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+ 
+    notify('✅ Rapport Excel généré avec succès (4 feuilles)', 'success');
+  } catch (error) {
+    console.error('Excel export error:', error);
+    notify("❌ Erreur lors de la génération du rapport Excel", 'error');
+  }
+}
 };
 
-// Fixed Client Detail View Component with inline styles
 const ClientDetailViewFixed: React.FC<{ client: Client; onUpdate: () => void }> = ({ client, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const { notify } = useNotification();
 
-  return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Client Header */}
-      <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.name}</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: client.status === 'active' ? '#10b981' : '#ef4444' }}></span>
-              <span style={{ fontSize: '0.875rem', color: '#6b7280', fontFamily: 'monospace' }}>ID: {client.id.slice(0, 8)}</span>
-            </div>
-          </div>
-          
-          <div style={{ display: 'flex', gap: '24px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.bordereaux?.length || 0}</span>
-              <span style={{ display: 'block', fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>Bordereaux</span>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.reclamations?.length || 0}</span>
-              <span style={{ display: 'block', fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>Réclamations</span>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '700', color: '#1f2937' }}>{client.contracts?.length || 0}</span>
-              <span style={{ display: 'block', fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>Contrats</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Fixed Tabs */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', backgroundColor: '#f8fafc', flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
-          {[
-            { id: 'overview', label: '📋 Aperçu' },
-            { id: 'contracts', label: '📑 Contrats' },
-            { id: 'sla', label: '⏱️ Paramètres SLA' },
-            { id: 'bordereaux', label: '📄 Bordereaux' },
-            { id: 'reclamations', label: '📞 Réclamations' },
-            { id: 'analytics', label: '📊 Analytics' },
-            { id: 'history', label: '📚 Historique' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '8px 16px',
-                border: activeTab === tab.id ? '2px solid #3b82f6' : '1px solid #d1d5db',
-                background: activeTab === tab.id ? '#eff6ff' : '#ffffff',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                color: activeTab === tab.id ? '#1e40af' : '#374151',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s'
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tab Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
-        {activeTab === 'overview' && <ClientOverviewTab client={client} />}
-        {activeTab === 'contracts' && <ClientContractsTab client={client} />}
-        {activeTab === 'sla' && <ClientSLATab client={client} onUpdate={onUpdate} />}
-        {activeTab === 'bordereaux' && <ClientBordereauxTab client={client} />}
-        {activeTab === 'reclamations' && <ClientReclamationsTab client={client} />}
-        {activeTab === 'analytics' && <ClientAnalyticsTab client={client} />}
-        {activeTab === 'history' && <ClientHistoryTab client={client} />}
-      </div>
-    </div>
+  const dashboardStats = useMemo(
+    () => [
+      { label: 'Bordereaux', value: client.bordereaux?.length || 0 },
+      { label: 'Réclamations', value: client.reclamations?.length || 0 },
+      { label: 'Contrats', value: client.contracts?.length || 0 },
+      { label: 'Adhérents', value: (client as any).adherents?.length || 0 }
+    ],
+    [client]
   );
-};
-
-// Original Client Detail View Component
-const ClientDetailView: React.FC<{ client: Client; onUpdate: () => void }> = ({ client, onUpdate }) => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const { notify } = useNotification();
 
   const tabs = [
-    { id: 'overview', label: '📋 Aperçu', icon: '📋' },
-    { id: 'contracts', label: '📑 Contrats', icon: '📑' },
-    { id: 'sla', label: '⏱️ Paramètres SLA', icon: '⏱️' },
-    { id: 'bordereaux', label: '📄 Bordereaux', icon: '📄' },
-    { id: 'reclamations', label: '📞 Réclamations', icon: '📞' },
-    { id: 'analytics', label: '📊 Analytics', icon: '📊' },
-    { id: 'history', label: '📚 Historique', icon: '📚' }
+    { id: 'overview', label: 'Aperçu', icon: '📋', description: 'Identité, contacts, référents et indicateurs' },
+    { id: 'operations', label: 'Opérations', icon: '📑', description: 'Contrats et bordereaux regroupés' },
+    { id: 'service', label: 'Service & SLA', icon: '⏱️', description: 'SLA et réclamations dans un seul espace' },
+    { id: 'analytics', label: 'Analytics', icon: '📊', description: 'Performance, risques et historique' }
   ];
 
   return (
-    <div className="client-detail">
-      {/* Client Header */}
-      <div className="client-detail-header">
-        <div className="client-info">
-          <h2 className="client-detail-name">{client.name}</h2>
-          <div className="client-meta">
-            <span className={`status-indicator ${client.status || 'active'}`}></span>
-            <span className="client-id">ID: {client.id.slice(0, 8)}</span>
+    <div className="client-workspace">
+      <div className="client-workspace-header">
+        <div className="client-hero">
+          <div className="client-hero-main">
+            <div className="client-hero-status">
+              <span className={`status-dot ${client.status || 'active'}`}></span>
+              <span className="client-hero-status-text">{getStatusLabel(client.status)}</span>
+            </div>
+            <h2 className="client-hero-title">{client.name}</h2>
+            <div className="client-hero-meta">
+              <span className="client-hero-id">ID: {client.id.slice(0, 8)}</span>
+              <span>{client.compagnieAssurance?.nom || 'Compagnie non renseignée'}</span>
+              <span>{getModeRecuperationLabel((client as any).modeRecuperation)}</span>
+            </div>
           </div>
-        </div>
-        
-        <div className="client-stats">
-          <div className="stat-item">
-            <span className="stat-value">{client.bordereaux?.length || 0}</span>
-            <span className="stat-label">Bordereaux</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-value">{client.reclamations?.length || 0}</span>
-            <span className="stat-label">Réclamations</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-value">{client.contracts?.length || 0}</span>
-            <span className="stat-label">Contrats</span>
-          </div>
-        </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="client-tabs">
-        <div className="tab-list">
-          {tabs.map(tab => (
+          <div className="client-hero-stats">
+            {dashboardStats.map((stat) => (
+              <div key={stat.label} className="client-hero-stat">
+                <span className="client-hero-stat-value">{stat.value}</span>
+                <span className="client-hero-stat-label">{stat.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="client-section-tabs">
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+              className={`client-section-tab ${activeTab === tab.id ? 'active' : ''}`}
             >
-              <span className="tab-icon">{tab.icon}</span>
-              <span className="tab-label">{tab.label}</span>
+              <span className="client-section-tab-icon">{tab.icon}</span>
+              <span className="client-section-tab-content">
+                <span className="client-section-tab-label">{tab.label}</span>
+                <span className="client-section-tab-description">{tab.description}</span>
+              </span>
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="tab-content">
-          {activeTab === 'overview' && <ClientOverviewTab client={client} />}
-          {activeTab === 'contracts' && <ClientContractsTab client={client} />}
-          {activeTab === 'sla' && <ClientSLATab client={client} onUpdate={onUpdate} />}
-          {activeTab === 'bordereaux' && <ClientBordereauxTab client={client} />}
-          {activeTab === 'reclamations' && <ClientReclamationsTab client={client} />}
-          {activeTab === 'analytics' && <ClientAnalyticsTab client={client} />}
-          {activeTab === 'history' && <ClientHistoryTab client={client} />}
-        </div>
+      <div className="client-workspace-body">
+        {activeTab === 'overview' && <ClientOverviewTab client={client} />}
+        {activeTab === 'operations' && <ClientOperationsTab client={client} />}
+        {activeTab === 'service' && <ClientServiceTab client={client} onUpdate={onUpdate} />}
+        {activeTab === 'analytics' && <ClientAnalyticsHubTab client={client} />}
       </div>
     </div>
   );
 };
 
-// Tab Components (simplified for now - will be implemented separately)
-// Payment Stats Component
 const PaymentStatsCard: React.FC<{ client: Client }> = ({ client }) => {
   const [paymentStats, setPaymentStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -492,6 +474,7 @@ const PaymentStatsCard: React.FC<{ client: Client }> = ({ client }) => {
         setLoading(false);
       }
     };
+
     loadPaymentStats();
   }, [client.id]);
 
@@ -508,63 +491,55 @@ const PaymentStatsCard: React.FC<{ client: Client }> = ({ client }) => {
     <>
       {paymentStats?.paymentStats && (
         <div className="info-card">
-          <h4>📊 Statistiques de Paiement (Module Finance)</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginTop: '12px' }}>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#f0f9ff', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#10b981' }}>
-                {paymentStats.paymentStats.paidOnTime}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Payés dans les délais</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#fef2f2', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ef4444' }}>
-                {paymentStats.paymentStats.paidLate}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Payés en retard</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#f9fafb', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>
-                {paymentStats.paymentStats.totalPaid}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Total sinistres payés</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#eff6ff', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>
-                {paymentStats.paymentStats.onTimeRate.toFixed(1)}%
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Taux de ponctualité</div>
-            </div>
+          <h4>📊 Statistiques de Paiement</h4>
+          <div className="mini-stats-grid">
+            <StatMiniCard
+              value={paymentStats.paymentStats.paidOnTime}
+              label="Payés dans les délais"
+              tone="success"
+            />
+            <StatMiniCard
+              value={paymentStats.paymentStats.paidLate}
+              label="Payés en retard"
+              tone="danger"
+            />
+            <StatMiniCard
+              value={paymentStats.paymentStats.totalPaid}
+              label="Total sinistres payés"
+              tone="neutral"
+            />
+            <StatMiniCard
+              value={`${paymentStats.paymentStats.onTimeRate.toFixed(1)}%`}
+              label="Taux de ponctualité"
+              tone="info"
+            />
           </div>
         </div>
       )}
       {paymentStats?.reclamationTimingStats && (
         <div className="info-card">
           <h4>📞 Statistiques de Réclamations</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginTop: '12px' }}>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#f0f9ff', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#10b981' }}>
-                {paymentStats.reclamationTimingStats.handledOnTime}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Traitées dans les délais</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#fef2f2', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ef4444' }}>
-                {paymentStats.reclamationTimingStats.handledLate}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Traitées en retard</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#f9fafb', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#1f2937' }}>
-                {paymentStats.reclamationTimingStats.totalHandled}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Total réclamations traitées</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '8px', background: '#eff6ff', borderRadius: '6px' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#3b82f6' }}>
-                {paymentStats.reclamationTimingStats.onTimeRate.toFixed(1)}%
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Taux de ponctualité</div>
-            </div>
+          <div className="mini-stats-grid">
+            <StatMiniCard
+              value={paymentStats.reclamationTimingStats.handledOnTime}
+              label="Traitées dans les délais"
+              tone="success"
+            />
+            <StatMiniCard
+              value={paymentStats.reclamationTimingStats.handledLate}
+              label="Traitées en retard"
+              tone="danger"
+            />
+            <StatMiniCard
+              value={paymentStats.reclamationTimingStats.totalHandled}
+              label="Total traitées"
+              tone="neutral"
+            />
+            <StatMiniCard
+              value={`${paymentStats.reclamationTimingStats.onTimeRate.toFixed(1)}%`}
+              label="Taux de ponctualité"
+              tone="info"
+            />
           </div>
         </div>
       )}
@@ -573,192 +548,280 @@ const PaymentStatsCard: React.FC<{ client: Client }> = ({ client }) => {
 };
 
 const ClientOverviewTab: React.FC<{ client: Client }> = ({ client }) => {
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'active': return 'Actif';
-      case 'inactive': return 'Inactif';
-      case 'suspended': return 'Suspendu';
-      default: return status;
-    }
-  };
+  const [bordereaux, setBordereaux] = useState<any[]>([]);
+  const [loadingBordereaux, setLoadingBordereaux] = useState(true);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#10b981';
-      case 'inactive': return '#ef4444';
-      case 'suspended': return '#f59e0b';
-      default: return '#6b7280';
-    }
-  };
+  useEffect(() => {
+    const loadBordereaux = async () => {
+      try {
+        const data = await fetchBordereauxByClient(client.id);
+        setBordereaux(data);
+      } catch (error) {
+        console.error('Error loading bordereaux:', error);
+      } finally {
+        setLoadingBordereaux(false);
+      }
+    };
+
+    loadBordereaux();
+  }, [client.id]);
 
   return (
-    <div className="tab-panel">
-      <h3>Informations Générales</h3>
-      <div className="info-grid">
+    <div className="client-dashboard-grid">
+      <div className="client-dashboard-main">
         <div className="info-card">
           <h4>Coordonnées</h4>
-          <p><strong>Nom:</strong> {client.name}</p>
-          <p><strong>Email:</strong> {client.email || 'Non renseigné'}</p>
-          <p><strong>Téléphone:</strong> {client.phone || 'Non renseigné'}</p>
-          <p><strong>Adresse:</strong> {client.address || 'Non renseignée'}</p>
-          <p>
-            <strong>Statut:</strong> 
-            <span style={{ color: getStatusColor(client.status), marginLeft: '8px' }}>
-              • {getStatusLabel(client.status)}
-            </span>
-          </p>
+          <div className="details-list">
+            <DetailRow label="Nom" value={client.name} />
+            <DetailRow label="Compagnie d'Assurance" value={client.compagnieAssurance?.nom || 'Non renseignée'} />
+            <DetailRow label="Email" value={client.email || 'Non renseigné'} />
+            <DetailRow label="Téléphone" value={client.phone || 'Non renseigné'} />
+            <DetailRow label="Adresse" value={client.address || 'Non renseignée'} />
+            <DetailRow label="Statut" value={getStatusLabel(client.status)} accent={getStatusColor(client.status)} />
+          </div>
         </div>
+
         <div className="info-card">
           <h4>Paramètres Contractuels</h4>
-          <p><strong>Délai Règlement:</strong> {client.reglementDelay} jours</p>
-          <p><strong>Délai Réclamation:</strong> {client.reclamationDelay} heures</p>
-          <p><strong>Créé le:</strong> {new Date(client.createdAt).toLocaleDateString('fr-FR')}</p>
-          <p><strong>Modifié le:</strong> {new Date(client.updatedAt).toLocaleDateString('fr-FR')}</p>
+          <div className="details-list">
+            <DetailRow label="Délai Règlement" value={`${client.reglementDelay} jours`} />
+            <DetailRow label="Délai Réclamation" value={`${client.reclamationDelay} heures`} />
+            <DetailRow
+              label="Mode de Récupération"
+              value={getModeRecuperationLabel((client as any).modeRecuperation)}
+              accent={getModeRecuperationColor((client as any).modeRecuperation)}
+            />
+            <DetailRow label="Créé le" value={new Date(client.createdAt).toLocaleDateString('fr-FR')} />
+            <DetailRow label="Modifié le" value={new Date(client.updatedAt).toLocaleDateString('fr-FR')} />
+          </div>
         </div>
+      </div>
+
+      <div className="client-dashboard-side">
         <div className="info-card">
           <h4>Référents</h4>
-          <p><strong>Gestionnaires assignés:</strong></p>
-          {client.gestionnaires && client.gestionnaires.length > 0 ? (
-            client.gestionnaires.map(g => (
-              <div key={g.id} className="gestionnaire-item">
-                <p>• {g.fullName}</p>
-                {g.email && <p style={{ fontSize: '0.875rem', color: '#6b7280', marginLeft: '12px' }}>{g.email}</p>}
+          <div className="reference-block">
+            <p className="reference-title">Chef d'Équipe / Chargé de Compte</p>
+            {client.chargeCompte ? (
+              <UserReferenceCard user={client.chargeCompte} />
+            ) : (
+              <p className="empty-inline">Aucun chef d'équipe assigné</p>
+            )}
+          </div>
+
+          <div className="reference-block">
+            <p className="reference-title">
+              Gestionnaires Supplémentaires ({client.gestionnaires?.length || 0})
+            </p>
+            {client.gestionnaires && client.gestionnaires.length > 0 ? (
+              <div className="reference-list">
+                {client.gestionnaires.map((gestionnaire) => (
+                  <UserReferenceCard key={gestionnaire.id} user={gestionnaire} />
+                ))}
               </div>
-            ))
-          ) : (
-            <p style={{ color: '#ef4444' }}>Aucun gestionnaire assigné</p>
-          )}
+            ) : (
+              <p className="empty-inline">Aucun gestionnaire supplémentaire</p>
+            )}
+          </div>
         </div>
+
         <div className="info-card">
-          <h4>Statistiques</h4>
-          <p><strong>Bordereaux:</strong> {client.bordereaux?.length || 0}</p>
-          <p><strong>Contrats:</strong> {client.contracts?.length || 0}</p>
-          <p><strong>Réclamations:</strong> {client.reclamations?.length || 0}</p>
+          <h4>Volumes</h4>
+          <div className="mini-stats-grid">
+            <StatMiniCard value={client.bordereaux?.length || 0} label="Bordereaux" tone="info" />
+            <StatMiniCard value={client.contracts?.length || 0} label="Contrats" tone="neutral" />
+            <StatMiniCard value={client.reclamations?.length || 0} label="Réclamations" tone="warning" />
+            <StatMiniCard value={(client as any).adherents?.length || 0} label="Adhérents" tone="success" />
+          </div>
         </div>
+
         <PaymentStatsCard client={client} />
+
+        {/* Bordereaux Summary */}
+        {loadingBordereaux ? (
+          <div className="info-card">
+            <h4>📄 Bordereaux Récents</h4>
+            <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Chargement...</p>
+          </div>
+        ) : bordereaux.length > 0 ? (
+          <div className="info-card">
+            <h4>📄 Bordereaux Récents ({bordereaux.length})</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+              {bordereaux.slice(0, 3).map((bordereau) => {
+                const documentsCount = bordereau.documents?.length || 0;
+                const documentsByType: { [key: string]: number } = {};
+
+                if (bordereau.documents && bordereau.documents.length > 0) {
+                  bordereau.documents.forEach((doc: any) => {
+                    const type = doc.type || 'Non spécifié';
+                    documentsByType[type] = (documentsByType[type] || 0) + 1;
+                  });
+                }
+
+                return (
+                  <div
+                    key={bordereau.id}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '12px',
+                      border: '1px solid #e2e8f0',
+                      background: 'linear-gradient(180deg, #ffffff, #f8fafc)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <strong style={{ color: '#0f172a', fontSize: '0.9rem' }}>{bordereau.reference}</strong>
+                      <span
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '999px',
+                          backgroundColor: getStatusColorForBordereau(bordereau.statut),
+                          color: '#fff',
+                          fontSize: '0.7rem',
+                          fontWeight: '700'
+                        }}
+                      >
+                        {getStatusLabelForBordereau(bordereau.statut)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '8px' }}>
+                      <div>Client: <strong>{client.name}</strong></div>
+                      <div>Documents: <strong>{documentsCount}</strong> | BS: <strong>{bordereau.nombreBS || 0}</strong></div>
+                    </div>
+                    {documentsCount > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+                        {Object.entries(documentsByType).map(([type, count]) => (
+                          <span
+                            key={type}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '999px',
+                              backgroundColor: getDocumentTypeColor(type),
+                              color: '#fff',
+                              fontSize: '0.65rem',
+                              fontWeight: '700'
+                            }}
+                          >
+                            {getDocumentTypeLabel(type)}: {count}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {bordereaux.length > 3 && (
+              <p style={{ marginTop: '12px', fontSize: '0.8rem', color: '#64748b', textAlign: 'center' }}>
+                +{bordereaux.length - 3} autre{bordereaux.length - 3 > 1 ? 's' : ''} bordereau{bordereaux.length - 3 > 1 ? 'x' : ''}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="info-card">
+            <h4>📄 Bordereaux</h4>
+            <p style={{ color: '#64748b', fontSize: '0.875rem' }}>Aucun bordereau pour ce client</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
+const ClientOperationsTab: React.FC<{ client: Client }> = ({ client }) => {
+  return (
+    <div className="stacked-panels">
+      <ClientContractsTab client={client} />
+      <ClientBordereauxTab client={client} />
+    </div>
+  );
+};
+
+const ClientServiceTab: React.FC<{ client: Client; onUpdate: () => void }> = ({ client, onUpdate }) => {
+  return (
+    <div className="stacked-panels">
+      <ClientSLATab client={client} onUpdate={onUpdate} />
+      <ClientReclamationsTab client={client} />
+    </div>
+  );
+};
+
+const ClientAnalyticsHubTab: React.FC<{ client: Client }> = ({ client }) => {
+  return (
+    <div className="stacked-panels">
+      <ClientAnalyticsTab client={client} />
+      <ClientHistoryTab client={client} />
+    </div>
+  );
+};
+
 const ClientContractsTab: React.FC<{ client: Client }> = ({ client }) => {
-  const [uploadingContract, setUploadingContract] = useState(false);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { notify } = useNotification();
+  const [contracts, setContracts] = useState<any[]>([]);
 
   useEffect(() => {
-    const loadDocuments = async () => {
+    const loadContracts = async () => {
       try {
-        const { data } = await LocalAPI.get(`/clients/${client.id}/documents`);
-        setDocuments(data);
+        const { data } = await LocalAPI.get(`/contracts?clientId=${client.id}`);
+        setContracts(data);
       } catch (error) {
-        console.error('Error loading documents:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error loading contracts:', error);
       }
     };
-    loadDocuments();
+
+    loadContracts();
   }, [client.id]);
 
-  const handleContractUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== 'application/pdf') {
-      notify('Seuls les fichiers PDF sont autorisés', 'error');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      notify('La taille du fichier ne doit pas dépasser 10MB', 'error');
-      return;
-    }
-
-    setUploadingContract(true);
-    try {
-      const result = await uploadClientContract(client.id, file);
-      notify('Contrat uploadé avec succès', 'success');
-      // Add new document to list
-      setDocuments(prev => [result, ...prev]);
-      // Reset file input
-      event.target.value = '';
-    } catch (error) {
-      notify('Erreur lors de l\'upload du contrat', 'error');
-    } finally {
-      setUploadingContract(false);
-    }
-  };
-
-  const handleContractDownload = async (documentId: string, fileName: string) => {
-    try {
-      const blob = await downloadClientContract(documentId);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      notify('Erreur lors du téléchargement', 'error');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="tab-panel">
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Chargement des contrats...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="tab-panel">
+    <div className="tab-panel section-panel">
       <div className="tab-header">
-        <h3>Contrats Numériques ({documents.length})</h3>
-        <div className="tab-actions">
-          <label className="btn btn-primary" style={{ cursor: 'pointer' }}>
-            {uploadingContract ? '🔄 Upload...' : '📁 Ajouter Contrat'}
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={handleContractUpload}
-              disabled={uploadingContract}
-              style={{ display: 'none' }}
-            />
-          </label>
-        </div>
+        <h3>Contrats ({contracts.length})</h3>
+        <p className="section-description">Vue consolidée des contrats liés au client.</p>
       </div>
-      
+
       <div className="contracts-list">
-        {documents.length > 0 ? (
-          documents.map(document => (
-            <div key={document.id} className="contract-item">
-              <div className="contract-info">
-                <h4>{document.name}</h4>
-                <p><strong>Uploadé le:</strong> {new Date(document.uploadedAt).toLocaleDateString('fr-FR')}</p>
-                <p><strong>Type:</strong> {document.type}</p>
-                <p><strong>Taille:</strong> Document PDF</p>
-              </div>
-              <div className="contract-actions">
-                <button 
-                  className="btn btn-secondary"
-                  onClick={() => handleContractDownload(document.id, document.name)}
-                >
-                  📄 Télécharger
-                </button>
-              </div>
-            </div>
-          ))
+        {contracts.length > 0 ? (
+          <div className="data-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Numéro</th>
+                  <th>Chef d'équipe</th>
+                  <th>Période</th>
+                  <th>SLA</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contracts.map((contract) => {
+                  const now = new Date();
+                  const endDate = new Date(contract.endDate);
+                  const isActive = endDate >= now;
+                  const statusLabel = isActive ? 'Actif' : 'Expiré';
+
+                  return (
+                    <tr key={contract.id}>
+                      <td>{contract.clientName || contract.codeAssure || contract.id.substring(0, 8)}</td>
+                      <td>{contract.teamLeader?.fullName || 'N/A'}</td>
+                      <td>
+                        {new Date(contract.startDate).toLocaleDateString('fr-FR')} -{' '}
+                        {new Date(contract.endDate).toLocaleDateString('fr-FR')}
+                      </td>
+                      <td>
+                        <div>R:{contract.delaiReglement}j</div>
+                        <div>C:{contract.delaiReclamation}j</div>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${isActive ? 'success' : 'danger'}`}>{statusLabel}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="empty-state">
             <p>Aucun contrat disponible</p>
-            <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Uploadez le premier contrat pour ce client</p>
+            <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Les contrats apparaîtront ici une fois créés</p>
           </div>
         )}
       </div>
@@ -782,6 +845,7 @@ const ClientSLATab: React.FC<{ client: Client; onUpdate: () => void }> = ({ clie
         console.error('Error loading SLA status:', error);
       }
     };
+
     loadSLAStatus();
   }, [client.id]);
 
@@ -799,19 +863,13 @@ const ClientSLATab: React.FC<{ client: Client; onUpdate: () => void }> = ({ clie
     }
   };
 
-  const getSLAStatusColor = (status: string) => {
-    switch (status) {
-      case 'healthy': return '#10b981';
-      case 'breach': return '#ef4444';
-      case 'warning': return '#f59e0b';
-      default: return '#6b7280';
-    }
-  };
-
   return (
-    <div className="tab-panel">
+    <div className="tab-panel section-panel">
       <div className="tab-header">
-        <h3>Paramètres SLA</h3>
+        <div>
+          <h3>Paramètres SLA</h3>
+          <p className="section-description">Configuration et suivi contractuel du service.</p>
+        </div>
         <div className="tab-actions">
           {!editing ? (
             <button className="btn btn-primary" onClick={() => setEditing(true)}>
@@ -833,34 +891,46 @@ const ClientSLATab: React.FC<{ client: Client; onUpdate: () => void }> = ({ clie
       {slaStatus && (
         <div className="sla-status-card">
           <h4>Statut SLA Actuel</h4>
-          <p className="status-indicator" style={{ color: getSLAStatusColor(slaStatus.status) }}>
-            • {slaStatus.status === 'healthy' ? 'Conforme' : slaStatus.status === 'breach' ? 'En dépassement' : 'Attention'}
-          </p>
+          <div className="sla-health-row">
+            <span className={`status-pill ${mapSlaStatusTone(slaStatus.status)}`}>
+              {slaStatus.status === 'healthy'
+                ? 'Conforme'
+                : slaStatus.status === 'breach'
+                  ? 'En dépassement'
+                  : 'Attention'}
+            </span>
+            {slaStatus.avgSLA !== undefined && slaStatus.avgSLA !== null && (
+              <span>SLA moyen: {slaStatus.avgSLA.toFixed(1)} jours</span>
+            )}
+          </div>
           {slaStatus.reason && <p><strong>Raison:</strong> {slaStatus.reason}</p>}
-          {slaStatus.avgSLA && <p><strong>SLA Moyen:</strong> {slaStatus.avgSLA.toFixed(1)} jours</p>}
         </div>
       )}
-      
+
       <div className="sla-config">
         <div className="sla-item">
           <label>Délai de Règlement (jours)</label>
-          <input 
-            type="number" 
-            value={slaConfig.reglementDelay || client.reglementDelay} 
-            onChange={(e) => setSlaConfig({ ...slaConfig, reglementDelay: parseInt(e.target.value) || 0 })}
+          <input
+            type="number"
+            value={(slaConfig as any).reglementDelay || client.reglementDelay}
+            onChange={(e) =>
+              setSlaConfig({ ...(slaConfig as any), reglementDelay: parseInt(e.target.value) || 0 })
+            }
             disabled={!editing}
             min="1"
             max="365"
           />
           <small>Délai contractuel de base</small>
         </div>
-        
+
         <div className="sla-item">
           <label>Délai de Réclamation (heures)</label>
-          <input 
-            type="number" 
-            value={slaConfig.reclamationDelay || client.reclamationDelay} 
-            onChange={(e) => setSlaConfig({ ...slaConfig, reclamationDelay: parseInt(e.target.value) || 0 })}
+          <input
+            type="number"
+            value={(slaConfig as any).reclamationDelay || client.reclamationDelay}
+            onChange={(e) =>
+              setSlaConfig({ ...(slaConfig as any), reclamationDelay: parseInt(e.target.value) || 0 })
+            }
             disabled={!editing}
             min="1"
             max="720"
@@ -870,10 +940,12 @@ const ClientSLATab: React.FC<{ client: Client; onUpdate: () => void }> = ({ clie
 
         <div className="sla-item">
           <label>Seuil d'Alerte SLA (jours)</label>
-          <input 
-            type="number" 
-            value={slaConfig.slaThreshold || client.reglementDelay}
-            onChange={(e) => setSlaConfig({ ...slaConfig, slaThreshold: parseInt(e.target.value) || 0 })}
+          <input
+            type="number"
+            value={(slaConfig as any).slaThreshold || client.reglementDelay}
+            onChange={(e) =>
+              setSlaConfig({ ...(slaConfig as any), slaThreshold: parseInt(e.target.value) || 0 })
+            }
             disabled={!editing}
             min="1"
             max="365"
@@ -883,10 +955,12 @@ const ClientSLATab: React.FC<{ client: Client; onUpdate: () => void }> = ({ clie
 
         <div className="sla-item">
           <label>Seuil d'Escalade (jours)</label>
-          <input 
-            type="number" 
-            value={slaConfig.escalationThreshold || (client.reglementDelay + 5)}
-            onChange={(e) => setSlaConfig({ ...slaConfig, escalationThreshold: parseInt(e.target.value) || 0 })}
+          <input
+            type="number"
+            value={(slaConfig as any).escalationThreshold || client.reglementDelay + 5}
+            onChange={(e) =>
+              setSlaConfig({ ...(slaConfig as any), escalationThreshold: parseInt(e.target.value) || 0 })
+            }
             disabled={!editing}
             min="1"
             max="365"
@@ -896,9 +970,11 @@ const ClientSLATab: React.FC<{ client: Client; onUpdate: () => void }> = ({ clie
 
         <div className="sla-item">
           <label>Notifications Email</label>
-          <select 
-            value={slaConfig.emailNotifications ? 'enabled' : 'disabled'}
-            onChange={(e) => setSlaConfig({ ...slaConfig, emailNotifications: e.target.value === 'enabled' })}
+          <select
+            value={(slaConfig as any).emailNotifications ? 'enabled' : 'disabled'}
+            onChange={(e) =>
+              setSlaConfig({ ...(slaConfig as any), emailNotifications: e.target.value === 'enabled' })
+            }
             disabled={!editing}
           >
             <option value="enabled">Activées</option>
@@ -926,32 +1002,15 @@ const ClientBordereauxTab: React.FC<{ client: Client }> = ({ client }) => {
         setLoading(false);
       }
     };
+
     loadBordereaux();
   }, [client.id]);
 
-  const getStatusColor = (statut: string) => {
-    switch (statut) {
-      case 'CLOTURE': return '#10b981';
-      case 'EN_COURS': return '#3b82f6';
-      case 'EN_ATTENTE': return '#f59e0b';
-      case 'EN_DIFFICULTE': return '#ef4444';
-      default: return '#6b7280';
-    }
-  };
-
-  const getStatusLabel = (statut: string) => {
-    switch (statut) {
-      case 'CLOTURE': return 'Clôturé';
-      case 'EN_COURS': return 'En cours';
-      case 'EN_ATTENTE': return 'En attente';
-      case 'EN_DIFFICULTE': return 'En difficulté';
-      default: return statut;
-    }
-  };
+  const totalDocuments = bordereaux.reduce((sum, bordereau) => sum + (bordereau.documents?.length || 0), 0);
 
   if (loading) {
     return (
-      <div className="tab-panel">
+      <div className="tab-panel section-panel">
         <div className="loading-state">
           <div className="spinner"></div>
           <p>Chargement des bordereaux...</p>
@@ -961,48 +1020,100 @@ const ClientBordereauxTab: React.FC<{ client: Client }> = ({ client }) => {
   }
 
   return (
-    <div className="tab-panel">
-      <h3>Bordereaux Associés ({bordereaux.length})</h3>
-      
+    <div className="tab-panel section-panel">
+      <div className="tab-header">
+        <div>
+          <h3>Bordereaux ({bordereaux.length || 0})</h3>
+          <p className="section-description">Suivi opérationnel détaillé des dossiers réceptionnés.</p>
+        </div>
+        <div className="summary-chip">Total documents: {totalDocuments || 0}</div>
+      </div>
+
       {bordereaux.length > 0 ? (
         <div className="bordereaux-list">
-          {bordereaux.map(bordereau => (
-            <div key={bordereau.id} className="bordereau-item">
-              <div className="bordereau-header">
-                <h4>{bordereau.reference}</h4>
-                <span 
-                  className="status-badge"
-                  style={{ backgroundColor: getStatusColor(bordereau.statut), color: 'white' }}
-                >
-                  {getStatusLabel(bordereau.statut)}
-                </span>
-              </div>
-              <div className="bordereau-info">
-                <p><strong>Date Réception:</strong> {new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}</p>
-                <p><strong>Nombre BS:</strong> {bordereau.nombreBS}</p>
-                <p><strong>Délai Règlement:</strong> {bordereau.delaiReglement} jours</p>
-                {bordereau.dateCloture && (
-                  <p><strong>Date Clôture:</strong> {new Date(bordereau.dateCloture).toLocaleDateString('fr-FR')}</p>
+          {bordereaux.map((bordereau) => {
+            const documentsCount = bordereau.documents?.length || 0;
+            const documentsByType: { [key: string]: number } = {};
+
+            if (bordereau.documents && bordereau.documents.length > 0) {
+              bordereau.documents.forEach((doc: any) => {
+                const type = doc.type || 'Non spécifié';
+                documentsByType[type] = (documentsByType[type] || 0) + 1;
+              });
+            }
+
+            return (
+              <div key={bordereau.id} className="bordereau-item enhanced">
+                <div className="bordereau-header">
+                  <div>
+                    <h4>{bordereau.reference}</h4>
+                    <span
+                      className="status-pill info"
+                      style={{ backgroundColor: getDocumentTypeColor(bordereau.type), color: '#fff' }}
+                    >
+                      {getDocumentTypeLabel(bordereau.type)}
+                    </span>
+                  </div>
+                  <span
+                    className="status-pill"
+                    style={{ backgroundColor: getStatusColorForBordereau(bordereau.statut), color: '#fff' }}
+                  >
+                    {getStatusLabelForBordereau(bordereau.statut)}
+                  </span>
+                </div>
+
+                <div className="bordereau-info-grid">
+                  <p><strong>Date Réception:</strong> {new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}</p>
+                  <p><strong>Nombre BS:</strong> {bordereau.nombreBS || 0}</p>
+                  <p><strong>Délai Règlement:</strong> {bordereau.delaiReglement || 0} jours</p>
+                  <p><strong>Documents:</strong> {documentsCount || 0}</p>
+                  {bordereau.chargeCompte && <p><strong>Charge Compte:</strong> {bordereau.chargeCompte.fullName}</p>}
+                  {bordereau.currentHandler && <p><strong>Handler Actuel:</strong> {bordereau.currentHandler.fullName}</p>}
+                  {bordereau.team && <p><strong>Équipe:</strong> {bordereau.team.fullName}</p>}
+                  {bordereau.dateCloture && (
+                    <p><strong>Date Clôture:</strong> {new Date(bordereau.dateCloture).toLocaleDateString('fr-FR')}</p>
+                  )}
+                </div>
+
+                {documentsCount > 0 && (
+                  <div className="document-breakdown">
+                    <strong>📎 Répartition des Documents ({documentsCount})</strong>
+                    <div className="tag-list">
+                      {Object.entries(documentsByType).map(([type, count]) => (
+                        <span
+                          key={type}
+                          className="status-pill"
+                          style={{ backgroundColor: getDocumentTypeColor(type), color: '#fff' }}
+                        >
+                          {getDocumentTypeLabel(type)}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {documentsCount === 0 && (
+                  <div className="alert-inline danger">⚠️ Aucun document associé (0 documents)</div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="empty-state">
-          <p>Aucun bordereau pour ce client</p>
+          <p>📄 Aucun bordereau pour ce client</p>
+          <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Les bordereaux apparaîtront ici une fois créés</p>
         </div>
       )}
     </div>
   );
 };
 
-// Reclamation Create Modal Component (moved up for proper scoping)
 const ReclamationCreateModal: React.FC<{
   clientId: string;
   onSubmit: (data: any) => void;
   onClose: () => void;
-}> = ({ clientId, onSubmit, onClose }) => {
+}> = ({ onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     type: '',
     severity: 'medium',
@@ -1028,8 +1139,8 @@ const ReclamationCreateModal: React.FC<{
           <h3>Nouvelle Réclamation</h3>
           <button onClick={onClose} className="modal-close">✕</button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="reclamation-form">
+
+        <form onSubmit={handleSubmit} className="reclamation-form client-form">
           <div className="form-group">
             <label>Type de Réclamation *</label>
             <select
@@ -1061,7 +1172,7 @@ const ReclamationCreateModal: React.FC<{
                 <option value="high">Haute</option>
               </select>
             </div>
-            
+
             <div className="form-group">
               <label>Département</label>
               <select
@@ -1089,7 +1200,7 @@ const ReclamationCreateModal: React.FC<{
               placeholder="Décrivez la réclamation en détail..."
             />
           </div>
-          
+
           <div className="form-actions">
             <button type="button" onClick={onClose} className="btn btn-secondary" disabled={loading}>
               Annuler
@@ -1121,6 +1232,7 @@ const ClientReclamationsTab: React.FC<{ client: Client }> = ({ client }) => {
         setLoading(false);
       }
     };
+
     loadReclamations();
   }, [client.id]);
 
@@ -1129,7 +1241,6 @@ const ClientReclamationsTab: React.FC<{ client: Client }> = ({ client }) => {
       await createComplaint(client.id, data);
       notify('Réclamation créée avec succès', 'success');
       setShowCreateForm(false);
-      // Reload reclamations
       const updatedData = await fetchComplaintsByClient(client.id);
       setReclamations(updatedData);
     } catch (error) {
@@ -1137,27 +1248,9 @@ const ClientReclamationsTab: React.FC<{ client: Client }> = ({ client }) => {
     }
   };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'high': return '#ef4444';
-      case 'medium': return '#f59e0b';
-      case 'low': return '#10b981';
-      default: return '#6b7280';
-    }
-  };
-
-  const getSeverityLabel = (severity: string) => {
-    switch (severity) {
-      case 'high': return 'Haute';
-      case 'medium': return 'Moyenne';
-      case 'low': return 'Basse';
-      default: return severity;
-    }
-  };
-
   if (loading) {
     return (
-      <div className="tab-panel">
+      <div className="tab-panel section-panel">
         <div className="loading-state">
           <div className="spinner"></div>
           <p>Chargement des réclamations...</p>
@@ -1167,36 +1260,37 @@ const ClientReclamationsTab: React.FC<{ client: Client }> = ({ client }) => {
   }
 
   return (
-    <div className="tab-panel">
+    <div className="tab-panel section-panel">
       <div className="tab-header">
-        <h3>Réclamations ({reclamations.length})</h3>
+        <div>
+          <h3>Réclamations ({reclamations.length})</h3>
+          <p className="section-description">Pilotage qualité et suivi des incidents clients.</p>
+        </div>
         <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>
           ➕ Nouvelle Réclamation
         </button>
       </div>
-      
+
       {reclamations.length > 0 ? (
         <div className="reclamations-list">
-          {reclamations.map(reclamation => (
-            <div key={reclamation.id} className="reclamation-item">
+          {reclamations.map((reclamation) => (
+            <div key={reclamation.id} className="reclamation-item refined">
               <div className="reclamation-header">
                 <h4>{reclamation.type}</h4>
                 <div className="reclamation-badges">
-                  <span 
-                    className="severity-badge"
+                  <span
+                    className="status-pill"
                     style={{ backgroundColor: getSeverityColor(reclamation.severity), color: 'white' }}
                   >
                     {getSeverityLabel(reclamation.severity)}
                   </span>
-                  <span className="status-badge">{reclamation.status}</span>
+                  <span className="status-pill neutral">{reclamation.status}</span>
                 </div>
               </div>
               <div className="reclamation-info">
                 <p><strong>Description:</strong> {reclamation.description}</p>
                 <p><strong>Créée le:</strong> {new Date(reclamation.createdAt).toLocaleDateString('fr-FR')}</p>
-                {reclamation.assignedTo && (
-                  <p><strong>Assignée à:</strong> {reclamation.assignedTo.fullName}</p>
-                )}
+                {reclamation.assignedTo && <p><strong>Assignée à:</strong> {reclamation.assignedTo.fullName}</p>}
               </div>
             </div>
           ))}
@@ -1228,17 +1322,6 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('monthly');
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'CLOTURE': return '#10b981';
-      case 'EN_COURS': return '#3b82f6';
-      case 'ASSIGNE': return '#f59e0b';
-      case 'A_SCANNER': return '#ef4444';
-      case 'EN_ATTENTE': return '#8b5cf6';
-      default: return '#6b7280';
-    }
-  };
-
   useEffect(() => {
     const loadAnalytics = async () => {
       setLoading(true);
@@ -1257,22 +1340,13 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
         setLoading(false);
       }
     };
+
     loadAnalytics();
   }, [client.id, period]);
 
-  const getRiskLevelColor = (level: string) => {
-    switch (level) {
-      case 'low': return '#10b981';
-      case 'medium': return '#f59e0b';
-      case 'high': return '#ef4444';
-      case 'critical': return '#dc2626';
-      default: return '#6b7280';
-    }
-  };
-
   if (loading) {
     return (
-      <div className="tab-panel">
+      <div className="tab-panel section-panel">
         <div className="loading-state">
           <div className="spinner"></div>
           <p>Chargement des analytics...</p>
@@ -1282,17 +1356,13 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
   }
 
   return (
-    <div className="tab-panel">
+    <div className="tab-panel section-panel">
       <div className="tab-header">
-        <h3>Analytics & Performance</h3>
-        <select 
-          value={period} 
-          onChange={(e) => {
-            console.log('Period changed to:', e.target.value);
-            setPeriod(e.target.value);
-          }}
-          className="period-select"
-        >
+        <div>
+          <h3>Analytics & Performance</h3>
+          <p className="section-description">Les graphiques et statistiques sont conservés avec une lecture plus claire.</p>
+        </div>
+        <select value={period} onChange={(e) => setPeriod(e.target.value)} className="period-select form-select">
           <option value="daily">Quotidien (30j)</option>
           <option value="weekly">Hebdomadaire (12s)</option>
           <option value="monthly">Mensuel (12m)</option>
@@ -1301,15 +1371,11 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
       </div>
 
       <div className="analytics-grid">
-        {/* Risk Assessment */}
         {riskAssessment && (
           <div className="analytics-card">
-            <h4>Evaluation des Risques</h4>
+            <h4>Évaluation des Risques</h4>
             <div className="risk-score">
-              <span 
-                className="risk-level"
-                style={{ color: getRiskLevelColor(riskAssessment.riskLevel) }}
-              >
+              <span className="risk-level" style={{ color: getRiskLevelColor(riskAssessment.riskLevel) }}>
                 {riskAssessment.riskScore}/100 - {riskAssessment.riskLevel.toUpperCase()}
               </span>
             </div>
@@ -1332,29 +1398,33 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
           </div>
         )}
 
-        {/* Performance Metrics */}
         {performanceMetrics && (
           <div className="analytics-card">
             <h4>Métriques de Performance</h4>
             <div className="metrics-grid">
               <div className="metric-item">
-                <span className="metric-value">{performanceMetrics.bordereauxByStatus?.reduce((acc: number, item: any) => acc + item._count, 0) || 0}</span>
+                <span className="metric-value">
+                  {performanceMetrics.bordereauxByStatus?.reduce((acc: number, item: any) => acc + item._count, 0) || 0}
+                </span>
                 <span className="metric-label">Bordereaux Traités</span>
               </div>
               <div className="metric-item">
-                <span className="metric-value">{performanceMetrics.reclamationsByStatus?.reduce((acc: number, item: any) => acc + item._count, 0) || 0}</span>
+                <span className="metric-value">
+                  {performanceMetrics.reclamationsByStatus?.reduce((acc: number, item: any) => acc + item._count, 0) || 0}
+                </span>
                 <span className="metric-label">Réclamations</span>
               </div>
               <div className="metric-item">
-                <span className="metric-value">{performanceMetrics.slaMetrics?._avg?.delaiReglement?.toFixed(1) || 'N/A'}</span>
+                <span className="metric-value">
+                  {performanceMetrics.slaMetrics?._avg?.delaiReglement?.toFixed(1) || 'N/A'}
+                </span>
                 <span className="metric-label">SLA Moyen (jours)</span>
               </div>
             </div>
-            
-            {/* Payment Timing Stats */}
+
             {performanceMetrics.paymentStats && (
               <div className="payment-stats">
-                <h5>📊 Statistiques de Paiement (Module Finance)</h5>
+                <h5>📊 Statistiques de Paiement</h5>
                 <div className="stats-row">
                   <div className="stat-box">
                     <span className="stat-number" style={{ color: '#10b981' }}>{performanceMetrics.paymentStats.paidOnTime}</span>
@@ -1369,24 +1439,29 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
                     <span className="stat-text">Total sinistres payés</span>
                   </div>
                   <div className="stat-box">
-                    <span className="stat-number" style={{ color: '#3b82f6' }}>{performanceMetrics.paymentStats.onTimeRate.toFixed(1)}%</span>
+                    <span className="stat-number" style={{ color: '#3b82f6' }}>
+                      {performanceMetrics.paymentStats.onTimeRate.toFixed(1)}%
+                    </span>
                     <span className="stat-text">Taux de ponctualité</span>
                   </div>
                 </div>
               </div>
             )}
-            
-            {/* Reclamation Timing Stats */}
+
             {performanceMetrics.reclamationTimingStats && (
               <div className="reclamation-timing-stats">
                 <h5>📞 Statistiques de Réclamations</h5>
                 <div className="stats-row">
                   <div className="stat-box">
-                    <span className="stat-number" style={{ color: '#10b981' }}>{performanceMetrics.reclamationTimingStats.handledOnTime}</span>
+                    <span className="stat-number" style={{ color: '#10b981' }}>
+                      {performanceMetrics.reclamationTimingStats.handledOnTime}
+                    </span>
                     <span className="stat-text">Traitées dans les délais</span>
                   </div>
                   <div className="stat-box">
-                    <span className="stat-number" style={{ color: '#ef4444' }}>{performanceMetrics.reclamationTimingStats.handledLate}</span>
+                    <span className="stat-number" style={{ color: '#ef4444' }}>
+                      {performanceMetrics.reclamationTimingStats.handledLate}
+                    </span>
                     <span className="stat-text">Traitées en retard</span>
                   </div>
                   <div className="stat-box">
@@ -1394,14 +1469,15 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
                     <span className="stat-text">Total réclamations traitées</span>
                   </div>
                   <div className="stat-box">
-                    <span className="stat-number" style={{ color: '#3b82f6' }}>{performanceMetrics.reclamationTimingStats.onTimeRate.toFixed(1)}%</span>
+                    <span className="stat-number" style={{ color: '#3b82f6' }}>
+                      {performanceMetrics.reclamationTimingStats.onTimeRate.toFixed(1)}%
+                    </span>
                     <span className="stat-text">Taux de ponctualité</span>
                   </div>
                 </div>
               </div>
             )}
-            
-            {/* Status Breakdown Charts */}
+
             <div className="status-charts">
               <div className="chart-section">
                 <h5>Bordereaux par Statut</h5>
@@ -1409,14 +1485,15 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
                   {performanceMetrics.bordereauxByStatus?.map((item: any, index: number) => {
                     const total = performanceMetrics.bordereauxByStatus.reduce((acc: number, i: any) => acc + i._count, 0);
                     const percentage = total > 0 ? (item._count / total) * 100 : 0;
+
                     return (
                       <div key={index} className="chart-bar-item">
                         <div className="chart-bar">
-                          <div 
+                          <div
                             className="chart-bar-fill"
-                            style={{ 
+                            style={{
                               width: `${percentage}%`,
-                              backgroundColor: getStatusColor(item.statut)
+                              backgroundColor: getStatusColorForBordereau(item.statut)
                             }}
                           />
                         </div>
@@ -1430,7 +1507,6 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
           </div>
         )}
 
-        {/* SLA Compliance */}
         {analytics?.slaCompliance && (
           <div className="analytics-card">
             <h4>Conformité SLA - Période: {period}</h4>
@@ -1446,17 +1522,20 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
                 {analytics.slaCompliance.trends.slice(-8).map((trend: any, index: number) => {
                   const height = Math.min((trend.count / 10) * 100, 100);
                   const isGood = (trend.avgSla || 0) <= client.reglementDelay;
+
                   return (
                     <div key={index} className="trend-item">
-                      <div 
+                      <div
                         className="trend-bar"
-                        style={{ 
+                        style={{
                           height: `${height}%`,
                           backgroundColor: isGood ? '#10b981' : '#ef4444'
                         }}
                         title={`${new Date(trend.date).toLocaleDateString('fr-FR')}: ${trend.count} bordereaux, SLA: ${(trend.avgSla || 0).toFixed(1)}j`}
                       />
-                      <span className="trend-date">{new Date(trend.date).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })}</span>
+                      <span className="trend-date">
+                        {new Date(trend.date).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })}
+                      </span>
                     </div>
                   );
                 })}
@@ -1465,7 +1544,6 @@ const ClientAnalyticsTab: React.FC<{ client: Client }> = ({ client }) => {
           </div>
         )}
 
-        {/* Volume Analysis */}
         {analytics?.volumeCapacity && (
           <div className="analytics-card">
             <h4>Analyse de Volume</h4>
@@ -1510,12 +1588,13 @@ const ClientHistoryTab: React.FC<{ client: Client }> = ({ client }) => {
         setLoading(false);
       }
     };
+
     loadHistory();
   }, [client.id]);
 
   if (loading) {
     return (
-      <div className="tab-panel">
+      <div className="tab-panel section-panel">
         <div className="loading-state">
           <div className="spinner"></div>
           <p>Chargement de l'historique...</p>
@@ -1525,23 +1604,23 @@ const ClientHistoryTab: React.FC<{ client: Client }> = ({ client }) => {
   }
 
   return (
-    <div className="tab-panel">
+    <div className="tab-panel section-panel">
       <h3>Historique des Actions</h3>
-      
+
       <div className="history-tabs">
-        <button 
+        <button
           className={`history-tab ${activeHistoryTab === 'modifications' ? 'active' : ''}`}
           onClick={() => setActiveHistoryTab('modifications')}
         >
           Modifications
         </button>
-        <button 
+        <button
           className={`history-tab ${activeHistoryTab === 'communications' ? 'active' : ''}`}
           onClick={() => setActiveHistoryTab('communications')}
         >
           Communications
         </button>
-        <button 
+        <button
           className={`history-tab ${activeHistoryTab === 'contracts' ? 'active' : ''}`}
           onClick={() => setActiveHistoryTab('contracts')}
         >
@@ -1553,7 +1632,6 @@ const ClientHistoryTab: React.FC<{ client: Client }> = ({ client }) => {
         {activeHistoryTab === 'modifications' && (
           <div className="modifications-history">
             <h4>Historique des Modifications</h4>
-            {/* This would show audit log entries */}
             <div className="history-timeline">
               <div className="timeline-item">
                 <div className="timeline-date">{new Date(client.updatedAt).toLocaleDateString('fr-FR')}</div>
@@ -1578,7 +1656,7 @@ const ClientHistoryTab: React.FC<{ client: Client }> = ({ client }) => {
             <h4>Historique des Communications</h4>
             {communicationHistory.length > 0 ? (
               <div className="communications-list">
-                {communicationHistory.map(comm => (
+                {communicationHistory.map((comm) => (
                   <div key={comm.id} className="communication-item">
                     <div className="comm-header">
                       <strong>{comm.subject}</strong>
@@ -1610,7 +1688,10 @@ const ClientHistoryTab: React.FC<{ client: Client }> = ({ client }) => {
                     <div className="timeline-content">
                       <strong>Contrat {contract.id.slice(0, 8)}</strong>
                       <p>Délai Règlement: {contract.delaiReglement}j</p>
-                      <p>Période: {new Date(contract.startDate).toLocaleDateString('fr-FR')} - {new Date(contract.endDate).toLocaleDateString('fr-FR')}</p>
+                      <p>
+                        Période: {new Date(contract.startDate).toLocaleDateString('fr-FR')} -{' '}
+                        {new Date(contract.endDate).toLocaleDateString('fr-FR')}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -1625,7 +1706,6 @@ const ClientHistoryTab: React.FC<{ client: Client }> = ({ client }) => {
   );
 };
 
-// Client Form Modal Component
 const ClientFormModal: React.FC<{
   client: Client | null;
   onSubmit: (data: any) => void;
@@ -1640,7 +1720,7 @@ const ClientFormModal: React.FC<{
     reglementDelay: client?.reglementDelay || 30,
     reclamationDelay: client?.reclamationDelay || 48,
     status: (client?.status || 'active') as 'active' | 'inactive' | 'suspended',
-    gestionnaireIds: client?.gestionnaires?.map(g => g.id) || [],
+    gestionnaireIds: client?.gestionnaires?.map((g) => g.id) || [],
     modeRecuperation: (client as any)?.modeRecuperation || ''
   });
   const [availableGestionnaires, setAvailableGestionnaires] = useState<any[]>([]);
@@ -1649,13 +1729,13 @@ const ClientFormModal: React.FC<{
   useEffect(() => {
     const loadGestionnaires = async () => {
       try {
-        // Fetch CHEF_EQUIPE users instead of GESTIONNAIRE
         const { data } = await LocalAPI.get('/users', { params: { role: 'CHEF_EQUIPE' } });
         setAvailableGestionnaires(data || []);
       } catch (error) {
         console.error('Error loading gestionnaires:', error);
       }
     };
+
     loadGestionnaires();
   }, []);
 
@@ -1669,8 +1749,6 @@ const ClientFormModal: React.FC<{
     }
   };
 
-  // Remove the handleGestionnaireChange function since we're using a select dropdown now
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -1678,7 +1756,7 @@ const ClientFormModal: React.FC<{
           <h3>{client ? 'Modifier Client' : 'Nouveau Client'}</h3>
           <button onClick={onClose} className="modal-close">✕</button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="client-form">
           <div className="form-group">
             <label>Nom du Client *</label>
@@ -1715,7 +1793,7 @@ const ClientFormModal: React.FC<{
                 placeholder="contact@client.com"
               />
             </div>
-            
+
             <div className="form-group">
               <label>Téléphone</label>
               <input
@@ -1738,7 +1816,7 @@ const ClientFormModal: React.FC<{
               placeholder="Adresse complète du client"
             />
           </div>
-          
+
           <div className="form-row">
             <div className="form-group">
               <label>Délai Règlement (jours) *</label>
@@ -1752,7 +1830,7 @@ const ClientFormModal: React.FC<{
                 className="form-input"
               />
             </div>
-            
+
             <div className="form-group">
               <label>Délai Réclamation (heures) *</label>
               <input
@@ -1766,12 +1844,14 @@ const ClientFormModal: React.FC<{
               />
             </div>
           </div>
-          
+
           <div className="form-group">
             <label>Statut</label>
             <select
               value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' | 'suspended' })}
+              onChange={(e) =>
+                setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' | 'suspended' })
+              }
               className="form-select"
             >
               <option value="active">Actif</option>
@@ -1788,7 +1868,7 @@ const ClientFormModal: React.FC<{
               className="form-select"
             >
               <option value="">Sélectionner un chef d'équipe</option>
-              {availableGestionnaires.map(gestionnaire => (
+              {availableGestionnaires.map((gestionnaire) => (
                 <option key={gestionnaire.id} value={gestionnaire.id}>
                   {gestionnaire.fullName} ({gestionnaire.email})
                 </option>
@@ -1810,19 +1890,286 @@ const ClientFormModal: React.FC<{
               <option value="FEUILLE_CAISSE">Mode de récupération sur feuille de caisse</option>
             </select>
           </div>
-          
+
           <div className="form-actions">
             <button type="button" onClick={onClose} className="btn btn-secondary" disabled={loading}>
               Annuler
             </button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Sauvegarde...' : (client ? 'Modifier' : 'Créer')}
+              {loading ? 'Sauvegarde...' : client ? 'Modifier' : 'Créer'}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
+};
+
+const DetailRow: React.FC<{ label: string; value: React.ReactNode; accent?: string }> = ({ label, value, accent }) => (
+  <div className="detail-row">
+    <span className="detail-row-label">{label}</span>
+    <span className="detail-row-value" style={accent ? { color: accent } : undefined}>
+      {value}
+    </span>
+  </div>
+);
+
+const UserReferenceCard: React.FC<{ user: any }> = ({ user }) => (
+  <div className="user-reference-card">
+    <div className="user-reference-main">
+      <span className="user-reference-name">{user.fullName}</span>
+      <span
+        className="status-pill"
+        style={{
+          backgroundColor: getRoleBadgeColor(user.role || ''),
+          color: '#fff'
+        }}
+      >
+        {getRoleLabel(user.role || '')}
+      </span>
+    </div>
+    {user.email && <p className="user-reference-meta">{user.email}</p>}
+    {(user as any).department && <p className="user-reference-meta">Département: {(user as any).department}</p>}
+  </div>
+);
+
+const StatMiniCard: React.FC<{ value: React.ReactNode; label: string; tone: 'success' | 'danger' | 'neutral' | 'info' | 'warning' }> = ({
+  value,
+  label,
+  tone
+}) => (
+  <div className={`mini-stat-card ${tone}`}>
+    <div className="mini-stat-value">{value}</div>
+    <div className="mini-stat-label">{label}</div>
+  </div>
+);
+
+const getStatusLabel = (status?: string) => {
+  switch (status) {
+    case 'active':
+      return 'Actif';
+    case 'inactive':
+      return 'Inactif';
+    case 'suspended':
+      return 'Suspendu';
+    default:
+      return status || 'Inconnu';
+  }
+};
+
+const getStatusColor = (status?: string) => {
+  switch (status) {
+    case 'active':
+      return '#10b981';
+    case 'inactive':
+      return '#ef4444';
+    case 'suspended':
+      return '#f59e0b';
+    default:
+      return '#6b7280';
+  }
+};
+
+const getModeRecuperationLabel = (mode?: string) => {
+  switch (mode) {
+    case 'VIREMENT':
+      return '🏦 Virement bancaire';
+    case 'CHEQUE':
+      return '💳 Chèque';
+    case 'FEUILLE_CAISSE':
+      return '📋 Feuille de caisse';
+    default:
+      return '❌ Non défini';
+  }
+};
+
+const getModeRecuperationColor = (mode?: string) => {
+  switch (mode) {
+    case 'VIREMENT':
+      return '#3b82f6';
+    case 'CHEQUE':
+      return '#10b981';
+    case 'FEUILLE_CAISSE':
+      return '#f59e0b';
+    default:
+      return '#ef4444';
+  }
+};
+
+const getRoleBadgeColor = (role: string) => {
+  switch (role) {
+    case 'GESTIONNAIRE_SENIOR':
+      return '#8b5cf6';
+    case 'GESTIONNAIRE':
+      return '#3b82f6';
+    case 'CHEF_EQUIPE':
+      return '#f59e0b';
+    default:
+      return '#6b7280';
+  }
+};
+
+const getRoleLabel = (role: string) => {
+  switch (role) {
+    case 'GESTIONNAIRE_SENIOR':
+      return 'Gestionnaire Senior';
+    case 'GESTIONNAIRE':
+      return 'Gestionnaire';
+    case 'CHEF_EQUIPE':
+      return "Chef d'Équipe";
+    default:
+      return role;
+  }
+};
+
+const getSeverityColor = (severity: string) => {
+  switch (severity) {
+    case 'high':
+      return '#ef4444';
+    case 'medium':
+      return '#f59e0b';
+    case 'low':
+      return '#10b981';
+    default:
+      return '#6b7280';
+  }
+};
+
+const getSeverityLabel = (severity: string) => {
+  switch (severity) {
+    case 'high':
+      return 'Haute';
+    case 'medium':
+      return 'Moyenne';
+    case 'low':
+      return 'Basse';
+    default:
+      return severity;
+  }
+};
+
+const getRiskLevelColor = (level: string) => {
+  switch (level) {
+    case 'low':
+      return '#10b981';
+    case 'medium':
+      return '#f59e0b';
+    case 'high':
+      return '#ef4444';
+    case 'critical':
+      return '#dc2626';
+    default:
+      return '#6b7280';
+  }
+};
+
+const getStatusColorForBordereau = (statut: string) => {
+  switch (statut) {
+    case 'CLOTURE':
+      return '#10b981';
+    case 'PAYE':
+      return '#059669';
+    case 'TRAITE':
+      return '#0ea5e9';
+    case 'EN_COURS':
+      return '#3b82f6';
+    case 'ASSIGNE':
+      return '#8b5cf6';
+    case 'SCANNE':
+      return '#06b6d4';
+    case 'A_SCANNER':
+      return '#f59e0b';
+    case 'EN_ATTENTE':
+      return '#f97316';
+    case 'EN_DIFFICULTE':
+      return '#ef4444';
+    case 'REJETE':
+      return '#dc2626';
+    default:
+      return '#6b7280';
+  }
+};
+
+const getStatusLabelForBordereau = (statut: string) => {
+  switch (statut) {
+    case 'CLOTURE':
+      return 'Clôturé';
+    case 'PAYE':
+      return 'Payé';
+    case 'TRAITE':
+      return 'Traité';
+    case 'EN_COURS':
+      return 'En cours';
+    case 'ASSIGNE':
+      return 'Assigné';
+    case 'SCANNE':
+      return 'Scanné';
+    case 'A_SCANNER':
+      return 'À scanner';
+    case 'EN_ATTENTE':
+      return 'En attente';
+    case 'EN_DIFFICULTE':
+      return 'En difficulté';
+    case 'REJETE':
+      return 'Rejeté';
+    default:
+      return statut;
+  }
+};
+
+const getDocumentTypeLabel = (type: string) => {
+  switch (type) {
+    case 'BULLETIN_SOIN':
+      return '📋 Bulletin de Soin';
+    case 'COMPLEMENT_INFORMATION':
+      return "📄 Complément d'Information";
+    case 'ADHESION':
+      return '✍️ Adhésion';
+    case 'RECLAMATION':
+      return '📞 Réclamation';
+    case 'CONTRAT_AVENANT':
+      return '📑 Contrat/Avenant';
+    case 'DEMANDE_RESILIATION':
+      return '❌ Demande de Résiliation';
+    case 'CONVENTION_TIERS_PAYANT':
+      return '🤝 Convention Tiers Payant';
+    default:
+      return type || 'Non spécifié';
+  }
+};
+
+const getDocumentTypeColor = (type: string) => {
+  switch (type) {
+    case 'BULLETIN_SOIN':
+      return '#3b82f6';
+    case 'COMPLEMENT_INFORMATION':
+      return '#8b5cf6';
+    case 'ADHESION':
+      return '#10b981';
+    case 'RECLAMATION':
+      return '#ef4444';
+    case 'CONTRAT_AVENANT':
+      return '#f59e0b';
+    case 'DEMANDE_RESILIATION':
+      return '#dc2626';
+    case 'CONVENTION_TIERS_PAYANT':
+      return '#06b6d4';
+    default:
+      return '#6b7280';
+  }
+};
+
+const mapSlaStatusTone = (status: string) => {
+  switch (status) {
+    case 'healthy':
+      return 'success';
+    case 'breach':
+      return 'danger';
+    case 'warning':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
 };
 
 export default ClientListPage;

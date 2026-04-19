@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowNotificationsService } from './workflow-notifications.service';
+import { calculateSLA } from '../utils/sla-calculator';
 
 export interface ProcessBordereauDto {
   bordereauId: string;
@@ -515,7 +516,7 @@ export class GestionnaireActionsService {
       this.logger.log(`✅ AI priorities generated: ${prioritizedBordereaux.length} items`);
       return prioritizedBordereaux;
 
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`❌ AI priorities failed: ${error.message}`);
       throw new Error(`AI priorities service unavailable: ${error.message}`);
     }
@@ -1219,32 +1220,42 @@ export class GestionnaireActionsService {
     remainingTime: number;
     priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   } {
-    const now = new Date();
-    const daysSinceReception = Math.floor(
-      (now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
-    );
+    // ✅ USE CENTRALIZED SLA CALCULATOR
+    const slaResult = calculateSLA({
+      dateReception: bordereau.dateReception,
+      delaiReglement: bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30,
+      statut: bordereau.statut,
+      dateCloture: bordereau.dateCloture,
+      dateExecutionVirement: bordereau.dateExecutionVirement,
+      ordresVirement: bordereau.ordresVirement,
+    });
     
+    const { daysElapsed, daysRemaining, percentElapsed, isFrozen } = slaResult;
     const slaLimit = bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30;
-    const remainingTime = Math.max(0, (slaLimit - daysSinceReception) * 24);
+    const remainingTimeHours = Math.max(0, daysRemaining * 24);
 
     let slaStatus: 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL';
     let priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-    if (daysSinceReception > slaLimit) {
+    // If frozen (completed), always show ON_TIME
+    if (isFrozen) {
+      slaStatus = 'ON_TIME';
+      priority = 'LOW';
+    } else if (percentElapsed > 100) {
       slaStatus = 'OVERDUE';
       priority = 'URGENT';
-    } else if (remainingTime <= 24) {
+    } else if (remainingTimeHours <= 24) {
       slaStatus = 'CRITICAL';
       priority = 'URGENT';
-    } else if (remainingTime <= 72) {
+    } else if (remainingTimeHours <= 72) {
       slaStatus = 'AT_RISK';
       priority = 'HIGH';
     } else {
       slaStatus = 'ON_TIME';
-      priority = daysSinceReception > slaLimit * 0.5 ? 'MEDIUM' : 'LOW';
+      priority = percentElapsed > 50 ? 'MEDIUM' : 'LOW';
     }
 
-    return { slaStatus, remainingTime, priority };
+    return { slaStatus, remainingTime: remainingTimeHours, priority };
   }
 
   private getAvailableActions(status: string): string[] {
@@ -1532,7 +1543,7 @@ export class GestionnaireActionsService {
         successCount++;
         this.logger.log(`✅ Successfully processed ${bordereau.reference}`);
 
-      } catch (error) {
+      } catch (error : any) {
         this.logger.error(`❌ Error processing ${bordereau.reference}: ${error.message}`);
         results.push({
           bordereauId: bordereau.id,

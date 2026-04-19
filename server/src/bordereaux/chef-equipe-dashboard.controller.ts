@@ -122,11 +122,9 @@ export class ChefEquipeDashboardController {
       })
     );
 
-    // Filter out gestionnaires with 0 assignments
-    const filteredAssignments = assignments.filter(a => a.totalAssigned > 0);
-    
-    //console.log('🔍 [BACKEND] Returning assignments:', filteredAssignments.length, 'gestionnaires (filtered from', assignments.length, 'total)');
-    return filteredAssignments;
+    // Return ALL gestionnaires including those with 0 assignments
+    //console.log('🔍 [BACKEND] Returning assignments:', assignments.length, 'gestionnaires');
+    return assignments;
   }
 
   @Get('dashboard-dossiers')
@@ -747,9 +745,17 @@ export class GestionnaireSeniorDashboardController {
   private mapStatus(status: string): string {
     const mapping = {
       'EN_ATTENTE': 'Nouveau',
-      'SCANNE': 'Nouveau',
+      'A_SCANNER': 'À scanner',
+      'SCAN_EN_COURS': 'En cours de Scan',
+      'SCANNE': 'Scan Finalisé',
+      'A_AFFECTER': 'À Affecter',
+      'ASSIGNE': 'Assigné',
       'EN_COURS': 'En cours',
       'TRAITE': 'Traité',
+      'PRET_VIREMENT': 'Prêt pour Virement',
+      'VIREMENT_EN_COURS': 'Virement en Cours',
+      'VIREMENT_EXECUTE': 'Virement Exécuté',
+      'CLOTURE': 'Réglé',
       'REJETE': 'Rejeté'
     };
     return mapping[status] || status;

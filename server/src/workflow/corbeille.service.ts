@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { calculateSLA } from '../utils/sla-calculator';
 
 @Injectable()
 export class CorbeilleService {
@@ -160,15 +161,14 @@ export class CorbeilleService {
         })
       ]);
 
-      // Calculate SLA status for each item
-      const now = new Date();
+      // Calculate SLA status for each item using centralized calculator
       const processItems = (items: any[]) => items.map(item => {
-        const daysSinceReception = Math.floor((now.getTime() - new Date(item.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+        const slaData = calculateSLA(item);
         const slaLimit = item.delaiReglement || item.contract?.delaiReglement || 30;
-        const remainingTime = Math.max(0, (slaLimit - daysSinceReception) * 24);
+        const remainingTime = Math.max(0, (slaLimit - slaData.daysElapsed) * 24);
 
         let slaStatus: 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL';
-        if (daysSinceReception > slaLimit) slaStatus = 'OVERDUE';
+        if (slaData.percentElapsed > 100) slaStatus = 'OVERDUE';
         else if (remainingTime <= 24) slaStatus = 'CRITICAL';
         else if (remainingTime <= 72) slaStatus = 'AT_RISK';
         else slaStatus = 'ON_TIME';
@@ -179,7 +179,7 @@ export class CorbeilleService {
           reference: item.reference,
           clientName: item.client?.name || 'Unknown',
           subject: `${item.nombreBS || 0} BS - ${item.client?.name}`,
-          priority: daysSinceReception > slaLimit ? 'URGENT' : 'NORMAL',
+          priority: slaData.percentElapsed > 100 ? 'URGENT' : 'NORMAL',
           status: item.statut,
           createdAt: item.dateReception,
           assignedTo: item.currentHandler?.fullName,

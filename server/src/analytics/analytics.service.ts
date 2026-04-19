@@ -6,6 +6,7 @@ import { AnalyticsExportDto } from './dto/analytics-export.dto';
 import { RealTimeAnalyticsService } from './real-time-analytics.service';
 import { SLAAnalyticsService } from './sla-analytics.service';
 import { OVAnalyticsService } from './ov-analytics.service';
+import { calculateSLA } from '../utils/sla-calculator';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -545,33 +546,30 @@ export class AnalyticsService {
         statut: true,
         clientId: true,
         assignedToUserId: true,
-        createdAt: true
+        createdAt: true,
+        ordresVirement: true
       }
     });
     
-    const now = new Date();
     const critical: any[] = [];
     const warning: any[] = [];
     const ok: any[] = [];
     
     for (const bordereau of allBordereaux) {
-      // Use dateReceptionBO from Bureau d'Ordre as primary date
-      const validDate = bordereau.dateReceptionBO || bordereau.dateReception || bordereau.createdAt;
+      const slaData = calculateSLA(bordereau);
       
-      const daysSinceReception = Math.floor(
-        (now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      
-      const slaThreshold = bordereau.delaiReglement || 30;
-      const percentageElapsed = (daysSinceReception / slaThreshold) * 100;
+      // Skip frozen bordereaux
+      if (slaData.isFrozen) {
+        continue;
+      }
       
       // RÈGLE SLA UNIFIÉE: Basée sur pourcentage du délai écoulé
-      if (percentageElapsed > 100) {
-        critical.push({ ...bordereau, statusLevel: 'red', daysSinceReception, slaThreshold });
-      } else if (percentageElapsed > 80) {
-        warning.push({ ...bordereau, statusLevel: 'orange', daysSinceReception, slaThreshold });
+      if (slaData.percentElapsed > 100) {
+        critical.push({ ...bordereau, statusLevel: 'red', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
+      } else if (slaData.percentElapsed > 80) {
+        warning.push({ ...bordereau, statusLevel: 'orange', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
       } else {
-        ok.push({ ...bordereau, statusLevel: 'green', daysSinceReception, slaThreshold });
+        ok.push({ ...bordereau, statusLevel: 'green', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
       }
     }
     

@@ -280,7 +280,7 @@ export class FinanceService {
         summary: validationResult.summary
       };
       
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error validating OV file:', error);
       throw new BadRequestException('Failed to process Excel file: ' + error.message);
     }
@@ -341,7 +341,7 @@ export class FinanceService {
       await this.logAuditAction('CREATE_OV', { userId: user.id, ovId: ovRecord.id });
       return ovRecord;
       
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error processing OV:', error);
       throw new BadRequestException('Failed to process OV: ' + error.message);
     }
@@ -491,7 +491,7 @@ export class FinanceService {
         updatedBy: user.id
       };
       
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error updating OV status:', error);
       throw new BadRequestException('Failed to update OV status: ' + error.message);
     }
@@ -1123,7 +1123,7 @@ Document généré automatiquement par ARS`;
         message: 'Ordre de virement manuel créé avec succès',
         ordreVirement
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Error creating manual OV:', error);
       throw new BadRequestException('Failed to create manual OV: ' + error.message);
     }
@@ -1628,7 +1628,7 @@ Document généré automatiquement par ARS`;
       
       console.log(`✅ Successfully returning ${result.length} pending OVs`);
       return result;
-    } catch (error) {
+    } catch (error : any) {
       console.error('❌ Error in getPendingValidationOVs:', error);
       console.error('❌ Error message:', error.message);
       console.error('❌ Error stack:', error.stack);
@@ -1887,7 +1887,7 @@ Document généré automatiquement par ARS`;
         message: `${createdOVs.length} OV(s) créé(s) avec succès`,
         ordresVirement: createdOVs
       };
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error creating OV from bordereaux:', error);
       throw new BadRequestException('Failed to create OV from bordereaux: ' + error.message);
     }
@@ -2053,7 +2053,7 @@ Document généré automatiquement par ARS`;
       });
 
       return pdfBuffer;
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error getting OV PDF buffer:', error);
       throw new BadRequestException('Failed to get PDF: ' + error.message);
     }
@@ -2095,7 +2095,7 @@ Document généré automatiquement par ARS`;
       });
 
       return txtContent;
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error getting OV TXT content:', error);
       throw new BadRequestException('Failed to get TXT: ' + error.message);
     }
@@ -2270,7 +2270,7 @@ Document généré automatiquement par ARS`;
         reference: ordreVirement.reference
       });
 
-    } catch (error) {
+    } catch (error : any) {
       console.error('Error exporting OV details to Excel:', error);
       throw new BadRequestException('Failed to export OV details: ' + error.message);
     }

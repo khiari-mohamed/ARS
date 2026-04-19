@@ -301,7 +301,7 @@ export class MultiChannelNotificationsService {
 
           const result = await this.sendToChannel(channel, recipient, request);
           results.push(result);
-        } catch (error) {
+        } catch (error: any) {
           results.push({
             id: `result_${Date.now()}`,
             status: 'failed',
@@ -339,7 +339,7 @@ export class MultiChannelNotificationsService {
         default:
           throw new Error(`Unsupported channel type: ${channel.type}`);
       }
-    } catch (error) {
+    } catch (error : any) {
       return {
         id: resultId,
         status: 'failed',

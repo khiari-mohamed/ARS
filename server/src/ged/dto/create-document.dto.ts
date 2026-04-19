@@ -3,11 +3,11 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class CreateDocumentDto {
   @IsNotEmpty()
   @IsString()
-  name: string;
+  name!: string;
 
   @IsNotEmpty()
   @IsString()
-  type: string; // e.g. BS, reçu, contrat
+  type!: string; // e.g. BS, reçu, contrat
 
   @IsOptional()
   @IsString()

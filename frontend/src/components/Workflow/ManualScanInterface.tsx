@@ -374,7 +374,7 @@ export const ManualScanInterface: React.FC = () => {
                 Cliquez pour sélectionner des fichiers
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                Formats acceptés: PDF, JPEG, PNG, TIFF (max 5GB par fichier, 1000 fichiers max)
+                Formats acceptés: PDF, JPEG, PNG, TIFF (max 50MB par fichier, 1000 fichiers max)
               </Typography>
             </Box>
 

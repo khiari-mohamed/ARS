@@ -202,7 +202,7 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
     if (logoPath1) {
       try {
         doc.image(logoPath1, 50, startY, { width: 60, height: 40 });
-      } catch (e) {
+      } catch (e : any) {
         console.warn('Failed to load logo 1:', e.message);
       }
     }
@@ -210,7 +210,7 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
     if (logoPath2) {
       try {
         doc.image(logoPath2, doc.page.width - 110, startY, { width: 60, height: 40 });
-      } catch (e) {
+      } catch (e : any) {
         console.warn('Failed to load logo 2:', e.message);
       }
     }

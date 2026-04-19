@@ -212,7 +212,7 @@ export class BulletinSoinController {
     try {
       const result = await this.bsService.getGestionnaires(req.user);
       return { data: result, success: true };
-    } catch (error) {
+    } catch (error:any) {
       console.error('❌ Error in getGestionnaires controller:', error);
       return { data: [], success: false, error: error.message };
     }
@@ -429,7 +429,7 @@ export class BulletinSoinController {
           ? `Synchronisation terminée avec ${result.errors} erreur(s). ${result.imported} bordereaux importés.`
           : `Synchronisation réussie! ${result.imported} bordereaux importés.`
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         imported: 0,
@@ -460,7 +460,7 @@ export class BulletinSoinController {
         ...status,
         logs
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         lastSync: null,
         lastResult: null,
@@ -490,7 +490,7 @@ export class BulletinSoinController {
         success: true,
         message: 'Status update pushed to MY TUNICLAIM successfully'
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         error: error.message,
@@ -518,7 +518,7 @@ export class BulletinSoinController {
         success: true,
         message: 'Payment update pushed to MY TUNICLAIM successfully'
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         error: error.message,

@@ -23,7 +23,7 @@ export class TuniclaimService {
     try {
       await this.syncBs();
       this.logger.log('Scheduled sync completed successfully');
-    } catch (error) {
+    } catch (error : any ) {
       this.logger.error('Scheduled sync failed:', error.message);
     }
   }
@@ -43,7 +43,7 @@ export class TuniclaimService {
       const data = Array.isArray(res.data) ? res.data : res.data?.bordereaux || [];
       this.logger.log(`Fetched ${data.length} bordereaux from MY TUNICLAIM`);
       return data;
-    } catch (e) {
+    } catch (e : any) {
       const errorMsg = e.code === 'ECONNREFUSED' 
         ? 'MY TUNICLAIM API unavailable - connection refused'
         : e.code === 'ETIMEDOUT'
@@ -63,7 +63,7 @@ export class TuniclaimService {
         timeout: this.timeout 
       });
       return res.data;
-    } catch (e) {
+    } catch (e : any) {
       this.logger.error(`Failed to fetch BS details for ${bsId}: ${e.message}`);
       throw e;
     }
@@ -80,7 +80,7 @@ export class TuniclaimService {
         }
       });
       this.logger.log(`Status update pushed successfully for ${bordereauId}`);
-    } catch (e) {
+    } catch (e : any ) {
       this.logger.error(`Failed to push status update for ${bordereauId}: ${e.message}`);
       // Don't throw - status updates are not critical
     }
@@ -97,7 +97,7 @@ export class TuniclaimService {
         }
       });
       this.logger.log(`Payment update pushed successfully for ${bordereauId}`);
-    } catch (e) {
+    } catch (e : any) {
       this.logger.error(`Failed to push payment update for ${bordereauId}: ${e.message}`);
       // Don't throw - payment updates are not critical
     }
@@ -114,7 +114,7 @@ export class TuniclaimService {
 
     try {
       bsList = await this.fetchBsList();
-    } catch (e) {
+    } catch (e : any) {
       const errorMsg = `MY TUNICLAIM fetch failed: ${e.message}`;
       this.logger.error(errorMsg);
       
@@ -132,7 +132,7 @@ export class TuniclaimService {
       // Send email notification
       try {
         await this.sendErrorNotification('MY TUNICLAIM API Unavailable', errorMsg);
-      } catch (emailError) {
+      } catch (emailError: any) {
         this.logger.warn('Failed to send error notification email:', emailError.message);
       }
       
@@ -171,7 +171,7 @@ export class TuniclaimService {
             try {
               await this.createBulletinSoin(extBsItem, bordereau.id);
               bsCount++;
-            } catch (bsError) {
+            } catch (bsError : any) {
               this.logger.error(`Failed to create BS ${extBsItem.numBs}: ${bsError.message}`);
               errorDetails.push(`BS ${extBsItem.numBs}: ${bsError.message}`);
             }
@@ -181,7 +181,7 @@ export class TuniclaimService {
         this.logger.log(`Successfully imported bordereau ${bordereau.reference} with ${bsCount} BS`);
         imported++;
         
-      } catch (e) {
+      } catch (e : any) {
         const ref = extBordereau.reference || 'UNKNOWN';
         const errorMsg = `Failed to import bordereau ${ref}: ${e.message}`;
         this.logger.error(errorMsg);
@@ -219,7 +219,7 @@ export class TuniclaimService {
           'MY TUNICLAIM Sync Completed with Errors',
           `Sync completed: ${imported} imported, ${errors} errors. Duration: ${duration}ms`
         );
-      } catch (emailError) {
+      } catch (emailError : any) {
         this.logger.warn('Failed to send sync notification:', emailError.message);
       }
     } else if (imported > 0) {
@@ -311,7 +311,7 @@ export class TuniclaimService {
         subject,
         `MY TUNICLAIM Sync Notification\n\n${message}\n\nTimestamp: ${new Date().toISOString()}`
       );
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('Failed to send email notification:', error.message);
       // Don't throw - email notifications are not critical for sync operation
     }
@@ -393,7 +393,7 @@ export class TuniclaimService {
           },
         });
         this.logger.log(`Created new contract for client: ${clientName}`);
-      } catch (error) {
+      } catch (error : any) {
         this.logger.error(`Failed to create contract for ${clientName}: ${error.message}`);
         return null;
       }
@@ -467,7 +467,7 @@ export class TuniclaimService {
       }
 
       this.logger.log(`Successfully created BS ${bulletinSoin.numBs} from MY TUNICLAIM`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Failed to create BS ${extBsItem.numBs}: ${error.message}`);
       throw error;
     }

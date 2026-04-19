@@ -1,13 +1,13 @@
-import { IsNotEmpty, IsString, IsBoolean, IsOptional, IsObject } from 'class-validator';
+/*import { IsNotEmpty, IsString, IsBoolean, IsOptional, IsObject } from 'class-validator';
 
 export class CreateConnectorDto {
   @IsNotEmpty()
   @IsString()
-  name: string;
+  name!: string;
 
   @IsNotEmpty()
   @IsString()
-  type: string; // 'rest', 'ftp', 'email', 'webhook'
+  type!: string; // 'rest', 'ftp', 'email', 'webhook'
 
   @IsOptional()
   @IsObject()
@@ -17,3 +17,4 @@ export class CreateConnectorDto {
   @IsBoolean()
   active?: boolean = true;
 }
+  */

@@ -74,7 +74,13 @@ const BordereauDetailPage: React.FC = () => {
     
     const receptionDate = new Date(bordereau.dateReception);
     const today = new Date();
-    const daysElapsed = Math.floor((today.getTime() - receptionDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // ✅ FREEZE LOGIC: Stop calculation when virement is executed
+    const isFrozen = ['VIREMENT_EXECUTE', 'PAYE', 'CLOTURE'].includes(bordereau.statut);
+    const freezeDate = bordereau.dateExecutionVirement || bordereau.dateCloture;
+    
+    const effectiveEndDate = isFrozen && freezeDate ? new Date(freezeDate) : today;
+    const daysElapsed = Math.floor((effectiveEndDate.getTime() - receptionDate.getTime()) / (1000 * 60 * 60 * 24));
     return bordereau.delaiReglement - daysElapsed;
   };
 

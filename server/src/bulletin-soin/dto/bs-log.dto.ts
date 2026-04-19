@@ -1,3 +1,3 @@
 export class BsLogDto {
-  action: string;
+  action!: string;
 }

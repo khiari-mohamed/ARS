@@ -12,9 +12,9 @@ import * as path from 'path';
 async function bootstrap() {
   const expressApp = express();
   
-  // Increase payload size limit for large file uploads (match nginx 5GB limit)
-  expressApp.use(express.json({ limit: '5gb' }));
-  expressApp.use(express.urlencoded({ limit: '5gb', extended: true }));
+  // Increase payload size limit for large file uploads (match nginx 10GB limit)
+  expressApp.use(express.json({ limit: '10gb' }));
+  expressApp.use(express.urlencoded({ limit: '10gb', extended: true }));
   
   // Serve static files from uploads directory at Express level
   const uploadsPath = path.join(__dirname, '..', 'uploads');

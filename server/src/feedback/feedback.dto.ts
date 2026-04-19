@@ -3,10 +3,10 @@
      export class FeedbackDto {
        @IsNotEmpty()
        @IsString()
-       message: string;
+       message!: string;
 
        @IsNotEmpty()
        @IsString()
-       page: string;
+       page!: string;
      }
      

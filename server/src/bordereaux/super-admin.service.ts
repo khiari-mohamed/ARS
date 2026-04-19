@@ -318,7 +318,7 @@ export class SuperAdminService {
           }
         });
         success++;
-      } catch (error) {
+      } catch (error : any) {
         failed++;
         errors.push(`Failed to create user ${userData.email}: ${error.message}`);
       }

@@ -99,7 +99,7 @@ export class ContractsService {
       await this.associateBordereaux(contract.id);
 
       return contract;
-    } catch (error) {
+    } catch (error: any) {
       console.error('=== SERVICE CREATE ERROR ===');
       console.error('Error in service create:', error);
       console.error('Stack trace:', error.stack);

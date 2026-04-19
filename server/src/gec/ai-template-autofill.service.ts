@@ -112,7 +112,7 @@ export class AITemplateAutoFillService {
           alternatives: [client.name, `M./Mme ${client.name}`]
         };
       }
-    } catch (error) {
+    } catch (error : any) {
       this.logger.warn(`Failed to fill client variable: ${error.message}`);
     }
 
@@ -150,7 +150,7 @@ export class AITemplateAutoFillService {
           alternatives: [bordereau.reference, `Dossier ${bordereau.reference}`]
         };
       }
-    } catch (error) {
+    } catch (error : any) {
       this.logger.warn(`Failed to fill bordereau variable: ${error.message}`);
     }
 
@@ -195,7 +195,7 @@ export class AITemplateAutoFillService {
             ]
           };
         }
-      } catch (error) {
+      } catch (error : any) {
         this.logger.warn(`Failed to get reception date: ${error.message}`);
       }
     }
@@ -242,7 +242,7 @@ export class AITemplateAutoFillService {
           };
         }
       }
-    } catch (error) {
+    } catch (error : any) {
       this.logger.warn(`Failed to fill amount variable: ${error.message}`);
     }
 
@@ -284,7 +284,7 @@ export class AITemplateAutoFillService {
           `sous ${delai} jours`
         ]
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.warn(`Failed to fill delay variable: ${error.message}`);
     }
 

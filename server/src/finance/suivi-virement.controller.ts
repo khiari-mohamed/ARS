@@ -157,7 +157,7 @@ export class SuiviVirementController {
       }
       
       res.send(reportData);
-    } catch (error) {
+    } catch (error : any) {
       console.error('Export failed:', error);
       res.status(500).json({ error: 'Export failed: ' + error.message });
     }

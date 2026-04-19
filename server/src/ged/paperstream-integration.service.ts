@@ -77,7 +77,7 @@ export class PaperStreamIntegrationService {
       const batchProcessor = new PaperStreamBatchProcessor(this.prisma);
       await batchProcessor.processBatchFolder(batchFolderPath);
       
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Batch folder processing failed: ${error.message}`);
     }
   }

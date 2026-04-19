@@ -552,7 +552,7 @@ export class AdherentService {
       });
 
       this.logger.log(`✅ Notified ${notifyUsers.length} users about ${blockedDuplicates.length} blocked duplicate RIBs requiring approval`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Failed to send duplicate RIB notification: ${error.message}`);
     }
   }

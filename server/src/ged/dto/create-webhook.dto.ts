@@ -1,9 +1,9 @@
-import { IsNotEmpty, IsString, IsBoolean, IsOptional, IsArray, IsUrl } from 'class-validator';
+/*import { IsNotEmpty, IsString, IsBoolean, IsOptional, IsArray, IsUrl } from 'class-validator';
 
 export class CreateWebhookDto {
   @IsNotEmpty()
   @IsUrl()
-  url: string;
+  url!: string;
 
   @IsOptional()
   @IsArray()
@@ -17,3 +17,4 @@ export class CreateWebhookDto {
   @IsBoolean()
   active?: boolean = true;
 }
+  */

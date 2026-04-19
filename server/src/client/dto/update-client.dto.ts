@@ -41,4 +41,9 @@ export class UpdateClientDto {
   @IsOptional()
   @IsObject()
   slaConfig?: any;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['VIREMENT', 'CHEQUE', 'FEUILLE_CAISSE'])
+  modeRecuperation?: string;
 }

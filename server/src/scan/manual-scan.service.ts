@@ -510,9 +510,9 @@ export class ManualScanService {
   }
 
   private validateFile(file: Express.Multer.File): { valid: boolean; error?: string } {
-    // Check file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      return { valid: false, error: 'File size exceeds 10MB limit' };
+    // Check file size (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      return { valid: false, error: 'File size exceeds 50MB limit' };
     }
 
     // Check file type

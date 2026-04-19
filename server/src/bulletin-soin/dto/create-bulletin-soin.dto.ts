@@ -4,31 +4,31 @@ import { Type } from 'class-transformer';
 
 export class CreateBulletinSoinDto {
   @IsString()
-  numBs: string;
+  numBs!: string;
 
   @IsString()
-  codeAssure: string;
+  codeAssure!: string;
 
   @IsString()
-  nomAssure: string;
+  nomAssure!: string;
 
   @IsDate()
   @Type(() => Date)
-  dateMaladie: Date;
+  dateMaladie!: Date;
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => BulletinSoinItem)
-  items: BulletinSoinItem[];
+  items!: BulletinSoinItem[];
 
-  nomBeneficiaire: string;
-  nomSociete: string;
-  nomPrestation: string;
-  nomBordereau: string;
-  lien: string;
-  dateCreation: Date;
-  totalPec: number;
-  observationGlobal: string;
-  etat: string;
+  nomBeneficiaire!: string;
+  nomSociete!: string;
+  nomPrestation!: string;
+  nomBordereau!: string;
+  lien!: string;
+  dateCreation!: Date;
+  totalPec!: number;
+  observationGlobal!: string;
+  etat!: string;
   ownerId?: number;
 }

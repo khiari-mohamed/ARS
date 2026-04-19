@@ -213,7 +213,7 @@ export const AssignmentSuggestions: React.FC<AssignmentSuggestionsProps> = ({
                         style={{ flex: 1, margin: 0 }}
                         format={() => (
                           <span style={{ fontSize: 10, fontWeight: 700, color: getScoreProgressColor(suggestion.score) }}>
-                            {suggestion.score.toFixed(2)}
+                            {suggestion.score?.toFixed(2) || '0.00'}
                           </span>
                         )}
                       />

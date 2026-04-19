@@ -327,7 +327,7 @@ export class EscalationEngineService {
                 channel,
                 success: true
               });
-            } catch (error) {
+            } catch (error: any) {
               instance.escalationHistory.push({
                 level,
                 timestamp: new Date(),

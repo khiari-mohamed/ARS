@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 export class CreateReclamationDto {
   @IsNotEmpty()
   @IsString()
-  clientId: string;
+  clientId!: string;
 
   @IsOptional()
   @IsString()
@@ -27,15 +27,15 @@ export class CreateReclamationDto {
 
   @IsNotEmpty()
   @IsString()
-  type: string;
+  type!: string;
 
   @IsNotEmpty()
   @IsString()
-  severity: string; // low, medium, critical
+  severity!: string; // low, medium, critical
 
   @IsNotEmpty()
   @IsString()
-  description: string;
+  description!: string;
 
   @IsOptional()
   @IsString()

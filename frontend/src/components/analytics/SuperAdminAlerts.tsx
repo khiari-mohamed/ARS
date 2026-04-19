@@ -941,10 +941,73 @@ const SuperAdminAlerts: React.FC = () => {
                       {new Date(alert.bordereau.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={getSLAStatus(alert)}
-                        color={getSLAStatus(alert) > 7 ? 'error' : getSLAStatus(alert) > 5 ? 'warning' : 'success'}
-                      />
+                      {alert.slaPhase === 'FINANCE' ? (
+                        <Tooltip 
+                          title={
+                            <Box sx={{ p: 1 }}>
+                              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                                📊 Suivi SLA en Deux Phases
+                              </Typography>
+                              <Divider sx={{ my: 1, bgcolor: 'rgba(255,255,255,0.3)' }} />
+                              <Typography variant="body2" sx={{ mb: 1 }}>
+                                <strong>Phase 1: Gestionnaire</strong>
+                              </Typography>
+                              <Typography variant="caption" display="block" sx={{ pl: 1, mb: 1 }}>
+                                ✅ Complété en {alert.slaInfo?.gestionnaireSla?.daysSince || 0} jours
+                                <br />
+                                Seuil: {alert.slaInfo?.gestionnaireSla?.threshold || 0} jours
+                                <br />
+                                Statut: Traitement terminé
+                              </Typography>
+                              <Typography variant="body2" sx={{ mb: 1 }}>
+                                <strong>Phase 2: Finance</strong>
+                              </Typography>
+                              <Typography variant="caption" display="block" sx={{ pl: 1 }}>
+                                {alert.alertLevel === 'red' ? '🔴' : alert.alertLevel === 'orange' ? '🟠' : '🟢'} En cours: {alert.daysSinceReception} jours
+                                <br />
+                                Seuil: {alert.slaThreshold} jours
+                                <br />
+                                Statut: {alert.alertLevel === 'red' ? 'Retard - Action requise' : alert.alertLevel === 'orange' ? 'À risque' : 'Dans les délais'}
+                              </Typography>
+                            </Box>
+                          }
+                          arrow
+                          placement="left"
+                          componentsProps={{
+                            tooltip: {
+                              sx: {
+                                maxWidth: 350,
+                                bgcolor: 'background.paper',
+                                color: 'text.primary',
+                                boxShadow: 3,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                '& .MuiTooltip-arrow': {
+                                  color: 'background.paper',
+                                },
+                              },
+                            },
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Chip 
+                              label={`${alert.daysSinceReception} / ${alert.slaThreshold}`}
+                              color={alert.alertLevel === 'red' ? 'error' : alert.alertLevel === 'orange' ? 'warning' : 'success'}
+                              size="small"
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              (Finance)
+                            </Typography>
+                            <Info fontSize="small" color="info" sx={{ cursor: 'pointer' }} />
+                          </Box>
+                        </Tooltip>
+                      ) : (
+                        <Chip 
+                          label={`${alert.daysSinceReception} / ${alert.slaThreshold}`}
+                          color={alert.alertLevel === 'red' ? 'error' : alert.alertLevel === 'orange' ? 'warning' : 'success'}
+                          size="small"
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Box display="flex" gap={1}>

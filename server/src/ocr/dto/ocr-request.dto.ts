@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 export class OcrRequestDto {
   @IsNotEmpty()
   @IsString()
-  documentId: string;
+  documentId!: string;
 
   @IsOptional()
   @IsString()

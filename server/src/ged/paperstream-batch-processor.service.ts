@@ -70,7 +70,7 @@ export class PaperStreamBatchProcessor {
       await this.moveBatchToProcessed(batchFolderPath, batch.batchId);
       
       this.logger.log(`Batch ${batch.batchId} processed successfully`);
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Batch processing failed: ${error.message}`);
       await this.quarantineBatch(batchFolderPath, 'PROCESSING_ERROR', error.message);
     } finally {
@@ -138,7 +138,7 @@ export class PaperStreamBatchProcessor {
       }
       
       return null;
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Failed to parse index file ${indexPath}: ${error.message}`);
       return null;
     }
@@ -155,7 +155,7 @@ export class PaperStreamBatchProcessor {
         timestamp: batch.Timestamp?.[0] || batch.timestamp?.[0],
         files: this.extractFileMetadataFromXML(batch.Files?.[0] || batch.files?.[0])
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`XML metadata extraction failed: ${error.message}`);
       return null;
     }
@@ -252,7 +252,7 @@ export class PaperStreamBatchProcessor {
       }
       
       return metadata;
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`CSV metadata extraction failed: ${error.message}`);
       return null;
     }
@@ -427,7 +427,7 @@ export class PaperStreamBatchProcessor {
           timestamp: new Date(),
         }
       });
-    } catch (auditError) {
+    } catch (auditError : any) {
       this.logger.warn(`Failed to create batch audit log: ${auditError.message}`);
     }
   }
@@ -466,7 +466,7 @@ export class PaperStreamBatchProcessor {
           timestamp: new Date(),
         }
       });
-    } catch (auditError) {
+    } catch (auditError : any) {
       this.logger.warn(`Failed to create quarantine audit log: ${auditError.message}`);
     }
   }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
+import { calculateSLA, isSLACompliant, isSLAAtRisk, isSLABreached } from '../utils/sla-calculator';
 
 const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
 
@@ -102,84 +103,63 @@ export class SLAAnalyticsService {
   }
 
   private async getSLACompliantCount(where: any) {
-    const now = new Date();
-    
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
         archived: false,
       },
-      include: { contract: true, client: true }
+      include: { contract: true, client: true, ordresVirement: true }
     });
 
-    let compliantCount = 0;
-    
-    for (const bordereau of bordereaux) {
-      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
-      const validDate = bordereau.dateReception || bordereau.createdAt;
-      const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
-      const percentElapsed = (daysElapsed / slaThreshold) * 100;
-      
-      if (percentElapsed <= 80) {
-        compliantCount++;
-      }
-    }
-
-    return compliantCount;
+    // ✅ USE CENTRALIZED SLA CALCULATOR
+    return bordereaux.filter(b => isSLACompliant({
+      dateReception: b.dateReception,
+      delaiReglement: b.delaiReglement || b.contract?.delaiReglement || b.client?.reglementDelay || 30,
+      statut: b.statut,
+      dateCloture: b.dateCloture,
+      dateExecutionVirement: b.dateExecutionVirement,
+      ordresVirement: b.ordresVirement,
+    })).length;
   }
 
   private async getAtRiskCount(where: any) {
-    const now = new Date();
-    
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
         archived: false,
       },
-      include: { contract: true, client: true }
+      include: { contract: true, client: true, ordresVirement: true }
     });
 
-    let atRiskCount = 0;
-    
-    for (const bordereau of bordereaux) {
-      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
-      const validDate = bordereau.dateReception || bordereau.createdAt;
-      const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
-      const percentElapsed = (daysElapsed / slaThreshold) * 100;
-      
-      if (percentElapsed > 80 && percentElapsed <= 100) {
-        atRiskCount++;
-      }
-    }
-
-    return atRiskCount;
+    // ✅ USE CENTRALIZED SLA CALCULATOR
+    return bordereaux.filter(b => isSLAAtRisk({
+      dateReception: b.dateReception,
+      delaiReglement: b.delaiReglement || b.contract?.delaiReglement || b.client?.reglementDelay || 30,
+      statut: b.statut,
+      dateCloture: b.dateCloture,
+      dateExecutionVirement: b.dateExecutionVirement,
+      ordresVirement: b.ordresVirement,
+    })).length;
   }
 
   private async getBreachedCount(where: any) {
-    const now = new Date();
-    
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
         archived: false,
       },
-      include: { contract: true, client: true }
+      include: { contract: true, client: true, ordresVirement: true }
     });
 
-    let breachedCount = 0;
-    
-    for (const bordereau of bordereaux) {
-      const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
-      const validDate = bordereau.dateReception || bordereau.createdAt;
-      const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
-      const percentElapsed = (daysElapsed / slaThreshold) * 100;
-      
-      if (percentElapsed > 100) {
-        breachedCount++;
-      }
-    }
-
-    return breachedCount;
+    // ✅ USE CENTRALIZED SLA CALCULATOR
+    return bordereaux.filter(b => isSLABreached({
+      dateReception: b.dateReception,
+      delaiReglement: b.delaiReglement || b.contract?.delaiReglement || b.client?.reglementDelay || 30,
+      statut: b.statut,
+      dateCloture: b.dateCloture,
+      dateExecutionVirement: b.dateExecutionVirement,
+      ordresVirement: b.ordresVirement,
+    })).length;
   }
 
   private async getAvgProcessingTime(where: any) {
@@ -267,7 +247,6 @@ export class SLAAnalyticsService {
 
   private async getSLAByDay(where: any) {
     const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const now = new Date();
     
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
@@ -279,8 +258,11 @@ export class SLAAnalyticsService {
         dateCloture: true,
         dateReception: true,
         delaiReglement: true,
+        statut: true,
+        dateExecutionVirement: true,
         contract: { select: { delaiReglement: true } },
-        client: { select: { reglementDelay: true } }
+        client: { select: { reglementDelay: true } },
+        ordresVirement: { select: { etatVirement: true, dateEtatFinal: true, dateTraitement: true } }
       }
     });
 
@@ -296,14 +278,16 @@ export class SLAAnalyticsService {
       const stats = dailyStats.get(date);
       stats.total++;
       
+      // ✅ USE CENTRALIZED SLA CALCULATOR
       const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
-      const validDate = bordereau.dateReception || bordereau.createdAt;
-      const daysElapsed = Math.floor(
-        (now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      const percentElapsed = (daysElapsed / slaThreshold) * 100;
-      
-      if (percentElapsed <= 80) {
+      if (isSLACompliant({
+        dateReception: bordereau.dateReception,
+        delaiReglement: slaThreshold,
+        statut: bordereau.statut,
+        dateCloture: bordereau.dateCloture,
+        dateExecutionVirement: bordereau.dateExecutionVirement,
+        ordresVirement: bordereau.ordresVirement,
+      })) {
         stats.compliant++;
       }
     }
@@ -317,8 +301,6 @@ export class SLAAnalyticsService {
   }
 
   private async getSLAAlerts(where: any) {
-    const now = new Date();
-    
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         ...where,
@@ -356,7 +338,8 @@ export class SLAAnalyticsService {
           select: {
             documents: true
           }
-        }
+        },
+        ordresVirement: { select: { etatVirement: true, dateEtatFinal: true, dateTraitement: true } }
       }
     });
 
@@ -364,14 +347,24 @@ export class SLAAnalyticsService {
     
     for (const bordereau of bordereaux) {
       const slaThreshold = bordereau.delaiReglement || bordereau.contract?.delaiReglement || bordereau.client?.reglementDelay || 30;
-      const validDate = bordereau.dateReception || bordereau.createdAt;
-      const daysElapsed = validDate
-        ? Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24))
-        : 0;
+      
+      // ✅ USE CENTRALIZED SLA CALCULATOR
+      const slaResult = calculateSLA({
+        dateReception: bordereau.dateReception,
+        delaiReglement: slaThreshold,
+        statut: bordereau.statut,
+        dateCloture: bordereau.dateCloture,
+        dateExecutionVirement: bordereau.dateExecutionVirement,
+        ordresVirement: bordereau.ordresVirement,
+      });
+      
+      const { daysElapsed, percentElapsed, daysRemaining, isFrozen } = slaResult;
+      
+      // Skip frozen bordereaux (already completed)
+      if (isFrozen) continue;
       
       let alertLevel: string | null = null;
       let message = '';
-      const percentElapsed = (daysElapsed / slaThreshold) * 100;
       
       if (percentElapsed > 100) {
         alertLevel = 'critical';
@@ -379,7 +372,6 @@ export class SLAAnalyticsService {
         message = `SLA breached by ${daysOverdue} days (${Math.round(percentElapsed)}% elapsed)`;
       } else if (percentElapsed > 80) {
         alertLevel = 'warning';
-        const daysRemaining = Math.ceil(slaThreshold - daysElapsed);
         message = `SLA at risk - ${daysRemaining} days remaining (${Math.round(percentElapsed)}% elapsed)`;
       }
       

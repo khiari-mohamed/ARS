@@ -1198,21 +1198,20 @@ export class DashboardService {
   }
   
   private async getDepartmentStatistics() {
-    // Get statistics based on user departments who are handling bordereaux
+    // Get statistics based on bordereau status (which determines which department handles it)
     const bordereaux = await this.prisma.bordereau.findMany({
       where: { archived: false },
-      include: {
-        currentHandler: {
-          select: { department: true }
-        }
+      select: {
+        statut: true
       }
     });
     
-    // Group by user department
+    // Map status to department based on workflow
     const deptMap = new Map<string, { status: string; count: number }[]>();
     
     bordereaux.forEach(b => {
-      const dept = b.currentHandler?.department || 'Non Affecté';
+      // Determine department based on status (workflow-based)
+      const dept = this.mapStatusToDepartment(b.statut);
       const status = b.statut;
       
       if (!deptMap.has(dept)) {
@@ -1325,7 +1324,9 @@ export class DashboardService {
         name: true,
         _count: {
           select: {
-            bordereaux: true,
+            bordereaux: {
+              where: { archived: false }
+            },
             reclamations: true
           }
         }
@@ -1806,7 +1807,7 @@ export class DashboardService {
           bulletinSoins: bulletinSoins.length
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Get training data error:', error);
       return {
         success: false,

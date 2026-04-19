@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Query, Param, UseGuards, Req, Res, Streama
 import { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as archiver from 'archiver';
+import archiver from 'archiver';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -65,6 +65,16 @@ export class ChefEquipeTableauBordController {
       }
     });
 
+    // ✅ FIX: Fetch ALL gestionnaires (including those with 0 documents)
+    let gestionnaireFilter: any = { role: 'GESTIONNAIRE', active: true };
+    if (req.user?.role === 'CHEF_EQUIPE') {
+      gestionnaireFilter.teamLeaderId = req.user.id;
+    }
+    const allGestionnaires = await this.prisma.user.findMany({
+      where: gestionnaireFilter,
+      select: { fullName: true }
+    });
+
     const typeMapping = {
       'BULLETIN_SOIN': 'Prestation',
       'ADHESION': 'Adhésion', 
@@ -83,6 +93,12 @@ export class ChefEquipeTableauBordController {
         clientBreakdown: {},
         gestionnaireBreakdown: {}
       };
+      
+      // ✅ FIX: Initialize ALL gestionnaires with 0 count
+      allGestionnaires.forEach(g => {
+        types[type].gestionnaireBreakdown[g.fullName] = 0;
+      });
+      types[type].gestionnaireBreakdown['Non assigné'] = 0;
     });
 
     documents.forEach(doc => {
@@ -99,10 +115,7 @@ export class ChefEquipeTableauBordController {
       }
       types[typeName].clientBreakdown[clientName]++;
       
-      // Gestionnaire breakdown
-      if (!types[typeName].gestionnaireBreakdown[gestionnaireName]) {
-        types[typeName].gestionnaireBreakdown[gestionnaireName] = 0;
-      }
+      // Gestionnaire breakdown (now just increment, already initialized)
       types[typeName].gestionnaireBreakdown[gestionnaireName]++;
       
       if (doc.bordereau.statut === 'TRAITE') {
@@ -1328,8 +1341,8 @@ export class ChefEquipeTableauBordController {
     // console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
     
-    // Filter gestionnaires based on user role
-    let gestionnaireFilter: any = { role: 'GESTIONNAIRE' };
+    // ✅ FIX: Filter gestionnaires based on user role AND active status
+    let gestionnaireFilter: any = { role: 'GESTIONNAIRE', active: true };
     
     // If user is CHEF_EQUIPE, only show gestionnaires in their team
     if (req.user?.role === 'CHEF_EQUIPE') {
@@ -1341,39 +1354,43 @@ export class ChefEquipeTableauBordController {
       gestionnaireFilter.id = req.user.id;
     }
     
+    // ✅ FIX: Fetch ALL gestionnaires first (including those with 0 documents)
     const gestionnaires = await this.prisma.user.findMany({
       where: gestionnaireFilter,
       select: {
         id: true,
-        fullName: true,
-        assignedDocuments: {
-          include: {
-            bordereau: { include: { client: true } }
-          },
-          where: {
-            bordereau: { ...accessFilter, archived: false }
-          }
-        }
+        fullName: true
       }
     });
 
     const assignments = await Promise.all(
       gestionnaires.map(async (gestionnaire) => {
+        // ✅ FIX: Fetch documents separately for each gestionnaire
+        const assignedDocuments = await this.prisma.document.findMany({
+          where: {
+            assignedToUserId: gestionnaire.id,
+            bordereau: { ...accessFilter, archived: false }
+          },
+          include: {
+            bordereau: { include: { client: true } }
+          }
+        });
+
         const docsByType = {};
-        gestionnaire.assignedDocuments.forEach(doc => {
+        assignedDocuments.forEach(doc => {
           const type = this.getDocumentTypeLabel(doc.type);
           docsByType[type] = (docsByType[type] || 0) + 1;
         });
 
-        const traites = gestionnaire.assignedDocuments.filter(doc => doc.status === 'TRAITE').length;
-        const enCours = gestionnaire.assignedDocuments.filter(doc => doc.status === 'EN_COURS').length;
-        const retournes = gestionnaire.assignedDocuments.filter(doc => doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN').length;
+        const traites = assignedDocuments.filter(doc => doc.status === 'TRAITE').length;
+        const enCours = assignedDocuments.filter(doc => doc.status === 'EN_COURS').length;
+        const retournes = assignedDocuments.filter(doc => doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN').length;
 
         // Get who returned the documents - find the most recent return action by this gestionnaire
         let returnedBy: string | null = null;
         if (retournes > 0) {
           // Find returned documents for this gestionnaire
-          const returnedDocs = gestionnaire.assignedDocuments.filter(doc => 
+          const returnedDocs = assignedDocuments.filter(doc => 
             doc.status === 'REJETE' || doc.status === 'RETOUR_ADMIN'
           );
           
@@ -1396,7 +1413,7 @@ export class ChefEquipeTableauBordController {
 
         return {
           gestionnaire: gestionnaire.fullName,
-          totalAssigned: gestionnaire.assignedDocuments.length,
+          totalAssigned: assignedDocuments.length,
           traites,
           enCours,
           retournes,

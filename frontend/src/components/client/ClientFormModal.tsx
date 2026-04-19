@@ -18,7 +18,7 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
   reglementDelay: 0,
   reclamationDelay: 0,
   gestionnaireIds: [] as string[],
-  modeRecuperation: '' as string,
+  modeRecuperation: '' as 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | '',
 });
   const [errors, setErrors] = useState<any>({});
   const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
@@ -83,7 +83,12 @@ const validate = () => {
     setFormError(null);
     if (!validate()) return;
     try {
-      await onSubmit(form);
+      // Cast modeRecuperation to the correct type, filtering out empty string
+      const submitData = {
+        ...form,
+        modeRecuperation: form.modeRecuperation || undefined
+      };
+      await onSubmit(submitData as Partial<Client>);
     } catch (err: any) {
       setFormError(err?.response?.data?.message || err?.message || 'An error occurred');
     }
@@ -161,7 +166,7 @@ const validate = () => {
                 labelId="modeRecuperation-label"
                 name="modeRecuperation"
                 value={form.modeRecuperation}
-                onChange={e => setForm({ ...form, modeRecuperation: e.target.value })}
+                onChange={e => setForm({ ...form, modeRecuperation: e.target.value as 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | '' })}
                 label="Mode de récupération *"
               >
                 <MenuItem value="">Sélectionner un mode</MenuItem>

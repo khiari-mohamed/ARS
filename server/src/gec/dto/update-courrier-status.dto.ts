@@ -4,5 +4,5 @@ import { CourrierStatus } from './search-courrier.dto';
 export class UpdateCourrierStatusDto {
   @IsNotEmpty()
   @IsEnum(CourrierStatus)
-  status: CourrierStatus;
+  status!: CourrierStatus;
 }

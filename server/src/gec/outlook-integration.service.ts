@@ -366,13 +366,13 @@ export class OutlookIntegrationService {
             }
           });
           synced++;
-        } catch (error) {
+        } catch (error : any) {
           errors.push(`Failed to sync contact ${contact.displayName}: ${error.message}`);
         }
       }
 
       return { synced, errors };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('Contact sync failed:', error);
       return { synced: 0, errors: [error.message] };
     }

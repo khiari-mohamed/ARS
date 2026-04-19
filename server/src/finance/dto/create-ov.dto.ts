@@ -3,15 +3,15 @@ import { IsNotEmpty, IsString, IsArray, IsNumber } from 'class-validator';
 export class CreateOVDto {
   @IsNotEmpty()
   @IsString()
-  donneurOrdreId: string;
+  donneurOrdreId!: string;
 
   @IsNotEmpty()
   @IsString()
-  societyId: string;
+  societyId!: string;
 
   @IsNotEmpty()
   @IsArray()
-  adherents: {
+  adherents!: {
     matricule: string;
     name: string;
     society: string;
@@ -24,5 +24,5 @@ export class CreateOVDto {
 
   @IsNotEmpty()
   @IsNumber()
-  totalAmount: number;
+  totalAmount!: number;
 }

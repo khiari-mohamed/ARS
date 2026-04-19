@@ -7,11 +7,13 @@ import { DocumentPreviewService } from './document-preview.service';
 import { DocumentAssignmentController } from './document-assignment.controller';
 import { DocumentAssignmentService } from './document-assignment.service';
 import { PrismaModule } from '../prisma/prisma.module';
-
+import { ClientExcelGenerator }  from './excel/client-excel.generator';
 @Module({
   imports: [PrismaModule],
   controllers: [ClientController, SlaConfigurationController, DocumentAssignmentController],
-  providers: [ClientService, SlaConfigurationService, DocumentPreviewService, DocumentAssignmentService],
+  providers: [ClientService, SlaConfigurationService, DocumentPreviewService, DocumentAssignmentService,
+        ClientExcelGenerator,  // ← ADD THIS LINE
+  ],
   exports: [ClientService, SlaConfigurationService, DocumentAssignmentService],
 })
 export class ClientModule {}

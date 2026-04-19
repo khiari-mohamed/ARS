@@ -21,7 +21,7 @@ export class TuniclaimController {
           ? `Synchronisation terminée avec ${result.errors} erreur(s). ${result.imported} bordereaux importés.`
           : `Synchronisation réussie! ${result.imported} bordereaux importés.`
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         imported: 0,
@@ -46,7 +46,7 @@ export class TuniclaimController {
         ...status,
         logs
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         lastSync: null,
         lastResult: null,
@@ -79,7 +79,7 @@ export class TuniclaimController {
         success: true,
         message: 'Status update pushed to MY TUNICLAIM successfully'
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         error: error.message,
@@ -100,7 +100,7 @@ export class TuniclaimController {
         success: true,
         message: 'Payment update pushed to MY TUNICLAIM successfully'
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         error: error.message,
@@ -121,7 +121,7 @@ export class TuniclaimController {
         success: true,
         data: details
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         error: error.message,
@@ -142,7 +142,7 @@ export class TuniclaimController {
         success: true,
         message: 'Connection to MY TUNICLAIM successful'
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         error: error.message,

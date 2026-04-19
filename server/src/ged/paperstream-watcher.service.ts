@@ -107,7 +107,7 @@ export class PaperStreamWatcherService {
       }
       
       await (this.batchProcessor as any).processBatchFolder(batchFolderPath, { clientName, scanDate });
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Batch folder processing failed: ${error.message}`);
     }
   }
@@ -221,7 +221,7 @@ export class PaperStreamWatcherService {
 
       this.logger.log(`Successfully processed file: ${filename}`);
 
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Error processing file ${filename}:`, error);
       await this.logImportError(filename, 'PROCESSING_ERROR', error.message);
       
@@ -319,7 +319,7 @@ export class PaperStreamWatcherService {
         message: `Processed ${processedCount} batch folders`,
         processedCount
       };
-    } catch (error) {
+    } catch (error : any) {
       return {
         success: false,
         error: error.message

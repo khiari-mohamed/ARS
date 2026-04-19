@@ -10,15 +10,15 @@ export enum CourrierType {
 export class CreateCourrierDto {
   @IsNotEmpty()
   @IsString()
-  subject: string;
+  subject!: string;
 
   @IsNotEmpty()
   @IsString()
-  body: string;
+  body!: string;
 
   @IsNotEmpty()
   @IsEnum(CourrierType)
-  type: CourrierType;
+  type!: CourrierType;
 
   @IsOptional()
   @IsString()

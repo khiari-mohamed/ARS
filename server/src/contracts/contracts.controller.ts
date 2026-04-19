@@ -49,7 +49,7 @@ export class ContractsController {
       const result = await this.contractsService.create(createContractDto, file, userId);
       console.log('Contract created successfully:', result.id);
       return result;
-    } catch (error) {
+    } catch (error: any) {
       console.error('=== CONTRACT CREATION ERROR ===');
       console.error('Error details:', error);
       console.error('Stack trace:', error.stack);

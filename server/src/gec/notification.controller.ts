@@ -6,7 +6,7 @@ import * as nodemailer from 'nodemailer';
 export class NotificationController {
   // In-memory store for demo purposes
   private prefs: Record<string, any> = {};
-  private transporter: nodemailer.Transporter | null;
+  private transporter!: nodemailer.Transporter | null;
 
   constructor(private readonly prisma: PrismaService) {
     this.initializeTransporter();
@@ -196,7 +196,7 @@ export class NotificationController {
         timestamp: new Date().toISOString()
       };
 
-    } catch (error) {
+    } catch (error: any) {
       return {
         success: false,
         message: 'Failed to send notification',

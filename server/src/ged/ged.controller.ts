@@ -210,7 +210,7 @@ async uploadDocument(
       
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(buffer);
-    } catch (error) {
+    } catch (error : any) {
       res.status(500).json({ error: 'Failed to export report: ' + error.message });
     }
   }

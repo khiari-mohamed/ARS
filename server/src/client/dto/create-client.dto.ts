@@ -3,11 +3,11 @@ import { IsNotEmpty, IsString, IsInt, IsOptional, IsObject, IsArray, IsEmail, Is
 export class CreateClientDto {
   @IsNotEmpty()
   @IsString()
-  name: string;
+  name!: string;
 
   @IsNotEmpty()
   @IsString()
-  compagnieAssurance: string;
+  compagnieAssurance!: string;
 
   @IsOptional()
   @IsEmail()
@@ -28,11 +28,11 @@ export class CreateClientDto {
 
   @IsNotEmpty()
   @IsInt()
-  reglementDelay: number;
+  reglementDelay!: number;
 
   @IsNotEmpty()
   @IsInt()
-  reclamationDelay: number;
+  reclamationDelay!: number;
 
   @IsOptional()
   @IsString()
@@ -41,4 +41,9 @@ export class CreateClientDto {
   @IsOptional()
   @IsObject()
   slaConfig?: any;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['VIREMENT', 'CHEQUE', 'FEUILLE_CAISSE'])
+  modeRecuperation?: string;
 }

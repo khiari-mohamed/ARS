@@ -107,6 +107,15 @@ export const bulkImportClients = async (file: File, validateOnly: boolean = fals
 };
 
 export const exportClientsAdvanced = async (format: 'csv' | 'excel' | 'pdf', filters?: any) => {
+  // Excel uses dedicated POST endpoint with role-based filtering
+  if (format === 'excel') {
+    const { data } = await LocalAPI.post('/clients/export/excel', filters, {
+      responseType: 'blob'
+    });
+    return data;
+  }
+  
+  // CSV and PDF use GET endpoint
   const { data } = await LocalAPI.get('/clients/export/advanced', {
     params: { format, ...filters },
     responseType: 'blob'

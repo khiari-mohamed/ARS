@@ -83,7 +83,7 @@ export class SlaConfigurationController {
       try {
         const result = await this.slaConfigService.updateSLAConfiguration(update.clientId, update.config);
         results.push({ clientId: update.clientId, success: true, result });
-      } catch (error) {
+      } catch (error: any) {
         results.push({ clientId: update.clientId, success: false, error: error.message });
       }
     }

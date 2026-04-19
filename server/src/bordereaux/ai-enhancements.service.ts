@@ -44,7 +44,7 @@ export class AIEnhancementsService {
         capacity_analysis: aiResponse.data.capacity_analysis,
         ai_powered: true
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('AI load forecasting failed:', error.message);
       return { forecast: [], error: 'AI service unavailable' };
     }
@@ -92,7 +92,7 @@ export class AIEnhancementsService {
         recommendations: await this.generatePerformanceRecommendations(performanceData),
         ai_powered: true
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('AI performance analytics failed:', error.message);
       return { error: 'AI service unavailable' };
     }
@@ -131,7 +131,7 @@ export class AIEnhancementsService {
         performance_ranking: aiResponse.data.performance_ranking,
         ai_powered: true
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('AI complaints intelligence failed:', error.message);
       return { insights: [], auto_replies: [] };
     }
@@ -196,7 +196,7 @@ export class AIEnhancementsService {
         generated_at: new Date().toISOString(),
         ai_powered: true
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('AI priority queue generation failed:', error.message);
       return { priority_queues: [] };
     }
@@ -249,7 +249,7 @@ export class AIEnhancementsService {
         forecast_accuracy: forecast.capacity_analysis?.accuracy || 0.85,
         ai_powered: true
       };
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error('AI capacity planning failed:', error.message);
       return { capacity_gap: 0, error: 'AI service unavailable' };
     }

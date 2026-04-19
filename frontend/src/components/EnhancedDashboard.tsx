@@ -2,24 +2,14 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { aiService } from '../services/aiService';
 import { LocalAPI } from '../services/axios';
-import { hasDashboardAccess, getRoleDisplayName, canViewFeature } from '../utils/dashboardRoles';
-import KPIWidgets from '../pages/dashboard/KPIWidgets';
-import AlertsPanel from '../pages/dashboard/AlertsPanel';
-import SLAStatusPanel from '../pages/dashboard/SLAStatusPanel';
-import AIDashboard from './ai/AIDashboard';
-import LineChart from './LineChart';
-import UserPerformance from './UserPerformance';
-import FeedbackForm from './FeedbackForm';
-import BordereauStatusIndicator from './analytics/BordereauStatusIndicator';
+import { hasDashboardAccess, canViewFeature } from '../utils/dashboardRoles';
 import WorkforceEstimator from './analytics/WorkforceEstimator';
-import GlobalCorbeille from './analytics/GlobalCorbeille';
 import { AssignmentSuggestions } from './BS/AssignmentSuggestions';
 import { RebalancingSuggestions } from './BS/RebalancingSuggestions';
 import { PrioritiesDashboard } from './BS/PrioritiesDashboard';
 import DossiersList from './BS/DossiersList';
-import { ReadOnlyWrapper, useIsReadOnly } from './ReadOnlyWrapper';
-import { PermissionGuard } from './PermissionGuard';
-import ChefEquipeDashboard from '../pages/dashboard/ChefEquipeDashboard';
+import { useIsReadOnly } from './ReadOnlyWrapper';
+
 
 interface TableauBordStats {
   totalDossiers: number;
@@ -134,8 +124,8 @@ const EnhancedDashboard: React.FC = () => {
   const superAdminBordereauxPerPage = 5;
   const superAdminIndividuelsPerPage = 20;
   
-  // AI Explanation Modal state
   const [showAIExplanationModal, setShowAIExplanationModal] = useState(false);
+  const [showDepartmentExplanationModal, setShowDepartmentExplanationModal] = useState(false);
   
   // Filter states
   const [filter1, setFilter1] = useState({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
@@ -963,116 +953,7 @@ const EnhancedDashboard: React.FC = () => {
       case 'RESPONSABLE_DEPARTEMENT':
         return (
           <div style={{ marginTop: '2rem' }}>
-            {/* COMMENTED OUT: All Document Types Overview - Corbeille - Tous Types de Documents */}
-            {/* <div style={{ marginBottom: '2rem' }}>
-              <div style={{ padding: '2rem', border: '1px solid #e0e7ff', borderRadius: '12px', backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <div style={{ width: '4px', height: '24px', backgroundColor: '#10b981', marginRight: '1rem', borderRadius: '2px' }}></div>
-                  <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>Corbeille - Tous Types de Documents</h3>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-                  {[
-                    { type: 'BULLETIN_SOIN', label: 'Bulletins de Soins', icon: '🏥', count: dashboardData.documentStats?.bulletinSoin || 0 },
-                    { type: 'COMPLEMENT_INFORMATION', label: 'Compléments Info', icon: '📋', count: dashboardData.documentStats?.complementInfo || 0 },
-                    { type: 'ADHESION', label: 'Adhésions', icon: '👥', count: dashboardData.documentStats?.adhesions || 0 },
-                    { type: 'RECLAMATION', label: 'Réclamations', icon: '⚠️', count: dashboardData.documentStats?.reclamations || 0 },
-                    { type: 'CONTRAT_AVENANT', label: 'Contrats/Avenants', icon: '📄', count: dashboardData.documentStats?.contrats || 0, noSLA: true },
-                    { type: 'DEMANDE_RESILIATION', label: 'Demandes Résiliation', icon: '❌', count: dashboardData.documentStats?.resiliations || 0, noSLA: true },
-                    { type: 'CONVENTION_TIERS_PAYANT', label: 'Conventions Tiers', icon: '🤝', count: dashboardData.documentStats?.conventions || 0, noSLA: true }
-                  ].map((docType, index) => {
-                    const statusBreakdown = (dashboardData.documentStats as any)?.[`${docType.type.toLowerCase()}StatusBreakdown`] || {
-                      enCours: Math.floor((docType.count || 0) * 0.3),
-                      traites: Math.floor((docType.count || 0) * 0.6),
-                      nonAffectes: Math.floor((docType.count || 0) * 0.1)
-                    };
-                    
-                    return (
-                      <div key={index} style={{ 
-                        padding: '1rem', 
-                        border: '1px solid #e5e7eb', 
-                        borderRadius: '8px', 
-                        backgroundColor: '#fafbfc',
-                        textAlign: 'center',
-                        position: 'relative',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 8px 25px -8px rgba(0, 0, 0, 0.15)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{docType.icon}</div>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#059669', marginBottom: '0.25rem' }}>{docType.count}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: '0.5rem' }}>{docType.label}</div>
-                        
-                        <div style={{ marginTop: '0.5rem', fontSize: '0.7rem', color: '#6b7280' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                            <span>🟠 En cours:</span> <span>{statusBreakdown.enCours}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                            <span>🟢 Traités:</span> <span>{statusBreakdown.traites}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>🔵 Non affectés:</span> <span>{statusBreakdown.nonAffectes}</span>
-                          </div>
-                        </div>
-                        
-                        {docType.noSLA && (
-                          <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', fontSize: '0.7rem', backgroundColor: '#fbbf24', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>No SLA</div>
-                        )}
-                        {!docType.noSLA && (
-                          <div style={{ position: 'absolute', top: '0.5rem', left: '0.5rem', fontSize: '0.7rem', backgroundColor: '#10b981', color: 'white', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>SLA</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                  <h4 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: '600', color: '#374151' }}>Affectation par Type de Document</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem' }}>
-                    {[
-                      { label: 'BS', assigned: dashboardData.documentStats?.bulletinSoin ? Math.floor(dashboardData.documentStats.bulletinSoin * 0.7) : 0, total: dashboardData.documentStats?.bulletinSoin || 0 },
-                      { label: 'Compléments', assigned: dashboardData.documentStats?.complementInfo ? Math.floor(dashboardData.documentStats.complementInfo * 0.8) : 0, total: dashboardData.documentStats?.complementInfo || 0 },
-                      { label: 'Adhésions', assigned: dashboardData.documentStats?.adhesions ? Math.floor(dashboardData.documentStats.adhesions * 0.9) : 0, total: dashboardData.documentStats?.adhesions || 0 },
-                      { label: 'Réclamations', assigned: dashboardData.documentStats?.reclamations ? Math.floor(dashboardData.documentStats.reclamations * 0.6) : 0, total: dashboardData.documentStats?.reclamations || 0 },
-                      { label: 'Contrats', assigned: dashboardData.documentStats?.contrats ? Math.floor(dashboardData.documentStats.contrats * 0.5) : 0, total: dashboardData.documentStats?.contrats || 0 },
-                      { label: 'Résiliations', assigned: dashboardData.documentStats?.resiliations ? Math.floor(dashboardData.documentStats.resiliations * 0.4) : 0, total: dashboardData.documentStats?.resiliations || 0 },
-                      { label: 'Conventions', assigned: dashboardData.documentStats?.conventions ? Math.floor(dashboardData.documentStats.conventions * 0.3) : 0, total: dashboardData.documentStats?.conventions || 0 }
-                    ].map((item, index) => {
-                      const percentage = item.total > 0 ? Math.round((item.assigned / item.total) * 100) : 0;
-                      return (
-                        <div key={index} style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
-                          <div style={{ fontSize: '0.8rem', fontWeight: '600', color: '#374151', marginBottom: '0.25rem' }}>{item.label}</div>
-                          <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: percentage >= 80 ? '#059669' : percentage >= 60 ? '#f59e0b' : '#dc2626' }}>{percentage}%</div>
-                          <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>{item.assigned}/{item.total}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#fff7ed', borderRadius: '8px', border: '1px solid #fed7aa' }}>
-                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', fontWeight: '600', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span>⚖️</span> Exemptions SLA
-                  </h4>
-                  <div style={{ fontSize: '0.9rem', color: '#9a3412' }}>
-                    <p style={{ margin: '0 0 0.5rem 0' }}>
-                      <strong>{(dashboardData.documentStats?.contrats || 0) + (dashboardData.documentStats?.resiliations || 0) + (dashboardData.documentStats?.conventions || 0)}</strong> documents exemptés de SLA :
-                    </p>
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                      <span>📄 Contrats/Avenants: {dashboardData.documentStats?.contrats || 0}</span>
-                      <span>❌ Résiliations: {dashboardData.documentStats?.resiliations || 0}</span>
-                      <span>🤝 Conventions: {dashboardData.documentStats?.conventions || 0}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div> */ }
+          
             <>
             
             <div style={{ marginBottom: '1.25rem' }}>
@@ -1081,6 +962,27 @@ const EnhancedDashboard: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
                   <div style={{ width: '3px', height: '16px', backgroundColor: '#3b82f6', marginRight: '0.625rem', borderRadius: '2px' }}></div>
                   <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '700', color: '#1f2937', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Statistiques par Département</h3>
+                  <button
+                    onClick={() => setShowDepartmentExplanationModal(true)}
+                    title="Cliquez pour comprendre comment fonctionnent ces statistiques"
+                    style={{ 
+                      cursor: 'pointer', 
+                      background: '#2196f3', 
+                      color: 'white', 
+                      borderRadius: '50%', 
+                      width: '18px', 
+                      height: '18px', 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      fontSize: '11px', 
+                      fontWeight: 'bold',
+                      marginLeft: '8px',
+                      border: 'none'
+                    }}
+                  >
+                    ?
+                  </button>
                   <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#6b7280' }}>
                     {(dashboardData.departmentStats || []).reduce((s: number, d: any) => s + (d.count || 0), 0)} dossiers total
                   </span>
@@ -1515,17 +1417,18 @@ const EnhancedDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Affectations par Gestionnaire */}
+              {/* Affectations par Gestionnaire - Show ALL gestionnaires including those with 0 */}
               <div style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', margin: 0 }}>Affectations par Gestionnaire</h3>
-                  <span style={{ fontSize: '14px', color: '#666' }}>Tous les gestionnaires</span>
+                  <span style={{ fontSize: '14px', color: '#666' }}>{superAdminGestionnaireAssignments.length} gestionnaire(s)</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
                   {superAdminGestionnaireAssignments.map((assignment, index) => (
-                    <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6' }}>
-                      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057' }}>
+                    <div key={index} style={{ background: '#f8f9fa', borderRadius: '6px', padding: '12px', border: '1px solid #dee2e6', opacity: assignment.totalAssigned === 0 ? 0.7 : 1 }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px', color: '#495057', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {assignment.gestionnaire}
+                        {assignment.totalAssigned === 0 && <span style={{ fontSize: '10px', background: '#e9ecef', color: '#6c757d', padding: '2px 6px', borderRadius: '4px', fontWeight: 'normal' }}>Disponible</span>}
                       </div>
                       <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
                         <strong>Total affectés:</strong> {assignment.totalAssigned}
@@ -1670,11 +1573,6 @@ const EnhancedDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dossier.date}</td>
-                          {/* <td style={{ padding: '12px 8px' }}>
-                            {!isReadOnly && (
-                              <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
-                            )}
-                          </td> */}
                         </tr>
                       ))}
                     </tbody>
@@ -1743,11 +1641,6 @@ const EnhancedDashboard: React.FC = () => {
                               ))}
                             </div>
                           </td>
-                          {/* <td style={{ padding: '12px 8px' }}>
-                            {!isReadOnly && (
-                              <button onClick={() => handleSuperAdminModifyStatus(dossier)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }} title="Modifier Statut">✏️</button>
-                            )}
-                          </td> */}
                         </tr>
                       ))}
                     </tbody>
@@ -2254,6 +2147,337 @@ const EnhancedDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Department Statistics Explanation Modal */}
+        {showDepartmentExplanationModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+            padding: '2rem'
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '1.5rem',
+                borderBottom: '2px solid #2196f3',
+                paddingBottom: '1rem'
+              }}>
+                <h2 style={{
+                  margin: 0,
+                  color: '#2196f3',
+                  fontSize: '1.8rem',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span>📊</span> Comment fonctionnent les Statistiques par Département ?
+                </h2>
+                <button
+                  onClick={() => setShowDepartmentExplanationModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '2rem',
+                    cursor: 'pointer',
+                    color: '#666',
+                    padding: '0',
+                    lineHeight: 1
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div style={{ fontSize: '0.95rem', lineHeight: '1.6', color: '#374151' }}>
+                {/* Introduction */}
+                <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: '#e3f2fd', borderRadius: '8px', border: '1px solid #90caf9' }}>
+                  <p style={{ margin: 0, fontWeight: '600', color: '#1565c0', fontSize: '1.05rem' }}>
+                    💡 Ces statistiques montrent <strong>où se trouvent les dossiers dans le processus de traitement</strong>, pas qui y travaille actuellement.
+                  </p>
+                </div>
+
+                {/* Section 1: Concept Principal */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#2196f3', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>🎯</span> Le Concept Principal
+                  </h3>
+                  <p style={{ marginBottom: '1rem' }}>
+                    Imaginez le traitement d'un dossier comme un <strong>voyage à travers différentes étapes</strong>. 
+                    Chaque étape correspond à un département qui doit intervenir.
+                  </p>
+                  <div style={{ backgroundColor: '#f5f5f5', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                    <strong>Exemple concret :</strong><br/>
+                    Un dossier avec le statut "A_SCANNER" doit être numérisé. Il est donc comptabilisé dans <strong>"Bureau d'Ordre"</strong> 
+                    car c'est le département responsable de cette étape, même si le dossier n'est pas encore assigné à une personne spécifique.
+                  </div>
+                </div>
+
+                {/* Section 2: Le Workflow Complet */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#2196f3', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>🔄</span> Le Parcours d'un Dossier (Workflow)
+                  </h3>
+                  <p style={{ marginBottom: '1rem' }}>
+                    Voici les différentes étapes par lesquelles passe un dossier, et le département responsable à chaque étape :
+                  </p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {/* Étape 1 */}
+                    <div style={{ padding: '1rem', backgroundColor: '#fff3e0', borderLeft: '4px solid #ff9800', borderRadius: '4px' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.5rem', color: '#e65100' }}>
+                        📥 Étape 1 : Réception
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Statuts :</strong> EN_ATTENTE, A_SCANNER
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Département :</strong> Bureau d'Ordre
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                        Le dossier vient d'arriver et doit être enregistré dans le système. Le Bureau d'Ordre s'occupe de la réception et prépare le dossier pour la numérisation.
+                      </div>
+                    </div>
+
+                    {/* Étape 2 */}
+                    <div style={{ padding: '1rem', backgroundColor: '#e8f5e9', borderLeft: '4px solid #4caf50', borderRadius: '4px' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.5rem', color: '#2e7d32' }}>
+                        📷 Étape 2 : Numérisation
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Statuts :</strong> SCAN_EN_COURS, SCANNE
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Département :</strong> Service SCAN
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                        Le dossier est en cours de numérisation ou vient d'être scanné. L'équipe SCAN transforme les documents papier en fichiers numériques.
+                      </div>
+                    </div>
+
+                    {/* Étape 3 */}
+                    <div style={{ padding: '1rem', backgroundColor: '#f3e5f5', borderLeft: '4px solid #9c27b0', borderRadius: '4px' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.5rem', color: '#6a1b9a' }}>
+                        👥 Étape 3 : Attribution
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Statut :</strong> A_AFFECTER
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Département :</strong> Chef d'Équipe
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                        Le dossier est numérisé et attend d'être assigné à un gestionnaire. Le Chef d'Équipe décide qui va traiter ce dossier.
+                      </div>
+                    </div>
+
+                    {/* Étape 4 */}
+                    <div style={{ padding: '1rem', backgroundColor: '#e1f5fe', borderLeft: '4px solid #03a9f4', borderRadius: '4px' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.5rem', color: '#01579b' }}>
+                        ✍️ Étape 4 : Traitement
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Statuts :</strong> ASSIGNE, EN_COURS, TRAITE
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Département :</strong> Gestionnaire
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                        Le dossier est assigné à un gestionnaire qui l'analyse, le vérifie et le traite. C'est l'étape la plus importante du processus.
+                      </div>
+                    </div>
+
+                    {/* Étape 5 */}
+                    <div style={{ padding: '1rem', backgroundColor: '#fff9c4', borderLeft: '4px solid #fbc02d', borderRadius: '4px' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.5rem', color: '#f57f17' }}>
+                        💰 Étape 5 : Paiement
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Statuts :</strong> PRET_VIREMENT, VIREMENT_EN_COURS, VIREMENT_EXECUTE
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Département :</strong> Finance
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                        Le dossier est validé et le service Finance s'occupe du virement bancaire pour rembourser le client.
+                      </div>
+                    </div>
+
+                    {/* Étape 6 */}
+                    <div style={{ padding: '1rem', backgroundColor: '#f5f5f5', borderLeft: '4px solid #9e9e9e', borderRadius: '4px' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.5rem', color: '#424242' }}>
+                        ✅ Étape 6 : Clôture
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Statut :</strong> CLOTURE
+                      </div>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <strong>Département :</strong> Clôturé
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                        Le dossier est terminé ! Le paiement a été effectué et le dossier est archivé.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Diagramme Visuel */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#2196f3', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>📐</span> Schéma du Parcours
+                  </h3>
+                  <pre style={{
+                    backgroundColor: '#1f2937',
+                    color: '#10b981',
+                    padding: '1.5rem',
+                    borderRadius: '8px',
+                    overflow: 'auto',
+                    fontSize: '0.75rem',
+                    lineHeight: '1.4'
+                  }}>
+{`┌─────────────────────────────────────────────────────────────┐
+│           PARCOURS D'UN DOSSIER DANS LE SYSTÈME            │
+└─────────────────────────────────────────────────────────────┘
+
+    📄 Dossier arrive
+         │
+         ▼
+    ┌─────────────────┐
+    │ Bureau d'Ordre  │  ← Statuts: EN_ATTENTE, A_SCANNER
+    │   (Réception)   │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │  Service SCAN   │  ← Statuts: SCAN_EN_COURS, SCANNE
+    │ (Numérisation)  │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │ Chef d'Équipe   │  ← Statut: A_AFFECTER
+    │  (Attribution)  │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │  Gestionnaire   │  ← Statuts: ASSIGNE, EN_COURS, TRAITE
+    │   (Traitement)  │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │     Finance     │  ← Statuts: PRET_VIREMENT, 
+    │   (Paiement)    │            VIREMENT_EN_COURS,
+    └────────┬────────┘            VIREMENT_EXECUTE
+             │
+             ▼
+    ┌─────────────────┐
+    │    Clôturé      │  ← Statut: CLOTURE
+    │   (Terminé)     │
+    └─────────────────┘
+             │
+             ▼
+         ✅ FIN`}
+                  </pre>
+                </div>
+
+                {/* Section 4: Pourquoi c'est important */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ color: '#2196f3', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>❓</span> Pourquoi cette méthode ?
+                  </h3>
+                  <div style={{ backgroundColor: '#e8f5e9', padding: '1rem', borderRadius: '8px', border: '1px solid #81c784' }}>
+                    <p style={{ margin: '0 0 1rem 0' }}>
+                      <strong>✅ Avantages de cette approche :</strong>
+                    </p>
+                    <ul style={{ marginLeft: '1.5rem', marginBottom: 0 }}>
+                      <li style={{ marginBottom: '0.5rem' }}>
+                        <strong>Vision claire du workflow :</strong> Vous voyez immédiatement combien de dossiers sont à chaque étape du processus.
+                      </li>
+                      <li style={{ marginBottom: '0.5rem' }}>
+                        <strong>Identification des goulots d'étranglement :</strong> Si beaucoup de dossiers sont bloqués au "Bureau d'Ordre", vous savez qu'il faut accélérer la numérisation.
+                      </li>
+                      <li style={{ marginBottom: '0.5rem' }}>
+                        <strong>Suivi opérationnel :</strong> Chaque département sait combien de dossiers l'attendent.
+                      </li>
+                      <li>
+                        <strong>Indépendant des personnes :</strong> Même si un dossier n'est pas encore assigné à quelqu'un, on sait quelle étape doit être faite.
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Section 5: Exemple Pratique */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <h3 style={{ color: '#2196f3', fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span>💼</span> Exemple Pratique
+                  </h3>
+                  <div style={{ backgroundColor: '#fff3e0', padding: '1rem', borderRadius: '8px', border: '1px solid #ffb74d' }}>
+                    <p style={{ margin: '0 0 1rem 0', fontWeight: 'bold' }}>
+                      Situation : Vous voyez dans les statistiques
+                    </p>
+                    <div style={{ backgroundColor: 'white', padding: '1rem', borderRadius: '4px', marginBottom: '1rem', fontFamily: 'monospace' }}>
+                      Bureau d'Ordre: 6 dossiers (A_SCANNER)<br/>
+                      Gestionnaire: 1 dossier (TRAITE)<br/>
+                      Finance: 6 dossiers (VIREMENT_EXECUTE)
+                    </div>
+                    <p style={{ margin: 0 }}>
+                      <strong>Interprétation :</strong><br/>
+                      • 6 dossiers attendent d'être scannés par le Bureau d'Ordre<br/>
+                      • 1 dossier a été traité par un gestionnaire<br/>
+                      • 6 dossiers ont été payés par le service Finance<br/>
+                      <br/>
+                      <strong>Action à prendre :</strong> Prioriser la numérisation des 6 dossiers en attente au Bureau d'Ordre.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                paddingTop: '1.5rem',
+                borderTop: '1px solid #e5e7eb'
+              }}>
+                <button
+                  onClick={() => setShowDepartmentExplanationModal(false)}
+                  style={{
+                    background: '#2196f3',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.75rem 2rem',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    fontWeight: '600'
+                  }}
+                >
+                  J'ai compris !
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* AI Explanation Modal */}
         {showAIExplanationModal && (
           <div style={{
@@ -2746,21 +2970,6 @@ const EnhancedDashboard: React.FC = () => {
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  {/*<select 
-                    onChange={(e) => handleSuperAdminStatusChangeInModal(e.target.value)}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #ddd',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                    defaultValue=""
-                  >
-                    <option value="" disabled>Modifier statut</option>
-                    <option value="En cours">En cours</option>
-                    <option value="Traité">Traité</option>
-                    <option value="Retourné">Retourné</option>
-                  </select>*/}
                   <button 
                     onClick={closeSuperAdminPDFModal}
                     style={{
@@ -2961,12 +3170,7 @@ const EnhancedDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* AI Dashboard for Admin roles - COMMENTED OUT: Document classification section */}
-          {/* {canViewFeature(user?.role, 'department_stats') && (
-            <div style={{ marginTop: '2rem' }}>
-              <AIDashboard />
-            </div>
-          )} */}
+      
 
           {/* AI Recommendations - ENHANCED UI */}
           {aiInsights?.recommendations.length > 0 && (

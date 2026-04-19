@@ -208,7 +208,7 @@ export class GedService {
         newStatus: status,
         actualStatus: doc.status
       });
-    } catch (enumError) {
+    } catch (enumError : any) {
       console.error('❌ Enum error, trying TRAITE instead:', enumError.message);
       // Fallback to TRAITE if SCANNE is not valid
       doc = await this.prisma.document.update({
@@ -369,7 +369,7 @@ export class GedService {
     // Notification
     await this.notificationService.notify('document_uploaded', { document: doc, user });
     return doc;
-  } catch (err) {
+  } catch (err : any) {
     console.error('Upload error:', err);
     throw new Error('File upload failed: ' + (err?.message || err));
   }
@@ -576,7 +576,7 @@ export class GedService {
     if (!['SUPER_ADMIN', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'].includes(user.role)) {
       throw new ForbiddenException('You do not have permission to perform advanced search');
     }
-    return this.advancedSearchService.search(query);
+    return this.advancedSearchService.search(query, user.id, user.role);
   }
 
   // Workflow Management
@@ -1428,7 +1428,7 @@ export class GedService {
       
       throw new Error('Unsupported format');
       
-    } catch (error) {
+    } catch (error : any) {
       console.error('Export error:', error);
       throw new Error('Failed to export report: ' + error.message);
     }
@@ -1785,7 +1785,7 @@ export class GedService {
       }
 
       return doc;
-    } catch (err) {
+    } catch (err : any) {
       console.error('❌ [BACKEND] Document creation failed:', {
         error: err?.message || err,
         data,

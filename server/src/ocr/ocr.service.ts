@@ -33,7 +33,7 @@ export class OcrService {
     try {
       const { data } = await Tesseract.recognize(filePath, 'fra+eng');
       return data.text;
-    } catch (e) {
+    } catch (e: any) {
       this.logger.error('OCR extraction failed', e);
       throw new Error('OCR extraction failed: ' + e.message);
     }
@@ -59,7 +59,7 @@ export class OcrService {
     try {
       const result = await Tesseract.recognize(file.path, 'eng+fra');
       rawText = result.data.text;
-    } catch (e) {
+    } catch (e : any) {
       status = 'FAILED';
       error = e.message;
       rawText = '';

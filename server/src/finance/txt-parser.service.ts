@@ -52,7 +52,7 @@ export class TxtParserService {
           if (parsed) {
             results.push(parsed);
           }
-        } catch (error) {
+        } catch (error : any) {
           errors.push(`Line ${i + 1}: ${error.message}`);
         }
       }

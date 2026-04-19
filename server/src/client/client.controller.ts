@@ -26,11 +26,14 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '../auth/user-role.enum';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Express } from 'express';
-
+import { ClientExcelGenerator }  from './excel/client-excel.generator'; //added this import for excel generation
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('clients')
 export class ClientController {
-  constructor(private readonly clientService: ClientService) {}
+  constructor(
+  private readonly clientService: ClientService,
+  private readonly clientExcelGenerator: ClientExcelGenerator,  // ← ADD THIS
+) {}
 
 
 
@@ -86,15 +89,20 @@ export class ClientController {
 
   // Export clients to Excel
   @Post('export/excel')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
-  async exportExcel(@Body() query: SearchClientDto, @Res() res: Response) {
-    const buffer = await this.clientService.exportToExcel(query);
-    res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': 'attachment; filename="clients.xlsx"',
-    });
-    res.status(HttpStatus.OK).send(buffer);
-  }
+ @Roles(UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE)
+  async exportExcel(@Body() query: SearchClientDto, @Res() res: Response, @Req() req: Request) {
+  // Pass user for role-based filtering
+  const clients = await this.clientService.findAll(query, req['user']);
+  const buffer  = await this.clientExcelGenerator.generateClientReport(clients);
+ 
+  const filename = `clients_${new Date().toISOString().split('T')[0]}.xlsx`;
+  res.set({
+    'Content-Type':        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'Content-Disposition': `attachment; filename="${filename}"`,
+    'Content-Length':      buffer.length,
+  });
+  res.status(HttpStatus.OK).send(buffer);
+}
 
   // Export clients to PDF
   @Post('export/pdf')
@@ -133,7 +141,7 @@ export class ClientController {
     try {
       await this.clientService.handleArsWebhook(payload);
       res.status(HttpStatus.OK).json({ status: 'success', message: 'Webhook processed' });
-    } catch (error) {
+    } catch (error : any ) {
       res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ status: 'error', message: error.message });
     }
   }

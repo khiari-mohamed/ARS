@@ -3,21 +3,21 @@ import { IsNotEmpty, IsString, IsNumber } from 'class-validator';
 export class CreateVirementDto {
   @IsNotEmpty()
   @IsString()
-  bordereauId: string;
+  bordereauId!: string;
 
   @IsNotEmpty()
   @IsNumber()
-  montant: number;
+  montant!: number;
 
   @IsNotEmpty()
   @IsString()
-  referenceBancaire: string;
+  referenceBancaire!: string;
 
   @IsNotEmpty()
   @IsString()
-  dateDepot: string; // ISO string
+  dateDepot!: string; // ISO string
 
   @IsNotEmpty()
   @IsString()
-  dateExecution: string; // ISO string
+  dateExecution!: string; // ISO string
 }

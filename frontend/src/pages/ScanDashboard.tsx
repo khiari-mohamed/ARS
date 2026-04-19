@@ -322,19 +322,7 @@ const ScanDashboard: React.FC = () => {
             width={{ xs: '100%', sm: 'auto' }}
             sx={{ flexWrap: { sm: 'wrap', md: 'nowrap' } }}
           >
-            {/* <Button
-              variant="contained"
-              startIcon={<Settings />}
-              onClick={handleInitializeScanner}
-              disabled={initializingScanner}
-              sx={{ 
-                minWidth: { xs: 'auto', sm: 120 },
-                fontSize: '0.75rem',
-                width: { xs: '100%', sm: 'auto' }
-              }}
-            >
-              {initializingScanner ? 'Init...' : 'Initialiser'}
-            </Button> */}
+
             <Button
               variant="outlined"
               startIcon={<Scanner />}
@@ -408,21 +396,6 @@ const ScanDashboard: React.FC = () => {
             >
               + Nouvelle Entrée
             </Button>
-            {/* COMMENTED OUT: SCAN MANUEL button as per requirements */}
-            {/* <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<Scanner />}
-              onClick={() => setActiveDialog('manual-scan')}
-              sx={{ 
-                minWidth: { xs: 'auto', sm: 140 },
-                fontSize: '0.75rem',
-                width: { xs: '100%', sm: 'auto' }
-              }}
-            >
-              📄 Scan Manuel
-            </Button> */}
-
           </Box>
         </Box>
       </Box>
@@ -445,11 +418,6 @@ const ScanDashboard: React.FC = () => {
           {scanStatus.errorCount} document(s) en erreur nécessitent une attention
         </Alert>
       )}
-
-      {/* COMMENTED OUT: Redundant scan corbeille - Use main File d'Attente SCAN table instead */}
-      {/* <Box sx={{ mb: 4 }}>
-        <ScanCorbeille />
-      </Box> */}
 
       {/* NEW BORDEREAU PROGRESS MANAGEMENT SECTION */}
       <Box sx={{ mb: 4 }}>
@@ -573,16 +541,6 @@ const ScanDashboard: React.FC = () => {
                     >
                       {loadingHistory ? '⏳ Chargement...' : '📜 Historique'}
                     </Button>
-                    {/* COMMENTED OUT: Corrections button - Now handled by ReturnedBordereauHandler component */}
-                    {/* <Button
-                      size="small"
-                      variant="outlined"
-                      color="warning"
-                      onClick={() => setActiveDialog('document-corrections')}
-                      sx={{ fontSize: '0.7rem' }}
-                    >
-                      🔧 Corrections
-                    </Button> */}
                   </Box>
                 </CardContent>
               </Card>
@@ -1064,257 +1022,6 @@ const ScanDashboard: React.FC = () => {
             </TableContainer>
           </Paper>
         </Grid>
-
-        {/* COMMENTED OUT: File d'Attente SCAN Table - REDUNDANT as per company requirements */}
-        {/* REDUNDANT TABLE - COMMENTED OUT
-        <Grid item xs={12}>
-          <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">
-                📋 File d'Attente SCAN ({scanQueue.length})
-              </Typography>
-              <Box display="flex" gap={1}>
-                <Chip 
-                  label={`${scanQueue.filter(b => b.statut === 'A_SCANNER').length} à scanner`}
-                  color="warning"
-                  size="small"
-                />
-                <Chip 
-                  label={`${scanQueue.filter(b => b.statut === 'SCAN_EN_COURS').length} en cours`}
-                  color="info"
-                  size="small"
-                />
-                <Chip 
-                  label={`${scanQueue.filter((b: any) => ['SCANNE', 'A_AFFECTER'].includes(b.statut)).length} finalisés`}
-                  color="success"
-                  size="small"
-                />
-              </Box>
-            </Box>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Référence</TableCell>
-                    <TableCell>Client</TableCell>
-                    <TableCell>Type</TableCell>
-                    <TableCell>Statut</TableCell>
-                    <TableCell>Scan Status</TableCell>
-                    <TableCell>Documents</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {scanQueue.map((bordereau: any) => {
-                    return (
-                      <TableRow key={bordereau.id}>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight="bold">
-                            {bordereau.reference}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {new Date(bordereau.createdAt).toLocaleDateString()}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {bordereau.client?.name || 'N/A'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={bordereau.type || 'GENERAL'} 
-                            size="small" 
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={bordereau.statut}
-                            color={
-                              bordereau.statut === 'A_SCANNER' ? 'warning' :
-                              bordereau.statut === 'SCAN_EN_COURS' ? 'info' :
-                              ['SCANNE', 'A_AFFECTER'].includes(bordereau.statut) ? 'success' : 'default'
-                            }
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={bordereau.scanStatus || 'NON_SCANNE'}
-                            color={
-                              bordereau.scanStatus === 'NON_SCANNE' ? 'default' :
-                              bordereau.scanStatus === 'SCAN_EN_COURS' ? 'info' :
-                              bordereau.scanStatus === 'SCAN_FINALISE' ? 'success' : 'default'
-                            }
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {bordereau.documents?.length || 0} doc(s)
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box display="flex" gap={1} flexWrap="wrap">
-                            {(bordereau.statut === 'A_SCANNER' || bordereau.statut === 'SCAN_EN_COURS') && (
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="secondary"
-                                startIcon={<Scanner />}
-                                onClick={() => {
-                                  setSelectedBordereau(bordereau);
-                                  setActiveDialog('manual-scan-direct');
-                                }}
-                                sx={{ 
-                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                                  minWidth: { xs: 'auto', sm: 'auto' },
-                                  px: { xs: 1, sm: 2 }
-                                }}
-                              >
-                                📄 Scan Manuel
-                              </Button>
-                            )}
-                            <Button
-                              size="small"
-                              variant="contained"
-                              startIcon={<PlayArrow />}
-                              onClick={() => handleStartScanning(bordereau.id)}
-                              disabled={processing === bordereau.id || autoAssigning === bordereau.id}
-                              sx={{ 
-                                fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                                minWidth: { xs: 'auto', sm: 'auto' },
-                                px: { xs: 1, sm: 2 }
-                              }}
-                            >
-                              Scanner
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<Visibility />}
-                              onClick={() => handleViewBordereau(bordereau.id)}
-                              sx={{ 
-                                fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                                minWidth: { xs: 'auto', sm: 'auto' },
-                                px: { xs: 1, sm: 2 }
-                              }}
-                            >
-                              Voir
-                            </Button>
-                            {(!bordereau.scanStatus || bordereau.scanStatus === 'NON_SCANNE') && (
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="warning"
-                                onClick={async () => {
-                                  try {
-                                    const { LocalAPI } = await import('../services/axios');
-                                    await LocalAPI.put(`/bordereaux/${bordereau.id}/scan-status`, {
-                                      scanStatus: 'SCAN_EN_COURS'
-                                    });
-                                    await loadDashboard();
-                                  } catch (error) {
-                                    console.error('Failed to start scan:', error);
-                                  }
-                                }}
-                                sx={{ 
-                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                                  minWidth: { xs: 'auto', sm: 'auto' },
-                                  px: { xs: 1, sm: 2 }
-                                }}
-                              >
-                                🖨️ Démarrer
-                              </Button>
-                            )}
-                            {bordereau.scanStatus === 'SCAN_EN_COURS' && (
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="success"
-                                onClick={async () => {
-                                  try {
-                                    const { LocalAPI } = await import('../services/axios');
-                                    await LocalAPI.put(`/bordereaux/${bordereau.id}/scan-status`, {
-                                      scanStatus: 'SCAN_FINALISE'
-                                    });
-                                    await loadDashboard();
-                                  } catch (error) {
-                                    console.error('Failed to finalize scan:', error);
-                                  }
-                                }}
-                                sx={{ 
-                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                                  minWidth: { xs: 'auto', sm: 'auto' },
-                                  px: { xs: 1, sm: 2 }
-                                }}
-                              >
-                                ✅ Finaliser
-                              </Button>
-                            )}
-                            {bordereau.scanStatus === 'SCAN_FINALISE' && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="secondary"
-                                disabled={autoAssigning === bordereau.id}
-                                onClick={async () => {
-                                  setAutoAssigning(bordereau.id);
-                                  try {
-                                    const { LocalAPI } = await import('../services/axios');
-                                    const response = await LocalAPI.post(`/bordereaux/${bordereau.id}/auto-assign`);
-                                    
-                                    if (response.data.success) {
-                                      alert(`✅ Bordereau auto-assigné avec succès!\n\n👤 Assigné à: ${response.data.assignedTo}\n🔧 Méthode: ${response.data.method || 'AI'}\n\n🔄 Actualisation du tableau...`);
-                                      await loadDashboard();
-                                    } else {
-                                      alert(`❌ Échec de l'auto-assignation\n\n🔍 Erreur: ${response.data.error || 'Erreur inconnue'}\n\n💡 Veuillez réessayer ou assigner manuellement`);
-                                    }
-                                  } catch (error: any) {
-                                    console.error('Auto-assign failed:', error);
-                                    const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de l\'auto-assignation';
-                                    alert(`❌ Erreur d'auto-assignation\n\n🔍 Détails: ${errorMessage}\n\n💡 Vérifiez qu'il y a des gestionnaires disponibles`);
-                                  } finally {
-                                    setAutoAssigning(null);
-                                  }
-                                }}
-                                sx={{ 
-                                  fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                                  minWidth: { xs: 'auto', sm: 'auto' },
-                                  px: { xs: 1, sm: 2 }
-                                }}
-                              >
-                                {autoAssigning === bordereau.id ? '⏳ Assignation...' : '🤖 Auto-assigner'}
-                              </Button>
-                            )}
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {scanQueue.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center">
-                        <Typography 
-                          color="text.secondary" 
-                          sx={{ 
-                            py: { xs: 2, sm: 4 },
-                            fontSize: { xs: '0.875rem', sm: '1rem' }
-                          }}
-                        >
-                          Aucun bordereau en attente de scan
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Grid> */}
-
       </Grid>
 
       {/* Dialogs */}

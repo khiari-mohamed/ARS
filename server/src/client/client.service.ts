@@ -23,7 +23,42 @@ export class ClientService {
 
   // --- Bordereaux by client ---
   async getBordereauxByClient(clientId: string) {
-    return this.prisma.bordereau.findMany({ where: { clientId } });
+    return this.prisma.bordereau.findMany({ 
+      where: { clientId },
+      include: {
+        chargeCompte: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true
+          }
+        },
+        currentHandler: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true
+          }
+        },
+        team: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true
+          }
+        },
+        documents: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            uploadedAt: true,
+            status: true
+          }
+        }
+      },
+      orderBy: { dateReception: 'desc' }
+    });
   }
   
   // --- GED Integration: Upload Contract Document ---
@@ -39,10 +74,10 @@ export class ClientService {
       throw new BadRequestException('Only PDF files are allowed for contracts');
     }
     
-    // Validate file size (max 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
-      throw new BadRequestException('File size must be less than 10MB');
+      throw new BadRequestException('File size must be less than 50MB');
     }
     
     const fs = require('fs');
@@ -590,7 +625,7 @@ export class ClientService {
         }
         
         results.success.push({ line: i + 1, name: clientData.name });
-      } catch (error) {
+      } catch (error : any ) {
         results.errors.push({ line: i + 1, error: error.message });
       }
     }
@@ -946,7 +981,7 @@ export class ClientService {
       }
       
       // Extract valid fields only and handle gestionnaireIds as teamLeaderId
-      const { name, compagnieAssurance, email, phone, address, reglementDelay, reclamationDelay, status, slaConfig, teamLeaderId, gestionnaireIds } = dto as any;
+      const { name, compagnieAssurance, email, phone, address, reglementDelay, reclamationDelay, status, slaConfig, teamLeaderId, gestionnaireIds, modeRecuperation } = dto as any;
       
       // Use gestionnaireIds[0] as teamLeaderId if provided
       const chefEquipeId = teamLeaderId || (gestionnaireIds && gestionnaireIds.length > 0 ? gestionnaireIds[0] : null);
@@ -985,6 +1020,7 @@ export class ClientService {
         slaConfig,
         chargeCompteId: chefEquipeId,
         compagnieAssuranceId: compagnieAssuranceRecord?.id,
+        modeRecuperation,
       };
       
       console.log('Creating client with final data:', clientData);
@@ -1010,7 +1046,26 @@ export class ClientService {
       where: { id },
       include: {
         chargeCompte: true, // Chef d'équipe assigned to client
-        contracts: true,
+        contracts: {
+          include: {
+            teamLeader: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: true
+              }
+            },
+            assignedManager: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: true
+              }
+            }
+          }
+        },
         bordereaux: true,
         reclamations: true,
         compagnieAssurance: true,

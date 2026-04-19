@@ -90,7 +90,7 @@ export class ExcelValidationService {
       if (!worksheet || worksheet.rowCount < 2) {
         throw new Error('Empty or invalid Excel file');
       }
-    } catch (error) {
+    } catch (error : any) {
       console.log('Excel parsing failed, creating default data:', error.message);
       return this.createDefaultValidationResult();
     }
@@ -523,7 +523,7 @@ export class ExcelValidationService {
       console.log(`Row ${rowNumber}: Final - RIB=${rib} (source: ${ribSource}), Status=${validationItem.status}, Errors=${validationItem.erreurs.length}`);
       return { item: validationItem };
 
-    } catch (error) {
+    } catch (error : any) {
       return {
         error: {
           row: rowNumber,

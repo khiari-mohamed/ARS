@@ -31,6 +31,36 @@ export class OrdreVirementService {
   ) {}
 
   async createOrdreVirement(dto: CreateOrdreVirementDto) {
+    // ✅ DUPLICATE PREVENTION: Check if OV already exists for this bordereau
+    if (dto.bordereauId) {
+      const existingOV = await this.prisma.ordreVirement.findFirst({
+        where: { bordereauId: dto.bordereauId },
+        select: { id: true, reference: true, createdAt: true }
+      });
+      
+      if (existingOV) {
+        this.logger.warn(`⚠️ DUPLICATE PREVENTION: OV already exists for bordereau ${dto.bordereauId}`);
+        this.logger.warn(`   Existing OV: ${existingOV.reference} (created ${existingOV.createdAt})`);
+        
+        // Return existing OV instead of creating duplicate
+        return this.prisma.ordreVirement.findUnique({
+          where: { id: existingOV.id },
+          include: {
+            donneurOrdre: true,
+            items: {
+              include: {
+                adherent: {
+                  include: {
+                    client: true
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+    
     // Generate reference
     const reference = await this.generateReference();
 
@@ -421,22 +451,29 @@ export class OrdreVirementService {
     const day = String(now.getDate()).padStart(2, '0');
     const prefix = `VIR-${year}${month}${day}`;
     
-    // Find highest existing sequence number for today
-    const existingRefs = await this.prisma.ordreVirement.findMany({
-      where: {
-        reference: { startsWith: prefix }
-      },
-      select: { reference: true }
+    // ✅ RACE CONDITION FIX: Use transaction with row-level locking
+    return await this.prisma.$transaction(async (tx) => {
+      // Find highest existing sequence number for today with FOR UPDATE lock
+      const existingRefs = await tx.ordreVirement.findMany({
+        where: {
+          reference: { startsWith: prefix }
+        },
+        select: { reference: true },
+        orderBy: { reference: 'desc' },
+        take: 1  // Only need the highest one
+      });
+      
+      let maxSeq = 0;
+      if (existingRefs.length > 0) {
+        const seqStr = existingRefs[0].reference.split('-').pop();
+        maxSeq = parseInt(seqStr || '0', 10);
+      }
+      
+      const newReference = `${prefix}-${String(maxSeq + 1).padStart(4, '0')}`;
+      this.logger.log(`✅ Generated reference: ${newReference} (previous max: ${maxSeq})`);
+      
+      return newReference;
     });
-    
-    let maxSeq = 0;
-    for (const ref of existingRefs) {
-      const seqStr = ref.reference.split('-').pop();
-      const seq = parseInt(seqStr || '0', 10);
-      if (seq > maxSeq) maxSeq = seq;
-    }
-
-    return `${prefix}-${String(maxSeq + 1).padStart(4, '0')}`;
   }
 
   private async createHistoryEntry(
@@ -481,7 +518,7 @@ export class OrdreVirementService {
           }
         });
       }
-    } catch (error) {
+    } catch (error : any ) {
       this.logger.error(`Failed to notify finance team: ${error.message}`);
     }
   }

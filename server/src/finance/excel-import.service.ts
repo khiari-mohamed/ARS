@@ -55,7 +55,7 @@ export class ExcelImportService {
       const results = await this.processExcelData(data, clientId);
       return results;
 
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`Excel processing failed: ${error.message}`);
       throw new BadRequestException(`Failed to process Excel file: ${error.message}`);
     }
@@ -260,7 +260,7 @@ export class ExcelImportService {
         errors
       };
 
-    } catch (error) {
+    } catch (error : any) {
       return {
         valid: false,
         errors: [`Erreur de lecture du fichier: ${error.message}`]

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowNotificationsService } from './workflow-notifications.service';
 import { TeamRoutingService } from './team-routing.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { calculateSLA } from '../utils/sla-calculator';
 
 @Injectable()
 export class AutomaticWorkflowService {
@@ -199,56 +200,46 @@ export class AutomaticWorkflowService {
   }
 
   async getSLABreaches() {
-    const now = new Date();
-    
     const breaches = await this.prisma.bordereau.findMany({
       where: {
-        statut: { in: ['ASSIGNE', 'EN_COURS', 'A_AFFECTER'] },
-        OR: [
-          {
-            dateReception: {
-              lte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) // 30 days ago
-            },
-            delaiReglement: { lte: 30 }
-          },
-          {
-            dateReception: {
-              lte: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000) // 15 days ago
-            },
-            delaiReglement: { lte: 15 }
-          },
-          {
-            dateReception: {
-              lte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) // 7 days ago
-            },
-            delaiReglement: { lte: 7 }
-          }
-        ]
+        statut: { in: ['ASSIGNE', 'EN_COURS', 'A_AFFECTER'] }
       },
       include: {
         client: { select: { name: true } },
-        currentHandler: { select: { fullName: true } }
+        currentHandler: { select: { fullName: true } },
+        ordresVirement: true
       },
       orderBy: { dateReception: 'asc' }
     });
 
-    return breaches.map(bordereau => {
-      const daysSinceReception = Math.floor(
-        (now.getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      const daysOverdue = daysSinceReception - bordereau.delaiReglement;
+    return breaches
+      .map(bordereau => {
+        const slaData = calculateSLA(bordereau);
+        
+        // Skip frozen bordereaux
+        if (slaData.isFrozen) {
+          return null;
+        }
+        
+        const daysOverdue = slaData.daysElapsed - bordereau.delaiReglement;
+        
+        // Only include actual breaches
+        if (daysOverdue <= 0) {
+          return null;
+        }
 
-      return {
-        id: bordereau.id,
-        reference: bordereau.reference,
-        clientName: bordereau.client?.name,
-        assignedTo: bordereau.currentHandler?.fullName,
-        daysSinceReception,
-        slaLimit: bordereau.delaiReglement,
-        daysOverdue,
-        severity: daysOverdue > 10 ? 'CRITICAL' : daysOverdue > 5 ? 'HIGH' : 'MEDIUM'
-      };
-    });
+        return {
+          id: bordereau.id,
+          reference: bordereau.reference,
+          clientName: bordereau.client?.name,
+          assignedTo: bordereau.currentHandler?.fullName,
+          daysSinceReception: slaData.daysElapsed,
+          slaLimit: bordereau.delaiReglement,
+          daysOverdue,
+          severity: daysOverdue > 10 ? 'CRITICAL' : daysOverdue > 5 ? 'HIGH' : 'MEDIUM'
+        };
+      })
+      .filter(b => b !== null);
   }
 
   async escalateSLABreaches() {

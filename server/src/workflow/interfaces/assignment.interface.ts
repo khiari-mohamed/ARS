@@ -1,4 +1,4 @@
-export interface Assignment {
+/*export interface Assignment {
   id: string;
   taskId: string;
   taskType: string;
@@ -8,3 +8,4 @@ export interface Assignment {
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE';
   notes?: string;
 }
+  */

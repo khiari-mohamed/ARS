@@ -182,7 +182,11 @@ export class AlertsService {
           }
         },
         team: true,
-        chargeCompte: true
+        chargeCompte: true,
+        AlertLog: {
+          where: { resolved: false },
+          select: { id: true, resolved: true }
+        }
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -214,7 +218,18 @@ export class AlertsService {
     }
 
     // Generate alerts with AI-enhanced color coding
-    const alerts = bordereaux.map(b => {
+    const alerts = bordereaux
+      // FILTER OUT COMPLETED BORDEREAUX - No action possible
+      // For alerts: exclude VIREMENT_EXECUTE, CLOTURE, PAYE (payment complete)
+      .filter(b => !['CLOTURE', 'VIREMENT_EXECUTE', 'PAYE'].includes(b.statut))
+      // FILTER OUT BORDEREAUX WITH ALL ALERTS RESOLVED
+      .filter(b => {
+        // If there are no alert logs, include it (might need an alert)
+        if (!b.AlertLog || b.AlertLog.length === 0) return true;
+        // If there are unresolved alerts, include it
+        return b.AlertLog.some(log => !log.resolved);
+      })
+      .map(b => {
       const aiPrediction = (aiPredictions as unknown as any[])?.find(p => p.id === b.id);
       const daysSinceReception = b.dateReception ? 
         (Date.now() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) : 0;
@@ -228,16 +243,42 @@ export class AlertsService {
         aiScore = aiPrediction.score;
         reason = aiPrediction.explanation || this.generateReasonFromScore(aiScore, daysSinceReception);
       } else {
-        // RÈGLE SLA UNIFIÉE: Basée sur pourcentage du délai écoulé
-        const slaThreshold = this.getSlaThreshold(b);
-        const percentageElapsed = (daysSinceReception / slaThreshold) * 100;
+        // TWO-PHASE SLA TRACKING
+        // Phase 1: Gestionnaire SLA (Reception → TRAITE)
+        // Phase 2: Finance SLA (TRAITE → VIREMENT_EXECUTE)
         
-        if (b.statut !== 'CLOTURE' && percentageElapsed > 100) {
-          level = 'red';
-          reason = 'SLA breach';
-        } else if (b.statut !== 'CLOTURE' && percentageElapsed > 80) {
-          level = 'orange';
-          reason = 'Risk of delay';
+        if (b.statut === 'TRAITE' || b.statut === 'PRET_VIREMENT') {
+          // PHASE 2: Finance SLA - Calculate days since TRAITE
+          const dateTraite = b.dateReceptionSante || b.updatedAt;
+          const daysSinceTraite = dateTraite ? 
+            (Date.now() - new Date(dateTraite).getTime()) / (1000 * 60 * 60 * 24) : 0;
+          
+          // Finance should process within 2-3 days
+          const financeSlaThreshold = 3;
+          const financePercentElapsed = (daysSinceTraite / financeSlaThreshold) * 100;
+          
+          if (financePercentElapsed > 100) {
+            level = 'red';
+            reason = `Finance delay: ${Math.round(daysSinceTraite)} days since TRAITE`;
+          } else if (financePercentElapsed > 80) {
+            level = 'orange';
+            reason = `Finance pending: ${Math.round(daysSinceTraite)} days since TRAITE`;
+          } else {
+            level = 'green';
+            reason = `Awaiting finance: ${Math.round(daysSinceTraite)} days since TRAITE`;
+          }
+        } else {
+          // PHASE 1: Gestionnaire SLA (normal SLA calculation)
+          const slaThreshold = this.getSlaThreshold(b);
+          const percentageElapsed = (daysSinceReception / slaThreshold) * 100;
+          
+          if (percentageElapsed > 100) {
+            level = 'red';
+            reason = 'SLA breach';
+          } else if (percentageElapsed > 80) {
+            level = 'orange';
+            reason = 'Risk of delay';
+          }
         }
       }
       
@@ -247,6 +288,30 @@ export class AlertsService {
         assignedToName = b.currentHandler.fullName;
       } else if (b.chargeCompte) {
         assignedToName = b.chargeCompte.fullName;
+      }
+      
+      // Calculate phase-specific SLA information
+      let slaInfo: any = {
+        threshold: this.getSlaThreshold(b),
+        daysSince: Math.round(daysSinceReception),
+        phase: 'GESTIONNAIRE'
+      };
+      
+      if (b.statut === 'TRAITE' || b.statut === 'PRET_VIREMENT') {
+        const dateTraite = b.dateReceptionSante || b.updatedAt;
+        const daysSinceTraite = dateTraite ? 
+          (Date.now() - new Date(dateTraite).getTime()) / (1000 * 60 * 60 * 24) : 0;
+        
+        slaInfo = {
+          threshold: 3, // Finance SLA is 3 days
+          daysSince: Math.round(daysSinceTraite),
+          phase: 'FINANCE',
+          gestionnaireSla: {
+            threshold: this.getSlaThreshold(b),
+            daysSince: Math.round(daysSinceReception),
+            completed: true
+          }
+        };
       }
       
       return {
@@ -259,8 +324,10 @@ export class AlertsService {
         },
         alertLevel: level,
         reason,
-        slaThreshold: this.getSlaThreshold(b),
-        daysSinceReception: Math.round(daysSinceReception),
+        slaThreshold: slaInfo.threshold,
+        daysSinceReception: slaInfo.daysSince,
+        slaPhase: slaInfo.phase,
+        slaInfo: slaInfo, // Full SLA information for tooltip
         aiScore,
         aiPrediction: aiPrediction || null
       };

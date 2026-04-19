@@ -636,7 +636,7 @@ export class SuiviVirementService {
       
       return Buffer.from(excelContent, 'utf-8');
       
-    } catch (error) {
+    } catch (error : any) {
       console.error('Failed to generate financial report:', error);
       throw new Error('Report generation failed: ' + error.message);
     }

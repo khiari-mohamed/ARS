@@ -1,18 +1,19 @@
-import { IsNotEmpty, IsString, IsArray } from 'class-validator';
+/*import { IsNotEmpty, IsString, IsArray } from 'class-validator';
 
 export class CreateTemplateDto {
   @IsNotEmpty()
   @IsString()
-  name: string;
+  name!: string;
 
   @IsNotEmpty()
   @IsString()
-  subject: string;
+  subject!: string;
 
   @IsNotEmpty()
   @IsString()
-  body: string;
+  body!: string;
 
   @IsArray()
-  variables: string[];
+  variables!: string[];
 }
+  */

@@ -15,7 +15,7 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class GecService {
   private readonly logger = new Logger(GecService.name);
-  private transporter: nodemailer.Transporter | null;
+  private transporter!: nodemailer.Transporter | null;
   
   constructor(
     private prisma: PrismaService,
@@ -58,7 +58,7 @@ export class GecService {
       
       await this.transporter.verify();
       this.logger.log('✅ SMTP connection verified successfully');
-    } catch (error) {
+    } catch (error : any) {
       this.logger.warn(`⚠️ SMTP connection failed: ${error.message} - Email notifications will be disabled`);
       this.transporter = null;
     }
@@ -141,7 +141,7 @@ export class GecService {
         subject = subjectResult.renderedContent;
         
         this.logger.log(`AI template rendering confidence: ${Math.round(aiResult.confidence * 100)}%`);
-      } catch (e) {
+      } catch (e : any) {
         this.logger.warn(`Template rendering failed: ${e.message}`);
         // Fallback to manual variables
         const variables = { 
@@ -189,7 +189,7 @@ export class GecService {
         }
         
         this.logger.log(`Email sent successfully to ${dto.recipientEmail}`);
-      } catch (error) {
+      } catch (error : any) {
         this.logger.error(`Failed to send email: ${error.message}`);
         this.logger.warn('Email sending failed - likely due to localhost/network restrictions. Will work on production server.');
       }
@@ -230,7 +230,7 @@ export class GecService {
           },
         },
       });
-    } catch (error) {
+    } catch (error : any) {
       console.warn('Failed to create audit log:', error.message);
     }
     
@@ -369,7 +369,7 @@ export class GecService {
             await this.sendRelanceEmail(courrier, clientEmail, 'client');
             relancesSent++;
             relanceAttempted = true;
-          } catch (emailError) {
+          } catch (emailError : any) {
             this.logger.warn(`Relance email failed but counting as attempted: ${emailError.message}`);
             relancesSent++; // Count as attempted even if email fails
             relanceAttempted = true;
@@ -385,7 +385,7 @@ export class GecService {
               `Courrier "${courrier.subject}" requires follow-up. No response received for 3+ days.`,
               courrier
             );
-          } catch (emailError) {
+          } catch (emailError : any) {
             this.logger.warn(`Notification email failed: ${emailError.message}`);
           }
           
@@ -417,7 +417,7 @@ export class GecService {
           });
         }
         
-      } catch (error) {
+      } catch (error : any) {
         this.logger.error(`Failed to process relance for courrier ${courrier.id}: ${error.message}`);
         // Still count as attempted if we got this far
         if (!relanceAttempted && (courrier.bordereau?.client?.email || courrier.uploader?.email)) {
@@ -444,7 +444,7 @@ export class GecService {
               await this.sendEscalationEmail(manager.email, courrier);
               escalationsSent++;
               escalationAttempted = true;
-            } catch (emailError) {
+            } catch (emailError : any ) {
               this.logger.warn(`Escalation email failed but counting as attempted: ${emailError.message}`);
               escalationsSent++; // Count as attempted even if email fails
               escalationAttempted = true;
@@ -463,7 +463,7 @@ export class GecService {
           }
         });
         
-      } catch (error) {
+      } catch (error : any) {
         this.logger.error(`Failed to escalate courrier ${courrier.id}: ${error.message}`);
         // Still count as attempted if we have managers to notify
         if (!escalationAttempted) {
@@ -617,7 +617,7 @@ export class GecService {
           details: { courrierId: id, response },
         },
       });
-    } catch (error) {
+    } catch (error : any) {
       console.warn('Failed to create audit log:', error.message);
     }
     
@@ -747,7 +747,7 @@ export class GecService {
       } else {
         console.log('⚠️ No relance template found, proceeding without template');
       }
-    } catch (error) {
+    } catch (error : any) {
       console.log('⚠️ Template service error, proceeding without template:', error.message);
     }
     
@@ -861,7 +861,7 @@ export class GecService {
           const errorText = await response.text();
           console.log('⚠️ AI service returned error:', response.status, errorText);
         }
-      } catch (aiError) {
+      } catch (aiError : any) {
         console.log('⚠️ AI service unavailable:', aiError.message);
       }
       
@@ -874,17 +874,18 @@ export class GecService {
       }, {});
       
       const insights = Object.entries(typeGroups)
-        .filter(([type, items]: [string, any[]]) => items.length > 1)
-        .map(([type, items]: [string, any[]], index) => {
-          const clients = new Set(items.map(item => item.client));
-          const keywords = this.extractKeywords(items.map(item => item.description).join(' '));
+        .filter(([type, items]) => Array.isArray(items) && items.length > 1)
+        .map(([type, items], index) => {
+          const itemsArray = items as any[];
+          const clients = new Set(itemsArray.map(item => item.client));
+          const keywords = this.extractKeywords(itemsArray.map(item => item.description).join(' '));
           
           return {
             group_id: index + 1,
-            complaint_count: items.length,
-            complaints: items.slice(0, 3),
+            complaint_count: itemsArray.length,
+            complaints: itemsArray.slice(0, 3),
             top_keywords: keywords.slice(0, 5),
-            pattern_strength: items.length > 5 ? 'high' : items.length > 2 ? 'medium' : 'low',
+            pattern_strength: itemsArray.length > 5 ? 'high' : itemsArray.length > 2 ? 'medium' : 'low',
             clients_affected: clients.size
           };
         });
@@ -897,7 +898,7 @@ export class GecService {
         summary: `${insights.length} patterns détectés dans ${complaints.length} courriers`
       };
       
-    } catch (error) {
+    } catch (error : any) {
       this.logger.error(`AI insights failed: ${error.message}`);
       return { 
         insights: [], 
@@ -945,7 +946,7 @@ export class GecService {
       
       await testTransporter.verify();
       return { success: true, message: 'SMTP connection successful' };
-    } catch (error) {
+    } catch (error : any) {
       console.error('SMTP test failed:', error.message);
       return { success: false, message: error.message };
     }
@@ -1416,7 +1417,7 @@ export class GecService {
         const errorText = await response.text();
         console.log(`🤖 AI service error ${response.status}: ${errorText}`);
       }
-    } catch (error) {
+    } catch (error : any) {
       console.log(`🤖 AI service unavailable: ${error.message}`);
     }
     

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport de Diagnostic Technique - ARS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            border-bottom: 4px solid #2c3e50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #2c3e50;
+            margin: 0;
+            font-size: 28px;
+        }
+        .meta {
+            color: #7f8c8d;
+            margin-top: 10px;
+        }
+        .status-badge {
+            display: inline-block;
+            background: #27ae60;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        h2 {
+            color: #2c3e50;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #34495e;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th {
+            background: #3498db;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+        .alert-danger {
+            background: #fee;
+            border-color: #e74c3c;
+            color: #c0392b;
+        }
+        .alert-warning {
+            background: #fef5e7;
+            border-color: #f39c12;
+            color: #d68910;
+        }
+        .alert-success {
+            background: #eafaf1;
+            border-color: #27ae60;
+            color: #1e8449;
+        }
+        .alert-info {
+            background: #ebf5fb;
+            border-color: #3498db;
+            color: #2471a3;
+        }
+        .workflow {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 20px 0;
+            line-height: 2;
+        }
+        .workflow-step {
+            padding: 5px 0;
+        }
+        .missing-step {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card.danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .stat-card.success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .conclusion-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+        .conclusion-box h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .recommendations {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        ul {
+            line-height: 2;
+        }
+        .icon {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Rapport de Diagnostic Technique</h1>
+            <div class="meta">
+                <strong>Date:</strong> ${new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
+                <strong>Objet:</strong> Analyse du problème d'affichage "Non assigné" dans le dashboard<br>
+                <span class="status-badge">✅ Diagnostic Complet</span>
+            </div>
+        </div>
+
+        <h2>🔍 Problème Signalé</h2>
+        <p>Le client a signalé que tous les documents apparaissent comme <strong>"Non assigné"</strong> dans le dashboard, avec 0 documents affectés aux gestionnaires.</p>
+
+        <h2>🔬 Analyse Technique Effectuée</h2>
+        <p>Nous avons effectué une analyse approfondie de la base de données pour identifier la cause racine du problème.</p>
+
+        <h3>📊 État Actuel des Documents</h3>
+        <div class="stats-grid">
+            <div class="stat-card success">
+                <div class="stat-label">Total Documents</div>
+                <div class="stat-number">293</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-label">Documents Assignés</div>
+                <div class="stat-number">0</div>
+                <div class="stat-label">0%</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-label">Documents Non Assignés</div>
+                <div class="stat-number">293</div>
+                <div class="stat-label">100%</div>
+            </div>
+        </div>
+
+        <h3>📁 Répartition par Type de Document</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Type de Document</th>
+                    <th>Total</th>
+                    <th>Assignés</th>
+                    <th>Non Assignés</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>BULLETIN_SOIN</td>
+                    <td>290</td>
+                    <td style="color: #e74c3c; font-weight: bold;">0</td>
+                    <td style="color: #e74c3c; font-weight: bold;">290</td>
+                </tr>
+                <tr>
+                    <td>COMPLEMENT_INFORMATION</td>
+                    <td>2</td>
+                    <td style="color: #e74c3c; font-weight: bold;">0</td>
+                    <td style="color: #e74c3c; font-weight: bold;">2</td>
+                </tr>
+                <tr>
+                    <td>ADHESION</td>
+                    <td>1</td>
+                    <td style="color: #e74c3c; font-weight: bold;">0</td>
+                    <td style="color: #e74c3c; font-weight: bold;">1</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>📈 Répartition par Statut de Traitement</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Statut</th>
+                    <th>Nombre de Documents</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>TRAITÉ</strong></td>
+                    <td style="font-weight: bold; color: #27ae60;">265</td>
+                </tr>
+                <tr>
+                    <td>EN_COURS</td>
+                    <td>6</td>
+                </tr>
+                <tr>
+                    <td>UPLOADED</td>
+                    <td>22</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="alert alert-danger">
+            <strong>⚠️ Observation Critique:</strong> 265 documents ont le statut "TRAITÉ" mais n'ont jamais été assignés à un gestionnaire!
+        </div>
+
+        <h3>👥 État des Gestionnaires</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Métrique</th>
+                    <th>Valeur</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Total Gestionnaires Disponibles</td>
+                    <td><strong>19</strong></td>
+                </tr>
+                <tr>
+                    <td>Gestionnaires Réguliers</td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td>Gestionnaires Senior</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td>Documents assignés par gestionnaire</td>
+                    <td style="color: #e74c3c; font-weight: bold;">0 pour tous</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>📜 Historique d'Affectation</h3>
+        <div class="alert alert-danger">
+            <strong>❌ Nombre d'enregistrements d'affectation: 0</strong><br>
+            Aucune affectation n'a jamais été effectuée dans le système.
+        </div>
+
+        <div class="conclusion-box">
+            <h3>✅ Conclusion du Diagnostic</h3>
+            <h4 style="color: #27ae60;">Le système fonctionne correctement ✓</h4>
+            <p>L'application affiche exactement ce qui se trouve dans la base de données. Le dashboard indique "Non assigné" parce que <strong>les documents n'ont jamais été assignés à des gestionnaires</strong>.</p>
+            
+            <h4 style="color: #e74c3c;">Cause Racine Identifiée: 🎯</h4>
+            <p style="font-size: 18px; font-weight: bold; color: #c0392b;">Les documents ont été traités sans passer par le processus d'affectation.</p>
+            
+            <h4>Observations:</h4>
+            <ul>
+                <li>✅ 265 documents ont le statut "TRAITÉ"</li>
+                <li>❌ Ces 265 documents n'ont jamais été assignés à un gestionnaire</li>
+                <li>❌ Aucun enregistrement d'affectation n'existe dans l'historique</li>
+                <li>✅ 19 gestionnaires sont disponibles et actifs dans le système</li>
+            </ul>
+
+            <h4>Cela indique que:</h4>
+            <p>Les utilisateurs ont traité les documents <strong>en contournant le workflow d'affectation standard</strong>, ce qui a résulté en:</p>
+            <ul>
+                <li>Documents traités mais sans gestionnaire assigné</li>
+                <li>Dashboard affichant correctement "Non assigné"</li>
+                <li>Aucune traçabilité des affectations</li>
+            </ul>
+        </div>
+
+        <h2>🔧 Recommandations</h2>
+
+        <div class="recommendations">
+            <h3>1. Formation des Utilisateurs ⚠️</h3>
+            <p><strong>Action Immédiate Requise:</strong></p>
+            <ul>
+                <li>Former les chefs d'équipe sur le processus d'affectation des documents</li>
+                <li>S'assurer que tous les documents passent par l'étape d'affectation avant traitement</li>
+                <li>Utiliser la fonctionnalité d'affectation disponible dans le module Chef d'Équipe</li>
+            </ul>
+        </div>
+
+        <h3>2. Workflow Correct à Suivre:</h3>
+        <div class="workflow">
+            <div class="workflow-step">1. Bureau d'Ordre → Saisie du bordereau</div>
+            <div class="workflow-step">2. Service SCAN → Numérisation</div>
+            <div class="workflow-step missing-step">3. Chef d'Équipe → AFFECTATION aux gestionnaires ⚠️ (ÉTAPE MANQUANTE)</div>
+            <div class="workflow-step">4. Gestionnaire → Traitement des documents</div>
+            <div class="workflow-step">5. Finance → Virement</div>
+        </div>
+
+        <div class="alert alert-info">
+            <h3>3. Correction des Données Existantes</h3>
+            <p>Nous pouvons fournir un script de migration pour:</p>
+            <ul>
+                <li>Assigner automatiquement les 293 documents existants aux gestionnaires</li>
+                <li>Répartir équitablement la charge de travail</li>
+                <li>Créer l'historique d'affectation manquant</li>
+            </ul>
+            <p><strong>Note:</strong> Cette correction nécessite votre validation avant exécution.</p>
+        </div>
+
+        <h2>📊 Preuves Techniques</h2>
+        <h3>Exemples de Documents Non Assignés:</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Nom</th>
+                    <th>Type</th>
+                    <th>Statut</th>
+                    <th>Client</th>
+                    <th>Date Upload</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>BS-1087751.pdf</td>
+                    <td>BULLETIN_SOIN</td>
+                    <td style="color: #27ae60; font-weight: bold;">TRAITÉ</td>
+                    <td>AMARIS CONSULTING</td>
+                    <td>07/04/2026</td>
+                </tr>
+                <tr>
+                    <td>BS-1405270.pdf</td>
+                    <td>BULLETIN_SOIN</td>
+                    <td style="color: #27ae60; font-weight: bold;">TRAITÉ</td>
+                    <td>L'OFFICE NATIONAL</td>
+                    <td>07/04/2026</td>
+                </tr>
+                <tr>
+                    <td>BS-5776483.pdf</td>
+                    <td>BULLETIN_SOIN</td>
+                    <td style="color: #27ae60; font-weight: bold;">TRAITÉ</td>
+                    <td>APAL</td>
+                    <td>13/04/2026</td>
+                </tr>
+            </tbody>
+        </table>
+        <p><strong>Constat:</strong> Ces documents sont marqués "TRAITÉ" mais n'ont jamais été assignés à un gestionnaire.</p>
+
+        <h2>🎯 Actions Requises du Client</h2>
+        
+        <div class="alert alert-warning">
+            <h3>Immédiat:</h3>
+            <ul>
+                <li>✅ <strong>Confirmer</strong> que les utilisateurs comprennent le processus d'affectation</li>
+                <li>✅ <strong>Former</strong> les chefs d'équipe sur l'utilisation du module d'affectation</li>
+                <li>✅ <strong>Valider</strong> si vous souhaitez que nous créions un script de correction pour les données existantes</li>
+            </ul>
+        </div>
+
+        <div class="alert alert-info">
+            <h3>Court Terme:</h3>
+            <ul>
+                <li>📋 Établir une procédure claire pour l'affectation des documents</li>
+                <li>📋 S'assurer que chaque document passe par l'étape d'affectation</li>
+                <li>📋 Utiliser le dashboard pour monitorer les affectations en temps réel</li>
+            </ul>
+        </div>
+
+        <h2>📝 Résumé Exécutif</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Aspect</th>
+                    <th>Résultat</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Problème Technique</strong></td>
+                    <td style="color: #27ae60; font-weight: bold;">❌ Aucun</td>
+                </tr>
+                <tr>
+                    <td><strong>Problème de Données</strong></td>
+                    <td style="color: #e74c3c; font-weight: bold;">✅ Identifié</td>
+                </tr>
+                <tr>
+                    <td><strong>Cause</strong></td>
+                    <td>Documents non assignés par les utilisateurs</td>
+                </tr>
+                <tr>
+                    <td><strong>Solution</strong></td>
+                    <td>Formation + Correction des données existantes</td>
+                </tr>
+                <tr>
+                    <td><strong>Responsabilité</strong></td>
+                    <td>Processus métier / Formation utilisateurs</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="alert alert-success">
+            <h3>Conclusion Finale</h3>
+            <p><strong>Le système fonctionne comme prévu.</strong> Le problème provient d'une utilisation incorrecte du workflow d'affectation. Une formation des utilisateurs et une correction ponctuelle des données existantes résoudront définitivement ce problème.</p>
+        </div>
+
+        <div class="footer">
+            <p><em>Rapport généré automatiquement par le système de diagnostic ARS</em></p>
+            <p>Pour toute question technique, veuillez contacter l'équipe de support.</p>
+            <p><strong>Date de génération:</strong> ${new Date().toLocaleString('fr-FR')}</p>
+        </div>
+    </div>
+</body>
+</html>

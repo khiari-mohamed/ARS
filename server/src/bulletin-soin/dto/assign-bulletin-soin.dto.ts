@@ -1,3 +1,3 @@
 export class AssignBulletinSoinDto {
-  ownerId: string | number;
+  ownerId!: string | number;
 }

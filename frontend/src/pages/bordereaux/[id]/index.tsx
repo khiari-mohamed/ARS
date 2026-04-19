@@ -24,6 +24,42 @@ export default function BordereauDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Calculate document statistics
+  const documentStats = bordereau?.documents ? {
+    total: bordereau.documents.length,
+    byType: bordereau.documents.reduce((acc: any, doc: any) => {
+      const type = doc.type || 'Non spécifié';
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {})
+  } : { total: 0, byType: {} };
+
+  const getDocumentTypeLabel = (type: string) => {
+    const labels: any = {
+      'BULLETIN_SOIN': '📋 Bulletin de Soin',
+      'COMPLEMENT_INFORMATION': '📄 Complément d\'Information',
+      'ADHESION': '✍️ Adhésion',
+      'RECLAMATION': '📞 Réclamation',
+      'CONTRAT_AVENANT': '📑 Contrat/Avenant',
+      'DEMANDE_RESILIATION': '❌ Demande de Résiliation',
+      'CONVENTION_TIERS_PAYANT': '🤝 Convention Tiers Payant'
+    };
+    return labels[type] || type;
+  };
+
+  const getDocumentTypeColor = (type: string) => {
+    const colors: any = {
+      'BULLETIN_SOIN': '#3b82f6',
+      'COMPLEMENT_INFORMATION': '#8b5cf6',
+      'ADHESION': '#10b981',
+      'RECLAMATION': '#ef4444',
+      'CONTRAT_AVENANT': '#f59e0b',
+      'DEMANDE_RESILIATION': '#dc2626',
+      'CONVENTION_TIERS_PAYANT': '#06b6d4'
+    };
+    return colors[type] || '#6b7280';
+  };
+
   if (loading) return <div className="text-gray-600 text-sm">Chargement...</div>;
   if (error) return <div className="text-red-600 text-sm">{error}</div>;
   if (!bordereau) return <div className="text-gray-500">Bordereau introuvable</div>;
@@ -44,7 +80,52 @@ export default function BordereauDetailPage() {
           <span>BS: <b>{bordereau.nombreBS}</b></span>
           <span>SLA: <b>{bordereau.delaiReglement}j</b></span>
           <span>Restant: <b>{bordereau.daysRemaining}</b>j</span>
+          <span>Documents: <b>{documentStats.total}</b></span>
         </div>
+
+        {/* Document Types Breakdown */}
+        {documentStats.total > 0 && (
+          <div style={{
+            marginTop: 16,
+            paddingTop: 16,
+            borderTop: '1px solid #e5e7eb'
+          }}>
+            <div style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: '#64748b',
+              marginBottom: 10,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}>
+              📎 Répartition des Documents ({documentStats.total})
+            </div>
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8
+            }}>
+              {Object.entries(documentStats.byType).map(([type, count]: [string, any]) => (
+                <span
+                  key={type}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    borderRadius: '999px',
+                    backgroundColor: getDocumentTypeColor(type),
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 700
+                  }}
+                >
+                  {getDocumentTypeLabel(type)}: {count}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       {/* Courriers Card */}
       <div className="card-panel bordereau-detail-card">

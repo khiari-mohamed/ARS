@@ -1,4 +1,5 @@
 import { Bordereau, Statut, User, Contract } from '@prisma/client';
+import { calculateSLA } from '../../utils/sla-calculator';
 
 export enum StatusColor {
   GREEN = 'GREEN',
@@ -74,23 +75,21 @@ export class BordereauResponseDto {
     });
     
     if (includeKPIs) {
-      // Calculate days elapsed since reception
-      const today = new Date();
+      // ✅ USE CENTRALIZED SLA CALCULATOR WITH FREEZE LOGIC
+      const slaResult = calculateSLA({
+        dateReception: bordereau.dateReception,
+        delaiReglement: bordereau.delaiReglement || 30,
+        statut: bordereau.statut,
+        dateCloture: bordereau.dateCloture,
+        dateExecutionVirement: bordereau.dateExecutionVirement,
+        ordresVirement: bordereau.ordresVirement,
+      });
+      
+      const { daysElapsed, daysRemaining, statusColor: slaColor } = slaResult;
+      const statusColor = slaColor === 'GREEN' ? StatusColor.GREEN : 
+                          slaColor === 'ORANGE' ? StatusColor.ORANGE : StatusColor.RED;
+      
       const receptionDate = new Date(bordereau.dateReception);
-      const daysElapsed = Math.floor((today.getTime() - receptionDate.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // UNIFIED SLA LOGIC: Calculate percentage elapsed
-      const slaThreshold = bordereau.delaiReglement || 30;
-      const percentElapsed = (daysElapsed / slaThreshold) * 100;
-      const daysRemaining = slaThreshold - daysElapsed;
-      
-      // Determine status color based on percentage elapsed (UNIFIED: ≤80% green, >80% orange, >100% red)
-      let statusColor = StatusColor.GREEN;
-      if (percentElapsed > 100) {
-        statusColor = StatusColor.RED;
-      } else if (percentElapsed > 80) {
-        statusColor = StatusColor.ORANGE;
-      }
       
       // Calculate scan duration if available
       let scanDuration: number | null = null;
