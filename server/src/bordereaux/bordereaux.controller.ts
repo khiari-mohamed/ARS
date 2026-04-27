@@ -2046,4 +2046,33 @@ export class BordereauxController {
     // Gestionnaire Senior works alone - return empty array
     return [];
   }
+
+  // Gestionnaire Senior: Modify dossier status
+  @Post('gestionnaire-senior/modify-dossier-status')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async modifyDossierStatusSenior(@Body() body: { dossierId: string; newStatus: string }) {
+    return this.bordereauxService.modifyDossierStatus(body.dossierId, body.newStatus);
+  }
+
+  // Gestionnaire Senior: Remplacer document
+  @Post('gestionnaire-senior/remplacer-document')
+  @UseInterceptors(FileInterceptor('file'))
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async remplacerDocument(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('documentId') documentId: string
+  ) {
+    return this.bordereauxService.remplacerDocument(documentId, file);
+  }
+
+  // Gestionnaire Senior: Réaffecter documents
+  @Post('gestionnaire-senior/reaffecter-documents')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async reaffecterDocuments(
+    @Body() body: { documentIds: string[]; targetBordereauId: string },
+    @Req() req
+  ) {
+    const user = req.user;
+    return this.bordereauxService.reaffecterDocuments(body.documentIds, body.targetBordereauId, user.id);
+  }
 }

@@ -869,6 +869,7 @@ const ScanDashboard: React.FC = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell>SLA</TableCell>
                     <TableCell>Référence</TableCell>
                     <TableCell>Client</TableCell>
                     <TableCell>Statut</TableCell>
@@ -877,8 +878,22 @@ const ScanDashboard: React.FC = () => {
                 </TableHead>
                 <TableBody>
                   {scanQueue.filter(b => b.statut === 'A_SCANNER' || b.statut === 'SCAN_EN_COURS').map((bordereau: any) => {
+                    // Calculate SLA status
+                    const now = new Date();
+                    const reception = new Date(bordereau.dateReception);
+                    const daysElapsed = Math.floor((now.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24));
+                    const slaIcon = daysElapsed >= 5 ? '🔴' : daysElapsed >= 2 ? '🟠' : '🟢';
+                    const slaStatus = daysElapsed >= 5 ? 'CRITICAL' : daysElapsed >= 2 ? 'WARNING' : 'OK';
+                    
                     return (
                       <TableRow key={bordereau.id}>
+                        <TableCell>
+                          <Tooltip title={`${daysElapsed} jours écoulés - ${slaStatus}`}>
+                            <span style={{ fontSize: '20px', cursor: 'pointer' }}>
+                              {slaIcon}
+                            </span>
+                          </Tooltip>
+                        </TableCell>
                         <TableCell>
                           <Typography variant="body2" fontWeight="bold">
                             {bordereau.reference}

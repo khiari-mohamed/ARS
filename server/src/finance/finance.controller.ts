@@ -1121,6 +1121,123 @@ export class FinanceController {
     const user = getUserFromRequest(req);
     return this.financeService.reinjectOV(id, user as any);
   }
+  
+  @Get('ordres-virement/:id/details')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getOVDetails(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    try {
+      const ov = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        include: {
+          donneurOrdre: true,
+          bordereau: { include: { client: true } }
+        }
+      });
+      
+      if (!ov) {
+        throw new BadRequestException('Ordre de virement not found');
+      }
+      
+      return {
+        success: true,
+        montantTotal: ov.montantTotal || 0,
+        nombreAdherents: ov.nombreAdherents || 0,
+        donneurOrdreId: ov.donneurOrdreId,
+        observations: ov.motifObservation || '',
+        reference: ov.reference,
+        clientName: ov.bordereau?.client?.name || ov.clientName || ''
+      };
+    } catch (error: any) {
+      console.error('Error fetching OV details:', error);
+      throw new BadRequestException('Failed to fetch OV details: ' + error.message);
+    }
+  }
+  
+  @Put('ordres-virement/:id/details')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
+  async updateOVDetails(
+    @Param('id') id: string,
+    @Body() body: {
+      montantTotal?: number;
+      nombreAdherents?: number;
+      donneurOrdreId?: string;
+      observations?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    try {
+      const updateData: any = {};
+      
+      if (body.montantTotal !== undefined) updateData.montantTotal = body.montantTotal;
+      if (body.nombreAdherents !== undefined) updateData.nombreAdherents = body.nombreAdherents;
+      if (body.donneurOrdreId !== undefined) updateData.donneurOrdreId = body.donneurOrdreId;
+      if (body.observations !== undefined) updateData.motifObservation = body.observations;
+      
+      const updatedOV = await this.prisma.ordreVirement.update({
+        where: { id },
+        data: updateData,
+        include: {
+          donneurOrdre: true,
+          bordereau: { include: { client: true } }
+        }
+      });
+      
+      console.log('✅ OV details updated:', { id, updates: updateData, user: user.id });
+      
+      return {
+        success: true,
+        message: 'Détails de l\'ordre de virement mis à jour avec succès',
+        ordreVirement: updatedOV
+      };
+    } catch (error: any) {
+      console.error('Error updating OV details:', error);
+      throw new BadRequestException('Failed to update OV details: ' + error.message);
+    }
+  }
+  
+  @Put('ordres-virement/:id/restart-processing')
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
+  async restartOVProcessing(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    try {
+      const updatedOV = await this.prisma.ordreVirement.update({
+        where: { id },
+        data: {
+          etatVirement: 'NON_EXECUTE',
+          dateTraitement: null,
+          dateEtatFinal: null,
+          motifObservation: 'Traitement relancé par ' + user.fullName,
+          utilisateurFinance: null
+        },
+        include: {
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
+      });
+      
+      console.log('✅ OV processing restarted:', { id, user: user.id });
+      
+      return {
+        success: true,
+        message: 'Traitement financier relancé avec succès',
+        ordreVirement: updatedOV
+      };
+    } catch (error: any) {
+      console.error('Error restarting OV processing:', error);
+      throw new BadRequestException('Failed to restart processing: ' + error.message);
+    }
+  }
 
   // === TEST ENDPOINT WITHOUT AUTH ===
   @Get('test-bordereaux-traites/:userId')

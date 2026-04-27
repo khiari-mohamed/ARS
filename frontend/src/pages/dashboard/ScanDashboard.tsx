@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Alert, Progress, Modal, Upload, message, Tabs } from 'antd';
+import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Alert, Progress, Modal, Upload, message, Tabs, Tooltip } from 'antd';
 import { 
   ScanOutlined, 
   FileTextOutlined,
@@ -31,6 +31,7 @@ const ScanDashboard: React.FC = () => {
   const [returnedItems, setReturnedItems] = useState<any[]>([]);
   const [manualUploadModal, setManualUploadModal] = useState(false);
   const [selectedBordereau, setSelectedBordereau] = useState<string | null>(null);
+  const [slaAlerts, setSlaAlerts] = useState<number>(0);
   
   const { data: bsData } = useBSList({ 
     statut: 'A_SCANNER,SCAN_EN_COURS,SCANNE',
@@ -44,6 +45,13 @@ const ScanDashboard: React.FC = () => {
         const { LocalAPI } = await import('../../services/axios');
         const response = await LocalAPI.get('/bordereaux/scan/ready-for-import');
         setBordereauxData(response.data);
+        
+        // Calculate SLA alerts
+        const alerts = response.data.filter((b: BordereauItem) => {
+          const sla = calculateScanSLA(b.dateReception);
+          return sla.status !== 'OK';
+        }).length;
+        setSlaAlerts(alerts);
       } catch (error) {
         console.error('Failed to fetch bordereaux:', error);
         message.error('Erreur lors du chargement des bordereaux');
@@ -186,6 +194,16 @@ const ScanDashboard: React.FC = () => {
     }
   };
 
+  const handleCheckSLA = async () => {
+    try {
+      const { LocalAPI } = await import('../../services/axios');
+      await LocalAPI.post('/scan-sla/check');
+      message.success('Vérification SLA effectuée - Notifications envoyées');
+    } catch (error) {
+      message.error('Erreur lors de la vérification SLA');
+    }
+  };
+
   const getStatusColor = (scanStatus: string) => {
     switch (scanStatus) {
       case 'NON_SCANNE': return 'orange';
@@ -193,6 +211,23 @@ const ScanDashboard: React.FC = () => {
       case 'SCAN_FINALISE': return 'green';
       default: return 'default';
     }
+  };
+
+  // Calculate SCAN SLA status
+  const calculateScanSLA = (dateReception: string) => {
+    const now = new Date();
+    const reception = new Date(dateReception);
+    const daysElapsed = Math.floor((now.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24));
+    
+    const warningThreshold = 2; // 2 days
+    const criticalThreshold = 5; // 5 days
+    
+    if (daysElapsed >= criticalThreshold) {
+      return { status: 'CRITICAL', color: 'red', icon: '🔴', daysElapsed };
+    } else if (daysElapsed >= warningThreshold) {
+      return { status: 'WARNING', color: 'orange', icon: '🟠', daysElapsed };
+    }
+    return { status: 'OK', color: 'green', icon: '🟢', daysElapsed };
   };
 
   const getScanStatusText = (scanStatus: string) => {
@@ -205,6 +240,21 @@ const ScanDashboard: React.FC = () => {
   };
 
   const columns = [
+    {
+      title: 'SLA',
+      key: 'sla',
+      width: 80,
+      render: (_: any, record: BordereauItem) => {
+        const sla = calculateScanSLA(record.dateReception);
+        return (
+          <Tooltip title={`${sla.daysElapsed} jours écoulés - ${sla.status}`}>
+            <span style={{ fontSize: '20px', cursor: 'pointer' }}>
+              {sla.icon}
+            </span>
+          </Tooltip>
+        );
+      },
+    },
     {
       title: 'Référence',
       dataIndex: 'reference',
@@ -344,19 +394,33 @@ const ScanDashboard: React.FC = () => {
           </Card>
         </Col>
         <Col span={6}>
-          <Card>
+          <Card style={{ borderColor: slaAlerts > 0 ? '#ff4d4f' : undefined, borderWidth: slaAlerts > 0 ? 2 : 1 }}>
             <Statistic
-              title="Progression moyenne"
-              value={Math.round(avgCompletion)}
-              suffix="%"
-              prefix={<FileTextOutlined />}
-              valueStyle={{ color: '#722ed1' }}
+              title="Alertes SLA"
+              value={slaAlerts}
+              prefix={<WarningOutlined />}
+              valueStyle={{ color: slaAlerts > 0 ? '#ff4d4f' : '#52c41a' }}
+              suffix={slaAlerts > 0 ? '🔴' : '🟢'}
             />
           </Card>
         </Col>
       </Row>
 
       {/* Alerts */}
+      {slaAlerts > 0 && (
+        <Alert
+          type="error"
+          message={`🔴 Alerte SLA SCAN`}
+          description={`${slaAlerts} bordereau(x) dépassent les seuils SLA (> 2 jours). Action requise !`}
+          style={{ marginBottom: 24 }}
+          showIcon
+          action={
+            <Button size="small" danger onClick={handleCheckSLA}>
+              Envoyer Notifications
+            </Button>
+          }
+        />
+      )}
       {pendingScan.length > 5 && (
         <Alert
           type="warning"
@@ -394,7 +458,8 @@ const ScanDashboard: React.FC = () => {
                   rowKey="id"
                   pagination={{ pageSize: 10 }}
                   size="small"
-                  scroll={{ x: 800 }}
+                  scroll={{ x: 1000 }}
+                  loading={processing}
                 />
               </Tabs.TabPane>
               <Tabs.TabPane 

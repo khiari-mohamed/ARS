@@ -288,7 +288,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     loadGestionnaires();
   }, [params]);
 
-  const loadDossiers = async () => {
+  const loadDossiers = async (keepCurrentPage = false) => {
     setLoading(true);
     try {
       const response = await LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers');
@@ -323,11 +323,11 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       
       setDossiers(dossiersWithDocuments);
       setFilteredDossiers(dossiersWithDocuments);
-      setPagination({
-        current: 1,
-        pageSize: 5,
+      setPagination(prev => ({
+        current: keepCurrentPage ? prev.current : 1,
+        pageSize: prev.pageSize,
         total: dossiersWithDocuments.length
-      });
+      }));
     } catch (error) {
       message.error('Erreur lors du chargement des dossiers');
       setDossiers([]);
@@ -516,7 +516,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       setAssignModalVisible(false);
       setSelectedAssignee('');
       handleClearSelection();
-      loadDossiers();
+      loadDossiers(true);
     } catch (error) {
       console.error('Error assigning elements:', error);
       message.error('Erreur lors de l\'assignation');
@@ -539,7 +539,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       setStatusModalVisible(false);
       setSelectedStatus('');
       handleClearSelection();
-      loadDossiers();
+      loadDossiers(true);
     } catch (error) {
       console.error('Error updating status:', error);
       message.error('Erreur lors de la mise à jour des statuts');
@@ -654,7 +654,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       setDocumentStatusModalVisible(false);
       setSelectedDocumentStatus('');
       handleClearSelection();
-      loadDossiers();
+      loadDossiers(true);
     } catch (error) {
       console.error('Error updating document status:', error);
       message.error('Erreur lors de la mise à jour des statuts');

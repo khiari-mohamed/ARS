@@ -113,7 +113,9 @@ const BordereauxDashboard: React.FC = () => {
       ]);
       
       const bordereauList = Array.isArray(bordereauxData) ? bordereauxData : bordereauxData.items || [];
-      setBordereaux(bordereauList);
+      // Filter out archived bordereaux on client side as safety measure
+      const nonArchivedBordereaux = bordereauList.filter((b: any) => !b.archived && b.archived !== true);
+      setBordereaux(nonArchivedBordereaux);
       setKpis(kpisData);
       setAnalytics(analyticsData);
     } catch (error) {
@@ -494,11 +496,7 @@ const BordereauxDashboard: React.FC = () => {
                 </div>
                 <h3 className="bordereau-kpi-label">En retard</h3>
                 <p className="bordereau-kpi-value value-danger">
-                  {bordereaux.filter(b => {
-                    const dureeTraitement = getDureeTraitement(b);
-                    const delai = b.delaiReglement || 0;
-                    return dureeTraitement.days !== null && dureeTraitement.days > delai;
-                  }).length}
+                  {bordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length}
                 </p>
               </div>
             </div>

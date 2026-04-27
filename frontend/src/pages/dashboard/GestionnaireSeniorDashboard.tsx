@@ -66,6 +66,20 @@ function GestionnaireSeniorDashboard() {
   const [reassignedDocuments, setReassignedDocuments] = useState<any[]>([]);
   const [loadingReassigned, setLoadingReassigned] = useState(false);
   const { user } = useAuth();
+  
+  // Actions menu states
+  const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null);
+  const [showRemplacerModal, setShowRemplacerModal] = useState(false);
+  const [showReaffecterModal, setShowReaffecterModal] = useState(false);
+  const [selectedDocForAction, setSelectedDocForAction] = useState<any>(null);
+  const [remplacerFile, setRemplacerFile] = useState<File | null>(null);
+  const [uploadingRemplacer, setUploadingRemplacer] = useState(false);
+  const [showRetirerConfirmModal, setShowRetirerConfirmModal] = useState(false);
+  
+  // Réaffectation states
+  const [selectedDocsForReaffect, setSelectedDocsForReaffect] = useState<string[]>([]);
+  const [targetBordereauId, setTargetBordereauId] = useState<string>('');
+  const [reaffectingDocs, setReaffectingDocs] = useState(false);
   const [filterDerniers, setFilterDerniers] = useState({ reference: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
   const [filterBordereaux, setFilterBordereaux] = useState({ reference: '', client: '', statut: '', dateFrom: '', dateTo: '' });
   const [filterDocuments, setFilterDocuments] = useState({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' });
@@ -89,6 +103,22 @@ function GestionnaireSeniorDashboard() {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  useEffect(() => {
+    // Close actions menu when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showActionsMenu && !target.closest('[data-actions-menu]')) {
+        setShowActionsMenu(null);
+        setSelectedDocForAction(null);
+      }
+    };
+    
+    if (showActionsMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showActionsMenu]);
 
   useEffect(() => {
     const f1 = dossiers.filter((d: any) =>
@@ -212,6 +242,132 @@ function GestionnaireSeniorDashboard() {
   const handleAddDocument = (bordereauId: string) => {
     setSelectedBordereauForDoc(bordereauId);
     setShowAddDocumentModal(true);
+  };
+
+  const handleOpenActionsMenu = (doc: any) => {
+    setSelectedDocForAction(doc);
+    setShowActionsMenu(doc.id);
+  };
+
+  const handleCloseActionsMenu = () => {
+    setShowActionsMenu(null);
+    setSelectedDocForAction(null);
+  };
+
+  const handleRetirerFromMenu = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!selectedDocForAction) return;
+    setShowActionsMenu(null);
+    setShowRetirerConfirmModal(true);
+  };
+
+  const handleConfirmRetirer = async () => {
+    if (!selectedDocForAction) return;
+    try {
+      await LocalAPI.post('/bordereaux/chef-equipe/remove-document-from-bordereau', { documentId: selectedDocForAction.id });
+      setShowRetirerConfirmModal(false);
+      setSelectedDocForAction(null);
+      setSuccessMessage('Document retiré avec succès');
+      setShowSuccessModal(true);
+      setTimeout(() => setShowSuccessModal(false), 3000);
+      loadDashboardData();
+    } catch (err) {
+      console.error('Error removing document:', err);
+      alert('Erreur lors du retrait');
+      setShowRetirerConfirmModal(false);
+    }
+  };
+
+  const handleRemplacerClick = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    handleCloseActionsMenu();
+    setShowRemplacerModal(true);
+  };
+
+  const handleReaffecterClick = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    handleCloseActionsMenu();
+    setSelectedDocsForReaffect([selectedDocForAction.id]);
+    setShowReaffecterModal(true);
+  };
+
+  const handleRemplacerUpload = async () => {
+    if (!remplacerFile || !selectedDocForAction) {
+      alert('Veuillez sélectionner un fichier');
+      return;
+    }
+
+    setUploadingRemplacer(true);
+    const formData = new FormData();
+    formData.append('file', remplacerFile);
+    formData.append('documentId', selectedDocForAction.id);
+
+    try {
+      const response = await LocalAPI.post('/bordereaux/gestionnaire-senior/remplacer-document', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (response.data.success) {
+        alert('Document remplacé avec succès');
+        setShowRemplacerModal(false);
+        setRemplacerFile(null);
+        setSelectedDocForAction(null);
+        loadDashboardData();
+      }
+    } catch (error) {
+      console.error('Remplacer document error:', error);
+      alert('Erreur lors du remplacement du document');
+    } finally {
+      setUploadingRemplacer(false);
+    }
+  };
+
+  const handleReaffecterDocuments = async () => {
+    if (!targetBordereauId || selectedDocsForReaffect.length === 0) {
+      alert('Veuillez sélectionner un bordereau de destination');
+      return;
+    }
+
+    setReaffectingDocs(true);
+    try {
+      const response = await LocalAPI.post('/bordereaux/gestionnaire-senior/reaffecter-documents', {
+        documentIds: selectedDocsForReaffect,
+        targetBordereauId
+      });
+
+      if (response.data.success) {
+        alert(`${selectedDocsForReaffect.length} document(s) réaffecté(s) avec succès`);
+        setShowReaffecterModal(false);
+        setSelectedDocsForReaffect([]);
+        setTargetBordereauId('');
+        setSelectedDocForAction(null);
+        loadDashboardData();
+      }
+    } catch (error: any) {
+      console.error('Réaffecter documents error:', error);
+      alert(error.response?.data?.message || 'Erreur lors de la réaffectation');
+    } finally {
+      setReaffectingDocs(false);
+    }
+  };
+
+  const toggleDocSelection = (docId: string) => {
+    setSelectedDocsForReaffect(prev => 
+      prev.includes(docId) ? prev.filter(id => id !== docId) : [...prev, docId]
+    );
+  };
+
+  const getSeniorBordereaux = () => {
+    return dossiers.filter((d: any) => d.isBordereau === true);
   };
 
   const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -886,10 +1042,13 @@ function GestionnaireSeniorDashboard() {
                     </td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.gestionnaire || 'Non assigné'}</td>
                     <td style={{ padding: '12px 8px', fontSize: '14px' }}>{document.date}</td>
-                    <td style={{ padding: '12px 8px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <td style={{ padding: '12px 8px' }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }} onClick={(e) => e.stopPropagation()}>
                         <button 
-                          onClick={async () => {
+                          type="button"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
                             try {
                               const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${document.id}`);
                               if (response.data.success && response.data.hasDocument) {
@@ -918,32 +1077,163 @@ function GestionnaireSeniorDashboard() {
                         >
                           📄 Voir PDF
                         </button>
-                        <button 
-                          onClick={async () => {
-                            if (window.confirm('Êtes-vous sûr de vouloir retirer ce document ?')) {
-                              try {
-                                await LocalAPI.post('/bordereaux/chef-equipe/remove-document-from-bordereau', { documentId: document.id });
-                                alert('Document retiré avec succès');
-                                loadDashboardData();
-                              } catch (err) {
-                                console.error('Error removing document:', err);
-                                alert('Erreur lors du retrait');
-                              }
-                            }
-                          }}
-                          style={{ 
-                            background: '#f44336', 
-                            color: 'white', 
-                            border: 'none', 
-                            padding: '4px 8px', 
-                            borderRadius: '4px', 
-                            fontSize: '11px', 
-                            cursor: 'pointer',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          🗑️ Retirer
-                        </button>
+                        <div style={{ position: 'relative' }} data-actions-menu onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.nativeEvent.stopImmediatePropagation();
+                              const isOpen = showActionsMenu === document.id;
+                              setShowActionsMenu(isOpen ? null : document.id);
+                              setSelectedDocForAction(isOpen ? null : document);
+                              return false;
+                            }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.nativeEvent.stopImmediatePropagation();
+                              return false;
+                            }}
+                            style={{ 
+                              background: '#9c27b0', 
+                              color: 'white', 
+                              border: 'none', 
+                              padding: '6px 12px', 
+                              borderRadius: '4px', 
+                              fontSize: '12px', 
+                              cursor: 'pointer',
+                              fontWeight: 'bold',
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            ⚙️ Actions ▼
+                          </button>
+                          {showActionsMenu === document.id && (
+                            <div 
+                              style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                zIndex: 1000,
+                                background: 'white',
+                                border: '2px solid #9c27b0',
+                                borderRadius: '6px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                                minWidth: '180px',
+                                marginTop: '4px',
+                                overflow: 'hidden'
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleRetirerFromMenu();
+                                }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px 16px',
+                                  border: 'none',
+                                  background: 'white',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500',
+                                  color: '#333',
+                                  borderBottom: '1px solid #f0f0f0',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#fff3e0'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              >
+                                <span style={{ fontSize: '16px' }}>🗑️</span>
+                                <span>Retirer</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowActionsMenu(null);
+                                  setShowRemplacerModal(true);
+                                }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px 16px',
+                                  border: 'none',
+                                  background: 'white',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500',
+                                  color: '#333',
+                                  borderBottom: '1px solid #f0f0f0',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#e3f2fd'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              >
+                                <span style={{ fontSize: '16px' }}>🔄</span>
+                                <span>Remplacer</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowActionsMenu(null);
+                                  setSelectedDocsForReaffect([selectedDocForAction.id]);
+                                  setShowReaffecterModal(true);
+                                }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px 16px',
+                                  border: 'none',
+                                  background: 'white',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500',
+                                  color: '#333',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  transition: 'background 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f3e5f5'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                              >
+                                <span style={{ fontSize: '16px' }}>📋</span>
+                                <span>Réaffecter</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1514,6 +1804,479 @@ function GestionnaireSeniorDashboard() {
                 }}
               >
                 Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Remplacer Document Modal */}
+      {showRemplacerModal && selectedDocForAction && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1003,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              paddingBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#d52b36',
+                fontSize: '18px',
+                fontWeight: 'bold'
+              }}>
+                🔄 Remplacer le Document
+              </h3>
+              <button
+                onClick={() => {
+                  setShowRemplacerModal(false);
+                  setRemplacerFile(null);
+                  setSelectedDocForAction(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <p style={{ fontSize: '14px', marginBottom: '12px', color: '#666' }}>
+                Document actuel: <strong>{selectedDocForAction.reference}</strong><br/>
+                Bordereau: <strong>{selectedDocForAction.bordereauReference}</strong><br/>
+                Client: <strong>{selectedDocForAction.client || selectedDocForAction.societe}</strong>
+              </p>
+              
+              <label style={{ 
+                display: 'block', 
+                fontSize: '14px', 
+                fontWeight: '500', 
+                marginBottom: '8px',
+                color: '#333'
+              }}>
+                Sélectionner le nouveau fichier:
+              </label>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => setRemplacerFile(e.target.files?.[0] || null)}
+                disabled={uploadingRemplacer}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px dashed #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  cursor: uploadingRemplacer ? 'not-allowed' : 'pointer'
+                }}
+              />
+              {remplacerFile && (
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#4caf50' }}>
+                  ✅ Fichier sélectionné: {remplacerFile.name}
+                </div>
+              )}
+              {uploadingRemplacer && (
+                <div style={{ marginTop: '12px', textAlign: 'center', color: '#666' }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>⏳</div>
+                  <p>Remplacement en cours...</p>
+                </div>
+              )}
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => {
+                  setShowRemplacerModal(false);
+                  setRemplacerFile(null);
+                  setSelectedDocForAction(null);
+                }}
+                disabled={uploadingRemplacer}
+                style={{
+                  background: '#f5f5f5',
+                  color: '#333',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: uploadingRemplacer ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleRemplacerUpload}
+                disabled={!remplacerFile || uploadingRemplacer}
+                style={{
+                  background: remplacerFile && !uploadingRemplacer ? '#d52b36' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: remplacerFile && !uploadingRemplacer ? 'pointer' : 'not-allowed',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {uploadingRemplacer ? 'Remplacement...' : 'Remplacer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Retirer Confirmation Modal */}
+      {showRetirerConfirmModal && selectedDocForAction && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1003,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '450px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              paddingBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#d52b36',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span style={{ fontSize: '24px' }}>⚠️</span>
+                Confirmer le retrait
+              </h3>
+              <button
+                onClick={() => {
+                  setShowRetirerConfirmModal(false);
+                  setSelectedDocForAction(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '24px' }}>
+              <p style={{ fontSize: '15px', marginBottom: '16px', color: '#333', lineHeight: '1.5' }}>
+                Êtes-vous sûr de vouloir retirer ce document ?
+              </p>
+              <div style={{ 
+                background: '#f8f9fa', 
+                padding: '12px', 
+                borderRadius: '6px',
+                border: '1px solid #e0e0e0'
+              }}>
+                <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
+                  <strong>Document:</strong> {selectedDocForAction.reference}
+                </div>
+                <div style={{ fontSize: '13px', color: '#666', marginBottom: '4px' }}>
+                  <strong>Bordereau:</strong> {selectedDocForAction.bordereauReference}
+                </div>
+                <div style={{ fontSize: '13px', color: '#666' }}>
+                  <strong>Client:</strong> {selectedDocForAction.client || selectedDocForAction.societe}
+                </div>
+              </div>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => {
+                  setShowRetirerConfirmModal(false);
+                  setSelectedDocForAction(null);
+                }}
+                style={{
+                  background: '#f5f5f5',
+                  color: '#333',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmRetirer}
+                style={{
+                  background: '#d52b36',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                🗑️ Confirmer le retrait
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Réaffecter Documents Modal */}
+      {showReaffecterModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1003,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '24px',
+            maxWidth: '700px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e0e0e0',
+              paddingBottom: '16px'
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: '#d52b36',
+                fontSize: '18px',
+                fontWeight: 'bold'
+              }}>
+                📋 Réaffecter des Documents
+              </h3>
+              <button
+                onClick={() => {
+                  setShowReaffecterModal(false);
+                  setSelectedDocsForReaffect([]);
+                  setTargetBordereauId('');
+                  setSelectedDocForAction(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <p style={{ fontSize: '14px', marginBottom: '16px', color: '#666' }}>
+                Sélectionnez les documents à réaffecter et choisissez le bordereau de destination (uniquement vos bordereaux).
+              </p>
+              
+              {/* Document Selection */}
+              <div style={{ marginBottom: '20px' }}>
+                <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '12px', color: '#333' }}>
+                  Documents disponibles ({selectedDocsForReaffect.length} sélectionné(s))
+                </h4>
+                <div style={{ 
+                  maxHeight: '250px', 
+                  overflow: 'auto', 
+                  border: '1px solid #e0e0e0', 
+                  borderRadius: '4px',
+                  padding: '8px'
+                }}>
+                  {documents.map(doc => (
+                    <div 
+                      key={doc.id}
+                      onClick={() => toggleDocSelection(doc.id)}
+                      style={{
+                        padding: '10px',
+                        marginBottom: '6px',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: selectedDocsForReaffect.includes(doc.id) ? '#e3f2fd' : 'white',
+                        borderColor: selectedDocsForReaffect.includes(doc.id) ? '#2196f3' : '#e0e0e0',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedDocsForReaffect.includes(doc.id)}
+                          onChange={() => toggleDocSelection(doc.id)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>
+                            {doc.reference}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#666' }}>
+                            Bordereau: {(doc as any).bordereauReference} | Client: {doc.client || doc.societe}
+                          </div>
+                        </div>
+                        <span style={{
+                          background: doc.statut === 'Traité' ? '#4caf50' : '#ff9800',
+                          color: 'white',
+                          padding: '2px 6px',
+                          borderRadius: '8px',
+                          fontSize: '10px',
+                          fontWeight: 'bold'
+                        }}>
+                          {doc.statut === 'Nouveau' ? 'En cours' : doc.statut}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Bordereau Selection */}
+              <div>
+                <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '12px', color: '#333' }}>
+                  Bordereau de destination
+                </h4>
+                <select
+                  value={targetBordereauId}
+                  onChange={(e) => setTargetBordereauId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="">-- Sélectionnez un bordereau --</option>
+                  {getSeniorBordereaux().map(bordereau => (
+                    <option key={bordereau.id} value={bordereau.id}>
+                      {bordereau.reference} - {bordereau.client || bordereau.societe} ({bordereau.type})
+                    </option>
+                  ))}
+                </select>
+                {getSeniorBordereaux().length === 0 && (
+                  <p style={{ fontSize: '12px', color: '#f44336', marginTop: '8px' }}>
+                    ⚠️ Aucun bordereau disponible dans votre portefeuille
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              paddingTop: '16px',
+              borderTop: '1px solid #e0e0e0'
+            }}>
+              <button
+                onClick={() => {
+                  setShowReaffecterModal(false);
+                  setSelectedDocsForReaffect([]);
+                  setTargetBordereauId('');
+                  setSelectedDocForAction(null);
+                }}
+                disabled={reaffectingDocs}
+                style={{
+                  background: '#f5f5f5',
+                  color: '#333',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: reaffectingDocs ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleReaffecterDocuments}
+                disabled={!targetBordereauId || selectedDocsForReaffect.length === 0 || reaffectingDocs}
+                style={{
+                  background: targetBordereauId && selectedDocsForReaffect.length > 0 && !reaffectingDocs ? '#d52b36' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '4px',
+                  cursor: targetBordereauId && selectedDocsForReaffect.length > 0 && !reaffectingDocs ? 'pointer' : 'not-allowed',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {reaffectingDocs ? 'Réaffectation...' : `Réaffecter (${selectedDocsForReaffect.length})`}
               </button>
             </div>
           </div>

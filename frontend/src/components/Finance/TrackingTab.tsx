@@ -91,6 +91,10 @@ const TrackingTab: React.FC = () => {
   });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [correctOVOpen, setCorrectOVOpen] = useState(false);
+  const [correctOVData, setCorrectOVData] = useState<any>(null);
+  const [restartProcessingOpen, setRestartProcessingOpen] = useState(false);
+  const [selectedForRestart, setSelectedForRestart] = useState<BordereauTraite | null>(null);
 
   const loadClients = async () => {
     try {
@@ -311,11 +315,75 @@ const TrackingTab: React.FC = () => {
   };
 
   const canModifyStatus = () => {
-    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE';
+    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR';
   };
   
   const canReinject = () => {
-    return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
+    return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN' || user?.role === 'GESTIONNAIRE_SENIOR';
+  };
+  
+  const handleCorrectOV = async (record: BordereauTraite) => {
+    try {
+      const financeService = await import('../../services/financeService');
+      const ovDetails = await financeService.financeService.getOVDetails(record.id);
+      
+      setCorrectOVData({
+        id: record.id,
+        reference: record.referenceOV || record.referenceBordereau,
+        montantTotal: ovDetails.montantTotal || 0,
+        nombreAdherents: ovDetails.nombreAdherents || 0,
+        donneurOrdreId: ovDetails.donneurOrdreId || '',
+        observations: ovDetails.observations || ''
+      });
+      setCorrectOVOpen(true);
+    } catch (error) {
+      console.error('Failed to load OV details:', error);
+      alert('Erreur lors du chargement des détails: ' + (error as any).message);
+    }
+  };
+  
+  const handleSaveCorrection = async () => {
+    if (!correctOVData) return;
+    
+    try {
+      const financeService = await import('../../services/financeService');
+      await financeService.financeService.updateOVDetails(correctOVData.id, {
+        montantTotal: correctOVData.montantTotal,
+        nombreAdherents: correctOVData.nombreAdherents,
+        donneurOrdreId: correctOVData.donneurOrdreId,
+        observations: correctOVData.observations
+      });
+      
+      alert('Ordre de virement corrigé avec succès!');
+      setCorrectOVOpen(false);
+      setCorrectOVData(null);
+      loadBordereauxTraites();
+    } catch (error) {
+      console.error('Failed to correct OV:', error);
+      alert('Erreur lors de la correction: ' + (error as any).message);
+    }
+  };
+  
+  const handleRestartProcessing = async (record: BordereauTraite) => {
+    setSelectedForRestart(record);
+    setRestartProcessingOpen(true);
+  };
+  
+  const handleConfirmRestart = async () => {
+    if (!selectedForRestart) return;
+    
+    try {
+      const financeService = await import('../../services/financeService');
+      await financeService.financeService.restartOVProcessing(selectedForRestart.id);
+      
+      alert('Traitement financier relancé avec succès!');
+      setRestartProcessingOpen(false);
+      setSelectedForRestart(null);
+      loadBordereauxTraites();
+    } catch (error) {
+      console.error('Failed to restart processing:', error);
+      alert('Erreur lors de la relance: ' + (error as any).message);
+    }
   };
 
   return (
@@ -696,28 +764,63 @@ const TrackingTab: React.FC = () => {
                           color="warning"
                           startIcon={<EditIcon />}
                           onClick={() => handleEditClick(record)}
+                          title="Modifier les informations du virement"
                         >
                           Corriger
                         </Button>
-                        {/* EXACT SPEC: Réinjecter for VIREMENT_NON_VALIDE - Chef Equipe and Super Admin only */}
-                        {record.statutVirement === 'VIREMENT_NON_VALIDE' && (user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN') && (
+                        
+                        {/* ALWAYS VISIBLE: Réinjecter button - only enabled for REJETE or VIREMENT_NON_VALIDE */}
+                        {canReinject() && (
                           <Button
                             size="small"
-                            color="error"
-                            variant="contained"
-                            onClick={() => setReinjectDialog({open: true, record})}
+                            color="warning"
+                            variant={record.statutVirement === 'REJETE' || record.statutVirement === 'VIREMENT_NON_VALIDE' ? 'contained' : 'outlined'}
+                            disabled={record.statutVirement !== 'REJETE' && record.statutVirement !== 'VIREMENT_NON_VALIDE'}
+                            onClick={() => {
+                              if (record.statutVirement === 'VIREMENT_NON_VALIDE') {
+                                setReinjectDialog({open: true, record});
+                              } else if (confirm(`Confirmer la réinjection du virement ${record.referenceOV} ?`)) {
+                                handleReinject(record.id);
+                              }
+                            }}
+                            title={record.statutVirement === 'REJETE' || record.statutVirement === 'VIREMENT_NON_VALIDE' 
+                              ? "Réinjecter le fichier exact sans modification" 
+                              : "Disponible uniquement pour les virements rejetés ou non validés"}
                           >
                             Réinjecter
                           </Button>
                         )}
-                        {/* EXACT SPEC: Reinject only for REJETE status */}
-                        {canReinject() && record.statutVirement === 'REJETE' && (
+                        
+                        {/* ALWAYS VISIBLE: Corriger OV button - only enabled for REJETE */}
+                        {canReinject() && (
                           <Button
                             size="small"
-                            color="warning"
-                            onClick={() => handleReinject(record.id)}
+                            color="info"
+                            variant={record.statutVirement === 'REJETE' ? 'contained' : 'outlined'}
+                            disabled={record.statutVirement !== 'REJETE'}
+                            startIcon={<EditIcon />}
+                            onClick={() => handleCorrectOV(record)}
+                            title={record.statutVirement === 'REJETE' 
+                              ? "Corriger l'ordre de virement avant réinjection" 
+                              : "Disponible uniquement pour les virements rejetés"}
                           >
-                            Réinjecter
+                            Corriger OV
+                          </Button>
+                        )}
+                        
+                        {/* ALWAYS VISIBLE: Relancer button - only enabled for REJETE or BLOQUE */}
+                        {canReinject() && (
+                          <Button
+                            size="small"
+                            color="secondary"
+                            variant={(record.statutVirement === 'REJETE' || record.statutVirement === 'BLOQUE') ? 'contained' : 'outlined'}
+                            disabled={record.statutVirement !== 'REJETE' && record.statutVirement !== 'BLOQUE'}
+                            onClick={() => handleRestartProcessing(record)}
+                            title={(record.statutVirement === 'REJETE' || record.statutVirement === 'BLOQUE') 
+                              ? "Relancer le traitement financier complet" 
+                              : "Disponible uniquement pour les virements rejetés ou bloqués"}
+                          >
+                            Relancer
                           </Button>
                         )}
                       </Box>
@@ -901,9 +1004,41 @@ const TrackingTab: React.FC = () => {
                           color="warning"
                           startIcon={<EditIcon />}
                           onClick={() => handleEditClick(record)}
+                          title="Modifier les informations du virement"
                         >
                           Corriger
                         </Button>
+                        
+                        {/* ALWAYS VISIBLE: Corriger OV and Relancer for manual entries */}
+                        {canReinject() && (
+                          <>
+                            <Button
+                              size="small"
+                              color="info"
+                              variant={record.statutVirement === 'REJETE' ? 'contained' : 'outlined'}
+                              disabled={record.statutVirement !== 'REJETE'}
+                              startIcon={<EditIcon />}
+                              onClick={() => handleCorrectOV(record)}
+                              title={record.statutVirement === 'REJETE' 
+                                ? "Corriger l'ordre de virement" 
+                                : "Disponible uniquement pour les virements rejetés"}
+                            >
+                              Corriger OV
+                            </Button>
+                            <Button
+                              size="small"
+                              color="secondary"
+                              variant={(record.statutVirement === 'REJETE' || record.statutVirement === 'BLOQUE') ? 'contained' : 'outlined'}
+                              disabled={record.statutVirement !== 'REJETE' && record.statutVirement !== 'BLOQUE'}
+                              onClick={() => handleRestartProcessing(record)}
+                              title={(record.statutVirement === 'REJETE' || record.statutVirement === 'BLOQUE') 
+                                ? "Relancer le traitement" 
+                                : "Disponible uniquement pour les virements rejetés ou bloqués"}
+                            >
+                              Relancer
+                            </Button>
+                          </>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -1257,6 +1392,94 @@ const TrackingTab: React.FC = () => {
             </Box>
           )}
         </DialogContent>
+      </Dialog>
+      
+      {/* Correct OV Dialog */}
+      <Dialog open={correctOVOpen} onClose={() => setCorrectOVOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Corriger l'Ordre de Virement</DialogTitle>
+        <DialogContent>
+          {correctOVData && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Alert severity="info">
+                Vous pouvez corriger les informations de l'ordre de virement avant de le réinjecter.
+              </Alert>
+              <TextField
+                fullWidth
+                label="Référence"
+                value={correctOVData.reference}
+                disabled
+                helperText="La référence ne peut pas être modifiée"
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="Montant Total (TND)"
+                value={correctOVData.montantTotal}
+                onChange={(e) => setCorrectOVData((prev: any) => ({ ...prev, montantTotal: parseFloat(e.target.value) || 0 }))}
+                required
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="Nombre Adhérents"
+                value={correctOVData.nombreAdherents}
+                onChange={(e) => setCorrectOVData((prev: any) => ({ ...prev, nombreAdherents: parseInt(e.target.value) || 0 }))}
+                required
+              />
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Observations"
+                value={correctOVData.observations}
+                onChange={(e) => setCorrectOVData((prev: any) => ({ ...prev, observations: e.target.value }))}
+                helperText="Notes sur les corrections effectuées"
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCorrectOVOpen(false)}>Annuler</Button>
+          <Button onClick={handleSaveCorrection} variant="contained" color="primary">
+            Sauvegarder et Réinjecter
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Restart Processing Dialog */}
+      <Dialog open={restartProcessingOpen} onClose={() => setRestartProcessingOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Relancer le Traitement Financier</DialogTitle>
+        <DialogContent>
+          {selectedForRestart && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Alert severity="warning">
+                <strong>Attention:</strong> Cette action va réinitialiser le statut du virement et relancer le traitement financier complet.
+              </Alert>
+              <Box>
+                <Typography variant="subtitle2">Référence OV:</Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>{selectedForRestart.referenceOV}</Typography>
+                
+                <Typography variant="subtitle2">Bordereau:</Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>{selectedForRestart.referenceBordereau || 'Entrée manuelle'}</Typography>
+                
+                <Typography variant="subtitle2">Statut actuel:</Typography>
+                <Box sx={{ mb: 2 }}>{getStatusChip(selectedForRestart.statutVirement)}</Box>
+                
+                <Typography variant="subtitle2">Société:</Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>{selectedForRestart.clientSociete}</Typography>
+              </Box>
+              <Alert severity="info">
+                Le virement sera remis en statut "Non Exécuté" et pourra être retraité par le service financier.
+              </Alert>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRestartProcessingOpen(false)}>Annuler</Button>
+          <Button onClick={handleConfirmRestart} variant="contained" color="warning">
+            Confirmer la Relance
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

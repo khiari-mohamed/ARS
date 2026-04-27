@@ -203,11 +203,11 @@ const SuiviVirementTab: React.FC = () => {
   };
   
   const canModifyStatus = () => {
-    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE';
+    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR';
   };
   
   const canReinject = () => {
-    return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN';
+    return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN' || user?.role === 'GESTIONNAIRE_SENIOR';
   };
   
   const handleReinject = async (suivi: SuiviVirement) => {

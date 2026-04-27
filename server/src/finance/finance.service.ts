@@ -1002,9 +1002,9 @@ Document généré automatiquement par ARS`;
   }
 
   async updateRecoveryInfo(id: string, data: any, user: User) {
-    // EXACT SPEC: Only Finance and Super Admin can update recovery
-    if (!['FINANCE', 'SUPER_ADMIN'].includes(user.role)) {
-      throw new ForbiddenException('Only Finance service can update recovery information');
+    // EXACT SPEC: Finance, Chef d'équipe, Gestionnaire Senior, and Super Admin can update recovery
+    if (!['FINANCE', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Finance service, Chef d\'équipe, and Gestionnaire Senior can update recovery information');
     }
     
     try {
@@ -1066,8 +1066,8 @@ Document généré automatiquement par ARS`;
   }
 
   async createManualOV(data: any, user: User) {
-    if (!['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
-      throw new ForbiddenException('Only Chef d\'équipe and Super Admin can create manual OV');
+    if (!['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Chef d\'équipe, Gestionnaire Senior, and Super Admin can create manual OV');
     }
     
     try {
@@ -1130,9 +1130,9 @@ Document généré automatiquement par ARS`;
   }
 
   async reinjectOV(id: string, user: User) {
-    // EXACT SPEC: Only Chef d'équipe and Super Admin
-    if (!['CHEF_EQUIPE', 'SUPER_ADMIN'].includes(user.role)) {
-      throw new ForbiddenException('Only Chef d\'équipe and Super Admin can reinject OV');
+    // EXACT SPEC: Only Chef d'équipe, Gestionnaire Senior, and Super Admin
+    if (!['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Chef d\'équipe, Gestionnaire Senior, and Super Admin can reinject OV');
     }
     
     try {

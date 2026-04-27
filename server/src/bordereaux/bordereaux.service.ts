@@ -13,7 +13,7 @@ import { Document as PrismaDocument } from '@prisma/client';
 import { BordereauResponseDto, StatusColor } from './dto/bordereau-response.dto';
 import { BordereauKPI, TeamKPI, UserKPI } from './interfaces/kpi.interface';
 import { CreateBSDto, UpdateBSDto, BSStatus } from './dto/bs.dto';
-import { AlertsService } from 'src/alerts/alerts.service';
+import { AlertsService } from '../alerts/alerts.service';
 import { Prisma } from '@prisma/client';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -3299,5 +3299,118 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
     };
     
     return mapping[oldType.toUpperCase()] || 'BULLETIN_SOIN';
+  }
+
+  // Gestionnaire Senior: Modify dossier status
+  async modifyDossierStatus(dossierId: string, newStatus: string): Promise<any> {
+    const document = await this.prisma.document.findUnique({ where: { id: dossierId } });
+    
+    if (document) {
+      const updated = await this.prisma.document.update({
+        where: { id: dossierId },
+        data: { status: newStatus as any }
+      });
+      return { success: true, document: updated };
+    }
+    
+    const bordereau = await this.prisma.bordereau.findUnique({ where: { id: dossierId } });
+    if (bordereau) {
+      const updated = await this.prisma.bordereau.update({
+        where: { id: dossierId },
+        data: { statut: newStatus as any }
+      });
+      return { success: true, bordereau: updated };
+    }
+    
+    throw new NotFoundException('Dossier not found');
+  }
+
+  // Gestionnaire Senior: Remplacer document
+  async remplacerDocument(documentId: string, file: Express.Multer.File): Promise<any> {
+    const document = await this.prisma.document.findUnique({ where: { id: documentId } });
+    if (!document) {
+      throw new NotFoundException('Document not found');
+    }
+
+    // Save new file
+    const uploadDir = path.join(process.cwd(), 'uploads', 'documents');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const uniqueFilename = `${base}-${uniqueSuffix}${ext}`;
+    const filePath = path.join(uploadDir, uniqueFilename);
+    fs.writeFileSync(filePath, file.buffer);
+    const relativePath = `documents/${uniqueFilename}`;
+
+    // Delete old file if exists
+    if (document.path) {
+      const oldFilePath = path.join(process.cwd(), 'uploads', document.path);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    }
+
+    // Update document
+    const updated = await this.prisma.document.update({
+      where: { id: documentId },
+      data: {
+        name: file.originalname,
+        path: relativePath,
+        uploadedAt: new Date()
+      }
+    });
+
+    return { success: true, document: updated };
+  }
+
+  // Gestionnaire Senior: Réaffecter documents
+  async reaffecterDocuments(documentIds: string[], targetBordereauId: string, userId: string): Promise<any> {
+    // Verify target bordereau exists and belongs to this senior
+    const targetBordereau = await this.prisma.bordereau.findUnique({
+      where: { id: targetBordereauId },
+      include: { contract: { include: { teamLeader: true } } }
+    });
+
+    if (!targetBordereau) {
+      throw new NotFoundException('Bordereau de destination introuvable');
+    }
+
+    // Verify senior owns this bordereau
+    if (targetBordereau.contract?.teamLeaderId !== userId) {
+      throw new BadRequestException('Vous ne pouvez réaffecter que vers vos propres bordereaux');
+    }
+
+    // Verify all documents belong to senior's bordereaux
+    const documents = await this.prisma.document.findMany({
+      where: { id: { in: documentIds } },
+      include: { bordereau: { include: { contract: true } } }
+    });
+
+    for (const doc of documents) {
+      if (doc.bordereau?.contract?.teamLeaderId !== userId) {
+        throw new BadRequestException(`Document ${doc.name} n'appartient pas à vos bordereaux`);
+      }
+    }
+
+    // Perform reassignment
+    await this.prisma.document.updateMany({
+      where: { id: { in: documentIds } },
+      data: { bordereauId: targetBordereauId }
+    });
+
+    // Log the action
+    await this.prisma.documentAssignmentHistory.createMany({
+      data: documentIds.map(docId => ({
+        documentId: docId,
+        assignedToUserId: userId,
+        assignedByUserId: userId,
+        action: 'REASSIGNED_TO_BORDEREAU',
+        reason: `Réaffecté vers bordereau ${targetBordereau.reference}`,
+        createdAt: new Date()
+      }))
+    });
+
+    return { success: true, reassignedCount: documentIds.length };
   }
 }

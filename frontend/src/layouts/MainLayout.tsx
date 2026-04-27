@@ -210,7 +210,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     setNotifications(prev => prev.map((n, i) => i === index ? {...n, read: true} : n));
   };
   
-  // Get notification icon
+  // Get notification icon and color
   const getNotificationIcon = (type: string, level?: string) => {
     switch (type) {
       case 'NEW_BORDEREAU_SCAN': return '📄';
@@ -222,6 +222,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'TEAM_OVERLOAD_ALERT': return '⚠️';
       case 'ASSIGNMENT_FAILURE': return '❌';
       case 'SLA_BREACH': return '🔴';
+      case 'SCAN_SLA_ALERT': return '⏰'; // SCAN SLA alert icon
       case 'CUSTOM_NOTIFICATION': return '💬';
       case 'OV_PENDING_VALIDATION': return '💰';
       case 'OV_VALIDATED': return '✅';
@@ -233,6 +234,21 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
         if (level === 'warning') return '⚠️';
         return '📝';
       default: return '🔔';
+    }
+  };
+  
+  const getNotificationColor = (type: string, data?: any) => {
+    switch (type) {
+      case 'SCAN_SLA_ALERT':
+        if (data?.status === 'CRITICAL') return '#d32f2f'; // Red for critical
+        if (data?.status === 'WARNING') return '#f57c00'; // Orange for warning
+        return '#1976d2'; // Blue default
+      case 'SLA_BREACH': return '#d32f2f';
+      case 'TEAM_OVERLOAD_ALERT': return '#f57c00';
+      case 'ASSIGNMENT_FAILURE': return '#d32f2f';
+      case 'OV_PENDING_VALIDATION': return '#2e7d32';
+      case 'reclamation': return '#ed6c02';
+      default: return '#1976d2';
     }
   };
 
@@ -337,22 +353,40 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                   </Typography>
                 </MenuItem>
               )}
-              {notifications.map((notif, i) => (
+              {notifications.map((notif, i) => {
+                const notifColor = getNotificationColor(notif._type || 'default', notif.data);
+                const isScanSLA = notif._type === 'SCAN_SLA_ALERT';
+                const isCritical = notif.data?.status === 'CRITICAL';
+                const isWarning = notif.data?.status === 'WARNING';
+                
+                return (
                 <MenuItem 
                   key={notif.id || i} 
                   onClick={() => handleNotificationClick(notif, i)}
                   sx={{ 
                     opacity: notif.read ? 0.6 : 1,
-                    backgroundColor: notif.read ? 'transparent' : 'rgba(25, 118, 210, 0.08)',
-                    '&:hover': { backgroundColor: 'rgba(25, 118, 210, 0.12)' },
-                    borderLeft: notif.read ? 'none' : '3px solid #1976d2',
-                    py: 1.5
+                    backgroundColor: notif.read ? 'transparent' : `${notifColor}15`,
+                    '&:hover': { backgroundColor: `${notifColor}25` },
+                    borderLeft: notif.read ? 'none' : `4px solid ${notifColor}`,
+                    py: 1.5,
+                    px: 2
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, width: '100%' }}>
-                    <span style={{ fontSize: '16px', marginTop: '2px' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, width: '100%' }}>
+                    <Box sx={{ 
+                      fontSize: '24px', 
+                      marginTop: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      backgroundColor: `${notifColor}20`,
+                      flexShrink: 0
+                    }}>
                       {getNotificationIcon(notif._type || 'default', notif.data?.level)}
-                    </span>
+                    </Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       {notif.title && (
                         <Typography 
@@ -360,6 +394,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                           sx={{ 
                             fontWeight: notif.read ? 'normal' : 'bold',
                             mb: 0.5,
+                            color: notif.read ? 'text.secondary' : notifColor,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap'
@@ -377,14 +412,74 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                           textOverflow: 'ellipsis',
                           display: '-webkit-box',
                           WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical'
+                          WebkitBoxOrient: 'vertical',
+                          fontSize: '0.875rem'
                         }}
                       >
                         {notif.message}
                       </Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                      
+                      {/* SCAN SLA specific info */}
+                      {isScanSLA && notif.data && (
+                        <Box sx={{ 
+                          display: 'flex', 
+                          gap: 1, 
+                          mt: 1,
+                          flexWrap: 'wrap'
+                        }}>
+                          <Box sx={{ 
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: '12px',
+                            backgroundColor: isCritical ? '#ffebee' : isWarning ? '#fff3e0' : '#e3f2fd',
+                            border: `1px solid ${isCritical ? '#ef5350' : isWarning ? '#ff9800' : '#2196f3'}`
+                          }}>
+                            <Typography variant="caption" sx={{ 
+                              fontWeight: 'bold',
+                              color: isCritical ? '#c62828' : isWarning ? '#e65100' : '#1565c0'
+                            }}>
+                              {isCritical ? '🔴 CRITIQUE' : isWarning ? '🟠 ATTENTION' : '🟢 OK'}
+                            </Typography>
+                          </Box>
+                          {notif.data.daysElapsed && (
+                            <Box sx={{ 
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                              px: 1,
+                              py: 0.25,
+                              borderRadius: '12px',
+                              backgroundColor: '#f5f5f5'
+                            }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                📅 {notif.data.daysElapsed} jours
+                              </Typography>
+                            </Box>
+                          )}
+                          {notif.data.clientName && (
+                            <Box sx={{ 
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                              px: 1,
+                              py: 0.25,
+                              borderRadius: '12px',
+                              backgroundColor: '#f5f5f5'
+                            }}>
+                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                🏢 {notif.data.clientName}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                      
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
                         {notif.createdAt && (
-                          <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                          <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.75rem' }}>
                             {new Date(notif.createdAt).toLocaleString('fr-FR', {
                               day: '2-digit',
                               month: '2-digit',
@@ -399,21 +494,23 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                             sx={{ 
                               color: 'primary.main', 
                               cursor: 'pointer',
-                              '&:hover': { textDecoration: 'underline' }
+                              '&:hover': { textDecoration: 'underline' },
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold'
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
                               window.open(`/home/reclamations/${notif.data.reclamationId}`, '_blank');
                             }}
                           >
-                            Voir réclamation
+                            Voir réclamation →
                           </Typography>
                         )}
                       </Box>
                     </Box>
                   </Box>
                 </MenuItem>
-              ))}
+              );})}
             </>
           )}
         </Menu>

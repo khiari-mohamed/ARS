@@ -28,7 +28,8 @@ import {
   Tab,
   Alert,
   Snackbar,
-  CircularProgress
+  CircularProgress,
+  Autocomplete
 } from '@mui/material';
 import ContractAssignment from '../../components/ContractAssignment';
 import {
@@ -79,6 +80,7 @@ const ContractsPage: React.FC = () => {
   const [mainTab, setMainTab] = useState(0);
   const [availableClients, setAvailableClients] = useState<any[]>([]);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [scanSLAIssues, setScanSLAIssues] = useState<any[]>([]);
 
   // Filters
   const [filters, setFilters] = useState<ContractSearchFilters>({
@@ -120,7 +122,17 @@ const ContractsPage: React.FC = () => {
     loadContracts();
     loadStatistics();
     loadAvailableData();
+    loadScanSLAIssues();
   }, [filters]);
+
+  const loadScanSLAIssues = async () => {
+    try {
+      const { data } = await LocalAPI.get('/scan-sla/issues');
+      setScanSLAIssues(data || []);
+    } catch (error) {
+      console.error('Error loading SCAN SLA issues:', error);
+    }
+  };
 
   const loadContracts = async () => {
     setLoading(true);
@@ -421,6 +433,24 @@ const ContractsPage: React.FC = () => {
         <Box mt={3}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} sm={6} md={3}>
+              <Autocomplete
+                options={availableClients}
+                getOptionLabel={(option) => option.name || ''}
+                value={availableClients.find(c => c.id === filters.clientId) || null}
+                onChange={(e, newValue) => setFilters({ ...filters, clientId: newValue?.id || undefined })}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Client"
+                    size="small"
+                    placeholder="Rechercher un client..."
+                  />
+                )}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                noOptionsText="Aucun client trouvé"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
               <TextField
                 fullWidth
                 label="Numéro de contrat"
@@ -487,6 +517,7 @@ const ContractsPage: React.FC = () => {
                 <Table stickyHeader>
                   <TableHead>
                     <TableRow>
+                      <TableCell>Alerte SCAN</TableCell>
                       <TableCell>Numéro</TableCell>
                       <TableCell>Client</TableCell>
                       <TableCell>Chef d'équipe</TableCell>
@@ -497,7 +528,16 @@ const ContractsPage: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {contracts.map((contract) => (
+                    {contracts.map((contract) => {
+                      // Check if this contract has SCAN SLA issues
+                      const hasScanIssues = scanSLAIssues.some((issue: any) => 
+                        issue.client?.id === contract.clientId
+                      );
+                      const scanIssue = scanSLAIssues.find((issue: any) => 
+                        issue.client?.id === contract.clientId
+                      );
+                      
+                      return (
                       <TableRow 
                         key={contract.id}
                         hover
@@ -505,6 +545,17 @@ const ContractsPage: React.FC = () => {
                         sx={{ cursor: 'pointer' }}
                         onClick={() => handleViewContract(contract)}
                       >
+                        <TableCell>
+                          {hasScanIssues && scanIssue?.scanSLA ? (
+                            <Tooltip title={`${scanIssue.scanSLA.daysElapsed} jours écoulés - ${scanIssue.scanSLA.status}`}>
+                              <span style={{ fontSize: '20px', cursor: 'pointer' }}>
+                                {scanIssue.scanSLA.status === 'CRITICAL' ? '🔴' : '🟠'}
+                              </span>
+                            </Tooltip>
+                          ) : (
+                            <span style={{ fontSize: '16px', opacity: 0.3 }}>🟢</span>
+                          )}
+                        </TableCell>
                         <TableCell>{contract.clientName}</TableCell>
                         <TableCell>{contract.client?.name}</TableCell>
                         <TableCell>{contract.teamLeader?.fullName || 'N/A'}</TableCell>
@@ -552,7 +603,7 @@ const ContractsPage: React.FC = () => {
                           </Box>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )})}
                   </TableBody>
                 </Table>
               )}
@@ -938,37 +989,44 @@ const ContractsPage: React.FC = () => {
 
               {activeTab === 3 && slaCompliance && (
                 <Box>
-                  <Typography variant="subtitle1" gutterBottom>Conformité SLA</Typography>
+                  <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+                    Conformité SLA
+                  </Typography>
+                  
                   <Grid container spacing={2}>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6} md={3}>
                       <Card>
-                        <CardContent sx={{ textAlign: 'center' }}>
+                        <CardContent>
+                          <Typography variant="body2" color="text.secondary">Conformes</Typography>
                           <Typography variant="h4" color="success.main">{slaCompliance.compliant}</Typography>
-                          <Typography variant="body2">Conformes</Typography>
+                          <Typography variant="caption">≤ 80% du délai</Typography>
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6} md={3}>
                       <Card>
-                        <CardContent sx={{ textAlign: 'center' }}>
+                        <CardContent>
+                          <Typography variant="body2" color="text.secondary">À risque</Typography>
                           <Typography variant="h4" color="warning.main">{slaCompliance.atRisk}</Typography>
-                          <Typography variant="body2">À risque</Typography>
+                          <Typography variant="caption">80-100% du délai</Typography>
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6} md={3}>
                       <Card>
-                        <CardContent sx={{ textAlign: 'center' }}>
+                        <CardContent>
+                          <Typography variant="body2" color="text.secondary">En dépassement</Typography>
                           <Typography variant="h4" color="error.main">{slaCompliance.breach}</Typography>
-                          <Typography variant="body2">En dépassement</Typography>
+                          <Typography variant="caption">&gt; 100% du délai</Typography>
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid item xs={12} sm={6} md={3}>
                       <Card>
-                        <CardContent sx={{ textAlign: 'center' }}>
+                        <CardContent>
+                          <Typography variant="body2" color="text.secondary">Taux de conformité</Typography>
                           <Typography variant="h4" color="primary.main">{slaCompliance.complianceRate.toFixed(1)}%</Typography>
-                          <Typography variant="body2">Taux de conformité</Typography>
+                          <Typography variant="caption">Objectif: ≥ 90%</Typography>
                         </CardContent>
                       </Card>
                     </Grid>

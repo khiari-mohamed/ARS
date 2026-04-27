@@ -509,6 +509,26 @@ class FinanceService {
     const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/reinject`);
     return data;
   }
+  
+  async getOVDetails(id: string) {
+    const { data } = await LocalAPI.get(`/finance/ordres-virement/${id}/details`);
+    return data;
+  }
+  
+  async updateOVDetails(id: string, updates: {
+    montantTotal?: number;
+    nombreAdherents?: number;
+    donneurOrdreId?: string;
+    observations?: string;
+  }) {
+    const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/details`, updates);
+    return data;
+  }
+  
+  async restartOVProcessing(id: string) {
+    const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/restart-processing`);
+    return data;
+  }
 
   // === NOTIFICATION METHODS ===
   async notifyResponsableEquipe(notificationData: {
