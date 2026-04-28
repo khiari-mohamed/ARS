@@ -47,6 +47,7 @@ export class ExcelValidationService {
     // Fix: Handle clientId as array (frontend sends it twice)
     const actualClientId = Array.isArray(clientId) ? clientId[0] : clientId;
     console.log('validateExcelFile called with clientId:', clientId, 'bordereauId:', bordereauId, '-> using:', actualClientId);
+    console.log('📄 File buffer size:', fileBuffer.length, 'bytes');
     
     // EXACT FIX: Get bordereau's client name and ID if bordereauId is provided
     let bordereauClientName: string | null = null;
@@ -85,18 +86,43 @@ export class ExcelValidationService {
     try {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(fileBuffer as any);
-      worksheet = workbook.getWorksheet(1);
+      // FIX: ExcelJS uses 0-based index OR get first worksheet
+      worksheet = workbook.worksheets[0] || workbook.getWorksheet(1);
       
-      if (!worksheet || worksheet.rowCount < 2) {
-        throw new Error('Empty or invalid Excel file');
+      console.log('📊 Workbook loaded:', {
+        sheetCount: workbook.worksheets.length,
+        sheetNames: workbook.worksheets.map(s => s.name),
+        worksheet1Exists: !!worksheet,
+        rowCount: worksheet?.rowCount || 0,
+        actualRowCount: worksheet?.actualRowCount || 0
+      });
+      
+      if (!worksheet) {
+        throw new Error('No worksheet found in Excel file');
+      }
+      
+      if (worksheet.rowCount < 2) {
+        console.log('⚠️ Worksheet has less than 2 rows');
+        // Check if there's actual data despite rowCount
+        let hasData = false;
+        worksheet.eachRow((row, rowNumber) => {
+          console.log(`Row ${rowNumber}:`, row.values);
+          if (rowNumber > 1 && row.hasValues) {
+            hasData = true;
+          }
+        });
+        
+        if (!hasData) {
+          throw new Error('Empty or invalid Excel file - no data rows found');
+        }
       }
     } catch (error : any) {
-      console.log('Excel parsing failed, creating default data:', error.message);
-      return this.createDefaultValidationResult();
+      console.log('❌ Excel parsing failed:', error.message);
+      throw new Error(`Failed to parse Excel file: ${error.message}. Please ensure the file has MATRICULE and MONTANT columns with valid data.`);
     }
     
     if (!worksheet) {
-      return this.createDefaultValidationResult();
+      throw new Error('Failed to load Excel worksheet. Please ensure the file is a valid Excel file.');
     }
     
     console.log('Processing Excel worksheet with', worksheet.rowCount, 'rows');
@@ -230,57 +256,7 @@ export class ExcelValidationService {
       }
     };
   }
-  
-  private createDefaultValidationResult(): ExcelValidationResult {
-    const defaultData: VirementValidationItem[] = [
-      {
-        matricule: 'M001',
-        nom: 'BENGAGI',
-        prenom: 'ZIED',
-        societe: 'ARS TUNISIE',
-        rib: '14043043100702168352',
-        montant: 102.036,
-        status: 'VALIDE',
-        erreurs: [],
-        adherentId: 'default-1'
-      },
-      {
-        matricule: 'M002',
-        nom: 'SAIDANI',
-        prenom: 'Hichem',
-        societe: 'ARS TUNISIE',
-        rib: '14015015100704939295',
-        montant: 116.957,
-        status: 'VALIDE',
-        erreurs: [],
-        adherentId: 'default-2'
-      },
-      {
-        matricule: 'M003',
-        nom: 'NEFZI',
-        prenom: 'MOHEB',
-        societe: 'ARS TUNISIE',
-        rib: '08081023082003208516',
-        montant: 65.5,
-        status: 'VALIDE',
-        erreurs: [],
-        adherentId: 'default-3'
-      }
-    ];
-    
-    return {
-      valid: true,
-      data: defaultData,
-      errors: [],
-      summary: {
-        total: defaultData.length,
-        valid: defaultData.length,
-        warnings: 0,
-        errors: 0,
-        totalAmount: defaultData.reduce((sum, item) => sum + item.montant, 0)
-      }
-    };
-  }
+
   
   private detectColumns(headerRow: ExcelJS.Row): { matricule: number; nom: number; prenom: number; rib: number; montant: number; societe: number } {
     const map = { matricule: -1, nom: -1, prenom: -1, rib: -1, montant: -1, societe: -1 };

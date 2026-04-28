@@ -939,6 +939,9 @@ export class BordereauxService {
       where.documentStatus = filters.documentStatus;
     }
     
+    // ✅ AUTO-FIX: Check and update bordereaux that should be TRAITE (before querying)
+    await this.autoFixBordereauStatus();
+    
     // Handle pagination
     const page = filters.page ? parseInt(filters.page) : 1;
     const pageSize = filters.pageSize ? parseInt(filters.pageSize) : 25;
@@ -952,7 +955,7 @@ export class BordereauxService {
       orderBy.dateReception = 'desc'; // Default sort
     }
     
-    // Build include clause - ALWAYS include documents for accurate count AND currentHandler for senior display
+    // Build include clause - ALWAYS include documents AND BulletinSoin for accurate DTO calculation
     const include: any = {
       client: true,
       contract: { 
@@ -961,7 +964,8 @@ export class BordereauxService {
           assignedManager: true
         } 
       },
-      documents: { select: { id: true } },
+      documents: true, // ✅ FULL documents for DTO calculation
+      BulletinSoin: true, // ✅ FULL BulletinSoin for DTO calculation
       currentHandler: { select: { id: true, fullName: true, role: true } },
       ordresVirement: {
         select: { dateTraitement: true, dateEtatFinal: true, etatVirement: true },
@@ -1740,7 +1744,7 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
   const existing = await this.prisma.bulletinSoin.findUnique({ where: { id: bsId } });
   if (!existing) throw new Error('BS not found.');
   // Only allow valid status transitions
-  if (dto.etat && !['IN_PROGRESS', 'VALIDATED', 'REJECTED'].includes(dto.etat)) {
+  if (dto.etat && !['IN_PROGRESS', 'VALIDATED', 'REJECTED', 'TRAITE'].includes(dto.etat)) {
     throw new Error('Invalid BS status transition.');
   }
   // Only pass allowed fields to Prisma
@@ -1768,6 +1772,10 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
     });
   }
   await this.updateBordereauStatusFromBS(bs.bordereauId);
+  
+  // ✅ AUTO-UPDATE BORDEREAU STATUS TO TRAITE IF ALL ITEMS TREATED
+  await this.checkAndUpdateBordereauToTraite(bs.bordereauId);
+  
   return bs;
 }
 
@@ -3303,13 +3311,32 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
 
   // Gestionnaire Senior: Modify dossier status
   async modifyDossierStatus(dossierId: string, newStatus: string): Promise<any> {
+    // Map French status names to enum values
+    const statusMap: Record<string, string> = {
+      'Traité': 'TRAITE',
+      'En cours': 'EN_COURS',
+      'Nouveau': 'EN_COURS',
+      'Rejeté': 'REJETE',
+      'Retourné': 'RETOURNER_AU_SCAN',
+      'Scanné': 'SCANNE',
+      'Uploadé': 'UPLOADED'
+    };
+    
+    const mappedStatus = statusMap[newStatus] || newStatus;
+    
     const document = await this.prisma.document.findUnique({ where: { id: dossierId } });
     
     if (document) {
       const updated = await this.prisma.document.update({
         where: { id: dossierId },
-        data: { status: newStatus as any }
+        data: { status: mappedStatus as any }
       });
+      
+      // ✅ AUTO-UPDATE BORDEREAU STATUS IF ALL DOCUMENTS TREATED
+      if (document.bordereauId) {
+        await this.checkAndUpdateBordereauToTraite(document.bordereauId);
+      }
+      
       return { success: true, document: updated };
     }
     
@@ -3412,5 +3439,130 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
     });
 
     return { success: true, reassignedCount: documentIds.length };
+  }
+  
+  // ✅ AUTO-UPDATE BORDEREAU STATUS TO TRAITE WHEN ALL ITEMS TREATED
+  private async checkAndUpdateBordereauToTraite(bordereauId: string): Promise<void> {
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: bordereauId },
+      include: {
+        documents: { select: { id: true, status: true, uploadedAt: true } },
+        BulletinSoin: { select: { id: true, etat: true, updatedAt: true } }
+      }
+    });
+    
+    if (!bordereau) return;
+    
+    // Check documents
+    const documents = bordereau.documents || [];
+    const totalDocs = documents.length;
+    const traitedDocs = documents.filter(doc => doc.status === 'TRAITE').length;
+    const allDocsTreated = totalDocs === 0 || traitedDocs === totalDocs;
+    
+    // Check bulletin soins
+    const bulletinSoins = bordereau.BulletinSoin || [];
+    const totalBS = bulletinSoins.length;
+    const traitedBS = bulletinSoins.filter(bs => bs.etat === 'TRAITE').length;
+    const allBSTreated = totalBS === 0 || traitedBS === totalBS;
+    
+    // Both must be treated (or empty) and at least one type must exist
+    const allTreated = allDocsTreated && allBSTreated && (totalDocs > 0 || totalBS > 0);
+    
+    // Auto-update to TRAITE if all items are treated and status is not already TRAITE or beyond
+    if (allTreated && !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(bordereau.statut)) {
+      // ✅ Calculate dateCloture as the LATEST update date of all treated items
+      const allDates: Date[] = [];
+      
+      // Get dates from documents
+      documents.forEach(doc => {
+        if (doc.uploadedAt) allDates.push(new Date(doc.uploadedAt));
+      });
+      
+      // Get dates from BS
+      bulletinSoins.forEach(bs => {
+        if (bs.updatedAt) allDates.push(new Date(bs.updatedAt));
+      });
+      
+      // Use the LATEST date, or current date if no dates found
+      const dateCloture = allDates.length > 0 
+        ? new Date(Math.max(...allDates.map(d => d.getTime())))
+        : new Date();
+      
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: {
+          statut: 'TRAITE',
+          dateCloture
+        }
+      });
+      
+      this.logger.log(`✅ Auto-updated bordereau ${bordereau.reference} to TRAITE (dateCloture: ${dateCloture.toISOString()})`);
+    }
+  }
+  
+  // ✅ AUTO-FIX: Batch check and update all bordereaux that should be TRAITE
+  private async autoFixBordereauStatus(): Promise<void> {
+    try {
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: {
+          statut: { notIn: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'] },
+          archived: false
+        },
+        include: {
+          documents: { select: { id: true, status: true, uploadedAt: true } },
+          BulletinSoin: { select: { id: true, etat: true, updatedAt: true } }
+        },
+        take: 50 // Limit to avoid performance issues
+      });
+      
+      for (const bordereau of bordereaux) {
+        // Check documents
+        const documents = bordereau.documents || [];
+        const totalDocs = documents.length;
+        const traitedDocs = documents.filter(doc => doc.status === 'TRAITE').length;
+        const allDocsTreated = totalDocs === 0 || traitedDocs === totalDocs;
+        
+        // Check bulletin soins
+        const bulletinSoins = bordereau.BulletinSoin || [];
+        const totalBS = bulletinSoins.length;
+        const traitedBS = bulletinSoins.filter(bs => bs.etat === 'TRAITE').length;
+        const allBSTreated = totalBS === 0 || traitedBS === totalBS;
+        
+        // Both must be treated (or empty) and at least one type must exist
+        const allTreated = allDocsTreated && allBSTreated && (totalDocs > 0 || totalBS > 0);
+        
+        if (allTreated) {
+          // ✅ Calculate dateCloture as the LATEST update date of all treated items
+          const allDates: Date[] = [];
+          
+          // Get dates from documents
+          documents.forEach(doc => {
+            if (doc.uploadedAt) allDates.push(new Date(doc.uploadedAt));
+          });
+          
+          // Get dates from BS
+          bulletinSoins.forEach(bs => {
+            if (bs.updatedAt) allDates.push(new Date(bs.updatedAt));
+          });
+          
+          // Use the LATEST date, or current date if no dates found
+          const dateCloture = allDates.length > 0 
+            ? new Date(Math.max(...allDates.map(d => d.getTime())))
+            : new Date();
+          
+          await this.prisma.bordereau.update({
+            where: { id: bordereau.id },
+            data: {
+              statut: 'TRAITE',
+              dateCloture
+            }
+          });
+          
+          this.logger.log(`✅ Auto-fixed bordereau ${bordereau.reference} to TRAITE (dateCloture: ${dateCloture.toISOString()})`);
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(`Error in autoFixBordereauStatus: ${error.message}`);
+    }
   }
 }

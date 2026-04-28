@@ -528,48 +528,9 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
       });
     }
     
-    // If no items, get real adherents from database and CREATE THEM IN DB
+    // If no items, throw error - Excel data must be valid
     if (!ordreVirement.items || ordreVirement.items.length === 0) {
-      console.log('No items found in ordre virement, fetching adherents from database...');
-      
-      const adherents = await this.prisma.adherent.findMany({
-        take: 10,
-        include: { client: true }
-      });
-      
-      if (adherents.length > 0) {
-        console.log(`Found ${adherents.length} adherents, creating items in database...`);
-        
-        const createdItems: any[] = [];
-        for (const adherent of adherents) {
-          const montant = Math.round((Math.random() * 500 + 30) * 1000) / 1000;
-          const item = await this.prisma.virementItem.create({
-            data: {
-              ordreVirementId: ordreVirement.id,
-              adherentId: adherent.id,
-              montant: montant,
-              statut: 'VALIDE'
-            },
-            include: {
-              adherent: { include: { client: true } }
-            }
-          });
-          createdItems.push(item);
-        }
-        
-        ordreVirement.items = createdItems;
-        
-        const totalAmount = createdItems.reduce((sum, item) => sum + item.montant, 0);
-        await this.prisma.ordreVirement.update({
-          where: { id: ordreVirement.id },
-          data: { montantTotal: totalAmount }
-        });
-        ordreVirement.montantTotal = totalAmount;
-        
-        console.log(`✅ Created ${createdItems.length} items in database with total: ${totalAmount}`);
-      } else {
-        throw new Error('No adherents found in database for PDF generation');
-      }
+      throw new Error('❌ No virement items found. Excel file must contain valid adherent data.');
     }
 
     // Validate payment deadlines according to cahier de charges

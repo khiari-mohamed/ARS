@@ -119,43 +119,50 @@ export class BordereauResponseDto {
       
       // Calculate Durée de traitement (Date Clôture - Date Réception)
       // When bordereau becomes TRAITÉ (processing completed)
-      // SAFEGUARD: Only use dateCloture if status is in a "finished" state
+      // ✅ CHECK: All documents AND bulletin soins must be treated
       if (bordereau.dateReception) {
         const isFinishedStatus = ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(bordereau.statut);
         
-        if (bordereau.dateCloture && isFinishedStatus) {
-          // Happy path: dateCloture exists and status is finished
+        // ✅ Check documents
+        const documents = bordereau.documents || [];
+        const totalDocs = documents.length;
+        const traitedDocs = documents.filter((doc: any) => doc.status === 'TRAITE').length;
+        const allDocsTreated = totalDocs === 0 || traitedDocs === totalDocs;
+        
+        // ✅ Check bulletin soins (BS)
+        const bulletinSoins = bordereau.BulletinSoin || [];
+        const totalBS = bulletinSoins.length;
+        const traitedBS = bulletinSoins.filter((bs: any) => bs.etat === 'TRAITE').length;
+        const allBSTreated = totalBS === 0 || traitedBS === totalBS;
+        
+        // ✅ Both must be treated (or empty)
+        const allTreated = allDocsTreated && allBSTreated && (totalDocs > 0 || totalBS > 0);
+        
+        if (bordereau.dateCloture && isFinishedStatus && allTreated) {
+          // Happy path: dateCloture exists, status is finished, and all items treated
           const dateReception = new Date(bordereau.dateReception);
           const dateCloture = new Date(bordereau.dateCloture);
           response.dureeTraitement = Math.floor(
             (dateCloture.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
           );
           response.dureeTraitementStatus = response.dureeTraitement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
-          response.dureeTraitementWarning = null; // No warning
-        } else if (bordereau.statut === 'TRAITE' && !bordereau.dateCloture) {
-          // Fallback: TRAITÉ without dateCloture (manual status change)
-          // Use current date as approximation
+          response.dureeTraitementWarning = null;
+        } else if (bordereau.statut === 'TRAITE' && !bordereau.dateCloture && allTreated) {
+          // Fallback: TRAITÉ without dateCloture but all items treated
           const now = new Date();
           const dateReception = new Date(bordereau.dateReception);
           response.dureeTraitement = Math.floor(
             (now.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
           );
-          response.dureeTraitementStatus = 'ORANGE' as any; // Special status for approximation
+          response.dureeTraitementStatus = 'ORANGE' as any;
           response.dureeTraitementWarning = 'Durée approximative - Date de clôture manquante';
-          
-          // Log data inconsistency for monitoring
-         // console.warn(`⚠️  Data inconsistency: Bordereau ${bordereau.reference} is TRAITÉ but missing dateCloture`);
         } else if (bordereau.dateCloture && !isFinishedStatus) {
           // Data inconsistency: has dateCloture but status is not finished
-          // Ignore the invalid dateCloture
           response.dureeTraitement = null;
           response.dureeTraitementStatus = null;
           response.dureeTraitementWarning = null;
-          
-          // Log data inconsistency for monitoring
-          //console.warn(`⚠️  Data inconsistency: Bordereau ${bordereau.reference} has dateCloture but status is ${bordereau.statut}`);
         } else {
-          // Normal case: not finished yet
+          // ✅ Not all items treated yet - show "En cours"
           response.dureeTraitement = null;
           response.dureeTraitementStatus = null;
           response.dureeTraitementWarning = null;

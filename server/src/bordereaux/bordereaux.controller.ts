@@ -1780,8 +1780,8 @@ export class BordereauxController {
           client: true,
           contract: true,
           currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } },
-          documents: { select: { id: true } },
+          BulletinSoin: true,
+          documents: true,
           ordresVirement: true
         },
         orderBy: { dateReception: 'desc' }
@@ -1796,8 +1796,8 @@ export class BordereauxController {
           client: true,
           contract: true,
           currentHandler: { select: { fullName: true } },
-          BulletinSoin: { select: { id: true, etat: true } },
-          documents: { select: { id: true } },
+          BulletinSoin: true,
+          documents: true,
           ordresVirement: true
         },
         orderBy: { updatedAt: 'desc' }

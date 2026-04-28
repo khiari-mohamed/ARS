@@ -69,6 +69,7 @@ function GestionnaireSeniorDashboard() {
   
   // Actions menu states
   const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null);
+  const [actionsMenuPosition, setActionsMenuPosition] = useState<'bottom' | 'top'>('bottom');
   const [showRemplacerModal, setShowRemplacerModal] = useState(false);
   const [showReaffecterModal, setShowReaffecterModal] = useState(false);
   const [selectedDocForAction, setSelectedDocForAction] = useState<any>(null);
@@ -244,9 +245,22 @@ function GestionnaireSeniorDashboard() {
     setShowAddDocumentModal(true);
   };
 
-  const handleOpenActionsMenu = (doc: any) => {
+  const handleOpenActionsMenu = (doc: any, event: React.MouseEvent) => {
     setSelectedDocForAction(doc);
     setShowActionsMenu(doc.id);
+    
+    // Calculate if dropdown should open upward or downward
+    const buttonRect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - buttonRect.bottom;
+    const spaceAbove = buttonRect.top;
+    
+    // If less than 200px space below, open upward
+    if (spaceBelow < 200 && spaceAbove > spaceBelow) {
+      setActionsMenuPosition('top');
+    } else {
+      setActionsMenuPosition('bottom');
+    }
   };
 
   const handleCloseActionsMenu = () => {
@@ -1085,8 +1099,12 @@ function GestionnaireSeniorDashboard() {
                               e.stopPropagation();
                               e.nativeEvent.stopImmediatePropagation();
                               const isOpen = showActionsMenu === document.id;
-                              setShowActionsMenu(isOpen ? null : document.id);
-                              setSelectedDocForAction(isOpen ? null : document);
+                              if (isOpen) {
+                                setShowActionsMenu(null);
+                                setSelectedDocForAction(null);
+                              } else {
+                                handleOpenActionsMenu(document, e);
+                              }
                               return false;
                             }}
                             onMouseDown={(e) => {
@@ -1117,7 +1135,7 @@ function GestionnaireSeniorDashboard() {
                             <div 
                               style={{
                                 position: 'absolute',
-                                top: '100%',
+                                ...(actionsMenuPosition === 'top' ? { bottom: '100%', marginBottom: '4px' } : { top: '100%', marginTop: '4px' }),
                                 left: 0,
                                 zIndex: 1000,
                                 background: 'white',
@@ -1125,7 +1143,6 @@ function GestionnaireSeniorDashboard() {
                                 borderRadius: '6px',
                                 boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
                                 minWidth: '180px',
-                                marginTop: '4px',
                                 overflow: 'hidden'
                               }}
                               onClick={(e) => e.stopPropagation()}
