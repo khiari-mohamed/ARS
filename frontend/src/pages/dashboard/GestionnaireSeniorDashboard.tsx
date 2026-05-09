@@ -255,8 +255,8 @@ function GestionnaireSeniorDashboard() {
     const spaceBelow = viewportHeight - buttonRect.bottom;
     const spaceAbove = buttonRect.top;
     
-    // If less than 200px space below, open upward
-    if (spaceBelow < 200 && spaceAbove > spaceBelow) {
+    // If less than 250px space below, open upward
+    if (spaceBelow < 250 && spaceAbove > spaceBelow) {
       setActionsMenuPosition('top');
     } else {
       setActionsMenuPosition('bottom');

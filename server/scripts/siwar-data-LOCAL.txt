@@ -1,0 +1,93 @@
+🚀 Checking Siwar Ayari data in current database...
+
+✅ Found Siwar: Siwar Ben Ftima (8fc8b0b3-89d4-4a17-8dca-6e9f740c628f), Role: GESTIONNAIRE
+
+📋 Contracts: 0
+PrismaClientValidationError: 
+Invalid `prisma.bordereau.findMany()` invocation in
+D:\ARS\server\scripts\check-siwar-data.js:41:45
+
+  38 
+  39 const contractIds = contracts.map(c => c.id);
+  40 
+→ 41 const bordereaux = await prisma.bordereau.findMany({
+       where: {
+         contractId: {
+           in: []
+         },
+         archived: false
+       },
+       include: {
+         client: {
+           select: {
+             name: true
+           }
+         },
+         documents: {
+           select: {
+             id: true,
+             name: true,
+             status: true,
+             uploadedAt: true,
+             createdAt: true,
+             ~~~~~~~~~
+             updatedAt: true,
+     ?       type?: true,
+     ?       path?: true,
+     ?       uploadedById?: true,
+     ?       bordereauId?: true,
+     ?       ocrResult?: true,
+     ?       ocrText?: true,
+     ?       hash?: true,
+     ?       barcodeValues?: true,
+     ?       batchId?: true,
+     ?       colorMode?: true,
+     ?       imprinterIds?: true,
+     ?       ingestStatus?: true,
+     ?       ingestTimestamp?: true,
+     ?       operatorId?: true,
+     ?       pageCount?: true,
+     ?       resolution?: true,
+     ?       scannerModel?: true,
+     ?       assignedToUserId?: true,
+     ?       assignedAt?: true,
+     ?       assignedByUserId?: true,
+     ?       priority?: true,
+     ?       slaApplicable?: true,
+     ?       statusModifiedByGestionnaire?: true,
+     ?       AlertLog?: true,
+     ?       bordereau?: true,
+     ?       uploader?: true,
+     ?       assignedTo?: true,
+     ?       assignedBy?: true,
+     ?       OCRLog?: true,
+     ?       reclamations?: true,
+     ?       workflowNotifications?: true,
+     ?       assignmentHistory?: true,
+     ?       _count?: true
+           }
+         },
+         BulletinSoin: {
+           select: {
+             id: true,
+             numBs: true,
+             etat: true,
+             createdAt: true,
+             updatedAt: true
+           }
+         }
+       },
+       orderBy: {
+         dateReception: "desc"
+       }
+     })
+
+Unknown field `createdAt` for select statement on model `Document`. Available options are marked with ?.
+    at Dn (D:\ARS\server\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at ri.handleRequestError (D:\ARS\server\node_modules\@prisma\client\runtime\library.js:121:7102)
+    at ri.handleAndLogRequestError (D:\ARS\server\node_modules\@prisma\client\runtime\library.js:121:6784)
+    at ri.request (D:\ARS\server\node_modules\@prisma\client\runtime\library.js:121:6491)
+    at async l (D:\ARS\server\node_modules\@prisma\client\runtime\library.js:130:9812)
+    at async main (D:\ARS\server\scripts\check-siwar-data.js:41:22) {
+  clientVersion: '6.12.0'
+}
