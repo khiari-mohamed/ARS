@@ -7,6 +7,9 @@ export interface CreateDonneurOrdreDto {
   banque: string;
   structureTxt: string;
   statut?: string;
+  codeJournal?: string;
+  compteTresorerie?: string;
+  compteGeneralTiers?: string;
 }
 
 export interface UpdateDonneurOrdreDto {
@@ -15,6 +18,9 @@ export interface UpdateDonneurOrdreDto {
   banque?: string;
   structureTxt?: string;
   statut?: string;
+  codeJournal?: string;
+  compteTresorerie?: string;
+  compteGeneralTiers?: string;
 }
 
 @Injectable()

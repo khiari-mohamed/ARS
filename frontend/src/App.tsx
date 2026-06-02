@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import FinanceTracker from './pages/finance/FinanceTracker';
+import SageManagement from './pages/sage/SageManagement';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register'; // <-- Import Register
@@ -16,14 +17,11 @@ import GecManager from './pages/gec/GecManager';
 import ReclamationsModule from './pages/reclamations/ReclamationsModule';
 import ReclamationDetail from './components/reclamations/ReclamationDetail';
 import { BordereauxArchive } from './pages/archives';
-// COMMENTED OUT: Redundant user management import - Use Super Admin interface instead
-// import UserManagement from './pages/users/UserManagement';
-
 import AlertsModule from './pages/AlertsModule';
 import BODashboard from './pages/BODashboard';
 import ScanDashboard from './pages/ScanDashboard';
-import ChefEquipePage from './pages/ChefEquipePage';
-import ChefEquipeTableauBordNew from './pages/dashboard/ChefEquipeTableauBordNew';
+//import ChefEquipePage from './pages/ChefEquipePage';
+//import ChefEquipeTableauBordNew from './pages/dashboard/ChefEquipeTableauBordNew';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import TuniclaimManager from './pages/TuniclaimManager';
 import GuideFlowPage from './components/guide/GuideFlowPage';
@@ -67,13 +65,7 @@ const App: React.FC = () => {
               <BordereauxArchive />
             </ProtectedRoute>
           } />
-          
-          {/* COMMENTED OUT: Redundant user management - Use Super Admin interface instead */}
-          {/* <Route path="/home/users" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR]}>
-              <UserManagement />
-            </ProtectedRoute>
-          } /> */}
+        
           
           <Route path="/home/analytics" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT]}>
@@ -87,25 +79,17 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
           
+          <Route path="/home/sage" element={
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.RESPONSABLE_DEPARTEMENT]}>
+              <SageManagement />
+            </ProtectedRoute>
+          } />
+          
           <Route path="/home/contracts" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT]}>
               <ContractList />
             </ProtectedRoute>
           } />
-          
-          {/* COMMENTED OUT: Redundant Chef d'Équipe dashboard - Use main dashboard instead */}
-          {/* <Route path="/home/chef-equipe" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE]}>
-              <ChefEquipeTableauBordNew />
-            </ProtectedRoute>
-          } /> */}
-          
-          {/* Legacy route redirect */}
-          {/* <Route path="/home/chef-equipe-dashboard" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE]}>
-              <ChefEquipeTableauBordNew />
-            </ProtectedRoute>
-          } /> */}
           
           <Route path="/home/tuniclaim" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.CHEF_EQUIPE, UserRole.FINANCE, UserRole.GESTIONNAIRE]}>

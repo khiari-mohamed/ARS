@@ -16,6 +16,12 @@ export interface OVTxtData {
     nom: string;
     rib: string;
     formatTxtType: string;
+    /**
+     * BNA-specific: Référence employeur CNSS / PowerCard (10 chars numeric).
+     * Required for BNA format. If not provided, the first 10 digits of the RIB are used as fallback.
+     * Store this value in DonneurOrdre.agence for BNA employers (e.g. '1000000088').
+     */
+    employerRef?: string;
   };
   virements: TxtVirementData[];
   dateCreation: Date;
@@ -30,12 +36,17 @@ export class TxtGenerationService {
   async generateOVTxt(data: OVTxtData): Promise<string> {
     // Auto-detect format from RIB if not specified
     let formatType = data.donneurOrdre.formatTxtType || 'BTK_COMAR';
-    
+
     // Auto-detect Attijari from RIB (starts with 04)
     if (data.donneurOrdre.rib.startsWith('04')) {
       formatType = 'ATTIJARI';
     }
-    
+
+    // Auto-detect BNA from RIB (starts with 07)
+    if (data.donneurOrdre.rib.startsWith('07')) {
+      formatType = 'BNA';
+    }
+
     let result = '';
     switch (formatType) {
       case 'BTK_COMAR':
@@ -47,29 +58,193 @@ export class TxtGenerationService {
       case 'ATTIJARI':
         result = this.generateStructure1OLD(data);
         break;
+      case 'BNA':
+        result = this.generateBNAFormat(data);
+        break;
       default:
         result = this.generateBTKComarFormat(data);
         break;
     }
-    
+
     // Ensure no HTML entities in output
     return result.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BNA – FICHIER SALAIRE (PowerCard salary-card loading format)
+  //
+  // Spec: "Fichier Salaire" — all records are exactly 100 characters.
+  //
+  //  HEADER  [10]: len=100
+  //    [1-2]    record_type      '10' (fixed)
+  //    [3-12]   file_id          10 spaces (blank, optional field)
+  //    [13-22]  file_reference   10-char numeric, right-padded spaces
+  //    [23-36]  file_date        YYYYMMDDhhmmss (14 chars)
+  //    [37]     file_origine     '4' (Autre – fixed)
+  //    [38-46]  gap              9 spaces
+  //    [47-49]  currency_code    '788' (TND – fixed)
+  //    [50-59]  employer_ref     10-char CNSS/PowerCard ref, right-padded spaces
+  //    [60-83]  employer_account RIB (20 digits) + 4 trailing spaces = 24 chars
+  //    [84-94]  gap              11 spaces
+  //    [95-100] record_number    '000001' (6 chars, zero-padded left)
+  //
+  //  DETAIL  [50]: len=100
+  //    [1-2]    record_type      '50' (fixed)
+  //    [3-4]    gap              2 spaces
+  //    [5-14]   employer_ref     10-char CNSS/PowerCard ref, right-padded spaces
+  //    [15-26]  employee_ref     matricule, 12 chars, right-padded spaces
+  //    [27-28]  gap              2 spaces
+  //    [29-43]  employee_salary  amount in millimes (×1000), 15 chars, zero-padded left
+  //    [44-94]  gap              51 spaces
+  //    [95-100] record_number    6 chars, zero-padded left (continues from header)
+  //
+  //  TRAILER [90]: len=100
+  //    [1-2]    record_type      '90' (fixed)
+  //    [3-12]   file_reference   10-char numeric
+  //    [13-26]  file_date        YYYYMMDDhhmmss (14 chars)
+  //    [27-46]  total_amount     sum of all salaries in millimes, 20 chars, zero-padded left
+  //    [47-52]  total_employes   count of detail records, 6 chars, zero-padded left
+  //    [53-94]  gap              42 spaces
+  //    [95-100] record_number    6 chars, zero-padded left
+  // ─────────────────────────────────────────────────────────────────────────────
+  private generateBNAFormat(data: OVTxtData): string {
+    // ── Validation ──────────────────────────────────────────────────────────────
+    if (!data.donneurOrdre.rib || !/^\d{20}$/.test(data.donneurOrdre.rib)) {
+      throw new Error(
+        `BNA: RIB du donneur d'ordre doit être exactement 20 chiffres. Reçu: "${data.donneurOrdre.rib}"`,
+      );
+    }
+    if (!data.virements || data.virements.length === 0) {
+      throw new Error('BNA: Aucun virement trouvé pour la génération du fichier salaire.');
+    }
+
+    // ── Common values ────────────────────────────────────────────────────────────
+
+    // file_reference: extract the last 10 numeric chars from the OV reference,
+    // right-pad with spaces if shorter than 10.
+    const numericRef = data.reference.replace(/[^0-9]/g, '').slice(-10).padEnd(10, ' ');
+
+    // file_date: YYYYMMDDhhmmss (14 chars)
+    const fileDateStr = this.formatDateBNA(data.dateCreation);
+
+    // employer_ref: CNSS/PowerCard 10-char reference.
+    // Populated from donneurOrdre.employerRef if provided; otherwise the first
+    // 10 digits of the RIB are used as a stable numeric fallback.
+    // → For production, store the BNA PowerCard employer ref in DonneurOrdre.agence.
+    const rawEmployerRef = data.donneurOrdre.employerRef
+      || data.donneurOrdre.rib.replace(/\D/g, '').substring(0, 10);
+    const employerRef = rawEmployerRef.substring(0, 10).padEnd(10, ' '); // right-pad to 10
+
+    // employer_account: RIB (20 digits) placed at pos 60-79, then 4 trailing spaces → 24 chars total
+    const employerAccount = data.donneurOrdre.rib.substring(0, 20).padEnd(24, ' ');
+
+    const BNA_RECORD_LEN = 100;
+
+    // ── HEADER ───────────────────────────────────────────────────────────────────
+    let headerLine = '';
+    headerLine += '10';                          // [1-2]   record_type
+    headerLine += ' '.repeat(10);               // [3-12]  file_id (blank)
+    headerLine += numericRef;                    // [13-22] file_reference  (10 chars, right-padded)
+    headerLine += fileDateStr;                   // [23-36] file_date       (14 chars)
+    headerLine += '4';                           // [37]    file_origine    (Autre)
+    headerLine += ' '.repeat(9);                // [38-46] gap
+    headerLine += '788';                         // [47-49] currency_code   (TND)
+    headerLine += employerRef;                   // [50-59] employer_ref    (10 chars, right-padded)
+    headerLine += employerAccount;               // [60-83] employer_account (24 chars)
+    headerLine += ' '.repeat(11);               // [84-94] gap
+    headerLine += '000001';                      // [95-100] record_number
+
+    if (headerLine.length !== BNA_RECORD_LEN) {
+      throw new Error(
+        `BNA: Longueur header invalide: ${headerLine.length} (attendu ${BNA_RECORD_LEN})`,
+      );
+    }
+
+    // ── DETAIL lines ─────────────────────────────────────────────────────────────
+    const detailLines: string[] = [];
+    let totalMillimes = 0;
+
+    data.virements.forEach((virement, index) => {
+      const seqNum = index + 2; // record_number: header is 1, details start at 2
+
+      if (!virement.matricule) {
+        throw new Error(
+          `BNA: Matricule manquant pour le virement index ${index + 1} (${virement.nom} ${virement.prenom}).`,
+        );
+      }
+      if (virement.montant == null || virement.montant < 0) {
+        throw new Error(
+          `BNA: Montant invalide pour le matricule ${virement.matricule}: ${virement.montant}`,
+        );
+      }
+
+      // Convert TND → millimes (spec unit), round to avoid floating-point drift
+      const amountMillimes = Math.round(virement.montant * 1000);
+      totalMillimes += amountMillimes;
+
+      // employee_ref: matricule, truncated to 12 chars, right-padded with spaces
+      const employeeRef = virement.matricule.substring(0, 12).padEnd(12, ' ');
+
+      let detailLine = '';
+      detailLine += '50';                                          // [1-2]   record_type
+      detailLine += '  ';                                          // [3-4]   gap
+      detailLine += employerRef;                                   // [5-14]  employer_ref (10 chars)
+      detailLine += employeeRef;                                   // [15-26] employee_ref (12 chars)
+      detailLine += '  ';                                          // [27-28] gap
+      detailLine += amountMillimes.toString().padStart(15, '0');  // [29-43] employee_salary (15 chars)
+      detailLine += ' '.repeat(51);                               // [44-94] gap
+      detailLine += seqNum.toString().padStart(6, '0');           // [95-100] record_number
+
+      if (detailLine.length !== BNA_RECORD_LEN) {
+        throw new Error(
+          `BNA: Longueur detail invalide (matricule ${virement.matricule}): ${detailLine.length} (attendu ${BNA_RECORD_LEN})`,
+        );
+      }
+
+      detailLines.push(detailLine);
+    });
+
+    // ── TRAILER ──────────────────────────────────────────────────────────────────
+    const trailerSeqNum = data.virements.length + 2; // header(1) + N details + trailer
+    const totalEmployes = data.virements.length;
+
+    let trailerLine = '';
+    trailerLine += '90';                                              // [1-2]   record_type
+    trailerLine += numericRef;                                        // [3-12]  file_reference (10 chars)
+    trailerLine += fileDateStr;                                       // [13-26] file_date (14 chars)
+    trailerLine += totalMillimes.toString().padStart(20, '0');       // [27-46] total_amount (20 chars)
+    trailerLine += totalEmployes.toString().padStart(6, '0');        // [47-52] total_employes (6 chars)
+    trailerLine += ' '.repeat(42);                                   // [53-94] gap
+    trailerLine += trailerSeqNum.toString().padStart(6, '0');        // [95-100] record_number
+
+    if (trailerLine.length !== BNA_RECORD_LEN) {
+      throw new Error(
+        `BNA: Longueur trailer invalide: ${trailerLine.length} (attendu ${BNA_RECORD_LEN})`,
+      );
+    }
+
+    // ── Assemble ─────────────────────────────────────────────────────────────────
+    return [headerLine, ...detailLines, trailerLine].join('\n');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Existing formats — NOT modified
+  // ─────────────────────────────────────────────────────────────────────────────
+
   private generateBTKComarFormat(data: OVTxtData): string {
     const lines: string[] = [];
     const dateStr = this.formatDateBTK(data.dateCreation); // YYYYMMDD
-    
+
     if (!/^\d{20}$/.test(data.donneurOrdre.rib)) {
       throw new Error('RIB donneur d\'ordre doit être exactement 20 chiffres');
     }
-    
+
     const totalAmountMillimes = data.virements.reduce((sum, v) => sum + Math.round(v.montant * 1000), 0);
     const numberOfOperations = data.virements.length;
-    
+
     // Extract numeric reference (remove ALL non-numeric chars) and take last 5 digits
     const numericRef = data.reference.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
-    
+
     // V1 HEADER - EXACT FORMAT (240 chars)
     let headerLine = 'V1';
     headerLine += '  '; // 2 spaces
@@ -85,7 +260,7 @@ export class TxtGenerationService {
     headerLine += 'TND'; // 3 chars
     headerLine += totalAmountMillimes.toString().padStart(18, '0'); // 18 digits
     headerLine += ' '.repeat(139); // Pad to 240 chars total
-    
+
     lines.push(headerLine);
 
     // V2 DETAIL - EXACT FORMAT (240 chars, except last line = 234 chars)
@@ -93,16 +268,16 @@ export class TxtGenerationService {
       if (!/^\d{20}$/.test(virement.rib)) {
         throw new Error(`RIB bénéficiaire invalide pour ${virement.nom} ${virement.prenom}`);
       }
-      
+
       const montantMillimes = Math.round(virement.montant * 1000);
       const sequenceNum = (index + 1).toString().padStart(7, '0');
       const isLastLine = (index === data.virements.length - 1);
-      
+
       let line = 'V2';
       line += '  '; // 2 spaces
       line += data.donneurOrdre.rib; // 20 digits emitter RIB
       line += virement.rib; // 20 digits beneficiary RIB
-      
+
       // Clean name: Remove special chars but PRESERVE original case
       const cleanName = (virement.nom + ' ' + virement.prenom)
         .replace(/[^A-Za-z0-9 ]/g, '') // Remove special chars but keep case
@@ -111,7 +286,7 @@ export class TxtGenerationService {
         .substring(0, 30)
         .padEnd(30, ' ');
       line += cleanName; // 30 chars name
-      
+
       // COMPOSITE FIELD: 42 chars total
       // Format: 15 zeros + 5 ref + 8 date + 4 lot + 10 sequence = 42 chars
       let compositeField = '000000000000000'; // 15 zeros
@@ -120,7 +295,7 @@ export class TxtGenerationService {
       compositeField += '0001'; // 4 digits lot
       compositeField += sequenceNum + '000'; // 10 digits (7 sequence + 3 zeros)
       line += compositeField; // 42 chars total
-      
+
       // MOTIF FIELD - 100 chars
       // Format: {SOCIETE_FULL} {BORDEREAU_REF} du {DDMMYYYY} OV GM n {REF}
       const cleanSociete = (virement.societe || data.donneurOrdre.nom || 'SOCIETE')
@@ -128,23 +303,23 @@ export class TxtGenerationService {
         .replace(/[^A-Z0-9 ]/g, '') // Remove special chars
         .replace(/\s+/g, ' ') // Normalize spaces
         .trim();
-      
+
       const cleanBordereauRef = (data.bordereauReference || data.reference)
         .replace(/[^A-Z0-9]/g, '')
         .substring(0, 15);
-      
+
       // Date in DDMMYYYY format for motif - USE 1 DAY BEFORE transaction date
       const motifDate = new Date(data.dateCreation);
       motifDate.setDate(motifDate.getDate() - 1); // Subtract 1 day
       const motifDateStr = this.formatDateBTK(motifDate); // YYYYMMDD
       const dateMotif = motifDateStr.substring(6, 8) + motifDateStr.substring(4, 6) + motifDateStr.substring(0, 4); // DDMMYYYY
-      
+
       const motif = `${cleanSociete} ${cleanBordereauRef} du ${dateMotif} OV GM n ${numericRef}`;
       line += motif.substring(0, 100).padEnd(100, ' '); // 100 chars motif
-      
+
       line += montantMillimes.toString().padStart(18, '0'); // 18 digits amount
       line += isLastLine ? '' : ' '.repeat(6); // Last line: no trailing spaces, others: 6 spaces
-      
+
       lines.push(line);
     });
 
@@ -166,18 +341,18 @@ export class TxtGenerationService {
     const dateStr = this.formatDateAmen(data.dateCreation);
     let totalAmountMillimes = 0;
     const detailLines: string[] = [];
-    
+
     data.virements.forEach((virement, index) => {
       const montantMillimes = Math.round(virement.montant * 1000);
       totalAmountMillimes += montantMillimes;
-      
+
       const emitterRib = data.donneurOrdre.rib.replace(/\D/g, '').substring(0, 20).padStart(20, '0');
       const benefRib = virement.rib.replace(/\D/g, '').substring(0, 20).padStart(20, '0');
       const benefName = (virement.nom + ' ' + virement.prenom).toUpperCase().replace(/[^A-Z0-9 ]/g, '').substring(0, 30).padEnd(30, ' ');
       const matricule = virement.matricule.replace(/[^A-Z0-9]/g, '').substring(0, 20).padStart(20, '0');
       const sequenceNum = (index + 1).toString().padStart(7, '0');
       const donneurNom = data.donneurOrdre.nom.replace(/&quot;/g, '"').replace(/&amp;/g, '&').substring(0, 30).padEnd(30, ' ');
-      
+
       let line = '';
       // Fields 1-5: Sens(1) + CodeValeur(2) + Nature(1) + CodeRemettant(2) + CodeCentre(3) = 9 chars
       line += '110104   ';
@@ -233,10 +408,10 @@ export class TxtGenerationService {
       line += ' ';
       // Field 29: Zone libre (37)
       line += ' '.repeat(37);
-      
+
       detailLines.push(line);
     });
-    
+
     // Header line
     let headerLine = '110104   ' + dateStr + '0001' + '11' + '788' + '00' + totalAmountMillimes.toString().padStart(15, '0') + data.virements.length.toString().padStart(10, '0');
     headerLine = headerLine.padEnd(280, ' ');
@@ -261,10 +436,24 @@ export class TxtGenerationService {
     return day + month + year;
   }
 
+  /**
+   * Format date as YYYYMMDDhhmmss (14 chars) for BNA FICHIER SALAIRE.
+   * Both the header and trailer file_date field use this format.
+   */
+  private formatDateBNA(date: Date): string {
+    const year  = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day   = date.getDate().toString().padStart(2, '0');
+    const hh    = date.getHours().toString().padStart(2, '0');
+    const mm    = date.getMinutes().toString().padStart(2, '0');
+    const ss    = date.getSeconds().toString().padStart(2, '0');
+    return year + month + day + hh + mm + ss; // 14 chars: YYYYMMDDhhmmss
+  }
+
   private generateStructure2OLD(data: OVTxtData): string {
     // Structure 2: Format BANQUE POPULAIRE - Enregistrements de longueur variable
     const lines: string[] = [];
-    
+
     // En-tête BP
     const headerBP = [
       '01', // Code enregistrement
@@ -275,7 +464,7 @@ export class TxtGenerationService {
       'TND', // Devise
       data.virements.length.toString().padStart(5, '0') // Nombre virements
     ].join('|'); // Séparateur pipe
-    
+
     lines.push(headerBP);
 
     // Détail des virements BP
@@ -290,7 +479,7 @@ export class TxtGenerationService {
         ('REMB MAT:' + virement.matricule).substring(0, 140), // Motif virement
         this.formatDateBP(data.dateCreation) // Date valeur
       ].join('|');
-      
+
       lines.push(detailBP);
     });
 
@@ -302,7 +491,7 @@ export class TxtGenerationService {
       totalAmount.toFixed(3), // Montant total
       'TND' // Devise
     ].join('|');
-    
+
     lines.push(footerBP);
 
     return lines.join('\n');
@@ -311,7 +500,7 @@ export class TxtGenerationService {
   private generateStructure3(data: OVTxtData): string {
     // Structure 3: Format STB (Société Tunisienne de Banque) - Format CSV délimité
     const lines: string[] = [];
-    
+
     // En-tête CSV STB
     const headerCSV = [
       'TYPE_ENREG',
@@ -323,7 +512,7 @@ export class TxtGenerationService {
       'MONTANT_TOTAL',
       'DEVISE'
     ].join(';');
-    
+
     lines.push(headerCSV);
 
     // Ligne en-tête STB
@@ -338,7 +527,7 @@ export class TxtGenerationService {
       totalAmount.toFixed(3),
       'TND'
     ].join(';');
-    
+
     lines.push(headerData);
 
     // En-tête détail
@@ -353,7 +542,7 @@ export class TxtGenerationService {
       'DATE_VALEUR',
       'MATRICULE'
     ].join(';');
-    
+
     lines.push(detailHeader);
 
     // Détail des virements STB
@@ -369,7 +558,7 @@ export class TxtGenerationService {
         this.formatDateSTB(data.dateCreation),
         virement.matricule
       ].join(';');
-      
+
       lines.push(detailData);
     });
 
@@ -385,7 +574,7 @@ export class TxtGenerationService {
       this.formatDateSTB(data.dateCreation),
       ''
     ].join(';');
-    
+
     lines.push(footerData);
 
     return lines.join('\n');
@@ -473,16 +662,16 @@ export class TxtGenerationService {
           // erreur is not JSON, ignore
         }
         const adherent = item.adherent;
-        
+
         // CRITICAL: Must have real adherent data from DB, reject if missing
         if (!adherent || !adherent.nom || !adherent.rib) {
           throw new Error(`Adherent data missing for item ${index + 1}. Matricule: ${adherent?.matricule || 'unknown'}. Please ensure all adherents exist in database.`);
         }
-        
+
         // ✅ EXACT FIX: Société comes from BORDEREAU CLIENT, not adherent client
         const societe = ordreVirement.bordereau?.client?.name || adherent.client?.name || adherent.assurance || ordreVirement.donneurOrdre.nom;
         console.log(`✅ TXT Gen - Item ${index + 1}: Société="${societe}" (from ${ordreVirement.bordereau?.client?.name ? 'bordereau.client' : adherent.client?.name ? 'adherent.client' : 'fallback'})`);
-        
+
         return {
           reference: `${ordreVirement.reference}-${(index + 1).toString().padStart(3, '0')}`,
           montant: item.montant,
@@ -516,11 +705,19 @@ export class TxtGenerationService {
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>');
 
+    // BNA: populate employerRef from DonneurOrdre.agence (if it holds a numeric CNSS/PowerCard ref).
+    // To configure BNA employer ref: store the 10-digit PowerCard reference in DonneurOrdre.agence.
+    // Example: agence = '1000000088'
+    // If agence is absent or non-numeric, the first 10 digits of the RIB are used as fallback
+    // (see generateBNAFormat comments for details).
+    const employerRef = ordreVirement.donneurOrdre.agence?.replace(/\D/g, '').substring(0, 10) || undefined;
+
     const txtData: OVTxtData = {
       donneurOrdre: {
         nom: donneurNom,
         rib: ordreVirement.donneurOrdre.rib,
-        formatTxtType: ordreVirement.donneurOrdre.formatTxtType || 'BTK_COMAR'
+        formatTxtType: ordreVirement.donneurOrdre.formatTxtType || 'BTK_COMAR',
+        employerRef, // populated for BNA; undefined for other formats (ignored)
       },
       virements,
       dateCreation: ordreVirement.dateCreation,

@@ -10,6 +10,7 @@
     "@emotion/styled": "^11.11.0",
     "@hookform/resolvers": "^5.1.1",
     "@mui/icons-material": "^5.14.0",
+    "@mui/lab": "^5.0.0-alpha.170",
     "@mui/material": "^5.14.0",
     "@mui/x-data-grid": "^6.17.0",
     "@mui/x-date-pickers": "^6.20.2",

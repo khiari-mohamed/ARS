@@ -39,6 +39,7 @@ interface PendingOV {
   nombreAdherents: number;
   dateCreation: string;
   utilisateurSante: string;
+  statutGlobal?: string; // NEW: Global workflow status
 }
 
 const OVValidationTab: React.FC = () => {
@@ -50,6 +51,31 @@ const OVValidationTab: React.FC = () => {
   const [validationComment, setValidationComment] = useState('');
   const [validating, setValidating] = useState(false);
   const { user } = useAuth();
+
+  // Helper functions for statutGlobal display
+  const getStatutGlobalLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      'EN_ATTENTE': 'En attente',
+      'VALIDE_INTERNE': 'Validé interne',
+      'VALIDE_RECOUVREMENT': 'Validé recouvrement',
+      'BLOQUE_RECOUVREMENT': 'Bloqué recouvrement',
+      'COMPTABILISE': 'Comptabilisé',
+      'INTEGRE_SAGE': 'Intégré dans Sage',
+    };
+    return labels[status] || status;
+  };
+
+  const getStatutGlobalColor = (status: string): 'default' | 'info' | 'success' | 'error' | 'primary' => {
+    const colors: Record<string, 'default' | 'info' | 'success' | 'error' | 'primary'> = {
+      'EN_ATTENTE': 'default',
+      'VALIDE_INTERNE': 'info',
+      'VALIDE_RECOUVREMENT': 'success',
+      'BLOQUE_RECOUVREMENT': 'error',
+      'COMPTABILISE': 'primary',
+      'INTEGRE_SAGE': 'success',
+    };
+    return colors[status] || 'default';
+  };
 
   const loadPendingOVs = async () => {
     try {
@@ -184,6 +210,7 @@ const OVValidationTab: React.FC = () => {
                     <TableCell>Adhérents</TableCell>
                     <TableCell>Date Création</TableCell>
                     <TableCell>Créé par</TableCell>
+                    <TableCell>Statut Global</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -209,6 +236,18 @@ const OVValidationTab: React.FC = () => {
                         {new Date(ov.dateCreation).toLocaleDateString('fr-FR')}
                       </TableCell>
                       <TableCell>{ov.utilisateurSante}</TableCell>
+                      <TableCell>
+                        {ov.statutGlobal ? (
+                          <Chip
+                            label={getStatutGlobalLabel(ov.statutGlobal)}
+                            color={getStatutGlobalColor(ov.statutGlobal) as any}
+                            size="small"
+                            sx={{ fontWeight: 600 }}
+                          />
+                        ) : (
+                          <Chip label="En attente" color="default" size="small" />
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                           <Button

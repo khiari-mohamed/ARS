@@ -19,7 +19,10 @@ import { SlaController } from './sla-controller';
 import { SlaIntegrationService } from './sla-integration.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WorkflowModule } from '../workflow/workflow.module';
-
+import { SageTxtGenerationService } from './sage-txt-generation.service';
+import { SageApiIntegrationService } from './sage-api-integration.service';
+import { StatutGlobalService } from './statut-global.service';// aded this sage new moduel 
+import { RecouvrementService } from './recouvrement.service'; // NEW: Service Recouvrement 
 @Module({
   imports: [PrismaModule, forwardRef(() => WorkflowModule)],
   controllers: [FinanceController, SuiviVirementController, SlaController],
@@ -38,7 +41,11 @@ import { WorkflowModule } from '../workflow/workflow.module';
     SuiviVirementService,
     BankFormatConfigService,
     SlaConfigurationService,
-    SlaIntegrationService
+    SlaIntegrationService,
+    SageTxtGenerationService, // new 
+    SageApiIntegrationService, // NEW: SAGE API Integration
+    StatutGlobalService, // NEW: Global status management
+    RecouvrementService, // NEW: Service Recouvrement 
   ],
   exports: [
     AdherentService,
@@ -48,7 +55,10 @@ import { WorkflowModule } from '../workflow/workflow.module';
     SuiviVirementService,
     TxtParserService,
     SlaConfigurationService,
-    SlaIntegrationService
+    SlaIntegrationService ,   
+    SageTxtGenerationService, //new
+    SageApiIntegrationService, // NEW: SAGE API Integration
+    RecouvrementService, // NEW: Service Recouvrement
   ]
 })
 export class FinanceModule {}

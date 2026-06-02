@@ -14,6 +14,8 @@ import { ExcelValidationService } from './excel-validation.service';
 import { PdfGenerationService } from './pdf-generation.service';
 import { TxtGenerationService } from './txt-generation.service';
 import { WorkflowNotificationService } from '../workflow/workflow-notification.service';
+import { logVirementHistory, VIREMENT_ACTIONS } from './virement-history.helper';
+import { StatutGlobalService } from './statut-global.service';
 
 @Injectable()
 export class FinanceService {
@@ -22,7 +24,8 @@ export class FinanceService {
     private excelValidationService: ExcelValidationService,
     private pdfGenerationService: PdfGenerationService,
     private txtGenerationService: TxtGenerationService,
-    private workflowNotificationService: WorkflowNotificationService
+    private workflowNotificationService: WorkflowNotificationService,
+    private statutGlobalService: StatutGlobalService,
   ) {}
 
   // Simple audit log (extend to DB if needed)
@@ -463,6 +466,62 @@ export class FinanceService {
   async updateOVStatus(id: string, dto: UpdateOVStatusDto, user: User) {
     this.checkFinanceRole(user);
     try {
+      console.log('🔄 updateOVStatus called:', { id, status: dto.status, userId: user.id });
+      
+      // Check if this is an OrdreVirement or WireTransferBatch
+      const ordreVirement = await this.prisma.ordreVirement.findUnique({ where: { id } });
+      
+      if (ordreVirement) {
+        console.log('✅ Found OrdreVirement:', { id, currentStatus: ordreVirement.etatVirement });
+        
+        // Update OrdreVirement
+        const previousStatus = ordreVirement.etatVirement;
+        
+        const updated = await this.prisma.ordreVirement.update({
+          where: { id },
+          data: {
+            etatVirement: dto.status as any,
+            dateTraitement: new Date(),
+            utilisateurFinance: user.id,
+            motifObservation: dto.observations || ordreVirement.motifObservation
+          },
+          include: {
+            bordereau: { include: { client: true } },
+            donneurOrdre: true
+          }
+        });
+        
+        console.log('📝 Logging history:', { virementId: id, action: 'CHANGEMENT_STATUT', userId: user.id, previousStatus, newStatus: dto.status });
+        
+        // Log history for status change
+        await logVirementHistory(
+          id,
+          VIREMENT_ACTIONS.CHANGEMENT_STATUT,
+          user.id,
+          {
+            previousState: previousStatus,
+            newState: dto.status,
+            comment: dto.observations || `Statut changé de ${previousStatus} à ${dto.status}`
+          }
+        );
+        
+        console.log('✅ History logged successfully');
+        
+        await this.logAuditAction('UPDATE_OV_STATUS', { userId: user.id, ovId: id, status: dto.status });
+        
+        return {
+          id,
+          status: dto.status,
+          dateExecuted: dto.dateExecuted,
+          observations: dto.observations,
+          updatedAt: new Date(),
+          updatedBy: user.id
+        };
+      }
+      
+      console.log('⚠️ OrdreVirement not found, trying WireTransferBatch');
+      
+      // Fallback to WireTransferBatch (legacy)
       const batchStatus = this.mapOVStatusToBatch(dto.status);
       
       const batch = await this.prisma.wireTransferBatch.update({
@@ -471,7 +530,6 @@ export class FinanceService {
         include: { society: true, donneur: true }
       });
       
-      // Add history record
       await this.prisma.wireTransferBatchHistory.create({
         data: {
           batchId: id,
@@ -492,7 +550,7 @@ export class FinanceService {
       };
       
     } catch (error : any) {
-      console.error('Error updating OV status:', error);
+      console.error('❌ Error updating OV status:', error);
       throw new BadRequestException('Failed to update OV status: ' + error.message);
     }
   }
@@ -1048,6 +1106,29 @@ Document généré automatiquement par ARS`;
         }
       });
       
+      // Log history for recovery actions
+      if (data.demandeRecuperation && updateData.demandeRecuperation) {
+        await logVirementHistory(
+          id,
+          VIREMENT_ACTIONS.DEMANDE_RECUPERATION,
+          user.id,
+          {
+            comment: `Date demande: ${data.dateDemandeRecuperation}`
+          }
+        );
+      }
+      
+      if (data.montantRecupere && updateData.montantRecupere) {
+        await logVirementHistory(
+          id,
+          VIREMENT_ACTIONS.MONTANT_RECUPERE,
+          user.id,
+          {
+            comment: `Date récupération: ${data.dateMontantRecupere}`
+          }
+        );
+      }
+      
       await this.logAuditAction('UPDATE_RECOVERY_INFO', {
         userId: user.id,
         ordreVirementId: id,
@@ -1093,20 +1174,29 @@ Document généré automatiquement par ARS`;
         donneurOrdreId = activeDonneur.id;
       }
       
-      // Create manual OV without bordereau link
+      // NEW: Get clientId and contractId if provided
+      let clientId = data.clientId || null;
+      let contractId = data.contractId || null;
+      
+      // Create manual OV without bordereau link but WITH client and contract links
       const ordreVirement = await this.prisma.ordreVirement.create({
         data: {
           reference: data.reference,
           donneurOrdreId,
           bordereauId: null,
+          clientId, // NEW: Link to client for manual entries
+          contractId, // NEW: Link to contract for manual entries (optional)
           utilisateurSante: user.id,
           montantTotal: parseFloat(data.montantTotal),
           nombreAdherents: parseInt(data.nombreAdherents) || 0,
           etatVirement: 'NON_EXECUTE',
-          commentaire: 'Entrée manuelle créée par Chef d\'équipe'
+          commentaire: 'Entrée manuelle créée par Chef d\'équipe',
+          clientName: data.clientName || null // Keep for backward compatibility
         },
         include: {
-          donneurOrdre: true
+          donneurOrdre: true,
+          client: true, // NEW: Include client in response
+          contract: true // NEW: Include contract in response
         }
       });
       
@@ -1115,7 +1205,8 @@ Document généré automatiquement par ARS`;
       await this.logAuditAction('CREATE_MANUAL_OV', {
         userId: user.id,
         ordreVirementId: ordreVirement.id,
-        reference: data.reference
+        reference: data.reference,
+        clientId
       });
       
       return {
@@ -1129,7 +1220,7 @@ Document généré automatiquement par ARS`;
     }
   }
 
-  async reinjectOV(id: string, user: User) {
+  async reinjectOV(id: string, excelFile: Express.Multer.File, pdfFile: Express.Multer.File, user: User) {
     // EXACT SPEC: Only Chef d'équipe, Gestionnaire Senior, and Super Admin
     if (!['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('Only Chef d\'équipe, Gestionnaire Senior, and Super Admin can reinject OV');
@@ -1138,27 +1229,100 @@ Document généré automatiquement par ARS`;
     try {
       const ordreVirement = await this.prisma.ordreVirement.findUnique({
         where: { id },
-        include: { bordereau: true }
+        include: { 
+          bordereau: { include: { client: true } },
+          donneurOrdre: true
+        }
       });
       
       if (!ordreVirement) {
         throw new NotFoundException('Ordre de virement not found');
       }
       
-      // EXACT SPEC: Only if status is REJETE
-      if (ordreVirement.etatVirement !== 'REJETE') {
-        throw new BadRequestException('Only rejected OV can be reinjected');
+      // EXACT SPEC: Only if status is REJETE or VIREMENT_NON_VALIDE
+      if (ordreVirement.etatVirement !== 'REJETE' && ordreVirement.etatVirement !== 'VIREMENT_NON_VALIDE') {
+        console.error('❌ Cannot reinject OV with status:', ordreVirement.etatVirement);
+        throw new BadRequestException(`Only rejected OV can be reinjected. Current status: ${ordreVirement.etatVirement}. Please change status to REJETE first.`);
       }
       
-      // EXACT SPEC: Update dateCreation (injection date)
+      // ✅ STEP 1: Parse Excel file using ExcelValidationService (same as original import)
+      // Get client ID from bordereau or direct link
+      const clientId = ordreVirement.bordereau?.clientId || ordreVirement.clientId;
+      if (!clientId) {
+        throw new BadRequestException('Cannot determine client ID for this OV');
+      }
+      
+      // Process Excel file using the same validation service as original import
+      const validationResult = await this.excelValidationService.validateExcelFile(
+        excelFile.buffer, 
+        clientId, 
+        ordreVirement.bordereauId || undefined
+      );
+      
+      // Convert validation result to import result format
+      const importResult = {
+        valid: validationResult.data.filter(item => item.status === 'VALIDE' || item.status === 'ALERTE'),
+        errors: validationResult.errors.map(err => ({
+          row: err.row,
+          error: err.message
+        })),
+        summary: {
+          totalAmount: validationResult.summary.totalAmount,
+          uniqueAdherents: validationResult.summary.valid + validationResult.summary.warnings
+        }
+      };
+      
+      console.log('📊 Excel validation result:', {
+        validCount: importResult.valid.length,
+        errorCount: importResult.errors.length,
+        totalAmount: importResult.summary.totalAmount,
+        uniqueAdherents: importResult.summary.uniqueAdherents
+      });
+      
+      if (importResult.valid.length === 0) {
+        throw new BadRequestException('No valid data found in Excel file. Errors: ' + importResult.errors.map(e => `Row ${e.row}: ${e.error}`).join(', '));
+      }
+      
+      const newTotalAmount = importResult.summary.totalAmount;
+      const adherentUpdates = importResult.valid
+        .filter(v => v.adherentId) // Filter out items without adherentId
+        .map(v => ({
+          matricule: v.matricule,
+          montant: v.montant,
+          adherentId: v.adherentId!
+        }));
+      
+      console.log('💰 New total amount calculated:', newTotalAmount);
+      console.log('👥 Adherent updates:', adherentUpdates.length);
+      
+      // ✅ STEP 2: Store new PDF file
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+      
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const pdfFilename = `OV_REINJECT_${id}_${Date.now()}.pdf`;
+      const pdfFilePath = path.join(uploadsDir, pdfFilename);
+      fs.writeFileSync(pdfFilePath, pdfFile.buffer);
+      
+      console.log('📄 New PDF stored at:', pdfFilePath);
+      
+      // ✅ STEP 3: Update OrdreVirement with new data
       const updatedOV = await this.prisma.ordreVirement.update({
         where: { id },
         data: {
-          etatVirement: 'NON_EXECUTE',
+          etatVirement: 'EN_COURS_VALIDATION',
           dateCreation: new Date(), // Date injection updated
           dateTraitement: null,
           dateEtatFinal: null,
-          commentaire: `Réinjection effectuée par ${user.fullName} le ${new Date().toLocaleDateString('fr-FR')}`
+          montantTotal: newTotalAmount, // ✅ Update amount
+          nombreAdherents: adherentUpdates.length, // ✅ Update adherent count
+          uploadedPdfPath: `/uploads/ov-documents/${pdfFilename}`, // ✅ Update PDF path
+          commentaire: `Réinjection effectuée par ${user.fullName} le ${new Date().toLocaleDateString('fr-FR')} - Nouveau montant: ${newTotalAmount.toFixed(3)} TND`,
+          validationStatus: 'EN_ATTENTE_VALIDATION' // Reset validation status
         },
         include: {
           bordereau: { include: { client: true } },
@@ -1166,26 +1330,94 @@ Document généré automatiquement par ARS`;
         }
       });
       
-      // Notify Finance service
-      if (updatedOV.bordereauId) {
-        await this.notifyFinanceTeam(updatedOV.bordereauId, `OV ${updatedOV.reference} réinjecté`, user);
+      console.log('✅ OV updated:', {
+        id: updatedOV.id,
+        oldStatus: 'REJETE',
+        newStatus: updatedOV.etatVirement,
+        oldAmount: ordreVirement.montantTotal,
+        newAmount: updatedOV.montantTotal,
+        user: user.id
+      });
+      
+      // ✅ STEP 4: Update adherent amounts in VirementItem table
+      if (adherentUpdates.length > 0) {
+        // Delete old items
+        await this.prisma.virementItem.deleteMany({
+          where: { ordreVirementId: id }
+        });
+        
+        // Create new items with updated amounts
+        for (const update of adherentUpdates) {
+          try {
+            await this.prisma.virementItem.create({
+              data: {
+                ordreVirementId: id,
+                adherentId: update.adherentId,
+                montant: update.montant,
+                statut: 'VALIDE'
+              }
+            });
+          } catch (error) {
+            console.error(`Failed to create item for adherent ${update.matricule}:`, error);
+          }
+        }
+        console.log('✅ Adherent amounts updated in VirementItem table');
       }
+      
+      // ✅ STEP 5: Regenerate PDF OV with new amounts
+      try {
+        const newPdfBuffer = await this.pdfGenerationService.generateOVFromOrderId(id);
+        await this.storePDFInDatabase(id, newPdfBuffer, user);
+        console.log('✅ New PDF OV generated and stored');
+      } catch (error) {
+        console.error('Failed to regenerate PDF OV:', error);
+        // Don't fail the whole operation if PDF generation fails
+      }
+      
+      // ✅ STEP 6: Log history
+      await logVirementHistory(
+        id,
+        VIREMENT_ACTIONS.REINJECTION,
+        user.id,
+        {
+          previousState: 'REJETE',
+          newState: 'EN_COURS_VALIDATION',
+          comment: `Virement réinjecté avec nouveau montant: ${newTotalAmount.toFixed(3)} TND (${adherentUpdates.length} adhérents)`
+        }
+      );
+      
+      // ✅ STEP 7: Notify Responsable Département for validation
+      await this.notifyResponsableEquipeForValidation({
+        ovId: updatedOV.id,
+        reference: updatedOV.reference,
+        message: `OV ${updatedOV.reference} réinjecté avec nouveau montant: ${newTotalAmount.toFixed(3)} TND`,
+        createdBy: user.fullName
+      }, user);
       
       await this.logAuditAction('REINJECT_OV', {
         userId: user.id,
         ordreVirementId: id,
         previousStatus: 'REJETE',
-        newStatus: 'NON_EXECUTE'
+        newStatus: 'EN_COURS_VALIDATION',
+        oldAmount: ordreVirement.montantTotal,
+        newAmount: newTotalAmount,
+        adherentCount: adherentUpdates.length
       });
       
       return {
         success: true,
         message: 'Ordre de virement réinjecté avec succès',
-        ordreVirement: updatedOV
+        ordreVirement: updatedOV,
+        changes: {
+          oldAmount: ordreVirement.montantTotal,
+          newAmount: newTotalAmount,
+          oldAdherentCount: ordreVirement.nombreAdherents,
+          newAdherentCount: adherentUpdates.length
+        }
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error reinjecting OV:', error);
-      throw new BadRequestException('Failed to reinject OV');
+      throw new BadRequestException('Failed to reinject OV: ' + error.message);
     }
   }
 
@@ -1285,6 +1517,8 @@ Document généré automatiquement par ARS`;
       const ordresVirement = await this.prisma.ordreVirement.findMany({
         where,
         include: {
+          client: true, // NEW: Include direct client for manual entries
+          contract: true, // NEW: Include direct contract for manual entries
           bordereau: { 
             include: { 
               client: {
@@ -1321,20 +1555,22 @@ Document généré automatiquement par ARS`;
         ordresVirement: ordresVirement.map(ov => ({
           id: ov.id,
           reference: ov.reference,
-          referenceBordereau: ov.bordereau?.reference || null, // NEW: Référence bordereau
-          compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || ov.clientName || null, // NEW: Use clientName for manual OV
-          client: ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle', // NEW: Use clientName for manual OV
-          bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle', // NEW: Manual entry display
+          referenceBordereau: ov.bordereau?.reference || null,
+          compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || ov.clientName || null,
+          client: ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle',
+          bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle',
           montant: ov.montantTotal,
           statut: ov.etatVirement,
           dateCreation: ov.dateCreation,
-          dateExecution: ov.dateTraitement || ov.dateCreation, // NEW: Use execution date
+          dateExecution: ov.dateTraitement || ov.dateCreation,
           demandeRecuperation: ov.demandeRecuperation,
           dateDemandeRecuperation: ov.dateDemandeRecuperation,
           montantRecupere: ov.montantRecupere,
           dateMontantRecupere: ov.dateMontantRecupere,
-          motifObservation: ov.validationComment || ov.motifObservation || null, // NEW: Full text display
-          modeRecuperation: ov.bordereau?.client?.modeRecuperation || null // NEW: Mode de récupération from client
+          motifObservation: ov.validationComment || ov.motifObservation || null,
+          modeRecuperation: ov.client?.modeRecuperation || ov.bordereau?.client?.modeRecuperation || null, // NEW: Mode de récupération (from direct client or bordereau client)
+          nomDonneur: ov.donneurOrdre?.nom || null, // NEW: Nom du donneur
+          numeroContrat: ov.contract?.codeAssure || ov.bordereau?.contract?.codeAssure || null // NEW: Numéro de contrat (from direct contract or bordereau contract)
         })),
         stats
       };
@@ -1416,7 +1652,10 @@ Document généré automatiquement par ARS`;
           demandeRecuperation: ov?.demandeRecuperation || false,
           dateDemandeRecuperation: ov?.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
           montantRecupere: ov?.montantRecupere || false,
-          dateMontantRecupere: ov?.dateMontantRecupere ? ov.dateMontantRecupere.toISOString() : null
+          dateMontantRecupere: ov?.dateMontantRecupere ? ov.dateMontantRecupere.toISOString() : null,
+          modeRecuperation: b.client?.modeRecuperation || null, // NEW: Mode de récupération
+          nomDonneur: ov?.donneurOrdre?.nom || null, // NEW: Nom du donneur
+          numeroContrat: b.contract?.codeAssure || null // NEW: Numéro de contrat
         };
       });
       
@@ -1682,6 +1921,11 @@ Document généré automatiquement par ARS`;
           bordereau: { include: { client: true } }
         }
       });
+      
+      // Update global status to VALIDE_INTERNE when approved
+      if (approved) {
+        await this.statutGlobalService.markAsValidatedInternally(id);
+      }
       
       // Notify relevant users
       if (approved) {

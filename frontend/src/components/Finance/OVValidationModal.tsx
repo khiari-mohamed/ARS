@@ -75,6 +75,7 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
       setTxtGenerated(false);
       setFinalStatus(null);
       setFinalizationComplete(false);
+      setComment('');
     }
   }, [open, ovId]);
 
@@ -257,11 +258,113 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
     }
   };
 
-  const renderStep4 = () => (
-    <Box>
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <strong>Étape 4:</strong> Validation de l'upload par le Responsable de département
-      </Alert>
+  const renderStep4 = () => {
+    // Check if OV is already validated by Responsable Département
+    const isAlreadyValidated = ovDetails?.validationStatus === 'VALIDE' || 
+                               ovDetails?.validationStatus === 'REJETE_VALIDATION' ||
+                               ovDetails?.etatVirement === 'VIREMENT_DEPOSE' || 
+                               ovDetails?.etatVirement === 'VIREMENT_NON_VALIDE';
+    const currentStatus = ovDetails?.etatVirement;
+    const validationStatus = ovDetails?.validationStatus;
+    
+    return (
+      <Box>
+        {isAlreadyValidated && (
+          <Alert 
+            severity="error" 
+            sx={{ 
+              mb: 3,
+              bgcolor: '#fff3e0',
+              border: '3px solid #ff9800',
+              boxShadow: '0 0 20px rgba(255, 152, 0, 0.3)',
+              animation: 'pulse 2s ease-in-out infinite',
+              '@keyframes pulse': {
+                '0%, 100%': {
+                  boxShadow: '0 0 20px rgba(255, 152, 0, 0.3)',
+                },
+                '50%': {
+                  boxShadow: '0 0 30px rgba(255, 152, 0, 0.6)',
+                },
+              },
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Box
+                sx={{
+                  fontSize: '48px',
+                  animation: 'blink 1.5s ease-in-out infinite',
+                  '@keyframes blink': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0.3 },
+                  },
+                }}
+              >
+                ⚠️
+              </Box>
+              <Typography 
+                variant="h5" 
+                sx={{ 
+                  fontWeight: 800, 
+                  color: '#e65100',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1
+                }}
+              >
+                Attention: Cet OV a déjà été validé!
+              </Typography>
+            </Box>
+            
+            <Box 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'white', 
+                borderRadius: 2,
+                border: '2px solid #ff9800',
+                mb: 2
+              }}
+            >
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#d84315', mb: 1 }}>
+                Statut actuel: <strong>
+                  {currentStatus === 'VIREMENT_DEPOSE' && '🏦 Virement Déposé'}
+                  {currentStatus === 'VIREMENT_NON_VALIDE' && '❌ Virement Non Validé'}
+                  {validationStatus === 'VALIDE' && '✅ Validé par Responsable'}
+                  {validationStatus === 'REJETE_VALIDATION' && '❌ Rejeté par Responsable'}
+                </strong>
+              </Typography>
+              {ovDetails?.validatedBy && (
+                <Typography variant="body2" sx={{ color: '#666', mt: 1 }}>
+                  Action effectuée par: <strong>{ovDetails.validatedBy}</strong>
+                  {ovDetails?.validatedAt && (
+                    <> le {new Date(ovDetails.validatedAt).toLocaleString('fr-FR')}</>
+                  )}
+                </Typography>
+              )}
+              {ovDetails?.validationComment && (
+                <Typography variant="body2" sx={{ color: '#666', mt: 1, fontStyle: 'italic' }}>
+                  Commentaire: "{ovDetails.validationComment}"
+                </Typography>
+              )}
+            </Box>
+            
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                fontWeight: 600, 
+                color: '#e65100',
+                fontSize: '1.1rem',
+                lineHeight: 1.6
+              }}
+            >
+              🛑 Si vous continuez, vous allez <strong>MODIFIER</strong> le statut existant. 
+              <br />
+              Assurez-vous que c'est bien votre intention avant de procéder.
+            </Typography>
+          </Alert>
+        )}
+        
+        <Alert severity="info" sx={{ mb: 3 }}>
+          <strong>Étape 4:</strong> Validation de l'upload par le Responsable de département
+        </Alert>
 
       {ovDetails && (
         <Grid container spacing={3}>
@@ -396,6 +499,7 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
       />
     </Box>
   );
+};
 
   const renderStep5 = () => (
     <Box>

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ExcelImportService, VirementData } from './excel-import.service';
 import { FileGenerationService } from './file-generation.service';
 import { WorkflowNotificationsService } from '../workflow/workflow-notifications.service';
+import { logVirementHistory, VIREMENT_ACTIONS } from './virement-history.helper';
 
 export interface CreateOrdreVirementDto {
   donneurOrdreId: string;
@@ -72,18 +73,39 @@ export class OrdreVirementService {
 
     // EXACT FIX: Find and link temporary PDF if bordereauId exists
     let uploadedPdfPath = dto.uploadedPdfPath;
-    if (dto.bordereauId && !uploadedPdfPath) {
-      const fs = require('fs');
-      const path = require('path');
-      const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
+    let typeOperation = 'REMBOURSEMENT'; // Default
+    
+    if (dto.bordereauId) {
+      // Determine typeOperation based on bordereau documents
+      const bordereau = await this.prisma.bordereau.findUnique({
+        where: { id: dto.bordereauId },
+        include: {
+          documents: {
+            where: { type: 'CONVENTION_TIERS_PAYANT' },
+            take: 1
+          }
+        }
+      });
       
-      if (fs.existsSync(uploadsDir)) {
-        const files = fs.readdirSync(uploadsDir);
-        const tempFile = files.find(f => f.startsWith(`TEMP_${dto.bordereauId}_`));
+      // If bordereau has CONVENTION_TIERS_PAYANT documents, it's TPA
+      if (bordereau?.documents && bordereau.documents.length > 0) {
+        typeOperation = 'TPA';
+      }
+      
+      // Find temporary PDF
+      if (!uploadedPdfPath) {
+        const fs = require('fs');
+        const path = require('path');
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
         
-        if (tempFile) {
-          uploadedPdfPath = `/uploads/ov-documents/${tempFile}`;
-          this.logger.log(`✅ Linked temporary PDF: ${tempFile}`);
+        if (fs.existsSync(uploadsDir)) {
+          const files = fs.readdirSync(uploadsDir);
+          const tempFile = files.find(f => f.startsWith(`TEMP_${dto.bordereauId}_`));
+          
+          if (tempFile) {
+            uploadedPdfPath = `/uploads/ov-documents/${tempFile}`;
+            this.logger.log(`✅ Linked temporary PDF: ${tempFile}`);
+          }
         }
       }
     }
@@ -100,7 +122,8 @@ export class OrdreVirementService {
         etatVirement: 'EN_COURS_VALIDATION',
         validationStatus: 'EN_ATTENTE_VALIDATION',
         uploadedPdfPath,
-        clientName: dto.clientName
+        clientName: dto.clientName,
+        typeOperation // Set the determined type
       }
     });
 
@@ -190,7 +213,15 @@ export class OrdreVirementService {
     });
 
     // Create history entry
-    await this.createHistoryEntry(ordreVirement.id, 'CREATION', null, 'NON_EXECUTE', dto.utilisateurSante);
+    await logVirementHistory(
+      ordreVirement.id,
+      VIREMENT_ACTIONS.CREATION,
+      dto.utilisateurSante,
+      {
+        newState: ordreVirement.etatVirement,
+        comment: 'Ordre de virement créé'
+      }
+    );
 
     // Notify finance team
     await this.notifyFinanceTeam(updatedOrdre);
@@ -230,13 +261,24 @@ export class OrdreVirementService {
     });
 
     // Create history entry
-    await this.createHistoryEntry(
+    let action: string;
+    if (dto.etatVirement === 'EXECUTE') {
+      action = VIREMENT_ACTIONS.EXECUTION;
+    } else if (dto.etatVirement === 'REJETE') {
+      action = VIREMENT_ACTIONS.REJET;
+    } else {
+      action = VIREMENT_ACTIONS.CHANGEMENT_STATUT;
+    }
+    
+    await logVirementHistory(
       ordreVirementId,
-      'MISE_A_JOUR_ETAT',
-      previousEtat,
-      dto.etatVirement,
+      action,
       dto.utilisateurFinance,
-      dto.commentaire
+      {
+        previousState: previousEtat,
+        newState: dto.etatVirement,
+        comment: dto.commentaire
+      }
     );
 
     // Update bordereau status if applicable
@@ -381,38 +423,41 @@ export class OrdreVirementService {
     const allOrdres = [...ordreVirements];
     
     // Transform virements to match OV format
-    const transformedVirements = virements.map((v, index) => ({
-      id: v.id,
-      reference: `VIR-2024-${String(index + 1).padStart(4, '0')}`,
-      etatVirement: v.confirmed ? 'EXECUTE' : 'NON_EXECUTE' as any,
-      montantTotal: v.montant,
-      dateCreation: v.createdAt,
-      createdAt: v.createdAt,
-      updatedAt: v.createdAt,
-      bordereauId: v.bordereauId,
-      commentaire: null,
-      donneurOrdreId: 'default',
-      utilisateurSante: 'system',
-      utilisateurFinance: null,
-      dateTraitement: null,
-      dateEtatFinal: v.confirmed ? v.confirmedAt : null,
-      nombreAdherents: 1,
-      fichierPdf: null,
-      fichierTxt: null,
-      bordereau: v.bordereau,
-      donneurOrdre: {
-        id: 'default',
-        nom: 'ARS Compte Principal',
-        statut: 'ACTIF',
+    const transformedVirements = virements.map((v, index) => {
+      const year = v.createdAt.getFullYear();
+      return {
+        id: v.id,
+        reference: `VIR-${year}-${String(index + 1).padStart(4, '0')}`,
+        etatVirement: v.confirmed ? 'EXECUTE' : 'NON_EXECUTE' as any,
+        montantTotal: v.montant,
+        dateCreation: v.createdAt,
         createdAt: v.createdAt,
         updatedAt: v.createdAt,
-        rib: '',
-        banque: 'ARS TUNISIE',
-        structureTxt: '',
-        formatTxtType: 'SWIFT',
-        signaturePath: null
-      }
-    }));
+        bordereauId: v.bordereauId,
+        commentaire: null,
+        donneurOrdreId: 'default',
+        utilisateurSante: 'system',
+        utilisateurFinance: null,
+        dateTraitement: null,
+        dateEtatFinal: v.confirmed ? v.confirmedAt : null,
+        nombreAdherents: 1,
+        fichierPdf: null,
+        fichierTxt: null,
+        bordereau: v.bordereau,
+        donneurOrdre: {
+          id: 'default',
+          nom: 'ARS Compte Principal',
+          statut: 'ACTIF',
+          createdAt: v.createdAt,
+          updatedAt: v.createdAt,
+          rib: '',
+          banque: 'ARS TUNISIE',
+          structureTxt: '',
+          formatTxtType: 'SWIFT',
+          signaturePath: null
+        }
+      };
+    });
     
     allOrdres.push(...(transformedVirements as any));
 
@@ -445,32 +490,26 @@ export class OrdreVirementService {
   }
 
   private async generateReference(): Promise<string> {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const prefix = `VIR-${year}${month}${day}`;
+    const currentYear = new Date().getFullYear();
+    const prefix = `OV-${currentYear}`;
     
-    // ✅ RACE CONDITION FIX: Use transaction with row-level locking
     return await this.prisma.$transaction(async (tx) => {
-      // Find highest existing sequence number for today with FOR UPDATE lock
       const existingRefs = await tx.ordreVirement.findMany({
-        where: {
-          reference: { startsWith: prefix }
-        },
+        where: { reference: { startsWith: prefix } },
         select: { reference: true },
         orderBy: { reference: 'desc' },
-        take: 1  // Only need the highest one
+        take: 1
       });
       
       let maxSeq = 0;
       if (existingRefs.length > 0) {
-        const seqStr = existingRefs[0].reference.split('-').pop();
+        const parts = existingRefs[0].reference.split('-');
+        const seqStr = parts[parts.length - 1];
         maxSeq = parseInt(seqStr || '0', 10);
       }
       
       const newReference = `${prefix}-${String(maxSeq + 1).padStart(4, '0')}`;
-      this.logger.log(`✅ Generated reference: ${newReference} (previous max: ${maxSeq})`);
+      this.logger.log(`✅ Generated reference: ${newReference} (year: ${currentYear}, max: ${maxSeq})`);
       
       return newReference;
     });

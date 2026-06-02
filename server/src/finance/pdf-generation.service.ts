@@ -66,7 +66,7 @@ export class PdfGenerationService {
     return '';
   }
 
-async generateOVPdf(data: OVPdfData): Promise<Buffer> {
+async generateOVPdf(data: OVPdfData, pdfLayout?: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       if (!data.virements || data.virements.length === 0) {
@@ -116,7 +116,7 @@ async generateOVPdf(data: OVPdfData): Promise<Buffer> {
         const endIdx = Math.min(startIdx + maxRowsPerPage, data.virements.length);
         const pageData = data.virements.slice(startIdx, endIdx);
 
-        this.addPageHeader(doc, data, pageNum, totalPages);
+        this.addPageHeader(doc, data, pageNum, totalPages, pdfLayout);
         this.addVirementTable(doc, { ...data, virements: pageData }, null);
         
         // Footer info only on last page
@@ -192,26 +192,67 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
   doc.text(`Date Injection OV : ${data.dateEmission.toLocaleDateString('fr-FR')}`, 50, currentY); currentY += 8;
   doc.text(`Saisie par : ${userName}`, 50, currentY);
 }
-  private addPageHeader(doc: any, data: OVPdfData, pageNum: number, totalPages: number) {
+  private addPageHeader(doc: any, data: OVPdfData, pageNum: number, totalPages: number, pdfLayout?: any) {
     const startY = 20;
     
-    // Logos - use dynamic path resolution
-    const logoPath1 = this.getImagePath('Image1.png');
-    const logoPath2 = this.getImagePath('Image2.png');
-    
-    if (logoPath1) {
+    // Logos - use template logo if available, otherwise use default paths
+    if (pdfLayout?.logoEnabled && pdfLayout?.logoPath) {
       try {
-        doc.image(logoPath1, 50, startY, { width: 60, height: 40 });
-      } catch (e : any) {
-        console.warn('Failed to load logo 1:', e.message);
+        // Check if it's a base64 data URL
+        if (pdfLayout.logoPath.startsWith('data:image')) {
+          // Extract base64 data
+          const base64Data = pdfLayout.logoPath.split(',')[1];
+          const imageBuffer = Buffer.from(base64Data, 'base64');
+          
+          // Position based on template settings
+          const logoX = pdfLayout.logoPosition === 'right' 
+            ? doc.page.width - pdfLayout.logoWidth - 50
+            : pdfLayout.logoPosition === 'center'
+            ? (doc.page.width - pdfLayout.logoWidth) / 2
+            : 50;
+          
+          doc.image(imageBuffer, logoX, startY, { 
+            width: pdfLayout.logoWidth, 
+            height: pdfLayout.logoHeight 
+          });
+        } else {
+          // It's a file path
+          const logoPath = this.getImagePath(pdfLayout.logoPath);
+          if (logoPath) {
+            const logoX = pdfLayout.logoPosition === 'right' 
+              ? doc.page.width - pdfLayout.logoWidth - 50
+              : pdfLayout.logoPosition === 'center'
+              ? (doc.page.width - pdfLayout.logoWidth) / 2
+              : 50;
+            
+            doc.image(logoPath, logoX, startY, { 
+              width: pdfLayout.logoWidth, 
+              height: pdfLayout.logoHeight 
+            });
+          }
+        }
+      } catch (e: any) {
+        console.warn('Failed to load template logo:', e.message);
       }
-    }
-    
-    if (logoPath2) {
-      try {
-        doc.image(logoPath2, doc.page.width - 110, startY, { width: 60, height: 40 });
-      } catch (e : any) {
-        console.warn('Failed to load logo 2:', e.message);
+    } else {
+      // Use default logos
+      const logoPath1 = this.getImagePath('Image1.png');
+      const logoPath2 = this.getImagePath('Image2.png');
+      
+      if (logoPath1) {
+        try {
+          doc.image(logoPath1, 50, startY, { width: 60, height: 40 });
+        } catch (e: any) {
+          console.warn('Failed to load logo 1:', e.message);
+        }
+      }
+      
+      if (logoPath2) {
+        try {
+          doc.image(logoPath2, doc.page.width - 110, startY, { width: 60, height: 40 });
+        } catch (e: any) {
+          console.warn('Failed to load logo 2:', e.message);
+        }
       }
     }
     
@@ -519,6 +560,14 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
       throw new Error('Ordre de virement non trouvé');
     }
     
+    // Fetch PDF template (if exists)
+    const pdfTemplate = await this.prisma.sageTemplate.findFirst({
+      where: { type: 'PDF', isDefault: true }
+    });
+    
+    const pdfLayout = pdfTemplate?.structure ? (pdfTemplate.structure as any).pdfLayout : null;
+    console.log('PDF Template loaded:', pdfTemplate ? `${pdfTemplate.name} (logo: ${pdfLayout?.logoEnabled})` : 'Using default layout');
+    
     // Fetch user info for "Saisie par"
     let createdByUser: { fullName: string; email: string } | null = null;
     if (ordreVirement.utilisateurSante) {
@@ -616,7 +665,7 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
     });
 
     // Generate PDF
-    const pdfBuffer = await this.generateOVPdf(pdfData);
+    const pdfBuffer = await this.generateOVPdf(pdfData, pdfLayout);
     
     // Update finance statistics and bordereau status after successful generation
     await this.updateFinanceStatistics(ordreVirement, deadlineValidation);

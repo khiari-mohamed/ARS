@@ -17,6 +17,9 @@ interface DonneurOrdre {
   rib: string;
   txtFormat: string;
   status: 'active' | 'inactive';
+  codeJournal?: string;
+  compteTresorerie?: string;
+  compteGeneralTiers?: string;
 }
 
 const DonneursTab: React.FC = () => {
@@ -32,6 +35,10 @@ const DonneursTab: React.FC = () => {
     rib: '',
     txtFormat: 'BTK_COMAR',
     status: 'active' as 'active' | 'inactive'
+    ,
+    codeJournal: '',
+    compteTresorerie: '',
+    compteGeneralTiers: ''
   });
 
   useEffect(() => {
@@ -55,6 +62,10 @@ const DonneursTab: React.FC = () => {
         rib: donneur.rib || '08001000123456789012',
         txtFormat: donneur.structureTxt || 'SWIFT',
         status: donneur.statut === 'ACTIF' ? 'active' : 'inactive'
+        ,
+        codeJournal: donneur.codeJournal || donneur.codeJournalSage || '',
+        compteTresorerie: donneur.compteTresorerie || '' ,
+        compteGeneralTiers: donneur.compteGeneralTiers || ''
       }));
       
       setDonneurs(transformedData);
@@ -71,6 +82,10 @@ const DonneursTab: React.FC = () => {
       rib: '',
       txtFormat: 'BTK_COMAR',
       status: 'active'
+      ,
+      codeJournal: '',
+      compteTresorerie: '',
+      compteGeneralTiers: ''
     });
     setDialog({open: true, donneur: null});
   };
@@ -82,6 +97,10 @@ const DonneursTab: React.FC = () => {
       rib: donneur.rib,
       txtFormat: donneur.txtFormat,
       status: donneur.status
+      ,
+      codeJournal: (donneur as any).codeJournal || '',
+      compteTresorerie: (donneur as any).compteTresorerie || '',
+      compteGeneralTiers: (donneur as any).compteGeneralTiers || ''
     });
     setDialog({open: true, donneur});
   };
@@ -94,6 +113,10 @@ const DonneursTab: React.FC = () => {
         rib: form.rib,
         structureTxt: form.txtFormat,
         statut: form.status === 'active' ? 'ACTIF' : 'INACTIF'
+        ,
+        codeJournal: form.codeJournal,
+        compteTresorerie: form.compteTresorerie,
+        compteGeneralTiers: form.compteGeneralTiers
       };
       
       if (dialog.donneur) {
@@ -335,6 +358,36 @@ const DonneursTab: React.FC = () => {
                     <MenuItem value="inactive">⚫ Inactif</MenuItem>
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Code Journal Sage"
+                  value={form.codeJournal || ''}
+                  onChange={(e) => setForm({...form, codeJournal: e.target.value})}
+                  fullWidth
+                  placeholder="Ex: BTK580, ATT411, BTK134"
+                  helperText="Code journal pour les écritures Sage 100"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Compte Trésorerie Sage"
+                  value={form.compteTresorerie || ''}
+                  onChange={(e) => setForm({...form, compteTresorerie: e.target.value})}
+                  fullWidth
+                  placeholder="Ex: 53221650, 53220900"
+                  helperText="Compte comptable trésorerie dans Sage"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Compte Général Tiers Sage"
+                  value={form.compteGeneralTiers || ''}
+                  onChange={(e) => setForm({...form, compteGeneralTiers: e.target.value})}
+                  fullWidth
+                  placeholder="Ex: 41100007, 41100005"
+                  helperText="Ex: 41100007 = ASTREE, 41100005 = COMAR 501"
+                />
               </Grid>
             </Grid>
           </Box>

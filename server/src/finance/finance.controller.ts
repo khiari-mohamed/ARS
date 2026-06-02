@@ -3,18 +3,20 @@ import {
   Get,
   Post,
   Put,
-  Delete,
+  Delete, 
   Body,
   Param,
   Query,
+  Patch,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   Req,
   Res,
   BadRequestException,
   UseGuards
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { Roles } from '../auth/roles.decorator';
 import { Public } from '../auth/public.decorator';
@@ -28,7 +30,11 @@ import { OrdreVirementService, CreateOrdreVirementDto, UpdateEtatVirementDto } f
 import { FileGenerationService } from './file-generation.service';
 import { FinanceService } from './finance.service';
 import { BankFormatConfigService } from './bank-format-config.service';
+import { RecouvrementService, BulkRecouvrementDto } from './recouvrement.service';
 import { SlaConfigurationService } from './sla-configuration.service';
+import { buildExportWorkbook } from './exportDashboard_exceljs';
+import { SageTxtGenerationService } from './sage-txt-generation.service';
+import { SageApiIntegrationService } from './sage-api-integration.service';
 
 function getUserFromRequest(req: any) {
   // Extract from JWT token - the JWT strategy returns: id, email, role
@@ -58,7 +64,11 @@ export class FinanceController {
     private financeService: FinanceService,
     private bankFormatConfig: BankFormatConfigService,
     private slaConfigService: SlaConfigurationService,
+    private readonly sageTxtGenerationService: SageTxtGenerationService,
+    private readonly sageApiIntegrationService: SageApiIntegrationService,
+    private readonly recouvrementService: RecouvrementService,
     private prisma: PrismaService
+    
   ) {}
 
   // === GET CLIENT AUTO-FILL DATA FOR ADHERENT FORM ===
@@ -587,60 +597,13 @@ export class FinanceController {
     const user = getUserFromRequest(req);
     const dashboardData = await this.financeService.getFinanceDashboardWithFilters(filters, user as any);
     
-    const ExcelJS = require('exceljs');
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Tableau de Bord Finance');
-    
-    // Add headers
-    worksheet.addRow([
-      'Référence OV',
-      'Référence Bordereau', 
-      'Compagnie d\'Assurance',
-      'Client/Société',
-      'Bordereau',
-      'Montant (TND)',
-      'Statut',
-      'Date d\'Exécution',
-      'Motif/Observations',
-      'Demande Récupération',
-      'Montant Récupéré'
-    ]);
-    
-    // Add data
-    dashboardData.ordresVirement.forEach((ordre: any) => {
-      worksheet.addRow([
-        ordre.reference || '',
-        ordre.referenceBordereau || '',
-        ordre.compagnieAssurance || '',
-        ordre.client || '',
-        ordre.bordereau || '',
-        ordre.montant || 0,
-        ordre.statut || '',
-        ordre.dateExecution ? new Date(ordre.dateExecution).toLocaleDateString('fr-FR') : '',
-        ordre.motifObservation || '',
-        ordre.demandeRecuperation ? 'Oui' : 'Non',
-        ordre.montantRecupere ? 'Oui' : 'Non'
-      ]);
-    });
-    
-    // Style headers
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFE0E0E0' }
-    };
-    
-    // Auto-fit columns
-    worksheet.columns.forEach(column => {
-      column.width = 15;
-    });
+    // Use the styled Excel export function
+    const buffer = await buildExportWorkbook(dashboardData.ordresVirement);
     
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="tableau_bord_finance_${new Date().toISOString().split('T')[0]}.xlsx"`);
     
-    await workbook.xlsx.write(res);
-    res.end();
+    res.send(Buffer.from(buffer as ArrayBuffer));
   }
 
   @Get('dashboard/stats')
@@ -1114,12 +1077,27 @@ export class FinanceController {
 
   @Put('ordres-virement/:id/reinject')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
+  @UseInterceptors(FilesInterceptor('files', 2))
   async reinjectOV(
     @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
-    return this.financeService.reinjectOV(id, user as any);
+    
+    if (!files || files.length < 2) {
+      throw new BadRequestException('Both Excel and PDF files are required for reinject');
+    }
+    
+    // Identify which file is Excel and which is PDF
+    const excelFile = files.find(f => f.mimetype.includes('spreadsheet') || f.originalname.endsWith('.xlsx') || f.originalname.endsWith('.xls'));
+    const pdfFile = files.find(f => f.mimetype === 'application/pdf' || f.originalname.endsWith('.pdf'));
+    
+    if (!excelFile || !pdfFile) {
+      throw new BadRequestException('Could not identify Excel and PDF files. Please ensure you upload one Excel file and one PDF file.');
+    }
+    
+    return this.financeService.reinjectOV(id, excelFile, pdfFile, user as any);
   }
   
   @Get('ordres-virement/:id/details')
@@ -1326,6 +1304,8 @@ export class FinanceController {
     const manualOVs = await this.prisma.ordreVirement.findMany({
       where,
       include: {
+        client: true, // NEW: Include direct client for manual entries
+        contract: true, // NEW: Include direct contract for manual entries
         donneurOrdre: true
       },
       orderBy: { dateCreation: 'desc' }
@@ -1333,7 +1313,7 @@ export class FinanceController {
     
     return manualOVs.map(ov => ({
       id: ov.id,
-      clientSociete: ov.clientName || 'Entrée manuelle',
+      clientSociete: ov.client?.name || ov.clientName || 'Entrée manuelle',
       referenceOV: ov.reference,
       referenceBordereau: '-',
       montantBordereau: ov.montantTotal || 0,
@@ -1344,7 +1324,10 @@ export class FinanceController {
       demandeRecuperation: ov.demandeRecuperation || false,
       dateDemandeRecuperation: ov.dateDemandeRecuperation,
       montantRecupere: ov.montantRecupere || false,
-      dateMontantRecupere: ov.dateMontantRecupere
+      dateMontantRecupere: ov.dateMontantRecupere,
+      modeRecuperation: ov.client?.modeRecuperation || null, // NEW: Get from direct client
+      nomDonneur: ov.donneurOrdre?.nom || null, // NEW: Nom du donneur
+      numeroContrat: ov.contract?.codeAssure || null // NEW: Get from direct contract (optional)
     }));
   }
 
@@ -1501,11 +1484,11 @@ export class FinanceController {
 
   // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
   @Put('ordres-virement/:id/status')
-  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async updateOVStatus(
     @Param('id') id: string,
     @Body() body: {
-      etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE';
+      etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_DEPOSE';
       motifObservation?: string;
       demandeRecuperation?: boolean;
       dateDemandeRecuperation?: string;
@@ -1517,6 +1500,29 @@ export class FinanceController {
     const user = getUserFromRequest(req);
     
     try {
+      // EXACT SPEC: Responsable Département can ONLY set these statuses
+      if (user.role === 'RESPONSABLE_DEPARTEMENT') {
+        const allowedStatuses = ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'];
+        
+        if (!allowedStatuses.includes(body.etatVirement)) {
+          throw new BadRequestException(
+            `Responsable Département peut uniquement définir les statuts: Virement non validé (VIREMENT_NON_VALIDE) ou Virement déposé (VIREMENT_DEPOSE). Statut demandé: ${body.etatVirement}`
+          );
+        }
+      }
+      
+      // Get current OV state before update
+      const currentOV = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        select: { etatVirement: true }
+      });
+
+      if (!currentOV) {
+        throw new BadRequestException('Ordre de virement not found');
+      }
+
+      const previousState = currentOV.etatVirement;
+      
       const updateData: any = {
         etatVirement: body.etatVirement,
         utilisateurFinance: user.id,
@@ -1553,6 +1559,29 @@ export class FinanceController {
           donneurOrdre: true
         }
       });
+
+      // LOG HISTORY - Determine action type
+      const { logVirementHistory, VIREMENT_ACTIONS } = await import('./virement-history.helper');
+      
+      let action: string;
+      if (body.etatVirement === 'EXECUTE') {
+        action = VIREMENT_ACTIONS.EXECUTION;
+      } else if (body.etatVirement === 'REJETE') {
+        action = VIREMENT_ACTIONS.REJET;
+      } else {
+        action = VIREMENT_ACTIONS.CHANGEMENT_STATUT;
+      }
+
+      await logVirementHistory(
+        id,
+        action,
+        user.id,
+        {
+          previousState,
+          newState: body.etatVirement,
+          comment: body.motifObservation || `Statut changé par ${user.fullName || user.email}`
+        }
+      );
       
       // EXACT SPEC: Auto-update bordereau status when virement is EXECUTE
       if (body.etatVirement === 'EXECUTE' && updatedOV.bordereauId) {
@@ -1568,9 +1597,10 @@ export class FinanceController {
       
       console.log('✅ OV status updated:', {
         id,
-        oldStatus: 'previous',
+        oldStatus: previousState,
         newStatus: body.etatVirement,
-        user: user.id
+        user: user.id,
+        role: user.role
       });
       
       return {
@@ -2088,6 +2118,35 @@ export class FinanceController {
     return this.financeService.exportOVDetailsExcel(id, res, user as any);
   }
 
+  // === GET NEXT OV REFERENCE ===
+  @Get('next-ov-reference')
+  async getNextOVReference() {
+    const currentYear = new Date().getFullYear();
+    const prefix = `OV-${currentYear}`;
+    
+    const existingRefs = await this.prisma.ordreVirement.findMany({
+      where: { reference: { startsWith: prefix } },
+      select: { reference: true },
+      orderBy: { reference: 'desc' },
+      take: 1
+    });
+    
+    let maxSeq = 0;
+    if (existingRefs.length > 0) {
+      const parts = existingRefs[0].reference.split('-');
+      const seqStr = parts[parts.length - 1];
+      maxSeq = parseInt(seqStr || '0', 10);
+    }
+    
+    const nextReference = `${prefix}-${String(maxSeq + 1).padStart(4, '0')}`;
+    
+    return {
+      reference: nextReference,
+      year: currentYear,
+      sequence: maxSeq + 1
+    };
+  }
+
   // === DUPLICATE RIB APPROVAL ENDPOINTS ===
   @Post('adherents/duplicate-rib/approve/:notificationId/:duplicateId')
   @Roles(UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
@@ -2123,4 +2182,654 @@ export class FinanceController {
     const user = getUserFromRequest(req);
     return this.adherentService.approveAllDuplicateRibs(notificationId, user.id, body.justification);
   }
+
+  // === VIREMENT HISTORY ENDPOINT ===
+  @Get('ordres-virement/:id/history')
+  async getVirementHistory(
+    @Param('id') id: string,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    try {
+      const history = await this.prisma.virementHistory.findMany({
+        where: { virementId: id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              role: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+      
+      return history.map(entry => ({
+        id: entry.id,
+        action: entry.action,
+        previousState: entry.previousState,
+        newState: entry.newState,
+        comment: entry.comment,
+        createdAt: entry.createdAt,
+        user: {
+          id: entry.user.id,
+          name: entry.user.fullName,
+          role: entry.user.role
+        }
+      }));
+    } catch (error: any) {
+      console.error('Failed to fetch virement history:', error);
+      throw new BadRequestException('Failed to fetch history: ' + error.message);
+    }
+  }
+
+  // === SAGE TXT ENDPOINTS ===
+  @Get('ordres-virement/:id/sage-txt')
+  async downloadSageTxt(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Res() res: Response,
+    @Query('templateId') templateId?: string,
+  ) {
+    try {
+      // Use the service's existing API which generates and persists the file
+      const userId: string = req.user?.id ?? 'system';
+      const result = await this.sageTxtGenerationService.generateForOrdreVirement(id, userId, templateId);
+
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      return res.send(result.content);
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Post('sage-txt-batch')
+async downloadSageTxtBatch(
+  @Body() body: { ordreVirementIds: string[]; templateId?: string },
+  @Req() req: any,
+  @Res() res: Response,
+) {
+  if (!body?.ordreVirementIds?.length) {
+    throw new BadRequestException('ordreVirementIds must be a non-empty array');
+  }
+ 
+  const userId: string = req.user?.id ?? 'system';
+ 
+  const result = await this.sageTxtGenerationService.generateBatch(
+    body.ordreVirementIds,
+    userId,
+    body.templateId,
+  );
+ 
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${result.fileName}"`,
+  );
+  return res.send(result.content);
+}
+
+// ─── Endpoint 3: OV history ───────────────────────────────────────────────────
+/**
+ * GET /finance/ordres-virement/:id/sage-txt/history
+ * Lists all Sage TXT generations for an OV.
+ */
+@Get('ordres-virement/:id/sage-txt/history')
+async getSageTxtHistory(@Param('id') id: string) {
+  return this.sageTxtGenerationService.getHistory(id);
+}
+
+// ─── Endpoint 4: Re-download a past generation ───────────────────────────────
+/**
+ * GET /finance/sage-txt-generations/:generationId/download
+ * Re-downloads a previously generated file from history.
+ */
+@Get('sage-txt-generations/:generationId/download')
+async reDownloadSageTxt(
+  @Param('generationId') generationId: string,
+  @Res() res: Response,
+) {
+  const content = await this.sageTxtGenerationService.getGeneratedContent(generationId);
+ 
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="sage_${generationId}.TXT"`,
+  );
+  return res.send(content);
+}
+
+  // ─── Endpoint 5: Get all Sage generations (for History tab) ─────────────────
+  /**
+   * GET /finance/sage-txt-generations/all
+   * Returns all Sage TXT generations with OV details
+   */
+  @Get('sage-txt-generations/all')
+  async getAllSageGenerations() {
+    const generations = await this.prisma.sageTxtGeneration.findMany({
+      orderBy: { generatedAt: 'desc' },
+      include: {
+        ordreVirement: {
+          select: {
+            reference: true,
+            montantTotal: true,
+            clientName: true,
+          },
+        },
+      },
+    });
+
+    // Manually fetch user details for each generation
+    const result = await Promise.all(
+      generations.map(async (gen) => {
+        const user = await this.prisma.user.findUnique({
+          where: { id: gen.generatedById },
+          select: { fullName: true },
+        });
+        return {
+          ...gen,
+          generatedBy: user,
+        };
+      }),
+    );
+
+    return result;
+  }
+
+  @Patch('clients/:id/sage-config')
+  async updateClientSageConfig(
+    @Param('id') id: string,
+    @Body() body: { compteAuxiliaireSage: string; codeJournalSage?: string }
+  ) {
+    return this.prisma.client.update({
+      where: { id },
+      data: {
+        compteAuxiliaireSage: body.compteAuxiliaireSage,
+        codeJournalSage: body.codeJournalSage,
+      }
+    });
+  }
+
+  // ─── Endpoint 6: Update DonneurOrdre Sage config ─────────────────────────────
+/**
+ * PATCH /finance/donneurs-ordre/:id/sage-config
+ * Body: { codeJournalSage: string, compteTresoreriesSage: string }
+ * Sets the Sage journal code and treasury account on a DonneurOrdre.
+ */
+@Patch('donneurs-ordre/:id/sage-config')
+async updateDonneurOrdreSageConfig(
+  @Param('id') id: string,
+  @Body() body: { codeJournal?: string; compteTresorerie?: string },
+) {
+  return this.prisma.donneurOrdre.update({
+    where: { id },
+    data: {
+      ...(body.codeJournal && { codeJournal: body.codeJournal }),
+      ...(body.compteTresorerie && { compteTresorerie: body.compteTresorerie }),
+    },
+    select: {
+      id: true,
+      nom: true,
+      codeJournal: true,
+      compteTresorerie: true,
+    },
+  });
+}
+ 
+// ─── Endpoint 7: Update CompagnieAssurance Sage config ───────────────────────
+/**
+ * PATCH /finance/compagnies-assurance/:id/sage-config
+ * Body: { compteGeneralSage: string }
+ */
+@Patch('compagnies-assurance/:id/sage-config')
+async updateCompagnieSageConfig(
+  @Param('id') id: string,
+  @Body() body: { compteGeneralSage: string },
+) {
+  if (!body?.compteGeneralSage) {
+    throw new BadRequestException('compteGeneralSage is required');
+  }
+  if (!/^\d{8}$/.test(body.compteGeneralSage)) {
+    throw new BadRequestException('compteGeneralSage must be exactly 8 digits');
+  }
+ 
+  return this.prisma.compagnieAssurance.update({
+    where: { id },
+    data: { compteGeneralSage: body.compteGeneralSage },
+    select: { id: true, nom: true, compteGeneralSage: true },
+  });
+}
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SERVICE RECOUVREMENT (SR) ENDPOINTS - CRITICAL GATE AFTER VIREMENT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Bulk validate/reject OVs by Service Recouvrement
+   * ROLE: FINANCE or SUPER_ADMIN (Recouvrement is a function, not a separate role)
+   */
+  @Post('recouvrement/bulk-validate')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async bulkValidateRecouvrement(
+    @Body() dto: BulkRecouvrementDto,
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    const result = await this.recouvrementService.bulkValidateRecouvrement(dto, user.id, user.role);
+    
+    // Send notifications based on status
+    for (const ovId of dto.ordreVirementIds) {
+      if (dto.status === 'AUTORISE') {
+        await this.recouvrementService.notifyFinanceOnAutorise(ovId);
+      } else if (dto.status === 'NON_AUTORISE') {
+        await this.recouvrementService.notifySuperAdminOnNonAutorise(ovId);
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Get OVs pending recouvrement validation
+   * ROLE: FINANCE or SUPER_ADMIN
+   */
+  @Get('recouvrement/pending')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getPendingRecouvrementOVs(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.recouvrementService.getPendingRecouvrementOVs(user.role);
+  }
+
+  /**
+   * Get NON_AUTORISE OVs (Super Admin only)
+   * ROLE: SUPER_ADMIN only
+   */
+  @Get('recouvrement/non-autorise')
+  @Roles(UserRole.SUPER_ADMIN)
+  async getNonAutoriseOVs(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.recouvrementService.getNonAutoriseOVs(user.role);
+  }
+
+  /**
+   * Get all OVs with recouvrement status (for tracking)
+   * ROLE: FINANCE or SUPER_ADMIN
+   */
+  @Get('recouvrement/all')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getAllRecouvrementOVs(
+    @Query() filters: {
+      status?: string;
+      recouvre?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      clientId?: string;
+    },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.recouvrementService.getAllRecouvrementOVs(user.role, {
+      ...filters,
+      recouvre: filters.recouvre === 'true' ? true : filters.recouvre === 'false' ? false : undefined,
+    });
+  }
+
+  /**
+   * Override NON_AUTORISE to AUTORISE (Super Admin only)
+   * ROLE: SUPER_ADMIN only
+   */
+  @Put('recouvrement/:id/override-autorise')
+  @Roles(UserRole.SUPER_ADMIN)
+  async overrideNonAutorise(
+    @Param('id') id: string,
+    @Body() body: { comment: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    if (!body.comment || body.comment.trim().length === 0) {
+      throw new BadRequestException('Un commentaire est obligatoire pour débloquer un OV');
+    }
+    
+    await this.recouvrementService.overrideNonAutorise(id, user.id, user.role, body.comment);
+    
+    // Notify Finance that OV is now AUTORISE
+    await this.recouvrementService.notifyFinanceOnAutorise(id);
+    
+    return {
+      success: true,
+      message: 'OV débloqué et autorisé avec succès'
+    };
+  }
+
+  /**
+   * Get recouvrement statistics
+   * ROLE: FINANCE or SUPER_ADMIN
+   */
+  @Get('recouvrement/stats')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getRecouvrementStats(@Req() req: any) {
+    const user = getUserFromRequest(req);
+    return this.recouvrementService.getRecouvrementStats(user.role);
+  }
+
+  // === COMPAGNIES ASSURANCE ENDPOINTS ===
+  @Get('compagnies-assurance')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getCompagniesAssurance() {
+    return this.prisma.compagnieAssurance.findMany({
+      orderBy: { nom: 'asc' }
+    });
+  }
+
+  @Post('compagnies-assurance')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async createCompagnieAssurance(
+    @Body() body: { nom: string; code: string; compteGeneralSage?: string }
+  ) {
+    return this.prisma.compagnieAssurance.create({ data: body });
+  }
+
+  @Put('compagnies-assurance/:id')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async updateCompagnieAssurance(
+    @Param('id') id: string,
+    @Body() body: { nom?: string; compteGeneralSage?: string; statut?: string }
+  ) {
+    return this.prisma.compagnieAssurance.update({ where: { id }, data: body });
+  }
+
+  @Delete('compagnies-assurance/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  async deleteCompagnieAssurance(@Param('id') id: string) {
+    // Safety check — don't delete if clients linked
+    const count = await this.prisma.client.count({ where: { compagnieAssuranceId: id } });
+    if (count > 0) {
+      throw new BadRequestException(`Impossible de supprimer: ${count} client(s) lié(s)`);
+    }
+    return this.prisma.compagnieAssurance.delete({ where: { id } });
+  }
+
+  // === SAGE TEMPLATE ENDPOINTS ===
+  @Get('sage/templates')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  async getSageTemplates() {
+    return this.prisma.sageTemplate.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  @Post('sage/templates')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async createSageTemplate(
+    @Body() body: { name: string; type: string; structure: any; isDefault?: boolean }
+  ) {
+    // If setting as default, unset other defaults of same type
+    if (body.isDefault) {
+      await this.prisma.sageTemplate.updateMany({
+        where: { type: body.type, isDefault: true },
+        data: { isDefault: false }
+      });
+    }
+    
+    return this.prisma.sageTemplate.create({ data: body });
+  }
+
+  @Put('sage/templates/:id')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async updateSageTemplate(
+    @Param('id') id: string,
+    @Body() body: { name?: string; type?: string; structure?: any; isDefault?: boolean }
+  ) {
+    // If setting as default, unset other defaults of same type
+    if (body.isDefault && body.type) {
+      await this.prisma.sageTemplate.updateMany({
+        where: { type: body.type, isDefault: true, id: { not: id } },
+        data: { isDefault: false }
+      });
+    }
+    
+    return this.prisma.sageTemplate.update({ where: { id }, data: body });
+  }
+
+  @Delete('sage/templates/:id')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async deleteSageTemplate(@Param('id') id: string) {
+    return this.prisma.sageTemplate.delete({ where: { id } });
+  }
+
+  // ─── Set default template ────────────────────────────────────────────────────
+  @Post('sage/templates/:id/set-default')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async setDefaultSageTemplate(@Param('id') id: string) {
+    // Unset all other defaults of same type first
+    const template = await this.prisma.sageTemplate.findUnique({ where: { id } });
+    if (!template) throw new BadRequestException('Template not found');
+
+    await this.prisma.sageTemplate.updateMany({
+      where: { type: template.type, isDefault: true },
+      data: { isDefault: false },
+    });
+
+    // Set this one as default
+    return this.prisma.sageTemplate.update({
+      where: { id },
+      data: { isDefault: true },
+    });
+  }
+
+  // ─── Get active template (default or hardcoded) ──────────────────────────────
+  @Get('sage/active-template')
+  async getActiveSageTemplate(@Query('type') type: string = 'TXT') {
+    const defaultTemplate = await this.prisma.sageTemplate.findFirst({
+      where: { type, isDefault: true },
+    });
+
+    return {
+      hasDefault: !!defaultTemplate,
+      template: defaultTemplate,
+      usingHardcoded: !defaultTemplate,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SAGE API INTEGRATION ENDPOINTS - STEP 5: AUTO-INJECT TO SAGE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * POST /finance/sage/integrate/:id
+   * Generate TXT and send to SAGE API (real-time mode)
+   * ROLE: FINANCE or SUPER_ADMIN
+   */
+  @Post('sage/integrate/:id')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async integrateSingleOV(
+    @Param('id') id: string,
+    @Body() body: { templateId?: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    return this.sageApiIntegrationService.integrateOrdreVirement(id, user.id, body.templateId);
+  }
+
+  /**
+   * POST /finance/sage/integrate-batch
+   * Generate TXT files and send to SAGE API (batch mode)
+   * ROLE: FINANCE or SUPER_ADMIN
+   */
+  @Post('sage/integrate-batch')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async integrateBatchOVs(
+    @Body() body: { ordreVirementIds: string[]; templateId?: string },
+    @Req() req: any
+  ) {
+    const user = getUserFromRequest(req);
+    
+    if (!body?.ordreVirementIds?.length) {
+      throw new BadRequestException('ordreVirementIds must be a non-empty array');
+    }
+    
+    return this.sageApiIntegrationService.integrateBatch(
+      body.ordreVirementIds,
+      user.id,
+      body.templateId,
+    );
+  }
+
+  /**
+   * GET /finance/sage/integration-status/:sageTransactionId
+   * Check integration status in SAGE
+   * ROLE: FINANCE or SUPER_ADMIN
+   */
+  @Get('sage/integration-status/:sageTransactionId')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async checkSageIntegrationStatus(
+    @Param('sageTransactionId') sageTransactionId: string
+  ) {
+    return this.sageApiIntegrationService.checkIntegrationStatus(sageTransactionId);
+  }
+
+  /**
+   * GET /finance/ordres-virement/:id/sage-integration-history
+   * Get SAGE integration history for an OV
+   * ROLE: FINANCE or SUPER_ADMIN
+   */
+  @Get('ordres-virement/:id/sage-integration-history')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getSageIntegrationHistory(@Param('id') id: string) {
+    return this.sageApiIntegrationService.getIntegrationHistory(id);
+  }
+
+  /**
+   * GET /finance/sage/test-connection
+   * Test SAGE API connection
+   * ROLE: SUPER_ADMIN only
+   */
+  @Get('sage/test-connection')
+  @Roles(UserRole.SUPER_ADMIN)
+  async testSageConnection() {
+    const isConnected = await this.sageApiIntegrationService.testConnection();
+    return {
+      success: isConnected,
+      message: isConnected ? 'SAGE API connection successful' : 'SAGE API connection failed',
+      config: this.sageApiIntegrationService.getConfig(),
+    };
+  }
+
+  /**
+   * GET /finance/sage/config
+   * Get SAGE API configuration
+   * ROLE: SUPER_ADMIN only
+   */
+  @Get('sage/config')
+  @Roles(UserRole.SUPER_ADMIN)
+  async getSageConfig() {
+    return this.sageApiIntegrationService.getConfig();
+  }
+  
+  /**
+   * GET /finance/sage/integrations/stats
+   * Aggregated statistics for the admin dashboard card.
+   * NOTE: must be declared BEFORE /sage/integrations/:id routes
+   */
+  @Get('sage/integrations/stats')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getSageIntegrationStats() {
+    return this.sageApiIntegrationService.getStats();
+  }
+
+  /**
+   * GET /finance/sage/integrations
+   * Paginated, filtered list of all integration attempts.
+   *
+   * Query params:
+   *   status     – SUCCESS | FAILED | PENDING
+   *   search     – OV reference or SAGE transaction ID substring
+   *   dateFrom   – ISO date string
+   *   dateTo     – ISO date string
+   *   page       – default 1
+   *   pageSize   – default 20, max 100
+   */
+  @Get('sage/integrations')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async getAllSageIntegrations(
+    @Query('status')   status?: string,
+    @Query('search')   search?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo')   dateTo?: string,
+    @Query('page')     page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('ordreVirementId') ordreVirementId?: string,
+  ) {
+    return this.sageApiIntegrationService.getAllIntegrations({
+      status: status as any,
+      search,
+      dateFrom,
+      dateTo,
+      ordreVirementId,
+      page:     page     ? parseInt(page,     10) : 1,
+      pageSize: pageSize ? parseInt(pageSize, 10) : 20,
+    });
+  }
+
+  /**
+   * POST /finance/sage/integrations/:id/retry
+   * Re-attempt a FAILED integration record.
+   * The old failed record is deleted and a fresh attempt is made.
+   */
+  @Post('sage/integrations/:id/retry')
+  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  async retrySageIntegration(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    const user = getUserFromRequest(req);
+    return this.sageApiIntegrationService.retryIntegration(id, user.id);
+  }
+
+  /**
+   * DELETE /finance/sage/integrations/:id
+   * Remove a FAILED or PENDING integration record.
+   * Successful records are protected — cannot be deleted (audit trail).
+   * ROLE: SUPER_ADMIN only.
+   */
+  @Delete('sage/integrations/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  async deleteSageIntegration(@Param('id') id: string) {
+    return this.sageApiIntegrationService.deleteIntegration(id);
+  }
+
+  /**
+   * POST /finance/sage/config/reload
+   * Hot-reload SAGE API configuration from .env without restarting the server.
+   * Call this after updating SAGE_API_URL / SAGE_API_KEY in .env.
+   * ROLE: SUPER_ADMIN only.
+   */
+  @Post('sage/config/reload')
+  @Roles(UserRole.SUPER_ADMIN)
+  async reloadSageConfig() {
+    await this.sageApiIntegrationService.reloadConfig();
+    return this.sageApiIntegrationService.getConfig();
+  }
+  
+  @Put('sage/config')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  async updateSageConfig(
+    @Body() body: {
+      apiUrl?:          string;
+      apiKey?:          string | null;
+      webhookSecret?:   string | null;
+      timeout?:         number;
+      retryAttempts?:   number;
+      pollIntervalMin?: number;
+    },
+    @Req() req: any,
+  ) {
+    return this.sageApiIntegrationService.updateConfig(body, req.user.id);
+  }
+  
 }

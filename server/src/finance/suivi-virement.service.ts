@@ -90,9 +90,13 @@ export class SuiviVirementService {
 
     const montantTotal = bulletinSoins.reduce((sum, bs) => sum + (bs.montant || 0), 0);
 
+    // Generate sequential OV reference with year
+    const currentYear = new Date().getFullYear();
+    const tempReference = `OV-${currentYear}-TEMP-${Date.now()}`;
+
     return this.prisma.ordreVirement.create({
       data: {
-        reference: `OV-${bordereau.reference}-${Date.now()}`,
+        reference: tempReference,
         donneurOrdreId: donneurOrdre.id,
         bordereauId: bordereau.id,
         utilisateurSante: utilisateurSanteId,

@@ -65,6 +65,9 @@ model User {
   assignedByHistory           DocumentAssignmentHistory[] @relation("AssignedByHistory")
   fromUserHistory             DocumentAssignmentHistory[] @relation("FromUserHistory")
   ovDocuments                 OVDocument[]                @relation("UserOVDocuments")
+  virementHistory             VirementHistory[]           @relation("UserVirementHistory")
+  recouvrementValidations     OrdreVirement[]             @relation("RecouvrementValidator")
+  sageIntegrations    SageIntegration[] @relation("SageIntegrationUser")
 }
 
 model Process {
@@ -306,11 +309,14 @@ model Client {
   contractDocumentPath String?
   compagnieAssuranceId String? // NEW: Link to insurance company
   modeRecuperation     String? // NEW: Mode de récupération
+  compteAuxiliaireSage String? // Ex: "41105500" pour PGH, "41139701" pour HIKMA
+  codeJournalSage      String? // Ex: "ATT411", "BTK580" — override si différent du DonneurOrdre
   adherents            Adherent[]
   bordereaux           Bordereau[]
   chargeCompte         User?               @relation("ChargeCompte", fields: [chargeCompteId], references: [id])
   compagnieAssurance   CompagnieAssurance? @relation("ClientCompagnieAssurance", fields: [compagnieAssuranceId], references: [id])
   contracts            Contract[]
+  ordresVirement       OrdreVirement[]     // NEW: Manual OV entries can link to client
   reclamations         Reclamation[]
   slaConfigurations    SlaConfiguration[]
   gestionnaires        User[]              @relation("ClientGestionnaires")
@@ -328,6 +334,8 @@ model CompagnieAssurance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   clients   Client[] @relation("ClientCompagnieAssurance")
+  // Sage integration: default compte général for this insurance company (8 chars)
+  compteGeneralSage String?
 }
 
 model Contract {
@@ -349,6 +357,7 @@ model Contract {
   version             Int               @default(1)
   thresholds          Json?
   bordereaux          Bordereau[]       @relation("ContractBordereaux")
+  ordresVirement      OrdreVirement[]   // NEW: Manual OV entries can link to contract
   assignedManager     User?             @relation("ManagerContracts", fields: [assignedManagerId], references: [id])
   teamLeader          User?             @relation("ContractTeamLeader", fields: [teamLeaderId], references: [id])
   client              Client            @relation(fields: [clientId], references: [id])
@@ -637,6 +646,9 @@ model DonneurOrdre {
   statut         String          @default("ACTIF")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+  codeJournal        String? // Ex: "ATT411", "BTK580", "BTK134"
+  compteTresorerie   String? // Ex: "53220900", "53221650", "53221550"
+  compteGeneralTiers String? // Ex: "41100007" (ASTREE), "41100005" (COMAR 501)
   ordresVirement OrdreVirement[]
 }
 
@@ -645,6 +657,8 @@ model OrdreVirement {
   reference               String               @unique
   donneurOrdreId          String
   bordereauId             String?
+  clientId                String?              // NEW: Direct client link for manual entries
+  contractId              String?              // NEW: Direct contract link for manual entries
   dateCreation            DateTime             @default(now())
   dateTraitement          DateTime?
   utilisateurSante        String
@@ -657,7 +671,12 @@ model OrdreVirement {
   fichierPdf              String?
   fichierTxt              String?
   uploadedPdfPath         String? // Manual OV uploaded PDF path
-  clientName              String? // Manual OV client name
+  clientName              String? // Manual OV client name (deprecated - use clientId instead)
+  typeOperation           String? // Type: REMBOURSEMENT or TPA
+  
+  // NEW: Main workflow status - Tracks the complete 6-step process
+  statutGlobal            StatutOrdreVirement  @default(EN_ATTENTE)
+  
   // Recovery tracking fields - EXACT SPEC
   demandeRecuperation     Boolean              @default(false)
   dateDemandeRecuperation DateTime?
@@ -669,17 +688,34 @@ model OrdreVirement {
   validatedBy             String?
   validatedAt             DateTime?
   validationComment       String?
+  // NEW: Service Recouvrement (SR) workflow - CRITICAL GATE
+  recouvrementStatus      RecouvrementStatus   @default(ATTENTE_RECOUVREMENT)
+  recouvrementValidatedBy String?              // User ID who validated/rejected
+  recouvrementValidatedAt DateTime?            // When SR made the decision
+  recouvrementComment     String?              // SR comment/reason
+  recouvrementRecouvre    Boolean              @default(false) // Is payment recovered?
+  dateRecouvrementRecouvre DateTime?           // When payment was recovered
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
   bordereau               Bordereau?           @relation(fields: [bordereauId], references: [id])
+  client                  Client?              @relation(fields: [clientId], references: [id])
+  contract                Contract?            @relation(fields: [contractId], references: [id])
   donneurOrdre            DonneurOrdre         @relation(fields: [donneurOrdreId], references: [id])
+  recouvrementValidator   User?                @relation("RecouvrementValidator", fields: [recouvrementValidatedBy], references: [id])
   suiviVirements          SuiviVirement[]
   historique              VirementHistorique[]
   items                   VirementItem[]
   ovDocuments             OVDocument[]         @relation("OVDocuments")
+  history                 VirementHistory[]    @relation("OrdreVirementHistory")
+  sageTxtGenerations      SageTxtGeneration[]
+  sageIntegrations        SageIntegration[]    // NEW: Track SAGE API integrations
+  // Optional custom libelle used in Sage GM block (13 chars)
+  libelleSage            String?
 
   @@index([etatVirement])
   @@index([validationStatus])
+  @@index([recouvrementStatus])
+  @@index([statutGlobal])
   @@index([demandeRecuperation, montantRecupere])
 }
 
@@ -1109,6 +1145,76 @@ model OVDocument {
   @@index([bordereauId])
 }
 
+// NEW: Virement History - Complete audit trail for all virement actions
+model VirementHistory {
+  id            String        @id @default(uuid())
+  virementId    String
+  action        String        // CREATION, VALIDATION, AUTORISATION, EXECUTION, REJET, etc.
+  previousState String?       // Previous status (if applicable)
+  newState      String?       // New status (if applicable)
+  comment       String?       // Optional comment/reason
+  createdAt     DateTime      @default(now())
+  userId        String
+  user          User          @relation("UserVirementHistory", fields: [userId], references: [id])
+  virement      OrdreVirement @relation("OrdreVirementHistory", fields: [virementId], references: [id], onDelete: Cascade)
+
+  @@index([virementId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+// NEW: Sage TXT Generation History - Track all Sage accounting file generations
+model SageTxtGeneration {
+  id              String        @id @default(uuid())
+  ordreVirementId String
+  type            String        // "REMBOURSEMENT" | "TPA"
+  codeJournal     String        // ATT411, BTK580, BTK134
+  filePath        String?
+  fileContent     String?       @db.Text
+  generatedById   String
+  generatedAt     DateTime      @default(now())
+  ordreVirement   OrdreVirement @relation(fields: [ordreVirementId], references: [id])
+
+  @@index([ordreVirementId])
+  @@index([generatedAt])
+}
+
+// NEW: Sage API Integration History - Track all SAGE API integration attempts
+model SageIntegration {
+  id                String        @id @default(uuid())
+  ordreVirementId   String
+  sageTransactionId String?
+  status            String        @default("PENDING") // "SUCCESS" | "FAILED" | "PENDING"
+  errorMessage      String?       @db.Text
+  txtContent        String?       @db.Text   // Full TXT payload sent to SAGE
+  fileName          String?                  // TXT filename sent to SAGE
+  integratedAt      DateTime      @default(now())
+  integratedById    String?                  // Nullable — system-triggered jobs have no user
+  ordreVirement     OrdreVirement @relation(fields: [ordreVirementId], references: [id], onDelete: Cascade)
+  integratedBy      User?         @relation("SageIntegrationUser", fields: [integratedById], references: [id], onDelete: SetNull)
+
+  @@index([ordreVirementId])
+  @@index([status])
+  @@index([integratedAt])
+}
+
+model SageWebhookLog {
+  id                String   @id @default(uuid())
+  receivedAt        DateTime @default(now())
+  sageTransactionId String?
+  ordreVirementId   String?
+  eventType         String   @default("UNKNOWN")
+  rawPayload        Json     @default("{}")
+  signatureValid    Boolean  @default(false)
+  processed         Boolean  @default(false)
+  processingError   String?
+  sourceIp          String?
+
+  @@index([sageTransactionId])
+  @@index([receivedAt])
+  @@index([processed])
+}
+
 // EXACT states from specifications + new validation statuses
 enum EtatVirement {
   NON_EXECUTE // When bordereau is "Traité"
@@ -1191,4 +1297,52 @@ enum DocumentType {
   CONTRAT_AVENANT
   DEMANDE_RESILIATION
   CONVENTION_TIERS_PAYANT
+}
+
+// NEW: Service Recouvrement status - CRITICAL GATE after virement generation
+// This status determines if Finance can execute the payment
+enum RecouvrementStatus {
+  ATTENTE_RECOUVREMENT  // Waiting for SR validation (default after TXT/PDF generation)
+  AUTORISE              // SR approved - payment received - Finance can execute
+  NON_AUTORISE          // SR rejected - payment NOT received - blocked (Super Admin only)
+}
+
+// NEW: Global OV Status - Tracks complete workflow from creation to Sage integration
+// This is the MAIN status field that represents the 6-step process from the diagram
+enum StatutOrdreVirement {
+  EN_ATTENTE            // Step 1: Order created, waiting for internal validation
+  VALIDE_INTERNE        // Step 2: Internally validated by Chef/Responsable
+  VALIDE_RECOUVREMENT   // Step 3: Recovery validated (payment received)
+  BLOQUE_RECOUVREMENT   // Step 3 (blocked): Recovery blocked (payment not received)
+  COMPTABILISE          // Step 4: Accounting entries generated (TXT file created)
+  INTEGRE_SAGE          // Step 5: Successfully integrated in Sage system
+}
+
+// NEW: Sage Template - Control TXT/PDF structure for Sage exports
+model SageTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   // "TXT" | "PDF"
+  structure Json     // Stores position config for TXT or layout for PDF
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([isDefault])
+}
+
+// Singleton table that stores SAGE config entered from the UI.
+// DB values override .env — allows zero-code reconfiguration in production.
+// Only one row ever exists (id = 'SINGLETON').
+model SageConfigStore {
+  id              String   @id              // Always 'SINGLETON' — enforces one-row constraint
+  apiUrl          String?                   // SAGE API base URL (overrides SAGE_API_URL in .env)
+  apiKey          String?                   // API key — stored plaintext; use secrets manager for high-security envs
+  webhookSecret   String?                   // HMAC secret for inbound webhook verification
+  timeout         Int?                      // HTTP timeout in ms
+  retryAttempts   Int?                      // Max retry count (1-5)
+  pollIntervalMin Int?                      // Polling interval in minutes
+  updatedAt       DateTime @updatedAt
+  updatedById     String?                   // Audit: which user saved this
 }

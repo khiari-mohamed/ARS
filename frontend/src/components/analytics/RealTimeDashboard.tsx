@@ -162,25 +162,6 @@ const RealTimeDashboard: React.FC = () => {
 
       {/* Real-time KPIs */}
       <Grid container spacing={3} mb={4}>
-        {/* COMMENTED OUT: Redundant Bordereaux Aujourd'hui card - Already in header */}
-        {/* <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="text.secondary" gutterBottom>
-                    Bordereaux Aujourd'hui
-                  </Typography>
-                  <Typography variant="h4">
-                    {kpis?.totalToday || 0}
-                  </Typography>
-                </Box>
-                <TrendingUp color="primary" fontSize="large" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid> */}
-
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>

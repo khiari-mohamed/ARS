@@ -19,6 +19,7 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
   reclamationDelay: 0,
   gestionnaireIds: [] as string[],
   modeRecuperation: '' as 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | '',
+  compteAuxiliaireSage: ''
 });
   const [errors, setErrors] = useState<any>({});
   const [managers, setManagers] = useState<{ id: string; fullName: string }[]>([]);
@@ -38,9 +39,11 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
         reclamationDelay: client.reclamationDelay || 0,
         gestionnaireIds: client.gestionnaires?.map((g: any) => g.id) || [],
         modeRecuperation: (client as any).modeRecuperation || ''
+        ,
+        compteAuxiliaireSage: (client as any).compteAuxiliaireSage || ''
       });
     } else {
-      setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [], modeRecuperation: '' });
+      setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [], modeRecuperation: '', compteAuxiliaireSage: '' });
     }
     setErrors({});
   }, [client]);
@@ -175,6 +178,17 @@ const validate = () => {
                 <MenuItem value="FEUILLE_CAISSE">Mode de récupération sur feuille de caisse</MenuItem>
               </Select>
             </FormControl>
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              label="Compte Auxiliaire Sage (8 chiffres)"
+              value={form.compteAuxiliaireSage || ''}
+              onChange={(e) => setForm({...form, compteAuxiliaireSage: e.target.value.replace(/\D/g, '').substring(0, 8)})}
+              fullWidth
+              placeholder="Ex: 41105500"
+              helperText="Code auxiliaire Sage du client (visible dans Sage 100 → Plan Comptable)"
+              inputProps={{ maxLength: 8, pattern: '[0-9]*' }}
+            />
           </Grid>
         </Grid>
       </DialogContent>

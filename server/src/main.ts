@@ -12,6 +12,24 @@ import * as path from 'path';
 async function bootstrap() {
   const expressApp = express();
   
+  // Capture raw body for SAGE webhook signature verification
+  // This middleware must be registered BEFORE the JSON body parser.
+  expressApp.use(
+    '/api/finance/sage/webhook',
+    express.raw({ type: 'application/json' }),
+    (req: any, _res: any, next: any) => {
+      if (Buffer.isBuffer(req.body)) {
+        req.rawBody = req.body.toString('utf8');
+        try {
+          req.body = JSON.parse(req.rawBody);
+        } catch (err) {
+          // If parsing fails, keep original body buffer and continue.
+        }
+      }
+      next();
+    },
+  );
+
   // Increase payload size limit for large file uploads (match nginx 10GB limit)
   expressApp.use(express.json({ limit: '10gb' }));
   expressApp.use(express.urlencoded({ limit: '10gb', extended: true }));

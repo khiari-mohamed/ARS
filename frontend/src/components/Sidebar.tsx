@@ -7,17 +7,18 @@ import PeopleIcon from '@mui/icons-material/People';
 import DescriptionIcon from '@mui/icons-material/Description';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import FolderIcon from '@mui/icons-material/Folder';
 import MailIcon from '@mui/icons-material/Mail';
 import ReportIcon from '@mui/icons-material/Report';
-import GroupIcon from '@mui/icons-material/Group';
+//import GroupIcon from '@mui/icons-material/Group';
 
-import NotificationsIcon from '@mui/icons-material/Notifications';
+//import NotificationsIcon from '@mui/icons-material/Notifications';
 import InputIcon from '@mui/icons-material/Input';
 import ScannerIcon from '@mui/icons-material/Scanner';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
+//import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArchiveIcon from '@mui/icons-material/Archive';
 import LogoutIcon from '@mui/icons-material/Logout';
 import UserBadge from './UserBadge';
@@ -32,6 +33,7 @@ const sidebarLinks = [
   { to: "/home/archives", label: "Archives", icon: <ArchiveIcon />, roles: ['SUPER_ADMIN'] },
   { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
   { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
+  { to: "/home/sage", label: "Gestion Sage", icon: <AccountBalanceWalletIcon />, roles: ['SUPER_ADMIN', 'FINANCE', 'RESPONSABLE_DEPARTEMENT'] },
   
   // RESPONSABLE_DEPARTEMENT: Read-only access to all modules like Super Admin
   { to: "/home/contracts", label: "Contrats", icon: <DescriptionIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
@@ -45,12 +47,6 @@ const sidebarLinks = [
   { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'CLIENT_SERVICE'] },
   { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
   
-  
-  // Common access
-  // Alertes - COMMENTED OUT (merged into Super Admin "Alertes Équipes" tab)
-  // { to: "/home/alerts", label: "Alertes", icon: <NotificationsIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
-  // Guide & Flux - COMMENTED OUT (client request: not needed in production)
-  // { to: "/home/guide", label: "📘 Guide & Flux", icon: <MenuBookIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'FINANCE', 'CLIENT_SERVICE', 'BO', 'BUREAU_ORDRE', 'SCAN_TEAM'] },
 ];
 
 interface SidebarProps {

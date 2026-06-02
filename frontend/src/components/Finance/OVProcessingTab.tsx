@@ -22,6 +22,9 @@ interface DonneurOrdre {
   banque: string;
   rib: string;
   structureTxt: string;
+  // Sage integration fields (optional)
+  codeJournalSage?: string;
+  compteTresoreriesSage?: string;
 }
 
 interface ValidationResult {
@@ -53,6 +56,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const [validationStatus, setValidationStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
   const [validationComment, setValidationComment] = useState('');
   const [canValidate, setCanValidate] = useState(false);
+  const [statutGlobal, setStatutGlobal] = useState<string>('EN_ATTENTE');
   const [selectedBordereauId, setSelectedBordereauId] = useState<string | null>(null);
   const [isManualOV, setIsManualOV] = useState(false);
   const [linkBordereauDialog, setLinkBordereauDialog] = useState(false);
@@ -67,6 +71,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const [clients, setClients] = useState<any[]>([]);
   const [fileInputKey, setFileInputKey] = useState(Date.now());
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const [sageDownloading, setSageDownloading] = useState(false);
   
   // Read selected bordereau from sessionStorage on mount
   useEffect(() => {
@@ -122,6 +127,41 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       console.error('Failed to load bordereaux:', error);
     }
   };
+
+  const handleDownloadSageTxt = async (ovId: string) => {
+    setSageDownloading(true);
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/sage-txt`,
+        {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: 'Erreur inconnue' }));
+        throw new Error(err.message || `HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get('Content-Disposition') ?? '';
+      const filenameMatch = contentDisposition.match(/filename="([^\"]+)"/);
+      const filename = filenameMatch?.[1] ?? `SAGE_${ovId}.TXT`;
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      alert(`Erreur génération TXT Sage: ${error.message}`);
+    } finally {
+      setSageDownloading(false);
+    }
+  };
   
   const loadClients = async () => {
     try {
@@ -157,6 +197,10 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         
         if (response.ok) {
           const data = await response.json();
+          // Update statutGlobal from backend
+          if (data.statutGlobal) {
+            setStatutGlobal(data.statutGlobal);
+          }
           if (data.validationStatus === 'VALIDE') {
             setValidationStatus('approved');
             setActiveStep(3); // Move to PDF generation step
@@ -183,6 +227,30 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     'Étape 5: Génération du fichier TXT',
     'Étape 6: Historique et archivage'
   ];
+
+  const getStatutGlobalLabel = (statut: string) => {
+    switch (statut) {
+      case 'EN_ATTENTE':            return '⏳ En attente';
+      case 'VALIDE_INTERNE':        return '✅ Validé interne';
+      case 'VALIDE_RECOUVREMENT':   return '✅ Validé recouvrement';
+      case 'BLOQUE_RECOUVREMENT':   return '🔒 Bloqué recouvrement';
+      case 'COMPTABILISE':          return '📊 Comptabilisé';
+      case 'INTEGRE_SAGE':          return '🎯 Intégré dans Sage';
+      default:                      return statut;
+    }
+  };
+
+  const getStatutGlobalColor = (statut: string) => {
+    switch (statut) {
+      case 'EN_ATTENTE':            return 'default';
+      case 'VALIDE_INTERNE':        return 'info';
+      case 'VALIDE_RECOUVREMENT':   return 'success';
+      case 'BLOQUE_RECOUVREMENT':   return 'error';
+      case 'COMPTABILISE':          return 'primary';
+      case 'INTEGRE_SAGE':          return 'success';
+      default:                      return 'default';
+    }
+  };
 
   useEffect(() => {
     const loadDonneurs = async () => {
@@ -656,6 +724,26 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
 
   return (
     <Box>
+      {/* Workflow Status Display */}
+      {ovId && (
+        <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              Statut Global du Workflow
+            </Typography>
+            <Chip
+              label={getStatutGlobalLabel(statutGlobal)}
+              color={getStatutGlobalColor(statutGlobal) as any}
+              size="small"
+              sx={{ fontWeight: 700 }}
+            />
+          </Box>
+          <Typography variant="caption" color="text.secondary">
+            Ce statut suit la progression complète de l'OV à travers les 6 étapes du processus
+          </Typography>
+        </Alert>
+      )}
+
       {/* Progress Stepper */}
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
         <Stepper activeStep={activeStep} alternativeLabel sx={{ overflowX: 'auto' }}>
@@ -1153,54 +1241,116 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           </Grid>
         )}
         
-        {/* EXACT SPEC: Étape 5 - Génération du fichier TXT */}
+        {/* Étape 5 — Génération des fichiers */}
+        {
+          /* Insert SageDownloadButton component used below */
+        }
+
+        
+
+        {/* Étape 5 — Génération des fichiers (JSX) */}
         {activeStep === 4 && (
           <Grid item xs={12}>
             <Paper elevation={2} sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Étape 5 : Génération du fichier TXT
+                Étape 5 : Génération des fichiers
               </Typography>
-              
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>Le format du fichier TXT dépend du donneur sélectionné</strong><br/>
-                Le système applique automatiquement la bonne structure, et crée un fichier prêt à être envoyé à la banque.
+
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Deux fichiers distincts à générer :
+                </Typography>
+                <Typography variant="body2">
+                  🏦 <strong>TXT Bancaire</strong> — Format V1/V2 envoyé à la banque pour exécution du virement
+                </Typography>
+                <Typography variant="body2">
+                  📊 <strong>TXT Sage Comptable</strong> — Écritures comptables (Débit/Crédit) à importer dans Sage 100
+                </Typography>
               </Alert>
 
-              <Card sx={{ mb: 3, bgcolor: '#f8f9fa' }}>
-                <CardContent>
-                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-                    Format TXT sélectionné
-                  </Typography>
-                  {selectedDonneur && (
-                    <Typography variant="body2">
-                      <strong>Structure:</strong> {selectedDonneur.structureTxt}
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<DescriptionIcon />}
-                  onClick={() => handleGenerateFiles('txt')}
-                  disabled={processing}
-                  sx={{ flex: 1 }}
-                >
-                  Générer le fichier TXT
-                </Button>
-                {ovId && (
+              {/* Section TXT Bancaire */}
+              <Paper variant="outlined" sx={{ p: 2, mb: 3, borderColor: '#1976d2' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#1976d2', mb: 2 }}>
+                  🏦 Fichier TXT Bancaire
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2 }}>
                   <Button
-                    variant="outlined"
+                    variant="contained"
                     size="large"
                     startIcon={<DescriptionIcon />}
-                    onClick={() => window.open(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/txt`, '_blank')}
-                    color="success"
+                    onClick={() => handleGenerateFiles('txt')}
+                    disabled={processing}
+                    sx={{ flex: 1 }}
                   >
-                    Télécharger TXT
+                    Générer TXT Bancaire
                   </Button>
+                  {ovId && (
+                    <Button
+                      variant="outlined"
+                      size="large"
+                      startIcon={<DescriptionIcon />}
+                      onClick={() =>
+                        window.open(
+                          `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/ordres-virement/${ovId}/txt`,
+                          '_blank'
+                        )
+                      }
+                      color="primary"
+                    >
+                      Télécharger TXT Bancaire
+                    </Button>
+                  )}
+                </Box>
+              </Paper>
+
+              {/* Section TXT Sage Comptable */}
+              <Paper variant="outlined" sx={{ p: 2, mb: 3, borderColor: '#6A1B9A' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#6A1B9A', mb: 1 }}>
+                  📊 Fichier TXT Sage Comptable
+                </Typography>
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    Ce fichier contient les écritures comptables (Débit + Crédit) au format Sage 100.
+                    Il doit être importé dans Sage <strong>après</strong> exécution du virement bancaire.
+                  </Typography>
+                </Alert>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  {ovId ? (
+                    <Button
+                      variant="contained"
+                      size="large"
+                      startIcon={sageDownloading ? undefined : <DescriptionIcon />}
+                      onClick={() => handleDownloadSageTxt(ovId)}
+                      disabled={sageDownloading}
+                      sx={{
+                        bgcolor: '#6A1B9A',
+                        '&:hover': { bgcolor: '#4A148C' },
+                        '&:disabled': { bgcolor: '#9E9E9E' },
+                      }}
+                    >
+                      {sageDownloading ? 'Génération...' : '⬇ TXT Sage Comptable'}
+                    </Button>
+                  ) : (
+                    <Alert severity="info" sx={{ flex: 1 }}>
+                      L'OV doit être créé avant de générer le TXT Sage. Cliquez d'abord sur
+                      "Valider et Envoyer pour Validation" à l'étape 3.
+                    </Alert>
+                  )}
+                </Box>
+
+                {/* Sage config warning if not set */}
+                {selectedDonneur && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" color="textSecondary">
+                      Code journal Sage : <strong>{selectedDonneur.codeJournalSage || 'Non configuré (utilisation valeur par défaut)'}</strong>
+                      {' · '}
+                      Compte trésorerie : <strong>{selectedDonneur.compteTresoreriesSage || 'Non configuré'}</strong>
+                    </Typography>
+                  </Box>
                 )}
+              </Paper>
+
+              <Box sx={{ display: 'flex', gap: 2 }}>
                 <Button
                   variant="outlined"
                   size="large"
