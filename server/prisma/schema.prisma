@@ -32,6 +32,10 @@ model User {
   Contract                    Contract[]                  @relation("ManagerContracts")
   contractsAsTeamLeader       Contract[]                  @relation("ContractTeamLeader")
   ContractHistory             ContractHistory[]
+  // Reassignment relations (history of contract reassignments)
+  contractReassignmentsPerformed ContractReassignment[] @relation("ContractReassignmentPerformedBy")
+  contractReassignmentsOldChef   ContractReassignment[] @relation("ContractReassignmentOldChef")
+  contractReassignmentsNewChef   ContractReassignment[] @relation("ContractReassignmentNewChef")
   courriers                   Courrier[]                  @relation("UserCourriers")
   documents                   Document[]                  @relation("UserDocuments")
   // NEW: Document assignment relations
@@ -362,6 +366,8 @@ model Contract {
   teamLeader          User?             @relation("ContractTeamLeader", fields: [teamLeaderId], references: [id])
   client              Client            @relation(fields: [clientId], references: [id])
   history             ContractHistory[]
+  // Reassignment history records for this contract
+  reassignments       ContractReassignment[] @relation("ContractReassignmentContract")
   Reclamation         Reclamation[]
 
   @@index([codeAssure])
@@ -375,6 +381,29 @@ model ContractHistory {
   changes      Json
   contract     Contract @relation(fields: [contractId], references: [id])
   modifiedBy   User     @relation(fields: [modifiedById], references: [id])
+}
+
+// Track contract reassignment events (who changed the team leader, from which user to which user)
+model ContractReassignment {
+  id            String   @id @default(uuid())
+  contractId    String
+  performedById String
+  oldChefId     String?
+  newChefId     String
+  oldChefName   String?
+  newChefName   String?
+  oldChefRole   String?
+  newChefRole   String?
+  createdAt     DateTime @default(now())
+
+  contract      Contract @relation("ContractReassignmentContract", fields: [contractId], references: [id])
+  performedBy   User     @relation("ContractReassignmentPerformedBy", fields: [performedById], references: [id])
+  oldChef       User?    @relation("ContractReassignmentOldChef", fields: [oldChefId], references: [id])
+  newChef       User     @relation("ContractReassignmentNewChef", fields: [newChefId], references: [id])
+
+  @@index([contractId])
+  @@index([performedById])
+  @@index([createdAt])
 }
 
 model Document {

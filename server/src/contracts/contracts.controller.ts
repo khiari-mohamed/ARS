@@ -136,4 +136,9 @@ export class ContractsController {
     const userId = req.user?.id || req.user?.sub;
     return this.contractsService.reassignChef(id, body.newChefId, userId);
   }
+
+  @Get(':id/reassignment-history')
+  async getReassignmentHistory(@Param('id') id: string) {
+    return this.contractsService.getReassignmentHistory(id);
+  }
 }

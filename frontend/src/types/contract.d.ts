@@ -1,3 +1,5 @@
+import { UserRole } from './user.d';
+
 export interface Contract {
   id: string;
   clientId: string;
@@ -27,11 +29,13 @@ export interface Contract {
     id: string;
     fullName: string;
     email: string;
+    role?: UserRole;
   };
   teamLeader?: {
     id: string;
     fullName: string;
     email: string;
+    role?: UserRole;
   };
 }
 

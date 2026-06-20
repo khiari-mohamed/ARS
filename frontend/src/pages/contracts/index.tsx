@@ -47,7 +47,8 @@ import {
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   Assignment as AssignmentIcon,
-  Groups as GroupsIcon
+  Groups as GroupsIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -107,7 +108,7 @@ const ContractsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [mainTab, setMainTab] = useState(0);
   const [availableClients, setAvailableClients] = useState<any[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; fullName: string; email: string; role: string }>>([]);
   const [scanSLAIssues, setScanSLAIssues] = useState<any[]>([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -138,6 +139,8 @@ const ContractsPage: React.FC = () => {
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [showReassignDialog, setShowReassignDialog] = useState(false);
   const [selectedNewChef, setSelectedNewChef] = useState('');
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [reassignmentHistory, setReassignmentHistory] = useState<any[]>([]);
 
   // ── Permissions (unchanged) ────────────────────────────────────────────────
   const canManage = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE'].includes(user?.role || '');
@@ -1029,14 +1032,32 @@ const ContractsPage: React.FC = () => {
                               {selectedContract.teamLeader?.fullName || 'Non affecté'}
                             </Typography>
                             {canManage && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => { setSelectedNewChef(''); setShowReassignDialog(true); }}
-                                sx={{ fontSize: '0.70rem', py: 0.2, px: 1, minWidth: 0, borderColor: '#1e3a5f', color: '#1e3a5f' }}
-                              >
-                                Réaffecter
-                              </Button>
+                              <>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => { setSelectedNewChef(''); setShowReassignDialog(true); }}
+                                  sx={{ fontSize: '0.70rem', py: 0.2, px: 1, minWidth: 0, borderColor: '#1e3a5f', color: '#1e3a5f' }}
+                                >
+                                  Réaffecter
+                                </Button>
+                                <IconButton
+                                  size="small"
+                                  onClick={async () => {
+                                    try {
+                                      const { data } = await LocalAPI.get(`/contracts/${selectedContract.id}/reassignment-history`);
+                                      setReassignmentHistory(data || []);
+                                      setShowHistoryDialog(true);
+                                    } catch (error) {
+                                      notify('Erreur lors du chargement de l\'historique', 'error');
+                                    }
+                                  }}
+                                  title="Voir l'historique des réaffectations"
+                                  sx={{ color: '#1e3a5f', '&:hover': { bgcolor: '#e8f0fe' } }}
+                                >
+                                  <HistoryIcon sx={{ fontSize: '1rem' }} />
+                                </IconButton>
+                              </>
                             )}
                           </Box>
                         </Grid>
@@ -1197,7 +1218,7 @@ const ContractsPage: React.FC = () => {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          REASSIGN DIALOG — zero logic changes
+          REASSIGN DIALOG — with Chef/Senior logic
       ══════════════════════════════════════════════════════════════════════ */}
       <Dialog
         open={showReassignDialog}
@@ -1219,6 +1240,11 @@ const ContractsPage: React.FC = () => {
               <Typography variant="body2" color="text.secondary">
                 Chef actuel : <strong>{selectedContract?.teamLeader?.fullName || 'Aucun'}</strong>
               </Typography>
+              {selectedContract?.teamLeader && (
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: '#546e7a' }}>
+                  Rôle : <strong>{selectedContract.teamLeader.role === 'GESTIONNAIRE_SENIOR' ? 'Senior' : 'Chef d\'équipe'}</strong>
+                </Typography>
+              )}
             </Box>
             <FormControl fullWidth>
               <InputLabel>Nouveau Chef d'équipe</InputLabel>
@@ -1229,17 +1255,49 @@ const ContractsPage: React.FC = () => {
                 MenuProps={{ style: { zIndex: 10002 } }}
               >
                 {availableUsers
-                  .filter(u => u.role === 'CHEF_EQUIPE' && u.id !== selectedContract?.teamLeader?.id)
+                  .filter(u => {
+                    // Current team leader's role
+                    const currentRole = selectedContract?.teamLeader?.role;
+                    
+                    // Don't show current chef in list
+                    if (u.id === selectedContract?.teamLeader?.id) return false;
+                    
+                    // If current is CHEF_EQUIPE → only show other CHEF_EQUIPE
+                    if (currentRole === 'CHEF_EQUIPE') {
+                      return u.role === 'CHEF_EQUIPE';
+                    }
+                    
+                    // If current is GESTIONNAIRE_SENIOR → show both CHEF_EQUIPE and GESTIONNAIRE_SENIOR
+                    if (currentRole === 'GESTIONNAIRE_SENIOR') {
+                      return u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR';
+                    }
+                    
+                    // Default: show both if no current chef
+                    return u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR';
+                  })
                   .map(chef => (
                     <MenuItem key={chef.id} value={chef.id}>
-                      {chef.fullName} ({chef.email})
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {chef.fullName}
+                          {chef.role === 'GESTIONNAIRE_SENIOR' && (
+                            <Chip label="Senior" size="small" sx={{ ml: 1, fontSize: '0.65rem', height: 18 }} color="primary" />
+                          )}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">{chef.email}</Typography>
+                      </Box>
                     </MenuItem>
                   ))}
               </Select>
             </FormControl>
-            {availableUsers.filter(u => u.role === 'CHEF_EQUIPE').length === 0 && (
+            {availableUsers.filter(u => {
+              const currentRole = selectedContract?.teamLeader?.role;
+              if (currentRole === 'CHEF_EQUIPE') return u.role === 'CHEF_EQUIPE' && u.id !== selectedContract?.teamLeader?.id;
+              if (currentRole === 'GESTIONNAIRE_SENIOR') return (u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR') && u.id !== selectedContract?.teamLeader?.id;
+              return (u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR') && u.id !== selectedContract?.teamLeader?.id;
+            }).length === 0 && (
               <Alert severity="warning" sx={{ mt: 1.5, borderRadius: 1.5 }}>
-                Aucun Chef d'équipe disponible
+                Aucun {selectedContract?.teamLeader?.role === 'CHEF_EQUIPE' ? 'Chef d\'équipe' : 'Chef d\'équipe ou Senior'} disponible
               </Alert>
             )}
           </Box>
@@ -1265,6 +1323,147 @@ const ContractsPage: React.FC = () => {
             sx={{ fontWeight: 600, bgcolor: '#1e3a5f', '&:hover': { bgcolor: '#162d4a' } }}
           >
             Réaffecter
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          REASSIGNMENT HISTORY DIALOG
+      ══════════════════════════════════════════════════════════════════════ */}
+      <Dialog
+        open={showHistoryDialog}
+        onClose={() => setShowHistoryDialog(false)}
+        maxWidth="md"
+        fullWidth
+        sx={{ zIndex: 10001 }}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid #e0e7ef', bgcolor: '#f4f7fb' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e3a5f' }}>
+            📜 Historique des Réaffectations
+          </Typography>
+          {selectedContract && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Contrat : {selectedContract.clientName} - {selectedContract.client?.name}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {reassignmentHistory.length === 0 ? (
+            <Box sx={{
+              p: 4, textAlign: 'center',
+              bgcolor: '#f8faff', borderRadius: 2,
+              border: '1px dashed #c5d4e8',
+            }}>
+              <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Aucune réaffectation enregistrée
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Ce contrat n'a pas encore été réaffecté
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {reassignmentHistory.map((entry: any, index: number) => (
+                <Card 
+                  key={entry.id} 
+                  elevation={0} 
+                  sx={{ 
+                    border: '1px solid #e0e7ef',
+                    borderLeft: '4px solid #1e3a5f',
+                    borderRadius: 2,
+                    transition: 'box-shadow 0.2s',
+                    '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.08)' },
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip 
+                          label={`#${reassignmentHistory.length - index}`} 
+                          size="small" 
+                          sx={{ 
+                            fontWeight: 700, 
+                            bgcolor: '#e8f0fe', 
+                            color: '#1e3a5f',
+                            fontSize: '0.70rem'
+                          }} 
+                        />
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                          {new Date(entry.modifiedAt).toLocaleString('fr-FR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={4}>
+                        <Box sx={{ p: 1.5, bgcolor: '#fff3e0', borderRadius: 1, border: '1px solid #ffe0b2' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#e65100', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: 0.5 }}>
+                            👤 Chef Précédent
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#e65100', mt: 0.5 }}>
+                            {entry.changes?.oldChefName || 'Non affecté'}
+                          </Typography>
+                          {entry.changes?.oldChefRole && (
+                            <Chip 
+                              label={entry.changes.oldChefRole === 'GESTIONNAIRE_SENIOR' ? 'Senior' : 'Chef d\'\u00e9quipe'}
+                              size="small"
+                              sx={{ mt: 0.5, fontSize: '0.65rem', height: 18 }}
+                            />
+                          )}
+                        </Box>
+                      </Grid>
+
+                      <Grid item xs={12} sm={4}>
+                        <Box sx={{ p: 1.5, bgcolor: '#e8f5e9', borderRadius: 1, border: '1px solid #a5d6a7' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#2e7d32', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: 0.5 }}>
+                            ✅ Nouveau Chef
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#2e7d32', mt: 0.5 }}>
+                            {entry.changes?.newChefName || 'Inconnu'}
+                          </Typography>
+                          {entry.changes?.newChefRole && (
+                            <Chip 
+                              label={entry.changes.newChefRole === 'GESTIONNAIRE_SENIOR' ? 'Senior' : 'Chef d\'\u00e9quipe'}
+                              size="small"
+                              color="primary"
+                              sx={{ mt: 0.5, fontSize: '0.65rem', height: 18 }}
+                            />
+                          )}
+                        </Box>
+                      </Grid>
+
+                      <Grid item xs={12} sm={4}>
+                        <Box sx={{ p: 1.5, bgcolor: '#f3e5f5', borderRadius: 1, border: '1px solid #ce93d8' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#6a1b9a', textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: 0.5 }}>
+                            👤 Modifié par
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#6a1b9a', mt: 0.5 }}>
+                            {entry.modifiedBy?.fullName || 'Système'}
+                          </Typography>
+                          {entry.modifiedBy?.role && (
+                            <Typography variant="caption" sx={{ display: 'block', mt: 0.3, color: '#8e24aa' }}>
+                              {entry.modifiedBy.role}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e0e7ef', bgcolor: '#fafbfc' }}>
+          <Button onClick={() => setShowHistoryDialog(false)} variant="outlined">
+            Fermer
           </Button>
         </DialogActions>
       </Dialog>

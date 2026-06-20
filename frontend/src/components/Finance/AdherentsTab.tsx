@@ -87,6 +87,8 @@ const AdherentsTab: React.FC = () => {
   const [page, setPage] = useState(0);
   const rowsPerPage = 20;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectAllMode, setSelectAllMode] = useState(false);
+  const [bulkDeleteBySocietyDialog, setBulkDeleteBySocietyDialog] = useState<{ open: boolean, society: string | null }>({ open: false, society: null });
   const [uniqueSocieties, setUniqueSocieties] = useState<Array<{ name: string, count: number }>>([]);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean, count: number }>({ open: false, count: 0 });
   const [showTips, setShowTips] = useState(false);
@@ -458,14 +460,45 @@ const AdherentsTab: React.FC = () => {
         </Box>
         <Stack direction="row" spacing={1.5}>
           {selectedIds.length > 0 && (
+            <>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => setDeleteDialog({ open: true, count: selectedIds.length })}
+                sx={{ fontWeight: 600 }}
+              >
+                Supprimer ({selectedIds.length})
+              </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => {
+                  setSelectedIds([]);
+                  setSelectAllMode(false);
+                }}
+                sx={{ fontWeight: 600 }}
+              >
+                Désélectionner tout
+              </Button>
+            </>
+          )}
+          {filteredAdherents.length > 0 && (
             <Button
-              variant="contained"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={() => setDeleteDialog({ open: true, count: selectedIds.length })}
+              variant={selectAllMode ? "contained" : "outlined"}
+              color="primary"
+              onClick={() => {
+                if (selectAllMode) {
+                  setSelectedIds([]);
+                  setSelectAllMode(false);
+                } else {
+                  setSelectedIds(filteredAdherents.map(a => a.id));
+                  setSelectAllMode(true);
+                }
+              }}
               sx={{ fontWeight: 600 }}
             >
-              Supprimer ({selectedIds.length})
+              {selectAllMode ? `✓ Tous sélectionnés (${filteredAdherents.length})` : `Sélectionner tous (${filteredAdherents.length})`}
             </Button>
           )}
           <Button
@@ -594,6 +627,19 @@ const AdherentsTab: React.FC = () => {
               variant={filters.society === society.name ? 'contained' : 'outlined'}
               onClick={() => setFilters({ ...filters, society: society.name })}
               sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+              endIcon={
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBulkDeleteBySocietyDialog({ open: true, society: society.name });
+                  }}
+                  sx={{ p: 0, ml: 0.5, color: 'error.main', '&:hover': { bgcolor: 'error.light' } }}
+                  title={`Supprimer tous les adhérents de ${society.name}`}
+                >
+                  <DeleteIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              }
             >
               {society.name} ({society.count})
             </Button>
@@ -695,14 +741,18 @@ const AdherentsTab: React.FC = () => {
                       type="checkbox"
                       style={{ accentColor: '#fff', cursor: 'pointer' }}
                       checked={
-                        selectedIds.length === filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).length &&
-                        filteredAdherents.length > 0
+                        selectAllMode ||
+                        (selectedIds.length === filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).length &&
+                        filteredAdherents.length > 0)
                       }
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedIds(filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(a => a.id));
+                          const currentPageIds = filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(a => a.id);
+                          setSelectedIds([...new Set([...selectedIds, ...currentPageIds])]);
                         } else {
-                          setSelectedIds([]);
+                          const currentPageIds = filteredAdherents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(a => a.id);
+                          setSelectedIds(selectedIds.filter(id => !currentPageIds.includes(id)));
+                          setSelectAllMode(false);
                         }
                       }}
                     />
@@ -1496,6 +1546,147 @@ const AdherentsTab: React.FC = () => {
             size="large"
           >
             ✅ J'ai compris
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Delete by Society Dialog */}
+      <Dialog
+        open={bulkDeleteBySocietyDialog.open}
+        onClose={() => setBulkDeleteBySocietyDialog({ open: false, society: null })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, borderBottom: '1px solid #e0e7ef', bgcolor: '#fff3cd' }}>
+          <WarningIcon color="error" fontSize="large" />
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e3a5f' }}>
+            Suppression massive par société
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mb: 2, mt: 2, borderRadius: 1.5 }}>
+            <strong>🚨 ATTENTION - ACTION CRITIQUE :</strong> Cette opération est irréversible !
+          </Alert>
+          <Box sx={{ p: 2, bgcolor: '#fff8e1', borderRadius: 1.5, border: '2px solid #ff9800', mb: 2 }}>
+            <Typography variant="body1" sx={{ fontWeight: 700, mb: 1, color: '#e65100' }}>
+              Vous êtes sur le point de supprimer TOUS les adhérents de :
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: '#d32f2f', mb: 1 }}>
+              📌 {bulkDeleteBySocietyDialog.society}
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#d32f2f' }}>
+              {uniqueSocieties.find(s => s.name === bulkDeleteBySocietyDialog.society)?.count || 0} adhérent(s)
+            </Typography>
+          </Box>
+          <Alert severity="warning" sx={{ mb: 2, borderRadius: 1.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+              ⚠️ Cette action va :
+            </Typography>
+            <Typography variant="body2" component="div">
+              • Supprimer définitivement tous les adhérents de cette société<br />
+              • Supprimer tous leurs RIB et données associées<br />
+              • Supprimer l'historique des modifications<br />
+              • Cette opération ne peut PAS être annulée
+            </Typography>
+          </Alert>
+          <Box sx={{ p: 2, bgcolor: '#f4f7fb', borderRadius: 1.5, border: '1px solid #dde3ef' }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#1e3a5f' }}>
+              Pour confirmer, tapez le nom exact de la société :
+            </Typography>
+            <TextField
+              fullWidth
+              placeholder={bulkDeleteBySocietyDialog.society || ''}
+              id="confirm-society-name"
+              autoComplete="off"
+              sx={{ mt: 1 }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e0e7ef', bgcolor: '#fafbfc', gap: 1 }}>
+          <Button
+            onClick={() => setBulkDeleteBySocietyDialog({ open: false, society: null })}
+            variant="outlined"
+            size="large"
+          >
+            ❌ Annuler
+          </Button>
+          <Button
+            onClick={async () => {
+              const inputElement = document.getElementById('confirm-society-name') as HTMLInputElement;
+              const confirmedName = inputElement?.value || '';
+
+              if (confirmedName !== bulkDeleteBySocietyDialog.society) {
+                alert('❌ Le nom de la société ne correspond pas. Suppression annulée.');
+                return;
+              }
+
+              const societyToDelete = bulkDeleteBySocietyDialog.society;
+              const adherentsToDelete = adherents.filter(a => a.society === societyToDelete);
+              const totalToDelete = adherentsToDelete.length;
+
+              if (totalToDelete === 0) {
+                alert('Aucun adhérent trouvé pour cette société.');
+                setBulkDeleteBySocietyDialog({ open: false, society: null });
+                return;
+              }
+
+              if (!window.confirm(`🚨 DERNIÈRE CONFIRMATION\n\nVous allez supprimer ${totalToDelete} adhérent(s) de "${societyToDelete}".\n\nCette action est IRRÉVERSIBLE.\n\nContinuer ?`)) {
+                return;
+              }
+
+              setBulkDeleteBySocietyDialog({ open: false, society: null });
+
+              let successCount = 0;
+              let errorCount = 0;
+              const errors: string[] = [];
+
+              const startTime = Date.now();
+              console.log(`🗑️ Starting bulk delete: ${totalToDelete} adherents from ${societyToDelete}`);
+
+              for (const adherent of adherentsToDelete) {
+                try {
+                  const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/${adherent.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                      'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                  });
+
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Failed to delete adherent');
+                  }
+
+                  successCount++;
+
+                  if (successCount % 50 === 0) {
+                    console.log(`⏳ Progress: ${successCount}/${totalToDelete} deleted...`);
+                  }
+                } catch (error: any) {
+                  errorCount++;
+                  errors.push(`${adherent.matricule}: ${error.message || 'Erreur inconnue'}`);
+                  console.error(`❌ Failed to delete ${adherent.matricule}:`, error);
+                }
+              }
+
+              const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+              console.log(`✅ Bulk delete completed in ${elapsed}s: ${successCount} success, ${errorCount} errors`);
+
+              await loadAdherents();
+
+              if (errorCount > 0) {
+                alert(`⚠️ Suppression terminée en ${elapsed}s\n\n✅ ${successCount} supprimé(s)\n❌ ${errorCount} échec(s)\n\nPremière erreur: ${errors[0]}`);
+              } else {
+                alert(`✅ Suppression réussie !\n\n${successCount} adhérent(s) de "${societyToDelete}" supprimé(s) en ${elapsed}s`);
+              }
+            }}
+            variant="contained"
+            color="error"
+            size="large"
+            startIcon={<DeleteIcon />}
+          >
+            🗑️ SUPPRIMER DÉFINITIVEMENT
           </Button>
         </DialogActions>
       </Dialog>

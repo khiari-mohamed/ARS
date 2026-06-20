@@ -517,7 +517,7 @@ const EnhancedDashboard: React.FC = () => {
         alert('Statut modifié avec succès');
         setStatusModifyModalOpen(false);
         setNewStatus('');
-        loadChefEquipeData();
+        window.location.reload();
       }
     } catch {
       alert('Erreur modification du statut');
@@ -571,56 +571,56 @@ const EnhancedDashboard: React.FC = () => {
     }
   }, [typeFilter]);
 
-  // ── Load Chef équipe data ──────────────────────────────────────────────────────
-  const loadChefEquipeData = useCallback(async () => {
+  // ── Fetch ALL Chef équipe + Super admin data in ONE parallel batch ─────────────
+  // FIX: previously this was two sequential phases:
+  //   loadChefEquipeData() -> 5 calls (awaited)
+  //   then fetchSuperAdminData() -> 6 more calls, 4 of which duplicated the first batch
+  // That was 11 total network calls (4 wasted) split across two sequential round-trips.
+  // Now: a single Promise.all with the 7 distinct endpoints needed, fired together.
+  const fetchSuperAdminData = useCallback(async () => {
     if (!['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')) return;
     try {
-      const [statsRes, typesRes, derniersRes, enCoursRes, assignmentsRes] = await Promise.all([
+      const [
+        statsRes,        // tableau-bord/stats
+        typesRes,        // tableau-bord/types-detail
+        derniersRes,     // tableau-bord/derniers-dossiers
+        enCoursRes,      // tableau-bord/dossiers-en-cours
+        assignmentsRes,  // gestionnaire-assignments-dossiers
+        seniorRes,       // tableau-bord/gestionnaire-senior-assignments
+        individuelsRes,  // tableau-bord/documents-individuels
+      ] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels?superAdmin=true'),
       ]);
+
+      // ── Chef équipe state (previously set inside loadChefEquipeData) ──
       setStats(statsRes.data);
       setTypesDetail(typesRes.data);
       setDerniersDossiers(derniersRes.data);
       setDossiersEnCours(enCoursRes.data);
       setAllGestionnaireAssignments(assignmentsRes.data ?? []);
       setFilteredGestionnaireAssignments(assignmentsRes.data ?? []);
-    } catch (e) {
-      console.error('Error loading Chef équipe data:', e);
-    }
-  }, [user?.role]);
 
-  // ── Fetch super admin data ─────────────────────────────────────────────────────
-  const fetchSuperAdminData = useCallback(async () => {
-    if (!['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')) return;
-    try {
-      await loadChefEquipeData();
-      const [statsRes, dossiersRes, assignmentsRes, seniorRes, enCoursRes, individuelsRes] = await Promise.all([
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels?superAdmin=true'),
-      ]);
-
-      if (statsRes.data) {
+      // ── Super admin state (previously set inside fetchSuperAdminData) ──
+      if (typesRes.data) {
         setSuperAdminStats({
-          prestation:  { total: statsRes.data.Prestation?.total ?? 0,           breakdown: statsRes.data.Prestation?.clientBreakdown ?? {},           gestionnaireBreakdown: statsRes.data.Prestation?.gestionnaireBreakdown ?? {} },
-          adhesion:    { total: statsRes.data['Adhésion']?.total ?? 0,          breakdown: statsRes.data['Adhésion']?.clientBreakdown ?? {},           gestionnaireBreakdown: statsRes.data['Adhésion']?.gestionnaireBreakdown ?? {} },
-          complement:  { total: statsRes.data['Complément Dossier']?.total ?? 0, breakdown: statsRes.data['Complément Dossier']?.clientBreakdown ?? {}, gestionnaireBreakdown: statsRes.data['Complément Dossier']?.gestionnaireBreakdown ?? {} },
+          prestation:  { total: typesRes.data.Prestation?.total ?? 0,           breakdown: typesRes.data.Prestation?.clientBreakdown ?? {},           gestionnaireBreakdown: typesRes.data.Prestation?.gestionnaireBreakdown ?? {} },
+          adhesion:    { total: typesRes.data['Adhésion']?.total ?? 0,          breakdown: typesRes.data['Adhésion']?.clientBreakdown ?? {},           gestionnaireBreakdown: typesRes.data['Adhésion']?.gestionnaireBreakdown ?? {} },
+          complement:  { total: typesRes.data['Complément Dossier']?.total ?? 0, breakdown: typesRes.data['Complément Dossier']?.clientBreakdown ?? {}, gestionnaireBreakdown: typesRes.data['Complément Dossier']?.gestionnaireBreakdown ?? {} },
           resiliation: { total: 0, breakdown: {}, gestionnaireBreakdown: {} },
-          reclamation: { total: statsRes.data['Réclamation']?.total ?? 0,       breakdown: statsRes.data['Réclamation']?.clientBreakdown ?? {},        gestionnaireBreakdown: statsRes.data['Réclamation']?.gestionnaireBreakdown ?? {} },
-          avenant:     { total: statsRes.data.Avenant?.total ?? 0,              breakdown: statsRes.data.Avenant?.clientBreakdown ?? {},               gestionnaireBreakdown: statsRes.data.Avenant?.gestionnaireBreakdown ?? {} },
+          reclamation: { total: typesRes.data['Réclamation']?.total ?? 0,       breakdown: typesRes.data['Réclamation']?.clientBreakdown ?? {},        gestionnaireBreakdown: typesRes.data['Réclamation']?.gestionnaireBreakdown ?? {} },
+          avenant:     { total: typesRes.data.Avenant?.total ?? 0,              breakdown: typesRes.data.Avenant?.clientBreakdown ?? {},               gestionnaireBreakdown: typesRes.data.Avenant?.gestionnaireBreakdown ?? {} },
         });
       }
 
-      if (dossiersRes.data) {
-        setSuperAdminDerniersDossiers(dossiersRes.data);
-        setSuperAdminAllDossiers(dossiersRes.data);
+      if (derniersRes.data) {
+        setSuperAdminDerniersDossiers(derniersRes.data);
+        setSuperAdminAllDossiers(derniersRes.data);
       }
       setSuperAdminGestionnaireAssignments(assignmentsRes.data ?? []);
       setSuperAdminGestionnaireSeniorAssignments(seniorRes.data ?? []);
@@ -629,7 +629,15 @@ const EnhancedDashboard: React.FC = () => {
     } catch (e) {
       console.error('Error loading Super Admin data:', e);
     }
-  }, [user?.role, loadChefEquipeData]);
+  }, [user?.role]);
+
+  // Kept for the few call sites that still want to refresh chef-équipe-only data
+  // (e.g. after editing a doc type). Delegates to the same merged fetch so there's
+  // still only one code path and no stale/duplicate requests.
+  const loadChefEquipeData = useCallback(async () => {
+    if (!['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')) return;
+    await fetchSuperAdminData();
+  }, [user?.role, fetchSuperAdminData]);
 
   // ── Fetch dashboard data ───────────────────────────────────────────────────────
   // FIX: guard with fetchInFlight ref so concurrent calls collapse into one
@@ -644,15 +652,18 @@ const EnhancedDashboard: React.FC = () => {
         return;
       }
 
-      if (['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')) {
-        await fetchSuperAdminData();
-      }
+      // Super admin batch (7 calls, single Promise.all) + the role-based dashboard
+      // batch below now all fire together rather than super-admin awaiting first.
+      const superAdminPromise = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')
+        ? fetchSuperAdminData()
+        : Promise.resolve();
 
       const [dashRes, deptRes, docStatsRes, docStatusRes] = await Promise.all([
         LocalAPI.get('/dashboard/role-based', { params: filters, timeout: 300_000 }),
         LocalAPI.get('/super-admin/departments').catch(() => ({ data: [] })),
         LocalAPI.get('/dashboard/documents/all-types', { params: filters }).catch(() => ({ data: {} })),
         LocalAPI.get('/dashboard/documents/status-breakdown', { params: filters }).catch(() => ({ data: {} })),
+        superAdminPromise,
       ]);
 
       const ds = docStatsRes.data ?? {};

@@ -504,7 +504,7 @@ export class ContractsService {
     return { alerts, count: alerts.length };
   }
 
-  // Reassign contract to different Chef d'équipe
+  // Reassign contract to different Chef d'équipe or Senior
   async reassignChef(contractId: string, newChefId: string, userId: string) {
     const contract = await this.prisma.contract.findUnique({ 
       where: { id: contractId },
@@ -514,13 +514,23 @@ export class ContractsService {
       throw new NotFoundException('Contract not found');
     }
 
-    // Verify new chef exists and has CHEF_EQUIPE role
+    // Verify new chef exists and has appropriate role
     const newChef = await this.prisma.user.findUnique({ where: { id: newChefId } });
     if (!newChef) {
       throw new NotFoundException('Chef d\'équipe not found');
     }
-    if (newChef.role !== 'CHEF_EQUIPE') {
-      throw new BadRequestException('User is not a Chef d\'équipe');
+    
+    // Validate role-based reassignment rules:
+    // - CHEF_EQUIPE can only reassign to another CHEF_EQUIPE
+    // - GESTIONNAIRE_SENIOR can reassign to either CHEF_EQUIPE or GESTIONNAIRE_SENIOR
+    const validRoles = ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'];
+    if (!validRoles.includes(newChef.role)) {
+      throw new BadRequestException('User must be a Chef d\'équipe or Senior');
+    }
+    
+    // If current team leader is CHEF_EQUIPE, new chef must also be CHEF_EQUIPE
+    if (contract.teamLeader?.role === 'CHEF_EQUIPE' && newChef.role !== 'CHEF_EQUIPE') {
+      throw new BadRequestException('Chef d\'équipe can only be reassigned to another Chef d\'équipe');
     }
 
     const oldChefId = contract.teamLeaderId;
@@ -546,11 +556,60 @@ export class ContractsService {
           oldChefId,
           newChefId,
           oldChefName: contract.teamLeader?.fullName || 'N/A',
-          newChefName: newChef.fullName
+          oldChefRole: contract.teamLeader?.role || 'N/A',
+          newChefName: newChef.fullName,
+          newChefRole: newChef.role
         }
       }
     });
 
+    // Persist reassignment history for this contract (readable list)
+    try {
+      await (this.prisma as any).contractReassignment.create({
+        data: {
+          contractId,
+          performedById: userId,
+          oldChefId: oldChefId || null,
+          newChefId,
+          oldChefName: contract.teamLeader?.fullName || null,
+          oldChefRole: contract.teamLeader?.role || null,
+          newChefName: newChef.fullName,
+          newChefRole: newChef.role
+        }
+      });
+    } catch (err) {
+      // Log but don't block the reassignment if history write fails
+      this.logger.error('Failed to record contract reassignment history', err as any);
+    }
+
     return updated;
+  }
+
+  // Fetch reassignment history records for a contract
+  async getReassignmentHistory(contractId: string) {
+    const records = await (this.prisma as any).contractReassignment.findMany({
+      where: { contractId },
+      include: {
+        performedBy: true,
+        oldChef: true,
+        newChef: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Map to legacy history shape expected by frontend
+    return records.map(r => ({
+      id: r.id,
+      modifiedAt: r.createdAt,
+      changes: {
+        oldChefId: r.oldChefId,
+        newChefId: r.newChefId,
+        oldChefName: r.oldChefName,
+        newChefName: r.newChefName,
+        oldChefRole: r.oldChefRole,
+        newChefRole: r.newChefRole
+      },
+      modifiedBy: r.performedBy ? { id: r.performedBy.id, fullName: r.performedBy.fullName, role: r.performedBy.role } : null
+    }));
   }
 }
