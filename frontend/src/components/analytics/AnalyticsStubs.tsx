@@ -1,3 +1,4 @@
+/*
 // Temporary stub components to fix compilation errors
 import React from 'react';
 import { Box, Typography, CircularProgress } from '@mui/material';
@@ -110,3 +111,5 @@ export default {
   StaffingDashboard,
   ThroughputGapKPI
 };
+*/
+export {};

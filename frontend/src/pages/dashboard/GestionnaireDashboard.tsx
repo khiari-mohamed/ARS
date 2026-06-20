@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+/*import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Alert, Tabs, Progress, Modal, message, notification } from 'antd';
 import { 
   ClockCircleOutlined, 
@@ -769,7 +769,7 @@ const GestionnaireDashboard: React.FC = () => {
         showIcon 
       />
       
-      {/* KPI Cards */}
+     
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card>
@@ -813,7 +813,7 @@ const GestionnaireDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Performance Progress */}
+      
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={12}>
           <Card title="Performance mensuelle">
@@ -854,7 +854,7 @@ const GestionnaireDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* 1. Corbeille Globale Card */}
+    
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={24}>
           <Card title="Corbeille Globale" style={{ background: 'linear-gradient(135deg, #ffebee 0%, #f44336 100%)', border: 'none' }}>
@@ -896,7 +896,7 @@ const GestionnaireDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* 2. Search & Filter Section */}
+      
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={24}>
           <Card title="Recherche & Filtres">
@@ -977,7 +977,7 @@ const GestionnaireDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* 3. Derniers Dossiers Ajoutés */}
+      
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={24}>
           <Card title="Derniers Dossiers Ajoutés">
@@ -1174,7 +1174,6 @@ const GestionnaireDashboard: React.FC = () => {
         </TabPane>
       </Tabs>
 
-      {/* Bulk Actions Modal */}
       <Modal
         title="Actions en lot"
         open={showBulkModal}
@@ -1260,3 +1259,6 @@ const GestionnaireDashboard: React.FC = () => {
 };
 
 export default GestionnaireDashboard;
+*/
+
+export {};

@@ -1,3 +1,4 @@
+/*
 // EXACT 6 virement statuses from specifications
 export type EtatVirement = 
   | 'NON_EXECUTE'              // When bordereau is "Traité"
@@ -115,3 +116,4 @@ export interface FinanceDashboard {
   stats: FinanceDashboardStats;
   ordresVirement: OrdreVirement[];
 }
+  */

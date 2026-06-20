@@ -1,0 +1,12 @@
+The local schema has all relations. Copy it to server:
+
+On Windows (your local machine):
+scp d:/ARS/server/prisma/schema.prisma arsadmin@arshosting:/home/yourapp/server/prisma/schema.prisma
+
+OR manually copy the schema.prisma file content from your local machine to the server.
+
+Then on the server:
+cd /home/yourapp/server
+npx prisma generate
+npm run build
+pm2 restart ars-api

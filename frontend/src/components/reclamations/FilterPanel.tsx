@@ -1,5 +1,6 @@
 import React from 'react';
 import { ReclamationSeverity, ReclamationStatus } from '../../types/reclamation.d';
+import { Box, TextField, MenuItem, Button } from '@mui/material';
 
 interface FilterPanelProps {
   filters: {
@@ -18,6 +19,8 @@ interface FilterPanelProps {
   className?: string;
 }
 
+const NAVY = '#1e3a5f';
+
 export const FilterPanel: React.FC<FilterPanelProps> = ({
   filters,
   onChange,
@@ -26,98 +29,136 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   types,
   className = '',
 }) => {
+  const handleChange = (key: string, value: any) => onChange({ ...filters, [key]: value });
+
+  const statusOptions = ['OPEN', 'IN_PROGRESS', 'ESCALATED', 'PENDING_CLIENT_REPLY', 'RESOLVED', 'CLOSED'];
+
   return (
-    <div className={`reclamations-filter-panel ${className}`}>
-      <label>
-        Client
-        <select
-          value={filters.clientId || ''}
-          onChange={e => onChange({ ...filters, clientId: e.target.value })}
+    <Box
+      className={`reclamations-filter-panel ${className}`}
+      sx={{
+        display: 'grid',
+        gap: 2,
+        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' },
+        alignItems: 'center',
+      }}
+    >
+      <TextField
+        label="Client"
+        size="small"
+        select
+        value={filters.clientId || ''}
+        onChange={(e) => handleChange('clientId', e.target.value)}
+      >
+        <MenuItem value="">Tous</MenuItem>
+        {clients.map((c) => (
+          <MenuItem key={c.id} value={c.id}>
+            {c.name}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      <TextField
+        label="Statut"
+        size="small"
+        select
+        value={filters.status || ''}
+        onChange={(e) => handleChange('status', e.target.value)}
+      >
+        <MenuItem value="">Tous</MenuItem>
+        {statusOptions.map((s) => (
+          <MenuItem key={s} value={s}>
+            {s.replace(/_/g, ' ')}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      <TextField
+        label="Gravité"
+        size="small"
+        select
+        value={filters.severity || ''}
+        onChange={(e) => handleChange('severity', e.target.value)}
+      >
+        <MenuItem value="">Toutes</MenuItem>
+        {['low', 'medium', 'critical'].map((s) => (
+          <MenuItem key={s} value={s}>
+            {s.charAt(0).toUpperCase() + s.slice(1)}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      <TextField
+        label="Type"
+        size="small"
+        select
+        value={filters.type || ''}
+        onChange={(e) => handleChange('type', e.target.value)}
+      >
+        <MenuItem value="">Tous</MenuItem>
+        {types.map((t) => (
+          <MenuItem key={t} value={t}>
+            {t}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      <TextField
+        label="Assigné à"
+        size="small"
+        select
+        value={filters.assignedToId || ''}
+        onChange={(e) => handleChange('assignedToId', e.target.value)}
+      >
+        <MenuItem value="">Tous</MenuItem>
+        {users.map((u) => (
+          <MenuItem key={u.id} value={u.id}>
+            {u.fullName}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      <TextField
+        label="Du"
+        type="date"
+        size="small"
+        InputLabelProps={{ shrink: true }}
+        value={filters.dateFrom || ''}
+        onChange={(e) => handleChange('dateFrom', e.target.value)}
+      />
+
+      <TextField
+        label="Au"
+        type="date"
+        size="small"
+        InputLabelProps={{ shrink: true }}
+        value={filters.dateTo || ''}
+        onChange={(e) => handleChange('dateTo', e.target.value)}
+      />
+
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        <Button
+          size="small"
+          variant="contained"
+          onClick={() => onChange(filters)}
+          sx={{
+            backgroundColor: NAVY,
+            '&:hover': { backgroundColor: '#15294a' },
+            textTransform: 'none',
+            fontWeight: 600,
+          }}
         >
-          <option value="">Tous</option>
-          {clients.map(c => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Statut
-        <select
-          value={filters.status || ''}
-          onChange={e => onChange({ ...filters, status: e.target.value })}
+          Filtrer
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => onChange({})}
+          sx={{ borderColor: NAVY, color: NAVY, textTransform: 'none', fontWeight: 600 }}
         >
-          <option value="">Tous</option>
-          {['OPEN', 'IN_PROGRESS', 'ESCALATED', 'PENDING_CLIENT_REPLY', 'RESOLVED', 'CLOSED'].map(
-            s => (
-              <option key={s} value={s}>
-                {s.replace(/_/g, ' ')}
-              </option>
-            )
-          )}
-        </select>
-      </label>
-      <label>
-        Gravité
-        <select
-          value={filters.severity || ''}
-          onChange={e => onChange({ ...filters, severity: e.target.value })}
-        >
-          <option value="">Toutes</option>
-          {['low', 'medium', 'critical'].map(s => (
-            <option key={s} value={s}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Type
-        <select
-          value={filters.type || ''}
-          onChange={e => onChange({ ...filters, type: e.target.value })}
-        >
-          <option value="">Tous</option>
-          {types.map(t => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Assigné à
-        <select
-          value={filters.assignedToId || ''}
-          onChange={e => onChange({ ...filters, assignedToId: e.target.value })}
-        >
-          <option value="">Tous</option>
-          {users.map(u => (
-            <option key={u.id} value={u.id}>
-              {u.fullName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Du
-        <input
-          type="date"
-          value={filters.dateFrom || ''}
-          onChange={e => onChange({ ...filters, dateFrom: e.target.value })}
-        />
-      </label>
-      <label>
-        Au
-        <input
-          type="date"
-          value={filters.dateTo || ''}
-          onChange={e => onChange({ ...filters, dateTo: e.target.value })}
-        />
-      </label>
-      {/* You can add a filter button if needed */}
-       <button className="filter-btn" onClick={() => onChange(filters)}>Filtrer</button> 
-    </div>
+          Réinitialiser
+        </Button>
+      </Box>
+    </Box>
   );
 };

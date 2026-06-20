@@ -24,23 +24,35 @@ async function cleanAllVirements() {
     const suiviCount = await prisma.suiviVirement.deleteMany({});
     console.log(`   ✅ Deleted ${suiviCount.count} suivi virement records`);
     
-    console.log('5️⃣ Deleting OrdreVirement...');
+    console.log('5️⃣ Deleting VirementHistory...');
+    const virHistCount = await prisma.virementHistory.deleteMany({});
+    console.log(`   ✅ Deleted ${virHistCount.count} virement history records`);
+    
+    console.log('6️⃣ Deleting SageTxtGeneration...');
+    const sageTxtCount = await prisma.sageTxtGeneration.deleteMany({});
+    console.log(`   ✅ Deleted ${sageTxtCount.count} sage txt generation records`);
+    
+    console.log('7️⃣ Deleting SageIntegration...');
+    const sageIntCount = await prisma.sageIntegration.deleteMany({});
+    console.log(`   ✅ Deleted ${sageIntCount.count} sage integration records`);
+    
+    console.log('8️⃣ Deleting OrdreVirement...');
     const ovCount = await prisma.ordreVirement.deleteMany({});
     console.log(`   ✅ Deleted ${ovCount.count} ordre virement records`);
     
-    console.log('6️⃣ Deleting Virement (legacy)...');
+    console.log('9️⃣ Deleting Virement (legacy)...');
     const virCount = await prisma.virement.deleteMany({});
     console.log(`   ✅ Deleted ${virCount.count} legacy virement records`);
     
-    console.log('7️⃣ Deleting WireTransfer...');
+    console.log('🔟 Deleting WireTransfer...');
     const wireCount = await prisma.wireTransfer.deleteMany({});
     console.log(`   ✅ Deleted ${wireCount.count} wire transfer records`);
     
-    console.log('8️⃣ Deleting WireTransferBatch...');
+    console.log('1️⃣1️⃣ Deleting WireTransferBatch...');
     const batchCount = await prisma.wireTransferBatch.deleteMany({});
     console.log(`   ✅ Deleted ${batchCount.count} wire transfer batch records`);
     
-    console.log('9️⃣ Deleting WireTransferBatchHistory...');
+    console.log('1️⃣2️⃣ Deleting WireTransferBatchHistory...');
     const batchHistCount = await prisma.wireTransferBatchHistory.deleteMany({});
     console.log(`   ✅ Deleted ${batchHistCount.count} batch history records`);
     
@@ -50,6 +62,9 @@ async function cleanAllVirements() {
     console.log(`   - VirementItem: ${itemCount.count}`);
     console.log(`   - OVDocument: ${docCount.count}`);
     console.log(`   - SuiviVirement: ${suiviCount.count}`);
+    console.log(`   - VirementHistory: ${virHistCount.count}`);
+    console.log(`   - SageTxtGeneration: ${sageTxtCount.count}`);
+    console.log(`   - SageIntegration: ${sageIntCount.count}`);
     console.log(`   - OrdreVirement: ${ovCount.count}`);
     console.log(`   - Virement (legacy): ${virCount.count}`);
     console.log(`   - WireTransfer: ${wireCount.count}`);
@@ -60,6 +75,9 @@ async function cleanAllVirements() {
       itemCount.count + 
       docCount.count + 
       suiviCount.count + 
+      virHistCount.count + 
+      sageTxtCount.count + 
+      sageIntCount.count + 
       ovCount.count + 
       virCount.count + 
       wireCount.count + 

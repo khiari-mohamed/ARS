@@ -65,7 +65,7 @@ export class ChefEquipeTableauBordController {
       }
     });
 
-    // ✅ FIX: Fetch ALL gestionnaires (including those with 0 documents)
+    // âœ… FIX: Fetch ALL gestionnaires (including those with 0 documents)
     let gestionnaireFilter: any = { role: 'GESTIONNAIRE', active: true };
     if (req.user?.role === 'CHEF_EQUIPE') {
       gestionnaireFilter.teamLeaderId = req.user.id;
@@ -77,10 +77,10 @@ export class ChefEquipeTableauBordController {
 
     const typeMapping = {
       'BULLETIN_SOIN': 'Prestation',
-      'ADHESION': 'Adhésion', 
-      'COMPLEMENT_INFORMATION': 'Complément Dossier',
+      'ADHESION': 'AdhÃ©sion', 
+      'COMPLEMENT_INFORMATION': 'ComplÃ©ment Dossier',
       'CONTRAT_AVENANT': 'Avenant',
-      'RECLAMATION': 'Réclamation'
+      'RECLAMATION': 'RÃ©clamation'
     };
 
     const types = {};
@@ -94,18 +94,18 @@ export class ChefEquipeTableauBordController {
         gestionnaireBreakdown: {}
       };
       
-      // ✅ FIX: Initialize ALL gestionnaires with 0 count
+      // âœ… FIX: Initialize ALL gestionnaires with 0 count
       allGestionnaires.forEach(g => {
         types[type].gestionnaireBreakdown[g.fullName] = 0;
       });
-      types[type].gestionnaireBreakdown['Non assigné'] = 0;
+      types[type].gestionnaireBreakdown['Non assignÃ©'] = 0;
     });
 
     documents.forEach(doc => {
       if (!doc.bordereau) return;
       const typeName = typeMapping[doc.type] || 'Prestation';
       const clientName = doc.bordereau.client?.name || 'Unknown';
-      const gestionnaireName = doc.assignedTo?.fullName || 'Non assigné';
+      const gestionnaireName = doc.assignedTo?.fullName || 'Non assignÃ©';
       
       types[typeName].total++;
       
@@ -136,7 +136,7 @@ export class ChefEquipeTableauBordController {
   async getDerniersDossiers(@Req() req: any) {
     const accessFilter = this.buildAccessFilter(req.user);
     
-    // For gestionnaires, get ALL bordereaux from their chef d'équipe
+    // For gestionnaires, get ALL bordereaux from their chef d'Ã©quipe
     let bordereaux;
     if (req.user?.role === 'GESTIONNAIRE') {
       // Get gestionnaire's team leader
@@ -146,7 +146,7 @@ export class ChefEquipeTableauBordController {
       });
       
       if (gestionnaire?.teamLeaderId) {
-        // Get ALL bordereaux managed by their chef d'équipe
+        // Get ALL bordereaux managed by their chef d'Ã©quipe
         bordereaux = await this.prisma.bordereau.findMany({
           where: { 
             archived: false,
@@ -227,18 +227,18 @@ export class ChefEquipeTableauBordController {
       // TRAITE = 100%, all other statuses = 0%
       const completionPercentage = totalDocuments > 0 ? Math.round((traitedDocuments / totalDocuments) * 100) : 0;
       
-      // Get document types (show document types like "Bulletin de Soin", "Adhésion", etc.)
+      // Get document types (show document types like "Bulletin de Soin", "AdhÃ©sion", etc.)
       const documentTypes = [...new Set(bordereau.documents.map(doc => this.getDocumentTypeLabel(doc.type)))].join(', ');
       
       // Get document states with counts
       const states: string[] = [];
-      if (traitedDocuments > 0) states.push(`Traité ${traitedDocuments}/${totalDocuments}`);
+      if (traitedDocuments > 0) states.push(`TraitÃ© ${traitedDocuments}/${totalDocuments}`);
       if (enCoursDocuments > 0) states.push(`En cours ${enCoursDocuments}/${totalDocuments}`);
-      if (scanneDocuments > 0) states.push(`Scanné ${scanneDocuments}/${totalDocuments}`);
+      if (scanneDocuments > 0) states.push(`ScannÃ© ${scanneDocuments}/${totalDocuments}`);
       if (uploadedDocuments > 0) states.push(`Nouveau ${uploadedDocuments}/${totalDocuments}`);
       
       // Determine handler with priority: assignedTo > teamLeader > currentHandler
-      let gestionnaireDisplay = 'Non assigné';
+      let gestionnaireDisplay = 'Non assignÃ©';
       let gestionnaireRole: string | null = null;
       
       const assignedGestionnaires = [...new Set(
@@ -286,8 +286,8 @@ export class ChefEquipeTableauBordController {
       switch (statut) {
         case 'Nouveau': return ['EN_ATTENTE', 'UPLOADED', 'A_SCANNER'];
         case 'En cours': return ['EN_COURS', 'ASSIGNE', 'SCAN_EN_COURS', 'A_AFFECTER', 'SCANNE'];
-        case 'Traité': return ['TRAITE'];
-        case 'Retourné': return ['REJETE', 'RETOUR_ADMIN'];
+        case 'TraitÃ©': return ['TRAITE'];
+        case 'RetournÃ©': return ['REJETE', 'RETOUR_ADMIN'];
         default: return ['EN_COURS', 'ASSIGNE', 'SCAN_EN_COURS', 'A_AFFECTER', 'SCANNE'];
       }
     };
@@ -299,10 +299,10 @@ export class ChefEquipeTableauBordController {
     if (req.user?.role === 'GESTIONNAIRE') {
       const typeMapping = {
         'Prestation': 'BULLETIN_SOIN',
-        'Adhésion': 'ADHESION',
-        'Complément Dossier': 'COMPLEMENT_INFORMATION',
+        'AdhÃ©sion': 'ADHESION',
+        'ComplÃ©ment Dossier': 'COMPLEMENT_INFORMATION',
         'Avenant': 'CONTRAT_AVENANT',
-        'Réclamation': 'RECLAMATION'
+        'RÃ©clamation': 'RECLAMATION'
       };
       
       const where: any = {
@@ -347,10 +347,10 @@ export class ChefEquipeTableauBordController {
       if (typeFilter && typeFilter !== 'Tous types') {
         const typeMapping = {
           'Prestation': 'BULLETIN_SOIN',
-          'Adhésion': 'ADHESION',
-          'Complément Dossier': 'COMPLEMENT_INFORMATION',
+          'AdhÃ©sion': 'ADHESION',
+          'ComplÃ©ment Dossier': 'COMPLEMENT_INFORMATION',
           'Avenant': 'CONTRAT_AVENANT',
-          'Réclamation': 'RECLAMATION'
+          'RÃ©clamation': 'RECLAMATION'
         };
         
         bordereaux = await this.prisma.bordereau.findMany({
@@ -410,14 +410,14 @@ export class ChefEquipeTableauBordController {
       
       const completionPercentage = totalDocuments > 0 ? Math.round((traitedDocuments / totalDocuments) * 100) : 0;
       
-      // Get document types (show document types like "Prestation", "Adhésion", etc.)
+      // Get document types (show document types like "Prestation", "AdhÃ©sion", etc.)
       const documentTypes = [...new Set(bordereau.documents.map(doc => this.getDocumentTypeLabel(doc.type)))].join(', ');
       
       // Get document states with counts
       const states: string[] = [];
-      if (traitedDocuments > 0) states.push(`Traité ${traitedDocuments}/${totalDocuments}`);
+      if (traitedDocuments > 0) states.push(`TraitÃ© ${traitedDocuments}/${totalDocuments}`);
       if (enCoursDocuments > 0) states.push(`En cours ${enCoursDocuments}/${totalDocuments}`);
-      if (scanneDocuments > 0) states.push(`Scanné ${scanneDocuments}/${totalDocuments}`);
+      if (scanneDocuments > 0) states.push(`ScannÃ© ${scanneDocuments}/${totalDocuments}`);
       if (uploadedDocuments > 0) states.push(`Nouveau ${uploadedDocuments}/${totalDocuments}`);
       
       return {
@@ -428,7 +428,7 @@ export class ChefEquipeTableauBordController {
         statut: this.getStatutLabel(bordereau.statut),
         joursEnCours,
         priorite: this.calculatePriorite(bordereau),
-        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+        gestionnaire: bordereau.currentHandler?.fullName || 'Non assignÃ©',
         completionPercentage,
         dossierStates: states.length > 0 ? states : ['Nouveau']
       };
@@ -479,7 +479,7 @@ export class ChefEquipeTableauBordController {
       client: doc.bordereau?.client?.name || 'N/A',
       type: doc.name || this.getDocumentTypeLabel(doc.type),
       statut: this.getDocumentStatusLabel(doc.status || undefined),
-      gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+      gestionnaire: doc.assignedTo?.fullName || 'Non assignÃ©',
       date: this.getRelativeTime(doc.uploadedAt),
       joursEnCours: Math.floor((new Date().getTime() - new Date(doc.uploadedAt).getTime()) / (1000 * 60 * 60 * 24)),
       priorite: this.calculateDocumentPriorite(doc)
@@ -496,16 +496,16 @@ export class ChefEquipeTableauBordController {
       });
       
       if (!document || document.assignedToUserId !== req.user.id) {
-        throw new Error('Accès refusé: Ce dossier ne vous est pas assigné');
+        throw new Error('AccÃ¨s refusÃ©: Ce dossier ne vous est pas assignÃ©');
       }
     }
     
     const typeMapping = {
       'Prestation': 'BULLETIN_SOIN',
-      'Adhésion': 'ADHESION',
-      'Complément Dossier': 'COMPLEMENT_INFORMATION',
+      'AdhÃ©sion': 'ADHESION',
+      'ComplÃ©ment Dossier': 'COMPLEMENT_INFORMATION',
       'Avenant': 'CONTRAT_AVENANT',
-      'Réclamation': 'RECLAMATION'
+      'RÃ©clamation': 'RECLAMATION'
     };
 
     const document = await this.prisma.document.findUnique({
@@ -513,7 +513,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (!document) {
-      throw new Error('Dossier non trouvé');
+      throw new Error('Dossier non trouvÃ©');
     }
 
     // Update document type
@@ -528,11 +528,11 @@ export class ChefEquipeTableauBordController {
         documentId: body.dossierId,
         assignedByUserId: req.user?.id,
         action: 'TYPE_CHANGED',
-        reason: `Type changé vers: ${body.newType}`
+        reason: `Type changÃ© vers: ${body.newType}`
       }
     });
 
-    return { success: true, message: 'Type de dossier modifié avec succès' };
+    return { success: true, message: 'Type de dossier modifiÃ© avec succÃ¨s' };
   }
 
   @Post('return-to-scan')
@@ -620,7 +620,7 @@ export class ChefEquipeTableauBordController {
           }
         }
       } else {
-        throw new Error('Bordereau non trouvé');
+        throw new Error('Bordereau non trouvÃ©');
       }
     }
 
@@ -634,8 +634,8 @@ export class ChefEquipeTableauBordController {
         data: {
           userId: user.id,
           type: 'DOSSIER_RETURNED_TO_SCAN',
-          title: 'Dossier retourné pour re-scan',
-          message: `Dossier retourné par le chef d'équipe: ${body.reason}`,
+          title: 'Dossier retournÃ© pour re-scan',
+          message: `Dossier retournÃ© par le chef d'Ã©quipe: ${body.reason}`,
           data: { dossierId: body.dossierId, reason: body.reason }
         }
       });
@@ -656,7 +656,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (!document) {
-      throw new Error('Dossier non trouvé');
+      throw new Error('Dossier non trouvÃ©');
     }
 
     return {
@@ -665,7 +665,7 @@ export class ChefEquipeTableauBordController {
       client: document.bordereau?.client?.name || 'N/A',
       dateReception: document.uploadedAt,
       statut: this.getDocumentStatusLabel(document.status || undefined),
-      gestionnaire: document.assignedTo?.fullName || 'Non assigné',
+      gestionnaire: document.assignedTo?.fullName || 'Non assignÃ©',
       documents: [{
         id: document.id,
         type: this.getDocumentTypeLabel(document.type),
@@ -687,7 +687,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (!bordereau) {
-      throw new Error('Dossier non trouvé');
+      throw new Error('Dossier non trouvÃ©');
     }
 
     // Log the download action
@@ -695,7 +695,7 @@ export class ChefEquipeTableauBordController {
       data: {
         bordereauId: bordereau.id,
         action: 'DOSSIER_DOWNLOADED',
-        details: `Dossier téléchargé - ${bordereau.documents.length} documents`,
+        details: `Dossier tÃ©lÃ©chargÃ© - ${bordereau.documents.length} documents`,
         timestamp: new Date()
       }
     });
@@ -715,7 +715,7 @@ export class ChefEquipeTableauBordController {
       client: bordereau.client?.name || 'N/A',
       dateReception: bordereau.dateReception,
       statut: this.getStatutLabel(bordereau.statut),
-      gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+      gestionnaire: bordereau.currentHandler?.fullName || 'Non assignÃ©',
       delaiReglement: bordereau.delaiReglement,
       joursEnCours: Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)),
       priorite: this.calculatePriorite(bordereau),
@@ -757,7 +757,7 @@ export class ChefEquipeTableauBordController {
 
     // If no documents, add info file
     if (bordereau.documents.length === 0) {
-      archive.append('Aucun document attaché à ce bordereau.', { name: 'aucun-document.txt' });
+      archive.append('Aucun document attachÃ© Ã  ce bordereau.', { name: 'aucun-document.txt' });
     }
 
     archive.finalize();
@@ -766,22 +766,22 @@ export class ChefEquipeTableauBordController {
   private getDocumentTypeLabel(type?: string): string {
     const mapping: Record<string, string> = {
       'BULLETIN_SOIN': 'Prestation',
-      'ADHESION': 'Adhésion',
-      'COMPLEMENT_INFORMATION': 'Complément Dossier',
+      'ADHESION': 'AdhÃ©sion',
+      'COMPLEMENT_INFORMATION': 'ComplÃ©ment Dossier',
       'CONTRAT_AVENANT': 'Avenant',
-      'RECLAMATION': 'Réclamation'
+      'RECLAMATION': 'RÃ©clamation'
     };
     return mapping[type || ''] || 'Prestation';
   }
 
   private getStatutLabel(statut: string): string {
     const mapping = {
-      'A_SCANNER': 'À scanner',
+      'A_SCANNER': 'Ã€ scanner',
       'SCAN_EN_COURS': 'En cours de Scan',
-      'SCANNE': 'Scan Finalisé',
+      'SCANNE': 'Scan FinalisÃ©',
       'EN_COURS': 'En cours de traitement',
-      'TRAITE': 'Traité',
-      'CLOTURE': 'Réglé'
+      'TRAITE': 'TraitÃ©',
+      'CLOTURE': 'RÃ©glÃ©'
     };
     return mapping[statut] || statut;
   }
@@ -790,7 +790,7 @@ export class ChefEquipeTableauBordController {
     const joursEnCours = Math.floor((new Date().getTime() - new Date(bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24));
     const delai = bordereau.delaiReglement || 30;
     
-    if (joursEnCours > delai) return 'Très';
+    if (joursEnCours > delai) return 'TrÃ¨s';
     if (joursEnCours > delai * 0.8) return 'Moyenne';
     return 'Normale';
   }
@@ -802,15 +802,15 @@ export class ChefEquipeTableauBordController {
     const documentStatusMapping = {
       'Nouveau': 'UPLOADED',
       'En cours': 'EN_COURS',
-      'Traité': 'TRAITE',
-      'Rejeté': 'REJETE',
-      'Retourné': 'RETOUR_ADMIN'
+      'TraitÃ©': 'TRAITE',
+      'RejetÃ©': 'REJETE',
+      'RetournÃ©': 'RETOUR_ADMIN'
     };
 
     const bordereauxStatusMapping = {
       'Nouveau': 'EN_ATTENTE',
       'En cours': 'EN_COURS',
-      'Traité': 'TRAITE'
+      'TraitÃ©': 'TRAITE'
     };
 
     // For GESTIONNAIRE_SENIOR, try bordereau first (they work with bordereaux)
@@ -825,7 +825,7 @@ export class ChefEquipeTableauBordController {
           where: { id: body.dossierId },
           data: { statut: bordereauxStatusMapping[body.newStatus] as any }
         });
-        return { success: true, message: 'Statut du bordereau modifié avec succès' };
+        return { success: true, message: 'Statut du bordereau modifiÃ© avec succÃ¨s' };
       }
     }
 
@@ -839,7 +839,7 @@ export class ChefEquipeTableauBordController {
       // Check if gestionnaire can modify this document (not for GESTIONNAIRE_SENIOR)
       if (req.user?.role === 'GESTIONNAIRE') {
         if (document.assignedToUserId !== req.user.id) {
-          return { success: false, message: 'Accès refusé: Ce document ne vous est pas assigné' };
+          return { success: false, message: 'AccÃ¨s refusÃ©: Ce document ne vous est pas assignÃ©' };
         }
         
         // REMOVED: statusModifiedByGestionnaire check - gestionnaires can now modify after reassignment
@@ -861,7 +861,7 @@ export class ChefEquipeTableauBordController {
         await this.updateBordereauStatusBasedOnDocuments(document.bordereauId);
       }
 
-      // ✅ NEW: Auto-complete bordereau if ALL documents are TRAITE
+      // âœ… NEW: Auto-complete bordereau if ALL documents are TRAITE
       if (document.bordereauId && documentStatusMapping[body.newStatus] === 'TRAITE') {
         try {
           // Get all documents in this bordereau
@@ -872,12 +872,12 @@ export class ChefEquipeTableauBordController {
           const totalDocs = allDocuments.length;
           const traitesDocs = allDocuments.filter(d => d.status === 'TRAITE').length;
           
-         // console.log(`🔍 Checking bordereau completion: { documentId: ${body.dossierId}, newStatus: ${body.newStatus}, bordereauId: ${document.bordereauId} }`);
-         // console.log(`📊 Bordereau ${document.bordereauId}: ${traitesDocs}/${totalDocs} documents TRAITE`);
+         // console.log(`ðŸ” Checking bordereau completion: { documentId: ${body.dossierId}, newStatus: ${body.newStatus}, bordereauId: ${document.bordereauId} }`);
+         // console.log(`ðŸ“Š Bordereau ${document.bordereauId}: ${traitesDocs}/${totalDocs} documents TRAITE`);
           
-          // If ALL documents are TRAITE → Auto-update bordereau
+          // If ALL documents are TRAITE â†’ Auto-update bordereau
           if (totalDocs > 0 && traitesDocs === totalDocs) {
-           // console.log(`✅ All documents TRAITE! Auto-updating bordereau status...`);
+           // console.log(`âœ… All documents TRAITE! Auto-updating bordereau status...`);
             await this.prisma.bordereau.update({
               where: { id: document.bordereauId },
               data: {
@@ -885,15 +885,15 @@ export class ChefEquipeTableauBordController {
                 dateCloture: new Date()
               }
             });
-           // console.log(`✅ Bordereau ${document.bordereauId} automatically marked as TRAITE with dateCloture: ${new Date().toISOString()}`);
+           // console.log(`âœ… Bordereau ${document.bordereauId} automatically marked as TRAITE with dateCloture: ${new Date().toISOString()}`);
           }
         } catch (borderError) {
-          console.error('❌ Failed to auto-complete bordereau:', borderError);
+          console.error('âŒ Failed to auto-complete bordereau:', borderError);
         }
       }
 
-      // If gestionnaire returns a document, create history and notify chef d'équipe
-      if (req.user?.role === 'GESTIONNAIRE' && body.newStatus === 'Retourné') {
+      // If gestionnaire returns a document, create history and notify chef d'Ã©quipe
+      if (req.user?.role === 'GESTIONNAIRE' && body.newStatus === 'RetournÃ©') {
         // Create assignment history
         if (req.user?.id) {
           await this.prisma.documentAssignmentHistory.create({
@@ -901,12 +901,12 @@ export class ChefEquipeTableauBordController {
               documentId: body.dossierId,
               assignedByUserId: req.user.id,
               action: 'RETURNED',
-              reason: `Retourné par ${req.user.fullName || 'Gestionnaire'}`
+              reason: `RetournÃ© par ${req.user.fullName || 'Gestionnaire'}`
             }
           });
         }
 
-        // Notify chef d'équipe
+        // Notify chef d'Ã©quipe
         const gestionnaire = await this.prisma.user.findUnique({
           where: { id: req.user.id },
           select: { teamLeaderId: true, fullName: true }
@@ -917,8 +917,8 @@ export class ChefEquipeTableauBordController {
             data: {
               userId: gestionnaire.teamLeaderId,
               type: 'DOCUMENT_RETURNED',
-              title: 'Document retourné par gestionnaire',
-              message: `${gestionnaire.fullName} a retourné le document ${document.name} (${document.bordereau?.client?.name || 'N/A'})`,
+              title: 'Document retournÃ© par gestionnaire',
+              message: `${gestionnaire.fullName} a retournÃ© le document ${document.name} (${document.bordereau?.client?.name || 'N/A'})`,
               data: { 
                 documentId: body.dossierId, 
                 gestionnaireName: gestionnaire.fullName,
@@ -930,7 +930,7 @@ export class ChefEquipeTableauBordController {
         }
       }
 
-      return { success: true, message: 'Statut modifié avec succès' };
+      return { success: true, message: 'Statut modifiÃ© avec succÃ¨s' };
     }
 
     // If not found as document, try as bordereau
@@ -941,7 +941,7 @@ export class ChefEquipeTableauBordController {
     if (bordereau) {
       // Regular Gestionnaires cannot modify bordereau status directly (but GESTIONNAIRE_SENIOR can)
       if (req.user?.role === 'GESTIONNAIRE') {
-        return { success: false, message: 'Accès refusé: Les gestionnaires ne peuvent modifier que les documents individuels' };
+        return { success: false, message: 'AccÃ¨s refusÃ©: Les gestionnaires ne peuvent modifier que les documents individuels' };
       }
       
       // Update bordereau status
@@ -949,17 +949,17 @@ export class ChefEquipeTableauBordController {
         where: { id: body.dossierId },
         data: { statut: bordereauxStatusMapping[body.newStatus] as any }
       });
-      return { success: true, message: 'Statut modifié avec succès' };
+      return { success: true, message: 'Statut modifiÃ© avec succÃ¨s' };
     }
 
-    return { success: false, message: 'Document ou bordereau non trouvé' };
+    return { success: false, message: 'Document ou bordereau non trouvÃ©' };
   }
 
   @Get('dossier-pdf/:dossierId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDossierPDF(@Param('dossierId') dossierId: string, @Req() req: any) {
-    // console.log(`🔍 Looking for document ID: ${dossierId}`);
+    // console.log(`ðŸ” Looking for document ID: ${dossierId}`);
     
     const document = await this.prisma.document.findUnique({
       where: { id: dossierId },
@@ -969,15 +969,15 @@ export class ChefEquipeTableauBordController {
     });
 
     if (!document) {
-      // console.log(`❌ Document not found: ${dossierId}`);
+      // console.log(`âŒ Document not found: ${dossierId}`);
       return { 
         success: false, 
-        error: 'Document non trouvé',
+        error: 'Document non trouvÃ©',
         hasDocument: false
       };
     }
     
-    // console.log(`✅ Found document: ${document.name}, path: ${document.path}`);
+    // console.log(`âœ… Found document: ${document.name}, path: ${document.path}`);
 
     // Check if document has a valid file path
     if (!document.path || document.path.includes('placeholder')) {
@@ -993,7 +993,7 @@ export class ChefEquipeTableauBordController {
     const pdfUrl = `/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/${cleanPath}`;
 
     // Return PDF URL or path for viewing
-    // console.log(`📄 Returning PDF URL: ${pdfUrl}`);
+    // console.log(`ðŸ“„ Returning PDF URL: ${pdfUrl}`);
     return {
       success: true,
       pdfUrl: pdfUrl,
@@ -1027,49 +1027,53 @@ export class ChefEquipeTableauBordController {
       }
       
       if (!fullPath) {
-        // console.log('❌ No file path provided');
+        // console.log('âŒ No file path provided');
         return res.status(400).json({ error: 'Invalid file path' });
       }
       
-      // console.log(`📄 Attempting to serve file from path: ${fullPath}`);
+      // console.log(`ðŸ“„ Attempting to serve file from path: ${fullPath}`);
       
       const filename = path.basename(fullPath);
-      // console.log(`📄 Extracted filename: ${filename}`);
+      // console.log(`ðŸ“„ Extracted filename: ${filename}`);
       
       const foundPath = await this.findFileInUploads(filename);
       
       if (foundPath) {
-        // console.log(`✅ Found file at: ${foundPath}`);
+        // console.log(`âœ… Found file at: ${foundPath}`);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Accept-Ranges', 'bytes');
         return res.sendFile(foundPath);
       } else {
-        // console.log(`❌ File not found: ${filename}`);
+        // console.log(`âŒ File not found: ${filename}`);
         return res.status(404).json({ error: 'File not found' });
       }
     } catch (error) {
-      console.error('❌ Error in servePDF:', error);
+      console.error('âŒ Error in servePDF:', error);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
 
   private async findFileInUploads(filename: string): Promise<string | null> {
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    
+    // Search in BOTH upload directories (old and new)
+    const uploadsDirs = [
+      path.join(process.cwd(), 'uploads'),           // New: /home/yourapp/server/uploads
+      '/home/yourapp/uploads'                         // Old: /home/yourapp/uploads
+    ];
+
     const searchInDirectory = (dir: string): string | null => {
       if (!fs.existsSync(dir)) return null;
-      
+
       try {
         const items = fs.readdirSync(dir, { withFileTypes: true });
-        
+
         for (const item of items) {
           if (item.isFile() && (item.name === filename || item.name.endsWith('_' + filename))) {
             return path.join(dir, item.name);
           }
         }
-        
+
         for (const item of items) {
           if (item.isDirectory()) {
             const found = searchInDirectory(path.join(dir, item.name));
@@ -1079,11 +1083,17 @@ export class ChefEquipeTableauBordController {
       } catch (error) {
         // console.log(`Error reading directory ${dir}:`, error.message);
       }
-      
+
       return null;
     };
-    
-    return searchInDirectory(uploadsDir);
+
+    // Try each uploads directory
+    for (const uploadsDir of uploadsDirs) {
+      const result = searchInDirectory(uploadsDir);
+      if (result) return result;
+    }
+
+    return null;
   }
 
   @Get('download-info/:bordereauId')
@@ -1095,7 +1105,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (!bordereau) {
-      throw new Error('Dossier non trouvé');
+      throw new Error('Dossier non trouvÃ©');
     }
 
     return {
@@ -1125,7 +1135,7 @@ export class ChefEquipeTableauBordController {
     
     let documents;
     
-    // For gestionnaires, show ALL documents from their chef d'équipe's bordereaux
+    // For gestionnaires, show ALL documents from their chef d'Ã©quipe's bordereaux
     if (req.user?.role === 'GESTIONNAIRE') {
       // Get gestionnaire's team leader
       const gestionnaire = await this.prisma.user.findUnique({
@@ -1134,7 +1144,7 @@ export class ChefEquipeTableauBordController {
       });
       
       if (gestionnaire?.teamLeaderId) {
-        // Get ALL documents from bordereaux managed by their chef d'équipe
+        // Get ALL documents from bordereaux managed by their chef d'Ã©quipe
         documents = await this.prisma.document.findMany({
           where: {
             bordereau: {
@@ -1217,9 +1227,9 @@ export class ChefEquipeTableauBordController {
       // Determine gestionnaire with priority order:
       // 1. assignedTo (regular gestionnaire)
       // 2. contract.teamLeader (Gestionnaire Senior)
-      // 3. bordereau.currentHandler (Chef d'équipe, Responsable, etc.)
-      // 4. "Non assigné" (truly unassigned)
-      let gestionnaireDisplay = 'Non assigné';
+      // 3. bordereau.currentHandler (Chef d'Ã©quipe, Responsable, etc.)
+      // 4. "Non assignÃ©" (truly unassigned)
+      let gestionnaireDisplay = 'Non assignÃ©';
       
       if (doc.assignedTo) {
         // Priority 1: Regular gestionnaire assigned
@@ -1230,11 +1240,11 @@ export class ChefEquipeTableauBordController {
         if (teamLeader.role === 'GESTIONNAIRE_SENIOR') {
           gestionnaireDisplay = teamLeader.fullName;
         } else {
-          // Team leader exists but is not a senior (could be Chef d'équipe)
+          // Team leader exists but is not a senior (could be Chef d'Ã©quipe)
           gestionnaireDisplay = teamLeader.fullName;
         }
       } else if (doc.bordereau?.currentHandler) {
-        // Priority 3: Check currentHandler (Chef d'équipe, Responsable, etc.)
+        // Priority 3: Check currentHandler (Chef d'Ã©quipe, Responsable, etc.)
         gestionnaireDisplay = doc.bordereau.currentHandler.fullName;
       }
       
@@ -1338,10 +1348,10 @@ export class ChefEquipeTableauBordController {
   @Get('gestionnaire-assignments-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireAssignmentsDossiers(@Req() req: any) {
-    // console.log('🔍 [BACKEND] Getting gestionnaire assignments dossiers...');
+    // console.log('ðŸ” [BACKEND] Getting gestionnaire assignments dossiers...');
     const accessFilter = this.buildAccessFilter(req.user);
     
-    // ✅ FIX: Filter gestionnaires based on user role AND active status
+    // âœ… FIX: Filter gestionnaires based on user role AND active status
     let gestionnaireFilter: any = { role: 'GESTIONNAIRE', active: true };
     
     // If user is CHEF_EQUIPE, only show gestionnaires in their team
@@ -1354,7 +1364,7 @@ export class ChefEquipeTableauBordController {
       gestionnaireFilter.id = req.user.id;
     }
     
-    // ✅ FIX: Fetch ALL gestionnaires first (including those with 0 documents)
+    // âœ… FIX: Fetch ALL gestionnaires first (including those with 0 documents)
     const gestionnaires = await this.prisma.user.findMany({
       where: gestionnaireFilter,
       select: {
@@ -1365,7 +1375,7 @@ export class ChefEquipeTableauBordController {
 
     const assignments = await Promise.all(
       gestionnaires.map(async (gestionnaire) => {
-        // ✅ FIX: Fetch documents separately for each gestionnaire
+        // âœ… FIX: Fetch documents separately for each gestionnaire
         const assignedDocuments = await this.prisma.document.findMany({
           where: {
             assignedToUserId: gestionnaire.id,
@@ -1423,7 +1433,7 @@ export class ChefEquipeTableauBordController {
       })
     );
 
-    // console.log('🔍 [BACKEND] Returning assignments:', assignments.length, 'gestionnaires (filtered from', gestionnaires.length, 'total)');
+    // console.log('ðŸ” [BACKEND] Returning assignments:', assignments.length, 'gestionnaires (filtered from', gestionnaires.length, 'total)');
     return assignments;
   }
 
@@ -1440,10 +1450,10 @@ export class ChefEquipeTableauBordController {
     if (typeFilter && typeFilter !== 'Tous types') {
       const typeMapping = {
         'Prestation': 'BULLETIN_SOIN',
-        'Adhésion': 'ADHESION',
-        'Complément Dossier': 'COMPLEMENT_INFORMATION',
+        'AdhÃ©sion': 'ADHESION',
+        'ComplÃ©ment Dossier': 'COMPLEMENT_INFORMATION',
         'Avenant': 'CONTRAT_AVENANT',
-        'Réclamation': 'RECLAMATION'
+        'RÃ©clamation': 'RECLAMATION'
       };
       where.type = typeMapping[typeFilter];
     }
@@ -1459,15 +1469,15 @@ export class ChefEquipeTableauBordController {
 
     // Prepare Excel data
     const excelData = documents.map(doc => ({
-      'Référence Dossier': doc.bordereau?.reference || doc.id,
+      'RÃ©fÃ©rence Dossier': doc.bordereau?.reference || doc.id,
       'Client': doc.bordereau?.client?.name || 'N/A',
       'Type': this.getDocumentTypeLabel(doc.type),
-      'Date Réception': new Date(doc.uploadedAt).toLocaleDateString('fr-FR'),
+      'Date RÃ©ception': new Date(doc.uploadedAt).toLocaleDateString('fr-FR'),
       'Jours en Cours': Math.floor((new Date().getTime() - new Date(doc.uploadedAt).getTime()) / (1000 * 60 * 60 * 24)),
-      'Priorité': this.calculateDocumentPriorite(doc),
-      'Gestionnaire': doc.assignedTo?.fullName || 'Non assigné',
+      'PrioritÃ©': this.calculateDocumentPriorite(doc),
+      'Gestionnaire': doc.assignedTo?.fullName || 'Non assignÃ©',
       'Statut': this.getDocumentStatusLabel(doc.status || undefined),
-      'Délai Règlement': 30,
+      'DÃ©lai RÃ¨glement': 30,
       'Date Export': new Date().toLocaleDateString('fr-FR')
     }));
 
@@ -1477,15 +1487,15 @@ export class ChefEquipeTableauBordController {
 
     // Set column widths
     const colWidths = [
-      { wch: 20 }, // Référence Dossier
+      { wch: 20 }, // RÃ©fÃ©rence Dossier
       { wch: 25 }, // Client
       { wch: 20 }, // Type
-      { wch: 15 }, // Date Réception
+      { wch: 15 }, // Date RÃ©ception
       { wch: 15 }, // Jours en Cours
-      { wch: 12 }, // Priorité
+      { wch: 12 }, // PrioritÃ©
       { wch: 20 }, // Gestionnaire
       { wch: 15 }, // Statut
-      { wch: 15 }, // Délai Règlement
+      { wch: 15 }, // DÃ©lai RÃ¨glement
       { wch: 15 }  // Date Export
     ];
     ws['!cols'] = colWidths;
@@ -1528,12 +1538,12 @@ export class ChefEquipeTableauBordController {
   private getDocumentStatusLabel(status?: string): string {
     const mapping = {
       'UPLOADED': 'Nouveau',
-      'SCANNE': 'Scanné',
-      'ASSIGNE': 'Assigné',
+      'SCANNE': 'ScannÃ©',
+      'ASSIGNE': 'AssignÃ©',
       'EN_COURS': 'En cours',
-      'TRAITE': 'Traité',
-      'REJETE': 'Rejeté',
-      'RETOUR_ADMIN': 'Retourné'
+      'TRAITE': 'TraitÃ©',
+      'REJETE': 'RejetÃ©',
+      'RETOUR_ADMIN': 'RetournÃ©'
     };
     return mapping[status || 'UPLOADED'] || status || 'Nouveau';
   }
@@ -1545,16 +1555,16 @@ export class ChefEquipeTableauBordController {
 
   private getDocumentStates(doc: any): string[] {
     const states: string[] = [];
-    if (doc.status === 'TRAITE') states.push('Traité');
+    if (doc.status === 'TRAITE') states.push('TraitÃ©');
     if (doc.status === 'EN_COURS') states.push('En cours');
-    if (doc.status === 'REJETE') states.push('Retourné');
+    if (doc.status === 'REJETE') states.push('RetournÃ©');
     if (states.length === 0) states.push('Nouveau');
     return states;
   }
 
   private calculateDocumentPriorite(doc: any): string {
     const joursEnCours = Math.floor((new Date().getTime() - new Date(doc.uploadedAt).getTime()) / (1000 * 60 * 60 * 24));
-    if (joursEnCours > 7) return 'Élevée';
+    if (joursEnCours > 7) return 'Ã‰levÃ©e';
     if (joursEnCours > 3) return 'Moyenne';
     return 'Normale';
   }

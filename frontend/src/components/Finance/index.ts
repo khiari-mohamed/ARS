@@ -19,7 +19,7 @@ export { default as VirementReconciliationPanel } from './VirementReconciliation
 export { default as VirementStatusTag } from './VirementStatusTag';
 export { default as ExportButton } from './ExportButton';
 export { default as FinanceMobileView } from './FinanceMobileView';
-export { default as FinanceTestPanel } from './FinanceTestPanel';
+//export { default as FinanceTestPanel } from './FinanceTestPanel';
 
 // Complete Finance Module with all enhanced features
 // - Ordre de Virement (OV) processing with Excel import/validation

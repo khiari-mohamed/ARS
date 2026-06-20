@@ -315,9 +315,9 @@ const AnalyticsDashboard: React.FC = () => {
               {tabLabels[tab]}
             </Typography>
             <Box>
-              {tab === 0 && <PerformanceTab filters={filters} dateRange={{}} />}
-              {tab === 1 && <SLARiskTab filters={filters} dateRange={{}} />}
-              {tab === 2 && <ForecastingTab filters={filters} dateRange={{}} />}
+              {tab === 0 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 1 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 2 && <ForecastingTab filters={filters as any} dateRange={getDateRange()} />}
             </Box>
           </Paper>
         </>
@@ -437,9 +437,9 @@ const AnalyticsDashboard: React.FC = () => {
             </Tabs>
 
             <Box>
-              {tab === 0 && <PerformanceTab filters={filters} dateRange={{}} />}
-              {tab === 1 && <SLARiskTab filters={filters} dateRange={{}} />}
-              {tab === 2 && <ForecastingTab filters={filters} dateRange={{}} />}
+              {tab === 0 && <PerformanceTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 1 && <SLARiskTab filters={filters} dateRange={getDateRange()} />}
+              {tab === 2 && <ForecastingTab filters={filters as any} dateRange={getDateRange()} />}
             </Box>
           </Paper>
         </>

@@ -1,107 +1,135 @@
 import React, { useEffect, useState } from 'react';
-import { Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody, Chip, Button, Box, CircularProgress, Card, CardContent, Alert, LinearProgress, TablePagination, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import {
+  Grid, Paper, Typography, Table, TableHead, TableRow, TableCell,
+  TableBody, TableContainer, Chip, Button, Box, CircularProgress,
+  Card, CardContent, Alert, TablePagination,
+  Dialog, DialogTitle, DialogContent, DialogActions, Snackbar,
+} from '@mui/material';
 import { LocalAPI } from '../../services/axios';
-import WarningIcon from '@mui/icons-material/Warning';
-import ErrorIcon from '@mui/icons-material/Error';
+import WarningIcon     from '@mui/icons-material/Warning';
+import ErrorIcon       from '@mui/icons-material/Error';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import GroupIcon from '@mui/icons-material/Group';
-import AssignmentIcon from '@mui/icons-material/Assignment';
+import AssignmentIcon  from '@mui/icons-material/Assignment';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+
+const NAVY = '#1e3a5f';
 
 interface Props {
   filters: any;
   dateRange: any;
 }
 
+/* ─────────────────────────────────────────
+   Helpers
+───────────────────────────────────────── */
+const formatDocumentType = (type: string): string =>
+  type
+    .split('_')
+    .map((word, index) => {
+      if (index === 0 && word === 'BULLETIN') return 'BS';
+      if (word === 'SOIN')        return '';
+      if (word === 'COMPLEMENT')  return 'Complément';
+      if (word === 'INFORMATION') return 'Info';
+      return word.charAt(0) + word.slice(1).toLowerCase();
+    })
+    .filter(Boolean)
+    .join(' ')
+    .trim() || type;
+
+const getSLAStatusChip = (daysRemaining: number) => {
+  if (daysRemaining < 0)  return (
+    <Chip label="En retard"  size="small"
+      sx={{ bgcolor: '#fdecea', color: '#b71c1c', border: '1px solid #ef9a9a', fontWeight: 700, fontSize: '0.72rem' }} />
+  );
+  if (daysRemaining === 0) return (
+    <Chip label="Critique"   size="small"
+      sx={{ bgcolor: '#fdecea', color: '#b71c1c', border: '1px solid #ef9a9a', fontWeight: 700, fontSize: '0.72rem' }} />
+  );
+  if (daysRemaining <= 1)  return (
+    <Chip label="À risque"   size="small"
+      sx={{ bgcolor: '#fff8e1', color: '#e65100', border: '1px solid #ffcc80', fontWeight: 700, fontSize: '0.72rem' }} />
+  );
+  return (
+    <Chip label="À temps"    size="small"
+      sx={{ bgcolor: '#e6f4ed', color: '#1b6b3a', border: '1px solid #a5d6a7', fontWeight: 700, fontSize: '0.72rem' }} />
+  );
+};
+
+const rowBg = (alertLevel: string, idx: number) =>
+  alertLevel === 'critical' ? '#fdecea' :
+  alertLevel === 'warning'  ? '#fff8e1' :
+  idx % 2 === 0             ? '#f4f7fb' : '#ffffff';
+
+/* ─────────────────────────────────────────
+   Component
+───────────────────────────────────────── */
 const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [slaKpis, setSlaKpis] = useState<any>(null);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage] = useState(10);
-  const [reassignmentDialog, setReassignmentDialog] = useState<{ open: boolean; bordereau: any; aiResponse: any }>({ open: false, bordereau: null, aiResponse: null });
+  const [data, setData]         = useState<any>(null);
+  const [loading, setLoading]   = useState(true);
+  const [slaKpis, setSlaKpis]   = useState<any>(null);
+  const [page, setPage]         = useState(0);
+  const [rowsPerPage]           = useState(10);
 
-  // Format document type for display
-  const formatDocumentType = (type: string) => {
-    // Convert enum format to readable format
-    // BULLETIN_SOIN -> BS
-    // COMPLEMENT_INFORMATION -> Complément Info
-    return type
-      .split('_')
-      .map((word, index) => {
-        if (index === 0 && word === 'BULLETIN') return 'BS';
-        if (word === 'SOIN') return '';
-        if (word === 'COMPLEMENT') return 'Complément';
-        if (word === 'INFORMATION') return 'Info';
-        return word.charAt(0) + word.slice(1).toLowerCase();
-      })
-      .filter(Boolean)
-      .join(' ')
-      .trim() || type;
-  };
+  const [reassignmentDialog, setReassignmentDialog] = useState<{
+    open: boolean; bordereau: any; aiResponse: any;
+  }>({ open: false, bordereau: null, aiResponse: null });
 
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean; message: string; severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
+
+  const showSnack = (message: string, severity: 'success' | 'error') =>
+    setSnackbar({ open: true, message, severity });
+
+  /* ── Data loading ── */
   const loadSLARiskData = async () => {
     try {
       setLoading(true);
-      
-      // Build filter params including user filters
+
       const filterParams = {
         ...dateRange,
-        clientId: filters.clientId,
-        gestionnaireId: filters.gestionnaireId,
+        clientId:             filters.clientId,
+        gestionnaireId:       filters.gestionnaireId,
         gestionnaireSeniorId: filters.gestionnaireSeniorId,
-        chefEquipeId: filters.chefEquipeId,
-        slaStatus: filters.slaStatus
+        chefEquipeId:         filters.chefEquipeId,
+        slaStatus:            filters.slaStatus,
       };
-      
-      console.log('🔍 [SLARiskTab] Loading with filters:', filterParams);
-      
+
       const [slaResponse, alertsResponse, capacityResponse] = await Promise.all([
         LocalAPI.get('/analytics/sla/dashboard', { params: filterParams }),
-        LocalAPI.get('/analytics/alerts', { params: filterParams }),
-        LocalAPI.get('/analytics/sla/capacity', { params: filterParams })
+        LocalAPI.get('/analytics/alerts',         { params: filterParams }),
+        LocalAPI.get('/analytics/sla/capacity',   { params: filterParams }),
       ]);
 
-      const slaData = slaResponse.data;
-      const alertsData = alertsResponse.data;
+      const slaData      = slaResponse.data;
       const capacityData = capacityResponse.data;
 
-      // Calculate real SLA KPIs from backend data
-      const atRiskCount = slaData.overview?.atRisk || 0;
-      const criticalCount = slaData.overview?.breached || 0;
+      const atRiskCount    = slaData.overview?.atRisk       || 0;
+      const criticalCount  = slaData.overview?.breached     || 0;
       const complianceRate = slaData.overview?.complianceRate || 0;
-      const totalAtRisk = atRiskCount + criticalCount;
+      const totalAtRisk    = atRiskCount + criticalCount;
 
-      setSlaKpis({
-        totalAtRisk,
-        criticalCount,
-        warningCount: atRiskCount,
-        complianceRate
-      });
+      setSlaKpis({ totalAtRisk, criticalCount, warningCount: atRiskCount, complianceRate });
 
-      // Get real at-risk bordereaux from SLA data
       const atRiskBordereaux = slaData.alerts || [];
 
-
-
-      // Get real workload distribution from capacity analysis
       const workloadDistribution = capacityData.map((user: any) => ({
-        team: user.userName,
-        workload: user.activeBordereaux,
-        capacity: user.dailyCapacity * 7,
-        risk: user.capacityStatus === 'overloaded' ? 'high' : 
-              user.capacityStatus === 'at_capacity' ? 'medium' : 'low',
-        recommendation: user.recommendation
+        team:           user.userName,
+        workload:       user.activeBordereaux,
+        capacity:       user.dailyCapacity * 7,
+        risk:           user.capacityStatus === 'overloaded'   ? 'high'   :
+                        user.capacityStatus === 'at_capacity'  ? 'medium' : 'low',
+        recommendation: user.recommendation,
       }));
 
       setData({
         atRiskBordereaux,
         workloadDistribution,
-        slaBreaches: slaData.breaches || [],
-        predictions: slaData.predictions || []
+        slaBreaches: slaData.breaches     || [],
+        predictions: slaData.predictions  || [],
       });
     } catch (error) {
       console.error('Failed to load SLA risk data:', error);
-      // Don't set fallback data - let the UI show the error state
       setData(null);
       setSlaKpis(null);
     } finally {
@@ -109,62 +137,23 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
     }
   };
 
-  useEffect(() => {
-    console.log('🔄 [SLARiskTab] Filters or dateRange changed, reloading...', { filters, dateRange });
-    loadSLARiskData();
-  }, [filters, dateRange]);
+  useEffect(() => { loadSLARiskData(); }, [filters, dateRange]);
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Chargement des données SLA...</Typography>
-      </Box>
-    );
-  }
-
-  if (!data || !slaKpis) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
-        <Typography variant="h6" color="text.secondary">
-          Aucune donnée SLA disponible. Vérifiez que des bordereaux sont présents dans le système.
-        </Typography>
-      </Box>
-    );
-  }
-
-  const getSLAStatusChip = (daysRemaining: number) => {
-    if (daysRemaining < 0) return <Chip label="🔴 En retard" color="error" size="small" />;
-    if (daysRemaining === 0) return <Chip label="🔴 Critique" color="error" size="small" />;
-    if (daysRemaining <= 1) return <Chip label="🟠 À risque" color="warning" size="small" />;
-    return <Chip label="🟢 À temps" color="success" size="small" />;
-  };
-
-  const getWorkloadColor = (percentage: number) => {
-    if (percentage >= 90) return 'error';
-    if (percentage >= 75) return 'warning';
-    return 'success';
-  };
-
+  /* ── AI actions ── */
   const handleReallocate = async (bordereauId: string, item: any) => {
     try {
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject({ message: 'Timeout' }), 30000)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject({ message: 'Timeout' }), 30000),
       );
       const apiPromise = LocalAPI.post('/analytics/ai/reassignment', {
         bordereauId,
-        reason: 'SLA_RISK'
+        reason: 'SLA_RISK',
       });
       const response = await Promise.race([apiPromise, timeoutPromise]) as any;
-      
-      setReassignmentDialog({
-        open: true,
-        bordereau: item,
-        aiResponse: response.data
-      });
+      setReassignmentDialog({ open: true, bordereau: item, aiResponse: response.data });
     } catch (error) {
       console.error('AI reassignment failed:', error);
-      alert('Erreur: La réaffectation IA a échoué. Le service IA est peut-être indisponible.');
+      showSnack('La réaffectation IA a échoué. Le service IA est peut-être indisponible.', 'error');
     }
   };
 
@@ -172,221 +161,546 @@ const SLARiskTab: React.FC<Props> = ({ filters, dateRange }) => {
     try {
       await LocalAPI.post(`/bordereaux/${reassignmentDialog.bordereau.bordereauId}/reassign`, {
         newUserId: reassignmentDialog.aiResponse.recommended_agent?.agent_id,
-        comment: 'Réaffectation IA pour optimisation SLA'
+        comment:   'Réaffectation IA pour optimisation SLA',
       });
-      
       setReassignmentDialog({ open: false, bordereau: null, aiResponse: null });
       loadSLARiskData();
-      alert('Réaffectation effectuée avec succès');
+      showSnack('Réaffectation effectuée avec succès.', 'success');
     } catch (error) {
       console.error('Reassignment execution failed:', error);
-      alert('Erreur lors de la réaffectation');
+      showSnack('Erreur lors de la réaffectation.', 'error');
     }
   };
 
+  /* ── States ── */
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400} gap={2}>
+        <CircularProgress size={30} />
+        <Typography color="text.secondary" sx={{ fontSize: '0.9rem' }}>
+          Chargement des données SLA…
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (!data || !slaKpis) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400} px={2}>
+        <Typography variant="body1" color="text.secondary" textAlign="center">
+          Aucune donnée SLA disponible. Vérifiez que des bordereaux sont présents dans le système.
+        </Typography>
+      </Box>
+    );
+  }
+
+  /* ── KPI card definitions ── */
+  const kpiCards = [
+    {
+      label:  'Critiques',
+      value:  slaKpis.criticalCount,
+      icon:   <ErrorIcon sx={{ fontSize: 20 }} />,
+      accent: '#f44336',
+    },
+    {
+      label:  'À Risque',
+      value:  slaKpis.warningCount,
+      icon:   <WarningIcon sx={{ fontSize: 20 }} />,
+      accent: '#ff9800',
+    },
+    {
+      label:  'Total à Risque',
+      value:  slaKpis.totalAtRisk,
+      icon:   <AssignmentIcon sx={{ fontSize: 20 }} />,
+      accent: '#2196f3',
+    },
+    {
+      label:  'Conformité SLA',
+      value:  `${Math.round(slaKpis.complianceRate)}%`,
+      icon:   <CheckCircleIcon sx={{ fontSize: 20 }} />,
+      accent: slaKpis.complianceRate >= 90 ? '#4caf50' : slaKpis.complianceRate >= 80 ? '#ff9800' : '#f44336',
+    },
+  ];
+
+  const TABLE_HEADERS = [
+    'Référence', 'Client', 'Type', 'Nb Documents',
+    'Assigné à', 'Statut SLA', 'Délai', 'Action',
+  ];
+
   return (
     <Grid container spacing={3}>
-      {/* SLA Risk KPI Cards */}
-      {slaKpis && (
-        <Grid item xs={12}>
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <ErrorIcon color="error" />
-                    <Box>
-                      <Typography variant="h4">{slaKpis.criticalCount}</Typography>
-                      <Typography color="textSecondary">Critiques</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <AssignmentIcon color="info" />
-                    <Box>
-                      <Typography variant="h4">{slaKpis.totalAtRisk}</Typography>
-                      <Typography color="textSecondary">Total À Risque</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Grid>
-      )}
 
-      {/* Critical Alerts */}
-      {slaKpis && slaKpis.criticalCount > 0 && (
+      {/* ─────────────── KPI Cards ─────────────── */}
+      <Grid item xs={12}>
+        <Grid container spacing={2}>
+          {kpiCards.map((card, i) => (
+            <Grid item xs={6} md={3} key={i}>
+              <Card
+                elevation={0}
+                sx={{
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  borderLeft: `4px solid ${card.accent}`,
+                  borderRadius: '10px',
+                  height: '100%',
+                  transition: 'box-shadow 0.2s, transform 0.2s',
+                  '&:hover': {
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.10)',
+                    transform: 'translateY(-1px)',
+                  },
+                }}
+              >
+                <CardContent
+                  sx={{ p: { xs: 1.75, md: 2.5 }, '&:last-child': { pb: { xs: 1.75, md: 2.5 } } }}
+                >
+                  <Box
+                    sx={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      bgcolor: `${card.accent}15`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: card.accent, mb: 1.5,
+                    }}
+                  >
+                    {card.icon}
+                  </Box>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: '#546e7a', fontSize: '0.68rem',
+                      textTransform: 'uppercase', letterSpacing: '0.07em',
+                      display: 'block', mb: 0.5,
+                    }}
+                  >
+                    {card.label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontWeight: 800, color: card.accent,
+                      fontSize: { xs: '1.5rem', md: '1.85rem' },
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {card.value}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Grid>
+
+      {/* ─────────────── Critical alert banner ─────────────── */}
+      {slaKpis.criticalCount > 0 && (
         <Grid item xs={12}>
-          <Alert severity="error" sx={{ mb: 2 }}>
-            <Typography variant="h6">Alerte Critique SLA</Typography>
-            <Typography>
+          <Alert
+            severity="error"
+            icon={<ErrorIcon />}
+            sx={{
+              borderRadius: '10px',
+              border: '1px solid #ef9a9a',
+              bgcolor: '#fdecea',
+              '& .MuiAlert-message': { width: '100%' },
+            }}
+          >
+            <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: '#b71c1c', mb: 0.25 }}>
+              Alerte Critique SLA
+            </Typography>
+            <Typography sx={{ fontSize: '0.85rem', color: '#c62828' }}>
               {slaKpis.criticalCount} bordereau(x) en dépassement de SLA nécessite(nt) une action immédiate.
             </Typography>
           </Alert>
         </Grid>
       )}
 
-      {/* At-Risk Bordereaux Table */}
+      {/* ─────────────── At-risk table ─────────────── */}
       <Grid item xs={12}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Bordereaux à Risque SLA ({data.atRiskBordereaux.length})</Typography>
-          <Box sx={{ overflowX: 'auto', width: '100%' }}>
-            <Table sx={{ minWidth: 700 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            border: '1px solid rgba(0,0,0,0.08)',
+            borderRadius: '10px',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Section header */}
+          <Box
+            sx={{
+              px: { xs: 2, md: 3 }, py: 2,
+              borderBottom: '1px solid rgba(0,0,0,0.06)',
+              display: 'flex', alignItems: 'center', gap: 1.5,
+            }}
+          >
+            <Box
+              sx={{
+                width: 32, height: 32, borderRadius: '50%',
+                bgcolor: '#fff8e1',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <WarningIcon sx={{ fontSize: 17, color: '#ff9800' }} />
+            </Box>
+            <Typography sx={{ fontWeight: 700, color: NAVY, fontSize: '0.95rem' }}>
+              Bordereaux à Risque SLA
+            </Typography>
+            <Chip
+              label={data.atRiskBordereaux.length}
+              size="small"
+              sx={{
+                bgcolor: '#fff8e1', color: '#e65100',
+                border: '1px solid #ffcc80', fontWeight: 700,
+                fontSize: '0.72rem', ml: 'auto',
+              }}
+            />
+          </Box>
+
+          <TableContainer>
+            <Table stickyHeader sx={{ minWidth: 860 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Référence</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Nombre Documents</TableCell>
-                  <TableCell>Assigné à</TableCell>
-                  <TableCell>Status SLA</TableCell>
-                  <TableCell>Jours Restants</TableCell>
-                  <TableCell>Actions</TableCell>
+                  {TABLE_HEADERS.map((h, i) => (
+                    <TableCell
+                      key={h}
+                      sx={{
+                        bgcolor: NAVY, color: '#fff',
+                        fontWeight: 700, fontSize: '0.70rem',
+                        textTransform: 'uppercase', letterSpacing: '0.05em',
+                        py: 1.5, whiteSpace: 'nowrap',
+                        borderRight: i < TABLE_HEADERS.length - 1
+                          ? '1px solid rgba(255,255,255,0.12)' : 'none',
+                      }}
+                    >
+                      {h}
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.atRiskBordereaux
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((item: any, index: number) => (
-                  <TableRow key={index} sx={{ bgcolor: item.alertLevel === 'critical' ? 'error.light' : item.alertLevel === 'warning' ? 'warning.light' : 'inherit' }}>
-                    <TableCell>
-                      <Typography variant="subtitle2">{item.reference}</Typography>
-                    </TableCell>
-                    <TableCell>{item.clientName || 'Client non défini'}</TableCell>
-                    <TableCell>
-                      <Box>
-                        {item.documentsByType && Object.keys(item.documentsByType).length > 0 ? (
-                          <Box>
-                            {Object.entries(item.documentsByType).map(([type, count]: [string, any], idx: number) => (
-                              <Chip 
-                                key={type}
-                                label={formatDocumentType(type)}
-                                size="small"
-                                color="primary"
-                                variant="outlined"
-                                sx={{ mr: 0.5, mb: 0.5 }}
-                              />
-                            ))}
-                          </Box>
-                        ) : (
-                          <Chip 
-                            label={formatDocumentType(item.type || 'BULLETIN_SOIN')} 
-                            size="small" 
-                            color="primary"
-                            variant="outlined"
-                          />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight={600}>
-                          {item.nombreDocuments || 0} document(s)
-                        </Typography>
-                        {item.documentsByType && Object.keys(item.documentsByType).length > 0 ? (
-                          <Box sx={{ mt: 0.5 }}>
-                            {Object.entries(item.documentsByType).map(([type, count]: [string, any]) => (
-                              <Chip 
-                                key={type}
-                                label={`${formatDocumentType(type)}: ${count}`}
-                                size="small"
-                                sx={{ mr: 0.5, mb: 0.5, fontSize: '0.7rem' }}
-                                variant="outlined"
-                              />
-                            ))}
-                          </Box>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                            Aucun document lié
-                          </Typography>
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell>{item.assignedTo || 'Non assigné'}</TableCell>
-                    <TableCell>{getSLAStatusChip(item.slaThreshold - item.daysSinceReception)}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color={item.daysOverdue > 0 ? 'error' : item.daysSinceReception >= item.slaThreshold * 0.8 ? 'warning.main' : 'textPrimary'}>
-                        {item.daysOverdue > 0 ? `${item.daysOverdue} jours de retard` : 
-                         item.daysSinceReception >= item.slaThreshold ? 'Échéance aujourd\'hui' :
-                         `${Math.max(0, item.slaThreshold - item.daysSinceReception)} jour(s) restant(s)`}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Button 
-                        variant={item.daysOverdue > 0 ? 'contained' : 'outlined'}
-                        color={item.daysOverdue > 0 ? 'error' : 'primary'}
-                        size="small"
-                        onClick={() => handleReallocate(item.bordereauId, item)}
+                  .map((item: any, rowIdx: number) => {
+                    const daysRemaining = item.slaThreshold - item.daysSinceReception;
+                    const isOverdue     = item.daysOverdue > 0;
+                    return (
+                      <TableRow
+                        key={rowIdx}
+                        sx={{
+                          bgcolor: rowBg(item.alertLevel, rowIdx),
+                          '&:hover': { bgcolor: '#e8f0fe' },
+                          '& td': {
+                            fontSize: '0.81rem',
+                            borderRight: '1px solid #e0e7ef',
+                            py: 1.5,
+                            '&:last-child': { borderRight: 'none' },
+                          },
+                        }}
                       >
-                        {item.daysOverdue > 0 ? 'Urgent' : 'Réallouer'}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        {/* Reference */}
+                        <TableCell>
+                          <Typography sx={{ fontWeight: 700, color: NAVY, fontSize: '0.81rem' }}>
+                            {item.reference}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Client */}
+                        <TableCell sx={{ color: '#546e7a' }}>
+                          {item.clientName || 'Client non défini'}
+                        </TableCell>
+
+                        {/* Type */}
+                        <TableCell>
+                          {item.documentsByType && Object.keys(item.documentsByType).length > 0 ? (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {Object.keys(item.documentsByType).map((type) => (
+                                <Chip
+                                  key={type}
+                                  label={formatDocumentType(type)}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: '#e3f2fd', color: '#0d47a1',
+                                    border: '1px solid #90caf9',
+                                    fontSize: '0.68rem', fontWeight: 600,
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          ) : (
+                            <Chip
+                              label={formatDocumentType(item.type || 'BULLETIN_SOIN')}
+                              size="small"
+                              sx={{
+                                bgcolor: '#e3f2fd', color: '#0d47a1',
+                                border: '1px solid #90caf9',
+                                fontSize: '0.68rem', fontWeight: 600,
+                              }}
+                            />
+                          )}
+                        </TableCell>
+
+                        {/* Nb Documents */}
+                        <TableCell>
+                          <Typography sx={{ fontWeight: 700, color: NAVY, fontSize: '0.81rem', mb: 0.5 }}>
+                            {item.nombreDocuments || 0} doc(s)
+                          </Typography>
+                          {item.documentsByType && Object.keys(item.documentsByType).length > 0 ? (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {Object.entries(item.documentsByType).map(([type, count]: [string, any]) => (
+                                <Chip
+                                  key={type}
+                                  label={`${formatDocumentType(type)}: ${count}`}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: '#f4f7fb', color: '#546e7a',
+                                    border: '1px solid #cfd8dc', fontSize: '0.65rem',
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>
+                              Aucun document lié
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        {/* Assigned to */}
+                        <TableCell sx={{ color: item.assignedTo ? NAVY : '#b0bec5', fontStyle: item.assignedTo ? 'normal' : 'italic' }}>
+                          {item.assignedTo || 'Non assigné'}
+                        </TableCell>
+
+                        {/* SLA Status */}
+                        <TableCell>
+                          {getSLAStatusChip(daysRemaining)}
+                        </TableCell>
+
+                        {/* Delay */}
+                        <TableCell>
+                          <Typography
+                            sx={{
+                              fontSize: '0.81rem', fontWeight: 600,
+                              color: isOverdue ? '#b71c1c' :
+                                     item.daysSinceReception >= item.slaThreshold * 0.8 ? '#e65100' : '#1b6b3a',
+                            }}
+                          >
+                            {isOverdue
+                              ? `${item.daysOverdue} j. de retard`
+                              : item.daysSinceReception >= item.slaThreshold
+                                ? "Échéance aujourd'hui"
+                                : `${Math.max(0, daysRemaining)} j. restant(s)`}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Action */}
+                        <TableCell>
+                          <Button
+                            variant={isOverdue ? 'contained' : 'outlined'}
+                            size="small"
+                            onClick={() => handleReallocate(item.bordereauId, item)}
+                            sx={isOverdue ? {
+                              bgcolor: '#f44336', color: '#fff', fontWeight: 700,
+                              fontSize: '0.75rem', borderRadius: '6px', textTransform: 'none',
+                              border: 'none',
+                              '&:hover': { bgcolor: '#d32f2f' },
+                            } : {
+                              color: NAVY, borderColor: NAVY, fontWeight: 700,
+                              fontSize: '0.75rem', borderRadius: '6px', textTransform: 'none',
+                              '&:hover': { bgcolor: NAVY, color: '#fff' },
+                            }}
+                          >
+                            {isOverdue ? 'Urgent' : 'Réallouer'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
-            <TablePagination
-              component="div"
-              count={data.atRiskBordereaux.length}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              rowsPerPageOptions={[10]}
-              labelRowsPerPage="Lignes par page:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
-            />
-          </Box>
+          </TableContainer>
+
+          <TablePagination
+            component="div"
+            count={data.atRiskBordereaux.length}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            rowsPerPage={rowsPerPage}
+            rowsPerPageOptions={[10]}
+            labelRowsPerPage="Lignes par page :"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} sur ${count}`}
+            sx={{
+              borderTop: '1px solid rgba(0,0,0,0.06)',
+              '& .MuiTablePagination-toolbar': { px: { xs: 1, md: 2 } },
+              '& .MuiTablePagination-displayedRows': { fontSize: '0.82rem', color: '#546e7a' },
+              '& .MuiTablePagination-selectLabel':   { fontSize: '0.82rem', color: '#546e7a' },
+            }}
+          />
         </Paper>
       </Grid>
 
-     
+      {/* ─────────────── AI Reassignment Dialog ─────────────── */}
+      <Dialog
+        open={reassignmentDialog.open}
+        onClose={() => setReassignmentDialog({ open: false, bordereau: null, aiResponse: null })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: '12px', overflow: 'hidden' },
+        }}
+      >
+        {/* Dialog title */}
+        <DialogTitle
+          sx={{
+            bgcolor: '#f4f7fb',
+            borderBottom: '1px solid rgba(0,0,0,0.07)',
+            py: 2, px: 3,
+            display: 'flex', alignItems: 'center', gap: 1.5,
+          }}
+        >
+          <Box
+            sx={{
+              width: 36, height: 36, borderRadius: '50%',
+              bgcolor: '#e3f2fd',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <SmartToyOutlinedIcon sx={{ fontSize: 19, color: '#1565c0' }} />
+          </Box>
+          <Typography sx={{ fontWeight: 700, color: NAVY, fontSize: '0.95rem' }}>
+            Confirmation de Réaffectation IA
+          </Typography>
+        </DialogTitle>
 
-      {/* AI Reassignment Confirmation Dialog */}
-      <Dialog open={reassignmentDialog.open} onClose={() => setReassignmentDialog({ open: false, bordereau: null, aiResponse: null })} maxWidth="sm" fullWidth>
-        <DialogTitle>Confirmation de Réaffectation IA</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: 0 }}>
           {reassignmentDialog.aiResponse && (
-            <Box>
-              <Typography variant="body1" sx={{ mb: 2 }}>
-                <strong>Bordereau:</strong> {reassignmentDialog.bordereau?.reference}
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>
-                <strong>Actuellement assigné à:</strong> {reassignmentDialog.bordereau?.assignedTo || 'Non assigné'}
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>
-                <strong>Recommandation IA:</strong> Réaffecter à {reassignmentDialog.aiResponse.recommended_agent?.agent_name || 'Agent non disponible'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                <strong>Raison:</strong> {reassignmentDialog.aiResponse.reasoning?.[0] || reassignmentDialog.aiResponse.reassignment_reason || 'Optimisation de la charge de travail'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                <strong>Confiance IA:</strong> {reassignmentDialog.aiResponse.recommended_agent?.confidence === 'high' ? '85%' : '70%'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                <strong>Charge actuelle de {reassignmentDialog.aiResponse.recommended_agent?.agent_name || "l'agent"} :</strong>{' '}
-                {reassignmentDialog.aiResponse.recommended_agent?.current_workload || 0} bordereau(x) déjà en traitement
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                ℹ️ Après réaffectation, ce bordereau viendra s'ajouter à sa charge actuelle.
-              </Typography>
+            <Box sx={{ px: 3, py: 2.5 }}>
+
+              {/* Info rows */}
+              {[
+                { label: 'Bordereau',          value: reassignmentDialog.bordereau?.reference },
+                { label: 'Actuellement assigné', value: reassignmentDialog.bordereau?.assignedTo || 'Non assigné' },
+                {
+                  label: 'Recommandation IA',
+                  value: `Réaffecter à ${reassignmentDialog.aiResponse.recommended_agent?.agent_name || 'Agent non disponible'}`,
+                  highlight: true,
+                },
+                {
+                  label: 'Raison',
+                  value: reassignmentDialog.aiResponse.reasoning?.[0]
+                      || reassignmentDialog.aiResponse.reassignment_reason
+                      || 'Optimisation de la charge de travail',
+                  muted: true,
+                },
+              ].map(({ label, value, highlight, muted }, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    display: 'flex', flexWrap: 'wrap', gap: 0.5,
+                    py: 1.25,
+                    borderBottom: i < 3 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: '#546e7a', fontSize: '0.72rem',
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                      minWidth: 140, pt: 0.2,
+                    }}
+                  >
+                    {label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontWeight: highlight ? 700 : 500,
+                      color:  highlight ? NAVY : muted ? '#546e7a' : NAVY,
+                      fontSize: '0.85rem', flex: 1,
+                    }}
+                  >
+                    {value}
+                  </Typography>
+                </Box>
+              ))}
+
+              {/* Confidence + Workload badges */}
+              <Box
+                sx={{
+                  mt: 2, p: 1.75,
+                  bgcolor: '#f4f7fb', borderRadius: '8px',
+                  border: '1px solid #e0e7ef',
+                  display: 'flex', flexWrap: 'wrap', gap: 1.5,
+                  alignItems: 'center',
+                }}
+              >
+                <Chip
+                  label={`Confiance IA : ${reassignmentDialog.aiResponse.recommended_agent?.confidence === 'high' ? '85 %' : '70 %'}`}
+                  size="small"
+                  sx={{
+                    bgcolor: '#e6f4ed', color: '#1b6b3a',
+                    border: '1px solid #a5d6a7', fontWeight: 700, fontSize: '0.75rem',
+                  }}
+                />
+                <Chip
+                  label={`Charge actuelle : ${reassignmentDialog.aiResponse.recommended_agent?.current_workload || 0} bordereau(x)`}
+                  size="small"
+                  sx={{
+                    bgcolor: '#fff8e1', color: '#e65100',
+                    border: '1px solid #ffcc80', fontWeight: 700, fontSize: '0.75rem',
+                  }}
+                />
+                <Typography variant="caption" sx={{ color: '#546e7a', fontSize: '0.72rem', mt: 0.25 }}>
+                  ℹ️ Ce bordereau s'ajoutera à la charge actuelle après réaffectation.
+                </Typography>
+              </Box>
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReassignmentDialog({ open: false, bordereau: null, aiResponse: null })} color="inherit">
+
+        <DialogActions
+          sx={{
+            px: 3, py: 2,
+            borderTop: '1px solid rgba(0,0,0,0.07)',
+            bgcolor: '#f4f7fb',
+            gap: 1,
+          }}
+        >
+          <Button
+            onClick={() => setReassignmentDialog({ open: false, bordereau: null, aiResponse: null })}
+            sx={{
+              color: '#546e7a', borderColor: '#cfd8dc',
+              border: '1px solid #cfd8dc', borderRadius: '6px',
+              textTransform: 'none', fontWeight: 600, fontSize: '0.85rem',
+              '&:hover': { bgcolor: '#e0e7ef' },
+            }}
+          >
             Annuler
           </Button>
-          <Button onClick={handleConfirmReassignment} variant="contained" color="primary">
+          <Button
+            onClick={handleConfirmReassignment}
+            variant="contained"
+            sx={{
+              bgcolor: NAVY, color: '#fff', fontWeight: 700,
+              borderRadius: '6px', textTransform: 'none', fontSize: '0.85rem',
+              px: 2.5,
+              '&:hover': { bgcolor: '#2d5484' },
+            }}
+          >
             Confirmer la Réaffectation
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ─────────────── Snackbar ─────────────── */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={5000}
+        onClose={() => setSnackbar(s => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar(s => ({ ...s, open: false }))}
+          sx={{ borderRadius: '8px', fontWeight: 600 }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Grid>
   );
 };

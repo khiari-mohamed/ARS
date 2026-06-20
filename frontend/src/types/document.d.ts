@@ -1,5 +1,5 @@
 // --- Document Types for GED and OCR ---
-
+/*
 export type DocumentType = 'BS' | 'contrat' | 'justificatif' | 'reçu' | 'courrier';
 
 // OCR result structure based on backend (ocr-response.dto.ts)
@@ -83,3 +83,4 @@ export interface DocumentSearchParams {
   keywords?: string;
   bordereauReference?: string;
 }
+  */

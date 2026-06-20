@@ -261,12 +261,6 @@ const SuperAdminDashboard: React.FC = () => {
             {/* <Tab label="Emails Outlook" /> */}
             <Tab label="Alertes Équipes" />
             <Tab label="Analytics Documents" />
-            {/* <Tab label="Affectation Documents" /> */}
-            {/* <Tab label="Affectation Avancée" /> */}
-            {/* <Tab label="Config Équipes" /> */}
-            {/* <Tab label="Dashboard Système" /> */}
-            {/* <Tab label="Configuration SLA" /> */}
-            {/* <Tab label="Configuration Système" /> */}
             <Tab label="Gestion Utilisateurs" />
           </Tabs>
         </Box>
@@ -275,10 +269,6 @@ const SuperAdminDashboard: React.FC = () => {
           <RealTimeSuperAdminDashboard onTeamRulesClick={() => setTeamRulesDialog(true)} />
         </TabPanel>
 
-        {/* <TabPanel value={activeTab} index={1}>
-          <OutlookEmailMonitoring />
-        </TabPanel> */}
-
         <TabPanel value={activeTab} index={1}>
           <SuperAdminAlerts />
         </TabPanel>
@@ -286,30 +276,6 @@ const SuperAdminDashboard: React.FC = () => {
         <TabPanel value={activeTab} index={2}>
           <DocumentAnalyticsDashboard />
         </TabPanel>
-
-        {/* <TabPanel value={activeTab} index={2}>
-          <DocumentAssignmentManager />
-        </TabPanel>
-
-        <TabPanel value={activeTab} index={3}>
-          <AssignmentCriteria />
-        </TabPanel> */}
-
-        {/* <TabPanel value={activeTab} index={2}>
-          <TeamWorkloadConfig />
-        </TabPanel> */}
-
-        {/* <TabPanel value={activeTab} index={3}>
-          <ComprehensiveSystemDashboard />
-        </TabPanel>
-
-        <TabPanel value={activeTab} index={4}>
-          <SLAConfigurationInterface />
-        </TabPanel> */}
-
-        {/* <TabPanel value={activeTab} index={3}>
-          <SystemConfigurationPanel />
-        </TabPanel> */}
 
         <TabPanel value={activeTab} index={3}>
           <AdvancedUserManagement />

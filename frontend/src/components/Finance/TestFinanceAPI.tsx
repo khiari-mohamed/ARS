@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+/*import React, { useState } from 'react';
 import { Button, Box, Typography, Paper } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -64,4 +64,5 @@ const TestFinanceAPI: React.FC = () => {
   );
 };
 
-export default TestFinanceAPI;
+/*export default TestFinanceAPI;*/
+export {};

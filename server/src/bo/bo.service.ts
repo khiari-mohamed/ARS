@@ -426,6 +426,18 @@ export class BOService {
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const startOfHour = new Date(today.getFullYear(), today.getMonth(), today.getDate(), today.getHours());
     
+    // Build a date filter for the status breakdown (prefer dateReception)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const dateWhere = filters?.dateFrom && filters?.dateTo ? {
+      dateReception: { gte: filters.dateFrom, lte: filters.dateTo }
+    } : filters?.dateFrom ? {
+      dateReception: { gte: filters.dateFrom }
+    } : filters?.dateTo ? {
+      dateReception: { lte: filters.dateTo }
+    } : {
+      dateReception: { gte: sevenDaysAgo }
+    };
+
     const [todayEntries, pendingEntries, recentEntries, documentTypes, hourlyEntries] = await Promise.all([
       this.prisma.bordereau.count({
         where: {
@@ -465,7 +477,10 @@ export class BOService {
         by: ['statut'],
         _count: { id: true },
         where: {
-          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+          ...(filters?.clientId && { clientId: filters.clientId }),
+          ...(filters?.chefEquipeId && { assignedToUserId: filters.chefEquipeId }),
+          ...(filters?.statut && { statut: filters.statut as any }),
+          ...dateWhere
         }
       }),
       

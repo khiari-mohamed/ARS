@@ -1,133 +1,130 @@
 import React, { useEffect, useState } from 'react';
-import { Grid, Paper, Typography, Table, TableHead, TableRow, TableCell, TableBody, Chip, Box, CircularProgress, Card, CardContent, Popover } from '@mui/material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
+import {
+  Grid, Paper, Typography, Table, TableHead, TableRow, TableCell,
+  TableBody, TableContainer, Chip, Box, CircularProgress,
+  Card, CardContent, Popover, TextField, Button,
+} from '@mui/material';
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, Legend, PieChart, Pie, Cell,
+} from 'recharts';
 import { LocalAPI } from '../../services/axios';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import GroupIcon from '@mui/icons-material/Group';
-import SpeedIcon from '@mui/icons-material/Speed';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import WarningIcon from '@mui/icons-material/Warning';
+import TrendingUpIcon    from '@mui/icons-material/TrendingUp';
+import SpeedIcon         from '@mui/icons-material/Speed';
+import AssessmentIcon    from '@mui/icons-material/Assessment';
+import WarningIcon       from '@mui/icons-material/Warning';
+import InfoOutlinedIcon  from '@mui/icons-material/InfoOutlined';
 
 interface Props {
   filters: any;
   dateRange: any;
 }
 
+const NAVY = '#1e3a5f';
+
+const getSLAAccent = (v: number) => v >= 90 ? '#4caf50' : v >= 80 ? '#ff9800' : '#f44336';
+
 const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [performanceKpis, setPerformanceKpis] = useState<any>(null);
+  const [data, setData]                         = useState<any>(null);
+  const [loading, setLoading]                   = useState(true);
+  const [performanceKpis, setPerformanceKpis]   = useState<any>(null);
   const [gestionnaireFilter, setGestionnaireFilter] = useState('');
-  const [gestDateRange, setGestDateRange] = useState({ fromDate: '', toDate: '' });
+  const [gestDateRange, setGestDateRange]       = useState({ fromDate: '', toDate: '' });
   const [appliedDateRange, setAppliedDateRange] = useState({ fromDate: '', toDate: '' });
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const [selectedGest, setSelectedGest] = useState<any>(null);
+  const [anchorEl, setAnchorEl]                 = useState<HTMLElement | null>(null);
+  const [selectedGest, setSelectedGest]         = useState<any>(null);
 
   const loadPerformanceData = async () => {
     try {
       setLoading(true);
-      
+
       const gestParams: any = {};
-      if (appliedDateRange.fromDate) gestParams.fromDate = appliedDateRange.fromDate;
-      if (appliedDateRange.toDate) gestParams.toDate = appliedDateRange.toDate;
-      // Apply parent filters to gestionnaires table
-      if (filters.gestionnaireId) gestParams.gestionnaireId = filters.gestionnaireId;
-      if (filters.gestionnaireSeniorId) gestParams.gestionnaireSeniorId = filters.gestionnaireSeniorId;
-      if (filters.chefEquipeId) gestParams.chefEquipeId = filters.chefEquipeId;
-      if (filters.clientId) gestParams.clientId = filters.clientId;
-      
-      console.log('📅 Gestionnaire params with filters:', gestParams);
-      
-      // Apply parent filters to all API calls
-      const apiParams = { ...dateRange };
-      if (filters.clientId) apiParams.clientId = filters.clientId;
-      if (filters.slaStatus) apiParams.slaStatus = filters.slaStatus;
-      if (filters.gestionnaireId) apiParams.gestionnaireId = filters.gestionnaireId;
-      if (filters.gestionnaireSeniorId) apiParams.gestionnaireSeniorId = filters.gestionnaireSeniorId;
-      if (filters.chefEquipeId) apiParams.chefEquipeId = filters.chefEquipeId;
-      
-      console.log('🔍 [PerformanceTab] Filters applied:', apiParams);
-      
-      const [performanceResponse, slaResponse, kpiResponse, gestionnairesDailyResponse, alertsResponse] = await Promise.all([
-        LocalAPI.get('/analytics/performance/by-user', { params: apiParams }),
-        LocalAPI.get('/analytics/sla-compliance-by-user', { params: apiParams }),
-        LocalAPI.get('/analytics/kpis/daily', { params: apiParams }),
-        LocalAPI.get('/analytics/gestionnaires/daily-performance', { params: gestParams }),
-        LocalAPI.get('/analytics/alerts', { params: apiParams })  // ✅ FIX: Pass apiParams to alerts
+      if (appliedDateRange.fromDate)      gestParams.fromDate             = appliedDateRange.fromDate;
+      if (appliedDateRange.toDate)        gestParams.toDate               = appliedDateRange.toDate;
+      if (filters.gestionnaireId)         gestParams.gestionnaireId       = filters.gestionnaireId;
+      if (filters.gestionnaireSeniorId)   gestParams.gestionnaireSeniorId = filters.gestionnaireSeniorId;
+      if (filters.chefEquipeId)           gestParams.chefEquipeId         = filters.chefEquipeId;
+      if (filters.clientId)               gestParams.clientId             = filters.clientId;
+
+      const apiParams: any = { ...dateRange };
+      if (filters.clientId)               apiParams.clientId              = filters.clientId;
+      if (filters.slaStatus)              apiParams.slaStatus             = filters.slaStatus;
+      if (filters.gestionnaireId)         apiParams.gestionnaireId        = filters.gestionnaireId;
+      if (filters.gestionnaireSeniorId)   apiParams.gestionnaireSeniorId  = filters.gestionnaireSeniorId;
+      if (filters.chefEquipeId)           apiParams.chefEquipeId          = filters.chefEquipeId;
+
+      const [
+        performanceResponse,
+        slaResponse,
+        kpiResponse,
+        gestionnairesDailyResponse,
+        alertsResponse,
+      ] = await Promise.all([
+        LocalAPI.get('/analytics/performance/by-user',              { params: apiParams }),
+        LocalAPI.get('/analytics/sla-compliance-by-user',           { params: apiParams }),
+        LocalAPI.get('/analytics/kpis/daily',                       { params: apiParams }),
+        LocalAPI.get('/analytics/gestionnaires/daily-performance',   { params: gestParams }),
+        LocalAPI.get('/analytics/alerts',                            { params: apiParams }),
       ]);
 
       const performanceData = performanceResponse.data;
-      const slaData = slaResponse.data;
-      const kpiData = kpiResponse.data;
-      const alertData = alertsResponse.data;
+      const slaData         = slaResponse.data;
+      const kpiData         = kpiResponse.data;
+      const alertData       = alertsResponse.data;
 
-      // Calculate performance KPIs
-      const totalProcessed = performanceData.processedByUser?.reduce((sum: number, user: any) => sum + (user._count?.id || 0), 0) || 0;
-      
-      // Get total active users from system (not just those with processed bordereaux)
+      const totalProcessed = performanceData.processedByUser?.reduce(
+        (sum: number, user: any) => sum + (user._count?.id || 0), 0,
+      ) || 0;
+
       const totalUsersResponse = await LocalAPI.get('/users/count-active');
       const totalUsers = totalUsersResponse.data.count || 0;
-      
-      const activeUsersWithData = slaData.filter((user: any) => user.userName && user.total > 0);
-      const avgSlaCompliance = activeUsersWithData.length > 0 ? Math.round(activeUsersWithData.reduce((sum: any, user: any) => sum + (user.complianceRate || 0), 0) / activeUsersWithData.length) : 0;
-      const avgProcessingTime = kpiData.avgDelay || 0;
-      const enAttenteCount = kpiData.enAttenteCount || 0;
 
-      setPerformanceKpis({
-        totalProcessed,
-        avgSlaCompliance,
-        totalUsers,
-        avgProcessingTime,
-        enAttenteCount
-      });
+      const activeUsersWithData = slaData.filter((u: any) => u.userName && u.total > 0);
+      const avgSlaCompliance    = activeUsersWithData.length > 0
+        ? Math.round(
+            activeUsersWithData.reduce((s: number, u: any) => s + (u.complianceRate || 0), 0)
+            / activeUsersWithData.length,
+          )
+        : 0;
+      const avgProcessingTime = kpiData.avgDelay      || 0;
+      const enAttenteCount    = kpiData.enAttenteCount || 0;
 
-      // Get department performance from backend with filters
+      setPerformanceKpis({ totalProcessed, avgSlaCompliance, totalUsers, avgProcessingTime, enAttenteCount });
+
       const deptPerformanceResponse = await LocalAPI.get('/analytics/performance/by-department', { params: apiParams });
-      const departmentPerformance = deptPerformanceResponse.data || [];
-      
-      console.log('📊 Department Performance Data:', departmentPerformance);
-      console.log('📊 Number of departments:', departmentPerformance.length);
-      
-      // Process volume trend data from bsPerDay - filter by selected gestionnaire if applicable
-      let volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
-        date: new Date(day.createdAt).toLocaleDateString('fr-FR'),
-        volume: day._count?.id || 0
-      })) || [];
-      
-      console.log('📊 Volume trend data points:', volumeTrend.length);
+      const departmentPerformance   = deptPerformanceResponse.data || [];
 
-      // Calculate SLA distribution from alert data
-      const slaCompliant = alertData.ok?.length || 0;
-      const slaAtRisk = alertData.warning?.length || 0;
-      const slaOverdue = alertData.critical?.length || 0;
-      
-      console.log('📊 SLA distribution:', { slaCompliant, slaAtRisk, slaOverdue });
-      
+      const volumeTrend = kpiData.bsPerDay?.map((day: any) => ({
+        date:   new Date(day.createdAt).toLocaleDateString('fr-FR'),
+        volume: day._count?.id || 0,
+      })) || [];
+
+      const slaCompliant = alertData.ok?.length       || 0;
+      const slaAtRisk    = alertData.warning?.length  || 0;
+      const slaOverdue   = alertData.critical?.length || 0;
+
       const slaDistribution = [
-        { name: 'À temps', value: slaCompliant, color: '#4caf50' },
-        { name: 'À risque', value: slaAtRisk, color: '#ff9800' },
-        { name: 'En retard', value: slaOverdue, color: '#f44336' }
+        { name: 'À temps',   value: slaCompliant, color: '#4caf50' },
+        { name: 'À risque',  value: slaAtRisk,    color: '#ff9800' },
+        { name: 'En retard', value: slaOverdue,   color: '#f44336' },
       ];
 
-      // Process team ranking from SLA data with real user names
       const teamRanking = slaData
-        .filter((user: any) => user.userName && user.total > 0)
+        .filter((u: any) => u.userName && u.total > 0)
         .slice(0, 5)
-        .map((user: any) => ({
-          name: user.userName,
-          processed: user.total,
-          slaRate: Math.round(user.complianceRate)
+        .map((u: any) => ({
+          name:      u.userName,
+          processed: u.total,
+          slaRate:   Math.round(u.complianceRate),
         }));
-
-
 
       setData({
         departmentPerformance,
         teamRanking,
-        userPerformance: slaData.slice(0, 10),
+        userPerformance:              slaData.slice(0, 10),
         gestionnairesDailyPerformance: gestionnairesDailyResponse.data,
         volumeTrend,
-        slaDistribution
+        slaDistribution,
       });
     } catch (error) {
       console.error('Failed to load performance data:', error);
@@ -137,417 +134,468 @@ const PerformanceTab: React.FC<Props> = ({ filters, dateRange }) => {
     }
   };
 
-  useEffect(() => {
-    loadPerformanceData();
-  }, [filters, dateRange, appliedDateRange]);
+  useEffect(() => { loadPerformanceData(); }, [filters, dateRange, appliedDateRange]);
 
-  const handleApplyDateFilter = () => {
-    setAppliedDateRange(gestDateRange);
-  };
-
-  const handlePopoverOpen = (event: React.MouseEvent<HTMLElement>, gest: any) => {
-    setAnchorEl(event.currentTarget);
+  const handleApplyDateFilter = () => setAppliedDateRange(gestDateRange);
+  const handlePopoverOpen = (e: React.MouseEvent<HTMLElement>, gest: any) => {
+    setAnchorEl(e.currentTarget);
     setSelectedGest(gest);
   };
-
   const handlePopoverClose = () => {
     setAnchorEl(null);
     setSelectedGest(null);
   };
 
+  /* ── Loading ── */
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Chargement des données de performance...</Typography>
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={400} gap={2}>
+        <CircularProgress size={30} />
+        <Typography color="text.secondary" sx={{ fontSize: '0.9rem' }}>
+          Chargement des données de performance…
+        </Typography>
       </Box>
     );
   }
 
-  if (!data) return <Typography>Aucune donnée de performance disponible</Typography>;
+  if (!data) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
+        <Typography color="text.secondary">Aucune donnée de performance disponible</Typography>
+      </Box>
+    );
+  }
 
-  const getSLAColor = (rate: number) => {
-    if (rate >= 90) return 'success';
-    if (rate >= 80) return 'warning';
-    return 'error';
-  };
+  /* ── KPI card definitions ── */
+  const kpiCards = performanceKpis ? [
+    {
+      label:  'Total Traités',
+      value:  performanceKpis.totalProcessed.toLocaleString('fr-FR'),
+      icon:   <AssessmentIcon sx={{ fontSize: 20 }} />,
+      accent: '#2196f3',
+    },
+    {
+      label:  'SLA Moyen',
+      value:  `${performanceKpis.avgSlaCompliance}%`,
+      icon:   <TrendingUpIcon sx={{ fontSize: 20 }} />,
+      accent: getSLAAccent(performanceKpis.avgSlaCompliance),
+    },
+    {
+      label:  'Temps Moyen',
+      value:  `${performanceKpis.avgProcessingTime.toFixed(1)}j`,
+      icon:   <SpeedIcon sx={{ fontSize: 20 }} />,
+      accent: '#00bcd4',
+    },
+    {
+      label:  'En Attente',
+      value:  performanceKpis.enAttenteCount.toLocaleString('fr-FR'),
+      icon:   <WarningIcon sx={{ fontSize: 20 }} />,
+      accent: '#ff9800',
+      sub:    'EN_ATTENTE · A_SCANNER · SCAN_EN_COURS · A_AFFECTER · ASSIGNE',
+    },
+  ] : [];
+
+  const TABLE_HEADERS = ['Gestionnaire', 'Total Documents', 'Traités', 'Dernières 24h', 'Progression'];
 
   return (
     <Grid container spacing={3}>
-      {/* Performance KPI Cards */}
+
+      {/* ─────────────── KPI Cards ─────────────── */}
       {performanceKpis && (
         <Grid item xs={12}>
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <AssessmentIcon color="primary" />
-                    <Box>
-                      <Typography variant="h4">{performanceKpis.totalProcessed}</Typography>
-                      <Typography color="textSecondary">Total Traités</Typography>
+          <Grid container spacing={2}>
+            {kpiCards.map((card, i) => (
+              <Grid item xs={6} md={3} key={i}>
+                <Card
+                  elevation={0}
+                  sx={{
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    borderLeft: `4px solid ${card.accent}`,
+                    borderRadius: '10px',
+                    height: '100%',
+                    transition: 'box-shadow 0.2s, transform 0.2s',
+                    '&:hover': {
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.10)',
+                      transform: 'translateY(-1px)',
+                    },
+                  }}
+                >
+                  <CardContent
+                    sx={{ p: { xs: 1.75, md: 2.5 }, '&:last-child': { pb: { xs: 1.75, md: 2.5 } } }}
+                  >
+                    <Box
+                      sx={{
+                        width: 40, height: 40, borderRadius: '50%',
+                        bgcolor: `${card.accent}15`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: card.accent, mb: 1.5,
+                      }}
+                    >
+                      {card.icon}
                     </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <TrendingUpIcon color="success" />
-                    <Box>
-                      <Typography variant="h4">{performanceKpis.avgSlaCompliance}%</Typography>
-                      <Typography color="textSecondary">SLA Moyen</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            {/* COMMENTED OUT: Redundant Utilisateurs Actifs - Already in Super Admin Gestion Utilisateurs */}
-            {/* <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <GroupIcon color="info" />
-                    <Box>
-                      <Typography variant="h4">{performanceKpis.totalUsers}</Typography>
-                      <Typography color="textSecondary">Utilisateurs Actifs</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid> */}
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <SpeedIcon color="warning" />
-                    <Box>
-                      <Typography variant="h4">{performanceKpis.avgProcessingTime.toFixed(1)}j</Typography>
-                      <Typography color="textSecondary">Temps Moyen</Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
-                <CardContent>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <WarningIcon color="warning" />
-                    <Box>
-                      <Typography variant="h4">{performanceKpis.enAttenteCount}</Typography>
-                      <Typography color="textSecondary">En Attente</Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mt: 0.5 }}>
-                        (EN_ATTENTE + A_SCANNER + SCAN_EN_COURS + A_AFFECTER + ASSIGNE)
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: '#546e7a', fontSize: '0.68rem',
+                        textTransform: 'uppercase', letterSpacing: '0.07em',
+                        display: 'block', mb: 0.5,
+                      }}
+                    >
+                      {card.label}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontWeight: 800, color: NAVY,
+                        fontSize: { xs: '1.4rem', md: '1.75rem' },
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {card.value}
+                    </Typography>
+                    {card.sub && (
+                      <Typography
+                        variant="caption"
+                        sx={{ color: 'text.disabled', fontSize: '0.62rem', lineHeight: 1.35, display: 'block', mt: 0.75 }}
+                      >
+                        {card.sub}
                       </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
           </Grid>
         </Grid>
       )}
 
-      {/* Department Performance Chart - COMMENTED OUT */}
-      {/* <Grid item xs={12} md={8}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Performance par Département</Typography>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.departmentPerformance}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="department" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="slaCompliance" fill="#1976d2" name="SLA %" />
-              <Bar dataKey="workload" fill="#ff9800" name="Charge" />
-            </BarChart>
-          </ResponsiveContainer>
-        </Paper>
-      </Grid> */}
-
-      {/* Volume Trend Chart */}
+      {/* ─────────────── Volume Trend ─────────────── */}
       <Grid item xs={12} md={8}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Volume de Traitement</Typography>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={data.volumeTrend}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="volume" stroke="#1976d2" strokeWidth={3} />
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2, md: 3 },
+            border: '1px solid rgba(0,0,0,0.08)',
+            borderRadius: '10px',
+            height: '100%',
+          }}
+        >
+          <Typography
+            sx={{ fontWeight: 700, color: NAVY, mb: 2.5, fontSize: '0.95rem' }}
+          >
+            Volume de Traitement
+          </Typography>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={data.volumeTrend} margin={{ top: 4, right: 8, bottom: 4, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ef" />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#546e7a' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#546e7a' }} />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, border: '1px solid #e0e7ef', fontSize: 12 }}
+                labelStyle={{ color: NAVY, fontWeight: 700 }}
+              />
+              <Line
+                type="monotone" dataKey="volume" stroke="#2196f3"
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: '#2196f3', strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </Paper>
       </Grid>
 
-      {/* SLA Distribution Chart */}
+      {/* ─────────────── SLA Distribution ─────────────── */}
       <Grid item xs={12} md={4}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Répartition SLA</Typography>
-          <ResponsiveContainer width="100%" height={300}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2, md: 3 },
+            border: '1px solid rgba(0,0,0,0.08)',
+            borderRadius: '10px',
+            height: '100%',
+          }}
+        >
+          <Typography sx={{ fontWeight: 700, color: NAVY, mb: 2.5, fontSize: '0.95rem' }}>
+            Répartition SLA
+          </Typography>
+          <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie data={data.slaDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value">
-                {data.slaDistribution.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+              <Pie
+                data={data.slaDistribution}
+                cx="50%" cy="45%"
+                innerRadius={58} outerRadius={92}
+                dataKey="value"
+                paddingAngle={3}
+              >
+                {data.slaDistribution.map((entry: any, idx: number) => (
+                  <Cell key={idx} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip />
-              <Legend />
+              <Tooltip
+                contentStyle={{ borderRadius: 8, border: '1px solid #e0e7ef', fontSize: 12 }}
+              />
+              <Legend
+                iconType="circle" iconSize={10}
+                wrapperStyle={{ fontSize: 12, paddingTop: 10 }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </Paper>
       </Grid>
 
-      {/* Daily Gestionnaire Performance */}
+      {/* ─────────────── Gestionnaire Daily Table ─────────────── */}
       <Grid item xs={12}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Performance Quotidienne des Gestionnaires</Typography>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end', bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
-              <Box sx={{ flex: 1, minWidth: 200 }}>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>Nom</Typography>
-                <input
-                  type="text"
-                  placeholder="Rechercher..."
-                  value={gestionnaireFilter}
-                  onChange={(e) => setGestionnaireFilter(e.target.value)}
-                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
-                />
-              </Box>
-              <Box sx={{ minWidth: 150 }}>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>Date début</Typography>
-                <input
-                  type="date"
-                  value={gestDateRange.fromDate}
-                  onChange={(e) => setGestDateRange({ ...gestDateRange, fromDate: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
-                />
-              </Box>
-              <Box sx={{ minWidth: 150 }}>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>Date fin</Typography>
-                <input
-                  type="date"
-                  value={gestDateRange.toDate}
-                  onChange={(e) => setGestDateRange({ ...gestDateRange, toDate: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
-                />
-              </Box>
-              <button
+        <Paper
+          elevation={0}
+          sx={{
+            border: '1px solid rgba(0,0,0,0.08)',
+            borderRadius: '10px',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Section header + filter panel */}
+          <Box sx={{ p: { xs: 2, md: 3 }, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+            <Typography sx={{ fontWeight: 700, color: NAVY, mb: 2, fontSize: '0.95rem' }}>
+              Performance Quotidienne des Gestionnaires
+            </Typography>
+
+            <Box
+              sx={{
+                display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end',
+                bgcolor: '#f0f4ff', p: 2, borderRadius: '8px',
+                border: '1px solid #d0dff5',
+              }}
+            >
+              <TextField
+                label="Rechercher"
+                placeholder="Nom du gestionnaire…"
+                size="small"
+                value={gestionnaireFilter}
+                onChange={(e) => setGestionnaireFilter(e.target.value)}
+                sx={{
+                  flex: 1, minWidth: 180,
+                  '& .MuiOutlinedInput-root': { bgcolor: '#fff', borderRadius: '6px', fontSize: '0.85rem' },
+                }}
+              />
+              <TextField
+                label="Date début"
+                type="date"
+                size="small"
+                value={gestDateRange.fromDate}
+                onChange={(e) => setGestDateRange({ ...gestDateRange, fromDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                sx={{
+                  minWidth: 155,
+                  '& .MuiOutlinedInput-root': { bgcolor: '#fff', borderRadius: '6px', fontSize: '0.85rem' },
+                }}
+              />
+              <TextField
+                label="Date fin"
+                type="date"
+                size="small"
+                value={gestDateRange.toDate}
+                onChange={(e) => setGestDateRange({ ...gestDateRange, toDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                sx={{
+                  minWidth: 155,
+                  '& .MuiOutlinedInput-root': { bgcolor: '#fff', borderRadius: '6px', fontSize: '0.85rem' },
+                }}
+              />
+              <Button
+                variant="contained"
+                size="small"
                 onClick={handleApplyDateFilter}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  backgroundColor: '#1976d2',
-                  color: 'white',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  fontWeight: 500
+                sx={{
+                  bgcolor: NAVY, color: '#fff', fontWeight: 600,
+                  px: 2.5, borderRadius: '6px',
+                  textTransform: 'none', fontSize: '0.85rem',
+                  '&:hover': { bgcolor: '#2d5484' },
                 }}
               >
                 Appliquer
-              </button>
+              </Button>
             </Box>
           </Box>
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table>
+
+          {/* Table */}
+          <TableContainer sx={{ maxHeight: 440 }}>
+            <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Gestionnaire</TableCell>
-                  <TableCell align="right">Total Documents</TableCell>
-                  <TableCell align="right">Traités</TableCell>
-                  <TableCell align="right">Dernières 24h</TableCell>
-                  <TableCell align="right" width="200px">Progression</TableCell>
+                  {TABLE_HEADERS.map((label, i) => (
+                    <TableCell
+                      key={label}
+                      align={i === 0 ? 'left' : 'right'}
+                      sx={{
+                        bgcolor: NAVY,
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.70rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        py: 1.5,
+                        whiteSpace: 'nowrap',
+                        borderRight: i < TABLE_HEADERS.length - 1
+                          ? '1px solid rgba(255,255,255,0.12)' : 'none',
+                        ...(i === 4 ? { minWidth: 180 } : {}),
+                      }}
+                    >
+                      {label}
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.gestionnairesDailyPerformance
-                  ?.filter((gest: any) => 
-                    gest.name.toLowerCase().includes(gestionnaireFilter.toLowerCase())
+                  ?.filter((gest: any) =>
+                    gest.name.toLowerCase().includes(gestionnaireFilter.toLowerCase()),
                   )
-                  .map((gest: any) => {
-                  // Calculate completion rate: Traités / Total Documents
-                  const completionRate = gest.documentsProcessed > 0 
-                    ? (gest.documentsTraites / gest.documentsProcessed) * 100 
-                    : 0;
-                  
-                  return (
-                    <TableRow key={gest.id}>
-                      <TableCell>{gest.name}</TableCell>
-                      <TableCell align="right">{gest.documentsProcessed}</TableCell>
-                      <TableCell align="right">
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            fontWeight: 'bold',
-                            color: 'error.main'
-                          }}
-                        >
-                          {gest.documentsTraites || 0}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            fontWeight: 'bold',
-                            color: gest.documentsLast24h > 0 ? 'success.main' : 'text.secondary'
-                          }}
-                        >
-                          {gest.documentsLast24h}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Box sx={{ width: '100%', bgcolor: 'grey.200', borderRadius: 1, height: 8 }}>
-                            <Box 
-                              sx={{ 
-                                width: `${Math.min(completionRate, 100)}%`, 
-                                bgcolor: completionRate >= 80 ? 'success.main' : completionRate >= 50 ? 'warning.main' : 'error.main', 
-                                borderRadius: 1, 
-                                height: 8 
-                              }} 
-                            />
-                          </Box>
-                          <Typography 
-                            variant="caption" 
-                            sx={{ 
-                              minWidth: 40, 
-                              cursor: 'pointer',
-                              '&:hover': { textDecoration: 'underline' }
-                            }}
-                            onClick={(e) => handlePopoverOpen(e, gest)}
-                          >
-                            {Math.round(completionRate)}%
+                  .map((gest: any, rowIdx: number) => {
+                    const completionRate = gest.documentsProcessed > 0
+                      ? (gest.documentsTraites / gest.documentsProcessed) * 100
+                      : 0;
+                    const barColor =
+                      completionRate >= 80 ? '#4caf50' :
+                      completionRate >= 50 ? '#ff9800' : '#f44336';
+
+                    return (
+                      <TableRow
+                        key={gest.id}
+                        sx={{
+                          bgcolor: rowIdx % 2 === 0 ? '#f4f7fb' : '#ffffff',
+                          '&:hover': { bgcolor: '#e8f0fe' },
+                          '& td': {
+                            fontSize: '0.81rem',
+                            borderRight: '1px solid #e0e7ef',
+                            py: 1.25,
+                            '&:last-child': { borderRight: 'none' },
+                          },
+                        }}
+                      >
+                        {/* Name */}
+                        <TableCell>
+                          <Typography sx={{ fontSize: '0.81rem', fontWeight: 600, color: NAVY }}>
+                            {gest.name}
                           </Typography>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                        </TableCell>
+
+                        {/* Total */}
+                        <TableCell align="right">
+                          {gest.documentsProcessed.toLocaleString('fr-FR')}
+                        </TableCell>
+
+                        {/* Traités */}
+                        <TableCell align="right">
+                          <Typography sx={{ fontSize: '0.81rem', fontWeight: 700, color: '#f44336' }}>
+                            {(gest.documentsTraites || 0).toLocaleString('fr-FR')}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Last 24h */}
+                        <TableCell align="right">
+                          <Chip
+                            label={gest.documentsLast24h}
+                            size="small"
+                            sx={{
+                              bgcolor: gest.documentsLast24h > 0 ? '#e6f4ed' : '#f4f7fb',
+                              color:   gest.documentsLast24h > 0 ? '#1b6b3a' : '#546e7a',
+                              border:  `1px solid ${gest.documentsLast24h > 0 ? '#a5d6a7' : '#cfd8dc'}`,
+                              fontWeight: 700, fontSize: '0.75rem',
+                            }}
+                          />
+                        </TableCell>
+
+                        {/* Progress bar */}
+                        <TableCell align="right">
+                          <Box display="flex" alignItems="center" gap={1.5}>
+                            <Box
+                              sx={{
+                                flex: 1, bgcolor: '#e0e7ef',
+                                borderRadius: '4px', height: 7, overflow: 'hidden',
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: `${Math.min(completionRate, 100)}%`,
+                                  bgcolor: barColor,
+                                  borderRadius: '4px',
+                                  height: '100%',
+                                  transition: 'width 0.4s ease',
+                                }}
+                              />
+                            </Box>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                minWidth: 36, fontWeight: 700,
+                                color: barColor, fontSize: '0.78rem',
+                                cursor: 'pointer',
+                                '&:hover': { textDecoration: 'underline' },
+                              }}
+                              onClick={(e) => handlePopoverOpen(e, gest)}
+                            >
+                              {Math.round(completionRate)}%
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
-          </Box>
+          </TableContainer>
         </Paper>
       </Grid>
 
-      {/* Team Ranking - COMMENTED OUT */}
-      {/* <Grid item xs={12} md={4}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Top Performers</Typography>
-          <Box>
-            {data.teamRanking.length > 0 ? (
-              data.teamRanking.map((team: any, index: number) => (
-                <Box key={index} sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="subtitle1">{team.name}</Typography>
-                    <Chip 
-                      label={`${team.slaRate}%`} 
-                      color={getSLAColor(team.slaRate) as any}
-                      size="small"
-                    />
-                  </Box>
-                  <Typography variant="body2" color="textSecondary">
-                    {team.processed} bordereaux traités
-                  </Typography>
-                </Box>
-              ))
-            ) : (
-              <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', py: 3 }}>
-                Aucun gestionnaire avec des bordereaux traités dans cette période
-              </Typography>
-            )}
-          </Box>
-        </Paper>
-      </Grid> */}
-
-      {/* Formula Popover */}
+      {/* ─────────────── Formula Popover ─────────────── */}
       <Popover
         open={Boolean(anchorEl)}
         anchorEl={anchorEl}
         onClose={handlePopoverClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top',    horizontal: 'center' }}
+        PaperProps={{
+          sx: {
+            borderRadius: '10px',
+            border: '1px solid #e0e7ef',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          },
         }}
       >
         {selectedGest && (
-          <Box sx={{ p: 2, maxWidth: 300 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-              Calcul de Progression
+          <Box sx={{ p: 2.5, minWidth: 280 }}>
+            <Box display="flex" alignItems="center" gap={1} sx={{ mb: 1.5 }}>
+              <InfoOutlinedIcon sx={{ fontSize: 18, color: '#2196f3' }} />
+              <Typography sx={{ fontWeight: 700, color: NAVY, fontSize: '0.88rem' }}>
+                Calcul de Progression
+              </Typography>
+            </Box>
+            <Typography variant="body2" sx={{ mb: 1.5, color: '#546e7a' }}>
+              <strong style={{ color: NAVY }}>{selectedGest.name}</strong>
             </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              <strong>{selectedGest.name}</strong>
-            </Typography>
-            <Box sx={{ bgcolor: 'grey.100', p: 1.5, borderRadius: 1, fontFamily: 'monospace' }}>
-              <Typography variant="body2" sx={{ mb: 0.5 }}>
+            <Box
+              sx={{
+                bgcolor: '#f4f7fb', p: 1.75,
+                borderRadius: '6px', border: '1px solid #e0e7ef',
+                fontFamily: 'monospace',
+              }}
+            >
+              <Typography variant="body2" sx={{ color: '#546e7a', mb: 0.75, fontSize: '0.82rem' }}>
                 Progression = (Traités / Total) × 100
               </Typography>
-              <Typography variant="body2" sx={{ color: 'primary.main' }}>
+              <Typography variant="body2" sx={{ color: '#2196f3', mb: 0.5, fontSize: '0.82rem' }}>
                 = ({selectedGest.documentsTraites} / {selectedGest.documentsProcessed}) × 100
               </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                = {Math.round((selectedGest.documentsTraites / selectedGest.documentsProcessed) * 100)}%
+              <Typography sx={{ fontWeight: 800, color: NAVY, fontSize: '0.92rem' }}>
+                ={' '}
+                {selectedGest.documentsProcessed > 0
+                  ? Math.round((selectedGest.documentsTraites / selectedGest.documentsProcessed) * 100)
+                  : 0}%
               </Typography>
             </Box>
           </Box>
         )}
       </Popover>
-      
-      {/* Department Performance Table - COMMENTED OUT */}
-      {/* <Grid item xs={12}>
-        <Paper elevation={2} sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Détail par Département</Typography>
-          <Box sx={{ overflowX: 'auto', width: '100%' }}>
-            <Table sx={{ minWidth: 650 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Département</TableCell>
-                  <TableCell>Conformité SLA</TableCell>
-                  <TableCell>Temps Moyen</TableCell>
-                  <TableCell>Charge de Travail</TableCell>
-                  <TableCell>Performance</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.departmentPerformance.map((dept: any, index: number) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <Typography variant="subtitle2">{dept.department}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={`${dept.slaCompliance}%`} 
-                        color={getSLAColor(dept.slaCompliance) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{dept.avgTime}j</TableCell>
-                    <TableCell>{dept.workload}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={dept.slaCompliance >= 90 ? 'Excellent' : dept.slaCompliance >= 80 ? 'Bon' : 'Améliorer'}
-                        color={getSLAColor(dept.slaCompliance) as any}
-                        variant="outlined"
-                        size="small"
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Box>
-        </Paper>
-      </Grid> */}
     </Grid>
   );
 };

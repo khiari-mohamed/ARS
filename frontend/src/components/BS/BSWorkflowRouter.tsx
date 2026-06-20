@@ -4,7 +4,7 @@ import BODashboard from '../../pages/dashboard/BODashboard';
 import ScanDashboard from '../../pages/dashboard/ScanDashboard';
 // COMMENTED OUT: Chef dashboard - Use dedicated Chef d'équipe module instead
 // import ChefDashboard from '../../pages/dashboard/ChefDashboard';
-import GestionnaireDashboard from '../../pages/dashboard/GestionnaireDashboard';
+//import GestionnaireDashboard from '../../pages/dashboard/GestionnaireDashboard';
 import { Alert } from 'antd';
 
 /**
@@ -50,7 +50,7 @@ export const BSWorkflowRouter: React.FC = () => {
     
     case 'gestionnaire':
     case 'processor':
-      return <GestionnaireDashboard />;
+      /*return <GestionnaireDashboard />;*/
     
     case 'finance':
       // Finance users see their own dashboard (not implemented here)

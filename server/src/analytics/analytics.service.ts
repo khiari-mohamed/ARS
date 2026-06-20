@@ -1212,29 +1212,108 @@ export class AnalyticsService {
 
   async getPlannedVsActual(user: any, dateRange: any) {
     this.checkAnalyticsRole(user);
-    
-    // Get actual data from database
-    const actualData = await this.prisma.bordereau.groupBy({
-      by: ['createdAt'],
-      _count: { id: true },
+    // Try to fetch forecast up-front (used for planned values/fallback)
+    let forecast: any = { history: [] };
+    try {
+      forecast = await this.getForecast(user);
+    } catch (err) {
+      forecast = { history: [] };
+    }
+
+    const history = Array.isArray(forecast?.history) ? forecast.history : [];
+
+    // Determine number of buckets (periods) to show. Prefer explicit bucketCount, then forecast history length, then default 8.
+    const defaultBuckets = 8;
+    const bucketCount = Number(dateRange?.bucketCount) || (history.length > 0 ? history.length : defaultBuckets);
+
+    // Resolve date range
+    const now = new Date();
+    const to = dateRange?.toDate ? new Date(dateRange.toDate) : now;
+    let from = dateRange?.fromDate ? new Date(dateRange.fromDate) : new Date(to.getTime() - bucketCount * 7 * 24 * 60 * 60 * 1000);
+    if (from.getTime() > to.getTime()) {
+      // Guard: if user passed an inverted range, fallback to a sensible window
+      from = new Date(to.getTime() - bucketCount * 7 * 24 * 60 * 60 * 1000);
+    }
+
+    const totalMs = Math.max(1, to.getTime() - from.getTime());
+    const bucketMs = Math.ceil(totalMs / bucketCount);
+    const msPerDay = 24 * 60 * 60 * 1000;
+
+    // Load raw actual rows for the date range and aggregate into buckets
+    const rows = await this.prisma.bordereau.findMany({
       where: {
         createdAt: {
-          gte: dateRange.fromDate ? new Date(dateRange.fromDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          lte: dateRange.toDate ? new Date(dateRange.toDate) : new Date()
-        }
+          gte: from,
+          lte: to,
+        },
       },
-      orderBy: { createdAt: 'asc' }
+      select: { createdAt: true },
     });
 
-    // Get planned data from AI forecast
-    const forecast = await this.getForecast(user);
-    
-    return actualData.map((actual, index) => ({
-      period: `Sem ${index + 1}`,
-      planned: forecast.history[index]?.count || 0,
-      actual: actual._count.id,
-      variance: Math.round(((actual._count.id - (forecast.history[index]?.count || 0)) / Math.max(forecast.history[index]?.count || 1, 1)) * 100)
-    }));
+    const buckets: number[] = new Array(bucketCount).fill(0);
+    for (const r of rows) {
+      const ts = new Date(r.createdAt).getTime();
+      let idx = Math.floor((ts - from.getTime()) / bucketMs);
+      if (idx < 0) idx = 0;
+      if (idx >= bucketCount) idx = bucketCount - 1;
+      buckets[idx] = (buckets[idx] || 0) + 1;
+    }
+
+    // Map forecast history to planned values per bucket.
+    const planned: number[] = [];
+    if (history.length === bucketCount) {
+      for (let i = 0; i < bucketCount; i++) planned.push(history[i]?.count || 0);
+    } else if (history.length > 0) {
+      const totalForecast = history.reduce((s: number, h: any) => s + (h.count || 0), 0);
+      const avgPerDay = totalForecast / Math.max(1, history.length);
+      const daysPerBucket = Math.max(1, Math.round(bucketMs / msPerDay));
+      for (let i = 0; i < bucketCount; i++) planned.push(Math.round(avgPerDay * daysPerBucket));
+    } else {
+      for (let i = 0; i < bucketCount; i++) planned.push(0);
+    }
+
+    // Helper: week number
+    const getWeekNumber = (d: Date) => {
+      const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      const dayNum = date.getUTCDay() || 7;
+      date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+      return Math.ceil((((date.getTime() - yearStart.getTime()) / msPerDay) + 1) / 7);
+    };
+
+    const formatLabel = (start: Date, end: Date) => {
+      // If large bucket (month+), show month-year
+      if (bucketMs >= 27 * msPerDay) {
+        return start.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+      }
+      // If week-sized bucket show week number
+      if (bucketMs >= 6 * msPerDay) {
+        return `Sem ${getWeekNumber(start)} ${start.getFullYear()}`;
+      }
+      // Otherwise show a short date range
+      const s = start.toLocaleDateString('fr-FR');
+      const e = end.toLocaleDateString('fr-FR');
+      return s === e ? s : `${s} → ${e}`;
+    };
+
+    const result: any[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const start = new Date(from.getTime() + i * bucketMs);
+      const end = new Date(Math.min(to.getTime(), from.getTime() + (i + 1) * bucketMs - 1));
+      const plannedVal = planned[i] || 0;
+      const actualVal = buckets[i] || 0;
+      const variance = plannedVal ? Math.round(((actualVal - plannedVal) / Math.max(plannedVal, 1)) * 100) : 0;
+      result.push({
+        period: formatLabel(start, end),
+        planned: plannedVal,
+        actual: actualVal,
+        variance,
+      });
+    }
+
+    // debug logs removed
+
+    return result;
   }
 
   async getAIRecommendations(user: any) {

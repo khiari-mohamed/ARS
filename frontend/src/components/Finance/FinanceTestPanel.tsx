@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+/*import React, { useState } from 'react';
 import { Paper, Typography, Button, Stack, Alert, Box } from '@mui/material';
 
 const FinanceTestPanel: React.FC = () => {
@@ -77,3 +77,5 @@ const FinanceTestPanel: React.FC = () => {
 };
 
 export default FinanceTestPanel;
+*/
+export {};
