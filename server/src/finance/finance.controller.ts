@@ -1500,27 +1500,34 @@ export class FinanceController {
     const user = getUserFromRequest(req);
     
     try {
+      console.log('🔍 Update request body:', body);
+      console.log('🔍 User attempting update:', { id: user.id, role: user.role });
+      
       // EXACT SPEC: Responsable Département can ONLY set these statuses
       if (user.role === 'RESPONSABLE_DEPARTEMENT') {
         const allowedStatuses = ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'];
         
         if (!allowedStatuses.includes(body.etatVirement)) {
-          throw new BadRequestException(
-            `Responsable Département peut uniquement définir les statuts: Virement non validé (VIREMENT_NON_VALIDE) ou Virement déposé (VIREMENT_DEPOSE). Statut demandé: ${body.etatVirement}`
-          );
+          const error = `Responsable Département peut uniquement définir les statuts: Virement non validé (VIREMENT_NON_VALIDE) ou Virement déposé (VIREMENT_DEPOSE). Statut demandé: ${body.etatVirement}`;
+          console.error('❌ Role validation failed:', error);
+          throw new BadRequestException(error);
         }
       }
       
       // Get current OV state before update
+      console.log('🔍 Fetching current OV state for id:', id);
       const currentOV = await this.prisma.ordreVirement.findUnique({
         where: { id },
-        select: { etatVirement: true }
+        select: { etatVirement: true, reference: true }
       });
 
       if (!currentOV) {
-        throw new BadRequestException('Ordre de virement not found');
+        const error = 'Ordre de virement not found';
+        console.error('❌ OV not found:', id);
+        throw new BadRequestException(error);
       }
 
+      console.log('🔍 Database before update:', currentOV);
       const previousState = currentOV.etatVirement;
       
       const updateData: any = {
@@ -1551,6 +1558,9 @@ export class FinanceController {
         }
       }
       
+      console.log('🔍 Update data prepared:', updateData);
+      console.log('🔍 Executing database update...');
+      
       const updatedOV = await this.prisma.ordreVirement.update({
         where: { id },
         data: updateData,
@@ -1559,8 +1569,11 @@ export class FinanceController {
           donneurOrdre: true
         }
       });
+      
+      console.log('✅ Database update successful:', { id: updatedOV.id, newStatus: updatedOV.etatVirement });
 
       // LOG HISTORY - Determine action type
+      console.log('🔍 Logging history...');
       const { logVirementHistory, VIREMENT_ACTIONS } = await import('./virement-history.helper');
       
       let action: string;
@@ -1583,8 +1596,11 @@ export class FinanceController {
         }
       );
       
+      console.log('✅ History logged:', action);
+      
       // EXACT SPEC: Auto-update bordereau status when virement is EXECUTE
       if (body.etatVirement === 'EXECUTE' && updatedOV.bordereauId) {
+        console.log('🔍 Updating bordereau status to VIREMENT_EXECUTE...');
         await this.prisma.bordereau.update({
           where: { id: updatedOV.bordereauId },
           data: {
@@ -1609,7 +1625,13 @@ export class FinanceController {
         ordreVirement: updatedOV
       };
     } catch (error : any) {
-      console.error('❌ Failed to update OV status:', error);
+      console.error('❌ Update failed:', error);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        code: error.code
+      });
       throw new BadRequestException('Failed to update status: ' + error.message);
     }
   }

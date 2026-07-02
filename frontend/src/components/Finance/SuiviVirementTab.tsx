@@ -544,7 +544,7 @@ const SuiviVirementTab: React.FC = () => {
                       fullWidth
                       type="date"
                       label="Date demande"
-                      value={updateData.dateDemandeRecuperation}
+                      value={updateData.dateDemandeRecuperation ? new Date(updateData.dateDemandeRecuperation).toISOString().split('T')[0] : ''}
                       onChange={(e) => setUpdateData(prev => ({ ...prev, dateDemandeRecuperation: e.target.value }))}
                       InputLabelProps={{ shrink: true }}
                       sx={{ mt: 1 }}
@@ -566,7 +566,7 @@ const SuiviVirementTab: React.FC = () => {
                       fullWidth
                       type="date"
                       label="Date récupération"
-                      value={updateData.dateMontantRecupere}
+                      value={updateData.dateMontantRecupere ? new Date(updateData.dateMontantRecupere).toISOString().split('T')[0] : ''}
                       onChange={(e) => setUpdateData(prev => ({ ...prev, dateMontantRecupere: e.target.value }))}
                       InputLabelProps={{ shrink: true }}
                       sx={{ mt: 1 }}

@@ -597,11 +597,19 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
     let clientName: string | undefined;
     let bordereauRef: string | undefined;
     
+    // FIXED: Get first adherent's actual contract number (not Contract.codeAssure which is insured code)
+    const firstAdherent = ordreVirement.items?.[0]?.adherent;
+    contractNumber = firstAdherent?.numeroContrat || undefined;
+    
     if (ordreVirement.bordereau) {
       // Bordereau-linked OV
-      contractNumber = ordreVirement.bordereau.contract?.codeAssure || undefined;
       clientName = ordreVirement.bordereau.client?.name || undefined;
       bordereauRef = ordreVirement.bordereau.reference || undefined;
+      
+      // Fallback to Contract.codeAssure only if no adherent contract number
+      if (!contractNumber) {
+        contractNumber = ordreVirement.bordereau.contract?.codeAssure || undefined;
+      }
     } else if (ordreVirement.clientName) {
       // Manual entry - get client and contract from clientName
       const client = await this.prisma.client.findFirst({
@@ -616,7 +624,10 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
       
       if (client) {
         clientName = client.name;
-        contractNumber = client.contracts?.[0]?.codeAssure || undefined;
+        // Fallback to client's contract if no adherent contract number
+        if (!contractNumber) {
+          contractNumber = client.contracts?.[0]?.codeAssure || undefined;
+        }
       }
       
       bordereauRef = 'Entrée manuelle';
@@ -644,7 +655,7 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
         ?.filter(item => item.statut === 'VALIDE') // Only valid items
         ?.map(item => ({
           societe: item.adherent?.client?.name || '',
-          numContrat: item.adherent?.clientId ? 'CT-' + item.adherent.clientId.substring(0, 8) : '',
+          numContrat: item.adherent?.numeroContrat || item.adherent?.codeAssure || '', // Use Adherent.numeroContrat (actual contract number) or fallback to codeAssure
           matricule: item.adherent?.matricule || '',
           nom: item.adherent?.nom || '',
           prenom: item.adherent?.prenom || '',

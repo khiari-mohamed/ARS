@@ -343,6 +343,7 @@ const DonneursTab: React.FC = () => {
                     <MenuItem value="BTK_COMAR">BTK COMAR (Format V1/V2)</MenuItem>
                     <MenuItem value="BTK_ASTREE">BTK ASTREE (Format V1/V2)</MenuItem>
                     <MenuItem value="ATTIJARI">ATTIJARI (Format 110104)</MenuItem>
+                    <MenuItem value="BNA">BNA (Banque Nationale Agricole)</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>

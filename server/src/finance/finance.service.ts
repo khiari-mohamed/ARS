@@ -1551,27 +1551,41 @@ Document généré automatiquement par ARS`;
         montantsRecuperes: ordresVirement.filter(ov => ov.montantRecupere).length
       };
       
+      // For each OV, get the first adherent's contract number
+      const ordresWithContractNumbers = await Promise.all(
+        ordresVirement.map(async (ov) => {
+          // Get first adherent's contract number
+          const firstItem = await this.prisma.virementItem.findFirst({
+            where: { ordreVirementId: ov.id },
+            include: { adherent: true },
+            orderBy: { createdAt: 'asc' }
+          });
+          
+          return {
+            id: ov.id,
+            reference: ov.reference,
+            referenceBordereau: ov.bordereau?.reference || null,
+            compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || ov.clientName || null,
+            client: ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle',
+            bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle',
+            montant: ov.montantTotal,
+            statut: ov.etatVirement,
+            dateCreation: ov.dateCreation,
+            dateExecution: ov.dateTraitement || ov.dateCreation,
+            demandeRecuperation: ov.demandeRecuperation,
+            dateDemandeRecuperation: ov.dateDemandeRecuperation,
+            montantRecupere: ov.montantRecupere,
+            dateMontantRecupere: ov.dateMontantRecupere,
+            motifObservation: ov.validationComment || ov.motifObservation || null,
+            modeRecuperation: ov.client?.modeRecuperation || ov.bordereau?.client?.modeRecuperation || null,
+            nomDonneur: ov.donneurOrdre?.nom || null,
+            numeroContrat: firstItem?.adherent?.numeroContrat || ov.bordereau?.contract?.codeAssure || ov.contract?.codeAssure || null
+          };
+        })
+      );
+      
       return {
-        ordresVirement: ordresVirement.map(ov => ({
-          id: ov.id,
-          reference: ov.reference,
-          referenceBordereau: ov.bordereau?.reference || null,
-          compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || ov.clientName || null,
-          client: ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle',
-          bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle',
-          montant: ov.montantTotal,
-          statut: ov.etatVirement,
-          dateCreation: ov.dateCreation,
-          dateExecution: ov.dateTraitement || ov.dateCreation,
-          demandeRecuperation: ov.demandeRecuperation,
-          dateDemandeRecuperation: ov.dateDemandeRecuperation,
-          montantRecupere: ov.montantRecupere,
-          dateMontantRecupere: ov.dateMontantRecupere,
-          motifObservation: ov.validationComment || ov.motifObservation || null,
-          modeRecuperation: ov.client?.modeRecuperation || ov.bordereau?.client?.modeRecuperation || null, // NEW: Mode de récupération (from direct client or bordereau client)
-          nomDonneur: ov.donneurOrdre?.nom || null, // NEW: Nom du donneur
-          numeroContrat: ov.contract?.codeAssure || ov.bordereau?.contract?.codeAssure || null // NEW: Numéro de contrat (from direct contract or bordereau contract)
-        })),
+        ordresVirement: ordresWithContractNumbers,
         stats
       };
     } catch (error) {
@@ -1634,30 +1648,46 @@ Document généré automatiquement par ARS`;
         console.log(`  - ${b.reference}: Client=${b.client.name}, TeamLeader=${b.contract?.teamLeader?.fullName || 'NONE'} (${b.contract?.teamLeaderId || 'NO_ID'})`);
       });
       
-      const result = bordereaux.map(b => {
-        // Get the LATEST OV (most recent dateCreation)
-        const ov = b.ordresVirement.sort((a, b) => b.dateCreation.getTime() - a.dateCreation.getTime())[0];
-        return {
-          id: ov?.id || b.id,
-          clientSociete: b.client.name,
-          compagnieAssurance: b.client.compagnieAssurance?.nom || null,
-          referenceOV: ov?.reference || null,
-          referenceBordereau: b.reference,
-          montantBordereau: ov?.montantTotal || 0,
-          dateFinalisationBordereau: b.dateCloture ? b.dateCloture.toISOString() : null,
-          dateInjection: ov?.dateCreation ? ov.dateCreation.toISOString() : null,
-          statutVirement: ov?.etatVirement || 'NON_EXECUTE',
-          dateTraitementVirement: ov?.dateTraitement ? ov.dateTraitement.toISOString() : null,
-          motifObservation: ov?.validationComment || ov?.motifObservation || null,
-          demandeRecuperation: ov?.demandeRecuperation || false,
-          dateDemandeRecuperation: ov?.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
-          montantRecupere: ov?.montantRecupere || false,
-          dateMontantRecupere: ov?.dateMontantRecupere ? ov.dateMontantRecupere.toISOString() : null,
-          modeRecuperation: b.client?.modeRecuperation || null, // NEW: Mode de récupération
-          nomDonneur: ov?.donneurOrdre?.nom || null, // NEW: Nom du donneur
-          numeroContrat: b.contract?.codeAssure || null // NEW: Numéro de contrat
-        };
-      });
+      const result = await Promise.all(
+        bordereaux.map(async (b) => {
+          // Get the LATEST OV (most recent dateCreation)
+          const ov = b.ordresVirement.sort((a, b) => b.dateCreation.getTime() - a.dateCreation.getTime())[0];
+          
+          // Get first adherent's contract number if OV exists
+          let numeroContrat = b.contract?.codeAssure || null;
+          if (ov?.id) {
+            const firstItem = await this.prisma.virementItem.findFirst({
+              where: { ordreVirementId: ov.id },
+              include: { adherent: true },
+              orderBy: { createdAt: 'asc' }
+            });
+            if (firstItem?.adherent?.numeroContrat) {
+              numeroContrat = firstItem.adherent.numeroContrat;
+            }
+          }
+          
+          return {
+            id: ov?.id || b.id,
+            clientSociete: b.client.name,
+            compagnieAssurance: b.client.compagnieAssurance?.nom || null,
+            referenceOV: ov?.reference || null,
+            referenceBordereau: b.reference,
+            montantBordereau: ov?.montantTotal || 0,
+            dateFinalisationBordereau: b.dateCloture ? b.dateCloture.toISOString() : null,
+            dateInjection: ov?.dateCreation ? ov.dateCreation.toISOString() : null,
+            statutVirement: ov?.etatVirement || 'NON_EXECUTE',
+            dateTraitementVirement: ov?.dateTraitement ? ov.dateTraitement.toISOString() : null,
+            motifObservation: ov?.validationComment || ov?.motifObservation || null,
+            demandeRecuperation: ov?.demandeRecuperation || false,
+            dateDemandeRecuperation: ov?.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
+            montantRecupere: ov?.montantRecupere || false,
+            dateMontantRecupere: ov?.dateMontantRecupere ? ov.dateMontantRecupere.toISOString() : null,
+            modeRecuperation: b.client?.modeRecuperation || null,
+            nomDonneur: ov?.donneurOrdre?.nom || null,
+            numeroContrat: numeroContrat
+          };
+        })
+      );
       
       console.log('✅ Returning', result.length, 'bordereaux to frontend');
       return result;
