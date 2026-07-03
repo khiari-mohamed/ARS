@@ -248,10 +248,10 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     let filtered = bordereauxTraites;
 
-    // EXACT SPEC: Finance role can only see virements with 4 specific statuses
+    // EXACT SPEC: Finance role can only see virements with 5 specific statuses
     if (user?.role === 'FINANCE') {
       filtered = filtered.filter(r => 
-        ['VIREMENT_DEPOSE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+        ['VIREMENT_DEPOSE', 'EN_COURS_VALIDATION', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
       );
     }
 
@@ -302,10 +302,10 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     let filtered = manualOVs;
 
-    // EXACT SPEC: Finance role can only see virements with 4 specific statuses
+    // EXACT SPEC: Finance role can only see virements with 5 specific statuses
     if (user?.role === 'FINANCE') {
       filtered = filtered.filter(r => 
-        ['VIREMENT_DEPOSE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+        ['VIREMENT_DEPOSE', 'EN_COURS_VALIDATION', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
       );
     }
 
@@ -364,7 +364,7 @@ const TrackingTab: React.FC = () => {
       'EXECUTE': 'Virement exécuté',
       'EN_COURS_VALIDATION': 'En cours de validation',
       'VIREMENT_NON_VALIDE': 'Virement non validé',
-      'VIREMENT_DEPOSE': 'Virement déposé'
+      'VIREMENT_DEPOSE': 'Virement autorisé'
     };
 
     const statusColors = {
@@ -388,7 +388,7 @@ const TrackingTab: React.FC = () => {
       'EXECUTE': '✅',
       'EN_COURS_VALIDATION': '📝',
       'VIREMENT_NON_VALIDE': '❌',
-      'VIREMENT_DEPOSE': '🏦'
+      'VIREMENT_DEPOSE': '✅'
     };
 
     return (
@@ -504,12 +504,12 @@ const TrackingTab: React.FC = () => {
     return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN' || user?.role === 'GESTIONNAIRE_SENIOR';
   };
 
-  // EXACT SPEC: Finance role can only access 4 specific statuses
-  // EXACT SPEC: Responsable Département can only access 2 specific statuses
+  // Statuses visible in the filter dropdown (view)
   const getAvailableStatuses = () => {
     if (user?.role === 'FINANCE') {
       return [
-        { value: 'VIREMENT_DEPOSE', label: '🏦 Virement autorisé' },
+        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+        { value: 'EN_COURS_VALIDATION', label: '📋 Virement déposé' },
         { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
         { value: 'EXECUTE', label: '✅ Virement exécuté' },
         { value: 'REJETE', label: '❌ Virement rejeté' },
@@ -518,10 +518,9 @@ const TrackingTab: React.FC = () => {
     if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
       return [
         { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-        { value: 'VIREMENT_DEPOSE', label: '🏦 Virement déposé' },
+        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
       ];
     }
-    // All other roles have access to all statuses
     return [
       { value: 'NON_EXECUTE', label: '⏳ Virement non exécuté' },
       { value: 'EN_COURS_EXECUTION', label: '🔄 Virement en cours d\'exécution' },
@@ -531,7 +530,36 @@ const TrackingTab: React.FC = () => {
       { value: 'EXECUTE', label: '✅ Virement exécuté' },
       { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
       { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-      { value: 'VIREMENT_DEPOSE', label: '🏦 Virement déposé' },
+      { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+    ];
+  };
+
+  // Statuses Finance/roles can SET in edit/bulk dialogs (actions)
+  const getEditableStatuses = () => {
+    if (user?.role === 'FINANCE') {
+      return [
+        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+        { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
+        { value: 'EXECUTE', label: '✅ Virement exécuté' },
+        { value: 'REJETE', label: '❌ Virement rejeté' },
+      ];
+    }
+    if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
+      return [
+        { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
+        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+      ];
+    }
+    return [
+      { value: 'NON_EXECUTE', label: '⏳ Virement non exécuté' },
+      { value: 'EN_COURS_EXECUTION', label: '🔄 Virement en cours d\'exécution' },
+      { value: 'EXECUTE_PARTIELLEMENT', label: '⚠️ Virement exécuté partiellement' },
+      { value: 'REJETE', label: '❌ Virement rejeté' },
+      { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
+      { value: 'EXECUTE', label: '✅ Virement exécuté' },
+      { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
+      { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
+      { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
     ];
   };
 
@@ -1619,7 +1647,7 @@ const TrackingTab: React.FC = () => {
                 label="Statut de virement"
                 disabled={!canModifyStatus()}
               >
-                {getAvailableStatuses().map(status => (
+                {getEditableStatuses().map(status => (
                   <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
                 ))}
               </Select>
@@ -2154,7 +2182,7 @@ const TrackingTab: React.FC = () => {
                 onChange={(e) => setBulkUpdateForm({ ...bulkUpdateForm, statutVirement: e.target.value })}
                 label="Nouveau Statut"
               >
-                {getAvailableStatuses().map(status => (
+                {getEditableStatuses().map(status => (
                   <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
                 ))}
               </Select>
