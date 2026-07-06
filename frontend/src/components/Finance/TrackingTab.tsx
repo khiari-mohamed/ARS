@@ -23,7 +23,7 @@ interface BordereauTraite {
   montantBordereau: number;
   dateFinalisationBordereau?: string;
   dateInjection: string;
-  statutVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_DEPOSE';
+  statutVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_DEPOSE' | 'VIREMENT_AUTORISE';
   statutGlobal?: string; // NEW: Global workflow status
   dateTraitementVirement?: string;
   motifObservation?: string;
@@ -248,10 +248,10 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     let filtered = bordereauxTraites;
 
-    // EXACT SPEC: Finance role can only see virements with 5 specific statuses
+    // Finance role sees: NON_EXECUTE (to create OVs) + workflow statuses
     if (user?.role === 'FINANCE') {
       filtered = filtered.filter(r => 
-        ['VIREMENT_DEPOSE', 'EN_COURS_VALIDATION', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+        ['NON_EXECUTE', 'VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
       );
     }
 
@@ -302,10 +302,10 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     let filtered = manualOVs;
 
-    // EXACT SPEC: Finance role can only see virements with 5 specific statuses
+    // Finance role sees: NON_EXECUTE + workflow statuses
     if (user?.role === 'FINANCE') {
       filtered = filtered.filter(r => 
-        ['VIREMENT_DEPOSE', 'EN_COURS_VALIDATION', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+        ['NON_EXECUTE', 'VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
       );
     }
 
@@ -364,7 +364,8 @@ const TrackingTab: React.FC = () => {
       'EXECUTE': 'Virement exécuté',
       'EN_COURS_VALIDATION': 'En cours de validation',
       'VIREMENT_NON_VALIDE': 'Virement non validé',
-      'VIREMENT_DEPOSE': 'Virement autorisé'
+      'VIREMENT_DEPOSE': 'Virement déposé',
+      'VIREMENT_AUTORISE': 'Virement autorisé'
     };
 
     const statusColors = {
@@ -376,7 +377,8 @@ const TrackingTab: React.FC = () => {
       'EXECUTE': 'success',
       'EN_COURS_VALIDATION': 'info',
       'VIREMENT_NON_VALIDE': 'error',
-      'VIREMENT_DEPOSE': 'success'
+      'VIREMENT_DEPOSE': 'success',
+      'VIREMENT_AUTORISE': 'success'
     };
 
     const statusIcons = {
@@ -388,7 +390,8 @@ const TrackingTab: React.FC = () => {
       'EXECUTE': '✅',
       'EN_COURS_VALIDATION': '📝',
       'VIREMENT_NON_VALIDE': '❌',
-      'VIREMENT_DEPOSE': '✅'
+      'VIREMENT_DEPOSE': '💼',
+      'VIREMENT_AUTORISE': '✅'
     };
 
     return (
@@ -508,8 +511,8 @@ const TrackingTab: React.FC = () => {
   const getAvailableStatuses = () => {
     if (user?.role === 'FINANCE') {
       return [
-        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
-        { value: 'EN_COURS_VALIDATION', label: '📋 Virement déposé' },
+        { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
+        { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
         { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
         { value: 'EXECUTE', label: '✅ Virement exécuté' },
         { value: 'REJETE', label: '❌ Virement rejeté' },
@@ -518,7 +521,7 @@ const TrackingTab: React.FC = () => {
     if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
       return [
         { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+        { value: 'VIREMENT_DEPOSE', label: '✅ Virement déposé' },
       ];
     }
     return [
@@ -538,7 +541,7 @@ const TrackingTab: React.FC = () => {
   const getEditableStatuses = () => {
     if (user?.role === 'FINANCE') {
       return [
-        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+        { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
         { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
         { value: 'EXECUTE', label: '✅ Virement exécuté' },
         { value: 'REJETE', label: '❌ Virement rejeté' },
@@ -547,7 +550,7 @@ const TrackingTab: React.FC = () => {
     if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
       return [
         { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-        { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+        { value: 'VIREMENT_DEPOSE', label: '✅ Virement déposé' },
       ];
     }
     return [
@@ -1546,6 +1549,27 @@ const TrackingTab: React.FC = () => {
                                 }}
                               >
                                 TXT
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                sx={{
+                                  fontSize: '0.68rem', py: 0.3, px: 0.8, minWidth: 0, whiteSpace: 'nowrap',
+                                  '&:hover': { bgcolor: 'secondary.main', color: '#fff' },
+                                }}
+                                onClick={async () => {
+                                  try {
+                                    const { LocalAPI } = await import('../../services/axios');
+                                    const response = await LocalAPI.get(`/finance/ordres-virement/${record.id}/uploaded-pdf`, { responseType: 'blob' });
+                                    const blob = new Blob([response.data], { type: 'application/pdf' });
+                                    setDocumentViewer({ open: true, url: URL.createObjectURL(blob), title: `PDF Uploadé - ${record.referenceOV}`, type: 'pdf' });
+                                  } catch (error: any) {
+                                    alert(`Aucun PDF uploadé trouvé pour cet OV\n${error.response?.data?.message || error.message || ''}`);
+                                  }
+                                }}
+                              >
+                                PDF Uploadé
                               </Button>
                             </>
                           )}

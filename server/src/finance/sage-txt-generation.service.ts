@@ -45,7 +45,7 @@ import { StatutGlobalService } from './statut-global.service';
 export interface SageLineParams {
   codeJournal: string;   // 6 chars max
   date: string;          // JJMMAAAA (8 chars)
-  numOrdre: string;      // numeric string, will be taken as last 5 digits
+  numOrdre: string;      // emits as YYYYNNNN, e.g. "20260001"
   compte: string;        // up to 16 chars (left-aligned, right-padded to 16)
   dc: 'D' | 'C';
   montant: string;       // already formatted: "1118,732"
@@ -230,8 +230,9 @@ export class SageTxtGenerationService {
    */
   private buildTwoLinesForOv(ov: any): string[] {
     const codes = this.resolveCodes(ov);
-    const date = this.formatDateJJMMAAAA(new Date(ov.dateCreation));
-    const numOrdre = this.extractNumOrdre(ov.reference);
+    const dateCreation = new Date(ov.dateCreation);
+    const date = this.formatDateJJMMAAAA(dateCreation);
+    const numOrdre = this.extractNumOrdre(ov.reference, dateCreation);
     const montant = this.formatMontant(ov.montantTotal);
     const libelleCompl = this.resolveLibelle(ov);
 
@@ -269,12 +270,14 @@ export class SageTxtGenerationService {
    */
   private buildTwoLinesForOvWithTemplate(ov: any, template: any): string[] {
     const codes = this.resolveCodes(ov);
-    const date = this.formatDateJJMMAAAA(new Date(ov.dateCreation));
-    const numOrdre = this.extractNumOrdre(ov.reference);
+    const dateCreation = new Date(ov.dateCreation);
+    const date = this.formatDateJJMMAAAA(dateCreation);
+    const numOrdre = this.extractNumOrdre(ov.reference, dateCreation);
     const montant = this.formatMontant(ov.montantTotal);
     const libelleCompl = this.resolveLibelle(ov);
     const tiersComplet = this.buildTiersCompte(ov, codes);
     const tresorerie = codes.compteTresorerie;
+    const normalizedTemplate = this.normalizeSageTxtTemplate(template);
 
     // Build data map
     const dataMap: Record<string, string> = {
@@ -288,10 +291,10 @@ export class SageTxtGenerationService {
     };
 
     // Build Credit line (tresorerie)
-    const lineC = this.buildLineFromTemplate(template, { ...dataMap, compte: tresorerie, dc: 'C' });
+    const lineC = this.buildLineFromTemplate(normalizedTemplate, { ...dataMap, compte: tresorerie, dc: 'C' });
     
     // Build Debit line (tiers)
-    const lineD = this.buildLineFromTemplate(template, { ...dataMap, compte: tiersComplet, dc: 'D' });
+    const lineD = this.buildLineFromTemplate(normalizedTemplate, { ...dataMap, compte: tiersComplet, dc: 'D' });
 
     return [lineC, lineD];
   }
@@ -335,13 +338,13 @@ export class SageTxtGenerationService {
           value = dataMap.date;
           break;
         case 'numOrdre':
-          value = dataMap.numOrdre.replace(/\D/g, '').slice(-5).padStart(5, '0');
+          value = this.extractNumOrdre(dataMap.numOrdre, dataMap.date);
           break;
         case 'compte':
           value = dataMap.compte;
           break;
         case 'libelle':
-          value = `ORDV GM N: ${dataMap.numOrdre.replace(/\D/g, '').slice(-5).padStart(5, '0')}`;
+          value = `ORDV GM N: ${this.extractNumOrdre(dataMap.numOrdre, dataMap.date)}`;
           break;
         case 'refCHQ':
           value = `CHQ${dataMap.date}${dataMap.dc}`;
@@ -350,7 +353,7 @@ export class SageTxtGenerationService {
           value = dataMap.montant;
           break;
         case 'numRepeat':
-          value = dataMap.numOrdre.replace(/\D/g, '').slice(-5).padStart(5, '0');
+          value = this.extractNumOrdre(dataMap.numOrdre, dataMap.date);
           break;
         case 'libelleCompl':
           value = `GM: ${dataMap.libelleCompl}`;
@@ -374,6 +377,56 @@ export class SageTxtGenerationService {
     return lineArray.join('');
   }
 
+  /**
+   * Existing saved TXT templates may still define N° Ordre as 5 chars.
+   * Expand that slot to 8 chars and shrink adjacent padding when possible,
+   * preserving the rest of the 150-character Sage layout.
+   */
+  private normalizeSageTxtTemplate(template: any): any {
+    const fields = template?.structure?.fields;
+    if (!Array.isArray(fields)) return template;
+
+    const normalizedFields = fields.map((field: any) => ({ ...field }));
+
+    const expandReferenceField = (key: 'numOrdre' | 'numRepeat') => {
+      const field = normalizedFields.find((f: any) => f.key === key);
+      if (!field || typeof field.start !== 'number' || typeof field.width !== 'number' || field.width >= 8) {
+        return;
+      }
+
+      const oldEnd = field.start + field.width;
+      const delta = 8 - field.width;
+      field.width = 8;
+
+      const nextPadding = normalizedFields.find(
+        (f: any) => f.key === 'padding' && f.start === oldEnd && typeof f.width === 'number',
+      );
+
+      if (nextPadding) {
+        nextPadding.start += delta;
+        nextPadding.width = Math.max(0, nextPadding.width - delta);
+        return;
+      }
+
+      for (const otherField of normalizedFields) {
+        if (otherField !== field && typeof otherField.start === 'number' && otherField.start >= oldEnd) {
+          otherField.start += delta;
+        }
+      }
+    };
+
+    expandReferenceField('numOrdre');
+    expandReferenceField('numRepeat');
+
+    return {
+      ...template,
+      structure: {
+        ...template.structure,
+        fields: normalizedFields.filter((field: any) => field.width !== 0),
+      },
+    };
+  }
+
   // -------------------------------------------------------------------------
   // LINE BUILDER — EXACT FORMAT
   // -------------------------------------------------------------------------
@@ -390,10 +443,10 @@ export class SageTxtGenerationService {
     const date = params.date.substring(0, 8).padEnd(8, ' ');
 
     // [14:19] N° Ordre — 5 chars (take last 5 digits)
-    const numOrdre = params.numOrdre.replace(/\D/g, '').slice(-5).padStart(5, '0');
+    const numOrdre = this.extractNumOrdre(params.numOrdre, date);
 
     // [19:27] Fixed 8 spaces
-    const pad1 = ' '.repeat(8);
+    const pad1 = ' '.repeat(5);
 
     // [27:43] Compte — 16 chars, left-aligned, right-padded with spaces
     const compte = params.compte.substring(0, 16).padEnd(16, ' ');
@@ -411,7 +464,7 @@ export class SageTxtGenerationService {
     const numOrdre2 = numOrdre;
 
     // [115:127] Fixed 12 spaces
-    const pad2 = ' '.repeat(12);
+    const pad2 = ' '.repeat(9);
 
     // [127:144] GM block — 17 chars: "GM: " (4) + 13-char label
     const label13 = params.libelleCompl.substring(0, 13).padEnd(13, ' ');
@@ -700,11 +753,36 @@ export class SageTxtGenerationService {
    * e.g. "OV-2026-28554" → "28554"
    *       "28554"         → "28554"
    */
-  extractNumOrdre(reference: string): string {
-    if (!reference) return '00000';
-    // Take last 5 digits
-    const digits = reference.replace(/\D/g, '');
-    return digits.slice(-5).padStart(5, '0');
+  extractNumOrdre(reference: string, fallbackDate?: Date | string): string {
+    const raw = reference ?? '';
+    const digits = raw.replace(/\D/g, '');
+
+    if (/^20\d{6}$/.test(digits)) {
+      return digits;
+    }
+
+    const year = raw.match(/20\d{2}/)?.[0] ?? this.resolveYearFromFallback(fallbackDate);
+    const sequence = digits.slice(-4).padStart(4, '0');
+    return `${year}${sequence}`;
+  }
+
+  private resolveYearFromFallback(fallbackDate?: Date | string): string {
+    if (fallbackDate instanceof Date && !isNaN(fallbackDate.getTime())) {
+      return String(fallbackDate.getFullYear());
+    }
+
+    if (typeof fallbackDate === 'string') {
+      if (/^\d{8}$/.test(fallbackDate)) {
+        return fallbackDate.substring(4, 8);
+      }
+
+      const parsed = new Date(fallbackDate);
+      if (!isNaN(parsed.getTime())) {
+        return String(parsed.getFullYear());
+      }
+    }
+
+    return String(new Date().getFullYear());
   }
 
   // -------------------------------------------------------------------------

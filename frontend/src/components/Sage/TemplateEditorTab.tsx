@@ -82,13 +82,13 @@ const DEFAULT_PDF_LAYOUT: PdfLayout = {
 const DEFAULT_FIELDS: FieldDef[] = [
   { key:'codeJournal',  label:'Code Journal',        color:'#1e3a5f', textColor:'#fff',     start:0,   width:6,  sample:'ATT411',                               editable:true,  fixed:false },
   { key:'date',         label:'Date JJMMAAAA',        color:'#0d47a1', textColor:'#fff',     start:6,   width:8,  sample:'01042026',                             editable:true,  fixed:false },
-  { key:'numOrdre',     label:'N° Ordre',             color:'#1565c0', textColor:'#fff',     start:14,  width:5,  sample:'28554',                                editable:true,  fixed:false },
-  { key:'padding',      label:'Espaces (fixe)',        color:'#546e7a', textColor:'#cfd8dc', start:19,  width:8,  sample:'        ',                             editable:false, fixed:true  },
+  { key:'numOrdre',     label:'N° Ordre',             color:'#1565c0', textColor:'#fff',     start:14,  width:8,  sample:'20260001',                             editable:true,  fixed:false },
+  { key:'padding',      label:'Espaces (fixe)',        color:'#546e7a', textColor:'#cfd8dc', start:22,  width:5,  sample:'     ',                                editable:false, fixed:true  },
   { key:'compte',       label:'Compte (16 chars)',     color:'#6a1b9a', textColor:'#fff',     start:27,  width:16, sample:'53220900        ',                     editable:true,  fixed:false },
-  { key:'libelle',      label:'Libellé ORDV (35c)',    color:'#4a148c', textColor:'#e1bee7', start:43,  width:35, sample:'ORDV GM N: 28554                   ',   editable:true,  fixed:false },
+  { key:'libelle',      label:'Libellé ORDV (35c)',    color:'#4a148c', textColor:'#e1bee7', start:43,  width:35, sample:'ORDV GM N: 20260001                ',   editable:true,  fixed:false },
   { key:'refCHQ',       label:'CHQ+Date+D/C (12c)',    color:'#880e4f', textColor:'#fff',     start:78,  width:12, sample:'CHQ01042026C',                         editable:true,  fixed:false },
   { key:'montant',      label:'Montant (20c)',          color:'#b71c1c', textColor:'#fff',     start:90,  width:20, sample:'1118,732            ',                 editable:true,  fixed:false },
-  { key:'numRepeat',    label:'N° Ordre répété (17c)', color:'#e65100', textColor:'#fff',     start:110, width:17, sample:'28554            ',                    editable:true,  fixed:false },
+  { key:'numRepeat',    label:'N° Ordre répété (17c)', color:'#e65100', textColor:'#fff',     start:110, width:17, sample:'20260001         ',                    editable:true,  fixed:false },
   { key:'libelleCompl', label:'GM: Label (23c)',        color:'#2e7d32', textColor:'#fff',     start:127, width:23, sample:'GM: PGH02-2026 UNOVMARS',             editable:true,  fixed:false },
 ];
 
@@ -837,7 +837,7 @@ const TemplateEditorTab: React.FC = () => {
     const F = DEFAULT_FIELDS.map(f => ({ ...f }));
     if (/^[A-Z]{3}\d{3}/.test(line)) F.find(f => f.key === 'codeJournal')!.sample = line.substring(0, 6);
     if (/^\d{8}$/.test(line.substring(6, 14))) F.find(f => f.key === 'date')!.sample = line.substring(6, 14);
-    F.find(f => f.key === 'numOrdre')!.sample     = line.substring(14, 19);
+    F.find(f => f.key === 'numOrdre')!.sample     = line.substring(14, 22);
     F.find(f => f.key === 'compte')!.sample       = line.substring(27, 43);
     F.find(f => f.key === 'libelle')!.sample      = line.substring(43, 78);
     F.find(f => f.key === 'refCHQ')!.sample       = line.substring(78, 90);

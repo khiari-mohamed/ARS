@@ -391,8 +391,8 @@ export class TxtGenerationService {
       // Field 22: Motif (45) - Dynamic: {SOCIETE}20-{YEAR}{BORDEREAU_REF}
       const societe = (virement.societe || 'PGH').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 5);
       const year = dateStr.substring(0, 4);
-      const bordereauRef = (data.bordereauReference || 'GANFRIGAN').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 9);
-      const motif = `${societe}20-${year}${bordereauRef}`.substring(0, 20).padEnd(45, ' ');
+      const bordereauRef = (data.bordereauReference || data.reference).toUpperCase().substring(0, 15);
+      const motif = `${societe}${bordereauRef}`.substring(0, 20).padEnd(45, ' ');
       line += motif;
       // Field 23: Date compensation (8)
       line += dateStr;

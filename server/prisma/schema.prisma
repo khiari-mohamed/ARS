@@ -1254,7 +1254,8 @@ enum EtatVirement {
   EXECUTE // When bordereau is "Payé"
   EN_COURS_VALIDATION // New: After Chef uploads Excel + PDF
   VIREMENT_NON_VALIDE // New: Rejected at validation step
-  VIREMENT_DEPOSE // New: Final approval status
+  VIREMENT_DEPOSE // New: Validated by Responsable Département
+  VIREMENT_AUTORISE // New: Authorized by Finance service
 }
 
 enum DocumentStatus {

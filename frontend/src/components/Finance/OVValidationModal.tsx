@@ -30,7 +30,7 @@ import {
   Visibility,
   GetApp
 } from '@mui/icons-material';
-import { TxtFormatValidator } from './TxtFormatValidator';
+//import { TxtFormatValidator } from './TxtFormatValidator';
 
 interface OVValidationModalProps {
   open: boolean;
@@ -825,11 +825,11 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
       </Dialog>
 
       {/* TXT Format Validator */}
-      <TxtFormatValidator
+      {/* <TxtFormatValidator
         open={showTxtValidator}
         onClose={() => setShowTxtValidator(false)}
         generatedContent={txtContent}
-      />
+      /> */}
     </Dialog>
   );
 };
