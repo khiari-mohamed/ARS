@@ -1310,7 +1310,24 @@ Document généré automatiquement par ARS`;
       
       console.log('📄 New PDF stored at:', pdfFilePath);
       
-      // ✅ STEP 3: Update OrdreVirement with new data
+      // ✅ STEP 3: Create OVDocument record for the uploaded reinjection PDF
+      try {
+        await this.prisma.oVDocument.create({
+          data: {
+            name: pdfFile.originalname || pdfFilename,
+            type: 'BORDEREAU_PDF',
+            path: pdfFilePath,
+            uploadedById: user.id,
+            bordereauId: ordreVirement.bordereauId,
+            ordreVirementId: id
+          }
+        });
+        console.log('✅ Created OVDocument record for reinjected PDF');
+      } catch (error) {
+        console.error('⚠️ Failed to create OVDocument record for reinjected PDF:', error);
+      }
+      
+      // ✅ STEP 4: Update OrdreVirement with new data
       const updatedOV = await this.prisma.ordreVirement.update({
         where: { id },
         data: {
@@ -1321,6 +1338,7 @@ Document généré automatiquement par ARS`;
           montantTotal: newTotalAmount, // ✅ Update amount
           nombreAdherents: adherentUpdates.length, // ✅ Update adherent count
           uploadedPdfPath: `/uploads/ov-documents/${pdfFilename}`, // ✅ Update PDF path
+          fichierPdf: null, // Clear stale generated PDF so the reinjected document is regenerated and shown
           commentaire: `Réinjection effectuée par ${user.fullName} le ${new Date().toLocaleDateString('fr-FR')} - Nouveau montant: ${newTotalAmount.toFixed(3)} TND`,
           validationStatus: 'EN_ATTENTE_VALIDATION' // Reset validation status
         },

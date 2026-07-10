@@ -709,13 +709,16 @@ export default function UserManagement() {
 
       {/* Create User Dialog */}
       <Dialog
+        fullScreen={isMobile}
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
         maxWidth="md"
         fullWidth
+        sx={{ '& .MuiDialog-container': { alignItems: 'center' } }}
+        PaperProps={{ sx: { mx: { xs: 1, sm: 'auto' }, mt: { xs: 8, sm: '72px' }, maxHeight: 'calc(100vh - 96px)', borderRadius: '12px' } }}
       >
         <DialogTitle>Créer un utilisateur</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', pt: 0 }}>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -790,13 +793,16 @@ export default function UserManagement() {
 
       {/* Edit User Dialog */}
       <Dialog
+        fullScreen={isMobile}
         open={Boolean(showEditDialog)}
         onClose={() => setShowEditDialog(null)}
         maxWidth="md"
         fullWidth
+        sx={{ '& .MuiDialog-container': { alignItems: 'center' } }}
+        PaperProps={{ sx: { mx: { xs: 1, sm: 'auto' }, mt: { xs: 8, sm: '72px' }, maxHeight: 'calc(100vh - 96px)', borderRadius: '12px' } }}
       >
         <DialogTitle>Modifier l'utilisateur - {showEditDialog?.fullName}</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', pt: 0 }}>
           {showEditDialog && (
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12} sm={6}>

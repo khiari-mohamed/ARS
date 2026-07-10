@@ -144,6 +144,9 @@ const TrackingTab: React.FC = () => {
   const [reinjectFiles, setReinjectFiles] = useState<{ excel: File | null, pdf: File | null }>({
     excel: null, pdf: null
   });
+  const [reinjectLoading, setReinjectLoading] = useState(false);
+  const [reinjectError, setReinjectError] = useState<string | null>(null);
+  const [reinjectSuccess, setReinjectSuccess] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [correctOVOpen, setCorrectOVOpen] = useState(false);
@@ -417,15 +420,25 @@ const TrackingTab: React.FC = () => {
     setEditDialog({ open: true, record });
   };
 
-  const handleReinject = async (recordId: string) => {
+  const handleReinject = async (recordId: string, excelFile: File, pdfFile: File) => {
+    setReinjectLoading(true);
+    setReinjectError(null);
     try {
-      const financeService = await import('../../services/financeService');
-      await financeService.financeService.reinjectOV(recordId);
+      const { LocalAPI } = await import('../../services/axios');
+      const formData = new FormData();
+      formData.append('files', excelFile);
+      formData.append('files', pdfFile);
+      await LocalAPI.put(`/finance/ordres-virement/${recordId}/reinject`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setReinjectSuccess(true);
       await loadBordereauxTraites();
-      alert('Réinjection effectuée avec succès');
-    } catch (error) {
-      console.error('Failed to reinject OV:', error);
-      alert('Erreur lors de la réinjection');
+      await loadManualOVs();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || 'Erreur lors de la réinjection';
+      setReinjectError(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setReinjectLoading(false);
     }
   };
 

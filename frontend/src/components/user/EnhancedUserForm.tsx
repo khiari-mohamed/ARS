@@ -95,7 +95,7 @@ const EnhancedUserForm: React.FC<Props> = ({
   const selectedRole = roleOptions.find(r => r.value === form.role);
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 800, width: '100%', mx: 'auto', p: { xs: 2, sm: 3 } }}>
       <Typography variant="h5" gutterBottom>
         {mode === 'create' ? 'Créer un utilisateur' : 'Modifier l\'utilisateur'}
       </Typography>

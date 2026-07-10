@@ -59,9 +59,25 @@ export class UsersService {
   }
 
   async create(data: any, createdBy?: string) {
-    // Validate email uniqueness
-    const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
+    // Validate email uniqueness (including soft-deleted users)
+    const existing = await this.prisma.user.findFirst({
+      where: { email: { equals: data.email, mode: 'insensitive' } },
+    });
     if (existing) {
+      if (!existing.active) {
+        // Reactivate the soft-deleted user instead of blocking
+        const reactivated = await this.prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            fullName: data.fullName ?? existing.fullName,
+            role: data.role ?? existing.role,
+            department: data.department ?? existing.department,
+            teamLeaderId: data.teamLeaderId ?? existing.teamLeaderId,
+            active: true,
+          },
+        });
+        return reactivated;
+      }
       throw new BadRequestException('A user with this email already exists.');
     }
 
@@ -134,9 +150,8 @@ export class UsersService {
     // Default to showing only active users unless explicitly requested otherwise
     if (filters?.active !== undefined) {
       where.active = filters.active;
-    } else {
-      where.active = true;
     }
+    // No default active filter — show all users (active and inactive)
     if (filters?.search) {
       where.OR = [
         { fullName: { contains: filters.search, mode: 'insensitive' } },
@@ -154,6 +169,12 @@ export class UsersService {
             fullName: true,
             email: true
           }
+        },
+        AuditLog: {
+          where: { action: 'LOGIN_SUCCESS' },
+          orderBy: { timestamp: 'desc' },
+          take: 1,
+          select: { timestamp: true }
         },
         _count: {
           select: {
@@ -220,6 +241,12 @@ export class UsersService {
     }
 
     return updatedUser;
+  }
+
+  async hardDelete(id: string) {
+    await this.findById(id);
+    await this.prisma.user.delete({ where: { id } });
+    return { success: true };
   }
 
   async delete(id: string, deletedBy?: string) {

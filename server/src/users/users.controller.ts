@@ -138,11 +138,11 @@ export class UsersController {
       const user = await this.usersService.create(createUserDto, currentUser.id);
       const { password, ...userWithoutPassword } = user;
       return userWithoutPassword;
-    } catch (error) {
-      if (error.message.includes('already exists')) {
+    } catch (error: any) {
+      if (error?.message?.includes('already exists')) {
         throw new BadRequestException('A user with this email already exists');
       }
-      throw new BadRequestException(error.message || 'Failed to create user');
+      throw new BadRequestException(error?.message || 'Failed to create user');
     }
   }
 
@@ -155,15 +155,21 @@ export class UsersController {
   ) {
     const currentUser = req.user;
     const targetUser = await this.usersService.findById(id);
-    
-    // Check permissions
-    if (!canManageUser(currentUser.role, targetUser.role)) {
+
+    // SUPER_ADMIN can edit anyone; others need strictly higher rank
+    if (currentUser.role !== 'SUPER_ADMIN' && !canManageUser(currentUser.role, targetUser.role)) {
       throw new ForbiddenException('You cannot modify this user');
     }
-    
+
     const user = await this.usersService.update(id, updateUserDto, currentUser.id);
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  @Delete(':id/hard')
+  @Roles(UserRole.SUPER_ADMIN)
+  async hardDeleteUser(@Param('id') id: string) {
+    return this.usersService.hardDelete(id);
   }
 
   @Delete(':id')
@@ -181,7 +187,9 @@ export class UsersController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR)
   async disableUser(@Param('id') id: string, @Request() req) {
     const currentUser = req.user;
+    console.log('DISABLE USER REQUEST:', { id, currentUser: currentUser?.id, role: currentUser?.role });
     const user = await this.usersService.disableUser(id, currentUser.id);
+    console.log('USER DISABLED:', { id, active: user.active });
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }

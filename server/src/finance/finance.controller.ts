@@ -1947,9 +1947,65 @@ export class FinanceController {
       
       console.log('📝 OV found:', { id, bordereauId: ov.bordereauId, uploadedPdfPath: ov.uploadedPdfPath });
       
-      // PRIORITY 1: Check for temporary PDF files by bordereauId (uploaded BEFORE OV creation)
+      // PRIORITY 1: Check OVDocument by ordreVirementId (PDF uploaded AFTER OV creation)
+      console.log('🔍 PRIORITY 1: Checking OVDocument by ordreVirementId:', id);
+      const ovDocument = await this.prisma.oVDocument.findFirst({
+        where: { 
+          ordreVirementId: id,
+          type: 'BORDEREAU_PDF'
+        },
+        orderBy: { uploadedAt: 'desc' }
+      });
+      
+      console.log('📄 PRIORITY 1 Result:', ovDocument ? `Found: ${ovDocument.name} at ${ovDocument.path}` : 'Not found');
+      
+      if (ovDocument) {
+        const fs = require('fs');
+        const fileExists = fs.existsSync(ovDocument.path);
+        console.log('💾 File exists on disk:', fileExists);
+        
+        if (fileExists) {
+          console.log('✅ SUCCESS: Returning PDF from PRIORITY 1 (ordreVirementId)');
+          const pdfBuffer = fs.readFileSync(ovDocument.path);
+          res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="${ovDocument.name}"`,
+            'Content-Length': pdfBuffer.length
+          });
+          return res.send(pdfBuffer);
+        } else {
+          console.log('⚠️ PRIORITY 1: File found in DB but missing on disk');
+        }
+      }
+      
+      // PRIORITY 2: Check uploadedPdfPath field (for manual OV uploads)
+      if (ov.uploadedPdfPath) {
+        console.log('🔍 PRIORITY 2: Checking uploadedPdfPath:', ov.uploadedPdfPath);
+        const fs = require('fs');
+        const path = require('path');
+        const fullPath = path.join(process.cwd(), ov.uploadedPdfPath);
+        const fileExists = fs.existsSync(fullPath);
+        console.log('💾 File exists on disk:', fileExists);
+        
+        if (fileExists) {
+          console.log('✅ SUCCESS: Returning PDF from PRIORITY 2 (uploadedPdfPath)');
+          const pdfBuffer = fs.readFileSync(fullPath);
+          res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `inline; filename="uploaded_ov_${id}.pdf"`,
+            'Content-Length': pdfBuffer.length
+          });
+          return res.send(pdfBuffer);
+        } else {
+          console.log('⚠️ PRIORITY 2: Path exists in DB but file missing on disk');
+        }
+      } else {
+        console.log('⚠️ PRIORITY 2: Skipped (no uploadedPdfPath)');
+      }
+      
+      // PRIORITY 3: Check for temporary PDF files by bordereauId (uploaded BEFORE OV creation)
       if (ov.bordereauId) {
-        console.log('🔍 PRIORITY 1: Checking for temporary PDF files by bordereauId:', ov.bordereauId);
+        console.log('🔍 PRIORITY 3: Checking for temporary PDF files by bordereauId:', ov.bordereauId);
         const fs = require('fs');
         const path = require('path');
         const uploadsDir = path.join(process.cwd(), 'uploads', 'ov-documents');
@@ -1958,7 +2014,7 @@ export class FinanceController {
           const files = fs.readdirSync(uploadsDir);
           const tempFile = files.find(f => f.startsWith(`TEMP_${ov.bordereauId}_`));
           
-          console.log('📄 PRIORITY 1 Result:', tempFile ? `Found: ${tempFile}` : 'Not found');
+          console.log('📄 PRIORITY 3 Result:', tempFile ? `Found: ${tempFile}` : 'Not found');
           
           if (tempFile) {
             const filePath = path.join(uploadsDir, tempFile);
@@ -1966,7 +2022,7 @@ export class FinanceController {
             console.log('💾 File exists on disk:', fileExists);
             
             if (fileExists) {
-              console.log('✅ SUCCESS: Returning PDF from PRIORITY 1 (temporary file)');
+              console.log('✅ SUCCESS: Returning PDF from PRIORITY 3 (temporary file)');
               const pdfBuffer = fs.readFileSync(filePath);
               res.set({
                 'Content-Type': 'application/pdf',
@@ -1978,63 +2034,7 @@ export class FinanceController {
           }
         }
       } else {
-        console.log('⚠️ PRIORITY 1: Skipped (no bordereauId)');
-      }
-      
-      // PRIORITY 2: Check OVDocument by ordreVirementId (PDF uploaded AFTER OV creation)
-      console.log('🔍 PRIORITY 2: Checking OVDocument by ordreVirementId:', id);
-      const ovDocument = await this.prisma.oVDocument.findFirst({
-        where: { 
-          ordreVirementId: id,
-          type: 'BORDEREAU_PDF'
-        },
-        orderBy: { uploadedAt: 'desc' }
-      });
-      
-      console.log('📄 PRIORITY 2 Result:', ovDocument ? `Found: ${ovDocument.name} at ${ovDocument.path}` : 'Not found');
-      
-      if (ovDocument) {
-        const fs = require('fs');
-        const fileExists = fs.existsSync(ovDocument.path);
-        console.log('💾 File exists on disk:', fileExists);
-        
-        if (fileExists) {
-          console.log('✅ SUCCESS: Returning PDF from PRIORITY 2 (ordreVirementId)');
-          const pdfBuffer = fs.readFileSync(ovDocument.path);
-          res.set({
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `inline; filename="${ovDocument.name}"`,
-            'Content-Length': pdfBuffer.length
-          });
-          return res.send(pdfBuffer);
-        } else {
-          console.log('⚠️ PRIORITY 2: File found in DB but missing on disk');
-        }
-      }
-      
-      // PRIORITY 3: Check uploadedPdfPath field (for manual OV uploads)
-      if (ov.uploadedPdfPath) {
-        console.log('🔍 PRIORITY 3: Checking uploadedPdfPath:', ov.uploadedPdfPath);
-        const fs = require('fs');
-        const path = require('path');
-        const fullPath = path.join(process.cwd(), ov.uploadedPdfPath);
-        const fileExists = fs.existsSync(fullPath);
-        console.log('💾 File exists on disk:', fileExists);
-        
-        if (fileExists) {
-          console.log('✅ SUCCESS: Returning PDF from PRIORITY 3 (uploadedPdfPath)');
-          const pdfBuffer = fs.readFileSync(fullPath);
-          res.set({
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `inline; filename="uploaded_ov_${id}.pdf"`,
-            'Content-Length': pdfBuffer.length
-          });
-          return res.send(pdfBuffer);
-        } else {
-          console.log('⚠️ PRIORITY 3: Path exists in DB but file missing on disk');
-        }
-      } else {
-        console.log('⚠️ PRIORITY 3: Skipped (no uploadedPdfPath)');
+        console.log('⚠️ PRIORITY 3: Skipped (no bordereauId)');
       }
       
       console.error('❌ ALL PRIORITIES FAILED - No uploaded PDF found for OV:', id);

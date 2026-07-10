@@ -30,18 +30,23 @@ import {
   Paper,
   Tooltip,
   Avatar
+  , useTheme, useMediaQuery
 } from '@mui/material';
 import {
   Add,
   Edit,
   Delete,
+  Block,
   People,
   PersonAdd,
   Group,
   AdminPanelSettings,
   WarningAmberRounded,
   CheckCircleOutline,
-  LayersOutlined
+  LayersOutlined,
+  Search,
+  FilterList,
+  Close
 } from '@mui/icons-material';
 import { fetchAllUsers, bulkCreateUsers, bulkUpdateUsers, bulkDeleteUsers, getRoleTemplates, createUserFromTemplate } from '../services/superAdminService';
 import { LocalAPI } from '../services/axios';
@@ -219,6 +224,8 @@ const dialogTitleSx = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const AdvancedUserManagement: React.FC = () => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [activeTab, setActiveTab] = useState(0);
   const [users, setUsers] = useState<any[]>([]);
   const [roleTemplates, setRoleTemplates] = useState<any[]>([]);
@@ -232,6 +239,8 @@ const AdvancedUserManagement: React.FC = () => {
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [hardDeleteDialogOpen, setHardDeleteDialogOpen] = useState(false);
+  const [hardDeleteError, setHardDeleteError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [newUserData, setNewUserData] = useState({
     fullName: '',
@@ -243,6 +252,28 @@ const AdvancedUserManagement: React.FC = () => {
     teamLeaderId: '',
     capacity: 50,
   });
+
+  const [filterText, setFilterText] = useState('');
+  const [filterRole, setFilterRole] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filteredUsers = users.filter(u => {
+    const q = filterText.toLowerCase();
+    const matchText = !q || [
+      u.fullName, u.email, u.department, u.role,
+      u.teamLeader?.fullName, u.id
+    ].some(v => v?.toLowerCase().includes(q));
+    const matchRole = !filterRole || u.role === filterRole;
+    const matchStatus = !filterStatus ||
+      (filterStatus === 'ACTIVE' ? u.active !== false : u.active === false);
+    return matchText && matchRole && matchStatus;
+  });
+
+  const clearFilters = () => { setFilterText(''); setFilterRole(''); setFilterStatus(''); };
+  const hasFilters = filterText || filterRole || filterStatus;
+
+  const passwordPattern = /(?=.{8,})(?=.*[A-Z])(?=.*\d)/;
+  const passwordValid = passwordPattern.test(newUserData.password);
 
   useEffect(() => { loadData(); }, []);
 
@@ -291,7 +322,10 @@ const AdvancedUserManagement: React.FC = () => {
     }
   };
 
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const handleCreateUser = async () => {
+    setCreateError(null);
     try {
       const userData = {
         fullName: newUserData.fullName,
@@ -306,9 +340,9 @@ const AdvancedUserManagement: React.FC = () => {
       await loadData();
       setTemplateDialogOpen(false);
       setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50 });
-    } catch (error) {
-      console.error('Failed to create user:', error);
-      alert("Erreur lors de la création de l'utilisateur");
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || "Erreur lors de la création de l'utilisateur";
+      setCreateError(Array.isArray(msg) ? msg.join(', ') : msg);
     }
   };
 
@@ -327,42 +361,69 @@ const AdvancedUserManagement: React.FC = () => {
     setEditDialogOpen(true);
   };
 
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
   const handleUpdateUser = async () => {
+    setUpdateError(null);
     try {
-      const updateData = {
+      const updateData: any = {
         fullName: newUserData.fullName,
         email: newUserData.email,
-        teamLeaderId: newUserData.role === 'GESTIONNAIRE' && newUserData.teamLeaderId ? newUserData.teamLeaderId : undefined,
         capacity: newUserData.capacity,
       };
+      if (newUserData.role === 'GESTIONNAIRE') {
+        updateData.teamLeaderId = newUserData.teamLeaderId || null;
+      }
       await LocalAPI.put(`/users/${selectedUser.id}`, updateData);
       await loadData();
       setEditDialogOpen(false);
       setSelectedUser(null);
       setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50 });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update user:', error);
+      const msg = error?.response?.data?.message || error?.message || 'Erreur lors de la mise à jour';
+      setUpdateError(Array.isArray(msg) ? msg.join(', ') : msg);
     }
   };
 
-  const handleDeleteUser = (user: any) => {
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+
+  const handleDeactivateUser = (user: any) => {
     setSelectedUser(user);
+    setDeactivateError(null);
     setDeleteDialogOpen(true);
   };
 
-  const confirmDeleteUser = async () => {
+  const confirmDeactivateUser = async () => {
     try {
-      console.log('Deleting user:', selectedUser.id);
-      const response = await LocalAPI.delete(`/users/${selectedUser.id}`);
-      console.log('Delete response:', response);
-      setUsers(prev => prev.filter(user => user.id !== selectedUser.id));
+      console.log('Deactivating user:', selectedUser?.id);
+      await LocalAPI.patch(`/users/${selectedUser.id}/disable`);
+      console.log('User deactivated successfully');
       setDeleteDialogOpen(false);
       setSelectedUser(null);
-      setTimeout(() => loadData(), 100);
+      await loadData();
     } catch (error: any) {
-      console.error('Delete error:', error);
-      console.error('Error response:', error.response);
-      alert(`Delete failed: ${error.response?.data?.message || error.message}`);
+      console.error('Deactivate error:', error);
+      const msg = error?.response?.data?.message || error?.message || 'Erreur lors de la désactivation';
+      setDeactivateError(Array.isArray(msg) ? msg.join(', ') : msg);
+    }
+  };
+
+  const handleHardDeleteUser = (user: any) => {
+    setSelectedUser(user);
+    setHardDeleteError(null);
+    setHardDeleteDialogOpen(true);
+  };
+
+  const confirmHardDeleteUser = async () => {
+    try {
+      await LocalAPI.delete(`/users/${selectedUser.id}/hard`);
+      setHardDeleteDialogOpen(false);
+      setSelectedUser(null);
+      await loadData();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || 'Erreur lors de la suppression';
+      setHardDeleteError(Array.isArray(msg) ? msg.join(', ') : msg);
     }
   };
 
@@ -478,7 +539,7 @@ const AdvancedUserManagement: React.FC = () => {
           <StatCard label="Total Utilisateurs"  value={users.length}                                                               accent="#2196f3" Icon={People} />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard label="Utilisateurs Actifs" value={users.filter(u => u.status === 'ACTIVE').length}                           accent="#4caf50" Icon={CheckCircleOutline} />
+          <StatCard label="Utilisateurs Actifs" value={users.filter(u => u.active !== false).length}                           accent="#4caf50" Icon={CheckCircleOutline} />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard label="Administrateurs"     value={users.filter(u => ['SUPER_ADMIN','ADMINISTRATEUR'].includes(u.role)).length} accent="#f44336" Icon={AdminPanelSettings} />
@@ -519,6 +580,67 @@ const AdvancedUserManagement: React.FC = () => {
 
         <TabPanel value={activeTab} index={0}>
 
+          {/* ── Filter Bar ── */}
+          <Box
+            display="flex"
+            gap={1.5}
+            flexWrap="wrap"
+            alignItems="center"
+            mb={2}
+            p={1.5}
+            sx={{ background: T.bgFilter, borderRadius: '8px', border: `1px solid ${T.borderTable}` }}
+          >
+            <TextField
+              size="small"
+              placeholder="Rechercher par nom, email, département, rôle..."
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              InputProps={{
+                startAdornment: <Search sx={{ fontSize: 17, color: T.textDisabled, mr: 0.5 }} />,
+                endAdornment: filterText ? (
+                  <IconButton size="small" onClick={() => setFilterText('')} sx={{ p: 0.3 }}>
+                    <Close sx={{ fontSize: 14 }} />
+                  </IconButton>
+                ) : null,
+              }}
+              sx={{ flex: '1 1 220px', minWidth: 180, background: '#fff', borderRadius: '6px',
+                '& .MuiOutlinedInput-root': { borderRadius: '6px', fontSize: '0.81rem' } }}
+            />
+            <FormControl size="small" sx={{ minWidth: 160, background: '#fff', borderRadius: '6px' }}>
+              <InputLabel sx={{ fontSize: '0.81rem' }}>Rôle</InputLabel>
+              <Select value={filterRole} label="Rôle"
+                onChange={e => setFilterRole(e.target.value)}
+                sx={{ fontSize: '0.81rem', borderRadius: '6px' }}
+              >
+                <MenuItem value=""><em>Tous les rôles</em></MenuItem>
+                {Object.entries(ROLE_META).map(([key, m]) => (
+                  <MenuItem key={key} value={key} sx={{ fontSize: '0.81rem' }}>{m.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 130, background: '#fff', borderRadius: '6px' }}>
+              <InputLabel sx={{ fontSize: '0.81rem' }}>Statut</InputLabel>
+              <Select value={filterStatus} label="Statut"
+                onChange={e => setFilterStatus(e.target.value)}
+                sx={{ fontSize: '0.81rem', borderRadius: '6px' }}
+              >
+                <MenuItem value=""><em>Tous</em></MenuItem>
+                <MenuItem value="ACTIVE" sx={{ fontSize: '0.81rem' }}>Actif</MenuItem>
+                <MenuItem value="INACTIVE" sx={{ fontSize: '0.81rem' }}>Inactif</MenuItem>
+              </Select>
+            </FormControl>
+            {hasFilters && (
+              <Button size="small" onClick={clearFilters}
+                startIcon={<Close sx={{ fontSize: 14 }} />}
+                sx={{ fontSize: '0.75rem', textTransform: 'none', color: T.textSecondary,
+                  borderRadius: '6px', whiteSpace: 'nowrap' }}>
+                Effacer
+              </Button>
+            )}
+            <Typography sx={{ ml: 'auto', fontSize: '0.72rem', color: T.textDisabled, whiteSpace: 'nowrap' }}>
+              {filteredUsers.length} / {users.length} utilisateur(s)
+            </Typography>
+          </Box>
           {/* Bulk alert */}
           {selectedUsers.length > 0 && (
             <Alert
@@ -608,7 +730,7 @@ const AdvancedUserManagement: React.FC = () => {
               </TableHead>
 
               <TableBody>
-                {users.map((user, idx) => (
+                {filteredUsers.map((user, idx) => (
                   <TableRow
                     key={user.id}
                     sx={{
@@ -683,12 +805,14 @@ const AdvancedUserManagement: React.FC = () => {
                     </TD>
 
                     {/* Status */}
-                    <TD>{statusBadge(user.status || 'ACTIVE')}</TD>
+                    <TD>{statusBadge(user.active === false ? 'INACTIVE' : 'ACTIVE')}</TD>
 
                     {/* Last Login */}
                     <TD>
                       <Typography sx={{ fontSize: '0.78rem', color: T.textSecondary }}>
-                        {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('fr-TN') : '—'}
+                        {user.AuditLog?.[0]?.timestamp
+                          ? new Date(user.AuditLog[0].timestamp).toLocaleDateString('fr-TN')
+                          : '—'}
                       </Typography>
                     </TD>
 
@@ -709,10 +833,24 @@ const AdvancedUserManagement: React.FC = () => {
                             <Edit sx={{ fontSize: 15 }} />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Supprimer" placement="top">
+                        <Tooltip title="Désactiver" placement="top">
                           <IconButton
                             size="small"
-                            onClick={() => handleDeleteUser(user)}
+                            onClick={() => handleDeactivateUser(user)}
+                            sx={{
+                              border: '1px solid #fff3e0',
+                              borderRadius: '5px', p: '4px',
+                              color: '#e65100',
+                              '&:hover': { background: '#e65100', color: '#fff', borderColor: '#e65100' },
+                            }}
+                          >
+                            <Block sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Supprimer définitivement" placement="top">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleHardDeleteUser(user)}
                             sx={{
                               border: '1px solid #fdecea',
                               borderRadius: '5px', p: '4px',
@@ -728,7 +866,7 @@ const AdvancedUserManagement: React.FC = () => {
                   </TableRow>
                 ))}
 
-                {users.length === 0 && !loading && (
+                {filteredUsers.length === 0 && !loading && (
                   <TableRow>
                     <TableCell colSpan={9}>
                       <Box
@@ -752,10 +890,10 @@ const AdvancedUserManagement: React.FC = () => {
           </TableContainer>
 
           {/* Table caption */}
-          {users.length > 0 && (
+          {filteredUsers.length > 0 && (
             <Box sx={{ pt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
               <Typography sx={{ fontSize: '0.72rem', color: T.textDisabled }}>
-                {users.length} utilisateur(s) au total
+                {filteredUsers.length} utilisateur(s) affiché(s) sur {users.length}
               </Typography>
             </Box>
           )}
@@ -768,18 +906,20 @@ const AdvancedUserManagement: React.FC = () => {
 
       {/* ── Bulk Operations Dialog ── */}
       <Dialog
+        fullScreen={fullScreen}
         open={bulkDialogOpen}
         onClose={() => setBulkDialogOpen(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '12px' } }}
+        sx={{ '& .MuiDialog-container': { alignItems: 'center' } }}
+        PaperProps={{ sx: { borderRadius: '12px', mx: { xs: 1, sm: 'auto' }, mt: { xs: 8, sm: '72px' }, maxHeight: 'calc(100vh - 96px)' } }}
       >
         <DialogTitle sx={dialogTitleSx}>
           {bulkOperation === 'create' && 'Création en lot'}
           {bulkOperation === 'update' && 'Modification en lot'}
           {bulkOperation === 'delete' && 'Suppression en lot'}
         </DialogTitle>
-        <DialogContent sx={{ pt: 2.5, pb: 1 }}>
+        <DialogContent sx={{ pt: 2.5, pb: 1, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
           {bulkOperation === 'delete' && (
             <Alert
               severity="warning"
@@ -825,14 +965,21 @@ const AdvancedUserManagement: React.FC = () => {
 
       {/* ── Create User Dialog ── */}
       <Dialog
+        fullScreen={fullScreen}
         open={templateDialogOpen}
-        onClose={() => setTemplateDialogOpen(false)}
+        onClose={() => { setTemplateDialogOpen(false); setCreateError(null); }}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '12px' } }}
+        sx={{ '& .MuiDialog-container': { alignItems: 'center' } }}
+        PaperProps={{ sx: { borderRadius: '12px', mx: { xs: 1, sm: 'auto' }, mt: { xs: 8, sm: '72px' }, maxHeight: 'calc(100vh - 96px)' } }}
       >
         <DialogTitle sx={dialogTitleSx}>Créer un utilisateur</DialogTitle>
-        <DialogContent sx={{ pt: 2.5 }}>
+        <DialogContent sx={{ pt: 2.5, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+          {createError && (
+            <Alert severity="error" sx={{ mb: 2, fontSize: '0.82rem', borderRadius: '6px' }} onClose={() => setCreateError(null)}>
+              {createError}
+            </Alert>
+          )}
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
               <TextField fullWidth label="Nom complet" size="small" value={newUserData.fullName}
@@ -845,7 +992,10 @@ const AdvancedUserManagement: React.FC = () => {
             <Grid item xs={12} sm={6}>
               <TextField fullWidth label="Mot de passe" type="password" size="small" value={newUserData.password}
                 onChange={(e) => setNewUserData(prev => ({ ...prev, password: e.target.value }))}
-                required helperText="Min 8 caractères, 1 majuscule, 1 chiffre" />
+                required
+                error={!passwordValid && newUserData.password.length > 0}
+                helperText={!passwordValid && newUserData.password.length > 0 ? 'Doit contenir min 8 caractères, 1 majuscule et 1 chiffre' : 'Min 8 caractères, 1 majuscule, 1 chiffre'}
+              />
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth size="small">
@@ -895,7 +1045,7 @@ const AdvancedUserManagement: React.FC = () => {
           <Button
             onClick={handleCreateUser}
             variant="contained"
-            disabled={!newUserData.fullName || !newUserData.email || !newUserData.password ||
+            disabled={!newUserData.fullName || !newUserData.email || !newUserData.password || !passwordValid ||
               (newUserData.role === 'GESTIONNAIRE' && !newUserData.teamLeaderId)}
             sx={{
               textTransform: 'none', fontSize: '0.81rem', borderRadius: '6px',
@@ -909,14 +1059,21 @@ const AdvancedUserManagement: React.FC = () => {
 
       {/* ── Edit User Dialog ── */}
       <Dialog
+        fullScreen={fullScreen}
         open={editDialogOpen}
-        onClose={() => setEditDialogOpen(false)}
+        onClose={() => { setEditDialogOpen(false); setUpdateError(null); }}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '12px' } }}
+        sx={{ '& .MuiDialog-container': { alignItems: 'center' } }}
+        PaperProps={{ sx: { borderRadius: '12px', mx: { xs: 1, sm: 'auto' }, mt: { xs: 8, sm: '72px' }, maxHeight: 'calc(100vh - 96px)' } }}
       >
         <DialogTitle sx={dialogTitleSx}>Modifier l'utilisateur</DialogTitle>
-        <DialogContent sx={{ pt: 2.5 }}>
+        <DialogContent sx={{ pt: 2.5, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
+          {updateError && (
+            <Alert severity="error" sx={{ mb: 2, fontSize: '0.82rem', borderRadius: '6px' }} onClose={() => setUpdateError(null)}>
+              {updateError}
+            </Alert>
+          )}
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
               <TextField fullWidth label="Nom complet" size="small" value={newUserData.fullName}
@@ -973,40 +1130,91 @@ const AdvancedUserManagement: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* ── Delete User Dialog ── */}
+      {/* ── Deactivate User Dialog ── */}
       <Dialog
+        fullScreen={fullScreen}
         open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={() => { setDeleteDialogOpen(false); setDeactivateError(null); }}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '12px' } }}
+        sx={{ '& .MuiDialog-container': { alignItems: 'center' } }}
+        PaperProps={{ sx: { borderRadius: '12px', mx: { xs: 1, sm: 'auto' }, mt: { xs: 8, sm: '72px' }, maxHeight: 'calc(100vh - 96px)' } }}
       >
-        <DialogTitle sx={dialogTitleSx}>Supprimer l'utilisateur</DialogTitle>
+        <DialogTitle sx={dialogTitleSx}>Désactiver l'utilisateur</DialogTitle>
         <DialogContent sx={{ pt: 2.5, pb: 1 }}>
           <Alert
             severity="warning"
             icon={<WarningAmberRounded fontSize="small" />}
-            sx={{ fontSize: '0.82rem', borderRadius: '6px' }}
+            sx={{ fontSize: '0.82rem', borderRadius: '6px', mb: deactivateError ? 2 : 0 }}
           >
-            Êtes-vous sûr de vouloir supprimer l'utilisateur&nbsp;
-            <strong>{selectedUser?.fullName}</strong> ?
-            Cette action est irréversible.
+            Êtes-vous sûr de vouloir désactiver&nbsp;<strong>{selectedUser?.fullName}</strong>&nbsp;?
+            Le compte sera désactivé mais les données seront conservées.
           </Alert>
+          {deactivateError && (
+            <Alert severity="error" sx={{ fontSize: '0.82rem', borderRadius: '6px' }}>
+              {deactivateError}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 2.5, pb: 2, gap: 1 }}>
-          <Button onClick={() => setDeleteDialogOpen(false)}
+          <Button onClick={() => { setDeleteDialogOpen(false); setDeactivateError(null); }}
             sx={{ textTransform: 'none', fontSize: '0.81rem', color: T.textSecondary, borderRadius: '6px' }}>
             Annuler
           </Button>
           <Button
-            onClick={confirmDeleteUser}
+            onClick={confirmDeactivateUser}
+            variant="contained"
+            sx={{
+              textTransform: 'none', fontSize: '0.81rem', borderRadius: '6px',
+              background: '#e65100', '&:hover': { background: '#bf360c' }, boxShadow: 'none',
+            }}
+          >
+            Désactiver
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Hard Delete User Dialog ── */}
+      <Dialog
+        fullScreen={fullScreen}
+        open={hardDeleteDialogOpen}
+        onClose={() => { setHardDeleteDialogOpen(false); setHardDeleteError(null); }}
+        maxWidth="sm"
+        fullWidth
+        sx={{ '& .MuiDialog-container': { alignItems: fullScreen ? 'center' : 'flex-start' } }}
+        PaperProps={{ sx: { borderRadius: '12px', mx: { xs: 1, sm: 'auto' }, my: { xs: 1, sm: '48px' }, maxHeight: 'calc(100vh - 96px)' } }}
+      >
+        <DialogTitle sx={{ ...dialogTitleSx, color: '#b71c1c' }}>Suppression définitive</DialogTitle>
+        <DialogContent sx={{ pt: 2.5, pb: 1 }}>
+          <Alert
+            severity="error"
+            icon={<WarningAmberRounded fontSize="small" />}
+            sx={{ fontSize: '0.82rem', borderRadius: '6px', mb: hardDeleteError ? 2 : 0 }}
+          >
+            Vous êtes sur le point de supprimer définitivement&nbsp;<strong>{selectedUser?.fullName}</strong>.
+            <br />
+            <strong>Cette action est irréversible</strong> — toutes les données associées seront perdues.
+          </Alert>
+          {hardDeleteError && (
+            <Alert severity="error" sx={{ fontSize: '0.82rem', borderRadius: '6px' }}>
+              {hardDeleteError}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, pb: 2, gap: 1 }}>
+          <Button onClick={() => { setHardDeleteDialogOpen(false); setHardDeleteError(null); }}
+            sx={{ textTransform: 'none', fontSize: '0.81rem', color: T.textSecondary, borderRadius: '6px' }}>
+            Annuler
+          </Button>
+          <Button
+            onClick={confirmHardDeleteUser}
             variant="contained"
             sx={{
               textTransform: 'none', fontSize: '0.81rem', borderRadius: '6px',
               background: '#b71c1c', '&:hover': { background: '#c62828' }, boxShadow: 'none',
             }}
           >
-            Supprimer
+            Supprimer définitivement
           </Button>
         </DialogActions>
       </Dialog>
