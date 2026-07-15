@@ -370,9 +370,12 @@ const AdvancedUserManagement: React.FC = () => {
         fullName: newUserData.fullName,
         email: newUserData.email,
         capacity: newUserData.capacity,
+        role: newUserData.role,
       };
       if (newUserData.role === 'GESTIONNAIRE') {
         updateData.teamLeaderId = newUserData.teamLeaderId || null;
+      } else {
+        updateData.teamLeaderId = null;
       }
       await LocalAPI.put(`/users/${selectedUser.id}`, updateData);
       await loadData();
@@ -1067,7 +1070,7 @@ const AdvancedUserManagement: React.FC = () => {
         sx={{ '& .MuiDialog-container': { alignItems: 'center' } }}
         PaperProps={{ sx: { borderRadius: '12px', mx: { xs: 1, sm: 'auto' }, mt: { xs: 8, sm: '72px' }, maxHeight: 'calc(100vh - 96px)' } }}
       >
-        <DialogTitle sx={dialogTitleSx}>Modifier l'utilisateur</DialogTitle>
+        <DialogTitle sx={dialogTitleSx}>Modifier l'utilisateur — rôle &amp; informations</DialogTitle>
         <DialogContent sx={{ pt: 2.5, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
           {updateError && (
             <Alert severity="error" sx={{ mb: 2, fontSize: '0.82rem', borderRadius: '6px' }} onClose={() => setUpdateError(null)}>
@@ -1090,8 +1093,22 @@ const AdvancedUserManagement: React.FC = () => {
                 InputProps={{ inputProps: { min: 10, max: 200 } }} />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth label="Rôle" size="small" value={newUserData.role} disabled
-                helperText="Le rôle ne peut pas être modifié" />
+              <FormControl fullWidth size="small">
+                <InputLabel>Rôle</InputLabel>
+                <Select value={newUserData.role} label="Rôle"
+                  onChange={(e) => setNewUserData(prev => ({ ...prev, role: e.target.value }))}>
+                  <MenuItem value="SUPER_ADMIN">Super Admin</MenuItem>
+                  <MenuItem value="RESPONSABLE_DEPARTEMENT">Responsable Département</MenuItem>
+                  <MenuItem value="ADMINISTRATEUR">Administrateur</MenuItem>
+                  <MenuItem value="CHEF_EQUIPE">Chef d'Équipe</MenuItem>
+                  <MenuItem value="GESTIONNAIRE_SENIOR">Gestionnaire Senior</MenuItem>
+                  <MenuItem value="GESTIONNAIRE">Gestionnaire</MenuItem>
+                  <MenuItem value="BO">Bureau d'Ordre</MenuItem>
+                  <MenuItem value="SCAN_TEAM">Équipe Scan</MenuItem>
+                  <MenuItem value="FINANCE">Finance</MenuItem>
+                  <MenuItem value="CLIENT_SERVICE">Service Client</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             {newUserData.role === 'GESTIONNAIRE' && (
               <Grid item xs={12}>

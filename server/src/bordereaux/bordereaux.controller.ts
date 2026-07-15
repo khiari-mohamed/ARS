@@ -66,8 +66,16 @@ export class BordereauxController {
   }
 
   @Get('export/excel')
-  exportExcel() {
-    return this.bordereauxService.exportExcel();
+  @Roles(UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async exportExcel(@Query() filters: any, @Res() res: any) {
+    const buffer = await this.bordereauxService.exportExcel(filters);
+    const filename = `bordereaux_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
   }
 
   @Get('export/pdf')

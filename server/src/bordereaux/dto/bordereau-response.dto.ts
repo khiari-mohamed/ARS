@@ -135,8 +135,11 @@ export class BordereauResponseDto {
         const traitedBS = bulletinSoins.filter((bs: any) => bs.etat === 'TRAITE').length;
         const allBSTreated = totalBS === 0 || traitedBS === totalBS;
         
-        // ✅ Both must be treated (or empty)
-        const allTreated = allDocsTreated && allBSTreated && (totalDocs > 0 || totalBS > 0);
+        // ✅ FIX: a bordereau imported/created with NO tracked child rows at all
+        // (totalDocs === 0 AND totalBS === 0) has nothing to verify against — don't
+        // block duration calculation forever. Trust statut + dateCloture in that case.
+        const hasTrackedItems = totalDocs > 0 || totalBS > 0;
+        const allTreated = hasTrackedItems ? (allDocsTreated && allBSTreated) : true;
         
         if (bordereau.dateCloture && isFinishedStatus && allTreated) {
           // Happy path: dateCloture exists, status is finished, and all items treated

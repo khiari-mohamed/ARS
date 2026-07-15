@@ -6,16 +6,16 @@ import { UserRole, assertValidRole } from './user-role.enum';
 import { isPasswordComplex, recordFailedAttempt, isLockedOut, resetLockout } from './password.utils';
 import { randomBytes } from 'crypto';
 import { addMinutes } from 'date-fns';
-
-// Assume PrismaService is available for DB access
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from './mail.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
     private usersService: UsersService,
-    private prisma: PrismaService, // Add PrismaService for DB access
+    private prisma: PrismaService,
+    private mailService: MailService,
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -72,16 +72,12 @@ export class AuthService {
     const expiresAt = addMinutes(new Date(), 30);
 
     await this.prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt,
-      }
+      data: { userId: user.id, token, expiresAt },
     });
 
-    // TODO: Send email with reset link (e.g., https://yourapp/reset?token=...)
-    // Use nodemailer or Microsoft 365 API
-    await this.usersService.logAction(user.id, 'PASSWORD_RESET_REQUEST', { token });
+    // Throws on SMTP failure — controller will return 500 so frontend knows it failed
+    await this.mailService.sendPasswordResetEmail(user.email, user.fullName, token);
+    await this.usersService.logAction(user.id, 'PASSWORD_RESET_REQUEST');
   }
 
   async confirmPasswordReset(token: string, newPassword: string) {

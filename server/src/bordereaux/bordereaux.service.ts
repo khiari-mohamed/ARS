@@ -20,6 +20,7 @@ import * as fs from 'fs';
 import axios from 'axios';
 import { UpdateBulletinSoinDto } from 'src/bulletin-soin/dto/update-bulletin-soin.dto';
 import { isSLACompliant } from '../utils/sla-calculator';
+import { BordereauxExcelService } from './bordereaux-excel.service';
 
 
 
@@ -690,7 +691,8 @@ export class BordereauxService {
     private readonly workflowNotifications: WorkflowNotificationsService,
     private readonly teamRouting: TeamRoutingService,
     private readonly autoNotificationService: AutoNotificationService,
-    private readonly workloadAssignmentService: WorkloadAssignmentService
+    private readonly workloadAssignmentService: WorkloadAssignmentService,
+    private readonly bordereauxExcelService: BordereauxExcelService,
   ) {}
 
 
@@ -1137,20 +1139,42 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       where: { id },
       include: {
         client: true,
-        contract: true,
+        contract: {
+          include: {
+            teamLeader: { select: { id: true, fullName: true, role: true } },
+            assignedManager: { select: { id: true, fullName: true, role: true } },
+          },
+        },
         virement: true,
-        documents: true,
+        documents: {
+          include: {
+            uploader: { select: { id: true, fullName: true } },
+            assignedTo: { select: { id: true, fullName: true } },
+          },
+          orderBy: { uploadedAt: 'desc' },
+        },
+        BulletinSoin: { orderBy: { createdAt: 'desc' } },
+        ordresVirement: { orderBy: { createdAt: 'desc' } },
         team: true,
-        currentHandler: true,
-        traitementHistory: { include: { user: true, assignedTo: true } },
+        currentHandler: { select: { id: true, fullName: true, role: true } },
+        chargeCompte: { select: { id: true, fullName: true, role: true } },
+        traitementHistory: {
+          include: { user: true, assignedTo: true },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
       },
     });
-    
+
     if (!bordereau) throw new NotFoundException('Bordereau not found');
+
     const dto = BordereauResponseDto.fromEntity(bordereau);
-    // CRITICAL FIX: Override nombreBS with actual document count
-    const docCount = (bordereau as any).documents?.length || bordereau.nombreBS;
-    dto.nombreBS = docCount;
+
+    // ✅ FIX: never let a real, stored nombreBS get overwritten by 0 just
+    // because no Document child rows exist yet (e.g. imported bordereaux).
+    const realDocCount = (bordereau as any).documents?.length || 0;
+    dto.nombreBS = Math.max(realDocCount, bordereau.nombreBS || 0);
+
     return dto;
   }
 
@@ -1487,16 +1511,8 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     return csvRows.join('\n');
   }
 
-  async exportExcel() {
-    const result = await this.findAll();
-    const bordereaux = Array.isArray(result) ? result : result.items;
-    const fields = ['id', 'reference', 'statut', 'dateReception', 'dateCloture', 'delaiReglement', 'nombreBS'];
-    const rows = [fields];
-    for (const b of bordereaux) {
-      rows.push(fields.map(f => b[f] !== undefined ? b[f] : ''));
-    }
-    const content = rows.map(r => r.join('\t')).join('\n');
-    return Buffer.from(content, 'utf-8');
+  async exportExcel(filters: any = {}): Promise<Buffer> {
+    return this.bordereauxExcelService.exportExcel(filters);
   }
 
   async exportPDF() {

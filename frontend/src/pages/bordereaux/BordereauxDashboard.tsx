@@ -17,6 +17,7 @@ import {
   batchUpdateStatus,
   bulkAssignBordereaux,
   exportBordereauxCSV,
+  exportBordereauxExcel,
   fetchUsers,
   startScan,
   completeScan,
@@ -307,6 +308,15 @@ const BordereauxDashboard: React.FC = () => {
     }
   };
 
+  const handleExportExcel = async () => {
+    try {
+      await exportBordereauxExcel(filters);
+      notify('Export Excel réalisé avec succès', 'success');
+    } catch (error) {
+      notify('Erreur lors de l\'export Excel', 'error');
+    }
+  };
+
   // Get Durée de traitement from backend calculation
   const getDureeTraitement = (bordereau: any): { days: number | null; isOnTime: boolean; warning?: string } => {
     if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
@@ -453,7 +463,38 @@ const BordereauxDashboard: React.FC = () => {
             <p className="bordereau-subtitle">Tableau de bord centralisé pour le suivi des bordereaux</p>
           </div>
           <div className="flex items-center gap-4">
-         
+
+            {isSuperAdmin && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleExport}
+                  title="Exporter en CSV"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '8px 14px', fontSize: '13px', fontWeight: 600,
+                    background: 'white', color: '#374151',
+                    border: '1px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer'
+                  }}
+                >
+                  <Download style={{ width: '14px', height: '14px' }} />
+                  CSV
+                </button>
+                <button
+                  onClick={handleExportExcel}
+                  title="Exporter en Excel"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '8px 14px', fontSize: '13px', fontWeight: 600,
+                    background: '#1e7145', color: 'white',
+                    border: 'none', borderRadius: '8px', cursor: 'pointer'
+                  }}
+                >
+                  <FileSpreadsheet style={{ width: '14px', height: '14px' }} />
+                  Excel
+                </button>
+              </div>
+            )}
+
             <div className="bordereau-user-info">
               Connecté en tant que <span style={{fontWeight: 600}}>{user?.fullName}</span>
             </div>

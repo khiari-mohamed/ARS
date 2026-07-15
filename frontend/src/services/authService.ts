@@ -26,12 +26,13 @@ export const register = async (userData: any) => {
 };
 
 export const requestPasswordReset = async (email: string) => {
-  try {
-    const { data } = await LocalAPI.post('/auth/password-reset', { email });
-    return data;
-  } catch (error) {
-    return { success: true, message: 'Password reset email sent' };
-  }
+  const { data } = await LocalAPI.post('/auth/password-reset-request', { email });
+  return data;
+};
+
+export const confirmPasswordReset = async (token: string, newPassword: string) => {
+  const { data } = await LocalAPI.post('/auth/password-reset-confirm', { token, newPassword });
+  return data;
 };
 
 export const logout = async () => {

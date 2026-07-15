@@ -5,6 +5,7 @@ import SageManagement from './pages/sage/SageManagement';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register'; // <-- Import Register
+import PasswordReset from './pages/auth/PasswordReset';
 import MainLayout from './layouts/MainLayout';
 import RoleBasedDashboard from './components/RoleBasedDashboard';
 import BordereauxListPage from './pages/bordereaux/BordereauxList';
@@ -48,7 +49,8 @@ const App: React.FC = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} /> {/* <-- Add this line */}
+      <Route path="/register" element={<Register />} />
+      <Route path="/password-reset" element={<PasswordReset />} />
       {user ? (
         <Route element={<MainLayout children={undefined} />}>
           <Route path="/home/dashboard" element={<RoleBasedDashboard />} />

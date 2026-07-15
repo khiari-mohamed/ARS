@@ -166,6 +166,27 @@ export const exportBordereauxCSV = async () => {
   return response.data;
 };
 
+export const exportBordereauxExcel = async (filters?: any) => {
+  const response = await LocalAPI.get('/bordereaux/export/excel', {
+    params: filters,
+    responseType: 'blob',
+  });
+
+  const blob = new Blob([response.data], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `bordereaux_${new Date().toISOString().split('T')[0]}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+
+  return { success: true };
+};
+
 export const fetchUsers = async (filters?: any) => {
   // Sanitize filters to prevent NoSQL injection
   const sanitizedFilters = filters ? {

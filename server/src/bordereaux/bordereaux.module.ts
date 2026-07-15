@@ -16,6 +16,7 @@ import { AlertsModule } from '../alerts/alerts.module';
 import { AuditLogModule } from './audit-log.module'; 
 import { SeedController } from '../seed.controller';
 import { WorkflowModule } from '../workflow/workflow.module';
+import { BordereauxExcelService } from './bordereaux-excel.service';
 @Module({
   imports: [
     PrismaModule, 
@@ -39,7 +40,8 @@ import { WorkflowModule } from '../workflow/workflow.module';
     AssignmentEngineService, 
     TeamAnalyticsService, 
     BordereauStatusAutomationService, 
-    ScanSLAService // NEW: SCAN SLA service
+    ScanSLAService ,// NEW: SCAN SLA service
+    BordereauxExcelService
   ],
   exports: [
     BordereauxService, 
