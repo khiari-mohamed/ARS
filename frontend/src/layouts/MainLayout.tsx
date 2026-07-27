@@ -3,6 +3,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { NotificationCenter } from '../components/BS/NotificationCenter';
 import { LocalAPI } from '../services/axios';
+import { fetchUserNotifications } from '../api/usersApi';
 import io from 'socket.io-client';
 import { getSocketUrl } from '../utils/getSocketUrl';
 import { Sidebar } from '../components/Sidebar';
@@ -32,6 +33,63 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0);
   const [playedSoundForIds, setPlayedSoundForIds] = useState<Set<string>>(new Set());
+  const [notificationPage, setNotificationPage] = useState(1);
+  const [notificationPageSize] = useState(50);
+  const [notificationTotalPages, setNotificationTotalPages] = useState(1);
+  const [notificationLoadingMore, setNotificationLoadingMore] = useState(false);
+
+  const normalizeNotificationsResponse = (data: any): any[] => {
+    if (Array.isArray(data)) return data;
+    if (data?.items && Array.isArray(data.items)) return data.items;
+    if (data?.notifications && Array.isArray(data.notifications)) return data.notifications;
+    return [];
+  };
+
+  const mapNotificationItem = (item: any): NotificationItem => ({
+    id: item.id,
+    message: item.message || item.title,
+    read: item.read,
+    _type: item.type,
+    title: item.title,
+    createdAt: item.createdAt,
+    data: item.data
+  });
+
+  const loadNotifications = async (pageNumber: number, append = false) => {
+    if (!user?.id) return;
+
+    if (append) {
+      setNotificationLoadingMore(true);
+    }
+
+    try {
+      const data = await fetchUserNotifications(user.id, pageNumber, notificationPageSize);
+      const mappedItems = data.items.map(mapNotificationItem);
+
+      if (append) {
+        setNotifications(prev => [
+          ...prev,
+          ...mappedItems.filter(item => !prev.some(existing => existing.id === item.id))
+        ]);
+      } else {
+        setNotifications(mappedItems);
+      }
+      setNotificationPage(pageNumber);
+      setNotificationTotalPages(data.totalPages);
+    } catch (error) {
+      // Keep existing notifications on error
+    } finally {
+      if (append) {
+        setNotificationLoadingMore(false);
+      }
+    }
+  };
+
+  const loadMoreNotifications = async () => {
+    if (notificationPage >= notificationTotalPages || !user?.id) return;
+    await loadNotifications(notificationPage + 1, true);
+  };
+
   // Managers state
   const [managers, setManagers] = useState<any[]>([]);
   
@@ -101,97 +159,31 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Poll for notifications every 30 seconds
+  // Poll for notifications every 30 seconds and keep older pages loaded
   useEffect(() => {
-    const fetchNotifications = async () => {
+    const refreshNotifications = async () => {
       if (!user?.id) return;
-      
-      try {
-        // Try to get notifications from the database
-        const { data } = await LocalAPI.get(`/users/${user.id}/notifications`);
-        if (Array.isArray(data)) {
-          const newNotifications = data.map((n: any) => ({
-            id: n.id,
-            message: n.message || n.title,
-            read: n.read,
-            _type: n.type,
-            title: n.title,
-            createdAt: n.createdAt,
-            data: n.data
-          }));
-          
-          // console.log('📥 Fetched notifications:', newNotifications.length, 'types:', newNotifications.map(n => n._type));
-          
-          const newUnreadCount = newNotifications.filter(n => !n.read).length;
-          
-          // Play sound for every new notification (especially OV validation)
-          const hasNewNotifications = newNotifications.some(n => 
-            !notifications.find(existing => existing.id === n.id)
-          );
-          
-          const newNotificationsList = newNotifications.filter(n => 
-            !notifications.find(existing => existing.id === n.id)
-          );
-          
-          if (newNotificationsList.length > 0) {
-            // console.log('🆕 NEW notifications detected:', newNotificationsList.map(n => ({ id: n.id, type: n._type, title: n.title })));
-          }
-          
-          // Also check for new unread notifications (in case of status changes)
-          const hasNewUnreadNotifications = newUnreadCount > previousUnreadCount;
-          
-          if ((hasNewNotifications || hasNewUnreadNotifications) && notifications.length > 0) {
-            const newNotificationTypes = newNotifications.filter(n => 
-              !notifications.find(existing => existing.id === n.id)
-            ).map(n => n._type);
-            
-            // console.log('🔊 Playing notification sound for:', {
-            //   hasNewNotifications,
-            //   hasNewUnreadNotifications,
-            //   newUnreadCount,
-            //   previousUnreadCount,
-            //   newNotificationTypes
-            // });
-            
-            playNotificationSound();
-          }
-          
 
-          
-          // Force sound for returned scan notifications (only once per notification)
-          const returnedScanNotifications = newNotifications.filter(n => 
-            (n._type === 'DOSSIER_RETURNED_TO_SCAN' || n._type === 'BORDEREAU_REJECTED') && 
-            !n.read && 
-            n.id && 
-            !playedSoundForIds.has(n.id)
-          );
-          
-          if (returnedScanNotifications.length > 0) {
-            // console.log('🔄 Playing sound for new returned scan notifications:', returnedScanNotifications.length);
-            playNotificationSound();
-            
-            // Mark these notifications as having played sound
-            const newPlayedIds = new Set(playedSoundForIds);
-            returnedScanNotifications.forEach(n => {
-              if (n.id) newPlayedIds.add(n.id);
-            });
-            setPlayedSoundForIds(newPlayedIds);
-          }
-          
-          setNotifications(newNotifications);
-          setPreviousUnreadCount(newUnreadCount);
-        }
+      try {
+        const data = await fetchUserNotifications(user.id, 1, notificationPageSize);
+        const freshItems = data.items.map(mapNotificationItem);
+        setNotifications(prev => {
+          const olderItems = prev.filter(old => !freshItems.some(item => item.id === old.id));
+          return [...freshItems, ...olderItems];
+        });
+        setNotificationPage(1);
+        setNotificationTotalPages(data.totalPages);
+        setPreviousUnreadCount(data.items.filter(n => !n.read).length);
       } catch (error) {
-        // Fallback: continue with existing reclamation alerts
-        // console.log('Using fallback notification system');
+        // keep current notifications if refresh fails
       }
     };
-    
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 3000); // Check every 3 seconds for faster response
-    
+
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 3000);
+
     return () => clearInterval(interval);
-  }, [user?.id, notifications, previousUnreadCount]);
+  }, [user?.id, notificationPageSize]);
 
   // Mark notifications as read when clicked
   const markAsRead = async (index: number) => {
@@ -260,7 +252,6 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   const [selectedOV, setSelectedOV] = useState<{ id: string; reference: string } | null>(null);
   
   const handleNotificationClick = async (notif: NotificationItem, index: number) => {
-    // AUTOMATICALLY mark as read when clicked
     if (!notif.read && notif.id) {
       try {
         if (notif._type === 'reclamation') {
@@ -268,15 +259,14 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
         } else {
           await LocalAPI.patch(`/users/${user?.id}/notifications/${notif.id}/read`);
         }
-        // Update local state immediately
-        setNotifications(prev => prev.map((n, i) => i === index ? {...n, read: true} : n));
+        setNotifications(prev => prev.map((n, i) => i === index ? { ...n, read: true } : n));
       } catch (error) {
         console.error('Failed to mark notification as read:', error);
       }
     }
-    
-    // EXACT SPEC: Open validation modal for OV_PENDING_VALIDATION notifications
-    if (notif._type === 'OV_PENDING_VALIDATION' && notif.data?.ordreVirementId) {
+
+    const notificationType = notif._type || notif.title;
+    if (notificationType === 'OV_PENDING_VALIDATION' && notif.data?.ordreVirementId) {
       setSelectedOV({
         id: notif.data.ordreVirementId,
         reference: notif.data.reference || 'N/A'
@@ -284,7 +274,6 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       setValidationModalOpen(true);
       setAnchorEl(null);
     } else {
-      // Open detail modal for other notifications
       setSelectedNotification(notif);
       setSelectedNotificationIndex(index);
       setDetailModalOpen(true);
@@ -350,6 +339,17 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                 >
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                     ✓ Marquer tout comme lu ({unreadCount})
+                  </Typography>
+                </MenuItem>
+              )}
+              {notificationPage < notificationTotalPages && (
+                <MenuItem
+                  onClick={loadMoreNotifications}
+                  disabled={notificationLoadingMore}
+                  sx={{ borderBottom: '1px solid #e0e0e0', backgroundColor: '#fafafa' }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                    {notificationLoadingMore ? 'Chargement...' : 'Charger les notifications plus anciennes'}
                   </Typography>
                 </MenuItem>
               )}
@@ -535,21 +535,12 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           ovId={selectedOV.id}
           ovReference={selectedOV.reference}
           onValidated={() => {
-            // Refresh notifications after validation
             if (user?.id) {
-              LocalAPI.get(`/users/${user.id}/notifications`)
-                .then(({ data }) => {
-                  if (Array.isArray(data)) {
-                    setNotifications(data.map((n: any) => ({
-                      id: n.id,
-                      message: n.message || n.title,
-                      read: n.read,
-                      _type: n.type,
-                      title: n.title,
-                      createdAt: n.createdAt,
-                      data: n.data
-                    })));
-                  }
+              fetchUserNotifications(user.id, 1, notificationPageSize)
+                .then((data) => {
+                  setNotifications(data.items.map(mapNotificationItem));
+                  setNotificationPage(1);
+                  setNotificationTotalPages(data.totalPages);
                 })
                 .catch(() => {});
             }

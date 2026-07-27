@@ -137,6 +137,15 @@ export interface UserNotification {
   createdAt: string;
 }
 
+export interface PaginatedUserNotifications {
+  items: UserNotification[];
+  total: number;
+  totalUnread: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 // Role labels for display
 export const ROLE_LABELS: Record<UserRole, string> = {
   SUPER_ADMIN: 'Super Administrateur',

@@ -287,15 +287,18 @@ export class UsersController {
   }
 
   @Get(':id/notifications')
-  async getUserNotifications(@Param('id') id: string, @Request() req) {
+  async getUserNotifications(@Param('id') id: string, @Request() req, @Query() query: any) {
     const currentUser = req.user;
     
     // Users can only view their own notifications
     if (currentUser.id !== id && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Access denied');
     }
+
+    const page = Math.max(1, parseInt(query.page, 10) || 1);
+    const pageSize = Math.min(200, Math.max(1, parseInt(query.pageSize, 10) || 50));
     
-    return this.usersService.getUserNotifications(id);
+    return this.usersService.getUserNotifications(id, page, pageSize);
   }
   
   @Patch(':id/notifications/:notificationId/read')

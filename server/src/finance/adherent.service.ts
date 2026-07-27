@@ -90,7 +90,7 @@ export class AdherentService {
             rib: duplicateRib.rib,
             clientName: duplicateRib.client.name
           },
-          pendingData: dto
+          pendingData: { ...dto, clientId: client.id }  // ensure clientId is always the UUID
         }],
         0,
         1
@@ -183,7 +183,7 @@ export class AdherentService {
               matricule: current.matricule,
               nom: dto.nom || current.nom,
               prenom: dto.prenom || current.prenom,
-              clientId: current.clientId,
+              clientId: current.clientId,  // already a UUID
               rib: dto.rib,
               codeAssure: (dto.codeAssure || current.codeAssure) || undefined,
               numeroContrat: (dto.numeroContrat || current.numeroContrat) || undefined,
@@ -573,12 +573,17 @@ export class AdherentService {
       throw new BadRequestException('Duplicate not found or already processed');
     }
 
-    // Create the adherent
-    const created = await this.createAdherentWithDuplicateRib(
-      duplicate.pendingData,
-      userId,
-      justification
-    );
+    // Create the adherent (handles duplicate matricule check internally)
+    let created;
+    try {
+      created = await this.createAdherentWithDuplicateRib(
+        duplicate.pendingData,
+        userId,
+        justification
+      );
+    } catch (error: any) {
+      throw new BadRequestException(`Impossible de créer l'adhérent: ${error.message}`);
+    }
 
     // Update notification data
     duplicate.status = 'APPROVED';
@@ -588,7 +593,7 @@ export class AdherentService {
 
     await this.prisma.notification.update({
       where: { id: notificationId },
-      data: { data }
+      data: { data: JSON.parse(JSON.stringify(data)) }
     });
 
     return created;
@@ -617,7 +622,7 @@ export class AdherentService {
 
     await this.prisma.notification.update({
       where: { id: notificationId },
-      data: { data }
+      data: { data: JSON.parse(JSON.stringify(data)) }
     });
 
     return { success: true, message: 'Duplicate RIB rejected' };
@@ -681,6 +686,29 @@ export class AdherentService {
 
     if (!client) {
       throw new BadRequestException(`Client ${dto.clientId} not found`);
+    }
+
+    // If adherent with same matricule+clientId already exists (double approval / already created),
+    // just return it — the goal of the approval is already achieved.
+    const existing = await this.prisma.adherent.findFirst({
+      where: { matricule: dto.matricule, clientId: client.id },
+      include: { client: true }
+    });
+    if (existing) {
+      return {
+        id: existing.id,
+        matricule: existing.matricule,
+        nom: existing.nom,
+        prenom: existing.prenom,
+        rib: existing.rib,
+        codeAssure: existing.codeAssure,
+        numeroContrat: existing.numeroContrat,
+        assurance: existing.assurance,
+        statut: existing.statut,
+        duplicateRib: true,
+        societe: existing.client.name,
+        client: { id: existing.client.id, name: existing.client.name }
+      };
     }
 
     const newAdherent = await this.prisma.adherent.create({

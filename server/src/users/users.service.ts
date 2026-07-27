@@ -455,7 +455,7 @@ export class UsersService {
             throw new Error(`Unknown action: ${action}`);
         }
         results.push({ userId, success: true });
-      } catch (error) {
+      } catch (error: any) {
         results.push({ userId, success: false, error: error.message });
       }
     }
@@ -647,12 +647,32 @@ export class UsersService {
   }
   
   // NOTIFICATION METHODS
-  async getUserNotifications(userId: string) {
-    return this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 50
-    });
+  async getUserNotifications(userId: string, page = 1, pageSize = 50) {
+    const pageNumber = Math.max(1, page);
+    const pageSizeNumber = Math.min(200, Math.max(1, pageSize));
+    const offset = (pageNumber - 1) * pageSizeNumber;
+
+    const [total, totalUnread, items] = await this.prisma.$transaction([
+      this.prisma.notification.count({ where: { userId } }),
+      this.prisma.notification.count({ where: { userId, read: false } }),
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: pageSizeNumber
+      })
+    ]);
+
+    const totalPages = total > 0 ? Math.ceil(total / pageSizeNumber) : 0;
+
+    return {
+      items,
+      total,
+      totalUnread,
+      page: pageNumber,
+      pageSize: pageSizeNumber,
+      totalPages
+    };
   }
   
   async markNotificationAsRead(userId: string, notificationId: string) {

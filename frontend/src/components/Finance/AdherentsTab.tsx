@@ -99,6 +99,18 @@ const AdherentsTab: React.FC = () => {
     loadClients();
   }, []);
 
+  useEffect(() => {
+    const handler = () => loadAdherents();
+    window.addEventListener('adherents-updated', handler);
+    return () => window.removeEventListener('adherents-updated', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => loadAdherents();
+    window.addEventListener('adherents-updated', handler);
+    return () => window.removeEventListener('adherents-updated', handler);
+  }, []);
+
   const loadClients = async () => {
     try {
       const { fetchClients } = await import('../../services/clientService');

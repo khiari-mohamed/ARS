@@ -1,5 +1,5 @@
 import { LocalAPI } from '../services/axios';
-import { User, UserRole, UserFilters, CreateUserDto, UpdateUserDto, UserPerformanceStats, UserActivitySummary, UserDashboardStats, AuditLog, BulkActionResult, UserNotification } from '../types/user.d';
+import { User, UserRole, UserFilters, CreateUserDto, UpdateUserDto, UserPerformanceStats, UserActivitySummary, UserDashboardStats, AuditLog, BulkActionResult, UserNotification, PaginatedUserNotifications } from '../types/user.d';
 
 // Legacy User interface for backward compatibility
 export interface LegacyUser {
@@ -102,13 +102,53 @@ export const exportUserData = async (userIds: string[], format: 'csv' | 'excel' 
   return response.data;
 };
 
-export const fetchUserNotifications = async (userId: string): Promise<UserNotification[]> => {
-  const { data } = await LocalAPI.get<UserNotification[]>(`/users/${userId}/notifications`);
-  return data;
+function isPaginatedUserNotifications(data: any): data is PaginatedUserNotifications {
+  return data && Array.isArray(data.items) && typeof data.total === 'number';
+}
+
+export const fetchUserNotifications = async (userId: string, page = 1, pageSize = 50): Promise<PaginatedUserNotifications> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize)
+  });
+  const { data } = await LocalAPI.get(`/users/${userId}/notifications?${params.toString()}`);
+
+  if (isPaginatedUserNotifications(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return {
+      items: data,
+      total: data.length,
+      totalUnread: data.filter((n: any) => !n.read).length,
+      page,
+      pageSize,
+      totalPages: Math.ceil(data.length / pageSize)
+    };
+  }
+
+  if (Array.isArray(data.notifications)) {
+    const items = data.notifications;
+    return {
+      items,
+      total: items.length,
+      totalUnread: items.filter((n: any) => !n.read).length,
+      page,
+      pageSize,
+      totalPages: Math.ceil(items.length / pageSize)
+    };
+  }
+
+  throw new Error('Unexpected notifications response format');
 };
 
-export const markNotificationRead = async (notificationId: string): Promise<void> => {
-  await LocalAPI.patch(`/notifications/${notificationId}/read`);
+export const markNotificationRead = async (userId: string, notificationId: string): Promise<void> => {
+  await LocalAPI.patch(`/users/${userId}/notifications/${notificationId}/read`);
+};
+
+export const markAllUserNotificationsRead = async (userId: string): Promise<void> => {
+  await LocalAPI.patch(`/users/${userId}/notifications/mark-all-read`);
 };
 
 // Role and permission utilities

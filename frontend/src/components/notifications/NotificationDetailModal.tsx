@@ -85,6 +85,7 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
       );
       setLocalData({ ...localData, duplicates: updatedDuplicates });
       alert('✅ RIB dupliqué approuvé avec succès!');
+      window.dispatchEvent(new CustomEvent('adherents-updated'));
     } catch (error) {
       alert('❌ Erreur lors de l\'approbation');
     } finally {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchUserNotifications, markNotificationRead } from '../../api/usersApi';
+import { fetchUserNotifications, markNotificationRead, markAllUserNotificationsRead } from '../../api/usersApi';
 import { UserNotification } from '../../types/user.d';
 import {
   Box,
@@ -96,45 +96,65 @@ const UserNotifications: React.FC<Props> = ({
   const [selectedNotification, setSelectedNotification] = useState<UserNotification | null>(null);
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(50);
+  const [total, setTotal] = useState(0);
+  const [totalUnread, setTotalUnread] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    loadNotifications();
+    setPage(1);
+    loadNotifications(1, pageSize, false);
   }, [userId]);
 
-  const loadNotifications = async () => {
-    setLoading(true);
+  const loadNotifications = async (pageNumber: number, pageSizeNumber: number, append: boolean) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const data = await fetchUserNotifications(userId);
-      setNotifications(data);
+      const data = await fetchUserNotifications(userId, pageNumber, pageSizeNumber);
+      setNotifications(prev => append ? [...prev, ...data.items] : data.items);
+      setTotal(data.total);
+      setTotalUnread(data.totalUnread);
+      setTotalPages(data.totalPages);
+      setPage(pageNumber);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement des notifications');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
-      await markNotificationRead(notificationId);
+      await markNotificationRead(userId, notificationId);
       setNotifications(prev => 
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
+      setTotalUnread(prev => Math.max(0, prev - 1));
     } catch (err: any) {
       setError(err.message || 'Erreur lors du marquage comme lu');
     }
   };
 
   const handleMarkAllAsRead = async () => {
-    const unreadNotifications = notifications.filter(n => !n.read);
     try {
-      await Promise.all(
-        unreadNotifications.map(n => markNotificationRead(n.id))
-      );
+      await markAllUserNotificationsRead(userId);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setTotalUnread(0);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du marquage de toutes les notifications');
     }
+  };
+
+  const handleLoadMore = async () => {
+    if (page >= totalPages) return;
+    await loadNotifications(page + 1, pageSize, true);
   };
 
   const handleNotificationClick = (notification: UserNotification) => {
@@ -157,7 +177,7 @@ const UserNotifications: React.FC<Props> = ({
     }
   });
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = totalUnread;
 
   if (loading) {
     return (
@@ -185,7 +205,7 @@ const UserNotifications: React.FC<Props> = ({
                 <Notifications />
               </Badge>
               <Typography variant="h6">
-                Notifications ({notifications.length})
+                Notifications ({total})
               </Typography>
             </Box>
             
@@ -313,6 +333,18 @@ const UserNotifications: React.FC<Props> = ({
             </List>
           )}
         </Box>
+
+        {page < totalPages && (
+          <Box display="flex" justifyContent="center" mt={2}>
+            <Button
+              variant="outlined"
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? 'Chargement…' : 'Charger les notifications plus anciennes'}
+            </Button>
+          </Box>
+        )}
       </CardContent>
 
       {/* Filter Menu */}
