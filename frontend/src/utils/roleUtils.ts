@@ -55,6 +55,7 @@ export function canManageUser(currentRole: UserRole, targetRole: UserRole): bool
     'GESTIONNAIRE': 3,
     'CLIENT_SERVICE': 3,
     'FINANCE': 3,
+    'COMPTABILITE': 3,
     'SCAN_TEAM': 2,
     'BO': 2
   };

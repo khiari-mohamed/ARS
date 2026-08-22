@@ -15,6 +15,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import AddIcon from '@mui/icons-material/Add';
+import DownloadIcon from '@mui/icons-material/Download';
 
 interface DonneurOrdre {
   id: string;
@@ -38,6 +39,40 @@ interface ValidationResult {
   memberId?: string;
   criticalDuplicate?: boolean;
 }
+
+const groupValidationResults = (results: ValidationResult[]): ValidationResult[] => {
+  const grouped = new Map<string, ValidationResult>();
+
+  results.forEach((result) => {
+    const key = result.matricule.trim();
+    const existing = grouped.get(key);
+
+    if (!existing) {
+      grouped.set(key, { ...result });
+      return;
+    }
+
+    const status = existing.status === 'error' || result.status === 'error'
+      ? 'error'
+      : existing.status === 'warning' || result.status === 'warning'
+        ? 'warning'
+        : 'ok';
+    const notes = [existing.notes, result.notes]
+      .filter(Boolean)
+      .filter((note, index, values) => values.indexOf(note) === index)
+      .join(', ');
+
+    grouped.set(key, {
+      ...existing,
+      amount: existing.amount + result.amount,
+      status,
+      notes,
+      criticalDuplicate: existing.criticalDuplicate || result.criticalDuplicate,
+    });
+  });
+
+  return Array.from(grouped.values());
+};
 
 interface OVProcessingTabProps {
   onSwitchToTab?: (tabIndex: number) => void;
@@ -275,7 +310,8 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     try {
       const { processOV } = await import('../../services/financeService');
       
-      const validAdherents = validationResults.filter(r => r.status === 'ok' || r.status === 'warning');
+      const groupedResults = groupValidationResults(validationResults);
+      const validAdherents = groupedResults.filter(r => r.status === 'ok' || r.status === 'warning');
       
       if (validAdherents.length === 0) {
         // Create mock adherent if none found
@@ -304,22 +340,43 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       const manualOVData = sessionStorage.getItem('manualOVData');
       let clientName = null;
       
+      let clientId: string | undefined;
+      let contractId: string | null | undefined;
       if (manualOVData) {
         try {
           const parsedData = JSON.parse(manualOVData);
           clientName = parsedData.clientName;
+          clientId = parsedData.clientId || undefined;
+          contractId = parsedData.contractId || null;
         } catch (e) {
           console.error('Failed to parse manual OV data:', e);
         }
       }
       
+      // Forward free-text referenceBordereau + observation from manual OV form
+      let referenceBordereau: string | undefined;
+      let motifObservation: string | undefined;
+      if (manualOVData) {
+        try {
+          const parsedData = JSON.parse(manualOVData);
+          referenceBordereau = parsedData.referenceBordereau?.trim() || undefined;
+          motifObservation = parsedData.observation?.trim() || undefined;
+        } catch (e) {
+          console.error('Failed to parse manual OV data for ref/obs:', e);
+        }
+      }
+
       const ovData = {
         donneurOrdreId: selectedDonneur?.id || 'default',
         bordereauId: selectedBordereauId,
+        referenceBordereau,
+        motifObservation,
         virementData,
         utilisateurSante: user?.id || 'demo-user',
         uploadedPdfPath: manualOVPdfPath || undefined,
-        clientName: clientName || undefined
+        clientName: clientName || undefined,
+        clientId,
+        contractId
       };
       
       const ovRecord = await processOV(ovData);
@@ -651,7 +708,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           memberId: item.adherentId,
           criticalDuplicate: item.criticalDuplicate || false
         }));
-        setValidationResults(transformedResults);
+        setValidationResults(groupValidationResults(transformedResults));
         
         // EXACT SPEC: Move to validation summary (Step 3) only if both files uploaded
         if (uploadedPdfFile) {
@@ -684,6 +741,33 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleExportRejectedRibs = async () => {
+    const rejected = validationResults.filter(r => r.status === 'error' || r.status === 'warning');
+    if (rejected.length === 0) return;
+
+    const XLSX = await import('xlsx');
+
+    const rows = rejected.map((r) => ({
+      Matricule: r.matricule,
+      'Nom et Prénom': r.name,
+      Société: r.society,
+      RIB: r.rib || 'N/A',
+      'Montant (TND)': r.amount.toFixed(3),
+      Statut: r.status === 'error' ? 'ERREUR' : 'ALERTE',
+      'Type d\'anomalie': r.notes || '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet['!cols'] = [
+      { wch: 14 }, { wch: 28 }, { wch: 25 }, { wch: 22 },
+      { wch: 14 }, { wch: 10 }, { wch: 80 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'RIB Rejetés');
+    XLSX.writeFile(workbook, `ribs_rejetes_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleGenerateFiles = async (type: 'pdf' | 'txt') => {
@@ -1006,6 +1090,11 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
               <Alert severity="success" sx={{ mb: 2 }}>
                 Validation automatique terminée
               </Alert>
+
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Les lignes du même matricule sont regroupées automatiquement par bordereau.
+                Un seul virement sera généré par bénéficiaire, avec le montant cumulé.
+              </Alert>
               
               <Table>
                 <TableHead>
@@ -1067,6 +1156,17 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   Abandonner
                 </Button>
                 <Box sx={{ display: 'flex', gap: 2 }}>
+                  {validationResults.some(r => r.status === 'error' || r.status === 'warning') && (
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<DownloadIcon />}
+                      onClick={handleExportRejectedRibs}
+                      sx={{ fontWeight: 600, borderColor: '#e65100', color: '#e65100', '&:hover': { borderColor: '#bf360c', bgcolor: '#fff3e0' } }}
+                    >
+                      Export RIB Rejetés ({validationResults.filter(r => r.status === 'error' || r.status === 'warning').length})
+                    </Button>
+                  )}
                   <Button
                     variant="outlined"
                     onClick={() => setActiveStep(1)}

@@ -1,11 +1,13 @@
-// EXACT 6 virement statuses from specifications
+// EXACT official 8 virement statuses from specifications
 export type EtatVirement = 
-  | 'NON_EXECUTE'              // When bordereau is "Traité"
-  | 'EN_COURS_EXECUTION'       // Applied by Finance service
-  | 'EXECUTE_PARTIELLEMENT'    // Partial execution (Finance action)
-  | 'REJETE'                   // Failed (Finance action)
-  | 'BLOQUE'                   // Suspended/stopped (Finance action)
-  | 'EXECUTE';                 // When bordereau is "Payé"
+  | 'NON_EXECUTE'
+  | 'EN_COURS_VALIDATION'
+  | 'VIREMENT_DEPOSE'
+  | 'VIREMENT_NON_VALIDE'
+  | 'VIREMENT_AUTORISE'
+  | 'BLOQUE'
+  | 'EXECUTE'
+  | 'REJETE';
 
 export type VirementStatus = EtatVirement;
 

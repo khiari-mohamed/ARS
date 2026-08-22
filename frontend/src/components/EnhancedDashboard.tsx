@@ -1,14 +1,64 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
-import { aiService } from '../services/aiService';
 import { LocalAPI } from '../services/axios';
 import { hasDashboardAccess, canViewFeature } from '../utils/dashboardRoles';
 import WorkforceEstimator from './analytics/WorkforceEstimator';
-import { AssignmentSuggestions } from './BS/AssignmentSuggestions';
-import { RebalancingSuggestions } from './BS/RebalancingSuggestions';
-import { PrioritiesDashboard } from './BS/PrioritiesDashboard';
 import DossiersList from './BS/DossiersList';
 import { useIsReadOnly } from './ReadOnlyWrapper';
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+// Single source of truth for the visual language. Inline styles reference this
+// object so the whole dashboard stays consistent without touching any global
+// stylesheet — nothing here changes behaviour, only appearance.
+
+const theme = {
+  font: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
+  bg: '#f4f5f9',
+  surface: '#ffffff',
+  surfaceSubtle: '#fafbfd',
+  surfaceMuted: '#f3f4f8',
+  border: '#e7e9f0',
+  borderStrong: '#d9dce6',
+  divider: '#eef0f5',
+  text: '#161a24',
+  textMuted: '#5b6072',
+  textFaint: '#9498a8',
+  textOnPrimary: '#ffffff',
+  primary: '#c31f2e',
+  primaryDark: '#9c1723',
+  primaryDarker: '#7a121b',
+  primarySoft: '#fdeceb',
+  primarySoftBorder: '#f6c9c9',
+  success: '#1a9c5b',
+  successSoft: '#e9f9f1',
+  successBorder: '#b6ecd2',
+  warning: '#c17a09',
+  warningSoft: '#fef6e7',
+  warningBorder: '#f6ddab',
+  danger: '#d13438',
+  dangerSoft: '#fdecec',
+  dangerBorder: '#f5c6c6',
+  info: '#2461c0',
+  infoSoft: '#eaf2fd',
+  infoBorder: '#c3dbf8',
+  violet: '#6d4bce',
+  violetSoft: '#f1edfc',
+  radiusSm: 8,
+  radiusMd: 12,
+  radiusLg: 16,
+  radiusXl: 20,
+  shadowXs: '0 1px 2px rgba(20,22,35,.04)',
+  shadowSm: '0 1px 3px rgba(20,22,35,.05), 0 1px 2px rgba(20,22,35,.03)',
+  shadowMd: '0 6px 16px -4px rgba(20,22,35,.09), 0 2px 6px -2px rgba(20,22,35,.05)',
+  shadowLg: '0 20px 48px -12px rgba(20,22,35,.18)',
+} as const;
+
+const cardBase: React.CSSProperties = {
+  background: theme.surface,
+  border: `1px solid ${theme.border}`,
+  borderRadius: theme.radiusLg,
+  boxShadow: theme.shadowSm,
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,77 +122,84 @@ interface DashboardData {
 }
 
 interface Filter1 { ref: string; client: string; type: string; statut: string; dateFrom: string; dateTo: string }
-interface Filter2 { ref: string; client: string; statut: string; dateFrom: string; dateTo: string }
-interface Filter3 { ref: string; refBrdx: string; client: string; type: string; statut: string; gest: string; dateFrom: string; dateTo: string }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const REFRESH_INTERVAL = 60_000; // Bumped from 30s → 60s to reduce server hammering
 const ITEMS_PER_PAGE = 5;
-const INDIVIDUEL_PER_PAGE = 20;
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  TRAITE:           { bg: '#d1fae5', text: '#065f46' },
-  EN_COURS:         { bg: '#e0f2fe', text: '#0369a1' },
-  A_AFFECTER:       { bg: '#fce7f3', text: '#9d174d' },
-  A_SCANNER:        { bg: '#fef3c7', text: '#92400e' },
-  VIREMENT_EXECUTE: { bg: '#dbeafe', text: '#1d4ed8' },
-  ASSIGNE:          { bg: '#ede9fe', text: '#5b21b6' },
-  CLOTURE:          { bg: '#f1f5f9', text: '#475569' },
-  default:          { bg: '#f3f4f6', text: '#374151' },
+const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  TRAITE:           { bg: theme.successSoft, text: '#0f7a49', border: theme.successBorder },
+  EN_COURS:         { bg: theme.infoSoft,    text: '#1d4f9e', border: theme.infoBorder },
+  A_AFFECTER:       { bg: '#fdedf5',         text: '#9d1361', border: '#f4c3de' },
+  A_SCANNER:        { bg: theme.warningSoft, text: '#8f5a06', border: theme.warningBorder },
+  VIREMENT_EXECUTE: { bg: theme.infoSoft,    text: '#1544a8', border: theme.infoBorder },
+  ASSIGNE:          { bg: theme.violetSoft,  text: '#5334a8', border: '#dad0f5' },
+  CLOTURE:          { bg: theme.surfaceMuted,text: '#4b5164', border: theme.border },
+  default:          { bg: theme.surfaceMuted,text: '#4b5164', border: theme.border },
 };
 
 const getStatusStyle = (status: string) =>
   STATUS_COLORS[status] ?? STATUS_COLORS.default;
 
 const getDossierStatutStyle = (statut: string) => {
-  if (statut === 'Traité')   return { bg: '#4caf50', text: 'white' };
-  if (statut === 'En cours') return { bg: '#ff9800', text: 'white' };
-  return { bg: '#f44336', text: 'white' };
+  if (statut === 'Traité')   return { bg: theme.successSoft, text: theme.success, border: theme.successBorder };
+  if (statut === 'En cours') return { bg: theme.warningSoft, text: theme.warning, border: theme.warningBorder };
+  return { bg: theme.dangerSoft, text: theme.danger, border: theme.dangerBorder };
 };
 
 const getPriorityColor = (priorite: string) => {
-  if (priorite === 'Très')    return '#f44336';
-  if (priorite === 'Moyenne') return '#ff9800';
-  return '#4caf50';
+  if (priorite === 'Très')    return theme.danger;
+  if (priorite === 'Moyenne') return theme.warning;
+  return theme.success;
 };
 
 const getCompletionColor = (pct: number) =>
-  pct >= 80 ? '#4caf50' : pct >= 50 ? '#ff9800' : '#f44336';
+  pct >= 80 ? theme.success : pct >= 50 ? theme.warning : theme.danger;
 
 // ─── Micro-components ─────────────────────────────────────────────────────────
 
 const Spinner: React.FC = () => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '1rem' }}>
-    <div style={{
-      width: 44, height: 44,
-      border: '3px solid #e5e7eb',
-      borderTop: '3px solid #d52b36',
-      borderRadius: '50%',
-      animation: 'ars-spin 0.8s linear infinite',
-    }} />
-    <p style={{ color: '#6b7280', fontWeight: 500, margin: 0 }}>Chargement du tableau de bord…</p>
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 18, fontFamily: theme.font }}>
+    <div style={{ position: 'relative', width: 52, height: 52 }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        border: `3px solid ${theme.surfaceMuted}`,
+        borderRadius: '50%',
+      }} />
+      <div style={{
+        position: 'absolute', inset: 0,
+        border: '3px solid transparent',
+        borderTopColor: theme.primary,
+        borderRightColor: theme.primary,
+        borderRadius: '50%',
+        animation: 'ars-spin 0.7s cubic-bezier(.5,0,.5,1) infinite',
+      }} />
+    </div>
+    <p style={{ color: theme.textMuted, fontWeight: 600, fontSize: 14, margin: 0, letterSpacing: '.01em' }}>Chargement du tableau de bord…</p>
   </div>
 );
 
 const ProgressBar: React.FC<{ pct: number }> = ({ pct }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-    <div style={{ width: 48, height: 6, background: '#e5e7eb', borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
-      <div style={{ width: `${pct}%`, height: '100%', background: getCompletionColor(pct), borderRadius: 3, transition: 'width .3s' }} />
+  <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontFamily: theme.font }}>
+    <div style={{ width: 56, height: 7, background: theme.surfaceMuted, borderRadius: 999, overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: getCompletionColor(pct), borderRadius: 999, transition: 'width .3s ease' }} />
     </div>
-    <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', minWidth: 30 }}>{pct}%</span>
+    <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.text, minWidth: 32 }}>{pct}%</span>
   </div>
 );
 
 const StatusBadge: React.FC<{ status: string; small?: boolean }> = ({ status, small }) => {
-  const { bg, text } = getStatusStyle(status);
+  const { bg, text, border } = getStatusStyle(status);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center',
-      padding: small ? '2px 6px' : '3px 10px',
-      borderRadius: 6, fontSize: small ? 10 : 12,
+      padding: small ? '3px 8px' : '4px 11px',
+      borderRadius: 999, fontSize: small ? 10.5 : 12,
       fontWeight: 700, background: bg, color: text,
-      whiteSpace: 'nowrap',
+      border: `1px solid ${border}`,
+      whiteSpace: 'nowrap', letterSpacing: '.01em',
+      fontFamily: theme.font,
     }}>
       {status}
     </span>
@@ -150,13 +207,16 @@ const StatusBadge: React.FC<{ status: string; small?: boolean }> = ({ status, sm
 };
 
 const DossierStatutBadge: React.FC<{ statut: string }> = ({ statut }) => {
-  const { bg, text } = getDossierStatutStyle(statut);
+  const { bg, text, border } = getDossierStatutStyle(statut);
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center',
-      padding: '3px 10px', borderRadius: 6,
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '4px 11px', borderRadius: 999,
       fontSize: 12, fontWeight: 700, background: bg, color: text,
+      border: `1px solid ${border}`, whiteSpace: 'nowrap',
+      fontFamily: theme.font,
     }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: text, flexShrink: 0 }} />
       {statut}
     </span>
   );
@@ -171,17 +231,17 @@ interface PaginationProps {
 const Pagination: React.FC<PaginationProps> = ({ page, total, perPage, onChange }) => {
   const totalPages = Math.ceil(total / perPage);
   if (totalPages <= 1) return null;
+  const btnStyle = (disabled: boolean): React.CSSProperties => ({
+    padding: '7px 15px', borderRadius: theme.radiusSm, border: `1px solid ${disabled ? theme.divider : theme.primary}`,
+    background: disabled ? theme.surfaceSubtle : theme.surface, color: disabled ? theme.textFaint : theme.primary,
+    cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 12.5,
+    transition: 'background .15s, color .15s', fontFamily: theme.font,
+  });
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, paddingTop: 16, borderTop: '1px solid #e5e7eb', marginTop: 12 }}>
-      <button
-        onClick={() => onChange(page - 1)} disabled={page === 1}
-        style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: page === 1 ? '#e5e7eb' : '#d52b36', color: page === 1 ? '#9ca3af' : 'white', cursor: page === 1 ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}
-      >← Précédent</button>
-      <span style={{ fontSize: 13, color: '#6b7280' }}>Page {page} / {totalPages}</span>
-      <button
-        onClick={() => onChange(page + 1)} disabled={page >= totalPages}
-        style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: page >= totalPages ? '#e5e7eb' : '#d52b36', color: page >= totalPages ? '#9ca3af' : 'white', cursor: page >= totalPages ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}
-      >Suivant →</button>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingTop: 16, borderTop: `1px solid ${theme.divider}`, marginTop: 14, fontFamily: theme.font }}>
+      <button onClick={() => onChange(page - 1)} disabled={page === 1} style={btnStyle(page === 1)}>← Précédent</button>
+      <span style={{ fontSize: 12.5, color: theme.textMuted, fontWeight: 600 }}>Page <strong style={{ color: theme.text }}>{page}</strong> sur {totalPages}</span>
+      <button onClick={() => onChange(page + 1)} disabled={page >= totalPages} style={btnStyle(page >= totalPages)}>Suivant →</button>
     </div>
   );
 };
@@ -189,16 +249,20 @@ const Pagination: React.FC<PaginationProps> = ({ page, total, perPage, onChange 
 // ─── Filter Row ───────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
-  padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6,
-  fontSize: 13, color: '#374151', background: 'white',
-  outline: 'none', transition: 'border-color .15s',
+  padding: '8px 12px', border: `1px solid ${theme.border}`, borderRadius: theme.radiusSm,
+  fontSize: 13, color: theme.text, background: theme.surfaceSubtle,
+  outline: 'none', transition: 'border-color .15s, background .15s',
+  fontFamily: theme.font,
 };
 
 const FilterRow: React.FC<{ children: React.ReactNode; onClear: () => void }> = ({ children, onClear }) => (
-  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 18, padding: 12, background: theme.surfaceSubtle, border: `1px solid ${theme.divider}`, borderRadius: theme.radiusMd, fontFamily: theme.font }}>
     {children}
-    <button onClick={onClear} style={{ padding: '6px 14px', background: '#d52b36', color: 'white', border: 'none', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
-      Effacer
+    <button
+      onClick={onClear}
+      style={{ padding: '8px 14px', background: theme.surface, color: theme.textMuted, border: `1px solid ${theme.borderStrong}`, borderRadius: theme.radiusSm, fontSize: 12.5, cursor: 'pointer', fontWeight: 700, marginLeft: 'auto', transition: 'color .15s, border-color .15s' }}
+    >
+      ✕ Effacer les filtres
     </button>
   </div>
 );
@@ -206,13 +270,16 @@ const FilterRow: React.FC<{ children: React.ReactNode; onClear: () => void }> = 
 // ─── Modal Shell ──────────────────────────────────────────────────────────────
 
 const ModalShell: React.FC<{ title: string; onClose: () => void; maxWidth?: number; children: React.ReactNode; accentColor?: string }> = ({
-  title, onClose, maxWidth = 480, children, accentColor = '#d52b36'
+  title, onClose, maxWidth = 480, children, accentColor = theme.primary
 }) => (
-  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-    <div style={{ background: 'white', borderRadius: 12, width: '100%', maxWidth, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,.25)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: `3px solid ${accentColor}` }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: accentColor }}>{title}</h2>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#9ca3af', lineHeight: 1, padding: 0 }}>×</button>
+  <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,17,26,.55)', backdropFilter: 'blur(2px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: theme.font }}>
+    <div style={{ background: theme.surface, borderRadius: theme.radiusLg, width: '100%', maxWidth, maxHeight: '90vh', overflow: 'auto', boxShadow: theme.shadowLg, display: 'flex', flexDirection: 'column', border: `1px solid ${theme.border}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: `1px solid ${theme.divider}` }}>
+        <h2 style={{ margin: 0, fontSize: 16.5, fontWeight: 800, color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 4, height: 18, borderRadius: 2, background: accentColor, display: 'inline-block' }} />
+          {title}
+        </h2>
+        <button onClick={onClose} style={{ background: theme.surfaceMuted, border: 'none', width: 28, height: 28, borderRadius: '50%', fontSize: 17, cursor: 'pointer', color: theme.textMuted, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}>×</button>
       </div>
       <div style={{ padding: 24, flex: 1, overflow: 'auto' }}>{children}</div>
     </div>
@@ -228,37 +295,38 @@ interface StatCardProps {
   gestionnaireBreakdown: Record<string, any>;
   accentColor?: string;
 }
-const StatCard: React.FC<StatCardProps> = ({ label, total, breakdown, gestionnaireBreakdown, accentColor = '#d52b36' }) => (
-  <div style={{ background: 'white', borderRadius: 10, padding: 16, boxShadow: '0 1px 6px rgba(0,0,0,.08)', border: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: 10 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '.03em' }}>{label}</span>
-      <span style={{ background: accentColor, color: 'white', borderRadius: 20, padding: '3px 10px', fontSize: 14, fontWeight: 700, minWidth: 28, textAlign: 'center' }}>{total}</span>
+const StatCard: React.FC<StatCardProps> = ({ label, total, breakdown, gestionnaireBreakdown, accentColor = theme.primary }) => (
+  <div style={{ ...cardBase, padding: '18px 18px 16px', display: 'flex', flexDirection: 'column', gap: 12, position: 'relative', overflow: 'hidden', fontFamily: theme.font }}>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accentColor }} />
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</span>
+      <span style={{ background: accentColor, color: 'white', borderRadius: theme.radiusSm, padding: '3px 11px', fontSize: 16, fontWeight: 800, minWidth: 30, textAlign: 'center', lineHeight: 1.5 }}>{total}</span>
     </div>
-    <div style={{ fontSize: 11, color: '#6b7280', maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div style={{ fontSize: 11.5, color: theme.textMuted, maxHeight: 170, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
       {Object.keys(breakdown).length > 0 && (
         <>
-          <span style={{ fontWeight: 700, color: '#374151', marginBottom: 2 }}>Par client</span>
+          <span style={{ fontWeight: 700, marginBottom: 3, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.03em', color: theme.textFaint }}>Par client</span>
           {Object.entries(breakdown).map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${theme.divider}` }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{k}</span>
-              <span style={{ fontWeight: 600, color: '#374151', flexShrink: 0 }}>{String(v)}</span>
+              <span style={{ fontWeight: 700, color: theme.text, flexShrink: 0 }}>{String(v)}</span>
             </div>
           ))}
         </>
       )}
       {Object.keys(gestionnaireBreakdown).length > 0 && (
         <>
-          <span style={{ fontWeight: 700, color: '#374151', marginTop: 6, marginBottom: 2 }}>Par gestionnaire</span>
+          <span style={{ fontWeight: 700, marginTop: 8, marginBottom: 3, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.03em', color: theme.textFaint }}>Par gestionnaire</span>
           {Object.entries(gestionnaireBreakdown).map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: `1px solid ${theme.divider}` }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{k}</span>
-              <span style={{ fontWeight: 600, color: '#374151', flexShrink: 0 }}>{String(v)}</span>
+              <span style={{ fontWeight: 700, color: theme.text, flexShrink: 0 }}>{String(v)}</span>
             </div>
           ))}
         </>
       )}
       {Object.keys(breakdown).length === 0 && Object.keys(gestionnaireBreakdown).length === 0 && (
-        <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Aucune donnée</span>
+        <span style={{ color: theme.textFaint, fontStyle: 'italic' }}>Aucune donnée</span>
       )}
     </div>
   </div>
@@ -268,12 +336,12 @@ const StatCard: React.FC<StatCardProps> = ({ label, total, breakdown, gestionnai
 
 interface Column { key: string; label: string; width?: number | string; render?: (row: any) => React.ReactNode }
 const DataTable: React.FC<{ columns: Column[]; rows: any[]; striped?: boolean }> = ({ columns, rows, striped = true }) => (
-  <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+  <div style={{ overflowX: 'auto', border: `1px solid ${theme.divider}`, borderRadius: theme.radiusMd, fontFamily: theme.font }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
       <thead>
-        <tr style={{ background: '#f8fafc' }}>
+        <tr style={{ background: theme.surfaceSubtle }}>
           {columns.map(c => (
-            <th key={c.key} style={{ padding: '10px 10px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap', width: c.width, borderBottom: '2px solid #e5e7eb' }}>
+            <th key={c.key} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, color: theme.textMuted, whiteSpace: 'nowrap', width: c.width, borderBottom: `1px solid ${theme.divider}`, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em' }}>
               {c.label}
             </th>
           ))}
@@ -281,11 +349,14 @@ const DataTable: React.FC<{ columns: Column[]; rows: any[]; striped?: boolean }>
       </thead>
       <tbody>
         {rows.length === 0 ? (
-          <tr><td colSpan={columns.length} style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontStyle: 'italic' }}>Aucun résultat</td></tr>
+          <tr><td colSpan={columns.length} style={{ padding: '36px 24px', textAlign: 'center', color: theme.textFaint, fontStyle: 'italic', fontSize: 13 }}>Aucun résultat</td></tr>
         ) : rows.map((row, i) => (
-          <tr key={row.id ?? i} style={{ background: striped && i % 2 !== 0 ? '#f9fafb' : 'white', borderBottom: '1px solid #f3f4f6' }}>
+          <tr
+            key={row.id ?? i}
+            style={{ background: striped && i % 2 !== 0 ? theme.surfaceSubtle : theme.surface, borderBottom: `1px solid ${theme.divider}`, transition: 'background .12s' }}
+          >
             {columns.map(c => (
-              <td key={c.key} style={{ padding: '10px 10px', verticalAlign: 'middle' }}>
+              <td key={c.key} style={{ padding: '11px 14px', verticalAlign: 'middle', color: theme.text }}>
                 {c.render ? c.render(row) : row[c.key] ?? '—'}
               </td>
             ))}
@@ -308,13 +379,11 @@ const EnhancedDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [realTimeEnabled, setRealTimeEnabled] = useState(true);
-  const [aiInsights, setAiInsights] = useState<any>(null);
   const [departments, setDepartments] = useState<any[]>([]);
 
   // FIX: use a ref to track whether a fetch is already in-flight
   // Prevents duplicate parallel requests on 30-s timer fires
   const fetchInFlight = useRef(false);
-  const aiInFlight = useRef(false);
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   const [filters, setFilters] = useState({ departmentId: '', fromDate: '', toDate: '', period: 'day' });
@@ -330,20 +399,20 @@ const EnhancedDashboard: React.FC = () => {
   });
   const [superAdminGestionnaireAssignments, setSuperAdminGestionnaireAssignments]           = useState<any[]>([]);
   const [superAdminGestionnaireSeniorAssignments, setSuperAdminGestionnaireSeniorAssignments] = useState<any[]>([]);
-  const [superAdminDerniersDossiers, setSuperAdminDerniersDossiers]                         = useState<any[]>([]);
-  const [superAdminDossiersEnCours, setSuperAdminDossiersEnCours]                           = useState<any[]>([]);
-  const [superAdminAllDossiers, setSuperAdminAllDossiers]                                   = useState<any[]>([]);
-  const [superAdminDocumentsIndividuels, setSuperAdminDocumentsIndividuels]                 = useState<any[]>([]);
+
+  // ✅ MERGED: "Tous les Bordereaux" + "Bordereaux (X total)" now share ONE
+  // dataset, coming from a single `/bordereaux-unified` call (one Prisma
+  // query, one Redis entry) instead of the two separate, largely-overlapping
+  // fetches this dashboard used to make.
+  const [superAdminBordereaux, setSuperAdminBordereaux]     = useState<any[]>([]);
+  const [superAdminEnCoursCount, setSuperAdminEnCoursCount] = useState(0);
+  const [showOnlyEnCours, setShowOnlyEnCours]               = useState(false);
+  const [superAdminUnifiedPage, setSuperAdminUnifiedPage]   = useState(1);
 
   // PDF modal
   const [showSuperAdminPDFModal, setShowSuperAdminPDFModal]   = useState(false);
   const [currentSuperAdminPDFUrl, setCurrentSuperAdminPDFUrl] = useState('');
   const [currentSuperAdminDossier, setCurrentSuperAdminDossier] = useState<any>(null);
-
-  // Pagination
-  const [superAdminDerniersPage, setSuperAdminDerniersPage]     = useState(1);
-  const [superAdminBordereauxPage, setSuperAdminBordereauxPage] = useState(1);
-  const [superAdminIndividuelsPage, setSuperAdminIndividuelsPage] = useState(1);
 
   // ── Chef équipe state ────────────────────────────────────────────────────────
   const [stats, setStats] = useState<TableauBordStats>({
@@ -372,63 +441,66 @@ const EnhancedDashboard: React.FC = () => {
   const [loadingDossierDetails, setLoadingDossierDetails] = useState(false);
 
   // Explanation modals
-  const [showAIExplanationModal, setShowAIExplanationModal]               = useState(false);
   const [showDepartmentExplanationModal, setShowDepartmentExplanationModal] = useState(false);
 
   // ── Per-table filters ────────────────────────────────────────────────────────
+  // filter1 drives the single merged "Bordereaux" table.
   const [filter1, setFilter1] = useState<Filter1>({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' });
-  const [filter2, setFilter2] = useState<Filter2>({ ref: '', client: '', statut: '', dateFrom: '', dateTo: '' });
-  const [filter3, setFilter3] = useState<Filter3>({ ref: '', refBrdx: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' });
-
-  const [filteredDerniers, setFilteredDerniers]       = useState<any[]>([]);
-  const [filteredEnCours, setFilteredEnCours]         = useState<any[]>([]);
-  const [filteredIndividuels, setFilteredIndividuels] = useState<any[]>([]);
 
   // ── Derived values ────────────────────────────────────────────────────────────
-  const allUniqueStatuts = React.useMemo(() => {
-    const all = [
-      ...derniersDossiers.map((d: any) => d.statut),
-      ...superAdminDossiersEnCours.map((d: any) => d.statut),
-      ...superAdminDocumentsIndividuels.map((d: any) => d.statut),
-    ].filter(Boolean);
-    return [...new Set(all)].sort();
-  }, [derniersDossiers, superAdminDossiersEnCours, superAdminDocumentsIndividuels]);
+  const normalizeType = React.useCallback((type?: string) => {
+    if (!type) return '';
+    return type === 'Aucun document' ? 'Prestation' : type;
+  }, []);
 
-  // ── Apply per-table filters ───────────────────────────────────────────────────
-  useEffect(() => {
-    const inDate = (d: string, from: string, to: string) => {
-      if (!d) return true;
-      const t = new Date(d).getTime();
+  const allUniqueStatuts = React.useMemo(() => {
+    const all = superAdminBordereaux.map((d: any) => d.statut).filter(Boolean);
+    return [...new Set(all)].sort();
+  }, [superAdminBordereaux]);
+
+  const allUniqueTypes = React.useMemo(() => {
+    const all = superAdminBordereaux.map((d: any) => normalizeType(d.type)).filter(Boolean);
+    return [...new Set(all)].sort();
+  }, [superAdminBordereaux, normalizeType]);
+
+  // ✅ useMemo instead of useEffect+setState: one fewer render pass per
+  // filter keystroke, and no risk of the filtered list lagging one tick
+  // behind the source data / toggle.
+  const filteredUnifiedBordereaux = React.useMemo(() => {
+    const inDate = (isoDate: string, from: string, to: string) => {
+      if (!isoDate) return true;
+      const t = new Date(isoDate).getTime();
       if (from && t < new Date(from).getTime()) return false;
       if (to   && t > new Date(to).getTime())   return false;
       return true;
     };
 
-    setFilteredDerniers(derniersDossiers.filter(d =>
+    let list = superAdminBordereaux.filter(d =>
       (!filter1.ref    || d.reference?.toLowerCase().includes(filter1.ref.toLowerCase())) &&
       (!filter1.client || d.client?.toLowerCase().includes(filter1.client.toLowerCase())) &&
-      (!filter1.type   || d.type === filter1.type) &&
-      (!filter1.statut || d.statut === filter1.statut) &&
-      inDate(d.date, filter1.dateFrom, filter1.dateTo)
-    ));
+      (!filter1.type   || normalizeType(d.type) === filter1.type) &&
+      inDate(d.dateSort, filter1.dateFrom, filter1.dateTo)
+    );
 
-    setFilteredEnCours(superAdminDossiersEnCours.filter(d =>
-      (!filter2.ref    || d.reference?.toLowerCase().includes(filter2.ref.toLowerCase())) &&
-      (!filter2.client || d.client?.toLowerCase().includes(filter2.client.toLowerCase())) &&
-      (!filter2.statut || d.statut === filter2.statut) &&
-      inDate(d.date, filter2.dateFrom, filter2.dateTo)
-    ));
+    if (showOnlyEnCours) {
+      list = list.filter(d => d.isEnCours);
+      // Oldest-received-first, matching the original "en cours" priority order
+      list = [...list].sort((a, b) => (b.joursEnCours ?? 0) - (a.joursEnCours ?? 0));
+    }
 
-    setFilteredIndividuels(superAdminDocumentsIndividuels.filter(d =>
-      (!filter3.ref    || d.reference?.toLowerCase().includes(filter3.ref.toLowerCase())) &&
-      (!filter3.refBrdx || d.bordereauReference?.toLowerCase().includes(filter3.refBrdx.toLowerCase())) &&
-      (!filter3.client || d.client?.toLowerCase().includes(filter3.client.toLowerCase())) &&
-      (!filter3.type   || d.type === filter3.type) &&
-      (!filter3.statut || d.statut === filter3.statut) &&
-      (!filter3.gest   || d.gestionnaire?.toLowerCase().includes(filter3.gest.toLowerCase())) &&
-      inDate(d.uploadedAt || d.date, filter3.dateFrom, filter3.dateTo)
-    ));
-  }, [derniersDossiers, superAdminDossiersEnCours, superAdminDocumentsIndividuels, filter1, filter2, filter3]);
+    return list;
+  }, [superAdminBordereaux, filter1, showOnlyEnCours]);
+
+  const pagedUnifiedBordereaux = React.useMemo(() => {
+    const start = (superAdminUnifiedPage - 1) * ITEMS_PER_PAGE;
+    return filteredUnifiedBordereaux.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredUnifiedBordereaux, superAdminUnifiedPage]);
+
+  // Reset to page 1 whenever the filtered set shrinks below the current page
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredUnifiedBordereaux.length / ITEMS_PER_PAGE));
+    if (superAdminUnifiedPage > totalPages) setSuperAdminUnifiedPage(totalPages);
+  }, [filteredUnifiedBordereaux.length, superAdminUnifiedPage]);
 
   // ── Dossier details ───────────────────────────────────────────────────────────
   const fetchDossierDetails = useCallback(async (dossierId: string) => {
@@ -572,41 +644,45 @@ const EnhancedDashboard: React.FC = () => {
   }, [typeFilter]);
 
   // ── Fetch ALL Chef équipe + Super admin data in ONE parallel batch ─────────────
-  // FIX: previously this was two sequential phases:
-  //   loadChefEquipeData() -> 5 calls (awaited)
-  //   then fetchSuperAdminData() -> 6 more calls, 4 of which duplicated the first batch
-  // That was 11 total network calls (4 wasted) split across two sequential round-trips.
-  // Now: a single Promise.all with the 7 distinct endpoints needed, fired together.
+  // FIX (this pass): the old "Tous les Bordereaux" (derniers-dossiers) and
+  // "Bordereaux en cours" (dossiers-en-cours) sections each fired their own
+  // heavy Prisma query with the full documents/client/contract include set —
+  // and dossiers-en-cours frequently just returned the SAME rows as
+  // derniers-dossiers anyway (its own fallback logic). That's now ONE call to
+  // `/bordereaux-unified`. The former "Dossiers Individuels" table's
+  // `/documents-individuels` call has also been dropped entirely now that
+  // its data/columns were merged into the "Liste Dossiers" table
+  // (DossiersList.tsx), cutting this batch to 5 calls.
   const fetchSuperAdminData = useCallback(async () => {
     if (!['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')) return;
     try {
       const [
         statsRes,        // tableau-bord/stats
         typesRes,        // tableau-bord/types-detail
-        derniersRes,     // tableau-bord/derniers-dossiers
-        enCoursRes,      // tableau-bord/dossiers-en-cours
+        unifiedRes,       // tableau-bord/bordereaux-unified  (was: derniers-dossiers + dossiers-en-cours)
         assignmentsRes,  // gestionnaire-assignments-dossiers
         seniorRes,       // tableau-bord/gestionnaire-senior-assignments
-        individuelsRes,  // tableau-bord/documents-individuels
       ] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/stats?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/derniers-dossiers?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/dossiers-en-cours?superAdmin=true'),
+        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/bordereaux-unified?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/gestionnaire-assignments-dossiers?superAdmin=true'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments?superAdmin=true'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels?superAdmin=true'),
       ]);
 
-      // ── Chef équipe state (previously set inside loadChefEquipeData) ──
+      const unifiedItems: any[] = Array.isArray(unifiedRes.data?.items) ? unifiedRes.data.items : [];
+      const enCoursCount: number = unifiedRes.data?.enCoursCount ?? unifiedItems.filter((i: any) => i.isEnCours).length;
+
+      // ── Chef équipe state (kept for the search/type-filter handlers above,
+      // which still hit their own endpoints independently) ──
       setStats(statsRes.data);
       setTypesDetail(typesRes.data);
-      setDerniersDossiers(derniersRes.data);
-      setDossiersEnCours(enCoursRes.data);
+      setDerniersDossiers(unifiedItems);
+      setDossiersEnCours(unifiedItems.filter((i: any) => i.isEnCours));
       setAllGestionnaireAssignments(assignmentsRes.data ?? []);
       setFilteredGestionnaireAssignments(assignmentsRes.data ?? []);
 
-      // ── Super admin state (previously set inside fetchSuperAdminData) ──
+      // ── Super admin state ──
       if (typesRes.data) {
         setSuperAdminStats({
           prestation:  { total: typesRes.data.Prestation?.total ?? 0,           breakdown: typesRes.data.Prestation?.clientBreakdown ?? {},           gestionnaireBreakdown: typesRes.data.Prestation?.gestionnaireBreakdown ?? {} },
@@ -618,14 +694,10 @@ const EnhancedDashboard: React.FC = () => {
         });
       }
 
-      if (derniersRes.data) {
-        setSuperAdminDerniersDossiers(derniersRes.data);
-        setSuperAdminAllDossiers(derniersRes.data);
-      }
+      setSuperAdminBordereaux(unifiedItems);
+      setSuperAdminEnCoursCount(enCoursCount);
       setSuperAdminGestionnaireAssignments(assignmentsRes.data ?? []);
       setSuperAdminGestionnaireSeniorAssignments(seniorRes.data ?? []);
-      setSuperAdminDossiersEnCours(enCoursRes.data ?? []);
-      setSuperAdminDocumentsIndividuels(individuelsRes.data ?? []);
     } catch (e) {
       console.error('Error loading Super Admin data:', e);
     }
@@ -652,7 +724,7 @@ const EnhancedDashboard: React.FC = () => {
         return;
       }
 
-      // Super admin batch (7 calls, single Promise.all) + the role-based dashboard
+      // Super admin batch (5 calls, single Promise.all) + the role-based dashboard
       // batch below now all fire together rather than super-admin awaiting first.
       const superAdminPromise = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')
         ? fetchSuperAdminData()
@@ -700,44 +772,6 @@ const EnhancedDashboard: React.FC = () => {
     }
   }, [filters, user?.role, fetchSuperAdminData]);
 
-  // ── Fetch AI insights ──────────────────────────────────────────────────────────
-  // FIX: guard with aiInFlight ref
-  const fetchAIInsights = useCallback(async () => {
-    if (!dashboardData?.kpis || aiInFlight.current) return;
-    aiInFlight.current = true;
-    try {
-      const isReady = await aiService.ensureReady();
-      if (!isReady) throw new Error('Authentication failed');
-
-      const healthCheck = await aiService.healthCheck();
-      let recommendations = { recommendations: [] };
-
-      if (healthCheck.status === 'healthy') {
-        try {
-          const [bordereauxRes, agentsRes] = await Promise.all([
-            LocalAPI.get('/bordereaux', { params: { excludeArchived: true, excludeClosed: true, limit: 1000 } }),
-            LocalAPI.get('/users/gestionnaires'),
-          ]);
-          const allBordereaux = bordereauxRes.data.bordereaux ?? bordereauxRes.data ?? [];
-          const agents        = agentsRes.data ?? [];
-          recommendations = await aiService.getRecommendations({
-            bordereaux: allBordereaux, agents,
-            workload: dashboardData.performance?.performance ?? [],
-            currentWorkload: allBordereaux.length, staff_count: agents.length,
-          });
-        } catch (e) {
-          console.warn('AI recommendations unavailable:', e);
-        }
-      }
-
-      setAiInsights({ health: healthCheck, recommendations: recommendations?.recommendations ?? [], lastUpdated: new Date() });
-    } catch (e) {
-      setAiInsights({ health: { status: 'unavailable', message: 'Service inaccessible' }, recommendations: [], lastUpdated: new Date() });
-    } finally {
-      aiInFlight.current = false;
-    }
-  }, [dashboardData]);
-
   // ── Effects ───────────────────────────────────────────────────────────────────
 
   // Initial load
@@ -756,20 +790,14 @@ const EnhancedDashboard: React.FC = () => {
     return () => window.removeEventListener('openPDFModal', handlePDFModal);
   }, [fetchDashboardData]);
 
-  // AI insights after dashboard data arrives
-  useEffect(() => {
-    if (dashboardData) fetchAIInsights();
-  }, [fetchAIInsights, dashboardData]);
-
   // Auto-refresh
   useEffect(() => {
     if (!realTimeEnabled) return;
     const id = setInterval(() => {
       fetchDashboardData();
-      if (aiInsights?.health?.status === 'unavailable') fetchAIInsights();
     }, REFRESH_INTERVAL);
     return () => clearInterval(id);
-  }, [fetchDashboardData, realTimeEnabled, aiInsights, fetchAIInsights]);
+  }, [fetchDashboardData, realTimeEnabled]);
 
   // ── Filter change helpers ─────────────────────────────────────────────────────
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -777,23 +805,6 @@ const EnhancedDashboard: React.FC = () => {
   };
 
   // ── Super admin actions ───────────────────────────────────────────────────────
-  const handleSuperAdminViewPDF = useCallback(async (dossierId: string) => {
-    try {
-      const res = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${dossierId}`);
-      if (res.data.success && res.data.pdfUrl) {
-        const dossier = [...superAdminDerniersDossiers, ...superAdminDossiersEnCours, ...superAdminAllDossiers].find(d => d.id === dossierId);
-        const base = process.env.REACT_APP_API_URL?.replace('/api', '') ?? window.location.origin;
-        setCurrentSuperAdminPDFUrl(`${base}${res.data.pdfUrl}`);
-        setCurrentSuperAdminDossier(dossier);
-        setShowSuperAdminPDFModal(true);
-      } else {
-        alert(res.data.error ?? 'PDF non disponible');
-      }
-    } catch {
-      alert('Erreur ouverture PDF');
-    }
-  }, [superAdminDerniersDossiers, superAdminDossiersEnCours, superAdminAllDossiers]);
-
   const closeSuperAdminPDFModal = useCallback(() => {
     setShowSuperAdminPDFModal(false);
     setCurrentSuperAdminPDFUrl('');
@@ -805,15 +816,9 @@ const EnhancedDashboard: React.FC = () => {
     try {
       const res = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', { dossierId: currentSuperAdminDossier.id, newStatus: status });
       if (res.data.success) { alert('Statut modifié'); fetchDashboardData(); closeSuperAdminPDFModal(); }
-      else alert('Erreur modification');
-    } catch { alert('Erreur modification'); }
+      else alert('Erreur modification'); }
+    catch { alert('Erreur modification'); }
   }, [currentSuperAdminDossier, fetchDashboardData, closeSuperAdminPDFModal]);
-
-  const handleSuperAdminModifyStatus = useCallback((dossier: any) => {
-    setSelectedDossier({ ...dossier, isDocument: false });
-    setNewStatus('');
-    setStatusModifyModalOpen(true);
-  }, []);
 
   const handleSuperAdminExport = useCallback(() => {
     const rows = [
@@ -856,35 +861,46 @@ const EnhancedDashboard: React.FC = () => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   const renderSuperAdminContent = () => (
-    <div style={{ fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif", background: '#f4f6fb', minHeight: '100vh' }}>
+    <div style={{ fontFamily: theme.font, background: theme.bg, minHeight: '100vh' }}>
       {/* ── Header ── */}
-      <div style={{ background: 'linear-gradient(135deg, #c0392b 0%, #d52b36 60%, #e74c3c 100%)', color: 'white', padding: '28px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{
+        background: `linear-gradient(120deg, ${theme.primaryDarker} 0%, ${theme.primary} 55%, ${theme.primaryDark} 100%)`,
+        color: 'white', padding: '26px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+        boxShadow: '0 4px 20px rgba(154,20,30,.18)',
+      }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: '-.02em' }}>
-            {isReadOnly ? '👁️ Dashboard Responsable Département' : '⚡ Dashboard Super Admin'}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(255,255,255,.18)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+              {isReadOnly ? '👁️' : '⚡'}
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', opacity: .78 }}>ARS · Tableau de bord</span>
+          </div>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, letterSpacing: '-.01em' }}>
+            {isReadOnly ? 'Dashboard Responsable Département' : 'Dashboard Super Admin'}
           </h1>
           {isReadOnly && <p style={{ margin: '6px 0 0', fontSize: 13, opacity: .85, fontWeight: 500 }}>Mode lecture seule — accès complet en consultation</p>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           <button
             onClick={() => setRealTimeEnabled(p => !p)}
             title={realTimeEnabled ? 'Désactiver l\'actualisation auto' : 'Activer l\'actualisation auto'}
-            style={{ padding: '6px 14px', borderRadius: 20, border: '2px solid rgba(255,255,255,.5)', background: realTimeEnabled ? 'rgba(255,255,255,.2)' : 'transparent', color: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 15px', borderRadius: 999, border: '1px solid rgba(255,255,255,.35)', background: realTimeEnabled ? 'rgba(255,255,255,.16)' : 'transparent', color: 'white', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, transition: 'background .15s' }}
           >
-            {realTimeEnabled ? '⏸ Auto' : '▶ Auto'}
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: realTimeEnabled ? '#4ade80' : 'rgba(255,255,255,.5)', flexShrink: 0 }} />
+            {realTimeEnabled ? 'Auto-actualisation' : 'Actualisation en pause'}
           </button>
-          <span style={{ fontSize: 12, opacity: .7 }}>Mis à jour {lastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+          <span style={{ fontSize: 12, opacity: .75, fontWeight: 500 }}>Mis à jour {lastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '24px 20px' }}>
+      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '26px 24px 40px' }}>
 
         {/* ── Stat Cards ── */}
-        <section style={{ marginBottom: 24 }}>
+        <section style={{ marginBottom: 22 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
             <StatCard label="Prestation"          total={superAdminStats.prestation?.total  ?? 0} breakdown={superAdminStats.prestation?.breakdown  ?? {}} gestionnaireBreakdown={superAdminStats.prestation?.gestionnaireBreakdown  ?? {}} />
             <StatCard label="Adhésion"            total={superAdminStats.adhesion?.total    ?? 0} breakdown={superAdminStats.adhesion?.breakdown    ?? {}} gestionnaireBreakdown={superAdminStats.adhesion?.gestionnaireBreakdown    ?? {}} />
-            <StatCard label="Complément Dossier"  total={superAdminStats.complement?.total  ?? 0} breakdown={superAdminStats.complement?.breakdown  ?? {}} gestionnaireBreakdown={superAdminStats.complement?.gestionnaireBreakdown  ?? {}} accentColor="#2196f3" />
+            <StatCard label="Complément Dossier"  total={superAdminStats.complement?.total  ?? 0} breakdown={superAdminStats.complement?.breakdown  ?? {}} gestionnaireBreakdown={superAdminStats.complement?.gestionnaireBreakdown  ?? {}} accentColor={theme.info} />
             <StatCard label="Résiliation"         total={superAdminStats.resiliation?.total ?? 0} breakdown={superAdminStats.resiliation?.breakdown ?? {}} gestionnaireBreakdown={superAdminStats.resiliation?.gestionnaireBreakdown ?? {}} />
             <StatCard label="Réclamation"         total={superAdminStats.reclamation?.total ?? 0} breakdown={superAdminStats.reclamation?.breakdown ?? {}} gestionnaireBreakdown={superAdminStats.reclamation?.gestionnaireBreakdown ?? {}} />
             <StatCard label="Avenant"             total={superAdminStats.avenant?.total     ?? 0} breakdown={superAdminStats.avenant?.breakdown     ?? {}} gestionnaireBreakdown={superAdminStats.avenant?.gestionnaireBreakdown     ?? {}} />
@@ -892,26 +908,27 @@ const EnhancedDashboard: React.FC = () => {
         </section>
 
         {/* ── Affectations par gestionnaire ── */}
-        <section style={{ background: 'white', borderRadius: 12, padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
+        <section style={{ ...cardBase, padding: '20px 22px', marginBottom: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <SectionTitle>Affectations par Gestionnaire</SectionTitle>
-            <span style={{ fontSize: 13, color: '#6b7280' }}>{superAdminGestionnaireAssignments.length} gestionnaire(s)</span>
+            <span style={{ fontSize: 12.5, color: theme.textMuted, fontWeight: 600, background: theme.surfaceMuted, padding: '4px 10px', borderRadius: 999 }}>{superAdminGestionnaireAssignments.length} gestionnaire(s)</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
             {superAdminGestionnaireAssignments.map((a, i) => (
-              <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '14px 16px', border: '1px solid #e5e7eb', opacity: a.totalAssigned === 0 ? .65 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontWeight: 700, fontSize: 14, color: '#1f2937' }}>{a.gestionnaire}</span>
-                  {a.totalAssigned === 0 && <span style={{ fontSize: 11, background: '#e5e7eb', color: '#6b7280', padding: '1px 7px', borderRadius: 10, fontWeight: 600 }}>Disponible</span>}
+              <div key={i} style={{ background: theme.surfaceSubtle, borderRadius: theme.radiusMd, padding: '15px 17px', border: `1px solid ${theme.divider}`, opacity: a.totalAssigned === 0 ? .65 : 1, transition: 'box-shadow .15s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
+                  <span style={{ width: 26, height: 26, borderRadius: '50%', background: theme.surfaceMuted, color: theme.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11.5, flexShrink: 0 }}>{String(a.gestionnaire ?? '?').charAt(0)}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: theme.text }}>{a.gestionnaire}</span>
+                  {a.totalAssigned === 0 && <span style={{ fontSize: 10.5, background: theme.surfaceMuted, color: theme.textFaint, padding: '2px 8px', borderRadius: 999, fontWeight: 700, marginLeft: 'auto' }}>Disponible</span>}
                 </div>
-                <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <Row label="Total affectés" value={a.totalAssigned} />
-                  <Row label="✓ Traités"      value={a.traites   ?? 0} color="#16a34a" />
-                  <Row label="⏳ En cours"    value={a.enCours   ?? 0} color="#d97706" />
-                  <Row label="↩ Retournés"    value={a.retournes ?? 0} color="#dc2626" />
+                  <Row label="✓ Traités"      value={a.traites   ?? 0} color={theme.success} />
+                  <Row label="⏳ En cours"    value={a.enCours   ?? 0} color={theme.warning} />
+                  <Row label="↩ Retournés"    value={a.retournes ?? 0} color={theme.danger} />
                 </div>
                 {Object.keys(a.documentsByType ?? {}).length > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '4px 8px', borderRadius: 4 }}>
+                  <div style={{ marginTop: 10, fontSize: 11, color: theme.textMuted, background: theme.surfaceMuted, padding: '6px 9px', borderRadius: theme.radiusSm }}>
                     {Object.entries(a.documentsByType ?? {}).map(([t, c]) => `${t}: ${c}`).join(' · ')}
                   </div>
                 )}
@@ -922,42 +939,42 @@ const EnhancedDashboard: React.FC = () => {
         </section>
 
         {/* ── Gestionnaires Senior ── */}
-        <section style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', borderRadius: 12, padding: '20px 24px', marginBottom: 20, border: '2px solid #86efac', boxShadow: '0 1px 6px rgba(34,197,94,.1)' }}>
+        <section style={{ background: theme.successSoft, borderRadius: theme.radiusLg, padding: '20px 22px', marginBottom: 18, border: `1px solid ${theme.successBorder}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <SectionTitle color="#15803d">⭐ Gestionnaires Senior</SectionTitle>
-            <span style={{ background: '#22c55e', color: 'white', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
+            <SectionTitle color={theme.success}>⭐ Gestionnaires Senior</SectionTitle>
+            <span style={{ background: theme.success, color: 'white', padding: '4px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 700 }}>
               {superAdminGestionnaireSeniorAssignments.length} Senior(s)
             </span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
             {superAdminGestionnaireSeniorAssignments.map((a, i) => (
-              <div key={i} style={{ background: 'white', borderRadius: 10, padding: '14px 16px', border: '2px solid #86efac', boxShadow: '0 1px 6px rgba(34,197,94,.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 20 }}>👤</span>
-                  <span style={{ fontWeight: 700, fontSize: 14, color: '#15803d' }}>{a.gestionnaire}</span>
+              <div key={i} style={{ background: theme.surface, borderRadius: theme.radiusMd, padding: '15px 17px', border: `1px solid ${theme.successBorder}`, boxShadow: theme.shadowXs }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 11 }}>
+                  <span style={{ width: 28, height: 28, borderRadius: '50%', background: theme.successSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>👤</span>
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: theme.success }}>{a.gestionnaire}</span>
                 </div>
-                <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Row label="Total affectés" value={a.totalAssigned} />
                     {(a.reassignedCount ?? 0) > 0 && (
-                      <span style={{ background: '#1d4ed8', color: 'white', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>
+                      <span style={{ background: theme.info, color: 'white', padding: '2px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 700 }}>
                         +{a.reassignedCount} 🔄
                       </span>
                     )}
                   </div>
-                  <Row label="✓ Traités"   value={a.traites   ?? 0} color="#16a34a" />
-                  <Row label="⏳ En cours" value={a.enCours   ?? 0} color="#d97706" />
+                  <Row label="✓ Traités"   value={a.traites   ?? 0} color={theme.success} />
+                  <Row label="⏳ En cours" value={a.enCours   ?? 0} color={theme.warning} />
                   <div>
-                    <Row label="↩ Retournés" value={a.retournes ?? 0} color="#dc2626" />
+                    <Row label="↩ Retournés" value={a.retournes ?? 0} color={theme.danger} />
                     {a.returnedBy && (a.retournes ?? 0) > 0 && (
-                      <div style={{ marginLeft: 16, marginTop: 3, fontSize: 11, color: '#dc2626', background: '#fef2f2', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
+                      <div style={{ marginLeft: 16, marginTop: 4, fontSize: 11, color: theme.danger, background: theme.dangerSoft, padding: '4px 9px', borderRadius: theme.radiusSm, fontWeight: 600 }}>
                         → Retourné par : {a.returnedBy}
                       </div>
                     )}
                   </div>
                 </div>
                 {Object.keys(a.documentsByType ?? {}).length > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: '#15803d', background: '#f0fdf4', padding: '4px 8px', borderRadius: 4 }}>
+                  <div style={{ marginTop: 10, fontSize: 11, color: theme.success, background: theme.successSoft, padding: '6px 9px', borderRadius: theme.radiusSm }}>
                     {Object.entries(a.documentsByType ?? {}).map(([t, c]) => `${t}: ${c}`).join(' · ')}
                   </div>
                 )}
@@ -967,113 +984,74 @@ const EnhancedDashboard: React.FC = () => {
           </div>
         </section>
 
-        {/* ── Tous les bordereaux ── */}
-        <section style={{ background: 'white', borderRadius: 12, padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
-          <SectionTitle style={{ marginBottom: 14 }}>Tous les Bordereaux (triés par récents)</SectionTitle>
-          <FilterRow onClear={() => { setFilter1({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' }); setSuperAdminDerniersPage(1); }}>
+        {/* ── Bordereaux (merged: "Tous les Bordereaux" + "Bordereaux en cours") ── */}
+        <section style={{ ...cardBase, padding: '20px 22px', marginBottom: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+            <SectionTitle>Bordereaux</SectionTitle>
+            <div style={{ display: 'flex', background: theme.surfaceMuted, borderRadius: 999, padding: 3, border: `1px solid ${theme.divider}` }}>
+              <button
+                onClick={() => { setShowOnlyEnCours(false); setSuperAdminUnifiedPage(1); }}
+                style={{ padding: '6px 16px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, transition: 'background .15s, color .15s', background: !showOnlyEnCours ? theme.primary : 'transparent', color: !showOnlyEnCours ? 'white' : theme.textMuted }}
+              >
+                Tous ({superAdminBordereaux.length})
+              </button>
+              <button
+                onClick={() => { setShowOnlyEnCours(true); setSuperAdminUnifiedPage(1); }}
+                style={{ padding: '6px 16px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, transition: 'background .15s, color .15s', background: showOnlyEnCours ? theme.primary : 'transparent', color: showOnlyEnCours ? 'white' : theme.textMuted }}
+              >
+                En cours ({superAdminEnCoursCount})
+              </button>
+            </div>
+          </div>
+
+          {/* Quick stat chips */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
+            {[
+              { label: 'Total',         value: superAdminBordereaux.length, color: theme.text },
+              { label: 'En cours',      value: superAdminEnCoursCount, color: theme.warning },
+              { label: 'Traités',       value: superAdminBordereaux.filter(b => b.statut === 'Traité').length, color: theme.success },
+              { label: 'Non assignés',  value: superAdminBordereaux.filter(b => b.gestionnaire === 'Non assigné').length, color: theme.danger },
+            ].map(chip => (
+              <div key={chip.label} style={{ padding: '7px 15px', background: theme.surfaceSubtle, border: `1px solid ${theme.divider}`, borderRadius: 999, fontSize: 12, fontWeight: 600, color: theme.textMuted }}>
+                {chip.label} <span style={{ color: chip.color, fontWeight: 800, marginLeft: 3 }}>{chip.value}</span>
+              </div>
+            ))}
+          </div>
+
+          <FilterRow onClear={() => { setFilter1({ ref: '', client: '', type: '', statut: '', dateFrom: '', dateTo: '' }); setSuperAdminUnifiedPage(1); }}>
             <input style={{ ...inputStyle, width: 130 }} placeholder="Référence" value={filter1.ref}      onChange={e => setFilter1(p => ({ ...p, ref:      e.target.value }))} />
             <input style={{ ...inputStyle, width: 130 }} placeholder="Client"    value={filter1.client}   onChange={e => setFilter1(p => ({ ...p, client:   e.target.value }))} />
             <select style={{ ...inputStyle, width: 120 }} value={filter1.type}   onChange={e => setFilter1(p => ({ ...p, type:   e.target.value }))}>
               <option value="">Type</option>
-              <option>Prestation</option><option>Adhésion</option>
+              {allUniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <select style={{ ...inputStyle, width: 120 }} value={filter1.statut} onChange={e => setFilter1(p => ({ ...p, statut: e.target.value }))}>
+            <select style={{ ...inputStyle, width: 150 }} value={filter1.statut} onChange={e => setFilter1(p => ({ ...p, statut: e.target.value }))}>
               <option value="">Statut</option>
               {allUniqueStatuts.map(s => <option key={s}>{s}</option>)}
             </select>
             <input type="date" style={{ ...inputStyle, width: 130 }} value={filter1.dateFrom} onChange={e => setFilter1(p => ({ ...p, dateFrom: e.target.value }))} />
             <input type="date" style={{ ...inputStyle, width: 130 }} value={filter1.dateTo}   onChange={e => setFilter1(p => ({ ...p, dateTo:   e.target.value }))} />
           </FilterRow>
-          <DataTable
-            columns={[
-              { key: 'reference',  label: 'Référence',         render: r => <span style={{ fontWeight: 700, color: '#2563eb' }}>{r.reference}</span> },
-              { key: 'client',     label: 'Client' },
-              { key: 'type',       label: 'Type',              render: r => r.type === 'Aucun document' ? 'Prestation' : r.type },
-              { key: 'completion', label: '% Finalisation',    render: r => <ProgressBar pct={r.statut === 'Traité' ? 100 : r.completionPercentage ?? 0} /> },
-              { key: 'statut',     label: 'Statut',            render: r => <DossierStatutBadge statut={r.statut} /> },
-              { key: 'date',       label: 'Date réception' },
-            ]}
-            rows={filteredDerniers.slice((superAdminDerniersPage - 1) * ITEMS_PER_PAGE, superAdminDerniersPage * ITEMS_PER_PAGE)}
-          />
-          <Pagination page={superAdminDerniersPage} total={filteredDerniers.length} perPage={ITEMS_PER_PAGE} onChange={setSuperAdminDerniersPage} />
-        </section>
 
-        {/* ── Bordereaux en cours ── */}
-        <section style={{ background: 'white', borderRadius: 12, padding: '20px 24px', marginBottom: 20, boxShadow: '0 1px 6px rgba(0,0,0,.07)' }}>
-          <SectionTitle style={{ marginBottom: 14 }}>Bordereaux ({superAdminDossiersEnCours.length} total)</SectionTitle>
-          <FilterRow onClear={() => { setFilter2({ ref: '', client: '', statut: '', dateFrom: '', dateTo: '' }); setSuperAdminBordereauxPage(1); }}>
-            <input style={{ ...inputStyle, width: 130 }} placeholder="Référence" value={filter2.ref}      onChange={e => setFilter2(p => ({ ...p, ref:      e.target.value }))} />
-            <input style={{ ...inputStyle, width: 130 }} placeholder="Client"    value={filter2.client}   onChange={e => setFilter2(p => ({ ...p, client:   e.target.value }))} />
-            <select style={{ ...inputStyle, width: 120 }} value={filter2.statut} onChange={e => setFilter2(p => ({ ...p, statut: e.target.value }))}>
-              <option value="">Statut</option>
-              {allUniqueStatuts.map(s => <option key={s}>{s}</option>)}
-            </select>
-            <input type="date" style={{ ...inputStyle, width: 130 }} value={filter2.dateFrom} onChange={e => setFilter2(p => ({ ...p, dateFrom: e.target.value }))} />
-            <input type="date" style={{ ...inputStyle, width: 130 }} value={filter2.dateTo}   onChange={e => setFilter2(p => ({ ...p, dateTo:   e.target.value }))} />
-          </FilterRow>
           <DataTable
             columns={[
-              { key: 'reference',  label: 'Référence',      render: r => <span style={{ fontWeight: 700, color: '#2563eb' }}>{r.reference}</span> },
+              { key: 'reference',  label: 'Référence',      render: r => <span style={{ fontWeight: 700, color: theme.info }}>{r.reference}</span> },
               { key: 'client',     label: 'Client' },
-              { key: 'statut',     label: 'Statut',         render: r => <DossierStatutBadge statut={r.statut} /> },
-              { key: 'completion', label: '% Finalisation', render: r => <ProgressBar pct={r.completionPercentage ?? 0} /> },
-              { key: 'etats',      label: 'États Dossiers', render: r => (
+              { key: 'type',       label: 'Type',            render: r => r.type === 'Aucun document' ? 'Prestation' : r.type },
+              { key: 'completion', label: '% Finalisation',  render: r => <ProgressBar pct={r.statut === 'Traité' ? 100 : r.completionPercentage ?? 0} /> },
+              { key: 'etats',      label: 'États Dossiers',  render: r => (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   {(r.dossierStates ?? [r.statut]).map((s: string, i: number) => <DossierStatutBadge key={i} statut={s} />)}
                 </div>
               )},
+              { key: 'statut',     label: 'Statut',          render: r => <DossierStatutBadge statut={r.statut} /> },
+              { key: 'jours',      label: 'Jours',           render: r => <span style={{ fontWeight: 700, color: getPriorityColor(r.priorite) }}>{r.joursEnCours}j</span> },
+              { key: 'gestionnaire', label: 'Gestionnaire',  render: r => r.gestionnaire === 'Non assigné' ? <span style={{ color: theme.textFaint, fontStyle: 'italic' }}>Non assigné</span> : r.gestionnaire },
+              { key: 'date',       label: 'Date réception' },
             ]}
-            rows={filteredEnCours.slice((superAdminBordereauxPage - 1) * ITEMS_PER_PAGE, superAdminBordereauxPage * ITEMS_PER_PAGE)}
+            rows={pagedUnifiedBordereaux}
           />
-          <Pagination page={superAdminBordereauxPage} total={filteredEnCours.length} perPage={ITEMS_PER_PAGE} onChange={setSuperAdminBordereauxPage} />
-        </section>
-
-        {/* ── Dossiers individuels ── */}
-        <section style={{ background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,.07)', marginBottom: 20 }}>
-          <div style={{ padding: '20px 24px 14px', borderBottom: '1px solid #e5e7eb' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-              <SectionTitle>Dossiers Individuels</SectionTitle>
-              <span style={{ fontSize: 13, color: '#6b7280' }}>({superAdminDocumentsIndividuels.length})</span>
-            </div>
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#9ca3af' }}>Affichage par dossier (non par bordereau)</p>
-            <FilterRow onClear={() => { setFilter3({ ref: '', refBrdx: '', client: '', type: '', statut: '', gest: '', dateFrom: '', dateTo: '' }); setSuperAdminIndividuelsPage(1); }}>
-              <input style={{ ...inputStyle, width: 120 }} placeholder="Réf. Dossier"    value={filter3.ref}    onChange={e => setFilter3(p => ({ ...p, ref:    e.target.value }))} />
-              <input style={{ ...inputStyle, width: 120 }} placeholder="Réf. Bordereau"  value={filter3.refBrdx} onChange={e => setFilter3(p => ({ ...p, refBrdx: e.target.value }))} />
-              <input style={{ ...inputStyle, width: 110 }} placeholder="Client"          value={filter3.client}  onChange={e => setFilter3(p => ({ ...p, client:  e.target.value }))} />
-              <select style={{ ...inputStyle, width: 110 }} value={filter3.type}   onChange={e => setFilter3(p => ({ ...p, type:   e.target.value }))}>
-                <option value="">Type</option>
-                <option>Prestation</option><option>Adhésion</option>
-              </select>
-              <select style={{ ...inputStyle, width: 110 }} value={filter3.statut} onChange={e => setFilter3(p => ({ ...p, statut: e.target.value }))}>
-                <option value="">Statut</option>
-                {allUniqueStatuts.map(s => <option key={s}>{s}</option>)}
-              </select>
-              <input style={{ ...inputStyle, width: 120 }} placeholder="Gestionnaire"    value={filter3.gest}    onChange={e => setFilter3(p => ({ ...p, gest:    e.target.value }))} />
-              <input type="date" style={{ ...inputStyle, width: 120 }} value={filter3.dateFrom} onChange={e => setFilter3(p => ({ ...p, dateFrom: e.target.value }))} />
-              <input type="date" style={{ ...inputStyle, width: 120 }} value={filter3.dateTo}   onChange={e => setFilter3(p => ({ ...p, dateTo:   e.target.value }))} />
-            </FilterRow>
-          </div>
-          <DataTable
-            columns={[
-              { key: 'reference',         label: 'Réf. Dossier',   render: r => <span style={{ fontWeight: 600 }}>{r.reference}</span> },
-              { key: 'bordereauReference',label: 'Réf. Bordereau' },
-              { key: 'client',            label: 'Client' },
-              { key: 'type',              label: 'Type' },
-              { key: 'statut',            label: 'Statut',          render: r => <DossierStatutBadge statut={r.statut} /> },
-              { key: 'gestionnaire',      label: 'Gestionnaire',    render: r => r.gestionnaire ?? <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Non assigné</span> },
-              { key: 'date',              label: 'Date' },
-              { key: 'actions',           label: 'Actions',         render: r => (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <ActionBtn color="#2563eb" onClick={() => handleSuperAdminViewPDF(r.id)}>PDF</ActionBtn>
-                  {!isReadOnly && <ActionBtn color="#d97706" onClick={() => handleSuperAdminModifyStatus({ ...r, isDocument: true })}>Statut</ActionBtn>}
-                </div>
-              )},
-            ]}
-            rows={filteredIndividuels.slice((superAdminIndividuelsPage - 1) * INDIVIDUEL_PER_PAGE, superAdminIndividuelsPage * INDIVIDUEL_PER_PAGE)}
-          />
-          <div style={{ padding: '0 24px 16px' }}>
-            <Pagination page={superAdminIndividuelsPage} total={filteredIndividuels.length} perPage={INDIVIDUEL_PER_PAGE} onChange={setSuperAdminIndividuelsPage} />
-          </div>
+          <Pagination page={superAdminUnifiedPage} total={filteredUnifiedBordereaux.length} perPage={ITEMS_PER_PAGE} onChange={setSuperAdminUnifiedPage} />
         </section>
 
       </div>
@@ -1087,19 +1065,19 @@ const EnhancedDashboard: React.FC = () => {
       case 'ADMINISTRATEUR':
       case 'RESPONSABLE_DEPARTEMENT':
         return (
-          <div style={{ marginTop: '2rem' }}>
+          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
             {/* Department Stats */}
-            <div style={{ marginBottom: '1.25rem', padding: '1rem 1.25rem', border: '1px solid #e0e7ff', borderRadius: '10px', backgroundColor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <div style={{ width: '3px', height: '16px', backgroundColor: '#3b82f6', marginRight: '0.625rem', borderRadius: '2px' }}></div>
-                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '700', color: '#1f2937', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Statistiques par Département</h3>
-                <button onClick={() => setShowDepartmentExplanationModal(true)} title="Comment fonctionnent ces statistiques ?" style={{ cursor: 'pointer', background: '#2196f3', color: 'white', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', marginLeft: '8px', border: 'none' }}>?</button>
-                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#6b7280' }}>
+            <div style={{ ...cardBase, marginBottom: '1.1rem', padding: '1.1rem 1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.85rem' }}>
+                <div style={{ width: 3, height: 16, backgroundColor: theme.info, marginRight: '0.65rem', borderRadius: 2 }}></div>
+                <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: theme.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Statistiques par Département</h3>
+                <button onClick={() => setShowDepartmentExplanationModal(true)} title="Comment fonctionnent ces statistiques ?" style={{ cursor: 'pointer', background: theme.info, color: 'white', borderRadius: '50%', width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, marginLeft: 8, border: 'none', flexShrink: 0 }}>?</button>
+                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: theme.textMuted, fontWeight: 600 }}>
                   {(dashboardData.departmentStats ?? []).reduce((s: number, d: any) => s + (d.count ?? 0), 0)} dossiers total
                 </span>
               </div>
               {/* Status legend */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '0.75rem', paddingBottom: '0.625rem', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.85rem', paddingBottom: '0.75rem', borderBottom: `1px solid ${theme.divider}` }}>
                 {[
                   { key: 'EN_COURS' }, { key: 'A_AFFECTER' }, { key: 'A_SCANNER' },
                   { key: 'TRAITE' }, { key: 'VIREMENT_EXECUTE' }, { key: 'ASSIGNE' }, { key: 'CLOTURE' },
@@ -1108,7 +1086,7 @@ const EnhancedDashboard: React.FC = () => {
                 ))}
               </div>
               {/* Dept rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                 {Object.entries(
                   (dashboardData.departmentStats ?? []).reduce((acc: Record<string, any[]>, dept: any) => {
                     if (!acc[dept.department]) acc[dept.department] = [];
@@ -1118,20 +1096,20 @@ const EnhancedDashboard: React.FC = () => {
                 ).map(([name, items]: [string, any[]]) => {
                   const total = items.reduce((s: number, d: any) => s + (d.count ?? 0), 0);
                   return (
-                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.5rem 0.75rem', borderRadius: '7px', backgroundColor: '#f8faff', border: '1px solid #e8eef8' }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.6rem 0.85rem', borderRadius: theme.radiusMd, backgroundColor: theme.surfaceSubtle, border: `1px solid ${theme.divider}` }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: theme.info, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <span style={{ color: 'white', fontWeight: 700, fontSize: '0.78rem' }}>{name.charAt(0)}</span>
                       </div>
-                      <span style={{ fontSize: '0.82rem', fontWeight: '600', color: '#374151', minWidth: 108, flexShrink: 0 }}>{name}</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#374151', background: '#e5e7eb', padding: '0.1rem 0.45rem', borderRadius: 10, flexShrink: 0 }}>{total}</span>
-                      <div style={{ width: 1, height: 16, background: '#d1d5db', flexShrink: 0 }} />
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', flex: 1 }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: theme.text, minWidth: 108, flexShrink: 0 }}>{name}</span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: theme.textMuted, background: theme.surfaceMuted, padding: '0.15rem 0.5rem', borderRadius: 999, flexShrink: 0 }}>{total}</span>
+                      <div style={{ width: 1, height: 16, background: theme.borderStrong, flexShrink: 0 }} />
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', flex: 1 }}>
                         {items.map((item: any, i: number) => {
-                          const { bg, text } = getStatusStyle(item.status);
+                          const { bg, text, border } = getStatusStyle(item.status);
                           return (
-                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0.18rem 0.5rem', borderRadius: 5, background: bg, fontSize: '0.72rem' }}>
+                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0.2rem 0.55rem', borderRadius: 999, background: bg, border: `1px solid ${border}`, fontSize: '0.7rem' }}>
                               <span style={{ fontWeight: 700, color: text }}>{item.count}</span>
-                              <span style={{ color: text, opacity: .75, fontWeight: 500 }}>{item.status}</span>
+                              <span style={{ color: text, opacity: .8, fontWeight: 500 }}>{item.status}</span>
                             </span>
                           );
                         })}
@@ -1143,33 +1121,41 @@ const EnhancedDashboard: React.FC = () => {
             </div>
 
             {/* Top Clients */}
-            <div style={{ padding: '1rem 1.25rem', border: '1px solid #e0e7ff', borderRadius: '10px', backgroundColor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <div style={{ width: 3, height: 16, backgroundColor: '#8b5cf6', marginRight: '0.625rem', borderRadius: 2 }}></div>
-                <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#1f2937', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Top Clients</h3>
-                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#6b7280' }}>{(dashboardData.clientStats ?? []).length} clients</span>
+            <div style={{ ...cardBase, padding: '1.1rem 1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.85rem' }}>
+                <div style={{ width: 3, height: 16, backgroundColor: theme.violet, marginRight: '0.65rem', borderRadius: 2 }}></div>
+                <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: theme.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Clients</h3>
+                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: theme.textMuted, fontWeight: 600 }}>{(dashboardData.clientStats ?? []).length} clients</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {dashboardData.clientStats?.map((client: any, index: number) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.45rem 0.75rem', borderRadius: 7, backgroundColor: index % 2 === 0 ? '#f8faff' : '#faf8ff', border: '1px solid #ece8fd' }}>
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.55rem 0.85rem', borderRadius: theme.radiusMd, backgroundColor: theme.surfaceSubtle, border: `1px solid ${theme.divider}` }}>
                     <div style={{ position: 'relative', flexShrink: 0 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: ['#7c3aed','#8b5cf6','#a78bfa','#c4b5fd'][Math.min(index,3)], display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: ['#6d4bce','#8b6fe0','#a98cec','#c7b3f4'][Math.min(index,3)], display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ color: 'white', fontWeight: 700, fontSize: '0.78rem' }}>{client.name.charAt(0)}</span>
                       </div>
                       {index < 3 && (
-                        <span style={{ position: 'absolute', top: -4, right: -4, width: 13, height: 13, borderRadius: '50%', background: ['#f59e0b','#94a3b8','#b45309'][index], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', color: 'white', fontWeight: 800, border: '1px solid white' }}>
+                        <span style={{ position: 'absolute', top: -4, right: -4, width: 13, height: 13, borderRadius: '50%', background: [theme.warning, theme.textFaint, theme.primaryDark][index], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', color: 'white', fontWeight: 800, border: `1px solid ${theme.surface}` }}>
                           {index + 1}
                         </span>
                       )}
                     </div>
-                    <span style={{ flex: 1, fontSize: '0.8rem', fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={client.name}>{client.name}</span>
-                    <div style={{ width: 80, textAlign: 'center', flexShrink: 0 }}>
-                      <span style={{ background: '#d1fae5', fontSize: '0.78rem', fontWeight: 700, color: '#065f46', padding: '0.15rem 0.55rem', borderRadius: 10 }}>{client._count.bordereaux}</span>
+                    <span style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={client.name}>{client.name}</span>
+                    <div style={{ width: 80, textAlign: 'center', flexShrink: 0, display: 'grid', gap: 4 }}>
+                      <span style={{ background: theme.successSoft, fontSize: '0.78rem', fontWeight: 700, color: theme.success, padding: '0.15rem 0.55rem', borderRadius: 999, border: `1px solid ${theme.successBorder}` }}>{client._count.bordereaux}</span>
+                      <span style={{ fontSize: '0.65rem', color: theme.textFaint }}>Bordereaux</span>
                     </div>
-                    <div style={{ width: 90, textAlign: 'center', flexShrink: 0 }}>
-                      <span style={{ background: client._count.reclamations > 0 ? '#fee2e2' : '#f1f5f9', fontSize: '0.78rem', fontWeight: 700, color: client._count.reclamations > 0 ? '#991b1b' : '#94a3b8', padding: '0.15rem 0.55rem', borderRadius: 10 }}>
+                    <div style={{ width: 90, textAlign: 'center', flexShrink: 0, display: 'grid', gap: 4 }}>
+                      <span
+                        title={client._count.reclamations > 0
+                          ? `${client._count.reclamations} réclamation(s) associée(s) à ce client`
+                          : 'Aucune réclamation enregistrée pour ce client'
+                        }
+                        style={{ background: client._count.reclamations > 0 ? theme.dangerSoft : theme.surfaceMuted, fontSize: '0.78rem', fontWeight: 700, color: client._count.reclamations > 0 ? theme.danger : theme.textFaint, padding: '0.15rem 0.55rem', borderRadius: 999, border: `1px solid ${client._count.reclamations > 0 ? theme.dangerBorder : theme.divider}` }}
+                      >
                         {client._count.reclamations}
                       </span>
+                      <span style={{ fontSize: '0.65rem', color: theme.textFaint }}>Réclamations</span>
                     </div>
                   </div>
                 ))}
@@ -1180,26 +1166,26 @@ const EnhancedDashboard: React.FC = () => {
 
       case 'CHEF_EQUIPE':
         return (
-          <div style={{ marginTop: '2rem' }}>
-            <div style={{ marginBottom: '2rem' }}>
-              <h3>Équipe</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
+            <div style={{ marginBottom: '1.75rem' }}>
+              <SectionHeading>Équipe</SectionHeading>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
                 {dashboardData.performance?.teamMembers?.map((m: any, i: number) => (
-                  <div key={i} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                    <h4 style={{ margin: '0 0 4px' }}>{m.fullName}</h4>
-                    <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>{m.role}</p>
-                  </div>
+                  <InfoCard key={i}>
+                    <p style={{ margin: '0 0 4px', fontWeight: 700, color: theme.text, fontSize: 14 }}>{m.fullName}</p>
+                    <p style={{ margin: 0, color: theme.textMuted, fontSize: 12.5 }}>{m.role}</p>
+                  </InfoCard>
                 ))}
               </div>
             </div>
             <div>
-              <h3>Charge de Travail Équipe</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+              <SectionHeading>Charge de Travail Équipe</SectionHeading>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
                 {dashboardData.performance?.teamWorkload?.map((w: any, i: number) => (
-                  <div key={i} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                    <p style={{ margin: '0 0 4px' }}>Utilisateur: <strong>{w.assignedToUserId}</strong></p>
-                    <p style={{ margin: 0 }}>Charge: <strong>{w._count.id} dossiers</strong></p>
-                  </div>
+                  <InfoCard key={i}>
+                    <p style={{ margin: '0 0 4px', fontSize: 13, color: theme.textMuted }}>Utilisateur : <strong style={{ color: theme.text }}>{w.assignedToUserId}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: theme.textMuted }}>Charge : <strong style={{ color: theme.text }}>{w._count.id} dossiers</strong></p>
+                  </InfoCard>
                 ))}
               </div>
             </div>
@@ -1208,16 +1194,16 @@ const EnhancedDashboard: React.FC = () => {
 
       case 'GESTIONNAIRE':
         return (
-          <div style={{ marginTop: '2rem' }}>
-            <h3>Mes Tâches</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
+            <SectionHeading>Mes Tâches</SectionHeading>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
               {dashboardData.personalTasks?.map((t: any, i: number) => (
-                <div key={i} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                  <h4 style={{ margin: '0 0 4px' }}>Bordereau {t.reference}</h4>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Client: {t.client?.name}</p>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Statut: <DossierStatutBadge statut={t.statut} /></p>
-                  <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>Reçu le {new Date(t.dateReception).toLocaleDateString('fr-FR')}</p>
-                </div>
+                <InfoCard key={i}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 700, color: theme.text, fontSize: 14 }}>Bordereau {t.reference}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: 12.5, color: theme.textMuted }}>Client : {t.client?.name}</p>
+                  <p style={{ margin: '0 0 8px', fontSize: 12.5, color: theme.textMuted }}>Statut : <DossierStatutBadge statut={t.statut} /></p>
+                  <p style={{ margin: 0, fontSize: 11.5, color: theme.textFaint }}>Reçu le {new Date(t.dateReception).toLocaleDateString('fr-FR')}</p>
+                </InfoCard>
               ))}
             </div>
           </div>
@@ -1225,31 +1211,31 @@ const EnhancedDashboard: React.FC = () => {
 
       case 'FINANCE':
         return (
-          <div style={{ marginTop: '2rem' }}>
-            <div style={{ marginBottom: '2rem' }}>
-              <h3>Virements en Attente</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
+            <div style={{ marginBottom: '1.75rem' }}>
+              <SectionHeading>Virements en Attente</SectionHeading>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
                 {dashboardData.virements?.map((v: any, i: number) => (
-                  <div key={i} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                    <h4 style={{ margin: '0 0 4px' }}>Virement {v.referenceBancaire}</h4>
-                    <p style={{ margin: '0 0 2px', fontSize: 13 }}>Montant: <strong>{v.montant.toLocaleString()} €</strong></p>
-                    <p style={{ margin: '0 0 2px', fontSize: 13 }}>Client: {v.bordereau?.client?.name}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>Dépôt le {new Date(v.dateDepot).toLocaleDateString('fr-FR')}</p>
-                  </div>
+                  <InfoCard key={i}>
+                    <p style={{ margin: '0 0 6px', fontWeight: 700, color: theme.text, fontSize: 14 }}>Virement {v.referenceBancaire}</p>
+                    <p style={{ margin: '0 0 4px', fontSize: 12.5, color: theme.textMuted }}>Montant : <strong style={{ color: theme.text }}>{v.montant.toLocaleString()} €</strong></p>
+                    <p style={{ margin: '0 0 4px', fontSize: 12.5, color: theme.textMuted }}>Client : {v.bordereau?.client?.name}</p>
+                    <p style={{ margin: 0, fontSize: 11.5, color: theme.textFaint }}>Dépôt le {new Date(v.dateDepot).toLocaleDateString('fr-FR')}</p>
+                  </InfoCard>
                 ))}
               </div>
             </div>
             <div>
-              <h3>Statistiques Financières</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              <SectionHeading>Statistiques Financières</SectionHeading>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
                 {[
-                  { label: 'Virements Quotidiens',  value: dashboardData.financialStats?.dailyVirements,   color: '#2563eb' },
-                  { label: 'Virements Mensuels',    value: dashboardData.financialStats?.monthlyVirements,  color: '#16a34a' },
-                  { label: 'Montant Moyen',          value: `${(dashboardData.financialStats?.avgAmount ?? 0).toLocaleString()} €`, color: '#dc2626' },
+                  { label: 'Virements Quotidiens',  value: dashboardData.financialStats?.dailyVirements,   color: theme.info },
+                  { label: 'Virements Mensuels',    value: dashboardData.financialStats?.monthlyVirements,  color: theme.success },
+                  { label: 'Montant Moyen',          value: `${(dashboardData.financialStats?.avgAmount ?? 0).toLocaleString()} €`, color: theme.primary },
                 ].map(s => (
-                  <div key={s.label} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9', textAlign: 'center' }}>
-                    <p style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 600, color: '#374151' }}>{s.label}</p>
-                    <p style={{ margin: 0, fontSize: '2rem', fontWeight: 800, color: s.color }}>{s.value}</p>
+                  <div key={s.label} style={{ ...cardBase, padding: '18px 16px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '.04em' }}>{s.label}</p>
+                    <p style={{ margin: 0, fontSize: '1.9rem', fontWeight: 800, color: s.color }}>{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -1260,16 +1246,16 @@ const EnhancedDashboard: React.FC = () => {
       case 'BO':
       case 'BUREAU_ORDRE':
         return (
-          <div style={{ marginTop: '2rem' }}>
-            <h3>Bordereaux en Attente</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
+            <SectionHeading>Bordereaux en Attente</SectionHeading>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
               {dashboardData.pendingBordereaux?.map((b: any, i: number) => (
-                <div key={i} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                  <h4 style={{ margin: '0 0 4px' }}>Bordereau {b.reference}</h4>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Client: {b.client?.name}</p>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Statut: <DossierStatutBadge statut={b.statut} /></p>
-                  <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>Reçu le {new Date(b.dateReception).toLocaleDateString('fr-FR')}</p>
-                </div>
+                <InfoCard key={i}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 700, color: theme.text, fontSize: 14 }}>Bordereau {b.reference}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: 12.5, color: theme.textMuted }}>Client : {b.client?.name}</p>
+                  <p style={{ margin: '0 0 8px', fontSize: 12.5, color: theme.textMuted }}>Statut : <DossierStatutBadge statut={b.statut} /></p>
+                  <p style={{ margin: 0, fontSize: 11.5, color: theme.textFaint }}>Reçu le {new Date(b.dateReception).toLocaleDateString('fr-FR')}</p>
+                </InfoCard>
               ))}
             </div>
           </div>
@@ -1277,16 +1263,16 @@ const EnhancedDashboard: React.FC = () => {
 
       case 'SCAN_TEAM':
         return (
-          <div style={{ marginTop: '2rem' }}>
-            <h3>File d'Attente Scan</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
+            <SectionHeading>File d'Attente Scan</SectionHeading>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
               {dashboardData.scanQueue?.map((b: any, i: number) => (
-                <div key={i} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                  <h4 style={{ margin: '0 0 4px' }}>Bordereau {b.reference}</h4>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Client: {b.client?.name}</p>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Statut: <DossierStatutBadge statut={b.statut} /></p>
-                  <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>Reçu le {new Date(b.dateReception).toLocaleDateString('fr-FR')}</p>
-                </div>
+                <InfoCard key={i}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 700, color: theme.text, fontSize: 14 }}>Bordereau {b.reference}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: 12.5, color: theme.textMuted }}>Client : {b.client?.name}</p>
+                  <p style={{ margin: '0 0 8px', fontSize: 12.5, color: theme.textMuted }}>Statut : <DossierStatutBadge statut={b.statut} /></p>
+                  <p style={{ margin: 0, fontSize: 11.5, color: theme.textFaint }}>Reçu le {new Date(b.dateReception).toLocaleDateString('fr-FR')}</p>
+                </InfoCard>
               ))}
             </div>
           </div>
@@ -1294,16 +1280,16 @@ const EnhancedDashboard: React.FC = () => {
 
       case 'CLIENT_SERVICE':
         return (
-          <div style={{ marginTop: '2rem' }}>
-            <h3>Réclamations Actives</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
+            <SectionHeading>Réclamations Actives</SectionHeading>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
               {dashboardData.activeReclamations?.map((r: any, i: number) => (
-                <div key={i} style={{ padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                  <h4 style={{ margin: '0 0 4px' }}>Réclamation #{r.id}</h4>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Client: {r.client?.name}</p>
-                  <p style={{ margin: '0 0 2px', fontSize: 13 }}>Statut: <DossierStatutBadge statut={r.status} /></p>
-                  <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>Créée le {new Date(r.createdAt).toLocaleDateString('fr-FR')}</p>
-                </div>
+                <InfoCard key={i}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 700, color: theme.text, fontSize: 14 }}>Réclamation #{r.id}</p>
+                  <p style={{ margin: '0 0 4px', fontSize: 12.5, color: theme.textMuted }}>Client : {r.client?.name}</p>
+                  <p style={{ margin: '0 0 8px', fontSize: 12.5, color: theme.textMuted }}>Statut : <DossierStatutBadge statut={r.status} /></p>
+                  <p style={{ margin: 0, fontSize: 11.5, color: theme.textFaint }}>Créée le {new Date(r.createdAt).toLocaleDateString('fr-FR')}</p>
+                </InfoCard>
               ))}
             </div>
           </div>
@@ -1311,9 +1297,9 @@ const EnhancedDashboard: React.FC = () => {
 
       default:
         return (
-          <div style={{ marginTop: '2rem', padding: '2rem', border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#f9fafb', textAlign: 'center' }}>
-            <h3>Tableau de Bord — {dashboardData.role}</h3>
-            <p style={{ color: '#6b7280' }}>Contenu spécifique au rôle en cours de développement.</p>
+          <div style={{ marginTop: '1.75rem', padding: '2.5rem 2rem', ...cardBase, textAlign: 'center', fontFamily: theme.font }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800, color: theme.text }}>Tableau de Bord — {dashboardData.role}</h3>
+            <p style={{ color: theme.textMuted, margin: 0, fontSize: 13.5 }}>Contenu spécifique au rôle en cours de développement.</p>
           </div>
         );
     }
@@ -1327,12 +1313,14 @@ const EnhancedDashboard: React.FC = () => {
     <>
       {/* Status modify modal */}
       {statusModifyModalOpen && selectedDossier && (
-        <ModalShell title="✏️ Modifier le Statut" onClose={() => setStatusModifyModalOpen(false)} maxWidth={400}>
-          <p style={{ margin: '0 0 16px', fontSize: 14, lineHeight: 1.6 }}>
-            Dossier : <strong>{selectedDossier.reference}</strong><br />
-            Client : <strong>{selectedDossier.client}</strong><br />
-            Statut actuel : <strong>{selectedDossier.statut}</strong>
-          </p>
+        <ModalShell title="Modifier le Statut" onClose={() => setStatusModifyModalOpen(false)} maxWidth={400}>
+          <div style={{ background: theme.surfaceSubtle, border: `1px solid ${theme.divider}`, borderRadius: theme.radiusMd, padding: '12px 14px', marginBottom: 18 }}>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.8, color: theme.textMuted }}>
+              Dossier : <strong style={{ color: theme.text }}>{selectedDossier.reference}</strong><br />
+              Client : <strong style={{ color: theme.text }}>{selectedDossier.client}</strong><br />
+              Statut actuel : <strong style={{ color: theme.text }}>{selectedDossier.statut}</strong>
+            </p>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
             {(['Nouveau','En cours','Traité','Rejeté','Retourné'] as const).map(s => {
               const docOnly  = s === 'Rejeté' || s === 'Retourné';
@@ -1344,28 +1332,28 @@ const EnhancedDashboard: React.FC = () => {
                   disabled={disabled}
                   onMouseDown={() => !disabled && setNewStatus(s)}
                   onClick={() => !disabled && handleModifyDossierStatus()}
-                  style={{ padding: '11px 14px', border: '1px solid #d1d5db', borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer', background: disabled ? '#f9fafb' : 'white', fontSize: 14, fontWeight: 600, textAlign: 'left', opacity: disabled ? .5 : 1, transition: 'border-color .15s' }}
+                  style={{ padding: '11px 14px', border: `1px solid ${theme.border}`, borderRadius: theme.radiusSm, cursor: disabled ? 'not-allowed' : 'pointer', background: disabled ? theme.surfaceSubtle : theme.surface, fontSize: 13.5, fontWeight: 700, textAlign: 'left', opacity: disabled ? .5 : 1, transition: 'border-color .15s, background .15s', color: theme.text, fontFamily: theme.font }}
                 >
                   {icons[s]} {s}
-                  {disabled && <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>(Documents uniquement)</span>}
+                  {disabled && <span style={{ fontSize: 11, color: theme.textFaint, marginLeft: 8, fontWeight: 500 }}>(Documents uniquement)</span>}
                 </button>
               );
             })}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={() => setStatusModifyModalOpen(false)} style={{ padding: '8px 18px', background: '#f3f4f6', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#374151' }}>Annuler</button>
+            <button onClick={() => setStatusModifyModalOpen(false)} style={{ padding: '9px 18px', background: theme.surfaceMuted, border: 'none', borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: theme.textMuted, fontFamily: theme.font }}>Annuler</button>
           </div>
         </ModalShell>
       )}
 
       {/* PDF View modal (chef equipe style) */}
       {pdfViewModalOpen && selectedDossier && (
-        <ModalShell title="📄 Aperçu PDF du Dossier" onClose={() => { setPdfViewModalOpen(false); setDossierDetails(null); }} maxWidth={600}>
+        <ModalShell title="Aperçu PDF du Dossier" onClose={() => { setPdfViewModalOpen(false); setDossierDetails(null); }} maxWidth={600}>
           {loadingDossierDetails ? (
             <div style={{ textAlign: 'center', padding: 32 }}><Spinner /></div>
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 22 }}>
                 {[
                   ['Référence', selectedDossier.reference],
                   ['Client',    selectedDossier.client],
@@ -1375,32 +1363,32 @@ const EnhancedDashboard: React.FC = () => {
                   ['Date',      selectedDossier.date],
                 ].map(([label, val]) => (
                   <div key={label}>
-                    <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>{label}</p>
-                    <div style={{ padding: '8px 10px', background: '#f9fafb', borderRadius: 6, fontSize: 13, color: '#374151' }}>{val}</div>
+                    <p style={{ margin: '0 0 5px', fontSize: 10.5, fontWeight: 700, color: theme.textFaint, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</p>
+                    <div style={{ padding: '8px 11px', background: theme.surfaceSubtle, border: `1px solid ${theme.divider}`, borderRadius: theme.radiusSm, fontSize: 13, color: theme.text, fontWeight: 600 }}>{val}</div>
                   </div>
                 ))}
               </div>
               <div>
-                <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>
+                <p style={{ margin: '0 0 9px', fontSize: 10.5, fontWeight: 700, color: theme.textFaint, textTransform: 'uppercase', letterSpacing: '.04em' }}>
                   Documents ({dossierDetails?.documents?.length ?? 0})
                 </p>
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', maxHeight: 280, overflowY: 'auto' }}>
+                <div style={{ border: `1px solid ${theme.divider}`, borderRadius: theme.radiusMd, overflow: 'hidden', maxHeight: 280, overflowY: 'auto' }}>
                   {dossierDetails?.documents?.length > 0 ? dossierDetails.documents.map((doc: any, i: number) => (
-                    <div key={doc.id ?? i} onClick={() => handleDocumentPDFView(doc.id, doc.fileName ?? doc.name)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: i < dossierDetails.documents.length - 1 ? '1px solid #f3f4f6' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div key={doc.id ?? i} onClick={() => handleDocumentPDFView(doc.id, doc.fileName ?? doc.name)} style={{ padding: '11px 14px', cursor: 'pointer', borderBottom: i < dossierDetails.documents.length - 1 ? `1px solid ${theme.divider}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: i % 2 !== 0 ? theme.surfaceSubtle : theme.surface }}>
                       <div>
-                        <p style={{ margin: '0 0 2px', fontWeight: 600, fontSize: 13 }}>📄 {doc.fileName ?? doc.name ?? `Document ${i + 1}`}</p>
-                        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>{doc.type ?? 'Non spécifié'} · {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : 'Taille inconnue'}</p>
+                        <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13, color: theme.text }}>📄 {doc.fileName ?? doc.name ?? `Document ${i + 1}`}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: theme.textFaint }}>{doc.type ?? 'Non spécifié'} · {doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : 'Taille inconnue'}</p>
                       </div>
-                      <ActionBtn color="#2563eb" onClick={e => { e.stopPropagation(); handleDocumentPDFView(doc.id, doc.fileName ?? doc.name); }}>PDF</ActionBtn>
+                      <ActionBtn color={theme.info} onClick={e => { e.stopPropagation(); handleDocumentPDFView(doc.id, doc.fileName ?? doc.name); }}>PDF</ActionBtn>
                     </div>
                   )) : (
-                    <p style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Aucun document disponible</p>
+                    <p style={{ padding: '22px', textAlign: 'center', color: theme.textFaint, fontSize: 13 }}>Aucun document disponible</p>
                   )}
                 </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-                <button onClick={() => { setPdfViewModalOpen(false); setDossierDetails(null); }} style={{ padding: '8px 18px', background: '#f3f4f6', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#374151' }}>Fermer</button>
-                <button onClick={() => { setPdfViewModalOpen(false); setStatusModifyModalOpen(true); }} style={{ padding: '8px 18px', background: '#d52b36', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 700, color: 'white' }}>Modifier le Statut</button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
+                <button onClick={() => { setPdfViewModalOpen(false); setDossierDetails(null); }} style={{ padding: '9px 18px', background: theme.surfaceMuted, border: 'none', borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: theme.textMuted, fontFamily: theme.font }}>Fermer</button>
+                <button onClick={() => { setPdfViewModalOpen(false); setStatusModifyModalOpen(true); }} style={{ padding: '9px 18px', background: theme.primary, border: 'none', borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: 'white', fontFamily: theme.font }}>Modifier le Statut</button>
               </div>
             </>
           )}
@@ -1409,19 +1397,19 @@ const EnhancedDashboard: React.FC = () => {
 
       {/* PDF full view modal (super admin) */}
       {showSuperAdminPDFModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.8)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'white', borderRadius: 12, width: '90%', height: '90%', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,.4)' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,17,26,.7)', backdropFilter: 'blur(2px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: theme.font }}>
+          <div style={{ background: theme.surface, borderRadius: theme.radiusLg, width: '90%', height: '90%', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: theme.shadowLg, border: `1px solid ${theme.border}` }}>
+            <div style={{ padding: '14px 22px', borderBottom: `1px solid ${theme.divider}`, background: theme.surfaceSubtle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>{currentSuperAdminDossier?.reference} — {currentSuperAdminDossier?.client}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 13, color: '#6b7280' }}>Type : {currentSuperAdminDossier?.type} · Statut : {currentSuperAdminDossier?.statut}</p>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: 15.5, color: theme.text }}>{currentSuperAdminDossier?.reference} — {currentSuperAdminDossier?.client}</p>
+                <p style={{ margin: '3px 0 0', fontSize: 12.5, color: theme.textMuted }}>Type : {currentSuperAdminDossier?.type} · Statut : {currentSuperAdminDossier?.statut}</p>
               </div>
-              <button onClick={closeSuperAdminPDFModal} style={{ padding: '7px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>Fermer</button>
+              <button onClick={closeSuperAdminPDFModal} style={{ padding: '8px 17px', background: theme.danger, color: 'white', border: 'none', borderRadius: theme.radiusSm, cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: theme.font }}>Fermer</button>
             </div>
-            <div style={{ flex: 1, padding: 16 }}>
+            <div style={{ flex: 1, padding: 18, background: theme.surfaceMuted }}>
               {currentSuperAdminPDFUrl
-                ? <iframe src={currentSuperAdminPDFUrl} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 6 }} title="PDF" />
-                : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af' }}>Chargement du PDF…</div>
+                ? <iframe src={currentSuperAdminPDFUrl} style={{ width: '100%', height: '100%', border: `1px solid ${theme.divider}`, borderRadius: theme.radiusMd, background: 'white' }} title="PDF" />
+                : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: theme.textFaint }}>Chargement du PDF…</div>
               }
             </div>
           </div>
@@ -1430,12 +1418,12 @@ const EnhancedDashboard: React.FC = () => {
 
       {/* Department explanation modal */}
       {showDepartmentExplanationModal && (
-        <ModalShell title="📊 Statistiques par Département — Comment ça marche ?" onClose={() => setShowDepartmentExplanationModal(false)} maxWidth={860} accentColor="#2196f3">
-          <div style={{ fontSize: 14, lineHeight: 1.7, color: '#374151' }}>
-            <InfoBox color="#e3f2fd" border="#90caf9">
-              💡 Ces statistiques montrent <strong>où se trouvent les dossiers dans le processus de traitement</strong>, pas qui y travaille actuellement.
+        <ModalShell title="Statistiques par Département — Comment ça marche ?" onClose={() => setShowDepartmentExplanationModal(false)} maxWidth={860} accentColor={theme.info}>
+          <div style={{ fontSize: 13.5, lineHeight: 1.7, color: theme.textMuted }}>
+            <InfoBox color={theme.infoSoft} border={theme.infoBorder}>
+              💡 Ces statistiques montrent <strong style={{ color: theme.text }}>où se trouvent les dossiers dans le processus de traitement</strong>, pas qui y travaille actuellement.
             </InfoBox>
-            <h4 style={{ color: '#2196f3', marginTop: 20 }}>🔄 Parcours d'un dossier</h4>
+            <h4 style={{ color: theme.info, marginTop: 22, marginBottom: 12, fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>🔄 Parcours d'un dossier</h4>
             {[
               { step: '1', icon: '📥', title: 'Réception — Bureau d\'Ordre', statuts: 'EN_ATTENTE, A_SCANNER', desc: 'Le dossier vient d\'arriver. Le Bureau d\'Ordre l\'enregistre et le prépare pour la numérisation.' },
               { step: '2', icon: '📷', title: 'Numérisation — Service SCAN', statuts: 'SCAN_EN_COURS, SCANNE', desc: 'L\'équipe SCAN transforme les documents papier en fichiers numériques.' },
@@ -1444,65 +1432,33 @@ const EnhancedDashboard: React.FC = () => {
               { step: '5', icon: '💰', title: 'Paiement — Finance', statuts: 'PRET_VIREMENT, VIREMENT_EN_COURS, VIREMENT_EXECUTE', desc: 'Le service Finance effectue le virement bancaire pour rembourser le client.' },
               { step: '6', icon: '✅', title: 'Clôture', statuts: 'CLOTURE', desc: 'Le dossier est terminé et archivé.' },
             ].map(s => (
-              <div key={s.step} style={{ padding: '10px 14px', borderLeft: '4px solid #2196f3', background: '#f0f7ff', borderRadius: '0 6px 6px 0', marginBottom: 10 }}>
-                <p style={{ margin: '0 0 2px', fontWeight: 700 }}>{s.icon} Étape {s.step} : {s.title}</p>
-                <p style={{ margin: '0 0 2px', fontSize: 12, color: '#1565c0' }}>Statuts : {s.statuts}</p>
-                <p style={{ margin: 0, fontSize: 12, color: '#555' }}>{s.desc}</p>
+              <div key={s.step} style={{ padding: '11px 15px', borderLeft: `3px solid ${theme.info}`, background: theme.infoSoft, borderRadius: `0 ${theme.radiusSm}px ${theme.radiusSm}px 0`, marginBottom: 10 }}>
+                <p style={{ margin: '0 0 3px', fontWeight: 700, color: theme.text, fontSize: 13.5 }}>{s.icon} Étape {s.step} : {s.title}</p>
+                <p style={{ margin: '0 0 3px', fontSize: 11.5, color: theme.info, fontWeight: 600 }}>Statuts : {s.statuts}</p>
+                <p style={{ margin: 0, fontSize: 12, color: theme.textMuted }}>{s.desc}</p>
               </div>
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-            <button onClick={() => setShowDepartmentExplanationModal(false)} style={{ padding: '10px 28px', background: '#2196f3', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>Compris !</button>
-          </div>
-        </ModalShell>
-      )}
-
-      {/* AI explanation modal */}
-      {showAIExplanationModal && (
-        <ModalShell title="🤖 Système d'Assignation IA" onClose={() => setShowAIExplanationModal(false)} maxWidth={860} accentColor="#6366f1">
-          <div style={{ fontSize: 14, lineHeight: 1.7, color: '#374151' }}>
-            <InfoBox color="#f0f9ff" border="#bae6fd">
-              💡 L'IA analyse la charge de travail, les performances historiques et les délais SLA pour recommander les meilleurs gestionnaires pour chaque dossier.
-            </InfoBox>
-            <h4 style={{ color: '#6366f1', marginTop: 20 }}>📊 Formule de Score (0–1)</h4>
-            <div style={{ background: '#fef3c7', padding: 12, borderRadius: 8, fontFamily: 'monospace', fontSize: 13, marginBottom: 16 }}>
-              Score = (Charge × 40%) + (Efficacité × 25%) + (SLA × 20%) + (Retards × 15%)
-            </div>
-            {[
-              ['Charge (40%)', 'Plus la charge est faible → meilleur score. Score_Charge = 1 − (charge_actuelle / charge_max)'],
-              ['Efficacité (25%)', 'Dossiers traités avec succès / total assignés'],
-              ['SLA (20%)', 'Pourcentage de dossiers traités dans les délais contractuels'],
-              ['Retards (15%)', 'Nombre de dossiers dépassant les délais (pénalité)'],
-            ].map(([k, v]) => (
-              <div key={k} style={{ padding: '8px 12px', background: '#f9fafb', borderLeft: '3px solid #6366f1', borderRadius: '0 6px 6px 0', marginBottom: 8 }}>
-                <strong>{k}</strong> — {v}
-              </div>
-            ))}
-            <h4 style={{ color: '#6366f1', marginTop: 20 }}>⚖️ Rééquilibrage automatique</h4>
-            <p>L'IA détecte les gestionnaires surchargés (charge &gt; moyenne + 20%) et propose des transferts vers les moins chargés, en évitant les doublons et en recalculant après chaque transfert.</p>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
-            <button onClick={() => setShowAIExplanationModal(false)} style={{ padding: '10px 28px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>Compris !</button>
+            <button onClick={() => setShowDepartmentExplanationModal(false)} style={{ padding: '10px 30px', background: theme.info, color: 'white', border: 'none', borderRadius: theme.radiusSm, cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: theme.font }}>Compris !</button>
           </div>
         </ModalShell>
       )}
 
       {/* Edit type modal */}
       {editModalOpen && (
-        <ModalShell title="✏️ Modifier le Type de Dossier" onClose={() => setEditModalOpen(false)} maxWidth={420} accentColor="#9c27b0">
+        <ModalShell title="Modifier le Type de Dossier" onClose={() => setEditModalOpen(false)} maxWidth={420} accentColor={theme.violet}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
             {(['Prestation','Adhésion','Complément Dossier','Avenant','Réclamation'] as const).map(t => (
-              <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', border: selectedType === t ? '2px solid #9c27b0' : '1px solid #d1d5db', borderRadius: 8, cursor: 'pointer', background: selectedType === t ? '#f3e5f5' : 'white' }}>
-                <input type="radio" name="docType" value={t} checked={selectedType === t} onChange={e => setSelectedType(e.target.value)} style={{ accentColor: '#9c27b0' }} />
-                <div>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{t}</p>
-                </div>
+              <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', border: selectedType === t ? `2px solid ${theme.violet}` : `1px solid ${theme.border}`, borderRadius: theme.radiusSm, cursor: 'pointer', background: selectedType === t ? theme.violetSoft : theme.surface, transition: 'border-color .15s, background .15s' }}>
+                <input type="radio" name="docType" value={t} checked={selectedType === t} onChange={e => setSelectedType(e.target.value)} style={{ accentColor: theme.violet }} />
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 13.5, color: theme.text }}>{t}</p>
               </label>
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-            <button onClick={() => setEditModalOpen(false)} style={{ padding: '8px 18px', background: '#f3f4f6', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#374151' }}>Annuler</button>
-            <button onClick={() => { setEditModalOpen(false); alert('Type modifié'); loadChefEquipeData(); }} disabled={!selectedType} style={{ padding: '8px 18px', background: selectedType ? '#9c27b0' : '#d1d5db', border: 'none', borderRadius: 6, cursor: selectedType ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, color: 'white' }}>Confirmer</button>
+            <button onClick={() => setEditModalOpen(false)} style={{ padding: '9px 18px', background: theme.surfaceMuted, border: 'none', borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: theme.textMuted, fontFamily: theme.font }}>Annuler</button>
+            <button onClick={() => { setEditModalOpen(false); alert('Type modifié'); loadChefEquipeData(); }} disabled={!selectedType} style={{ padding: '9px 18px', background: selectedType ? theme.violet : theme.borderStrong, border: 'none', borderRadius: theme.radiusSm, cursor: selectedType ? 'pointer' : 'not-allowed', fontSize: 13.5, fontWeight: 700, color: 'white', fontFamily: theme.font }}>Confirmer</button>
           </div>
         </ModalShell>
       )}
@@ -1521,17 +1477,17 @@ const EnhancedDashboard: React.FC = () => {
   );
 
   if (error) return (
-    <div style={{ padding: '3rem 2rem', textAlign: 'center', maxWidth: 560, margin: '0 auto' }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🚨</div>
-      <h3 style={{ color: '#dc2626', marginBottom: '1rem' }}>Problème de Connexion ARS</h3>
-      <div style={{ padding: '1.25rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, marginBottom: '1.5rem', textAlign: 'left' }}>
-        <p style={{ margin: 0, color: '#b91c1c', fontWeight: 600 }}>{error}</p>
+    <div style={{ padding: '4rem 2rem', textAlign: 'center', maxWidth: 520, margin: '4rem auto', fontFamily: theme.font }}>
+      <div style={{ width: 56, height: 56, borderRadius: '50%', background: theme.dangerSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.7rem', margin: '0 auto 1.1rem' }}>🚨</div>
+      <h3 style={{ color: theme.text, marginBottom: '0.4rem', fontSize: 17, fontWeight: 800 }}>Problème de Connexion ARS</h3>
+      <div style={{ padding: '1rem 1.15rem', background: theme.dangerSoft, border: `1px solid ${theme.dangerBorder}`, borderRadius: theme.radiusMd, marginBottom: '1.5rem', textAlign: 'left' }}>
+        <p style={{ margin: 0, color: theme.danger, fontWeight: 600, fontSize: 13.5 }}>{error}</p>
       </div>
-      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-        <button onClick={fetchDashboardData} style={{ padding: '0.7rem 1.4rem', background: '#2563eb', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>🔄 Réessayer</button>
-        <button onClick={() => window.location.reload()} style={{ padding: '0.7rem 1.4rem', background: '#6b7280', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>🔄 Recharger</button>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+        <button onClick={fetchDashboardData} style={{ padding: '10px 20px', background: theme.primary, color: 'white', border: 'none', borderRadius: theme.radiusSm, cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: theme.font }}>Réessayer</button>
+        <button onClick={() => window.location.reload()} style={{ padding: '10px 20px', background: theme.surfaceMuted, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: theme.radiusSm, cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: theme.font }}>Recharger</button>
       </div>
-      <p style={{ marginTop: '1.5rem', fontSize: '0.875rem', color: '#6b7280' }}>Si le problème persiste, contactez l'administrateur ARS</p>
+      <p style={{ marginTop: '1.5rem', fontSize: 12.5, color: theme.textFaint }}>Si le problème persiste, contactez l'administrateur ARS</p>
     </div>
   );
 
@@ -1545,131 +1501,51 @@ const EnhancedDashboard: React.FC = () => {
     <>
       <style>{`@keyframes ars-spin { to { transform: rotate(360deg); } }`}</style>
 
-      <div style={{ padding: '1rem' }}>
+      <div style={{ padding: isSuperAdminRole ? 0 : '1.25rem', background: isSuperAdminRole ? 'transparent' : theme.bg, minHeight: '100vh', fontFamily: theme.font }}>
         {/* Super Admin full-page content */}
         {isSuperAdminRole && renderSuperAdminContent()}
 
-        {/* Status/AI banners */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', margin: '1.5rem 0', maxWidth: 1440 }}>
+        <div style={{ padding: isSuperAdminRole ? '0 24px' : 0, maxWidth: 1440, margin: '0 auto' }}>
+          {/* Status banner */}
           {dashboardData?.kpis?.dataSource && (
-            <Banner
-              icon={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? '⚠️' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? '🚨' : '✅'}
-              color={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? '#fffbeb' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? '#fef2f2' : '#f0fdf4'}
-              border={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? '#fde68a' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? '#fecaca' : '#bbf7d0'}
-              title={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? 'Mode Dégradé ARS' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? 'Erreur Système ARS' : 'Système ARS Opérationnel'}
-              desc={
-                dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? 'Données réelles disponibles — Service IA temporairement indisponible' :
-                dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? 'Problème base de données — Contactez l\'administrateur' :
-                'Tous les services ARS fonctionnent normalement'
-              }
-            />
+            <div style={{ margin: isSuperAdminRole ? '18px 0 0' : '0 0 1.25rem' }}>
+              <Banner
+                icon={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? '⚠️' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? '🚨' : '✅'}
+                color={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? theme.warningSoft : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? theme.dangerSoft : theme.successSoft}
+                border={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? theme.warningBorder : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? theme.dangerBorder : theme.successBorder}
+                title={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? 'Mode Dégradé ARS' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? 'Erreur Système ARS' : 'Système ARS Opérationnel'}
+                desc={
+                  dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? 'Données réelles disponibles — Service IA temporairement indisponible' :
+                  dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? 'Problème base de données — Contactez l\'administrateur' :
+                  'Tous les services ARS fonctionnent normalement'
+                }
+              />
+            </div>
           )}
-          {aiInsights && (
-            <Banner
-              icon="🤖"
-              color={aiInsights.health.status === 'healthy' ? '#f0fdf4' : '#fffbeb'}
-              border={aiInsights.health.status === 'healthy' ? '#bbf7d0' : '#fde68a'}
-              title={`Intelligence Artificielle ARS : ${aiInsights.health.status === 'healthy' ? 'Active' : 'Indisponible'}`}
-              desc={aiInsights.health.message}
-            >
-              {aiInsights.recommendations.length > 0 && (
-                <span style={{ padding: '3px 10px', background: '#22c55e', color: 'white', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
-                  {aiInsights.recommendations.length} recommandation(s)
-                </span>
+
+          {/* Shared content (all roles) */}
+          {dashboardData && (
+            <>
+              {canViewFeature(user?.role, 'workforce_estimator') && (
+                <div style={{ marginTop: '1.75rem' }}><WorkforceEstimator /></div>
               )}
-              {aiInsights.health.status === 'unavailable' && (
-                <button onClick={fetchAIInsights} style={{ padding: '4px 12px', background: '#22c55e', color: 'white', border: 'none', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
-                  Réactiver
-                </button>
+
+              {renderRoleSpecificContent()}
+
+              {/* DossiersList — now includes everything the old "Dossiers Individuels"
+                  table had (Type, % Finalisation, États Dossiers, colors) */}
+              {['SUPER_ADMIN','ADMINISTRATEUR','CHEF_EQUIPE','RESPONSABLE_DEPARTEMENT'].includes(dashboardData?.role ?? '') && (
+                <div style={{ marginTop: '1.75rem', marginBottom: '1.5rem', padding: '1.4rem 1.6rem', ...cardBase }}>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.1rem' }}>
+                    <div style={{ width: 3, height: 18, backgroundColor: theme.success, marginRight: '0.7rem', borderRadius: 2 }}></div>
+                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: theme.text }}>Liste Dossiers</h3>
+                  </div>
+                  <DossiersList params={{}} />
+                </div>
               )}
-            </Banner>
+            </>
           )}
         </div>
-
-        {/* Shared content (all roles) */}
-        {dashboardData && (
-          <>
-            {canViewFeature(user?.role, 'workforce_estimator') && (
-              <div style={{ marginTop: '2rem' }}><WorkforceEstimator /></div>
-            )}
-
-            {renderRoleSpecificContent()}
-
-            {/* DossiersList */}
-            {['SUPER_ADMIN','ADMINISTRATEUR','CHEF_EQUIPE','RESPONSABLE_DEPARTEMENT'].includes(dashboardData?.role ?? '') && (
-              <div style={{ marginTop: '2rem', padding: '1.5rem 2rem', border: '1px solid #e0e7ff', borderRadius: 12, backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0,0,0,.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
-                  <div style={{ width: 4, height: 22, backgroundColor: '#10b981', marginRight: '1rem', borderRadius: 2 }}></div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1f2937' }}>Liste Dossiers</h3>
-                </div>
-                <DossiersList params={{}} />
-              </div>
-            )}
-
-            {/* BS module */}
-            {(dashboardData?.role === 'SUPER_ADMIN' || dashboardData?.role === 'ADMINISTRATEUR' || user?.role === 'RESPONSABLE_DEPARTEMENT') && (
-              <div style={{ marginTop: '2rem', padding: '1.5rem 2rem', border: '1px solid #e0e7ff', borderRadius: 12, backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0,0,0,.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
-                  <div style={{ width: 4, height: 22, backgroundColor: '#10b981', marginRight: '1rem', borderRadius: 2 }}></div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1f2937' }}>Module Bulletin de Soins</h3>
-                  <button onClick={() => setShowAIExplanationModal(true)} style={{ marginLeft: 'auto', padding: '7px 14px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    ℹ️ Comment ça marche ?
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.5rem' }}>
-                  <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: 8 }}>
-                    <h4 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#374151' }}>Suggestions d'Assignation IA</h4>
-                    <div style={{ maxHeight: 320, overflow: 'auto' }}><AssignmentSuggestions showActions={false} /></div>
-                  </div>
-                  <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: 8 }}>
-                    <h4 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#374151' }}>Suggestions de Rééquilibrage IA</h4>
-                    <div style={{ maxHeight: 320, overflow: 'auto' }}><RebalancingSuggestions /></div>
-                  </div>
-                </div>
-                <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: 8 }}>
-                  <h4 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 700, color: '#374151' }}>Priorités par Gestionnaire</h4>
-                  <PrioritiesDashboard />
-                </div>
-              </div>
-            )}
-
-            {/* AI recommendations */}
-            {(aiInsights?.recommendations.length ?? 0) > 0 && (
-              <div style={{ marginTop: '2rem', padding: '1.5rem 2rem', border: '1px solid #e0e7ff', borderRadius: 12, backgroundColor: 'white', boxShadow: '0 4px 6px -1px rgba(0,0,0,.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
-                  <div style={{ width: 4, height: 22, backgroundColor: '#6366f1', marginRight: '1rem', borderRadius: 2 }}></div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1f2937' }}>🤖 Recommandations IA</h3>
-                  <span style={{ marginLeft: 'auto', padding: '5px 14px', background: '#6366f1', color: 'white', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
-                    {aiInsights.recommendations.length} recommandation(s)
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {aiInsights.recommendations.map((rec: string, i: number) => {
-                    const isCrit = rec.includes('🚨') || rec.includes('CRITIQUE') || rec.includes('URGENT');
-                    const isWarn = rec.includes('⚠️') || rec.includes('Alerte') || rec.includes('Attention');
-                    const bg     = isCrit ? '#fef2f2' : isWarn ? '#fffbeb' : '#f0f9ff';
-                    const border = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#3b82f6';
-                    return (
-                      <div key={i} style={{ padding: '1rem', background: bg, border: `2px solid ${border}`, borderRadius: 8, display: 'flex', gap: 10 }}>
-                        <span style={{ flexShrink: 0, fontSize: 18 }}>{isCrit ? '🚨' : isWarn ? '⚠️' : '📊'}</span>
-                        <span style={{ fontSize: 14, lineHeight: 1.5, color: '#374151' }}>{rec}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* AI unavailable notice */}
-            {aiInsights?.health?.status === 'unavailable' && (
-              <div style={{ marginTop: '2rem', padding: '1rem 1.5rem', border: '1px solid #fde68a', borderRadius: 10, background: '#fffbeb' }}>
-                <h4 style={{ margin: '0 0 6px', color: '#92400e' }}>Service IA Indisponible</h4>
-                <p style={{ margin: '0 0 12px', fontSize: 14, color: '#6b7280' }}>Les fonctionnalités de base du tableau de bord restent disponibles.</p>
-                <button onClick={fetchAIInsights} style={{ padding: '7px 16px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>Réessayer la connexion IA</button>
-              </div>
-            )}
-          </>
-        )}
       </div>
 
       {renderModals()}
@@ -1680,41 +1556,54 @@ const EnhancedDashboard: React.FC = () => {
 // ─── Tiny helper components (file-local) ─────────────────────────────────────
 
 const Row: React.FC<{ label: string; value: number; color?: string }> = ({ label, value, color }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-    <span style={{ color: color ?? '#6b7280' }}>{label}</span>
-    <span style={{ fontWeight: 700, color: color ?? '#374151' }}>{value}</span>
+  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontFamily: theme.font }}>
+    <span style={{ color: theme.textMuted }}>{label}</span>
+    <span style={{ fontWeight: 700, color: color ?? theme.text }}>{value}</span>
   </div>
 );
 
-const SectionTitle: React.FC<{ children: React.ReactNode; color?: string; style?: React.CSSProperties }> = ({ children, color = '#1f2937', style: s }) => (
-  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color, display: 'flex', alignItems: 'center', gap: 8, ...s }}>
-    <span style={{ width: 3, height: 18, background: color === '#15803d' ? '#22c55e' : '#d52b36', borderRadius: 2, display: 'inline-block', flexShrink: 0 }} />
+const SectionTitle: React.FC<{ children: React.ReactNode; color?: string; style?: React.CSSProperties }> = ({ children, color = theme.text, style: s }) => (
+  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color, display: 'flex', alignItems: 'center', gap: 9, fontFamily: theme.font, ...s }}>
+    <span style={{ width: 3, height: 17, background: color === theme.success ? theme.success : theme.primary, borderRadius: 2, display: 'inline-block', flexShrink: 0 }} />
     {children}
   </h3>
 );
 
+// Heading used inside role-specific panels (Équipe, Mes Tâches, etc.)
+const SectionHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h3 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 800, color: theme.text, textTransform: 'uppercase', letterSpacing: '.04em', display: 'flex', alignItems: 'center', gap: 9 }}>
+    <span style={{ width: 3, height: 15, background: theme.primary, borderRadius: 2, display: 'inline-block' }} />
+    {children}
+  </h3>
+);
+
+// Generic content card used across the simple role-specific list views
+const InfoCard: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div style={{ ...cardBase, padding: '15px 17px', background: theme.surfaceSubtle }}>{children}</div>
+);
+
 const EmptyState: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div style={{ textAlign: 'center', padding: '24px', color: '#9ca3af', fontSize: 14, gridColumn: '1 / -1' }}>
-    <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
+  <div style={{ textAlign: 'center', padding: '32px 20px', color: theme.textFaint, fontSize: 13.5, gridColumn: '1 / -1', fontFamily: theme.font }}>
+    <div style={{ fontSize: 32, marginBottom: 8, opacity: .6 }}>📋</div>
     <p style={{ margin: 0 }}>{children}</p>
   </div>
 );
 
 const ActionBtn: React.FC<{ color: string; onClick: (e: React.MouseEvent) => void; children: React.ReactNode }> = ({ color, onClick, children }) => (
-  <button onClick={onClick} style={{ padding: '4px 10px', background: color, color: 'white', border: 'none', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontWeight: 700 }}>{children}</button>
+  <button onClick={onClick} style={{ padding: '5px 11px', background: color, color: 'white', border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: 700, fontFamily: theme.font, letterSpacing: '.01em' }}>{children}</button>
 );
 
 const InfoBox: React.FC<{ color: string; border: string; children: React.ReactNode }> = ({ color, border, children }) => (
-  <div style={{ padding: '10px 14px', background: color, border: `1px solid ${border}`, borderRadius: 8, fontSize: 14 }}>{children}</div>
+  <div style={{ padding: '11px 15px', background: color, border: `1px solid ${border}`, borderRadius: theme.radiusMd, fontSize: 13.5, fontFamily: theme.font }}>{children}</div>
 );
 
 interface BannerProps { icon: string; color: string; border: string; title: string; desc?: string; children?: React.ReactNode }
 const Banner: React.FC<BannerProps> = ({ icon, color, border, title, desc, children }) => (
-  <div style={{ padding: '12px 16px', background: color, border: `1px solid ${border}`, borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-    <span style={{ fontSize: 22, flexShrink: 0 }}>{icon}</span>
+  <div style={{ padding: '13px 17px', background: color, border: `1px solid ${border}`, borderRadius: theme.radiusMd, display: 'flex', alignItems: 'center', gap: 13, fontFamily: theme.font }}>
+    <span style={{ fontSize: 20, flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
     <div style={{ flex: 1 }}>
-      <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>{title}</p>
-      {desc && <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>{desc}</p>}
+      <p style={{ margin: 0, fontWeight: 800, fontSize: 13.5, color: theme.text }}>{title}</p>
+      {desc && <p style={{ margin: '2px 0 0', fontSize: 12, color: theme.textMuted }}>{desc}</p>}
     </div>
     {children && <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>{children}</div>}
   </div>

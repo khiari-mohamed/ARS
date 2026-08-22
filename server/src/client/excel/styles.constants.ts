@@ -206,7 +206,7 @@ export const getStatusLabel = (status?: string): string => {
   }
 };
 
-export const getModeLabel = (mode?: string): string => {
+export const getModeLabel = (mode?: string | null): string => {
   switch (mode) {
     case 'VIREMENT':       return 'Virement Bancaire';
     case 'CHEQUE':         return 'Chèque';

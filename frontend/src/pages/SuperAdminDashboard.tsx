@@ -38,6 +38,7 @@ import TeamWorkloadConfig from '../components/Workflow/TeamWorkloadConfig';
 import DocumentAssignmentManager from '../components/DocumentAssignmentManager';
 import DocumentAnalyticsDashboard from '../components/analytics/DocumentAnalyticsDashboard';
 import OutlookEmailMonitoring from '../components/reclamations/OutlookEmailMonitoring';
+import BSReassignmentManager from '../components/BSReassignmentManager';
 import { fetchSystemHealth, fetchSystemStats } from '../services/superAdminService';
 
 interface TabPanelProps {
@@ -262,6 +263,7 @@ const SuperAdminDashboard: React.FC = () => {
             <Tab label="Alertes Équipes" />
             <Tab label="Analytics Documents" />
             <Tab label="Gestion Utilisateurs" />
+            <Tab label="Réaffectation BS" />
           </Tabs>
         </Box>
 
@@ -279,6 +281,10 @@ const SuperAdminDashboard: React.FC = () => {
 
         <TabPanel value={activeTab} index={3}>
           <AdvancedUserManagement />
+        </TabPanel>
+
+        <TabPanel value={activeTab} index={4}>
+          <BSReassignmentManager />
         </TabPanel>
       </Paper>
 

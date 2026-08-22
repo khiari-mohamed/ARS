@@ -35,6 +35,8 @@ import BordereauAssignModal from '../../components/BordereauAssignModal';
 import BordereauCorbeilleModal from '../../components/BordereauCorbeilleModal';
 import BordereauReassignModal from '../../components/BordereauReassignModal';
 import BordereauEditModal from '../../components/BordereauEditModal';
+import BordereauSLAIndicators from '../../components/BordereauSLAIndicators';
+import type { BordereauSLAIndicators as BordereauSLAIndicatorsType } from '../../types/sla';
 
 const BordereauxDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -340,25 +342,23 @@ const BordereauxDashboard: React.FC = () => {
     };
   };
 
-  // ✅ UNIFIED SLA LOGIC WITH FREEZE - Calculate from dateReception, freeze when virement executed
+  // Legacy single-SLA filters mirror backend SLA de reglement BO.
+  const getBordereauSla = (bordereau: any): BordereauSLAIndicatorsType => ({
+    slaScan: bordereau.slaScan,
+    slaTraitement: bordereau.slaTraitement,
+    slaReglementBO: bordereau.slaReglementBO,
+    slaReglementFinance: bordereau.slaReglementFinance,
+  });
+
+  const hasBordereauSla = (bordereau: any) =>
+    !!(bordereau.slaScan || bordereau.slaTraitement || bordereau.slaReglementBO || bordereau.slaReglementFinance);
+
   const calculateSLAStatus = (bordereau: any) => {
-    if (!bordereau.dateReception || !bordereau.delaiReglement) return 'UNKNOWN';
-    
-    const today = new Date();
-    const reception = new Date(bordereau.dateReception);
-    const delai = bordereau.delaiReglement;
-    
-    // ✅ FREEZE LOGIC: Stop calculation when virement is executed
-    const isFrozen = ['VIREMENT_EXECUTE', 'PAYE', 'CLOTURE'].includes(bordereau.statut);
-    const freezeDate = bordereau.dateExecutionVirement || bordereau.dateCloture;
-    
-    const effectiveEndDate = isFrozen && freezeDate ? new Date(freezeDate) : today;
-    const daysElapsed = (effectiveEndDate.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24);
-    const percentElapsed = (daysElapsed / delai) * 100;
-    
-    if (percentElapsed > 100) return 'OVERDUE';  // En retard
-    if (percentElapsed > 80) return 'AT_RISK';   // À risque (>80%)
-    return 'ON_TIME';  // À temps
+    const status = bordereau.slaReglementBO?.status || bordereau.statusColor;
+    if (status === 'RED') return 'OVERDUE';
+    if (status === 'ORANGE') return 'AT_RISK';
+    if (status === 'GREEN') return 'ON_TIME';
+    return 'UNKNOWN';
   };
 
   // Pagination logic with SLA filter applied
@@ -1063,6 +1063,9 @@ const BordereauxDashboard: React.FC = () => {
                         </td>
                         <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                           {(() => {
+                            if (hasBordereauSla(bordereau)) {
+                              return <BordereauSLAIndicators sla={getBordereauSla(bordereau)} />;
+                            }
                             const slaStatus = calculateSLAStatus(bordereau);
                             if (slaStatus === 'UNKNOWN') {
                               return <span style={{ color: '#999', fontSize: '12px' }}>-</span>;
@@ -1574,4 +1577,3 @@ const BordereauxDashboard: React.FC = () => {
 };
 
 export default BordereauxDashboard;
-

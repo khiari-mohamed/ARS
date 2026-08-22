@@ -9,6 +9,7 @@ export const analyticsRoleMap: Record<string, string> = {
   GESTIONNAIRE: 'GESTIONNAIRE',
   CLIENT_SERVICE: 'CLIENT_SERVICE',
   FINANCE: 'FINANCE',
+  COMPTABILITE: 'COMPTABILITE',
   BO: 'BO',
   SCAN: 'SCAN',
 };

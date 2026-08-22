@@ -1,10 +1,45 @@
 import { Bordereau, Statut, User, Contract } from '@prisma/client';
-import { calculateSLA } from '../../utils/sla-calculator';
+import { calculateAllSLAs, BordereauForSLA, SLAColor } from '../../utils/sla-calculator';
 
 export enum StatusColor {
   GREEN = 'GREEN',
   ORANGE = 'ORANGE',
   RED = 'RED',
+}
+
+/** One of the four unified, company-mandated SLA indicators */
+export class SLAIndicatorDto {
+  applicable!: boolean;
+  frozen!: boolean;
+  overdue!: boolean;
+  daysElapsed!: number | null;
+  daysRemaining!: number | null;
+  percentElapsed!: number | null;
+  status!: StatusColor | null;
+
+  constructor(partial: Partial<SLAIndicatorDto>) {
+    Object.assign(this, partial);
+  }
+
+  static fromMetric(metric: {
+    applicable: boolean;
+    isFrozen: boolean;
+    isOverdue: boolean;
+    daysElapsed: number | null;
+    daysRemaining: number | null;
+    percentElapsed: number | null;
+    statusColor: SLAColor | null;
+  }): SLAIndicatorDto {
+    return new SLAIndicatorDto({
+      applicable: metric.applicable,
+      frozen: metric.isFrozen,
+      overdue: metric.isOverdue,
+      daysElapsed: metric.daysElapsed,
+      daysRemaining: metric.daysRemaining,
+      percentElapsed: metric.percentElapsed,
+      status: (metric.statusColor as StatusColor | null) ?? null,
+    });
+  }
 }
 
 export class BordereauResponseDto {
@@ -24,22 +59,34 @@ export class BordereauResponseDto {
   nombreBS!: number;
   createdAt!: Date;
   updatedAt!: Date;
-  
-  // Additional fields for KPIs and tracking
+
+  // ── Legacy overall KPI fields — kept for backward compatibility, now mirror
+  //    "SLA de règlement BO" (exactly what the app used to compute/display) ──
   daysElapsed?: number;
   daysRemaining?: number;
   statusColor?: StatusColor;
+  isOverdue?: boolean;
+
   scanDuration?: number | null;
   totalDuration?: number | null;
-  isOverdue?: boolean;
   assignedTo?: string;
   dateReceptionBO?: Date | null;
+
+  // ── Legacy duration fields — BUG FIXED, now driven by the unified calculator ──
   dureeTraitement?: number | null;
-  dureeTraitementStatus?: 'GREEN' | 'RED' | null;
-  dureeTraitementWarning?: string | null; // Warning message for data inconsistency
+  dureeTraitementStatus?: 'GREEN' | 'ORANGE' | 'RED' | null;
+  dureeTraitementWarning?: string | null;
   dureeReglement?: number | null;
-  dureeReglementStatus?: 'GREEN' | 'RED' | null;
+  dureeReglementStatus?: 'GREEN' | 'ORANGE' | 'RED' | null;
+  dureeReglementFinance?: number | null;
+  dureeReglementFinanceStatus?: 'GREEN' | 'ORANGE' | 'RED' | null;
   dateAffectation?: Date | null;
+
+  // ── The four unified, company-mandated SLA indicators ──
+  slaScan?: SLAIndicatorDto;
+  slaTraitement?: SLAIndicatorDto;
+  slaReglementBO?: SLAIndicatorDto;
+  slaReglementFinance?: SLAIndicatorDto;
 
   // Relations
   client?: User;
@@ -52,148 +99,115 @@ export class BordereauResponseDto {
   }
 
   static fromEntity(bordereau: any, includeKPIs = true): BordereauResponseDto {
-    // Create a new response object with the bordereau data
     const response = new BordereauResponseDto({
       ...bordereau,
-      // Ensure date fields are properly handled
       dateReception: bordereau.dateReception,
       dateDebutScan: bordereau.dateDebutScan || null,
       dateFinScan: bordereau.dateFinScan || null,
       dateReceptionSante: bordereau.dateReceptionSante || null,
       dateCloture: bordereau.dateCloture || null,
       dateDepotVirement: bordereau.dateDepotVirement || null,
-      dateExecutionVirement: bordereau.ordresVirement?.[0]?.dateEtatFinal || bordereau.ordresVirement?.[0]?.dateTraitement || bordereau.dateExecutionVirement || null,
+      dateExecutionVirement:
+        bordereau.ordresVirement?.[0]?.dateEtatFinal ||
+        bordereau.ordresVirement?.[0]?.dateTraitement ||
+        bordereau.dateExecutionVirement ||
+        null,
       dateReceptionBO: bordereau.dateReceptionBO || null,
       dateAffectation: bordereau.dateAffectation || null,
       createdAt: bordereau.createdAt,
       updatedAt: bordereau.updatedAt,
-      // Include relations if they exist
       client: bordereau.client,
       contract: bordereau.contract,
       bulletinSoins: bordereau.BulletinSoin || [],
       assignedToUser: bordereau.assignedToUser,
     });
-    
+
     if (includeKPIs) {
-      // ✅ USE CENTRALIZED SLA CALCULATOR WITH FREEZE LOGIC
-      const slaResult = calculateSLA({
+      const slaInput: BordereauForSLA = {
         dateReception: bordereau.dateReception,
         delaiReglement: bordereau.delaiReglement || 30,
         statut: bordereau.statut,
+        dateDebutScan: bordereau.dateDebutScan,
+        dateFinScan: bordereau.dateFinScan,
         dateCloture: bordereau.dateCloture,
         dateExecutionVirement: bordereau.dateExecutionVirement,
         ordresVirement: bordereau.ordresVirement,
-      });
-      
-      const { daysElapsed, daysRemaining, statusColor: slaColor } = slaResult;
-      const statusColor = slaColor === 'GREEN' ? StatusColor.GREEN : 
-                          slaColor === 'ORANGE' ? StatusColor.ORANGE : StatusColor.RED;
-      
+      };
+
+      // ✅ ONE unified computation for all 4 indicators — no more scattered
+      // date-diff math spread across services.
+      const all = calculateAllSLAs(slaInput);
+
+      response.slaScan = SLAIndicatorDto.fromMetric(all.scan);
+      response.slaTraitement = SLAIndicatorDto.fromMetric(all.traitement);
+      response.slaReglementBO = SLAIndicatorDto.fromMetric(all.reglementBO);
+      response.slaReglementFinance = SLAIndicatorDto.fromMetric(all.reglementFinance);
+
+      // Legacy overall fields mirror "SLA de règlement BO" — the only
+      // indicator the app used to compute/display before this fix.
+      response.daysElapsed = all.reglementBO.daysElapsed ?? 0;
+      response.daysRemaining = all.reglementBO.daysRemaining ?? (bordereau.delaiReglement || 30);
+      response.statusColor = (all.reglementBO.statusColor as StatusColor) ?? StatusColor.GREEN;
+      response.isOverdue = all.reglementBO.isOverdue;
+
       const receptionDate = new Date(bordereau.dateReception);
-      
-      // Calculate scan duration if available
-      let scanDuration: number | null = null;
-      if (bordereau.dateDebutScan && bordereau.dateFinScan) {
-        scanDuration = Math.floor(
-          (new Date(bordereau.dateFinScan).getTime() - new Date(bordereau.dateDebutScan).getTime()) / 
-          (1000 * 60 * 60 * 24)
-        );
-      }
-      
-      // Calculate total duration if closed
-      let totalDuration: number | null = null;
-      if (bordereau.dateCloture) {
-        totalDuration = Math.floor(
-          (new Date(bordereau.dateCloture).getTime() - receptionDate.getTime()) / 
-          (1000 * 60 * 60 * 24)
-        );
-      }
-      
-      // Add KPI fields to response
-      response.daysElapsed = daysElapsed;
-      response.daysRemaining = daysRemaining;
-      response.statusColor = statusColor;
-      response.scanDuration = scanDuration;
-      response.totalDuration = totalDuration;
-      response.isOverdue = daysRemaining <= 0;
-      
-      // Calculate Durée de traitement (Date Clôture - Date Réception)
-      // When bordereau becomes TRAITÉ (processing completed)
-      // ✅ CHECK: All documents AND bulletin soins must be treated
-      if (bordereau.dateReception) {
-        const isFinishedStatus = ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(bordereau.statut);
-        
-        // ✅ Check documents
-        const documents = bordereau.documents || [];
-        const totalDocs = documents.length;
-        const traitedDocs = documents.filter((doc: any) => doc.status === 'TRAITE').length;
-        const allDocsTreated = totalDocs === 0 || traitedDocs === totalDocs;
-        
-        // ✅ Check bulletin soins (BS)
-        const bulletinSoins = bordereau.BulletinSoin || [];
-        const totalBS = bulletinSoins.length;
-        const traitedBS = bulletinSoins.filter((bs: any) => bs.etat === 'TRAITE').length;
-        const allBSTreated = totalBS === 0 || traitedBS === totalBS;
-        
-        // ✅ FIX: a bordereau imported/created with NO tracked child rows at all
-        // (totalDocs === 0 AND totalBS === 0) has nothing to verify against — don't
-        // block duration calculation forever. Trust statut + dateCloture in that case.
-        const hasTrackedItems = totalDocs > 0 || totalBS > 0;
-        const allTreated = hasTrackedItems ? (allDocsTreated && allBSTreated) : true;
-        
-        if (bordereau.dateCloture && isFinishedStatus && allTreated) {
-          // Happy path: dateCloture exists, status is finished, and all items treated
-          const dateReception = new Date(bordereau.dateReception);
-          const dateCloture = new Date(bordereau.dateCloture);
-          response.dureeTraitement = Math.floor(
-            (dateCloture.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
-          );
-          response.dureeTraitementStatus = response.dureeTraitement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
-          response.dureeTraitementWarning = null;
-        } else if (bordereau.statut === 'TRAITE' && !bordereau.dateCloture && allTreated) {
-          // Fallback: TRAITÉ without dateCloture but all items treated
-          const now = new Date();
-          const dateReception = new Date(bordereau.dateReception);
-          response.dureeTraitement = Math.floor(
-            (now.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
-          );
-          response.dureeTraitementStatus = 'ORANGE' as any;
-          response.dureeTraitementWarning = 'Durée approximative - Date de clôture manquante';
-        } else if (bordereau.dateCloture && !isFinishedStatus) {
-          // Data inconsistency: has dateCloture but status is not finished
-          response.dureeTraitement = null;
-          response.dureeTraitementStatus = null;
-          response.dureeTraitementWarning = null;
-        } else {
-          // ✅ Not all items treated yet - show "En cours"
-          response.dureeTraitement = null;
-          response.dureeTraitementStatus = null;
-          response.dureeTraitementWarning = null;
-        }
+
+      // Raw scan duration (informational only — slaScan carries the colored status)
+      response.scanDuration =
+        bordereau.dateDebutScan && bordereau.dateFinScan
+          ? Math.floor(
+              (new Date(bordereau.dateFinScan).getTime() - new Date(bordereau.dateDebutScan).getTime()) /
+                (1000 * 60 * 60 * 24),
+            )
+          : null;
+
+      response.totalDuration = bordereau.dateCloture
+        ? Math.floor((new Date(bordereau.dateCloture).getTime() - receptionDate.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      // ── Durée de traitement (BUG FIX) ────────────────────────────────────
+      // Company definition: dateCloture (finalisation du traitement) − dateReception.
+      // The old logic ALSO required every single document/BS row to read
+      // "TRAITE" before showing a value. dateCloture is only ever set by the
+      // workflow once processing is genuinely finalised — that extra check was
+      // redundant, and it silently blanked out a valid duration whenever one
+      // denormalized child row lagged behind. Removed. Same clock as slaTraitement.
+      if (all.traitement.isFrozen) {
+        response.dureeTraitement = all.traitement.daysElapsed;
+        response.dureeTraitementStatus = all.traitement.statusColor;
+        response.dureeTraitementWarning = null;
+      } else if (['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(bordereau.statut)) {
+        // Status says finished but dateCloture is missing — data inconsistency.
+        // Show an approximate live value flagged with a warning instead of hiding it.
+        response.dureeTraitement = all.traitement.daysElapsed;
+        response.dureeTraitementStatus = 'ORANGE';
+        response.dureeTraitementWarning = 'Durée approximative - Date de clôture manquante';
       } else {
+        // Not finished yet — "En cours"
         response.dureeTraitement = null;
         response.dureeTraitementStatus = null;
+        response.dureeTraitementWarning = null;
       }
-      
-      // Calculate Durée de règlement (Date Execution Virement - Date Réception)
-      // When virement is actually executed (payment sent)
-      const dateExecutionVirement = bordereau.ordresVirement?.[0]?.dateEtatFinal || 
-                                    bordereau.ordresVirement?.[0]?.dateTraitement || 
-                                    bordereau.dateExecutionVirement;
-      
-      if (bordereau.dateReception && dateExecutionVirement) {
-        const dateReception = new Date(bordereau.dateReception);
-        const dateReglement = new Date(dateExecutionVirement);
-        response.dureeReglement = Math.floor(
-          (dateReglement.getTime() - dateReception.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        response.dureeReglementStatus = response.dureeReglement <= bordereau.delaiReglement ? 'GREEN' : 'RED';
+
+      // ── Durée de règlement BO — Date d'exécution du virement − Date de réception ──
+      if (all.reglementBO.isFrozen) {
+        response.dureeReglement = all.reglementBO.daysElapsed;
+        response.dureeReglementStatus = all.reglementBO.statusColor;
       } else {
         response.dureeReglement = null;
         response.dureeReglementStatus = null;
       }
+
+      // ── Durée de règlement Finance — Date d'exécution du virement − Date de finalisation du traitement ──
+      if (all.reglementFinance.isFrozen) {
+        response.dureeReglementFinance = all.reglementFinance.daysElapsed;
+        response.dureeReglementFinanceStatus = all.reglementFinance.statusColor;
+      } else {
+        response.dureeReglementFinance = null;
+        response.dureeReglementFinanceStatus = null;
+      }
     }
-    
+
     return response;
   }
 }

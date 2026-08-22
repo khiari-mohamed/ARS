@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsInt, IsOptional, IsDateString, IsArray, IsObject, IsNumber } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, IsOptional, IsDateString, IsArray, IsObject, IsNumber, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateContractDto {
@@ -12,7 +12,16 @@ export class CreateContractDto {
 
   @IsOptional()
   @IsString()
-  codeAssure?: string; // NEW: Code Assuré field
+  codeAssure?: string;
+
+  @IsOptional()
+  @IsString()
+  compagnieAssuranceId?: string; // Compagnie d'assurance for this contract
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['VIREMENT', 'CHEQUE', 'FEUILLE_CAISSE'])
+  modeRecuperation?: string; // Mode de récupération for this contract
 
   @IsNotEmpty()
   @Type(() => Number)

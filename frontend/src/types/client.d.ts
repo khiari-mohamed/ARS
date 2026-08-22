@@ -30,11 +30,21 @@ export interface Client {
   }>;
   contracts?: Array<{
     id: string;
+    clientId?: string;
+    clientName?: string;
+    codeAssure?: string;
+    compagnieAssuranceId?: string;
+    modeRecuperation?: 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | null;
     delaiReglement: number;
     delaiReclamation: number;
     startDate: string;
     endDate: string;
     documentPath?: string;
+    compagnieAssurance?: {
+      id: string;
+      nom: string;
+      code?: string;
+    } | null;
   }>;
   bordereaux?: Array<{
     id: string;

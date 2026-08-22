@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
-
-type SLAStatus = 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'UNKNOWN';
+import { calculateAllSLAs, SLAColor } from '../utils/sla-calculator';
 
 @Injectable()
 export class BordereauxExcelService {
@@ -49,16 +48,22 @@ export class BordereauxExcelService {
       { header: 'Bulletins de soins', key: 'nombreBS', width: 14 },
       { header: 'BS Traités', key: 'bsTraites', width: 12 },
       { header: 'Date fin Scan', key: 'dateFinScan', width: 16 },
+      { header: 'Date clôture (traitement)', key: 'dateCloture', width: 18 },
+      { header: 'Date exécution virement', key: 'dateExecutionVirement', width: 20 },
       { header: 'Délai contractuel (j)', key: 'delaiReglement', width: 18 },
-      { header: 'Durée de traitement', key: 'dureeTraitement', width: 18 },
-      { header: 'Durée de règlement', key: 'dureeReglement', width: 18 },
-      { header: 'SLA', key: 'sla', width: 14 },
+      { header: 'SLA Scan (j)', key: 'slaScanDays', width: 14 },
+      { header: 'SLA Scan', key: 'slaScanStatus', width: 12 },
+      { header: 'SLA Traitement (j)', key: 'slaTraitementDays', width: 16 },
+      { header: 'SLA Traitement', key: 'slaTraitementStatus', width: 14 },
+      { header: 'SLA Règlement BO (j)', key: 'slaReglementBODays', width: 18 },
+      { header: 'SLA Règlement BO', key: 'slaReglementBOStatus', width: 16 },
+      { header: 'SLA Règlement Finance (j)', key: 'slaReglementFinanceDays', width: 22 },
+      { header: 'SLA Règlement Finance', key: 'slaReglementFinanceStatus', width: 18 },
       { header: 'Statut Virement', key: 'statutVirement', width: 20 },
       { header: 'Dernière MAJ', key: 'updatedAt', width: 16 },
       { header: 'Statut', key: 'statut', width: 18 },
     ];
 
-    // --- Header styling (ARS brand red) ---
     const headerRow = sheet.getRow(1);
     headerRow.height = 24;
     headerRow.eachCell((cell) => {
@@ -73,9 +78,18 @@ export class BordereauxExcelService {
       };
     });
 
-    // --- Data rows ---
     bordereaux.forEach((b: any, index) => {
-      const slaStatus = this.calculateSLAStatus(b);
+      const sla = calculateAllSLAs({
+        dateReception: b.dateReception,
+        delaiReglement: b.delaiReglement ?? b.contract?.delaiReglement ?? 30,
+        statut: b.statut,
+        dateDebutScan: b.dateDebutScan,
+        dateFinScan: b.dateFinScan,
+        dateCloture: b.dateCloture,
+        dateExecutionVirement: b.dateExecutionVirement,
+        ordresVirement: b.ordresVirement,
+      });
+
       const bsTraites = (b.BulletinSoin || []).filter((bs: any) => bs.etat === 'VALIDATED').length;
       const virement = b.ordresVirement?.[0];
 
@@ -87,10 +101,17 @@ export class BordereauxExcelService {
         nombreBS: b.nombreBS ?? (b.BulletinSoin?.length || 0),
         bsTraites,
         dateFinScan: b.dateFinScan ? new Date(b.dateFinScan) : null,
+        dateCloture: b.dateCloture ? new Date(b.dateCloture) : null,
+        dateExecutionVirement: sla.reglementBO.endDate,
         delaiReglement: b.delaiReglement ?? b.contract?.delaiReglement ?? 0,
-        dureeTraitement: b.dureeTraitement ?? null,
-        dureeReglement: b.dureeReglement ?? null,
-        sla: this.slaLabel(slaStatus),
+        slaScanDays: sla.scan.daysElapsed,
+        slaScanStatus: this.slaLabel(sla.scan.statusColor, sla.scan.applicable),
+        slaTraitementDays: sla.traitement.daysElapsed,
+        slaTraitementStatus: this.slaLabel(sla.traitement.statusColor, sla.traitement.applicable),
+        slaReglementBODays: sla.reglementBO.daysElapsed,
+        slaReglementBOStatus: this.slaLabel(sla.reglementBO.statusColor, sla.reglementBO.applicable),
+        slaReglementFinanceDays: sla.reglementFinance.daysElapsed,
+        slaReglementFinanceStatus: this.slaLabel(sla.reglementFinance.statusColor, sla.reglementFinance.applicable),
         statutVirement: this.virementLabel(virement),
         updatedAt: b.updatedAt ? new Date(b.updatedAt) : null,
         statut: b.statut,
@@ -104,13 +125,11 @@ export class BordereauxExcelService {
         cell.border = { bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } } };
       });
 
-      // Date formatting
-      ['dateReception', 'dateFinScan', 'updatedAt'].forEach((key) => {
+      ['dateReception', 'dateFinScan', 'dateCloture', 'dateExecutionVirement', 'updatedAt'].forEach((key) => {
         const cell = row.getCell(sheet.getColumn(key).number);
         if (cell.value instanceof Date) cell.numFmt = 'dd/mm/yyyy';
       });
 
-      // Zebra striping
       if (index % 2 === 1) {
         row.eachCell((cell) => {
           if (!cell.fill) {
@@ -119,26 +138,14 @@ export class BordereauxExcelService {
         });
       }
 
-      // SLA color coding
-      const slaCell = row.getCell(sheet.getColumn('sla').number);
-      if (slaStatus === 'OVERDUE') slaCell.font = { color: { argb: 'FFC62828' }, bold: true };
-      else if (slaStatus === 'AT_RISK') slaCell.font = { color: { argb: 'FFF57C00' }, bold: true };
-      else if (slaStatus === 'ON_TIME') slaCell.font = { color: { argb: 'FF2E7D32' }, bold: true };
+      this.colorSLACell(row.getCell(sheet.getColumn('slaScanStatus').number), sla.scan.statusColor);
+      this.colorSLACell(row.getCell(sheet.getColumn('slaTraitementStatus').number), sla.traitement.statusColor);
+      this.colorSLACell(row.getCell(sheet.getColumn('slaReglementBOStatus').number), sla.reglementBO.statusColor);
+      this.colorSLACell(
+        row.getCell(sheet.getColumn('slaReglementFinanceStatus').number),
+        sla.reglementFinance.statusColor,
+      );
 
-      // Durée de traitement color coding (based on backend-computed status)
-      const dtCell = row.getCell(sheet.getColumn('dureeTraitement').number);
-      if (b.dureeTraitement !== null && b.dureeTraitement !== undefined) {
-        dtCell.font = { color: { argb: b.dureeTraitementStatus === 'GREEN' ? 'FF2E7D32' : 'FFC62828' } };
-        if (b.dureeTraitementWarning) dtCell.note = b.dureeTraitementWarning;
-      }
-
-      // Durée de règlement color coding
-      const drCell = row.getCell(sheet.getColumn('dureeReglement').number);
-      if (b.dureeReglement !== null && b.dureeReglement !== undefined) {
-        drCell.font = { color: { argb: b.dureeReglementStatus === 'GREEN' ? 'FF2E7D32' : 'FFC62828' } };
-      }
-
-      // Statut color coding
       const statutCell = row.getCell(sheet.getColumn('statut').number);
       if (['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)) {
         statutCell.font = { color: { argb: 'FF2E7D32' }, bold: true };
@@ -171,34 +178,20 @@ export class BordereauxExcelService {
     return map[virement.etatVirement] || virement.etatVirement || 'En attente';
   }
 
-  private slaLabel(status: SLAStatus): string {
-    const map: Record<SLAStatus, string> = {
-      OVERDUE: 'En retard',
-      AT_RISK: 'À risque',
-      ON_TIME: 'Respecté',
-      UNKNOWN: '-',
+  private slaLabel(status: SLAColor | null, applicable: boolean): string {
+    if (!applicable || !status) return '-';
+    const map: Record<SLAColor, string> = {
+      RED: 'En retard',
+      ORANGE: 'À risque',
+      GREEN: 'Respecté',
     };
     return map[status];
   }
 
-  // Mirrors calculateSLAStatus() in BordereauxDashboard.tsx — freeze on virement execution
-  private calculateSLAStatus(b: any): SLAStatus {
-    const delai = b.delaiReglement ?? b.contract?.delaiReglement;
-    if (!b.dateReception || !delai) return 'UNKNOWN';
-
-    const today = new Date();
-    const reception = new Date(b.dateReception);
-
-    const isFrozen = ['VIREMENT_EXECUTE', 'PAYE', 'CLOTURE'].includes(b.statut);
-    const freezeDate = b.dateExecutionVirement || b.dateCloture;
-    const effectiveEndDate = isFrozen && freezeDate ? new Date(freezeDate) : today;
-
-    const daysElapsed = (effectiveEndDate.getTime() - reception.getTime()) / (1000 * 60 * 60 * 24);
-    const percentElapsed = (daysElapsed / delai) * 100;
-
-    if (percentElapsed > 100) return 'OVERDUE';
-    if (percentElapsed > 80) return 'AT_RISK';
-    return 'ON_TIME';
+  private colorSLACell(cell: ExcelJS.Cell, status: SLAColor | null): void {
+    if (status === 'RED') cell.font = { color: { argb: 'FFC62828' }, bold: true };
+    else if (status === 'ORANGE') cell.font = { color: { argb: 'FFF57C00' }, bold: true };
+    else if (status === 'GREEN') cell.font = { color: { argb: 'FF2E7D32' }, bold: true };
   }
 
   private buildWhereClause(filters: any): any {

@@ -23,6 +23,10 @@ model User {
   AlertLog                    AlertLog[]
   AuditLog                    AuditLog[]
   bsLogs                      BSLog[]
+  assignedByBulletinSoins       BulletinSoin[]                  @relation("AssignedByBulletinSoins")
+  bsAssignmentHistoryAssignedTo BulletinSoinAssignmentHistory[] @relation("BSAssignmentHistoryAssignedTo")
+  bsAssignmentHistoryAssignedBy BulletinSoinAssignmentHistory[] @relation("BSAssignmentHistoryAssignedBy")
+  bsAssignmentHistoryFromUser   BulletinSoinAssignmentHistory[] @relation("BSAssignmentHistoryFromUser")
   chargeCompteBordereaux      Bordereau[]                 @relation("ChargeCompteBordereaux")
   bordereauxCurrentHandler    Bordereau[]                 @relation("CurrentHandlerBordereaux")
   bordereauxTeam              Bordereau[]                 @relation("TeamBordereaux")
@@ -230,6 +234,13 @@ model Bordereau {
   workflowNotifications    WorkflowNotification[]
   User                     User[]                 @relation("UserBordereaux")
   ovDocuments              OVDocument[]           @relation("BordereauOVDocuments")
+
+  @@index([statut])
+  @@index([currentHandlerId])
+  @@index([assignedToUserId])
+  @@index([clientId])
+  @@index([dateReception])
+  @@index([archived])
 }
 
 model Prestataire {
@@ -311,14 +322,11 @@ model Client {
   status               String              @default("active")
   chargeCompteId       String?
   contractDocumentPath String?
-  compagnieAssuranceId String? // NEW: Link to insurance company
-  modeRecuperation     String? // NEW: Mode de récupération
-  compteAuxiliaireSage String? // Ex: "41105500" pour PGH, "41139701" pour HIKMA
-  codeJournalSage      String? // Ex: "ATT411", "BTK580" — override si différent du DonneurOrdre
+  compteAuxiliaireSage String? 
+  codeJournalSage      String? 
   adherents            Adherent[]
   bordereaux           Bordereau[]
   chargeCompte         User?               @relation("ChargeCompte", fields: [chargeCompteId], references: [id])
-  compagnieAssurance   CompagnieAssurance? @relation("ClientCompagnieAssurance", fields: [compagnieAssuranceId], references: [id])
   contracts            Contract[]
   ordresVirement       OrdreVirement[]     // NEW: Manual OV entries can link to client
   reclamations         Reclamation[]
@@ -328,27 +336,29 @@ model Client {
 
 // NEW: Insurance company table
 model CompagnieAssurance {
-  id        String   @id @default(uuid())
-  nom       String   @unique
-  code      String   @unique
+  id        String    @id @default(uuid())
+  nom       String    @unique
+  code      String    @unique
   adresse   String?
   telephone String?
   email     String?
-  statut    String   @default("ACTIF")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  clients   Client[] @relation("ClientCompagnieAssurance")
-  // Sage integration: default compte général for this insurance company (8 chars)
+  statut    String    @default("ACTIF")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  contracts Contract[] @relation("ContractCompagnieAssurance")
+  // Sage integration: default compte general for this insurance company (8 chars)
   compteGeneralSage String?
 }
 
 model Contract {
   id                  String            @id @default(uuid())
   assignedManagerId   String?           // Optional: Can be assigned to Manager or Team Leader
-  teamLeaderId        String?           // NEW: Chef d'équipe assigned to this contract
+  teamLeaderId        String?           // NEW: Chef d'equipe assigned to this contract
   clientId            String
   clientName          String
   codeAssure          String?
+  compagnieAssuranceId String?          // Compagnie d'assurance for this contract
+  modeRecuperation    String?           // Mode de recuperation for this contract
   createdAt           DateTime          @default(now())
   delaiReclamation    Int
   delaiReglement      Int
@@ -365,6 +375,7 @@ model Contract {
   assignedManager     User?             @relation("ManagerContracts", fields: [assignedManagerId], references: [id])
   teamLeader          User?             @relation("ContractTeamLeader", fields: [teamLeaderId], references: [id])
   client              Client            @relation(fields: [clientId], references: [id])
+  compagnieAssurance  CompagnieAssurance? @relation("ContractCompagnieAssurance", fields: [compagnieAssuranceId], references: [id])
   history             ContractHistory[]
   // Reassignment history records for this contract
   reassignments       ContractReassignment[] @relation("ContractReassignmentContract")
@@ -446,6 +457,12 @@ model Document {
   workflowNotifications        WorkflowNotification[]
   // NEW: Document assignment history
   assignmentHistory            DocumentAssignmentHistory[] @relation("DocumentAssignmentHistory")
+
+  @@index([assignedToUserId])
+  @@index([bordereauId])
+  @@index([status])
+  @@index([type])
+  @@index([uploadedAt])
 }
 
 model Courrier {
@@ -549,6 +566,9 @@ model BulletinSoin {
   processedById     String?
   virementId        String?
   priority          Int                @default(1)
+  // NEW: dossier-level (BS) assignment tracking — independent of etat
+  assignedAt        DateTime?
+  assignedByUserId  String?
   logs              BSLog[]
   bordereau         Bordereau          @relation(fields: [bordereauId], references: [id])
   owner             User?              @relation("OwnerBulletinSoins", fields: [ownerId], references: [id])
@@ -556,6 +576,13 @@ model BulletinSoin {
   virement          Virement?          @relation("VirementBulletinSoins", fields: [virementId], references: [id])
   items             BulletinSoinItem[]
   expertises        ExpertiseInfo[]
+  // NEW: dossier-level (BS) assignment
+  assignedBy        User?                           @relation("AssignedByBulletinSoins", fields: [assignedByUserId], references: [id])
+  assignmentHistory  BulletinSoinAssignmentHistory[] @relation("BSAssignmentHistory")
+
+  @@index([ownerId])
+  @@index([etat])
+  @@index([assignedByUserId])
 }
 
 model BulletinSoinItem {
@@ -611,13 +638,13 @@ model BSLog {
 // EXACT fields from specifications
 model Adherent {
   id            String                @id @default(uuid())
-  matricule     String // Unique per société
+  matricule     String // Unique per societe
   nom           String
   prenom        String
-  clientId      String // Société de rattachement
+  clientId      String // Societe de rattachement
   rib           String // 20 digits - compte bancaire personnel
   codeAssure    String? // Linked to Contract table field
-  numeroContrat String? // Numéro de contrat
+  numeroContrat String? // Numero de contrat
   assurance     String? // Insurance company name (e.g., PGH & FILIALES)
   statut        String                @default("ACTIF") // actif/inactif
   createdAt     DateTime              @default(now())
@@ -629,7 +656,7 @@ model Adherent {
   ribHistory    AdherentRibHistory[]
   history       AdherentHistory[]
 
-  @@unique([matricule, clientId]) // Matricule unique per société
+  @@unique([matricule, clientId]) // Matricule unique per societe
   @@index([rib]) // RIB unique per adherent
   @@index([codeAssure])
   @@index([matricule, clientId])
@@ -695,6 +722,7 @@ model OrdreVirement {
   etatVirement            EtatVirement         @default(NON_EXECUTE)
   dateEtatFinal           DateTime?
   commentaire             String?
+  referenceBordereau      String?              // Manual OV bank reference; free text, not a Bordereau FK
   montantTotal            Float
   nombreAdherents         Int
   fichierPdf              String?
@@ -712,7 +740,7 @@ model OrdreVirement {
   montantRecupere         Boolean              @default(false)
   dateMontantRecupere     DateTime?
   motifObservation        String?
-  // Validation workflow - Chef équipe → Responsable
+  // Validation workflow - Chef equipe -> Responsable
   validationStatus        String               @default("EN_ATTENTE_VALIDATION")
   validatedBy             String?
   validatedAt             DateTime?
@@ -746,6 +774,7 @@ model OrdreVirement {
   @@index([recouvrementStatus])
   @@index([statutGlobal])
   @@index([demandeRecuperation, montantRecupere])
+  @@index([referenceBordereau])
 }
 
 model VirementItem {
@@ -1044,7 +1073,7 @@ model SuiviVirement {
   utilisateurSante   String
   dateTraitement     DateTime?
   utilisateurFinance String?
-  etatVirement       String         @default("NON_EXECUTE")
+  etatVirement       EtatVirement   @default(NON_EXECUTE)
   dateEtatFinal      DateTime?
   commentaire        String?
   ordreVirementId    String?
@@ -1156,6 +1185,29 @@ model DocumentAssignmentHistory {
   @@index([createdAt])
 }
 
+// NEW: BulletinSoin (dossier) assignment/reassignment audit trail.
+// This is deliberately separate from `etat` — reassigning a BS NEVER touches its status.
+model BulletinSoinAssignmentHistory {
+  id               String       @id @default(uuid())
+  bulletinSoinId   String
+  assignedToUserId String?
+  assignedByUserId String
+  fromUserId       String?
+  action           String       // ASSIGNED | REASSIGNED
+  reason           String?
+  etatAtAssignment String       // snapshot of etat at the time, for audit clarity only — never written back
+  createdAt        DateTime     @default(now())
+
+  bulletinSoin     BulletinSoin @relation("BSAssignmentHistory", fields: [bulletinSoinId], references: [id], onDelete: Cascade)
+  assignedTo       User?        @relation("BSAssignmentHistoryAssignedTo", fields: [assignedToUserId], references: [id])
+  assignedBy       User         @relation("BSAssignmentHistoryAssignedBy", fields: [assignedByUserId], references: [id])
+  fromUser         User?        @relation("BSAssignmentHistoryFromUser", fields: [fromUserId], references: [id])
+
+  @@index([bulletinSoinId])
+  @@index([assignedToUserId])
+  @@index([createdAt])
+}
+
 // NEW: OV Document table - separate from Document to avoid dashboard appearance
 model OVDocument {
   id              String        @id @default(uuid())
@@ -1218,7 +1270,7 @@ model SageIntegration {
   txtContent        String?       @db.Text   // Full TXT payload sent to SAGE
   fileName          String?                  // TXT filename sent to SAGE
   integratedAt      DateTime      @default(now())
-  integratedById    String?                  // Nullable — system-triggered jobs have no user
+  integratedById    String?                  // Nullable -- system-triggered jobs have no user
   ordreVirement     OrdreVirement @relation(fields: [ordreVirementId], references: [id], onDelete: Cascade)
   integratedBy      User?         @relation("SageIntegrationUser", fields: [integratedById], references: [id], onDelete: SetNull)
 
@@ -1244,18 +1296,16 @@ model SageWebhookLog {
   @@index([processed])
 }
 
-// EXACT states from specifications + new validation statuses
+// EXACT official status workflow for OV and suivi virement
 enum EtatVirement {
-  NON_EXECUTE // When bordereau is "Traité"
-  EN_COURS_EXECUTION // Applied by Finance service
-  EXECUTE_PARTIELLEMENT // Partial execution (Finance action)
-  REJETE // Failed (Finance action)
-  BLOQUE // Suspended/stopped (Finance action)
-  EXECUTE // When bordereau is "Payé"
-  EN_COURS_VALIDATION // New: After Chef uploads Excel + PDF
-  VIREMENT_NON_VALIDE // New: Rejected at validation step
-  VIREMENT_DEPOSE // New: Validated by Responsable Département
-  VIREMENT_AUTORISE // New: Authorized by Finance service
+  NON_EXECUTE
+  EN_COURS_VALIDATION
+  VIREMENT_DEPOSE
+  VIREMENT_NON_VALIDE
+  VIREMENT_AUTORISE
+  BLOQUE
+  EXECUTE
+  REJETE
 }
 
 enum DocumentStatus {
@@ -1363,12 +1413,12 @@ model SageTemplate {
 }
 
 // Singleton table that stores SAGE config entered from the UI.
-// DB values override .env — allows zero-code reconfiguration in production.
+// DB values override .env -- allows zero-code reconfiguration in production.
 // Only one row ever exists (id = 'SINGLETON').
 model SageConfigStore {
-  id              String   @id              // Always 'SINGLETON' — enforces one-row constraint
+  id              String   @id              // Always 'SINGLETON' -- enforces one-row constraint
   apiUrl          String?                   // SAGE API base URL (overrides SAGE_API_URL in .env)
-  apiKey          String?                   // API key — stored plaintext; use secrets manager for high-security envs
+  apiKey          String?                   // API key -- stored plaintext; use secrets manager for high-security envs
   webhookSecret   String?                   // HMAC secret for inbound webhook verification
   timeout         Int?                      // HTTP timeout in ms
   retryAttempts   Int?                      // Max retry count (1-5)

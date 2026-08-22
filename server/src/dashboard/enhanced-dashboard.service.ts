@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { calculateAllSLAs, calculateSLA } from '../utils/sla-calculator';
 
 export interface DashboardConfig {
   userId: string;
@@ -617,10 +618,19 @@ export class EnhancedDashboardService {
   }
 
   private calculateScanPriority(bordereau: any): 'HIGH' | 'MEDIUM' | 'LOW' {
-    const daysSinceReception = Math.floor((new Date().getTime() - bordereau.dateReception.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysSinceReception > bordereau.delaiReglement * 0.8) return 'HIGH';
-    if (daysSinceReception > bordereau.delaiReglement * 0.6) return 'MEDIUM';
+    const scan = calculateAllSLAs({
+      dateReception: bordereau.dateReception,
+      delaiReglement: bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30,
+      statut: bordereau.statut,
+      dateDebutScan: bordereau.dateDebutScan,
+      dateFinScan: bordereau.dateFinScan,
+      dateCloture: bordereau.dateCloture,
+      dateExecutionVirement: bordereau.dateExecutionVirement,
+      ordresVirement: bordereau.ordresVirement,
+    }).scan;
+
+    if (scan.statusColor === 'RED') return 'HIGH';
+    if (scan.statusColor === 'ORANGE') return 'MEDIUM';
     return 'LOW';
   }
 
@@ -712,16 +722,30 @@ export class EnhancedDashboardService {
   }
 
   private calculateAssignmentPriority(bordereau: any): 'HIGH' | 'MEDIUM' | 'LOW' {
-    const daysSinceReception = Math.floor((new Date().getTime() - bordereau.dateReception.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (bordereau.delaiReglement < 10 || daysSinceReception > 2) return 'HIGH';
-    if (bordereau.delaiReglement < 20 || daysSinceReception > 1) return 'MEDIUM';
+    const sla = calculateSLA({
+      dateReception: bordereau.dateReception,
+      delaiReglement: bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30,
+      statut: bordereau.statut,
+      dateCloture: bordereau.dateCloture,
+      dateExecutionVirement: bordereau.dateExecutionVirement,
+      ordresVirement: bordereau.ordresVirement,
+    });
+
+    if (sla.statusColor === 'RED' || sla.daysRemaining <= 2) return 'HIGH';
+    if (sla.statusColor === 'ORANGE' || sla.daysRemaining <= 5) return 'MEDIUM';
     return 'LOW';
   }
 
   private calculateDaysRemaining(bordereau: any): number {
-    const daysSinceReception = Math.floor((new Date().getTime() - bordereau.dateReception.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, bordereau.delaiReglement - daysSinceReception);
+    const sla = calculateSLA({
+      dateReception: bordereau.dateReception,
+      delaiReglement: bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30,
+      statut: bordereau.statut,
+      dateCloture: bordereau.dateCloture,
+      dateExecutionVirement: bordereau.dateExecutionVirement,
+      ordresVirement: bordereau.ordresVirement,
+    });
+    return Math.max(0, sla.daysRemaining);
   }
 
   private calculateProcessingPriority(bordereau: any): 'HIGH' | 'MEDIUM' | 'LOW' {

@@ -7,7 +7,7 @@ import { AssignmentEngineController } from './assignment-engine.controller';
 import { TeamAnalyticsService } from './team-analytics.service';
 import { TeamAnalyticsController } from './team-analytics.controller';
 import { ChefEquipeTableauBordController } from './chef-equipe-tableau-bord.controller';
-import { ChefEquipeDashboardController, GestionnaireSeniorDashboardController } from './chef-equipe-dashboard.controller';
+import { ChefEquipeDashboardController } from './chef-equipe-dashboard.controller';
 import { BordereauStatusAutomationService } from './bordereau-status-automation.service';
 import { ScanSLAService } from './scan-sla.service';
 import { ScanSLAController } from './scan-sla.controller';
@@ -31,8 +31,7 @@ import { BordereauxExcelService } from './bordereaux-excel.service';
     AssignmentEngineController, 
     TeamAnalyticsController, 
     ChefEquipeTableauBordController, 
-    ChefEquipeDashboardController, 
-    GestionnaireSeniorDashboardController,
+    ChefEquipeDashboardController,
     ScanSLAController // NEW: SCAN SLA controller
   ],
   providers: [

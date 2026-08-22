@@ -200,6 +200,23 @@ const rolePermissions: Record<UserRole, RolePermission[]> = {
       description: 'Consultation des bordereaux prêts pour virement'
     }
   ],
+  COMPTABILITE: [
+    {
+      module: 'Comptabilité',
+      permissions: ['Voir opérations', 'Contrôler pièces', 'Suivre rapprochements'],
+      description: 'Pilotage des opérations comptables et rapprochements'
+    },
+    {
+      module: 'Rapports financiers',
+      permissions: ['Rapports comptables', 'Suivi paiements', 'Export comptable'],
+      description: 'Analyse et export des données financières'
+    },
+    {
+      module: 'Bordereaux',
+      permissions: ['Consulter états', 'Vérifier montants'],
+      description: 'Consultation des bordereaux en vue du traitement comptable'
+    }
+  ],
   SCAN_TEAM: [
     {
       module: 'Numérisation',
@@ -245,6 +262,7 @@ const roleIcons: Record<UserRole, React.ReactElement> = {
   GESTIONNAIRE: <Assignment color="success" />,
   CLIENT_SERVICE: <Person color="info" />,
   FINANCE: <AccountBalance color="warning" />,
+  COMPTABILITE: <AccountBalance color="secondary" />,
   SCAN_TEAM: <Scanner color="action" />,
   BO: <Description color="action" />
 };

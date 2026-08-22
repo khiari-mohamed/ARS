@@ -12,6 +12,7 @@ const roleOptions = [
   { label: 'Gestionnaire', value: UserRole.GESTIONNAIRE },
   { label: 'Service Client', value: UserRole.CLIENT_SERVICE },
   { label: 'Finance', value: UserRole.FINANCE },
+  { label: 'Équipe Comptabilité', value: 'COMPTABILITE' },
   { label: 'Équipe Scan', value: UserRole.SCAN_TEAM },
   { label: 'Bureau d\'Ordre', value: UserRole.BO },
 ];

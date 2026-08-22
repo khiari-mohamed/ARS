@@ -5,6 +5,8 @@ export interface Contract {
   clientId: string;
   clientName: string;
   codeAssure?: string; // NEW: Code Assuré field
+  compagnieAssuranceId?: string; // Contract-owned insurance company ID
+  modeRecuperation?: 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | null; // Contract-owned recovery mode
   name?: string; // For backward compatibility
   nom?: string; // For backward compatibility
   delaiReglement: number; // SLA Treatment delay in days
@@ -25,6 +27,11 @@ export interface Contract {
     id: string;
     name: string;
   };
+  compagnieAssurance?: {
+    id: string;
+    nom: string;
+    code?: string;
+  } | null;
   assignedManager?: {
     id: string;
     fullName: string;
@@ -60,6 +67,8 @@ export interface CreateContractRequest {
   clientId: string;
   contractNumber: string;
   codeAssure?: string; // NEW: Code Assuré field
+  compagnieAssuranceId?: string;
+  modeRecuperation?: 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | null;
   treatmentDelay: number;
   claimsReplyDelay: number;
   paymentDelay: number;
@@ -75,6 +84,10 @@ export interface CreateContractRequest {
     escalationEnabled: boolean;
   };
   notes?: string;
+}
+
+export interface UpdateContractRequest extends Partial<CreateContractRequest> {
+  modeRecuperation?: 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | null;
 }
 
 export interface ContractSearchFilters {

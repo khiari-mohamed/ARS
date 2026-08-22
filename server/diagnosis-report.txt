@@ -1,0 +1,150 @@
+
+================================================================
+  1. ALL @Cron / @Interval DECLARATIONS (file + line)
+================================================================
+src/alerts/alert-scheduler.service.ts:70:  @Cron(process.env.CRON_SLA_ALERTS || '0 */10 * * * *')
+src/alerts/alert-scheduler.service.ts:198:  @Cron(process.env.CRON_FINANCE_ALERTS || '0 0 * * * *')
+src/alerts/alert-scheduler.service.ts:250:  @Cron(process.env.CRON_TEAM_OVERLOAD_ALERTS || '0 */30 * * * *')
+src/alerts/alert-scheduler.service.ts:425:  @Cron(process.env.CRON_RECLAMATION_ALERTS || '*/5 * * * *')
+src/alerts/alerts.service.ts:69:  @Interval(60_000)
+src/alerts/enhanced-alerts.service.ts:85:  // @Cron(CronExpression.EVERY_HOUR) // DISABLED - Email spam issue
+src/bordereaux/scan-sla.service.ts:18:  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+src/gec/gec.service.ts:327:  @Cron(CronExpression.EVERY_HOUR)
+src/ged/paperstream-integration.service.ts:26:  // @Cron(CronExpression.EVERY_5_MINUTES)
+src/ged/paperstream-watcher.service.ts:127:  @Cron(CronExpression.EVERY_5_MINUTES)
+src/jobs/sync-tuniclaim.job.ts:12:  @Cron('0 * * * *')
+src/reclamations/continuous-learning.service.ts:31:  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+src/reclamations/outlook-scheduler.service.ts:14:  // @Cron('*/15 * * * *')
+src/reclamations/sla-engine.service.ts:138:  @Cron(CronExpression.EVERY_HOUR)
+src/workflow/automatic-workflow.service.ts:19:  @Cron(CronExpression.EVERY_5_MINUTES)
+src/workflow/overload-detection.service.ts:14:  @Cron(CronExpression.EVERY_HOUR)
+src/workflow/workflow.scheduler.ts:11:  @Cron(CronExpression.EVERY_30_MINUTES)
+src/workflow/workflow.scheduler.ts:17:  @Cron(CronExpression.EVERY_HOUR)
+src/workflow/workflow.scheduler.ts:23:  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+
+================================================================
+  2. EVERY MODULE THAT PROVIDES EACH SCHEDULER-BEARING SERVICE
+================================================================
+-- collecting service class names found in step 1 --
+
+Service: AlertSchedulerService  (defined in src/alerts/alert-scheduler.service.ts)
+  --> declared as a provider in:
+      src/alerts/alerts.module.ts
+
+Service: AlertsService  (defined in src/alerts/alerts.service.ts)
+  --> declared as a provider in:
+      src/alerts/alerts.module.ts
+
+Service: EnhancedAlertsService  (defined in src/alerts/enhanced-alerts.service.ts)
+  --> declared as a provider in:
+      src/alerts/alerts.module.ts
+
+Service: ScanSLAService  (defined in src/bordereaux/scan-sla.service.ts)
+  --> declared as a provider in:
+      src/bordereaux/bordereaux.module.ts
+
+Service: GecService  (defined in src/gec/gec.service.ts)
+  --> declared as a provider in:
+      src/gec/gec.module.ts
+
+Service: PaperStreamIntegrationService  (defined in src/ged/paperstream-integration.service.ts)
+  --> declared as a provider in:
+      src/ged/ged.module.ts
+
+Service: PaperStreamWatcherService  (defined in src/ged/paperstream-watcher.service.ts)
+  --> declared as a provider in:
+      src/ged/ged.module.ts
+
+Service: SyncTuniclaimJob  (defined in src/jobs/sync-tuniclaim.job.ts)
+  --> declared as a provider in:
+
+Service: ContinuousLearningService  (defined in src/reclamations/continuous-learning.service.ts)
+  --> declared as a provider in:
+      src/reclamations/reclamations.module.ts
+
+Service: OutlookSchedulerService  (defined in src/reclamations/outlook-scheduler.service.ts)
+  --> declared as a provider in:
+      src/reclamations/reclamations.module.ts
+
+Service: SLAEngineService  (defined in src/reclamations/sla-engine.service.ts)
+  --> declared as a provider in:
+      src/reclamations/reclamations.module.ts
+
+Service: AutomaticWorkflowService  (defined in src/workflow/automatic-workflow.service.ts)
+  --> declared as a provider in:
+      src/workflow/workflow.module.ts
+
+Service: OverloadDetectionService  (defined in src/workflow/overload-detection.service.ts)
+  --> declared as a provider in:
+      src/workflow/workflow-integration.module.ts
+      src/workflow/workflow.module.ts
+
+Service: WorkflowScheduler  (defined in src/workflow/workflow.scheduler.ts)
+  --> declared as a provider in:
+
+================================================================
+  3. ALL DIRECT AI MICROSERVICE CALLERS (files referencing AI_MICROSERVICE_URL / AI_SERVICE_URL)
+================================================================
+src/alerts/alert-scheduler.service.ts
+src/alerts/alerts.service.ts
+src/analytics/analytics.service.ts
+src/analytics/sla-analytics.service.ts
+src/bordereaux/ai-enhancements.service.ts
+src/bordereaux/bordereaux.service.ts
+src/bordereaux/ocr-integration.service.ts
+src/dashboard/dashboard-ai.service.ts
+src/gec/gec.service.ts
+src/reclamations/advanced-analytics.service.ts
+src/reclamations/reclamations.service.ts
+src/workflow/gestionnaire-actions.service.ts
+
+================================================================
+  4. ALL AI ENV VAR NAMES ACTUALLY REFERENCED IN CODE (catch naming mismatches)
+================================================================
+process.env.AI_MICROSERVICE_URL
+process.env.AI_PASSWORD
+process.env.AI_SERVICE_PASSWORD
+process.env.AI_SERVICE_USER
+process.env.AI_USERNAME
+
+================================================================
+  5. WHAT'S ACTUALLY DEFINED IN .env (AI_* only — values redacted)
+================================================================
+AI_MICROSERVICE_URL=<redacted>
+AI_MICROSERVICE_ENABLED=<redacted>
+AI_SERVICE_USER=<redacted>
+AI_SERVICE_PASSWORD=<redacted>
+
+================================================================
+  6. DASHBOARD CONTROLLER — role-based endpoint definition
+================================================================
+src/dashboard/dashboard.controller.ts:139:  @Get('role-based')
+src/dashboard/dashboard-ai.controller.ts:6:// /dashboard/role-based load now lives here, behind its own endpoints.
+
+================================================================
+  7. ALL @Cron/@Interval SCHEDULES GROUPED (to spot overlapping responsibilities by name)
+================================================================
+src/alerts/alert-scheduler.service.ts:70:  @Cron(process.env.CRON_SLA_ALERTS || '0 */10 * * * *')
+src/alerts/alert-scheduler.service.ts:198:  @Cron(process.env.CRON_FINANCE_ALERTS || '0 0 * * * *')
+src/alerts/alert-scheduler.service.ts:250:  @Cron(process.env.CRON_TEAM_OVERLOAD_ALERTS || '0 */30 * * * *')
+src/alerts/alert-scheduler.service.ts:425:  @Cron(process.env.CRON_RECLAMATION_ALERTS || '*/5 * * * *')
+src/alerts/alerts.service.ts:69:  @Interval(60_000)
+src/alerts/enhanced-alerts.service.ts:85:  // @Cron(CronExpression.EVERY_HOUR) // DISABLED - Email spam issue
+src/bordereaux/scan-sla.service.ts:18:  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+src/reclamations/continuous-learning.service.ts:31:  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+src/reclamations/outlook-scheduler.service.ts:14:  // @Cron('*/15 * * * *')
+src/reclamations/sla-engine.service.ts:138:  @Cron(CronExpression.EVERY_HOUR)
+src/workflow/automatic-workflow.service.ts:19:  @Cron(CronExpression.EVERY_5_MINUTES)
+src/workflow/overload-detection.service.ts:14:  @Cron(CronExpression.EVERY_HOUR)
+src/workflow/workflow.scheduler.ts:11:  @Cron(CronExpression.EVERY_30_MINUTES)
+src/workflow/workflow.scheduler.ts:17:  @Cron(CronExpression.EVERY_HOUR)
+src/workflow/workflow.scheduler.ts:23:  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+
+================================================================
+  8. FILES DECLARING MORE THAN ONE @Injectable CLASS (can hide duplicate providers)
+================================================================
+
+================================================================
+  9. RUNNING NODE PROCESSES (paste this section's output manually if on native PowerShell)
+================================================================
+Run separately in PowerShell: Get-Process node | Select-Object Id, StartTime, CPU, WS

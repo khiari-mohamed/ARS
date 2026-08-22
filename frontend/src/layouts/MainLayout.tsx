@@ -219,6 +219,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'OV_PENDING_VALIDATION': return '💰';
       case 'OV_VALIDATED': return '✅';
       case 'OV_REJECTED': return '❌';
+      case 'VIREMENT_UPDATE': return '💰';
       case 'NOUVEAU_VIREMENT': return '💰';
       case 'RIB_UPDATE': return '💳';
       case 'reclamation': 
@@ -239,6 +240,10 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       case 'TEAM_OVERLOAD_ALERT': return '#f57c00';
       case 'ASSIGNMENT_FAILURE': return '#d32f2f';
       case 'OV_PENDING_VALIDATION': return '#2e7d32';
+      case 'VIREMENT_UPDATE':
+        if (['VIREMENT_NON_VALIDE', 'REJETE', 'BLOQUE'].includes(data?.status)) return '#d32f2f';
+        if (data?.status === 'EXECUTE') return '#2e7d32';
+        return '#1976d2';
       case 'reclamation': return '#ed6c02';
       default: return '#1976d2';
     }

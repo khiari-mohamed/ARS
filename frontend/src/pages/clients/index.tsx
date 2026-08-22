@@ -232,7 +232,7 @@ const ClientListPage: React.FC = () => {
                       <div>
                         <h4 className="client-name">{client.name}</h4>
                         <p className="client-card-company">
-                          {client.compagnieAssurance?.nom || 'Compagnie non renseignée'}
+                          {(client.contracts || []).find((contract: any) => contract.compagnieAssurance)?.compagnieAssurance?.nom || 'Compagnie non renseignée'}
                         </p>
                       </div>
                       <span className={`status-badge ${client.status || 'active'}`}>
@@ -417,8 +417,8 @@ const ClientDetailViewFixed: React.FC<{ client: Client; onUpdate: () => void }> 
             <h2 className="client-hero-title">{client.name}</h2>
             <div className="client-hero-meta">
               <span className="client-hero-id">ID: {client.id.slice(0, 8)}</span>
-              <span>{client.compagnieAssurance?.nom || 'Compagnie non renseignée'}</span>
-              <span>{getModeRecuperationLabel((client as any).modeRecuperation)}</span>
+              <span>{(client.contracts || []).find((contract: any) => contract.compagnieAssurance)?.compagnieAssurance?.nom || 'Compagnie non renseignée'}</span>
+              <span>{getModeRecuperationLabel((client.contracts || []).find((contract: any) => contract.modeRecuperation)?.modeRecuperation)}</span>
             </div>
           </div>
 
@@ -573,7 +573,7 @@ const ClientOverviewTab: React.FC<{ client: Client }> = ({ client }) => {
           <h4>Coordonnées</h4>
           <div className="details-list">
             <DetailRow label="Nom" value={client.name} />
-            <DetailRow label="Compagnie d'Assurance" value={client.compagnieAssurance?.nom || 'Non renseignée'} />
+            <DetailRow label="Compagnie d'Assurance" value={(client.contracts || []).find((contract: any) => contract.compagnieAssurance)?.compagnieAssurance?.nom || 'Non renseignée'} />
             <DetailRow label="Email" value={client.email || 'Non renseigné'} />
             <DetailRow label="Téléphone" value={client.phone || 'Non renseigné'} />
             <DetailRow label="Adresse" value={client.address || 'Non renseignée'} />
@@ -588,8 +588,8 @@ const ClientOverviewTab: React.FC<{ client: Client }> = ({ client }) => {
             <DetailRow label="Délai Réclamation" value={`${client.reclamationDelay} heures`} />
             <DetailRow
               label="Mode de Récupération"
-              value={getModeRecuperationLabel((client as any).modeRecuperation)}
-              accent={getModeRecuperationColor((client as any).modeRecuperation)}
+              value={getModeRecuperationLabel((client.contracts || []).find((contract: any) => contract.modeRecuperation)?.modeRecuperation)}
+              accent={getModeRecuperationColor((client.contracts || []).find((contract: any) => contract.modeRecuperation)?.modeRecuperation)}
             />
             <DetailRow label="Créé le" value={new Date(client.createdAt).toLocaleDateString('fr-FR')} />
             <DetailRow label="Modifié le" value={new Date(client.updatedAt).toLocaleDateString('fr-FR')} />
@@ -1713,15 +1713,13 @@ const ClientFormModal: React.FC<{
 }> = ({ client, onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     name: client?.name || '',
-    compagnieAssurance: client?.compagnieAssurance?.nom || '',
     email: client?.email || '',
     phone: client?.phone || '',
     address: client?.address || '',
     reglementDelay: client?.reglementDelay || 30,
     reclamationDelay: client?.reclamationDelay || 48,
     status: (client?.status || 'active') as 'active' | 'inactive' | 'suspended',
-    gestionnaireIds: client?.gestionnaires?.map((g) => g.id) || [],
-    modeRecuperation: (client as any)?.modeRecuperation || ''
+    gestionnaireIds: client?.gestionnaires?.map((g) => g.id) || []
   });
   const [availableGestionnaires, setAvailableGestionnaires] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1767,18 +1765,6 @@ const ClientFormModal: React.FC<{
               required
               className="form-input"
               placeholder="Nom du client"
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Compagnie d'Assurance *</label>
-            <input
-              type="text"
-              value={formData.compagnieAssurance}
-              onChange={(e) => setFormData({ ...formData, compagnieAssurance: e.target.value })}
-              required
-              className="form-input"
-              placeholder="Nom de la compagnie d'assurance"
             />
           </div>
 
@@ -1876,21 +1862,6 @@ const ClientFormModal: React.FC<{
             </select>
           </div>
 
-          <div className="form-group">
-            <label>Mode de récupération *</label>
-            <select
-              value={formData.modeRecuperation}
-              onChange={(e) => setFormData({ ...formData, modeRecuperation: e.target.value })}
-              className="form-select"
-              required
-            >
-              <option value="">Sélectionner un mode</option>
-              <option value="VIREMENT">Mode de récupération par virement</option>
-              <option value="CHEQUE">Mode de récupération par chèque</option>
-              <option value="FEUILLE_CAISSE">Mode de récupération sur feuille de caisse</option>
-            </select>
-          </div>
-
           <div className="form-actions">
             <button type="button" onClick={onClose} className="btn btn-secondary" disabled={loading}>
               Annuler
@@ -1970,7 +1941,7 @@ const getStatusColor = (status?: string) => {
   }
 };
 
-const getModeRecuperationLabel = (mode?: string) => {
+const getModeRecuperationLabel = (mode?: string | null) => {
   switch (mode) {
     case 'VIREMENT':
       return '🏦 Virement bancaire';
@@ -1983,7 +1954,7 @@ const getModeRecuperationLabel = (mode?: string) => {
   }
 };
 
-const getModeRecuperationColor = (mode?: string) => {
+const getModeRecuperationColor = (mode?: string | null) => {
   switch (mode) {
     case 'VIREMENT':
       return '#3b82f6';

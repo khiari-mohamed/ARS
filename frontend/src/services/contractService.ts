@@ -1,5 +1,5 @@
 import { LocalAPI } from './axios';
-import { Contract, ContractStatistics, SLACompliance, CreateContractRequest, ContractSearchFilters } from '../types/contract.d';
+import { Contract, ContractStatistics, SLACompliance, CreateContractRequest, UpdateContractRequest, ContractSearchFilters } from '../types/contract.d';
 
 // Get all contracts with filters
 export const fetchContracts = async (filters?: ContractSearchFilters): Promise<Contract[]> => {
@@ -49,7 +49,7 @@ export const createContract = async (data: CreateContractRequest, file?: File): 
 };
 
 // Update contract
-export const updateContract = async (id: string, data: Partial<CreateContractRequest>): Promise<Contract> => {
+export const updateContract = async (id: string, data: Partial<UpdateContractRequest>): Promise<Contract> => {
   const response = await LocalAPI.patch(`/contracts/${id}`, data);
   return response.data;
 };

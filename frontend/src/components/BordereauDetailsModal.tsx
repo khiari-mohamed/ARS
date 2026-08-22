@@ -147,14 +147,12 @@ const STATUT_STYLE: Record<string, [string, string]> = {
 const VIREMENT_META: Record<string, { label: string; bg: string; fg: string; icon: string }> = {
   EXECUTE: { label: 'Exécuté', bg: T.greenBg, fg: T.green, icon: '✅' },
   REJETE: { label: 'Rejeté', bg: T.redBg, fg: T.red, icon: '❌' },
-  EN_COURS_EXECUTION: { label: "En cours d'exécution", bg: T.orangeBg, fg: T.orange, icon: '🔄' },
   EN_COURS_VALIDATION: { label: 'En attente de validation', bg: T.brandBg, fg: T.brand, icon: '⏳' },
   NON_EXECUTE: { label: 'Non exécuté', bg: T.grayBg, fg: T.gray, icon: '⏳' },
-  EXECUTE_PARTIELLEMENT: { label: 'Exécuté partiellement', bg: T.orangeBg, fg: T.orange, icon: '⚠️' },
-  BLOQUE: { label: 'Bloqué', bg: T.redBg, fg: T.red, icon: '⛔' },
-  VIREMENT_NON_VALIDE: { label: 'Non validé', bg: T.redBg, fg: T.red, icon: '❌' },
   VIREMENT_DEPOSE: { label: 'Déposé', bg: T.brandBg, fg: T.brand, icon: '📤' },
+  VIREMENT_NON_VALIDE: { label: 'Non validé', bg: T.redBg, fg: T.red, icon: '❌' },
   VIREMENT_AUTORISE: { label: 'Autorisé', bg: '#e0f7f9', fg: '#0891a1', icon: '🔓' },
+  BLOQUE: { label: 'Bloqué', bg: T.redBg, fg: T.red, icon: '⛔' },
 };
 
 const BS_ETAT_META: Record<string, [string, string, string]> = {

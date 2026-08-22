@@ -124,7 +124,7 @@ const FinancialReportingDashboard: React.FC = () => {
             averageAmount: avgAmount,
             successfulPayments: realData.filter((i: any) => i.etatVirement === 'EXECUTE').length,
             failedPayments: realData.filter((i: any) => i.etatVirement === 'REJETE').length,
-            pendingPayments: realData.filter((i: any) => i.etatVirement === 'NON_EXECUTE' || i.etatVirement === 'EN_COURS_EXECUTION').length,
+            pendingPayments: realData.filter((i: any) => i.etatVirement === 'NON_EXECUTE' || i.etatVirement === 'EN_COURS_VALIDATION').length,
             successRate: (realData.filter((i: any) => i.etatVirement === 'EXECUTE').length / realData.length) * 100
           },
           byBeneficiary: realBeneficiaries,
@@ -138,8 +138,10 @@ const FinancialReportingDashboard: React.FC = () => {
           byStatus: {
             EXECUTE: realData.filter((i: any) => i.etatVirement === 'EXECUTE').length,
             NON_EXECUTE: realData.filter((i: any) => i.etatVirement === 'NON_EXECUTE').length,
-            EN_COURS_EXECUTION: realData.filter((i: any) => i.etatVirement === 'EN_COURS_EXECUTION').length,
-            EXECUTE_PARTIELLEMENT: realData.filter((i: any) => i.etatVirement === 'EXECUTE_PARTIELLEMENT').length,
+            EN_COURS_VALIDATION: realData.filter((i: any) => i.etatVirement === 'EN_COURS_VALIDATION').length,
+            VIREMENT_DEPOSE: realData.filter((i: any) => i.etatVirement === 'VIREMENT_DEPOSE').length,
+            VIREMENT_NON_VALIDE: realData.filter((i: any) => i.etatVirement === 'VIREMENT_NON_VALIDE').length,
+            VIREMENT_AUTORISE: realData.filter((i: any) => i.etatVirement === 'VIREMENT_AUTORISE').length,
             REJETE: realData.filter((i: any) => i.etatVirement === 'REJETE').length
           },
           byAmount: [

@@ -309,7 +309,6 @@ export class ClientService {
         contracts: true,
         bordereaux: true,
         reclamations: true,
-        compagnieAssurance: true,
       },
     });
   }
@@ -981,33 +980,10 @@ export class ClientService {
       }
       
       // Extract valid fields only and handle gestionnaireIds as teamLeaderId
-      const { name, compagnieAssurance, email, phone, address, reglementDelay, reclamationDelay, status, slaConfig, teamLeaderId, gestionnaireIds, modeRecuperation } = dto as any;
+      const { name, email, phone, address, reglementDelay, reclamationDelay, status, slaConfig, teamLeaderId, gestionnaireIds } = dto as any;
       
       // Use gestionnaireIds[0] as teamLeaderId if provided
       const chefEquipeId = teamLeaderId || (gestionnaireIds && gestionnaireIds.length > 0 ? gestionnaireIds[0] : null);
-      
-      // Find or create CompagnieAssurance
-      let compagnieAssuranceRecord: any = null;
-      if (compagnieAssurance) {
-        console.log('Looking for compagnie:', compagnieAssurance);
-        compagnieAssuranceRecord = await this.prisma.compagnieAssurance.findFirst({
-          where: { nom: compagnieAssurance }
-        });
-        
-        if (!compagnieAssuranceRecord) {
-          console.log('Creating new compagnie:', compagnieAssurance);
-          const code = compagnieAssurance.length > 0 ? 
-            compagnieAssurance.substring(0, Math.min(10, compagnieAssurance.length)).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'DEFAULT' : 
-            'DEFAULT';
-          compagnieAssuranceRecord = await this.prisma.compagnieAssurance.create({
-            data: {
-              nom: compagnieAssurance,
-              code: code,
-              statut: 'ACTIF'
-            }
-          });
-        }
-      }
       
       const clientData = {
         name,
@@ -1019,8 +995,6 @@ export class ClientService {
         status: status || 'active',
         slaConfig,
         chargeCompteId: chefEquipeId,
-        compagnieAssuranceId: compagnieAssuranceRecord?.id,
-        modeRecuperation,
       };
       
       console.log('Creating client with final data:', clientData);
@@ -1031,8 +1005,7 @@ export class ClientService {
           chargeCompte: true, 
           contracts: true, 
           bordereaux: true, 
-          reclamations: true,
-          compagnieAssurance: true
+          reclamations: true
         },
       });
     } catch (error) {
@@ -1063,12 +1036,12 @@ export class ClientService {
                 email: true,
                 role: true
               }
-            }
+            },
+            compagnieAssurance: true,
           }
         },
         bordereaux: true,
         reclamations: true,
-        compagnieAssurance: true,
         gestionnaires: true,
       },
     });
@@ -1100,7 +1073,6 @@ export class ClientService {
     
     const {
       name,
-      compagnieAssurance,
       email,
       phone,
       address,
@@ -1109,7 +1081,6 @@ export class ClientService {
       reclamationDelay,
       teamLeaderId,
       slaConfig,
-      modeRecuperation
     } = dto as any;
     
     const data: any = {
@@ -1122,31 +1093,9 @@ export class ClientService {
       ...(reclamationDelay !== undefined && { reclamationDelay }),
       ...(slaConfig !== undefined && { slaConfig }),
       ...(teamLeaderId !== undefined && { chargeCompteId: teamLeaderId }),
-      ...(modeRecuperation !== undefined && { modeRecuperation }),
     };
     
     console.log('🔍 Final data to update in database:', data);
-    
-    // Handle compagnieAssurance update
-    if (compagnieAssurance !== undefined) {
-      let compagnieAssuranceRecord: any = null;
-      if (compagnieAssurance) {
-        compagnieAssuranceRecord = await this.prisma.compagnieAssurance.findFirst({
-          where: { nom: compagnieAssurance }
-        });
-        
-        if (!compagnieAssuranceRecord) {
-          compagnieAssuranceRecord = await this.prisma.compagnieAssurance.create({
-            data: {
-              nom: compagnieAssurance,
-              code: compagnieAssurance.substring(0, 10).toUpperCase().replace(/[^A-Z0-9]/g, ''),
-              statut: 'ACTIF'
-            }
-          });
-        }
-      }
-      data.compagnieAssuranceId = compagnieAssuranceRecord?.id;
-    }
     
     const result = await this.prisma.client.update({
       where: { id },
@@ -1155,12 +1104,11 @@ export class ClientService {
         chargeCompte: true, 
         contracts: true, 
         bordereaux: true, 
-        reclamations: true,
-        compagnieAssurance: true
+        reclamations: true
       },
     });
     
-    console.log('✅ Client updated successfully:', { id, modeRecuperation: result.modeRecuperation });
+    console.log('✅ Client updated successfully:', { id });
     return result;
   }
 

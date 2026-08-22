@@ -22,6 +22,7 @@ const roleColors: Record<UserRole, string> = {
   GESTIONNAIRE: '#2196f3',
   CLIENT_SERVICE: '#9c27b0',
   FINANCE: '#ff5722',
+  COMPTABILITE: '#009688',
   SCAN_TEAM: '#607d8b',
   BO: '#795548'
 };

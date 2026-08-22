@@ -33,6 +33,7 @@ import {
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import { useAuth } from '../../contexts/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ const STATUS_MAP: Record<string, { label: string; bg: string; color: string; bor
   VIREMENT_NON_VALIDE:  { label: 'Non valide',         bg: '#fdecea', color: '#b71c1c', border: '#ef9a9a' },
   EN_COURS:             { label: 'En cours',           bg: '#fff8e1', color: '#e65100', border: '#ffcc80' },
   PENDING:              { label: 'En attente',         bg: '#fff8e1', color: '#e65100', border: '#ffcc80' },
+  NON_EXECUTE:          { label: 'Non exécuté',        bg: '#fff8e1', color: '#e65100', border: '#ffcc80' },
   EN_COURS_VALIDATION:  { label: 'En validation',      bg: '#e3f2fd', color: '#0d47a1', border: '#90caf9' },
 };
 
@@ -141,6 +143,9 @@ const FinanceDashboard: React.FC = () => {
     open: boolean; url: string; title: string; type: 'pdf' | 'txt' | 'excel';
   }>({ open: false, url: '', title: '', type: 'pdf' });
   const [excelPreviewData, setExcelPreviewData] = useState<any>(null);
+  const [historyModal, setHistoryModal] = useState<{ open: boolean; years: number[]; total: number; loading: boolean; downloading: boolean; selectedYear: number | 'all' }>(
+    { open: false, years: [], total: 0, loading: false, downloading: false, selectedYear: 'all' }
+  );
 
   // ── Data loading (unchanged) ────────────────────────────────────────────────
   const loadDashboard = async () => {
@@ -237,7 +242,7 @@ const FinanceDashboard: React.FC = () => {
   const getFilteredStats = () => {
     const filtered = applyRecentFilters(ordresVirement || []);
     const totalOrdres        = filtered.length;
-    const ordresEnCours      = filtered.filter((o: any) => ['EN_COURS', 'PENDING'].includes(o.statut)).length;
+    const ordresEnCours      = filtered.filter((o: any) => ['EN_COURS', 'PENDING', 'NON_EXECUTE', 'EN_COURS_VALIDATION'].includes(o.statut)).length;
     const ordresExecutes     = filtered.filter((o: any) => ['EXECUTE', 'VIREMENT_DEPOSE'].includes(o.statut)).length;
     const ordresRejetes      = filtered.filter((o: any) => ['REJETE', 'VIREMENT_NON_VALIDE'].includes(o.statut)).length;
     const montantTotal       = filtered.reduce((sum: number, o: any) => sum + (o.montant || 0), 0);
@@ -441,6 +446,25 @@ const FinanceDashboard: React.FC = () => {
               <Button
                 variant="outlined"
                 size="small"
+                startIcon={<Assignment />}
+                sx={{ fontSize: '0.78rem', borderColor: '#6a1b9a', color: '#6a1b9a' }}
+                onClick={async () => {
+                  setHistoryModal(m => ({ ...m, open: true, loading: true, selectedYear: 'all' }));
+                  try {
+                    const { financeService } = await import('../../services/financeService');
+                    const { years, total } = await financeService.getExportYears();
+                    setHistoryModal(m => ({ ...m, years, total, loading: false }));
+                  } catch {
+                    setHistoryModal(m => ({ ...m, loading: false }));
+                    alert('Erreur lors du chargement des années');
+                  }
+                }}
+              >
+                📊 Historique Global Excel
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
                 startIcon={<Refresh />}
                 onClick={loadDashboard}
                 sx={{ fontSize: '0.78rem' }}
@@ -613,7 +637,9 @@ const FinanceDashboard: React.FC = () => {
                     <TableCell sx={HEAD_CELL_SX}>Nom Donneur</TableCell>
                     <TableCell sx={HEAD_CELL_SX}>N° Contrat</TableCell>
                     <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Dem. Récup.</TableCell>
+                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center', whiteSpace: 'nowrap' }}>Date Dem. Récup.</TableCell>
                     <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Mnt Récupéré</TableCell>
+                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center', whiteSpace: 'nowrap' }}>Date Récupération</TableCell>
                     <TableCell sx={{ ...HEAD_CELL_SX, minWidth: 220 }}>Documents</TableCell>
                   </TableRow>
                 </TableHead>
@@ -718,48 +744,42 @@ const FinanceDashboard: React.FC = () => {
 
                         {/* Demande Récupération */}
                         <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
-                          {ordre.demandeRecuperation ? (
-                            <Box>
-                              <Box sx={{
-                                display: 'inline-flex', px: 0.8, py: 0.2, borderRadius: 1,
-                                fontSize: '0.70rem', fontWeight: 700,
-                                bgcolor: '#fff8e1', color: '#e65100', border: '1px solid #ffcc80',
-                              }}>Oui</Box>
-                              {ordre.dateDemandeRecuperation && (
-                                <Typography variant="caption" display="block" sx={{ color: '#78909c', mt: 0.2 }}>
-                                  {new Date(ordre.dateDemandeRecuperation).toLocaleDateString('fr-FR')}
-                                </Typography>
-                              )}
-                            </Box>
-                          ) : (
-                            <Box sx={{
-                              display: 'inline-flex', px: 0.8, py: 0.2, borderRadius: 1,
-                              fontSize: '0.70rem', color: '#90a4ae', border: '1px solid #cfd8dc',
-                            }}>Non</Box>
-                          )}
+                          <Box sx={{
+                            display: 'inline-flex', px: 0.8, py: 0.2, borderRadius: 1,
+                            fontSize: '0.70rem', fontWeight: 700,
+                            ...(ordre.demandeRecuperation
+                              ? { bgcolor: '#fff8e1', color: '#e65100', border: '1px solid #ffcc80' }
+                              : { color: '#90a4ae', border: '1px solid #cfd8dc' }),
+                          }}>
+                            {ordre.demandeRecuperation ? 'Oui' : 'Non'}
+                          </Box>
+                        </TableCell>
+
+                        {/* Date Demande Récupération */}
+                        <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center', whiteSpace: 'nowrap', color: '#546e7a', fontSize: '0.78rem' }}>
+                          {ordre.dateDemandeRecuperation
+                            ? new Date(ordre.dateDemandeRecuperation).toLocaleDateString('fr-FR')
+                            : '—'}
                         </TableCell>
 
                         {/* Montant Récupéré */}
                         <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
-                          {ordre.montantRecupere ? (
-                            <Box>
-                              <Box sx={{
-                                display: 'inline-flex', px: 0.8, py: 0.2, borderRadius: 1,
-                                fontSize: '0.70rem', fontWeight: 700,
-                                bgcolor: '#e6f4ed', color: '#1b6b3a', border: '1px solid #a5d6a7',
-                              }}>Oui</Box>
-                              {ordre.dateMontantRecupere && (
-                                <Typography variant="caption" display="block" sx={{ color: '#78909c', mt: 0.2 }}>
-                                  {new Date(ordre.dateMontantRecupere).toLocaleDateString('fr-FR')}
-                                </Typography>
-                              )}
-                            </Box>
-                          ) : (
-                            <Box sx={{
-                              display: 'inline-flex', px: 0.8, py: 0.2, borderRadius: 1,
-                              fontSize: '0.70rem', color: '#90a4ae', border: '1px solid #cfd8dc',
-                            }}>Non</Box>
-                          )}
+                          <Box sx={{
+                            display: 'inline-flex', px: 0.8, py: 0.2, borderRadius: 1,
+                            fontSize: '0.70rem', fontWeight: 700,
+                            ...(ordre.montantRecupere
+                              ? { bgcolor: '#e6f4ed', color: '#1b6b3a', border: '1px solid #a5d6a7' }
+                              : { color: '#90a4ae', border: '1px solid #cfd8dc' }),
+                          }}>
+                            {ordre.montantRecupere ? 'Oui' : 'Non'}
+                          </Box>
+                        </TableCell>
+
+                        {/* Date Récupération */}
+                        <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center', whiteSpace: 'nowrap', color: '#546e7a', fontSize: '0.78rem' }}>
+                          {ordre.dateMontantRecupere
+                            ? new Date(ordre.dateMontantRecupere).toLocaleDateString('fr-FR')
+                            : '—'}
                         </TableCell>
 
                         {/* Documents */}
@@ -1037,6 +1057,66 @@ const FinanceDashboard: React.FC = () => {
           </Grid>
         </Grid>
       )}
+
+      {/* History Export Modal */}
+      <Dialog open={historyModal.open} onClose={() => setHistoryModal(m => ({ ...m, open: false }))} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#1e3a5f', color: '#fff', fontWeight: 700, fontSize: '1rem' }}>
+          📊 Historique Global — Export Excel
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2, pb: 1 }}>
+          {historyModal.loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress /></Box>
+          ) : (
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {historyModal.total} virement(s) au total. Choisissez une année ou téléchargez tout.
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Chip
+                  label="Toutes les années"
+                  onClick={() => setHistoryModal(m => ({ ...m, selectedYear: 'all' }))}
+                  color={historyModal.selectedYear === 'all' ? 'primary' : 'default'}
+                  variant={historyModal.selectedYear === 'all' ? 'filled' : 'outlined'}
+                  sx={{ fontWeight: 600 }}
+                />
+                {historyModal.years.map(y => (
+                  <Chip
+                    key={y}
+                    label={String(y)}
+                    onClick={() => setHistoryModal(m => ({ ...m, selectedYear: y }))}
+                    color={historyModal.selectedYear === y ? 'secondary' : 'default'}
+                    variant={historyModal.selectedYear === y ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: 600 }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setHistoryModal(m => ({ ...m, open: false }))} size="small">Annuler</Button>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={historyModal.loading || historyModal.downloading}
+            startIcon={historyModal.downloading ? <CircularProgress size={14} color="inherit" /> : <Assignment />}
+            sx={{ bgcolor: '#6a1b9a', '&:hover': { bgcolor: '#4a148c' } }}
+            onClick={async () => {
+              setHistoryModal(m => ({ ...m, downloading: true }));
+              try {
+                const { financeService } = await import('../../services/financeService');
+                await financeService.exportAllHistoryExcel(historyModal.selectedYear);
+                setHistoryModal(m => ({ ...m, open: false, downloading: false }));
+              } catch {
+                setHistoryModal(m => ({ ...m, downloading: false }));
+                alert("Erreur lors de l'export");
+              }
+            }}
+          >
+            {historyModal.downloading ? 'Téléchargement...' : 'Télécharger Excel'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Document Viewer Dialog */}
       <Dialog

@@ -10,9 +10,12 @@ export class ScanSLAService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Cron job: Check SCAN SLA every hour
+   * Cron job: Check SCAN SLA once per day (08:00 server time)
+   * CHANGED: was EVERY_HOUR — with dedup in place the volume was fixed,
+   * but hourly full-table scans + user lookups are still unnecessary load.
+   * SLA status doesn't need hour-by-hour granularity.
    */
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_DAY_AT_8AM)
   async handleScanSLACron() {
     this.logger.log('🔍 Running SCAN SLA check (cron job)');
     await this.checkScanSLAAndNotify();
@@ -51,9 +54,39 @@ export class ScanSLAService {
 
   /**
    * Send SCAN SLA alert to SCAN team AND Gestionnaires
+   * Deduplicated — skips re-notifying if an unresolved alert
+   * for this bordereau already exists at the same or worse level.
    */
   private async sendScanAlert(bordereau: any, sla: any): Promise<void> {
     try {
+      const alertLevel = getScanAlertLevel(bordereau.dateReception);
+
+      // --- DEDUP CHECK ---
+      // Look for an existing unresolved SCAN_SLA alert for this bordereau.
+      const existingAlert = await this.prisma.alertLog.findFirst({
+        where: {
+          bordereauId: bordereau.id,
+          alertType: 'SCAN_SLA',
+          resolved: false,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (existingAlert && existingAlert.alertLevel === alertLevel) {
+        // Same bordereau, same severity, already alerted and still unresolved.
+        // Don't re-spam every run — skip silently.
+        return;
+      }
+
+      // Either no prior alert, or severity escalated (e.g. WARNING -> CRITICAL):
+      // resolve the old one (if any) and send a fresh alert.
+      if (existingAlert) {
+        await this.prisma.alertLog.update({
+          where: { id: existingAlert.id },
+          data: { resolved: true, resolvedAt: new Date() },
+        });
+      }
+
       // Get SCAN team members
       const scanTeam = await this.prisma.user.findMany({
         where: {
@@ -70,7 +103,6 @@ export class ScanSLAService {
         },
       });
 
-      const alertLevel = getScanAlertLevel(bordereau.dateReception);
       const allRecipients = [...scanTeam, ...gestionnaires];
 
       // Create notifications for SCAN team AND Gestionnaires
@@ -100,7 +132,7 @@ export class ScanSLAService {
         }).catch(() => this.logger.warn('Failed to create SCAN notification'));
       }
 
-      // Create alert log
+      // Create alert log (this is now the dedup anchor for future runs)
       await this.prisma.alertLog.create({
         data: {
           bordereauId: bordereau.id,

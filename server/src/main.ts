@@ -35,7 +35,8 @@ async function bootstrap() {
   expressApp.use(express.urlencoded({ limit: '10gb', extended: true }));
   
   // Serve static files from uploads directory at Express level
-  const uploadsPath = path.join(__dirname, '..', 'uploads');
+  // Upload writers use process.cwd()/uploads in both source and compiled runs.
+  const uploadsPath = path.resolve(process.cwd(), 'uploads');
   console.log(`📁 Setting up static files from: ${uploadsPath}`);
   expressApp.use('/uploads', express.static(uploadsPath));
   

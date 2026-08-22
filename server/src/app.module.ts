@@ -33,6 +33,8 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { PrismaService } from './prisma/prisma.service';
 import { SeedController } from './seed.controller';
 import { SuperAdminController } from './super-admin.controller';
+import { BsAssignmentController } from './bs-assignment.controller';
+import { BsAssignmentService } from './bs-assignment.service';
 
 
 @Module({
@@ -46,7 +48,7 @@ import { SuperAdminController } from './super-admin.controller';
     ScanModule,
     BulletinSoinModule
   ],
-  controllers: [AppController, SeedController, SuperAdminController],
-  providers: [AppService, PrismaService],
+  controllers: [AppController, SeedController, SuperAdminController, BsAssignmentController],
+  providers: [AppService, PrismaService, BsAssignmentService],
 })
 export class AppModule {}

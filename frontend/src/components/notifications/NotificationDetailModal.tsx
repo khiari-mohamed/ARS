@@ -170,6 +170,7 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
       case 'OV_PENDING_VALIDATION': return '💰';
       case 'OV_VALIDATED': return '✅';
       case 'OV_REJECTED': return '❌';
+      case 'VIREMENT_UPDATE': return '💰';
       case 'DUPLICATE_RIB_APPROVAL_REQUIRED': return '🚨';
       case 'WORKFLOW_ASSIGNMENT': return '📋';
       case 'reclamation': 
@@ -191,6 +192,7 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
       case 'OV_PENDING_VALIDATION': return 'Validation requise';
       case 'OV_VALIDATED': return 'Validé';
       case 'OV_REJECTED': return 'Rejeté';
+      case 'VIREMENT_UPDATE': return 'Changement de statut OV';
       case 'DUPLICATE_RIB_APPROVAL_REQUIRED': return 'RIB Dupliqués';
       case 'reclamation': return 'Réclamation';
       default: return 'Notification';

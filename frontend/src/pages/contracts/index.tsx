@@ -108,6 +108,7 @@ const ContractsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [mainTab, setMainTab] = useState(0);
   const [availableClients, setAvailableClients] = useState<any[]>([]);
+  const [availableCompanies, setAvailableCompanies] = useState<Array<{ id: string; nom: string; code: string }>>([]);
   const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; fullName: string; email: string; role: string }>>([]);
   const [scanSLAIssues, setScanSLAIssues] = useState<any[]>([]);
   const [page, setPage] = useState(0);
@@ -119,6 +120,8 @@ const ContractsPage: React.FC = () => {
     clientId: '',
     contractNumber: '',
     codeAssure: '',
+    compagnieAssuranceId: '',
+    modeRecuperation: undefined,
     treatmentDelay: 30,
     claimsReplyDelay: 48,
     paymentDelay: 30,
@@ -186,12 +189,14 @@ const ContractsPage: React.FC = () => {
 
   const loadAvailableData = async () => {
     try {
-      const [clients, users] = await Promise.all([
+      const [clients, users, companies] = await Promise.all([
         fetchAvailableClients(),
-        LocalAPI.get('/users').then(res => res.data)
+        LocalAPI.get('/users').then(res => res.data),
+        LocalAPI.get('/finance/compagnies-assurance').then(res => res.data || [])
       ]);
       setAvailableClients(clients);
       setAvailableUsers(users);
+      setAvailableCompanies(companies);
       console.log('Available users loaded:', users);
     } catch (error) {
       console.error('Error loading available data:', error);
@@ -214,6 +219,8 @@ const ContractsPage: React.FC = () => {
       clientId: '',
       contractNumber: '',
       codeAssure: '',
+      compagnieAssuranceId: '',
+      modeRecuperation: undefined,
       treatmentDelay: 30,
       claimsReplyDelay: 48,
       paymentDelay: 30,
@@ -236,6 +243,8 @@ const ContractsPage: React.FC = () => {
       clientId: contract.clientId,
       contractNumber: contract.clientName,
       codeAssure: contract.codeAssure || '',
+      compagnieAssuranceId: (contract as any).compagnieAssuranceId || (contract as any).compagnieAssurance?.id || '',
+      modeRecuperation: (contract as any).modeRecuperation || undefined,
       treatmentDelay: contract.delaiReglement,
       claimsReplyDelay: contract.delaiReclamation,
       paymentDelay: contract.delaiReglement,
@@ -802,6 +811,38 @@ const ContractsPage: React.FC = () => {
                 required
                 helperText="Ce code sera utilisé pour auto-remplir le champ lors de l'ajout d'adhérents"
               />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Compagnie d'assurance</InputLabel>
+                <Select
+                  value={formData.compagnieAssuranceId || ''}
+                  onChange={(e) => setFormData({ ...formData, compagnieAssuranceId: e.target.value })}
+                  label="Compagnie d'assurance"
+                >
+                  <MenuItem value="">Sélectionner une compagnie</MenuItem>
+                  {availableCompanies.map(company => (
+                    <MenuItem key={company.id} value={company.id}>{company.nom}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Mode de récupération</InputLabel>
+                <Select
+                  value={formData.modeRecuperation || ''}
+                  onChange={(e) => setFormData({ ...formData, modeRecuperation: (e.target.value || undefined) as any })}
+                  label="Mode de récupération"
+                >
+                  <MenuItem value="">Sélectionner un mode</MenuItem>
+                  <MenuItem value="CHEQUE">Chèque</MenuItem>
+                  <MenuItem value="VIREMENT">Virement</MenuItem>
+                  <MenuItem value="FEUILLE_CAISSE">Feuille de caisse</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
 
             <Grid item xs={12} sm={4}>

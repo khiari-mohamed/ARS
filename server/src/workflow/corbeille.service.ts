@@ -163,14 +163,20 @@ export class CorbeilleService {
 
       // Calculate SLA status for each item using centralized calculator
       const processItems = (items: any[]) => items.map(item => {
-        const slaData = calculateSLA(item);
-        const slaLimit = item.delaiReglement || item.contract?.delaiReglement || 30;
-        const remainingTime = Math.max(0, (slaLimit - slaData.daysElapsed) * 24);
+        const slaData = calculateSLA({
+          dateReception: item.dateReception,
+          delaiReglement: item.delaiReglement || item.contract?.delaiReglement || 30,
+          statut: item.statut,
+          dateCloture: item.dateCloture,
+          dateExecutionVirement: item.dateExecutionVirement,
+          ordresVirement: item.ordresVirement,
+        });
+        const remainingTime = Math.max(0, slaData.daysRemaining * 24);
 
         let slaStatus: 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL';
-        if (slaData.percentElapsed > 100) slaStatus = 'OVERDUE';
-        else if (remainingTime <= 24) slaStatus = 'CRITICAL';
-        else if (remainingTime <= 72) slaStatus = 'AT_RISK';
+        if (slaData.statusColor === 'RED' || slaData.percentElapsed > 100) slaStatus = 'OVERDUE';
+        else if (!slaData.isFrozen && remainingTime <= 24) slaStatus = 'CRITICAL';
+        else if (slaData.statusColor === 'ORANGE' || (!slaData.isFrozen && remainingTime <= 72)) slaStatus = 'AT_RISK';
         else slaStatus = 'ON_TIME';
 
         return {
@@ -179,7 +185,7 @@ export class CorbeilleService {
           reference: item.reference,
           clientName: item.client?.name || 'Unknown',
           subject: `${item.nombreBS || 0} BS - ${item.client?.name}`,
-          priority: slaData.percentElapsed > 100 ? 'URGENT' : 'NORMAL',
+          priority: slaStatus === 'OVERDUE' || slaStatus === 'CRITICAL' ? 'URGENT' : 'NORMAL',
           status: item.statut,
           createdAt: item.dateReception,
           assignedTo: item.currentHandler?.fullName,

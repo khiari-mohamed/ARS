@@ -652,11 +652,139 @@ export class UsersService {
     const pageSizeNumber = Math.min(200, Math.max(1, pageSize));
     const offset = (pageNumber - 1) * pageSizeNumber;
 
+    let notificationWhere: any = { userId };
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true,
+        clientsManaged: { select: { id: true } },
+        contractsAsTeamLeader: {
+          select: { bordereaux: { select: { id: true, clientId: true } } },
+        },
+      },
+    });
+
+    if (user?.role === 'GESTIONNAIRE_SENIOR') {
+      const clientIds = new Set(user.clientsManaged.map((client) => client.id));
+      const bordereauIds = new Set<string>();
+
+      user.contractsAsTeamLeader.forEach((contract) => {
+        contract.bordereaux.forEach((bordereau) => {
+          bordereauIds.add(bordereau.id);
+          clientIds.add(bordereau.clientId);
+        });
+      });
+
+      const portfolioBordereaux = await this.prisma.bordereau.findMany({
+        where: { clientId: { in: Array.from(clientIds) } },
+        select: { id: true },
+      });
+      portfolioBordereaux.forEach((bordereau) => bordereauIds.add(bordereau.id));
+
+      const portfolioOVs = await this.prisma.ordreVirement.findMany({
+        where: {
+          OR: [
+            ...(clientIds.size > 0 ? [{ clientId: { in: Array.from(clientIds) } }] : []),
+            ...(bordereauIds.size > 0 ? [{ bordereauId: { in: Array.from(bordereauIds) } }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+
+      const trackedTypes = [
+        'BORDEREAU_RECEIVED',
+        'NEW_BORDEREAU_SCAN',
+        'BORDEREAU_READY_SCAN',
+        'BORDEREAU_SCANNED',
+        'BORDEREAU_READY_ASSIGNMENT',
+        'BORDEREAU_ASSIGNED',
+        'SCAN_STARTED',
+        'SCAN_COMPLETED',
+        'SCAN_SLA_ALERT',
+        'SLA_ALERT',
+        'SLA_WARNING',
+        'SLA_BREACH',
+        'SLA_BREACH_ALERT',
+        'SLA_CRITICAL_BREACH',
+        'BORDEREAU_SLA',
+        'OV_VALIDATED',
+        'OV_REJECTED',
+        'VIREMENT_UPDATE',
+        'NOUVEAU_VIREMENT',
+      ];
+      const portfolioOVIds = portfolioOVs.map((ov) => ov.id);
+      const scopeConditions = [
+        ...Array.from(bordereauIds).flatMap((id) => [
+          { data: { path: ['bordereauId'], equals: id } },
+        ]),
+        ...portfolioOVIds.map((id) => ({ data: { path: ['ordreVirementId'], equals: id } })),
+      ];
+
+      notificationWhere = {
+        userId,
+        type: { in: trackedTypes },
+        ...(scopeConditions.length > 0 ? { OR: scopeConditions } : { id: '__no_portfolio_notification__' }),
+      };
+    } else if (user?.role === 'GESTIONNAIRE') {
+      const [assignedBordereaux, assignedBulletins, assignedDocuments] = await Promise.all([
+        this.prisma.bordereau.findMany({
+          where: {
+            OR: [
+              { assignedToUserId: userId },
+              { currentHandlerId: userId },
+            ],
+          },
+          select: { id: true },
+        }),
+        this.prisma.bulletinSoin.findMany({
+          where: { ownerId: userId },
+          select: { id: true, bordereauId: true },
+        }),
+        this.prisma.document.findMany({
+          where: { assignedToUserId: userId },
+          select: { id: true, bordereauId: true },
+        }),
+      ]);
+
+      const bordereauIds = new Set(assignedBordereaux.map((bordereau) => bordereau.id));
+      assignedBulletins.forEach((bulletin) => bordereauIds.add(bulletin.bordereauId));
+      assignedDocuments.forEach((document) => {
+        if (document.bordereauId) bordereauIds.add(document.bordereauId);
+      });
+
+      const bulletinIds = assignedBulletins.map((bulletin) => bulletin.id);
+      const trackedTypes = [
+        'BORDEREAU_ASSIGNED',
+        'TASK_ASSIGNED',
+        'TASK_REASSIGNED',
+        'SCAN_SLA_ALERT',
+        'SLA_ALERT',
+        'SLA_WARNING',
+        'SLA_BREACH',
+        'SLA_BREACH_ALERT',
+        'SLA_CRITICAL_BREACH',
+        'BORDEREAU_SLA',
+      ];
+      const scopeConditions = [
+        ...Array.from(bordereauIds).map((id) => ({ data: { path: ['bordereauId'], equals: id } })),
+        ...bulletinIds.flatMap((id) => [
+          { data: { path: ['bsId'], equals: id } },
+          { data: { path: ['bulletinSoinId'], equals: id } },
+        ]),
+      ];
+
+      notificationWhere = {
+        userId,
+        type: { in: trackedTypes },
+        ...(scopeConditions.length > 0 ? { OR: scopeConditions } : { id: '__no_assigned_notification__' }),
+      };
+    }
+
     const [total, totalUnread, items] = await this.prisma.$transaction([
-      this.prisma.notification.count({ where: { userId } }),
-      this.prisma.notification.count({ where: { userId, read: false } }),
+      this.prisma.notification.count({ where: notificationWhere }),
+      this.prisma.notification.count({ where: { ...notificationWhere, read: false } }),
       this.prisma.notification.findMany({
-        where: { userId },
+        where: notificationWhere,
         orderBy: { createdAt: 'desc' },
         skip: offset,
         take: pageSizeNumber

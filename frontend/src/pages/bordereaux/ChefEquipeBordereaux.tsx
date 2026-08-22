@@ -1,3 +1,5 @@
+
+
 import { useEffect, useState } from "react";
 import { fetchUnassignedBordereaux, fetchTeamBordereaux, assignBordereau, fetchUserBordereaux } from "../../services/bordereauxService";
 import { fetchUsers } from "../../services/userService";
@@ -12,6 +14,190 @@ interface Gestionnaire {
   workload: number;
   capacity: number;
 }
+
+const REGISTRE_STYLES = `
+  .gsd-root {
+    --ink-900:#0F1B2D; --ink-700:#24344A; --ink-500:#5B6B82; --ink-300:#9AA7B8;
+    --line:#E2E6EC; --surface:#FFFFFF; --canvas:#F3F5F9;
+    --brand:#A82A2E; --brand-dark:#7E1F22;
+    --ok:#1E8E5A; --ok-bg:#E7F5EE; --warn:#B4740E; --warn-bg:#FBF1DF;
+    --danger:#B3272D; --danger-bg:#FBEAEA; --info:#2A5DA8; --info-bg:#E9F0FA;
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background: var(--canvas); min-height: 100vh; color: var(--ink-900);
+    padding: 24px 20px 60px;
+  }
+  .gsd-root * { box-sizing: border-box; }
+  @media (max-width: 640px) { .gsd-root { padding: 16px 12px 48px; } }
+
+  .gsd-wrap { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  .gsd-header {
+    background: linear-gradient(135deg, var(--ink-900) 0%, #16263D 100%);
+    border-bottom: 3px solid var(--brand);
+    border-radius: 10px;
+    padding: 28px 24px;
+    color: white;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .gsd-header-icon {
+    width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0;
+  }
+  .gsd-header-eyebrow {
+    display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+    background: rgba(168,42,46,0.25); color: #F3C6C7; padding: 3px 10px; border-radius: 20px;
+    margin-bottom: 10px; font-weight: 600;
+  }
+  .gsd-header h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px 0; letter-spacing: -0.2px; }
+  .gsd-header p { color: #C4CCDA; font-size: 13px; margin: 0; }
+
+  .gsd-alert-panel {
+    display: flex; align-items: center; gap: 16px; border-radius: 10px; padding: 16px 18px;
+    border: 1px solid var(--line);
+  }
+  .gsd-alert-panel--ok { background: var(--ok-bg); border-color: rgba(30,142,90,0.25); }
+  .gsd-alert-panel--warn { background: var(--warn-bg); border-color: rgba(180,116,14,0.25); }
+  .gsd-alert-title { font-weight: 700; font-size: 15px; margin-bottom: 3px; }
+  .gsd-alert-panel--ok .gsd-alert-title { color: var(--ok); }
+  .gsd-alert-panel--warn .gsd-alert-title { color: var(--warn); }
+  .gsd-alert-text { font-size: 13px; line-height: 1.5; color: var(--ink-700); }
+
+  .gsd-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .gsd-stat-card {
+    background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--brand);
+    border-radius: 10px; padding: 18px; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .gsd-stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(15,27,45,0.08); }
+  .gsd-stat-card--static { cursor: default; }
+  .gsd-stat-card--static:hover { transform: none; box-shadow: none; }
+  .gsd-stat-icon-badge {
+    width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; flex-shrink: 0;
+  }
+  .gsd-stat-num {
+    font-family:'IBM Plex Mono',SFMono-Regular,Consolas,monospace; font-weight: 700; font-size: 28px; line-height: 1;
+  }
+  .gsd-stat-label { font-size: 13px; color: var(--ink-500); font-weight: 600; margin-top: 6px; }
+  .gsd-stat-hint { font-size: 11px; color: var(--ink-300); margin-top: 3px; }
+
+  .gsd-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .gsd-panel--flush { padding: 0; overflow: hidden; }
+  .gsd-panel-header {
+    display: flex; align-items: center; gap: 16px; padding: 16px 18px; background: var(--canvas);
+    border-bottom: 1px solid var(--line);
+  }
+  .gsd-panel-title { font-size: 16px; font-weight: 700; color: var(--ink-700); margin: 0; }
+
+  .gsd-tabs { display: flex; border-bottom: 1px solid var(--line); background: var(--surface); }
+  .gsd-tab {
+    padding: 14px 20px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 700;
+    color: var(--ink-500); border-bottom: 3px solid transparent; transition: color 0.15s ease;
+  }
+  .gsd-tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+  .gsd-empty { text-align: center; padding: 60px 20px; color: var(--ink-500); }
+  .gsd-empty-icon { font-size: 44px; margin-bottom: 14px; opacity: 0.6; }
+  .gsd-empty h3 { font-size: 20px; font-weight: 700; color: var(--ink-900); margin-bottom: 10px; }
+  .gsd-empty p { font-size: 14px; line-height: 1.5; }
+
+  .gsd-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .gsd-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  .gsd-table thead th {
+    background: var(--ink-900); color: white; text-transform: uppercase; letter-spacing: 0.03em;
+    font-size: 11.5px; font-weight: 700; padding: 11px 10px; text-align: left; white-space: nowrap;
+  }
+  .gsd-table tbody td { padding: 11px 10px; font-size: 13px; color: var(--ink-700); border-bottom: 1px solid var(--line); }
+  .gsd-table tbody tr:nth-child(even) { background: #FAFBFD; }
+  .gsd-table tbody tr:hover { background: #F0F3F8; }
+  .gsd-table tbody tr.gsd-row--selected { background: var(--info-bg); box-shadow: inset 3px 0 0 var(--info); }
+  .gsd-cell--ref {
+    font-family:'IBM Plex Mono',SFMono-Regular,Consolas,monospace; font-weight: 600; color: var(--brand-dark);
+  }
+
+  .gsd-row--locked {
+    background-image: repeating-linear-gradient(135deg, rgba(15,27,45,0.035) 0 6px, transparent 6px 12px);
+    box-shadow: inset 3px 0 0 var(--ink-300);
+  }
+
+  .gsd-status {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; white-space: nowrap;
+  }
+  .gsd-status--ok { background: var(--ok-bg); color: var(--ok); }
+  .gsd-status--warn { background: var(--warn-bg); color: var(--warn); }
+  .gsd-status--danger { background: var(--danger-bg); color: var(--danger); }
+  .gsd-status--info { background: var(--info-bg); color: var(--info); }
+  .gsd-status--purple { background: #F1ECF9; color: #6E4A9E; }
+  .gsd-status--neutral { background: var(--canvas); color: var(--ink-500); }
+
+  .gsd-tag {
+    display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 700;
+  }
+  .gsd-tag--ok { background: var(--ok); color: white; }
+  .gsd-tag--neutral { background: #99A3B0; color: white; }
+  .gsd-tag-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+
+  .gsd-btn {
+    border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;
+    padding: 8px 14px; transition: transform 0.1s ease, opacity 0.15s ease, background 0.15s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .gsd-btn:not(:disabled):hover { transform: translateY(-1px); }
+  .gsd-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .gsd-btn--brand { background: var(--brand); color: white; }
+  .gsd-btn--brand:not(:disabled):hover { background: var(--brand-dark); }
+  .gsd-btn--info { background: var(--info); color: white; }
+  .gsd-btn--danger { background: var(--danger); color: white; }
+  .gsd-btn--neutral { background: var(--surface); color: var(--ink-700); border: 1px solid var(--line); }
+  .gsd-btn--sm { padding: 4px 9px; font-size: 11px; }
+
+  .gsd-assign-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+  .gsd-assign-title { font-size: 17px; font-weight: 700; color: var(--ink-900); margin-bottom: 18px; }
+  .gsd-gestionnaire-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .gsd-gestionnaire-card {
+    background: var(--canvas); border: 2px solid var(--line); border-radius: 8px; padding: 14px; cursor: pointer;
+    text-align: center; transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .gsd-gestionnaire-card.selected { border-color: var(--info); background: var(--info-bg); }
+  .gsd-gestionnaire-card .avatar { font-size: 28px; margin-bottom: 8px; }
+  .gsd-gestionnaire-card .name { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--ink-900); }
+  .gsd-gestionnaire-card .load { font-size: 12px; color: var(--ink-500); }
+  .gsd-progress-track { width: 100%; height: 5px; border-radius: 4px; background: var(--line); margin-top: 8px; overflow: hidden; }
+  .gsd-progress-fill { height: 100%; }
+
+  .gsd-perf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .gsd-perf-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; text-align: center; }
+  .gsd-perf-num {
+    font-family:'IBM Plex Mono',SFMono-Regular,Consolas,monospace; font-weight: 700; font-size: 28px; margin-bottom: 6px;
+  }
+  .gsd-perf-label { font-size: 13px; font-weight: 700; }
+
+  .gsd-overlay {
+    position: fixed; inset: 0; background: rgba(15,27,45,0.55); display: flex; align-items: center;
+    justify-content: center; z-index: 1000;
+  }
+  .gsd-modal {
+    background: var(--surface); border-radius: 10px; width: 90%; box-shadow: 0 20px 40px rgba(15,27,45,0.3);
+    display: flex; flex-direction: column;
+  }
+  .gsd-modal--sm { max-width: 500px; }
+  .gsd-modal--lg { max-width: 1000px; max-height: 80vh; overflow: hidden; }
+  .gsd-modal--xl { max-width: 1200px; max-height: 80vh; overflow: hidden; }
+  .gsd-modal-header {
+    padding: 18px 22px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between;
+    align-items: center; background: var(--canvas);
+  }
+  .gsd-modal-body { padding: 18px 22px; overflow-y: auto; }
+  .gsd-modal-title { margin: 0; font-size: 18px; font-weight: 700; color: var(--ink-900); }
+  .gsd-modal-sub { color: var(--ink-500); font-size: 13px; margin: 4px 0 0 0; }
+
+  .gsd-status-choice {
+    display: flex; align-items: center; padding: 14px; border: 2px solid var(--line); border-radius: 8px;
+    background: var(--surface); cursor: pointer; transition: all 0.15s ease; font-size: 15px; font-weight: 600;
+    width: 100%; text-align: left;
+  }
+`;
 
 function ChefEquipeBordereaux() {
   const { user } = useAuth();
@@ -29,7 +215,7 @@ function ChefEquipeBordereaux() {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [statsModalType, setStatsModalType] = useState<'en-cours' | 'traites' | 'retournes' | 'non-affectes'>('en-cours');
   const [statsModalData, setStatsModalData] = useState<any[]>([]);
-  
+
   const teamId = user?.teamId || user?.id || '';
 
   useEffect(() => {
@@ -51,8 +237,6 @@ function ChefEquipeBordereaux() {
     }
   }, [userBordereaux, isGestionnaire]);
 
-
-
   const loadData = async () => {
     try {
       setLoading(true);
@@ -71,12 +255,12 @@ function ChefEquipeBordereaux() {
         console.log('🔍 Loading data for Chef d\'équipe:', user?.id);
         const response = await LocalAPI.get('/bordereaux/chef-equipe/corbeille');
         const data = response.data;
-        
+
         console.log('📊 Chef équipe corbeille data:', data);
         console.log('📊 Non affectés:', data.nonAffectes?.length || 0);
         console.log('📊 En cours:', data.enCours?.length || 0);
         console.log('📊 Traités:', data.traites?.length || 0);
-        
+
         setUnassignedBordereaux(data.nonAffectes || []);
         setTeamBordereaux([...data.enCours || [], ...data.traites || []]);
       }
@@ -91,7 +275,7 @@ function ChefEquipeBordereaux() {
     try {
       const users = await fetchUsers();
       let filteredGestionnaires;
-      
+
       if (isGestionnaire) {
         // Gestionnaires don't need to see other gestionnaires
         filteredGestionnaires = [];
@@ -106,7 +290,7 @@ function ChefEquipeBordereaux() {
             capacity: u.capacity || 20
           }));
       }
-      
+
       console.log('🔍 Filtered gestionnaires for chef:', user?.id, 'Count:', filteredGestionnaires.length);
       setGestionnaires(filteredGestionnaires);
     } catch (error) {
@@ -114,7 +298,12 @@ function ChefEquipeBordereaux() {
     }
   };
 
+  const isBordereauLocked = (bordereau: any) => bordereau?.statut === 'VIREMENT_EXECUTE';
+
   const handleBordereauSelect = (bordereauId: string) => {
+    const bordereau = [...unassignedBordereaux, ...teamBordereaux, ...userBordereaux].find(item => item.id === bordereauId);
+    if (isBordereauLocked(bordereau)) return;
+
     if (selectedBordereaux.includes(bordereauId)) {
       setSelectedBordereaux(selectedBordereaux.filter(id => id !== bordereauId));
     } else {
@@ -124,14 +313,24 @@ function ChefEquipeBordereaux() {
 
   const handleAssignBordereaux = async () => {
     if (!selectedGestionnaire || selectedBordereaux.length === 0) return;
-    
+
+    const hasLockedSelection = selectedBordereaux.some((id) => {
+      const bordereau = [...unassignedBordereaux, ...teamBordereaux, ...userBordereaux].find(item => item.id === id);
+      return isBordereauLocked(bordereau);
+    });
+
+    if (hasLockedSelection) {
+      alert('Impossible de modifier un bordereau déjà en statut "Virement Exécuté".');
+      return;
+    }
+
     try {
       await Promise.all(
-        selectedBordereaux.map(bordereauId => 
+        selectedBordereaux.map(bordereauId =>
           assignBordereau(bordereauId, selectedGestionnaire)
         )
       );
-      
+
       setSelectedBordereaux([]);
       setSelectedGestionnaire('');
       await loadData();
@@ -158,6 +357,9 @@ function ChefEquipeBordereaux() {
   };
 
   const openStatusModal = (bordereau: any) => {
+    if (isBordereauLocked(bordereau)) {
+      return;
+    }
     setSelectedBordereau(bordereau);
     setShowStatusModal(true);
   };
@@ -178,7 +380,7 @@ function ChefEquipeBordereaux() {
         data = userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE');
         break;
     }
-    
+
     console.log('🔍 Opening stats modal:', type, 'Data count:', data.length);
     if (type === 'traites' && data.length > 0) {
       console.log('📊 Sample traites data:', data.slice(0, 2).map(b => ({
@@ -190,7 +392,7 @@ function ChefEquipeBordereaux() {
         dureeReglementStatus: b.dureeReglementStatus
       })));
     }
-    
+
     setStatsModalType(type);
     setStatsModalData(data);
     setShowStatsModal(true);
@@ -214,9 +416,9 @@ function ChefEquipeBordereaux() {
     if (bordereau.dureeTraitement === null || bordereau.dureeTraitement === undefined) {
       return { days: null, isOnTime: true };
     }
-    return { 
-      days: bordereau.dureeTraitement, 
-      isOnTime: bordereau.dureeTraitementStatus === 'GREEN' 
+    return {
+      days: bordereau.dureeTraitement,
+      isOnTime: bordereau.dureeTraitementStatus === 'GREEN'
     };
   };
 
@@ -225,549 +427,406 @@ function ChefEquipeBordereaux() {
     if (bordereau.dureeReglement === null || bordereau.dureeReglement === undefined) {
       return { days: null, isOnTime: true };
     }
-    return { 
-      days: bordereau.dureeReglement, 
-      isOnTime: bordereau.dureeReglementStatus === 'GREEN' 
+    return {
+      days: bordereau.dureeReglement,
+      isOnTime: bordereau.dureeReglementStatus === 'GREEN'
     };
   };
 
   const tabData = getTabData();
 
+  const dureeTraitementBadge = (bordereau: any) => {
+    const dt = getDureeTraitement(bordereau);
+    if (dt.days === null || dt.days === undefined) {
+      return <span className="gsd-tag gsd-tag--neutral">En cours</span>;
+    }
+    return (
+      <span className={`gsd-status ${dt.isOnTime ? 'gsd-status--ok' : 'gsd-status--danger'}`}>
+        {dt.days} jour{dt.days !== 1 ? 's' : ''}
+      </span>
+    );
+  };
+
+  const dureeReglementBadge = (bordereau: any) => {
+    if (bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE') {
+      const days = getDureeReglement(bordereau).days;
+      return <span className="gsd-status gsd-status--ok">✓ Réglé ({days || 0}j)</span>;
+    }
+    const dr = getDureeReglement(bordereau);
+    if (dr.days === null || dr.days === undefined) {
+      return <span className="gsd-tag gsd-tag--neutral">En attente</span>;
+    }
+    return (
+      <span className={`gsd-status ${dr.isOnTime ? 'gsd-status--ok' : 'gsd-status--danger'}`}>
+        {dr.days} jour{dr.days !== 1 ? 's' : ''}
+      </span>
+    );
+  };
+
   return (
-    <div className="chef-equipe-container">
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Enhanced Header */}
-        <div className="chef-equipe-header">
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
-            <div className="chef-equipe-icon">
-              👨‍💼
-            </div>
-            <div>
-              <h1 style={{ fontSize: '42px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>
-                {isGestionnaire ? 'Gestionnaire' : 'Chef d\'Équipe'}
-              </h1>
-              <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>
-                {isGestionnaire ? 'Accès en lecture seule avec modification des dossiers assignés' : 'Gestion et supervision de votre équipe et contrats assignés'}
-              </p>
-            </div>
+    <div className="gsd-root">
+      <style>{REGISTRE_STYLES}</style>
+      <div className="gsd-wrap">
+        {/* Header */}
+        <div className="gsd-header">
+          <div className="gsd-header-icon">👨‍💼</div>
+          <div>
+            <span className="gsd-header-eyebrow">{isGestionnaire ? 'Accès Gestionnaire' : "Accès Chef d'Équipe"}</span>
+            <h1>{isGestionnaire ? 'Gestionnaire' : "Chef d'Équipe"}</h1>
+            <p>
+              {isGestionnaire
+                ? 'Accès en lecture seule avec modification des dossiers assignés'
+                : 'Gestion et supervision de votre équipe et contrats assignés'}
+            </p>
           </div>
-          <div className="chef-equipe-warning">
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '28px', marginRight: '20px' }}>✅</span>
-              <div>
-                <div style={{ fontWeight: 'bold', color: isGestionnaire ? '#f57c00' : '#2e7d32', fontSize: '18px', marginBottom: '4px' }}>
-                  {isGestionnaire ? 'Accès Gestionnaire' : 'Accès Chef d\'Équipe'}
-                </div>
-                <div style={{ color: isGestionnaire ? '#ef6c00' : '#388e3c', fontSize: '15px', lineHeight: '1.4' }}>
-                  {isGestionnaire 
-                    ? 'Vous avez une visibilité sur tous les dossiers du bordereau, mais vous ne pouvez changer le statut/état que des dossiers qui vous sont personnellement affectés'
-                    : 'Vous gérez uniquement les bordereaux des contrats qui vous sont assignés et supervisez vos gestionnaires'
-                  }
-                </div>
-              </div>
+        </div>
+
+        <div className={`gsd-alert-panel ${isGestionnaire ? 'gsd-alert-panel--warn' : 'gsd-alert-panel--ok'}`}>
+          <span style={{ fontSize: '22px' }}>✅</span>
+          <div>
+            <div className="gsd-alert-title">{isGestionnaire ? 'Accès Gestionnaire' : "Accès Chef d'Équipe"}</div>
+            <div className="gsd-alert-text">
+              {isGestionnaire
+                ? 'Vous avez une visibilité sur tous les dossiers du bordereau, mais vous ne pouvez changer le statut/état que des dossiers qui vous sont personnellement affectés'
+                : 'Vous gérez uniquement les bordereaux des contrats qui vous sont assignés et supervisez vos gestionnaires'}
             </div>
           </div>
         </div>
 
         {/* Quick Stats - Gestionnaire Only */}
         {isGestionnaire && (
-          <div className="chef-equipe-stats">
-            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('en-cours')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
-                  <span style={{ fontSize: '32px' }}>⏳</span>
+          <div className="gsd-stats-grid">
+            <div className="gsd-stat-card" onClick={() => openStatsModal('en-cours')}>
+              <div className="gsd-stat-icon-badge" style={{ background: 'var(--info-bg)' }}>⏳</div>
+              <div>
+                <div className="gsd-stat-num" style={{ color: 'var(--info)' }}>
+                  {userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
                 </div>
-                <div>
-                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>
-                    {userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
-                </div>
+                <div className="gsd-stat-label">En cours</div>
+                <div className="gsd-stat-hint">Cliquer pour voir</div>
               </div>
             </div>
-            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('traites')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
-                  <span style={{ fontSize: '32px' }}>✅</span>
+            <div className="gsd-stat-card" onClick={() => openStatsModal('traites')}>
+              <div className="gsd-stat-icon-badge" style={{ background: 'var(--ok-bg)' }}>✅</div>
+              <div>
+                <div className="gsd-stat-num" style={{ color: 'var(--ok)' }}>
+                  {userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                 </div>
-                <div>
-                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
-                    {userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
-                </div>
+                <div className="gsd-stat-label">Traités</div>
+                <div className="gsd-stat-hint">Cliquer pour voir</div>
               </div>
             </div>
-            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('retournes')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ background: 'linear-gradient(135deg, #ffebee 0%, #f44336 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(244, 67, 54, 0.2)' }}>
-                  <span style={{ fontSize: '32px' }}>↩️</span>
+            <div className="gsd-stat-card" onClick={() => openStatsModal('retournes')}>
+              <div className="gsd-stat-icon-badge" style={{ background: 'var(--danger-bg)' }}>↩️</div>
+              <div>
+                <div className="gsd-stat-num" style={{ color: 'var(--danger)' }}>
+                  {userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE').length}
                 </div>
-                <div>
-                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#f44336', marginBottom: '4px' }}>
-                    {userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE').length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Retournés</div>
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
-                </div>
+                <div className="gsd-stat-label">Retournés</div>
+                <div className="gsd-stat-hint">Cliquer pour voir</div>
               </div>
             </div>
           </div>
         )}
-        
+
         {/* Chef d'équipe stats - WITH POPUP */}
         {!isGestionnaire && (
-          <div className="chef-equipe-stats">
-            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('non-affectes')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(255, 152, 0, 0.2)' }}>
-                  <span style={{ fontSize: '32px' }}>📋</span>
-                </div>
-                <div>
-                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>{unassignedBordereaux.length}</div>
-                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Non affectés</div>
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
-                </div>
+          <div className="gsd-stats-grid">
+            <div className="gsd-stat-card" onClick={() => openStatsModal('non-affectes')}>
+              <div className="gsd-stat-icon-badge" style={{ background: 'var(--warn-bg)' }}>📋</div>
+              <div>
+                <div className="gsd-stat-num" style={{ color: 'var(--warn)' }}>{unassignedBordereaux.length}</div>
+                <div className="gsd-stat-label">Non affectés</div>
+                <div className="gsd-stat-hint">Cliquer pour voir</div>
               </div>
             </div>
-            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('en-cours')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
-                  <span style={{ fontSize: '32px' }}>⏳</span>
+            <div className="gsd-stat-card" onClick={() => openStatsModal('en-cours')}>
+              <div className="gsd-stat-icon-badge" style={{ background: 'var(--info-bg)' }}>⏳</div>
+              <div>
+                <div className="gsd-stat-num" style={{ color: 'var(--info)' }}>
+                  {teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
                 </div>
-                <div>
-                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>
-                    {teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
-                </div>
+                <div className="gsd-stat-label">En cours</div>
+                <div className="gsd-stat-hint">Cliquer pour voir</div>
               </div>
             </div>
-            <div className="chef-equipe-stat-card" onClick={() => openStatsModal('traites')} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
-                  <span style={{ fontSize: '32px' }}>✅</span>
+            <div className="gsd-stat-card" onClick={() => openStatsModal('traites')}>
+              <div className="gsd-stat-icon-badge" style={{ background: 'var(--ok-bg)' }}>✅</div>
+              <div>
+                <div className="gsd-stat-num" style={{ color: 'var(--ok)' }}>
+                  {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                 </div>
-                <div>
-                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>
-                    {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
-                </div>
+                <div className="gsd-stat-label">Traités</div>
+                <div className="gsd-stat-hint">Cliquer pour voir</div>
               </div>
             </div>
-            <div className="chef-equipe-stat-card">
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(156, 39, 176, 0.2)' }}>
-                  <span style={{ fontSize: '32px' }}>👥</span>
-                </div>
-                <div>
-                  <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#9c27b0', marginBottom: '4px' }}>
-                    {gestionnaires.length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Gestionnaires</div>
-                </div>
+            <div className="gsd-stat-card gsd-stat-card--static">
+              <div className="gsd-stat-icon-badge" style={{ background: '#F1ECF9' }}>👥</div>
+              <div>
+                <div className="gsd-stat-num" style={{ color: '#6E4A9E' }}>{gestionnaires.length}</div>
+                <div className="gsd-stat-label">Gestionnaires</div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Corbeille Globale - COMMENTED OUT */}
+        {/* Corbeille Globale - COMMENTED OUT (unchanged: still gated behind `false`) */}
         {false && !isGestionnaire && (
-          <div className="chef-equipe-corbeille">
-            <div className="chef-equipe-corbeille-header">
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div className="chef-equipe-corbeille-icon">
-                  📥
-                </div>
+          <div className="gsd-panel gsd-panel--flush">
+            <div className="gsd-panel-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div className="gsd-header-icon" style={{ width: '44px', height: '44px', fontSize: '20px', background: 'var(--canvas)' }}>📥</div>
                 <div>
-                  <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Corbeille Globale</h2>
-                  <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>Gestion et affectation des dossiers</p>
+                  <h2 className="gsd-panel-title" style={{ fontSize: '18px' }}>Corbeille Globale</h2>
+                  <p className="gsd-modal-sub">Gestion et affectation des dossiers</p>
                 </div>
               </div>
             </div>
 
-          {/* Tabs */}
-          <div className="chef-equipe-tabs">
-            <button 
-              className={`chef-equipe-tab ${activeTab === 'non-affectes' ? 'active' : ''}`}
-              onClick={() => setActiveTab('non-affectes')}
-            >
-              Non affectés ({unassignedBordereaux.length})
-            </button>
-            <button 
-              className={`chef-equipe-tab ${activeTab === 'en-cours' ? 'active' : ''}`}
-              onClick={() => setActiveTab('en-cours')}
-            >
-              En cours ({teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length})
-            </button>
-            <button 
-              className={`chef-equipe-tab ${activeTab === 'traites' ? 'active' : ''}`}
-              onClick={() => setActiveTab('traites')}
-            >
-              Traités ({teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
-            </button>
-          </div>
-
-          {/* Content */}
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '60px' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-              <p style={{ color: '#666', fontSize: '18px' }}>Chargement des dossiers...</p>
+            <div className="gsd-tabs">
+              <button className={`gsd-tab ${activeTab === 'non-affectes' ? 'active' : ''}`} onClick={() => setActiveTab('non-affectes')}>
+                Non affectés ({unassignedBordereaux.length})
+              </button>
+              <button className={`gsd-tab ${activeTab === 'en-cours' ? 'active' : ''}`} onClick={() => setActiveTab('en-cours')}>
+                En cours ({teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length})
+              </button>
+              <button className={`gsd-tab ${activeTab === 'traites' ? 'active' : ''}`} onClick={() => setActiveTab('traites')}>
+                Traités ({teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
+              </button>
             </div>
-          ) : tabData.length === 0 ? (
-            <div className="chef-equipe-empty">
-              <div className="chef-equipe-empty-icon">
-                📋
-              </div>
-              <h3 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '16px', letterSpacing: '-0.5px' }}>
-                Aucun dossier {activeTab === 'non-affectes' ? 'non affecté' : activeTab === 'en-cours' ? 'en cours' : 'traité'}
-              </h3>
-              <p style={{ color: '#666', fontSize: '20px', marginBottom: '40px', lineHeight: '1.5' }}>
-                {activeTab === 'non-affectes' 
-                  ? 'Tous les dossiers ont été affectés à vos gestionnaires.'
-                  : activeTab === 'en-cours'
-                  ? 'Aucun dossier n\'est actuellement en cours de traitement.'
-                  : 'Aucun dossier n\'a encore été traité par votre équipe.'
-                }
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Company-Requested Chef d'équipe Table */}
-              <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', marginBottom: '24px' }}>
-                <div style={{ padding: '16px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
-                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#495057' }}>📋 Tableau de Bord Chef d'Équipe</h3>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ background: '#f8f9fa' }}>
-                        {activeTab === 'non-affectes' && !isGestionnaire && (
-                          <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Sélection</th>
-                        )}
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Client / Prestataire</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Référence Bordereau</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date réception BO</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Bulletin de soins</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date fin de Scannérisation</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Délais contractuels de règlement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de traitement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de règlement</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tabData.map((bordereau, index) => {
-                        // Check if Gestionnaire can modify this bordereau
-                        const canModify = !isGestionnaire || bordereau.assignedToUserId === user?.id;
-                        const isAssignedToMe = bordereau.assignedToUserId === user?.id;
-                        const isSelected = selectedBordereaux.includes(bordereau.id);
-                        
 
-                        
-                        return (
-                        <tr 
-                          key={bordereau.id} 
-                          style={{ 
-                            background: isSelected ? '#e3f2fd' : index % 2 === 0 ? '#ffffff' : '#f8f9fa',
-                            cursor: activeTab === 'non-affectes' && !isGestionnaire ? 'pointer' : 'default',
-                            opacity: isGestionnaire && !isAssignedToMe ? 0.6 : 1,
-                            border: isSelected ? '2px solid #2196f3' : 'none'
-                          }}
-                          onClick={() => {
-                            if (activeTab === 'non-affectes' && !isGestionnaire) {
-                              handleBordereauSelect(bordereau.id);
-                            }
-                          }}
-                        >
-                          {activeTab === 'non-affectes' && !isGestionnaire && (
-                            <td style={{ padding: '12px 8px', borderBottom: '1px solid #dee2e6' }}>
-                              <input 
-                                type="checkbox" 
-                                checked={selectedBordereaux.includes(bordereau.id)}
-                                onChange={() => handleBordereauSelect(bordereau.id)}
-                                style={{ cursor: 'pointer' }}
-                              />
-                            </td>
-                          )}
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {bordereau.client?.name || 'N/A'}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc', borderBottom: '1px solid #dee2e6' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {bordereau.reference}
-                              {isGestionnaire && isAssignedToMe && (
-                                <span style={{
-                                  background: '#4caf50',
-                                  color: 'white',
-                                  padding: '2px 6px',
-                                  borderRadius: '10px',
-                                  fontSize: '10px',
-                                  fontWeight: 'bold'
-                                }}>
-                                  💼 ASSIGNÉ
-                                </span>
-                              )}
-                              {isGestionnaire && !isAssignedToMe && (
-                                <span style={{
-                                  background: '#999',
-                                  color: 'white',
-                                  padding: '2px 6px',
-                                  borderRadius: '10px',
-                                  fontSize: '10px',
-                                  fontWeight: 'bold'
-                                }}>
-                                  🔒 LECTURE
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ 
-                                background: '#e3f2fd', 
-                                color: '#1976d2', 
-                                padding: '4px 8px', 
-                                borderRadius: '12px', 
-                                fontSize: '12px', 
-                                fontWeight: 'bold' 
-                              }}>
-                                {bordereau.nombreBS || 0} BS
-                              </span>
-                              {bordereau.BulletinSoin && bordereau.BulletinSoin.length > 0 && (
-                                <span style={{ fontSize: '12px', color: '#666' }}>
-                                  ({bordereau.BulletinSoin.filter((bs: any) => bs.etat === 'VALIDATED').length} traités)
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            <span style={{ 
-                              background: '#fff3e0', 
-                              color: '#f57c00', 
-                              padding: '4px 8px', 
-                              borderRadius: '12px', 
-                              fontSize: '12px', 
-                              fontWeight: 'bold' 
-                            }}>
-                              {bordereau.delaiReglement || 0} jours
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {(() => {
-                              const dureeTraitement = getDureeTraitement(bordereau);
-                              if (dureeTraitement.days === null || dureeTraitement.days === undefined) {
-                                return <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>;
-                              }
-                              return (
-                                <span style={{ 
-                                  background: dureeTraitement.isOnTime ? '#e8f5e9' : '#ffebee', 
-                                  color: dureeTraitement.isOnTime ? '#2e7d32' : '#c62828', 
-                                  padding: '4px 8px', 
-                                  borderRadius: '12px', 
-                                  fontSize: '12px', 
-                                  fontWeight: 'bold',
-                                  display: 'inline-block'
-                                }}>
-                                  {dureeTraitement.days} jour{dureeTraitement.days !== 1 ? 's' : ''}
-                                </span>
-                              );
-                            })()}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                            {(() => {
-                              // Show "✓ Réglé (Xj)" for VIREMENT_EXECUTE with days
-                              if (bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE') {
-                                const days = getDureeReglement(bordereau).days;
-                                return <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({days || 0}j)</span>;
-                              }
-                              const dureeReglement = getDureeReglement(bordereau);
-                              if (dureeReglement.days === null || dureeReglement.days === undefined) {
-                                return <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>;
-                              }
-                              return (
-                                <span style={{ 
-                                  background: dureeReglement.isOnTime ? '#e8f5e9' : '#ffebee', 
-                                  color: dureeReglement.isOnTime ? '#2e7d32' : '#c62828', 
-                                  padding: '4px 8px', 
-                                  borderRadius: '12px', 
-                                  fontSize: '12px', 
-                                  fontWeight: 'bold',
-                                  display: 'inline-block'
-                                }}>
-                                  {dureeReglement.days} jour{dureeReglement.days !== 1 ? 's' : ''}
-                                </span>
-                              );
-                            })()}
-                          </td>
-                        </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+            {loading ? (
+              <div className="gsd-empty">
+                <div className="gsd-empty-icon">⏳</div>
+                <p>Chargement des dossiers...</p>
               </div>
-
-              {/* Original Dossiers Grid (kept for compatibility) */}
-              <div className="chef-equipe-dossier-grid" style={{ display: 'none' }}>
-                {tabData.map(bordereau => (
-                  <div 
-                    key={bordereau.id} 
-                    className={`chef-equipe-dossier-card ${selectedBordereaux.includes(bordereau.id) ? 'selected' : ''}`}
-                    onClick={() => activeTab === 'non-affectes' && handleBordereauSelect(bordereau.id)}
-                    style={{ cursor: activeTab === 'non-affectes' ? 'pointer' : 'default' }}
-                  >
-                    <BordereauCard 
-                      bordereau={bordereau} 
-                      onAssignSuccess={loadData}
-                      showSelect={activeTab === 'non-affectes'}
-                      selected={selectedBordereaux.includes(bordereau.id)}
-                    />
+            ) : tabData.length === 0 ? (
+              <div className="gsd-empty">
+                <div className="gsd-empty-icon">📋</div>
+                <h3>Aucun dossier {activeTab === 'non-affectes' ? 'non affecté' : activeTab === 'en-cours' ? 'en cours' : 'traité'}</h3>
+                <p>
+                  {activeTab === 'non-affectes'
+                    ? 'Tous les dossiers ont été affectés à vos gestionnaires.'
+                    : activeTab === 'en-cours'
+                    ? 'Aucun dossier n\'est actuellement en cours de traitement.'
+                    : 'Aucun dossier n\'a encore été traité par votre équipe.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: '18px' }}>
+                  <div className="gsd-panel gsd-panel--flush">
+                    <div className="gsd-panel-header">
+                      <h3 className="gsd-panel-title" style={{ fontSize: '15px' }}>📋 Tableau de Bord Chef d'Équipe</h3>
+                    </div>
+                    <div className="gsd-table-scroll">
+                      <table className="gsd-table">
+                        <thead>
+                          <tr>
+                            {activeTab === 'non-affectes' && !isGestionnaire && <th>Sélection</th>}
+                            <th>Client / Prestataire</th>
+                            <th>Référence Bordereau</th>
+                            <th>Date réception BO</th>
+                            <th>Bulletin de soins</th>
+                            <th>Date fin de Scannérisation</th>
+                            <th>Délais contractuels de règlement</th>
+                            <th>Durée de traitement</th>
+                            <th>Durée de règlement</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tabData.map((bordereau) => {
+                            const isAssignedToMe = bordereau.assignedToUserId === user?.id;
+                            const isSelected = selectedBordereaux.includes(bordereau.id);
+                            const locked = bordereau.statut === 'VIREMENT_EXECUTE';
+                            return (
+                              <tr
+                                key={bordereau.id}
+                                className={`${isSelected ? 'gsd-row--selected' : ''} ${locked ? 'gsd-row--locked' : ''}`}
+                                style={{
+                                  cursor: activeTab === 'non-affectes' && !isGestionnaire && !locked ? 'pointer' : 'default',
+                                  opacity: isGestionnaire && !isAssignedToMe ? 0.6 : 1,
+                                }}
+                                onClick={() => {
+                                  if (activeTab === 'non-affectes' && !isGestionnaire && !locked) {
+                                    handleBordereauSelect(bordereau.id);
+                                  }
+                                }}
+                              >
+                                {activeTab === 'non-affectes' && !isGestionnaire && (
+                                  <td>
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedBordereaux.includes(bordereau.id)}
+                                      onChange={() => handleBordereauSelect(bordereau.id)}
+                                      style={{ cursor: locked ? 'not-allowed' : 'pointer' }}
+                                      disabled={locked}
+                                    />
+                                  </td>
+                                )}
+                                <td>{bordereau.client?.name || 'N/A'}</td>
+                                <td className="gsd-cell--ref">
+                                  <div className="gsd-tag-row">
+                                    {bordereau.reference}
+                                    {locked && <span className="gsd-tag gsd-tag--neutral">🔒 Verrouillé</span>}
+                                    {isGestionnaire && isAssignedToMe && <span className="gsd-tag gsd-tag--ok">💼 ASSIGNÉ</span>}
+                                    {isGestionnaire && !isAssignedToMe && <span className="gsd-tag gsd-tag--neutral">🔒 LECTURE</span>}
+                                  </div>
+                                </td>
+                                <td>{bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
+                                <td>
+                                  <div className="gsd-tag-row">
+                                    <span className="gsd-status gsd-status--info">{bordereau.nombreBS || 0} BS</span>
+                                    {bordereau.BulletinSoin && bordereau.BulletinSoin.length > 0 && (
+                                      <span style={{ fontSize: '11px', color: 'var(--ink-500)' }}>
+                                        ({bordereau.BulletinSoin.filter((bs: any) => bs.etat === 'VALIDATED').length} traités)
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td>{bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
+                                <td><span className="gsd-status gsd-status--warn">{bordereau.delaiReglement || 0} jours</span></td>
+                                <td>{dureeTraitementBadge(bordereau)}</td>
+                                <td>{dureeReglementBadge(bordereau)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Assignment Panel - Only for Chef d'équipe */}
-              {activeTab === 'non-affectes' && selectedBordereaux.length > 0 && !isGestionnaire && (
-                <div className="chef-equipe-assign-panel">
-                  <h3 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '20px' }}>
-                    Affecter {selectedBordereaux.length} dossier(s) sélectionné(s)
-                  </h3>
-                  
-                  <div className="chef-equipe-gestionnaire-list">
-                    {gestionnaires.map(gestionnaire => (
+                  {/* Original Dossiers Grid (kept for compatibility) */}
+                  <div className="chef-equipe-dossier-grid" style={{ display: 'none' }}>
+                    {tabData.map(bordereau => (
                       <div
-                        key={gestionnaire.id}
-                        className={`chef-equipe-gestionnaire-card ${selectedGestionnaire === gestionnaire.id ? 'selected' : ''}`}
-                        onClick={() => setSelectedGestionnaire(gestionnaire.id)}
+                        key={bordereau.id}
+                        className={`chef-equipe-dossier-card ${selectedBordereaux.includes(bordereau.id) ? 'selected' : ''}`}
+                        onClick={() => activeTab === 'non-affectes' && handleBordereauSelect(bordereau.id)}
+                        style={{ cursor: activeTab === 'non-affectes' ? 'pointer' : 'default' }}
                       >
-                        <div style={{ fontSize: '32px', marginBottom: '12px' }}>👤</div>
-                        <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '8px' }}>{gestionnaire.fullName}</div>
-                        <div style={{ fontSize: '14px', color: '#666' }}>
-                          Charge: {gestionnaire.workload}/{gestionnaire.capacity}
-                        </div>
-                        <div style={{ 
-                          width: '100%', 
-                          height: '4px', 
-                          background: '#f0f0f0', 
-                          borderRadius: '2px', 
-                          marginTop: '8px',
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{ 
-                            width: `${Math.min((gestionnaire.workload / gestionnaire.capacity) * 100, 100)}%`, 
-                            height: '100%', 
-                            background: gestionnaire.workload >= gestionnaire.capacity ? '#f44336' : '#4caf50',
-                            borderRadius: '2px'
-                          }} />
-                        </div>
+                        <BordereauCard
+                          bordereau={bordereau}
+                          onAssignSuccess={loadData}
+                          showSelect={activeTab === 'non-affectes'}
+                          selected={selectedBordereaux.includes(bordereau.id)}
+                        />
                       </div>
                     ))}
                   </div>
 
-                  <div style={{ marginTop: '24px', textAlign: 'center' }}>
-                    <button
-                      onClick={handleAssignBordereaux}
-                      disabled={!selectedGestionnaire}
-                      style={{
-                        background: selectedGestionnaire ? 'linear-gradient(135deg, #9c27b0 0%, #e91e63 100%)' : '#ccc',
-                        color: 'white',
-                        border: 'none',
-                        padding: '16px 32px',
-                        borderRadius: '12px',
-                        fontSize: '18px',
-                        fontWeight: 'bold',
-                        cursor: selectedGestionnaire ? 'pointer' : 'not-allowed',
-                        boxShadow: selectedGestionnaire ? '0 8px 20px rgba(156, 39, 176, 0.3)' : 'none',
-                        transition: 'all 0.3s ease'
-                      }}
-                    >
-                      Affecter les dossiers
-                    </button>
-                  </div>
+                  {/* Assignment Panel - Only for Chef d'équipe */}
+                  {activeTab === 'non-affectes' && selectedBordereaux.length > 0 && !isGestionnaire && (
+                    <div className="gsd-assign-panel" style={{ marginTop: '18px' }}>
+                      <h3 className="gsd-assign-title">
+                        Affecter {selectedBordereaux.length} dossier(s) sélectionné(s)
+                      </h3>
+
+                      <div className="gsd-gestionnaire-grid">
+                        {gestionnaires.map(gestionnaire => (
+                          <div
+                            key={gestionnaire.id}
+                            className={`gsd-gestionnaire-card ${selectedGestionnaire === gestionnaire.id ? 'selected' : ''}`}
+                            onClick={() => setSelectedGestionnaire(gestionnaire.id)}
+                          >
+                            <div className="avatar">👤</div>
+                            <div className="name">{gestionnaire.fullName}</div>
+                            <div className="load">Charge: {gestionnaire.workload}/{gestionnaire.capacity}</div>
+                            <div className="gsd-progress-track">
+                              <div
+                                className="gsd-progress-fill"
+                                style={{
+                                  width: `${Math.min((gestionnaire.workload / gestionnaire.capacity) * 100, 100)}%`,
+                                  background: gestionnaire.workload >= gestionnaire.capacity ? 'var(--danger)' : 'var(--ok)',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                        <button
+                          className="gsd-btn gsd-btn--brand"
+                          onClick={handleAssignBordereaux}
+                          disabled={!selectedGestionnaire || selectedBordereaux.some((id) => {
+                            const bordereau = [...unassignedBordereaux, ...teamBordereaux, ...userBordereaux].find(item => item.id === id);
+                            return isBordereauLocked(bordereau);
+                          })}
+                        >
+                          Affecter les dossiers
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* Performance Section */}
-        <div className="chef-equipe-performance">
-          <div className="chef-equipe-perf-header">
-            <div className="chef-equipe-perf-icon">
-              📊
-            </div>
-            <div>
-              <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>
-                {isGestionnaire ? 'Performance Gestionnaire' : 'Performance de l\'\u00c9quipe'}
-              </h2>
-              <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>Suivi et analyse des performances</p>
+        <div className="gsd-panel">
+          <div className="gsd-panel-header" style={{ margin: '-18px -18px 18px -18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div className="gsd-header-icon" style={{ width: '44px', height: '44px', fontSize: '20px', background: 'var(--surface)', border: '1px solid var(--line)' }}>📊</div>
+              <div>
+                <h2 className="gsd-panel-title" style={{ fontSize: '18px' }}>
+                  {isGestionnaire ? 'Performance Gestionnaire' : "Performance de l'Équipe"}
+                </h2>
+                <p className="gsd-modal-sub">Suivi et analyse des performances</p>
+              </div>
             </div>
           </div>
-          <div className="chef-equipe-perf-grid">
+          <div className="gsd-perf-grid">
             {isGestionnaire ? (
               <>
-                <div className="chef-equipe-perf-card blue">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
-                    {userBordereaux.length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total bordereaux gestionnaire</div>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--info)' }}>{userBordereaux.length}</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--info)' }}>Total bordereaux gestionnaire</div>
                 </div>
-                <div className="chef-equipe-perf-card green">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--ok)' }}>
                     {userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                   </div>
-                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>bordereaux traités par le gestionnaire</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--ok)' }}>bordereaux traités par le gestionnaire</div>
                 </div>
-                <div className="chef-equipe-perf-card orange">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--warn)' }}>
                     {Math.round((userBordereaux.length / 20) * 100) || 0}%
                   </div>
-                  <div style={{ fontSize: '16px', color: '#f57c00', fontWeight: 'bold' }}>Charge moyenne du gestionnaire</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--warn)' }}>Charge moyenne du gestionnaire</div>
                 </div>
-                <div className="chef-equipe-perf-card purple">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--brand)' }}>
                     {userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%
                   </div>
-                  <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite du gestionnaire</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--brand)' }}>Taux de réussite du gestionnaire</div>
                 </div>
               </>
             ) : (
               <>
-                <div className="chef-equipe-perf-card blue">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>
-                    {unassignedBordereaux.length + teamBordereaux.length}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>Total bordereaux équipe</div>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--info)' }}>{unassignedBordereaux.length + teamBordereaux.length}</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--info)' }}>Total bordereaux équipe</div>
                 </div>
-                <div className="chef-equipe-perf-card green">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--ok)' }}>
                     {teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}
                   </div>
-                  <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>bordereaux traités</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--ok)' }}>bordereaux traités</div>
                 </div>
-                <div className="chef-equipe-perf-card orange">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f57c00', marginBottom: '12px' }}>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--warn)' }}>
                     {Math.round(gestionnaires.reduce((acc, g) => acc + (g.workload / g.capacity), 0) / gestionnaires.length * 100) || 0}%
                   </div>
-                  <div style={{ fontSize: '16px', color: '#f57c00', fontWeight: 'bold' }}>Charge moyenne équipe</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--warn)' }}>Charge moyenne équipe</div>
                 </div>
-                <div className="chef-equipe-perf-card purple">
-                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>
+                <div className="gsd-perf-card">
+                  <div className="gsd-perf-num" style={{ color: 'var(--brand)' }}>
                     {(unassignedBordereaux.length + teamBordereaux.length) > 0 ? Math.round((teamBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / (unassignedBordereaux.length + teamBordereaux.length)) * 100) : 0}%
                   </div>
-                  <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
+                  <div className="gsd-perf-label" style={{ color: 'var(--brand)' }}>Taux de réussite</div>
                 </div>
               </>
             )}
@@ -777,270 +836,155 @@ function ChefEquipeBordereaux() {
 
       {/* Status Change Modal */}
       {showStatusModal && selectedBordereau && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '32px',
-            maxWidth: '500px',
-            width: '90%',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '8px' }}>
-                Modifier le Statut
-              </h2>
-              <p style={{ color: '#666', fontSize: '16px' }}>
-                Bordereau: <strong>{selectedBordereau.reference}</strong>
-              </p>
-              <p style={{ color: '#666', fontSize: '14px' }}>
-                Statut actuel: <span style={{ 
-                  background: '#e3f2fd', 
-                  color: '#1976d2', 
-                  padding: '4px 8px', 
-                  borderRadius: '4px',
-                  fontWeight: 'bold'
-                }}>{selectedBordereau.statut}</span>
-              </p>
-            </div>
+        <div className="gsd-overlay">
+          <div className="gsd-modal gsd-modal--sm">
+            <div style={{ padding: '26px 26px 0 26px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)', marginBottom: '8px' }}>
+                  Modifier le Statut
+                </h2>
+                <p style={{ color: 'var(--ink-500)', fontSize: '14px' }}>
+                  Bordereau: <strong style={{ color: 'var(--ink-900)' }}>{selectedBordereau.reference}</strong>
+                </p>
+                <p style={{ color: 'var(--ink-500)', fontSize: '13px' }}>
+                  Statut actuel: <span className="gsd-status gsd-status--info">{selectedBordereau.statut}</span>
+                </p>
+              </div>
 
-            <div style={{ marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: '#1a1a1a' }}>
-                Choisir le nouveau statut:
-              </h3>
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {(isGestionnaire ? [
-                  { key: 'TRAITE', label: 'Traité', color: '#4caf50', icon: '✅' },
-                  { key: 'EN_DIFFICULTE', label: 'En difficulté', color: '#ff9800', icon: '⚠️' },
-                  { key: 'REJETE', label: 'Rejeté', color: '#f44336', icon: '❌' }
-                ] : [
-                  { key: 'TRAITE', label: 'Traité', color: '#4caf50', icon: '✅' },
-                  { key: 'EN_DIFFICULTE', label: 'En difficulté', color: '#ff9800', icon: '⚠️' },
-                  { key: 'REJETE', label: 'Rejeté', color: '#f44336', icon: '❌' },
-                  { key: 'ASSIGNE', label: 'Assigné', color: '#2196f3', icon: '📋' },
-                  { key: 'EN_COURS', label: 'En cours', color: '#9c27b0', icon: '⏳' }
-                ]).map(status => (
-                  <button
-                    key={status.key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '16px',
-                      border: '2px solid #e0e0e0',
-                      borderRadius: '8px',
-                      backgroundColor: 'white',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      fontSize: '16px',
-                      fontWeight: '500'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = status.color;
-                      e.currentTarget.style.backgroundColor = status.color + '10';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e0e0e0';
-                      e.currentTarget.style.backgroundColor = 'white';
-                    }}
-                    onClick={() => handleGestionnaireStatusChange(selectedBordereau.id, status.key)}
-                  >
-                    <span style={{ fontSize: '24px', marginRight: '12px' }}>{status.icon}</span>
-                    <span style={{ color: status.color, fontWeight: 'bold' }}>{status.label}</span>
-                  </button>
-                ))}
+              <div style={{ marginBottom: '22px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '14px', color: 'var(--ink-900)' }}>
+                  Choisir le nouveau statut:
+                </h3>
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  {(isGestionnaire ? [
+                    { key: 'TRAITE', label: 'Traité', color: '#1E8E5A', icon: '✅' },
+                    { key: 'EN_DIFFICULTE', label: 'En difficulté', color: '#B4740E', icon: '⚠️' },
+                    { key: 'REJETE', label: 'Rejeté', color: '#B3272D', icon: '❌' }
+                  ] : [
+                    { key: 'TRAITE', label: 'Traité', color: '#1E8E5A', icon: '✅' },
+                    { key: 'EN_DIFFICULTE', label: 'En difficulté', color: '#B4740E', icon: '⚠️' },
+                    { key: 'REJETE', label: 'Rejeté', color: '#B3272D', icon: '❌' },
+                    { key: 'ASSIGNE', label: 'Assigné', color: '#2A5DA8', icon: '📋' },
+                    { key: 'EN_COURS', label: 'En cours', color: '#6E4A9E', icon: '⏳' }
+                  ]).map(status => (
+                    <button
+                      key={status.key}
+                      className="gsd-status-choice"
+                      disabled={selectedBordereau?.statut === 'VIREMENT_EXECUTE'}
+                      style={{
+                        opacity: selectedBordereau?.statut === 'VIREMENT_EXECUTE' ? 0.45 : 1,
+                        cursor: selectedBordereau?.statut === 'VIREMENT_EXECUTE' ? 'not-allowed' : 'pointer',
+                        pointerEvents: selectedBordereau?.statut === 'VIREMENT_EXECUTE' ? 'none' : 'auto'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (selectedBordereau?.statut === 'VIREMENT_EXECUTE') return;
+                        e.currentTarget.style.borderColor = status.color;
+                        e.currentTarget.style.backgroundColor = status.color + '10';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (selectedBordereau?.statut === 'VIREMENT_EXECUTE') return;
+                        e.currentTarget.style.borderColor = 'var(--line)';
+                        e.currentTarget.style.backgroundColor = 'var(--surface)';
+                      }}
+                      onClick={() => handleGestionnaireStatusChange(selectedBordereau.id, status.key)}
+                    >
+                      <span style={{ fontSize: '22px', marginRight: '12px' }}>{status.icon}</span>
+                      <span style={{ color: status.color, fontWeight: 700 }}>{status.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                style={{
-                  padding: '12px 24px',
-                  border: '2px solid #e0e0e0',
-                  borderRadius: '8px',
-                  backgroundColor: 'white',
-                  color: '#666',
-                  fontSize: '16px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onClick={() => setShowStatusModal(false)}
-              >
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 26px 26px 26px', borderTop: '1px solid var(--line)' }}>
+              <button className="gsd-btn gsd-btn--neutral" onClick={() => setShowStatusModal(false)}>
                 Annuler
               </button>
             </div>
           </div>
         </div>
       )}
-      
+
       {/* Stats Modal for Gestionnaire */}
       {showStatsModal && isGestionnaire && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            width: '90%',
-            maxWidth: '1000px',
-            maxHeight: '80vh',
-            overflow: 'hidden',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              padding: '20px',
-              borderBottom: '1px solid #e0e0e0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: '#f8f9fa'
-            }}>
+        <div className="gsd-overlay">
+          <div className="gsd-modal gsd-modal--lg">
+            <div className="gsd-modal-header">
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>
-                  {statsModalType === 'en-cours' ? '⏳ Dossiers En Cours' : 
-                   statsModalType === 'traites' ? '✅ Dossiers Traités' : 
+                <h2 className="gsd-modal-title">
+                  {statsModalType === 'en-cours' ? '⏳ Dossiers En Cours' :
+                   statsModalType === 'traites' ? '✅ Dossiers Traités' :
                    '↩️ Dossiers Retournés'}
                 </h2>
-                <p style={{ color: '#666', fontSize: '14px', margin: '4px 0 0 0' }}>
-                  {statsModalData.length} dossier(s) trouvé(s)
-                </p>
+                <p className="gsd-modal-sub">{statsModalData.length} dossier(s) trouvé(s)</p>
               </div>
-              <button
-                onClick={() => setShowStatsModal(false)}
-                style={{
-                  background: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 'bold'
-                }}
-              >
+              <button className="gsd-btn gsd-btn--danger" onClick={() => setShowStatsModal(false)}>
                 Fermer
               </button>
             </div>
-            
-            {/* Modal Content */}
-            <div style={{ padding: '20px', maxHeight: '60vh', overflow: 'auto' }}>
+
+            <div className="gsd-modal-body">
               {statsModalData.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px' }}>
-                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>
-                    {statsModalType === 'en-cours' ? '⏳' : 
-                     statsModalType === 'traites' ? '✅' : '↩️'}
+                <div className="gsd-empty">
+                  <div className="gsd-empty-icon">
+                    {statsModalType === 'en-cours' ? '⏳' : statsModalType === 'traites' ? '✅' : '↩️'}
                   </div>
-                  <h3 style={{ fontSize: '20px', color: '#666', marginBottom: '8px' }}>Aucun dossier</h3>
-                  <p style={{ color: '#999' }}>Aucun dossier {statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'} pour le moment.</p>
+                  <h3>Aucun dossier</h3>
+                  <p>Aucun dossier {statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'} pour le moment.</p>
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div className="gsd-table-scroll">
+                  <table className="gsd-table">
                     <thead>
-                      <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #d52b36' }}>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Référence</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Documents</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Actions</th>
+                      <tr>
+                        <th>Référence</th>
+                        <th>Client</th>
+                        <th>Statut</th>
+                        <th>Date Réception</th>
+                        <th>Documents</th>
+                        <th>Délai</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {statsModalData.map((bordereau, index) => (
-                        <tr key={bordereau.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc' }}>
-                            {bordereau.reference}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {bordereau.client?.name || 'Client inconnu'}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <span style={{
-                              background: bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? '#4caf50' : 
-                                         bordereau.statut === 'RETOURNE' ? '#f44336' : '#2196f3',
-                              color: 'white',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                              fontWeight: 'bold'
-                            }}>
-                              {bordereau.statut}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <span style={{
-                              background: '#e3f2fd',
-                              color: '#1976d2',
-                              padding: '4px 8px',
-                              borderRadius: '12px',
-                              fontSize: '12px',
-                              fontWeight: 'bold'
-                            }}>
-                              {bordereau.documentsCount || bordereau.nombreBS || 0} BS
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <span style={{
-                              background: '#fff3e0',
-                              color: '#f57c00',
-                              padding: '4px 8px',
-                              borderRadius: '12px',
-                              fontSize: '12px',
-                              fontWeight: 'bold'
-                            }}>
-                              {bordereau.delaiReglement || 30}j
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                      {statsModalData.map((bordereau) => {
+                        const locked = bordereau.statut === 'VIREMENT_EXECUTE';
+                        return (
+                          <tr key={bordereau.id} className={locked ? 'gsd-row--locked' : ''}>
+                            <td className="gsd-cell--ref">
+                              {bordereau.reference}
+                              {locked && <span className="gsd-tag gsd-tag--neutral" style={{ marginLeft: '6px' }}>🔒</span>}
+                            </td>
+                            <td>{bordereau.client?.name || 'Client inconnu'}</td>
+                            <td>
+                              <span className={`gsd-status ${
+                                bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? 'gsd-status--ok' :
+                                bordereau.statut === 'RETOURNE' ? 'gsd-status--danger' : 'gsd-status--info'
+                              }`}>
+                                {bordereau.statut}
+                              </span>
+                            </td>
+                            <td>{new Date(bordereau.dateReception).toLocaleDateString('fr-FR')}</td>
+                            <td><span className="gsd-status gsd-status--info">{bordereau.documentsCount || bordereau.nombreBS || 0} BS</span></td>
+                            <td><span className="gsd-status gsd-status--warn">{bordereau.delaiReglement || 30}j</span></td>
+                            <td>
                               <button
+                                className="gsd-btn gsd-btn--info gsd-btn--sm"
                                 onClick={() => {
+                                  if (isBordereauLocked(bordereau)) return;
                                   setSelectedBordereau(bordereau);
                                   setShowStatusModal(true);
                                   setShowStatsModal(false);
                                 }}
-                                style={{
-                                  background: '#2196f3',
-                                  color: 'white',
-                                  border: 'none',
-                                  padding: '4px 8px',
-                                  borderRadius: '4px',
-                                  fontSize: '12px',
-                                  cursor: 'pointer'
-                                }}
+                                disabled={isBordereauLocked(bordereau)}
+                                style={{ opacity: isBordereauLocked(bordereau) ? 0.45 : 1, cursor: isBordereauLocked(bordereau) ? 'not-allowed' : 'pointer' }}
                               >
                                 ✏️ Modifier
                               </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1049,167 +993,94 @@ function ChefEquipeBordereaux() {
           </div>
         </div>
       )}
-      
+
       {/* Stats Modal */}
       {showStatsModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            width: '90%',
-            maxWidth: '1200px',
-            maxHeight: '80vh',
-            overflow: 'hidden',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)'
-          }}>
-            <div style={{
-              padding: '20px',
-              borderBottom: '1px solid #e0e0e0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
+        <div className="gsd-overlay">
+          <div className="gsd-modal gsd-modal--xl">
+            <div className="gsd-modal-header">
+              <h2 className="gsd-modal-title">
                 Dossiers {statsModalType === 'non-affectes' ? 'Non Affectés' : statsModalType === 'en-cours' ? 'En Cours' : statsModalType === 'traites' ? 'Traités' : 'Retournés'} ({statsModalData.length})
               </h2>
-              <button 
-                onClick={() => setShowStatsModal(false)}
-                style={{
-                  background: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
+              <button className="gsd-btn gsd-btn--danger" onClick={() => setShowStatsModal(false)}>
                 Fermer
               </button>
             </div>
-            
-            <div style={{ padding: '20px', maxHeight: '60vh', overflowY: 'auto' }}>
+
+            <div className="gsd-modal-body">
               {statsModalData.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+                <div className="gsd-empty">
+                  <div className="gsd-empty-icon">📋</div>
                   <p>Aucun dossier {statsModalType === 'non-affectes' ? 'non affecté' : statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'}</p>
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div className="gsd-table-scroll">
+                  <table className="gsd-table">
                     <thead>
-                      <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #d52b36' }}>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Référence</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Client</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Statut</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Réception</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Documents</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Délai</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Traitement</th>
-                        {statsModalData.some(b => b.statut === 'VIREMENT_EXECUTE') && (
-                          <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Date Traitement Virement</th>
-                        )}
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Durée Règlement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#666' }}>Actions</th>
+                      <tr>
+                        <th>Référence</th>
+                        <th>Client</th>
+                        <th>Statut</th>
+                        <th>Date Réception</th>
+                        <th>Documents</th>
+                        <th>Délai</th>
+                        <th>Durée Traitement</th>
+                        {statsModalData.some(b => b.statut === 'VIREMENT_EXECUTE') && <th>Date Traitement Virement</th>}
+                        <th>Durée Règlement</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {statsModalData.map((bordereau, index) => {
-                        const dt = getDureeTraitement(bordereau);
+                      {statsModalData.map((bordereau) => {
                         const dr = getDureeReglement(bordereau);
                         const isVirementExecute = bordereau.statut === 'VIREMENT_EXECUTE';
                         const dateTraitementVirement = bordereau.dateExecutionVirement || bordereau.virement?.dateExecution;
-                        
-                        // Use backend-calculated dureeReglement for VIREMENT_EXECUTE
-                        const dureeReglementDays = dr.days;
-                        const dureeReglementOnTime = dr.isOnTime;
-                        
                         return (
-                        <tr key={bordereau.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
-                          <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{bordereau.reference}</td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>{bordereau.client?.name || 'N/A'}</td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <span style={{
-                              background: bordereau.statut === 'VIREMENT_EXECUTE' ? '#9c27b0' :
-                                         bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? '#4caf50' : 
-                                         bordereau.statut === 'RETOURNE' ? '#f44336' : '#2196f3',
-                              color: 'white',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontSize: '12px'
-                            }}>
-                              {bordereau.statut}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
-                              {bordereau.nombreBS || 0} BS
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px' }}>
-                              {bordereau.delaiReglement || 30} jours
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}
-                          </td>
-                          {statsModalData.some(b => b.statut === 'VIREMENT_EXECUTE') && (
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                              {isVirementExecute && dateTraitementVirement ? (
-                                <span style={{ background: '#e1bee7', color: '#6a1b9a', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>
-                                  {new Date(dateTraitementVirement).toLocaleDateString('fr-FR')}
-                                </span>
-                              ) : (
-                                <span style={{ color: '#999', fontSize: '12px' }}>-</span>
-                              )}
+                          <tr key={bordereau.id} className={isVirementExecute ? 'gsd-row--locked' : ''}>
+                            <td className="gsd-cell--ref">
+                              {bordereau.reference}
+                              {isVirementExecute && <span className="gsd-tag gsd-tag--neutral" style={{ marginLeft: '6px' }}>🔒</span>}
                             </td>
-                          )}
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            {bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE' ? (
-                              <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span>
-                            ) : dr.days === null ? (
-                              <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>
-                            ) : (
-                              <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>
+                            <td>{bordereau.client?.name || 'N/A'}</td>
+                            <td>
+                              <span className={`gsd-status ${
+                                bordereau.statut === 'VIREMENT_EXECUTE' ? 'gsd-status--purple' :
+                                bordereau.statut === 'TRAITE' || bordereau.statut === 'CLOTURE' ? 'gsd-status--ok' :
+                                bordereau.statut === 'RETOURNE' ? 'gsd-status--danger' : 'gsd-status--info'
+                              }`}>
+                                {bordereau.statut}
+                              </span>
+                            </td>
+                            <td>{bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td><span className="gsd-status gsd-status--info">{bordereau.nombreBS || 0} BS</span></td>
+                            <td><span className="gsd-status gsd-status--warn">{bordereau.delaiReglement || 30} jours</span></td>
+                            <td>{dureeTraitementBadge(bordereau)}</td>
+                            {statsModalData.some(b => b.statut === 'VIREMENT_EXECUTE') && (
+                              <td>
+                                {isVirementExecute && dateTraitementVirement ? (
+                                  <span className="gsd-status gsd-status--purple">{new Date(dateTraitementVirement).toLocaleDateString('fr-FR')}</span>
+                                ) : (
+                                  <span className="gsd-tag gsd-tag--neutral">-</span>
+                                )}
+                              </td>
                             )}
-                          </td>
-                          <td style={{ padding: '12px 8px', fontSize: '14px' }}>
-                            <button
-                              onClick={() => {
-                                setSelectedBordereau(bordereau);
-                                setShowStatsModal(false);
-                                setShowStatusModal(true);
-                              }}
-                              style={{
-                                background: '#2196f3',
-                                color: 'white',
-                                border: 'none',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Modifier
-                            </button>
-                          </td>
-                        </tr>
+                            <td>{dureeReglementBadge(bordereau)}</td>
+                            <td>
+                              <button
+                                className="gsd-btn gsd-btn--info gsd-btn--sm"
+                                onClick={() => {
+                                  if (isBordereauLocked(bordereau)) return;
+                                  setSelectedBordereau(bordereau);
+                                  setShowStatsModal(false);
+                                  setShowStatusModal(true);
+                                }}
+                                disabled={isBordereauLocked(bordereau)}
+                                style={{ opacity: isBordereauLocked(bordereau) ? 0.45 : 1, cursor: isBordereauLocked(bordereau) ? 'not-allowed' : 'pointer' }}
+                              >
+                                Modifier
+                              </button>
+                            </td>
+                          </tr>
                         );
                       })}
                     </tbody>

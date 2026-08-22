@@ -18,7 +18,6 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
   reglementDelay: 0,
   reclamationDelay: 0,
   gestionnaireIds: [] as string[],
-  modeRecuperation: '' as 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | '',
   compteAuxiliaireSage: ''
 });
   const [errors, setErrors] = useState<any>({});
@@ -38,12 +37,10 @@ const ClientFormModal: React.FC<Props> = ({ open, onClose, onSubmit, client }) =
         reglementDelay: client.reglementDelay || 0,
         reclamationDelay: client.reclamationDelay || 0,
         gestionnaireIds: client.gestionnaires?.map((g: any) => g.id) || [],
-        modeRecuperation: (client as any).modeRecuperation || ''
-        ,
         compteAuxiliaireSage: (client as any).compteAuxiliaireSage || ''
       });
     } else {
-      setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [], modeRecuperation: '', compteAuxiliaireSage: '' });
+      setForm({ name: '', reglementDelay: 0, reclamationDelay: 0, gestionnaireIds: [], compteAuxiliaireSage: '' });
     }
     setErrors({});
   }, [client]);
@@ -86,12 +83,7 @@ const validate = () => {
     setFormError(null);
     if (!validate()) return;
     try {
-      // Cast modeRecuperation to the correct type, filtering out empty string
-      const submitData = {
-        ...form,
-        modeRecuperation: form.modeRecuperation || undefined
-      };
-      await onSubmit(submitData as Partial<Client>);
+      await onSubmit(form as Partial<Client>);
     } catch (err: any) {
       setFormError(err?.response?.data?.message || err?.message || 'An error occurred');
     }
@@ -160,23 +152,6 @@ const validate = () => {
                 ))}
               </Select>
               {errors.gestionnaireIds && <FormHelperText>{errors.gestionnaireIds}</FormHelperText>}
-            </FormControl>
-          </Grid>
-          <Grid item xs={12}>
-            <FormControl fullWidth required>
-              <InputLabel id="modeRecuperation-label">Mode de récupération *</InputLabel>
-              <Select
-                labelId="modeRecuperation-label"
-                name="modeRecuperation"
-                value={form.modeRecuperation}
-                onChange={e => setForm({ ...form, modeRecuperation: e.target.value as 'VIREMENT' | 'CHEQUE' | 'FEUILLE_CAISSE' | '' })}
-                label="Mode de récupération *"
-              >
-                <MenuItem value="">Sélectionner un mode</MenuItem>
-                <MenuItem value="CHEQUE">Mode de récupération par chèque</MenuItem>
-                <MenuItem value="VIREMENT">Mode de récupération par virement</MenuItem>
-                <MenuItem value="FEUILLE_CAISSE">Mode de récupération sur feuille de caisse</MenuItem>
-              </Select>
             </FormControl>
           </Grid>
           <Grid item xs={12}>

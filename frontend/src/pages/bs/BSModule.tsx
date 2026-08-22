@@ -49,16 +49,6 @@ const BSModule: React.FC = () => {
         if (isMobile) setMobileMenuOpen(false);
       }
     },
-    // COMMENTED OUT: Analytiques as per company requirements
-    // {
-    //   key: '/home/bs/analytics',
-    //   icon: <BarChartOutlined />,
-    //   label: 'Analytiques',
-    //   onClick: () => {
-    //     navigate('/home/bs/analytics');
-    //     if (isMobile) setMobileMenuOpen(false);
-    //   }
-    // },
     {
       key: '/home/bs/ai',
       icon: <RobotOutlined />,
@@ -68,16 +58,6 @@ const BSModule: React.FC = () => {
         if (isMobile) setMobileMenuOpen(false);
       }
     },
-    // COMMENTED OUT: MY TUNICLAIM - Integrated into other modules instead
-    // {
-    //   key: '/home/bs/tuniclaim',
-    //   icon: <CloudDownloadOutlined />,
-    //   label: 'MY TUNICLAIM',
-    //   onClick: () => {
-    //     navigate('/home/bs/tuniclaim');
-    //     if (isMobile) setMobileMenuOpen(false);
-    //   }
-    // }
   ];
 
   // Add role-specific menu items

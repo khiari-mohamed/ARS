@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, ForbiddenException, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertsQueryDto } from './dto/alerts-query.dto';
 import { OutlookService } from '../integrations/outlook.service';
@@ -6,125 +6,229 @@ import { EnhancedAlertsService } from './enhanced-alerts.service';
 import { EscalationEngineService } from './escalation-engine.service';
 import { MultiChannelNotificationsService } from './multi-channel-notifications.service';
 import { AlertAnalyticsService } from './alert-analytics.service';
+import { RedisService } from '../shared/redis.service';
 import axios from 'axios';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 
 const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
 
 @Injectable()
-export class AlertsService {
+export class AlertsService implements OnModuleInit {
   private readonly logger = new Logger(AlertsService.name);
-  
+
+  // --- AI service auth/perf tuning -----------------------------------
+  private readonly AI_TOKEN_CACHE_KEY = 'ai:service:token';
+  private readonly AI_TOKEN_TTL = 25 * 60; // 25 minutes
+
+  private readonly AI_CIRCUIT_KEY = 'ai:service:circuit:open';
+  private readonly AI_CIRCUIT_TTL = 30; // seconds
+
+  // --- Background AI predictions cache --------------------------------
+  // The dashboard's AI-derived alert level NEVER calls the AI service
+  // inline anymore. A background job refreshes this Redis map on a
+  // fixed interval; the request path only ever reads it. This is what
+  // decouples "dashboard load time" from "AI service availability/speed".
+  private readonly AI_PREDICTIONS_CACHE_KEY = 'ai:predictions:sla:map';
+  private readonly AI_PREDICTIONS_REFRESH_MS = 60_000; // background refresh cadence
+  private readonly AI_PREDICTIONS_CACHE_TTL = 90; // seconds — > refresh interval so a slow tick doesn't blank the cache
+  private aiRefreshInFlight = false;
+
   constructor(
-    private prisma: PrismaService, 
+    private prisma: PrismaService,
     private readonly outlook: OutlookService,
     private readonly enhancedAlerts: EnhancedAlertsService,
     public readonly escalationEngine: EscalationEngineService,
     public readonly multiChannelNotifications: MultiChannelNotificationsService,
-    public readonly alertAnalytics: AlertAnalyticsService
+    public readonly alertAnalytics: AlertAnalyticsService,
+    private readonly redis: RedisService,
   ) {}
 
-
+  /**
+   * IMPORTANT: this deliberately does NOT await the first AI refresh.
+   * Nest awaits every module's onModuleInit before the app starts
+   * listening — if we awaited an AI call here, a slow/down AI service
+   * would delay server boot itself, not just the dashboard. Firing it
+   * without awaiting means boot proceeds immediately; the cache just
+   * fills in a few seconds later, in the background.
+   */
+  onModuleInit() {
+    setTimeout(() => {
+      this.refreshAiPredictionsCache().catch(err =>
+        this.logger.warn(`Initial AI predictions warm-up failed: ${err.message}`)
+      );
+    }, 5000); // small delay to let DB pool / AI service finish their own startup
+  }
 
   /**
-   * AI-powered SLA prediction with authentication
+   * Background job: recompute AI SLA predictions for active bordereaux
+   * and cache them as a { [bordereauId]: prediction } map in Redis.
+   * Runs on a fixed interval, completely independent of any HTTP request.
+   * Never throws — a failed tick just leaves the previous cache in place
+   * (or lets it expire) rather than breaking anything downstream.
+   */
+  @Interval(60_000)
+  private async refreshAiPredictionsCache(): Promise<void> {
+    if (this.aiRefreshInFlight) return; // don't overlap ticks if a previous run is still going
+    this.aiRefreshInFlight = true;
+
+    try {
+      // Same "active" filter as the dashboard uses, so we only ever
+      // request predictions for bordereaux that could actually show up
+      // as an alert — no wasted AI calls on closed/paid items.
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where: { statut: { notIn: ['CLOTURE', 'VIREMENT_EXECUTE', 'PAYE'] } },
+        select: {
+          id: true,
+          statut: true,
+          dateReception: true,
+          createdAt: true,
+          delaiReglement: true,
+          courriers: { select: { id: true } },
+          virement: { select: { id: true } },
+          contract: { select: { delaiReglement: true } },
+          client: { select: { reglementDelay: true } },
+        },
+      });
+
+      if (bordereaux.length === 0) {
+        await this.redis.set(this.AI_PREDICTIONS_CACHE_KEY, {}, this.AI_PREDICTIONS_CACHE_TTL);
+        return;
+      }
+
+      const aiItems = bordereaux.map(b => ({
+        id: b.id,
+        start_date: b.dateReception || b.createdAt,
+        deadline: this.calculateDeadline(b),
+        current_progress: this.calculateProgress(b),
+        total_required: this.calculateTotalRequired(b),
+        sla_days: this.getSlaThreshold(b),
+        complexity: this.calculateComplexity(b),
+        client_priority: this.getClientPriority(b),
+      }));
+
+      const aiResponse = await this.getSlaPredictionAI(aiItems);
+      const predictions: any[] = aiResponse?.sla_predictions || [];
+
+      // FIX: the AI microservice returns `bordereau_id`, not `id`.
+      // The old inline matching used `p.id`, which never matched anything.
+      const predictionsMap: Record<string, any> = {};
+      for (const p of predictions) {
+        const key = p.bordereau_id ?? p.id; // tolerate either shape defensively
+        if (key) predictionsMap[key] = p;
+      }
+
+      await this.redis.set(this.AI_PREDICTIONS_CACHE_KEY, predictionsMap, this.AI_PREDICTIONS_CACHE_TTL);
+      this.logger.debug(`AI predictions cache refreshed: ${Object.keys(predictionsMap).length}/${bordereaux.length} bordereaux matched`);
+    } catch (error: any) {
+      // Background failure — log and move on. The existing cache (if any)
+      // simply ages out after AI_PREDICTIONS_CACHE_TTL, at which point the
+      // dashboard falls back to defaults rather than ever blocking.
+      this.logger.warn(`Background AI predictions refresh failed: ${error.message}`);
+    } finally {
+      this.aiRefreshInFlight = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Generic cache-aside helper
+  // ---------------------------------------------------------------------
+  private async cached<T>(key: string, ttlSeconds: number, compute: () => Promise<T>): Promise<T> {
+    const hit = await this.redis.get<T>(key);
+    if (hit !== null && hit !== undefined) {
+      return hit;
+    }
+    const result = await compute();
+    await this.redis.set(key, result, ttlSeconds);
+    return result;
+  }
+
+  // ---------------------------------------------------------------------
+  // AI service access — token cache + circuit breaker.
+  // Only ever called from the background refresh job (and from
+  // getDelayPredictions, which is its own separately-cached, explicitly
+  // user-triggered forecast feature) — never from the dashboard hot path.
+  // ---------------------------------------------------------------------
+
+  private async isAiCircuitOpen(): Promise<boolean> {
+    const open = await this.redis.get<boolean>(this.AI_CIRCUIT_KEY);
+    return open === true;
+  }
+
+  private async tripAiCircuit(): Promise<void> {
+    await this.redis.set(this.AI_CIRCUIT_KEY, true, this.AI_CIRCUIT_TTL);
+  }
+
+  private async callAiService<T>(fn: () => Promise<T>): Promise<T> {
+    if (await this.isAiCircuitOpen()) {
+      throw new Error('AI microservice circuit breaker open - skipping call');
+    }
+    try {
+      return await fn();
+    } catch (error) {
+      await this.tripAiCircuit();
+      throw error;
+    }
+  }
+
+  private async getAIServiceToken(): Promise<string> {
+    const cachedToken = await this.redis.get<string>(this.AI_TOKEN_CACHE_KEY);
+    if (cachedToken) {
+      return cachedToken;
+    }
+
+    const username = process.env.AI_SERVICE_USER || 'admin';
+    const password = process.env.AI_SERVICE_PASSWORD || 'secret';
+
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
+
+    const response = await axios.post(`${AI_MICROSERVICE_URL}/token`, formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      timeout: 10000
+    });
+
+    const token = response.data.access_token;
+    await this.redis.set(this.AI_TOKEN_CACHE_KEY, token, this.AI_TOKEN_TTL);
+    return token;
+  }
+
+  /**
+   * AI-powered SLA prediction with authentication.
+   * No fallback — throws if the AI service is unavailable. Only called
+   * from refreshAiPredictionsCache() (background) — never inline in a
+   * user request.
    */
   async getSlaPredictionAI(items: any[]) {
-    try {
-      // Get AI service token
+    return this.callAiService(async () => {
       const token = await this.getAIServiceToken();
-      
+
       const response = await axios.post(`${AI_MICROSERVICE_URL}/sla_prediction`, items, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        timeout: 300000
+        timeout: 20000
       });
-      
+
       return response.data;
-    } catch (error: any) {
-      this.logger.warn('AI service unavailable, using fallback:', error.message);
-      return this.getBasicSlaPrediction(items);
-    }
-  }
-
-  /**
-   * Get AI service authentication token
-   */
-  private async getAIServiceToken(): Promise<string> {
-    const username = process.env.AI_SERVICE_USER || 'admin';
-    const password = process.env.AI_SERVICE_PASSWORD || 'secret';
-    
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-    
-    const response = await axios.post(`${AI_MICROSERVICE_URL}/token`, formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      timeout: 100000
     });
-    
-    return response.data.access_token;
   }
 
-  /**
-   * Fallback SLA prediction when AI service is unavailable
-   */
-  // private getBasicSlaPrediction(items: any[]) {
-  //   return {
-  //     sla_predictions: items.map(item => {
-  //       const now = new Date();
-  //       const deadline = new Date(item.deadline);
-  //       const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  //       const progress = item.current_progress || 0;
-  //       const total = item.total_required || 1;
-  //       const progressRatio = progress / total;
-  //       
-  //       let risk = '🟢';
-  //       let score = 0;
-  //       
-  //       if (daysLeft <= 0) {
-  //         risk = '🔴';
-  //         score = 1.0;
-  //       } else if (daysLeft <= 2 || progressRatio < 0.5) {
-  //         risk = '🔴';
-  //         score = 0.9;
-  //       } else if (daysLeft <= 5 || progressRatio < 0.7) {
-  //         risk = '🟠';
-  //         score = 0.6;
-  //       }
-  //       
-  //       return {
-  //         id: item.id,
-  //         risk,
-  //         score,
-  //         days_left: daysLeft,
-  //         explanation: `${daysLeft} jours restants, progression: ${Math.round(progressRatio * 100)}%`
-  //       };
-  //     })
-  //   };
-  // }
-  private getBasicSlaPrediction(items: any[]) {
-    return { sla_predictions: [] };
-  } 
   // Allow all authenticated users to access dashboard alerts
   private checkAlertsRole(user: any) {
-    // Implement role-based access if needed
-    // Example: restrict access to certain roles
     return; // Currently allows all authenticated users
   }
 
   /**
-   * Real-time and AI-powered alerts dashboard with dynamic color coding
+   * Pure computation for the alerts dashboard (DB fetch + Redis-cached AI
+   * prediction lookup + alert level assignment). No network calls to the
+   * AI service happen here — predictions come from the background-refreshed
+   * Redis map only, so this is fast regardless of AI service health.
    */
-  async getAlertsDashboard(query: AlertsQueryDto, user: any) {
-    this.checkAlertsRole(user);
-    
-    // this.logger.log(`🔍 Alerts Dashboard - User: ${user.id} Role: ${user.role}`);
-    
+  private async computeAlertsDashboard(query: AlertsQueryDto, user: any) {
     const where: any = {};
     if (query.teamId) where.teamId = query.teamId;
     if (query.userId) where.currentHandlerId = query.userId;
@@ -134,23 +238,20 @@ export class AlertsService {
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
     }
-    
+
     // Role-based filtering
     if (user.role === 'GESTIONNAIRE') {
       where.currentHandlerId = user.id;
-      // this.logger.log(`🎯 Filtering for GESTIONNAIRE: ${user.id}`);
     } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
-      // Filter by contract.teamLeaderId for Chef d'équipe and GESTIONNAIRE_SENIOR
       where.contract = {
         teamLeaderId: user.id
       };
-      // this.logger.log(`🎯 Filtering for CHEF_EQUIPE/GESTIONNAIRE_SENIOR by contract.teamLeaderId: ${user.id}`);
     }
-    
+
     const bordereaux = await this.prisma.bordereau.findMany({
       where,
-      include: { 
-        courriers: true, 
+      include: {
+        courriers: true,
         virement: true,
         documents: {
           select: {
@@ -160,16 +261,16 @@ export class AlertsService {
             status: true
           }
         },
-        contract: { 
-          include: { 
-            teamLeader: { 
-              select: { id: true, fullName: true, role: true } 
+        contract: {
+          include: {
+            teamLeader: {
+              select: { id: true, fullName: true, role: true }
             },
             client: {
               select: { id: true, name: true }
             }
-          } 
-        }, 
+          }
+        },
         client: {
           select: { id: true, name: true }
         },
@@ -190,153 +291,111 @@ export class AlertsService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    
-    // this.logger.log(`📊 Found ${bordereaux.length} bordereaux after filtering`);
-    // if (bordereaux.length > 0) {
-    //   this.logger.log(`📊 Sample: ${bordereaux[0].reference}, contract.teamLeaderId: ${bordereaux[0].contract?.teamLeaderId}`);
-    // }
 
-    // Prepare data for AI SLA prediction
-    const aiItems = bordereaux.map(b => ({
-      id: b.id,
-      start_date: b.dateReception || b.createdAt,
-      deadline: this.calculateDeadline(b),
-      current_progress: this.calculateProgress(b),
-      total_required: this.calculateTotalRequired(b),
-      sla_days: this.getSlaThreshold(b),
-      complexity: this.calculateComplexity(b),
-      client_priority: this.getClientPriority(b)
-    }));
-
-    // Get AI predictions
-    let aiPredictions: any[] = [];
-    try {
-      const aiResponse = await this.getSlaPredictionAI(aiItems);
-      aiPredictions = aiResponse.sla_predictions || [];
-    } catch (error) {
-      this.logger.warn('AI prediction failed, using fallback');
-    }
+    // Read AI predictions from the background-refreshed cache — no network
+    // call, no timeout risk, no dependency on AI service health.
+    const predictionsMap = (await this.redis.get<Record<string, any>>(this.AI_PREDICTIONS_CACHE_KEY)) || {};
 
     // Generate alerts with AI-enhanced color coding
+    let missingPredictionCount = 0;
+
     const alerts = bordereaux
-      // FILTER OUT COMPLETED BORDEREAUX - No action possible
-      // For alerts: exclude VIREMENT_EXECUTE, CLOTURE, PAYE (payment complete)
       .filter(b => !['CLOTURE', 'VIREMENT_EXECUTE', 'PAYE'].includes(b.statut))
-      // FILTER OUT BORDEREAUX WITH ALL ALERTS RESOLVED
       .filter(b => {
-        // If there are no alert logs, include it (might need an alert)
         if (!b.AlertLog || b.AlertLog.length === 0) return true;
-        // If there are unresolved alerts, include it
         return b.AlertLog.some(log => !log.resolved);
       })
       .map(b => {
-      const aiPrediction = (aiPredictions as unknown as any[])?.find(p => p.id === b.id);
-      const daysSinceReception = b.dateReception ? 
-        (Date.now() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) : 0;
-      
-      let level: 'green' | 'orange' | 'red' = 'green';
-      let reason = 'On time';
-      let aiScore = 0;
-      
-      if (aiPrediction) {
-        level = aiPrediction.risk === '🔴' ? 'red' : aiPrediction.risk === '🟠' ? 'orange' : 'green';
-        aiScore = aiPrediction.score;
-        reason = aiPrediction.explanation || this.generateReasonFromScore(aiScore, daysSinceReception);
-      } else {
-        // TWO-PHASE SLA TRACKING
-        // Phase 1: Gestionnaire SLA (Reception → TRAITE)
-        // Phase 2: Finance SLA (TRAITE → VIREMENT_EXECUTE)
-        
-        if (b.statut === 'TRAITE' || b.statut === 'PRET_VIREMENT') {
-          // PHASE 2: Finance SLA - Calculate days since TRAITE
-          const dateTraite = b.dateReceptionSante || b.updatedAt;
-          const daysSinceTraite = dateTraite ? 
-            (Date.now() - new Date(dateTraite).getTime()) / (1000 * 60 * 60 * 24) : 0;
-          
-          // Finance should process within 2-3 days
-          const financeSlaThreshold = 3;
-          const financePercentElapsed = (daysSinceTraite / financeSlaThreshold) * 100;
-          
-          if (financePercentElapsed > 100) {
-            level = 'red';
-            reason = `Finance delay: ${Math.round(daysSinceTraite)} days since TRAITE`;
-          } else if (financePercentElapsed > 80) {
-            level = 'orange';
-            reason = `Finance pending: ${Math.round(daysSinceTraite)} days since TRAITE`;
-          } else {
-            level = 'green';
-            reason = `Awaiting finance: ${Math.round(daysSinceTraite)} days since TRAITE`;
-          }
-        } else {
-          // PHASE 1: Gestionnaire SLA (normal SLA calculation)
-          const slaThreshold = this.getSlaThreshold(b);
-          const percentageElapsed = (daysSinceReception / slaThreshold) * 100;
-          
-          if (percentageElapsed > 100) {
-            level = 'red';
-            reason = 'SLA breach';
-          } else if (percentageElapsed > 80) {
-            level = 'orange';
-            reason = 'Risk of delay';
-          }
-        }
-      }
-      
-      // Show assignedToName from currentHandler
-      let assignedToName = 'Non assigné';
-      if (b.currentHandler) {
-        assignedToName = b.currentHandler.fullName;
-      } else if (b.chargeCompte) {
-        assignedToName = b.chargeCompte.fullName;
-      }
-      
-      // Calculate phase-specific SLA information
-      let slaInfo: any = {
-        threshold: this.getSlaThreshold(b),
-        daysSince: Math.round(daysSinceReception),
-        phase: 'GESTIONNAIRE'
-      };
-      
-      if (b.statut === 'TRAITE' || b.statut === 'PRET_VIREMENT') {
-        const dateTraite = b.dateReceptionSante || b.updatedAt;
-        const daysSinceTraite = dateTraite ? 
-          (Date.now() - new Date(dateTraite).getTime()) / (1000 * 60 * 60 * 24) : 0;
-        
-        slaInfo = {
-          threshold: 3, // Finance SLA is 3 days
-          daysSince: Math.round(daysSinceTraite),
-          phase: 'FINANCE',
-          gestionnaireSla: {
-            threshold: this.getSlaThreshold(b),
-            daysSince: Math.round(daysSinceReception),
-            completed: true
-          }
-        };
-      }
-      
-      return {
-        bordereau: {
-          ...b,
-          teamName: b.team?.fullName || 'Non assigné',
-          assignedToName,
-          currentHandler: b.currentHandler, // Include currentHandler in response
-          contract: b.contract // Include contract with teamLeader
-        },
-        alertLevel: level,
-        reason,
-        slaThreshold: slaInfo.threshold,
-        daysSinceReception: slaInfo.daysSince,
-        slaPhase: slaInfo.phase,
-        slaInfo: slaInfo, // Full SLA information for tooltip
-        aiScore,
-        aiPrediction: aiPrediction || null
-      };
-    });
+        const aiPrediction = predictionsMap[b.id];
+        const daysSinceReception = b.dateReception ?
+          (Date.now() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) : 0;
 
-    // Trigger escalations for critical alerts
+        let level: 'green' | 'orange' | 'red' = 'green';
+        let reason = 'On time';
+        let aiScore = 0;
+
+        if (aiPrediction) {
+          level = aiPrediction.risk === '🔴' ? 'red' : aiPrediction.risk === '🟠' ? 'orange' : 'green';
+          aiScore = aiPrediction.score;
+          reason = aiPrediction.explanation || this.generateReasonFromScore(aiScore, daysSinceReception);
+        } else {
+          // AI is the sole source of truth for alert level — no local
+          // recomputation. Without a cached prediction (still warming up,
+          // or bordereau created since the last refresh tick) we simply
+          // stay at the default (green) rather than fabricating a level.
+          missingPredictionCount++;
+        }
+
+        let assignedToName = 'Non assigné';
+        if (b.currentHandler) {
+          assignedToName = b.currentHandler.fullName;
+        } else if (b.chargeCompte) {
+          assignedToName = b.chargeCompte.fullName;
+        }
+
+        let slaInfo: any = {
+          threshold: this.getSlaThreshold(b),
+          daysSince: Math.round(daysSinceReception),
+          phase: 'GESTIONNAIRE'
+        };
+
+        if (b.statut === 'TRAITE' || b.statut === 'PRET_VIREMENT') {
+          const dateTraite = b.dateReceptionSante || b.updatedAt;
+          const daysSinceTraite = dateTraite ?
+            (Date.now() - new Date(dateTraite).getTime()) / (1000 * 60 * 60 * 24) : 0;
+
+          slaInfo = {
+            threshold: 3,
+            daysSince: Math.round(daysSinceTraite),
+            phase: 'FINANCE',
+            gestionnaireSla: {
+              threshold: this.getSlaThreshold(b),
+              daysSince: Math.round(daysSinceReception),
+              completed: true
+            }
+          };
+        }
+
+        return {
+          bordereau: {
+            ...b,
+            teamName: b.team?.fullName || 'Non assigné',
+            assignedToName,
+            currentHandler: b.currentHandler,
+            contract: b.contract
+          },
+          alertLevel: level,
+          reason,
+          slaThreshold: slaInfo.threshold,
+          daysSinceReception: slaInfo.daysSince,
+          slaPhase: slaInfo.phase,
+          slaInfo: slaInfo,
+          aiScore,
+          aiPrediction: aiPrediction || null
+        };
+      });
+
+    if (missingPredictionCount > 0) {
+      this.logger.debug(`${missingPredictionCount}/${bordereaux.length} bordereaux had no cached AI prediction this request`);
+    }
+
+    return alerts;
+  }
+
+  /**
+   * Real-time and AI-powered alerts dashboard with dynamic color coding.
+   * Pure computation (DB + Redis-cached AI lookup) is cached for 30s;
+   * escalations still run on every call so critical alerts are never
+   * delayed by the cache.
+   */
+  async getAlertsDashboard(query: AlertsQueryDto, user: any) {
+    this.checkAlertsRole(user);
+
+    const cacheKey = `alerts:dashboard:${user.id}:${user.role}:${JSON.stringify(query)}`;
+    const alerts = await this.cached(cacheKey, 30, () => this.computeAlertsDashboard(query, user));
+
     await this.processAlertEscalations(alerts);
-    
-    // ONLY return actual alerts (red/orange), not green ones
+
     return alerts.filter(a => a.alertLevel === 'red' || a.alertLevel === 'orange');
   }
 
@@ -348,7 +407,6 @@ export class AlertsService {
   }
 
   private calculateProgress(bordereau: any): number {
-    // Calculate progress based on status and courriers
     const statusProgress = {
       'RECU': 0.1,
       'SCANNE': 0.3,
@@ -367,7 +425,7 @@ export class AlertsService {
     if (bordereau.contract?.delaiReglement) return bordereau.contract.delaiReglement;
     if (bordereau.client?.reglementDelay) return bordereau.client.reglementDelay;
     if (bordereau.delaiReglement) return bordereau.delaiReglement;
-    return 30; // Default 30 days
+    return 30;
   }
 
   private calculateComplexity(bordereau: any): number {
@@ -389,7 +447,7 @@ export class AlertsService {
 
   private async processAlertEscalations(alerts: any[]) {
     const criticalAlerts = alerts.filter(a => a.alertLevel === 'red');
-    
+
     for (const alert of criticalAlerts) {
       try {
         await this.escalationEngine.processAlert(alert.bordereau.id, {
@@ -405,238 +463,221 @@ export class AlertsService {
     }
   }
 
-  /**
-   * 2. Team overload detection - UNIFIED LOGIC with Super Admin
-   * Uses TIME-BASED calculation with delaiReglement (durée de règlement)
-   * Règle: <70% Normal | 70-89% Occupé | ≥90% Surchargé
-   */
   async getTeamOverloadAlerts(user: any) {
     this.checkAlertsRole(user);
-    
-    const now = new Date();
-    
-    // Get all CHEF_EQUIPE with their team members (EXACT SAME QUERY AS SUPER ADMIN)
-    const chefEquipes = await this.prisma.user.findMany({
-      where: {
-        role: 'CHEF_EQUIPE',
-        active: true
-      },
-      include: {
-        teamMembers: {
-          where: { active: true },
-          include: {
-            assignedDocuments: {
-              include: {
-                bordereau: {
-                  select: {
-                    dateReception: true,
-                    delaiReglement: true,
-                    contract: {
-                      select: { delaiReglement: true }
+
+    return this.cached('alerts:team-overload', 30, async () => {
+      const now = new Date();
+
+      const chefEquipes = await this.prisma.user.findMany({
+        where: {
+          role: 'CHEF_EQUIPE',
+          active: true
+        },
+        include: {
+          teamMembers: {
+            where: { active: true },
+            include: {
+              assignedDocuments: {
+                include: {
+                  bordereau: {
+                    select: {
+                      dateReception: true,
+                      delaiReglement: true,
+                      contract: {
+                        select: { delaiReglement: true }
+                      }
                     }
                   }
                 }
               }
             }
-          }
-        },
-        assignedDocuments: {
-          include: {
-            bordereau: {
-              select: {
-                dateReception: true,
-                delaiReglement: true,
-                contract: {
-                  select: { delaiReglement: true }
+          },
+          assignedDocuments: {
+            include: {
+              bordereau: {
+                select: {
+                  dateReception: true,
+                  delaiReglement: true,
+                  contract: {
+                    select: { delaiReglement: true }
+                  }
                 }
               }
             }
           }
         }
-      }
-    });
+      });
 
-    // Get GESTIONNAIRE_SENIOR and RESPONSABLE_DEPARTEMENT (EXACT SAME AS SUPER ADMIN)
-    const individualTeams = await this.prisma.user.findMany({
-      where: {
-        role: { in: ['GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'] },
-        active: true
-      },
-      include: {
-        assignedDocuments: {
-          include: {
-            bordereau: {
-              select: {
-                dateReception: true,
-                delaiReglement: true,
-                contract: {
-                  select: { delaiReglement: true }
+      const individualTeams = await this.prisma.user.findMany({
+        where: {
+          role: { in: ['GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'] },
+          active: true
+        },
+        include: {
+          assignedDocuments: {
+            include: {
+              bordereau: {
+                select: {
+                  dateReception: true,
+                  delaiReglement: true,
+                  contract: {
+                    select: { delaiReglement: true }
+                  }
+                }
+              }
+            }
+          },
+          contractsAsTeamLeader: {
+            include: {
+              bordereaux: {
+                where: { archived: false },
+                include: {
+                  documents: true,
+                  contract: true
                 }
               }
             }
           }
-        },
-        contractsAsTeamLeader: {
-          include: {
-            bordereaux: {
-              where: { archived: false },
-              include: {
-                documents: true,
-                contract: true
-              }
-            }
-          }
+        }
+      });
+
+      const overloads: any[] = [];
+
+      const calculateTimeBasedUtilization = (documents: any[], capacity: number) => {
+        let totalRequiredPerDay = 0;
+
+        for (const doc of documents) {
+          const bordereau = doc.bordereau || doc;
+          const delaiReglement = bordereau?.delaiReglement || bordereau?.contract?.delaiReglement || 30;
+          const dateReception = bordereau?.dateReception || now;
+
+          const deadlineDate = new Date(dateReception);
+          deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
+
+          const remainingDays = Math.max(1, Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+
+          totalRequiredPerDay += 1 / remainingDays;
+        }
+
+        const utilizationRate = capacity > 0 ? Math.round((totalRequiredPerDay / capacity) * 100) : 0;
+        return { utilizationRate, requiredPerDay: totalRequiredPerDay };
+      };
+
+      for (const chef of chefEquipes) {
+        const teamMembers = chef.teamMembers || [];
+        const allDocs = [...chef.assignedDocuments, ...teamMembers.flatMap(m => m.assignedDocuments)];
+        const totalCapacity = chef.capacity + teamMembers.reduce((sum, member) => sum + member.capacity, 0);
+
+        const { utilizationRate } = calculateTimeBasedUtilization(allDocs, totalCapacity);
+        const teamSize = teamMembers.length + 1;
+
+        if (utilizationRate >= 90) {
+          overloads.push({
+            team: { id: chef.id, fullName: chef.fullName, email: chef.email, role: chef.role, createdAt: chef.createdAt, password: '' },
+            count: allDocs.length,
+            alert: 'red',
+            reason: `Surcharge critique: ${allDocs.length} docs / ${totalCapacity} capacité (${teamSize} membres) - ${utilizationRate}%`
+          });
+        } else if (utilizationRate >= 70) {
+          overloads.push({
+            team: { id: chef.id, fullName: chef.fullName, email: chef.email, role: chef.role, createdAt: chef.createdAt, password: '' },
+            count: allDocs.length,
+            alert: 'orange',
+            reason: `Charge élevée: ${allDocs.length} docs / ${totalCapacity} capacité (${teamSize} membres) - ${utilizationRate}%`
+          });
         }
       }
+
+      for (const user of individualTeams) {
+        let allDocs = user.assignedDocuments;
+
+        if (user.role === 'GESTIONNAIRE_SENIOR' && user.contractsAsTeamLeader) {
+          allDocs = user.contractsAsTeamLeader.flatMap(contract =>
+            contract.bordereaux.flatMap(bordereau =>
+              bordereau.documents.map(doc => ({ ...doc, bordereau }))
+            )
+          );
+        }
+
+        const { utilizationRate } = calculateTimeBasedUtilization(allDocs, user.capacity);
+
+        if (utilizationRate >= 90) {
+          overloads.push({
+            team: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, createdAt: user.createdAt, password: '' },
+            count: allDocs.length,
+            alert: 'red',
+            reason: `${user.fullName} surchargé - ${allDocs.length} docs (${utilizationRate}% time-based)`
+          });
+        } else if (utilizationRate >= 70) {
+          overloads.push({
+            team: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, createdAt: user.createdAt, password: '' },
+            count: allDocs.length,
+            alert: 'orange',
+            reason: `${user.fullName} charge élevée - ${allDocs.length} docs (${utilizationRate}% time-based)`
+          });
+        }
+      }
+
+      return overloads;
     });
-
-    const overloads: any[] = [];
-
-    // Helper function: EXACT SAME TIME-BASED CALCULATION AS SUPER ADMIN
-    const calculateTimeBasedUtilization = (documents: any[], capacity: number) => {
-      let totalRequiredPerDay = 0;
-      
-      for (const doc of documents) {
-        const bordereau = doc.bordereau || doc;
-        const delaiReglement = bordereau?.delaiReglement || bordereau?.contract?.delaiReglement || 30;
-        const dateReception = bordereau?.dateReception || now;
-        
-        const deadlineDate = new Date(dateReception);
-        deadlineDate.setDate(deadlineDate.getDate() + delaiReglement);
-        
-        const remainingDays = Math.max(1, Math.ceil((deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-        
-        totalRequiredPerDay += 1 / remainingDays;
-      }
-      
-      const utilizationRate = capacity > 0 ? Math.round((totalRequiredPerDay / capacity) * 100) : 0;
-      return { utilizationRate, requiredPerDay: totalRequiredPerDay };
-    };
-
-    // Process Chef d'Équipe teams (EXACT SAME LOGIC AS SUPER ADMIN)
-    for (const chef of chefEquipes) {
-      const teamMembers = chef.teamMembers || [];
-      const allDocs = [...chef.assignedDocuments, ...teamMembers.flatMap(m => m.assignedDocuments)];
-      const totalCapacity = chef.capacity + teamMembers.reduce((sum, member) => sum + member.capacity, 0);
-      
-      const { utilizationRate } = calculateTimeBasedUtilization(allDocs, totalCapacity);
-      const teamSize = teamMembers.length + 1;
-      
-      // this.logger.log(`Team ${chef.fullName}: ${allDocs.length} docs, ${totalCapacity} capacity, ${utilizationRate}% utilization (time-based)`);
-      
-      // UNIFIED THRESHOLDS: <70% Normal | 70-89% Occupé | ≥90% Surchargé
-      if (utilizationRate >= 90) {
-        overloads.push({
-          team: { id: chef.id, fullName: chef.fullName, email: chef.email, role: chef.role, createdAt: chef.createdAt, password: '' },
-          count: allDocs.length,
-          alert: 'red',
-          reason: `Surcharge critique: ${allDocs.length} docs / ${totalCapacity} capacité (${teamSize} membres) - ${utilizationRate}%`
-        });
-      } else if (utilizationRate >= 70) {
-        overloads.push({
-          team: { id: chef.id, fullName: chef.fullName, email: chef.email, role: chef.role, createdAt: chef.createdAt, password: '' },
-          count: allDocs.length,
-          alert: 'orange',
-          reason: `Charge élevée: ${allDocs.length} docs / ${totalCapacity} capacité (${teamSize} membres) - ${utilizationRate}%`
-        });
-      }
-    }
-
-    // Process individual teams (EXACT SAME LOGIC AS SUPER ADMIN)
-    for (const user of individualTeams) {
-      let allDocs = user.assignedDocuments;
-      
-      if (user.role === 'GESTIONNAIRE_SENIOR' && user.contractsAsTeamLeader) {
-        allDocs = user.contractsAsTeamLeader.flatMap(contract => 
-          contract.bordereaux.flatMap(bordereau => 
-            bordereau.documents.map(doc => ({ ...doc, bordereau }))
-          )
-        );
-      }
-      
-      const { utilizationRate } = calculateTimeBasedUtilization(allDocs, user.capacity);
-      
-      // this.logger.log(`Individual ${user.fullName}: ${allDocs.length} docs, ${user.capacity} capacity, ${utilizationRate}% utilization (time-based)`);
-      
-      // UNIFIED THRESHOLDS: <70% Normal | 70-89% Occupé | ≥90% Surchargé
-      if (utilizationRate >= 90) {
-        overloads.push({
-          team: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, createdAt: user.createdAt, password: '' },
-          count: allDocs.length,
-          alert: 'red',
-          reason: `${user.fullName} surchargé - ${allDocs.length} docs (${utilizationRate}% time-based)`
-        });
-      } else if (utilizationRate >= 70) {
-        overloads.push({
-          team: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, createdAt: user.createdAt, password: '' },
-          count: allDocs.length,
-          alert: 'orange',
-          reason: `${user.fullName} charge élevée - ${allDocs.length} docs (${utilizationRate}% time-based)`
-        });
-      }
-    }
-    
-    return overloads;
   }
 
-  /**
-   * 3. Reclamation-based alerts
-   */
   async getReclamationAlerts(user: any) {
     this.checkAlertsRole(user);
-    
-    // Get recent reclamations from Reclamation table (last 30 days)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const reclamations = await this.prisma.reclamation.findMany({ 
-      where: { 
-        createdAt: { gte: thirtyDaysAgo },
-        status: { in: ['SENT', 'DRAFT', 'PENDING'] }
-      }, 
-      include: {
-        client: true,
-        bordereau: true
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 10
+
+    return this.cached('alerts:reclamations', 30, async () => {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const reclamations = await this.prisma.reclamation.findMany({
+        where: {
+          createdAt: { gte: thirtyDaysAgo },
+          status: { in: ['SENT', 'DRAFT', 'PENDING'] }
+        },
+        include: {
+          client: true,
+          bordereau: true
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10
+      });
+
+      return reclamations.map(r => ({
+        reclamation: r,
+        alert: r.severity === 'HIGH' ? 'red' : 'orange',
+        reason: `Réclamation du ${new Date(r.createdAt).toLocaleDateString('fr-FR')}`,
+        status: r.status,
+      }));
     });
-    
-    return reclamations.map(r => ({
-      reclamation: r,
-      alert: r.severity === 'HIGH' ? 'red' : 'orange',
-      reason: `Réclamation du ${new Date(r.createdAt).toLocaleDateString('fr-FR')}`,
-      status: r.status,
-    }));
   }
 
   /**
-   * AI-powered delay prediction and smart recommendations
+   * AI-powered delay prediction and smart recommendations.
+   * NOTE: No fallback — throws if the AI service is unavailable. This is
+   * a separate, explicitly user-triggered forecast feature (not part of
+   * dashboard initial load), so an inline AI call here is acceptable —
+   * it's already isolated behind its own 300s cache.
    */
   async getDelayPredictions(user: any) {
     this.checkAlertsRole(user);
-    
-    try {
-      // Get ALL historical data for AI analysis (no time limit)
+
+    return this.cached('alerts:delay-predictions', 300, async () => {
       const historicalData = await this.prisma.bordereau.findMany({
         include: { client: true, contract: true },
         orderBy: { createdAt: 'asc' }
       });
-      
-      // this.logger.log(`📊 AI analyzing ${historicalData.length} bordereaux for predictions`);
 
-      // Prepare data for AI trend forecasting - count bordereaux per day
       const dailyCounts = historicalData.reduce((acc, b) => {
         const date = b.createdAt.toISOString().split('T')[0];
         acc[date] = (acc[date] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
-      
-      // Fill missing dates with 0 to ensure continuous data
+
       const sortedDates = Object.keys(dailyCounts).sort();
       if (sortedDates.length > 0) {
         const startDate = new Date(sortedDates[0]);
         const endDate = new Date(sortedDates[sortedDates.length - 1]);
         const currentDate = new Date(startDate);
-        
+
         while (currentDate <= endDate) {
           const dateStr = currentDate.toISOString().split('T')[0];
           if (!dailyCounts[dateStr]) {
@@ -645,72 +686,57 @@ export class AlertsService {
           currentDate.setDate(currentDate.getDate() + 1);
         }
       }
-      
+
       const trendData = Object.entries(dailyCounts)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, count]) => ({
           date,
           value: count
         }));
-      
-      // this.logger.log(`📊 Prepared ${trendData.length} days of historical data for AI analysis`);
 
-      // Try AI service first
       let forecast: any = {};
       let recommendationsResponse: any = { data: { decisions: [] } };
-      
+
       try {
-        const token = await this.getAIServiceToken();
-        
-        // Get trend forecast - send data in correct format
-        const forecastResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, trendData, {
-          headers: { 'Authorization': `Bearer ${token}` },
-          timeout: 300000
+        await this.callAiService(async () => {
+          const token = await this.getAIServiceToken();
+
+          const forecastResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, trendData, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            timeout: 20000
+          });
+          forecast = forecastResponse.data;
+
+          const workload = await this.getCurrentWorkload();
+          const capacity = await this.getTeamCapacity();
+
+          recommendationsResponse = await axios.post(`${AI_MICROSERVICE_URL}/automated_decisions`, {
+            context: { workload, capacity, historical_data: trendData },
+            decision_type: 'resource_allocation'
+          }, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            timeout: 20000
+          });
         });
-        forecast = forecastResponse.data;
-        
-        // this.logger.log(`🤖 AI Forecast: ${JSON.stringify(forecast.forecast?.slice(0, 3))}`);
-        // this.logger.log(`📈 Trend: ${forecast.trend_direction}, Weekly prediction: ${this.calculateWeeklyPrediction(forecast.forecast || [])}`);
-        
-        // Get recommendations
-        const workload = await this.getCurrentWorkload();
-        const capacity = await this.getTeamCapacity();
-        
-        recommendationsResponse = await axios.post(`${AI_MICROSERVICE_URL}/automated_decisions`, {
-          context: { workload, capacity, historical_data: trendData },
-          decision_type: 'resource_allocation'
-        }, {
-          headers: { 'Authorization': `Bearer ${token}` },
-          timeout: 300000
-        });
-        
       } catch (aiError: any) {
         this.logger.error('AI service unavailable:', aiError.message);
         throw new Error(`AI microservice unavailable: ${aiError.message}`);
       }
 
-      // Calculate confidence based on data quality and model performance
-      const dataQuality = Math.min(1.0, trendData.length / 30); // More data = higher confidence
+      const dataQuality = Math.min(1.0, trendData.length / 30);
       const modelConfidence = forecast.model_performance?.trend_strength || 0.5;
-      // Boost confidence if we have recent data
       const recencyBoost = trendData.length >= 14 ? 0.1 : 0;
       const finalConfidence = Math.min(0.95, (dataQuality * 0.4 + modelConfidence * 0.6) + recencyBoost);
-      
+
       const weeklyPrediction = this.calculateWeeklyPrediction(forecast.forecast || []);
-      
-      // Generate actionable insights
+
       const insights = await this.generatePredictionInsights(
         weeklyPrediction,
         forecast.trend_direction,
         trendData,
         finalConfidence
       );
-      
-      // this.logger.log(`💡 Generated ${insights.length} insights:`);
-      // insights.forEach((insight, i) => {
-      //   this.logger.log(`  ${i+1}. [${insight.priority}] ${insight.message.substring(0, 50)}...`);
-      // });
-      
+
       return {
         forecast: forecast.forecast || [],
         trend_direction: forecast.trend_direction || 'stable',
@@ -721,10 +747,7 @@ export class AlertsService {
         data_points_analyzed: trendData.length,
         forecast_reliability: this.assessForecastReliability(forecast.forecast || [], trendData)
       };
-    } catch (error: any) {
-      this.logger.error('AI delay prediction failed:', error.response?.data || error.message);
-      throw error;
-    }
+    });
   }
 
   private calculateProcessingTime(bordereau: any): number {
@@ -752,20 +775,16 @@ export class AlertsService {
 
   private calculateWeeklyPrediction(forecast: any[]): number {
     if (!forecast || forecast.length === 0) return 0;
-    
-    // Use a balanced approach: average of predicted_value and upper_bound
-    // This gives more realistic predictions while accounting for uncertainty
+
     const avgDaily = forecast.reduce((sum, f) => {
       const predicted = f.predicted_value || 0;
       const upper = f.upper_bound || 0;
-      // Use 70% of upper bound + 30% of predicted for better accuracy
       const estimate = Math.max(predicted, upper * 0.7 + predicted * 0.3);
       return sum + estimate;
     }, 0) / forecast.length;
-    
+
     const weeklyPrediction = Math.round(avgDaily * 7);
-    // this.logger.log(`📊 Calculated weekly prediction: ${weeklyPrediction} (avg daily: ${avgDaily.toFixed(2)})`);
-    
+
     return Math.max(0, weeklyPrediction);
   }
 
@@ -774,37 +793,32 @@ export class AlertsService {
     const avgHistorical = historicalData.reduce((sum, d) => sum + d.value, 0) / historicalData.length;
     const dailyAvg = weeklyPrediction / 7;
     const percentChange = ((dailyAvg - avgHistorical) / avgHistorical) * 100;
-    
-    // Get current team capacity and workload
+
     const teams = await this.prisma.user.findMany({
       where: { role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] } },
       select: { capacity: true, role: true, id: true }
     });
     const totalCapacity = teams.reduce((sum, t) => sum + (t.capacity || 0), 0);
     const gestionnaireCount = teams.filter(t => t.role === 'GESTIONNAIRE').length;
-    
-    // Get current active workload
+
     const activeWorkload = await this.prisma.bordereau.count({
       where: { statut: { notIn: ['CLOTURE', 'PAYE'] } }
     });
-    
-    // Calculate capacity utilization
+
     const currentUtilization = totalCapacity > 0 ? (activeWorkload / totalCapacity) * 100 : 0;
-    
-    // Calculate required resources based on prediction
+
     const avgProcessingPerPerson = totalCapacity > 0 && gestionnaireCount > 0 ? (avgHistorical * 7) / gestionnaireCount : 10;
     const requiredStaff = Math.ceil(weeklyPrediction / avgProcessingPerPerson);
     const staffGap = requiredStaff - gestionnaireCount;
 
-    // Workload prediction insights with actionable recommendations
     if (percentChange > 50) {
       const extraBordereaux = Math.round(weeklyPrediction - avgHistorical * 7);
-      const hoursNeeded = Math.round(extraBordereaux * 2); // Assume 2h per bordereau
+      const hoursNeeded = Math.round(extraBordereaux * 2);
       insights.push({
         type: 'critical',
         icon: '🚨',
         message: `Surcharge critique: +${Math.round(percentChange)}% (${Math.round(weeklyPrediction)} bordereaux prévus vs ${Math.round(avgHistorical * 7)} habituels)`,
-        action: staffGap > 0 
+        action: staffGap > 0
           ? `ACTION URGENTE: Recruter ${staffGap} gestionnaire(s) OU mobiliser ${Math.ceil(hoursNeeded / 40)} ressources temporaires (${hoursNeeded}h nécessaires)`
           : `PLAN D'URGENCE: Activer heures supplémentaires (${hoursNeeded}h), prioriser dossiers critiques, reporter tâches non-urgentes`,
         priority: 'high'
@@ -838,8 +852,7 @@ export class AlertsService {
         priority: 'low'
       });
     }
-    
-    // Capacity utilization insight
+
     if (currentUtilization > 90) {
       insights.push({
         type: 'critical',
@@ -867,7 +880,6 @@ export class AlertsService {
       });
     }
 
-    // Trend-based strategic insights with specific actions
     if (trendDirection === 'increasing') {
       const projectedIncrease = Math.round(weeklyPrediction * 0.15);
       const weeksUntilCapacity = totalCapacity > 0 ? Math.floor((totalCapacity - activeWorkload) / (weeklyPrediction / 4)) : 0;
@@ -899,7 +911,6 @@ export class AlertsService {
       });
     }
 
-    // Data quality and confidence insights with improvement actions
     if (confidence < 0.6) {
       const daysNeeded = Math.max(0, 30 - historicalData.length);
       insights.push({
@@ -935,7 +946,7 @@ export class AlertsService {
 
   private assessForecastReliability(forecast: any[], historicalData: any[]) {
     const dataPoints = historicalData.length;
-    const forecastVariance = forecast.length > 0 
+    const forecastVariance = forecast.length > 0
       ? forecast.reduce((sum, f) => sum + (f.upper_bound - f.lower_bound), 0) / forecast.length
       : 0;
 
@@ -953,20 +964,15 @@ export class AlertsService {
     return {
       level: reliability,
       score: score,
-      reason: dataPoints < 14 
-        ? 'Données historiques insuffisantes' 
-        : forecastVariance > 20 
+      reason: dataPoints < 14
+        ? 'Données historiques insuffisantes'
+        : forecastVariance > 20
         ? 'Forte variabilité dans les prévisions'
         : 'Prévisions basées sur données solides'
     };
   }
 
-  /**
-   * 5. Automated notifications (real email + stub web)
-   * Used by escalation logic and can be called directly.
-   */
   async notify(role: string, message: string, alert: any = {}) {
-    // Find users by role
     const users = await this.prisma.user.findMany({ where: { role } });
     for (const user of users) {
       if (user.email) {
@@ -981,8 +987,7 @@ export class AlertsService {
         }
       }
     }
-    
-    // Check if similar alert already exists to avoid duplicates
+
     const existingAlert = await this.prisma.alertLog.findFirst({
       where: {
         bordereauId: alert.bordereau?.id || alert.bordereauId || null,
@@ -991,8 +996,7 @@ export class AlertsService {
         message
       }
     });
-    
-    // Only create alert if it doesn't exist
+
     if (!existingAlert) {
       await this.prisma.alertLog.create({
         data: {
@@ -1009,9 +1013,6 @@ export class AlertsService {
     return { role, message, sent: true };
   }
 
-  /**
-   * Helper for escalation logic: notifyRole
-   */
   async notifyRole(role: string, alert: any) {
     let message = '';
     if (alert.reason) {
@@ -1022,21 +1023,17 @@ export class AlertsService {
     await this.notify(role, message, alert);
   }
 
-  /**
-   * 5b. Query alert history/trends - WITH UNIFIED SLA LOGIC
-   */
   async getAlertHistory(query: any, user: any) {
     this.checkAlertsRole(user);
-    
+
     const where: any = {};
-    
-    // Handle resolved filter from query (convert string to boolean)
+
     if (query.resolved !== undefined) {
       where.resolved = query.resolved === 'true' || query.resolved === true;
     } else {
-      where.resolved = false; // Default to unresolved
+      where.resolved = false;
     }
-    
+
     if (query.bordereauId) where.bordereauId = query.bordereauId;
     if (query.alertLevel) where.alertLevel = query.alertLevel;
     if (query.fromDate || query.toDate) {
@@ -1044,83 +1041,72 @@ export class AlertsService {
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
     }
-    
+
     const alerts = await this.prisma.alertLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: { 
-        bordereau: { 
-          include: { 
+      include: {
+        bordereau: {
+          include: {
             client: true,
             contract: true
-          } 
-        }, 
-        document: true, 
-        user: true 
+          }
+        },
+        document: true,
+        user: true
       },
     });
-    
-    // Role-based filtering AFTER fetch (to handle alerts without bordereaux)
+
     const filteredAlerts = alerts.filter(alert => {
-      // SUPER_ADMIN sees all
       if (user.role === 'SUPER_ADMIN') return true;
-      
-      // Alerts without bordereau: only show if no bordereau exists
       if (!alert.bordereau) return false;
-      
-      // GESTIONNAIRE: only their assigned bordereaux
+
       if (user.role === 'GESTIONNAIRE') {
         return alert.bordereau.currentHandlerId === user.id;
       }
-      
-      // CHEF_EQUIPE/GESTIONNAIRE_SENIOR: only their team's bordereaux
+
       if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
         return alert.bordereau.contract?.teamLeaderId === user.id;
       }
-      
+
       return false;
     });
-    
-    // Remove duplicates: keep only the LATEST alert per bordereau
+
     const uniqueAlerts = new Map();
     filteredAlerts.forEach(alert => {
       const bordereauId = alert.bordereauId;
-      if (!uniqueAlerts.has(bordereauId) || 
+      if (!uniqueAlerts.has(bordereauId) ||
           new Date(alert.createdAt) > new Date(uniqueAlerts.get(bordereauId).createdAt)) {
         uniqueAlerts.set(bordereauId, alert);
       }
     });
     const deduplicatedAlerts = Array.from(uniqueAlerts.values());
-    
+
     const now = new Date();
-    
-    // this.logger.log(`🔍 Alert History - Filtered ${deduplicatedAlerts.length} alerts (${filteredAlerts.length} before deduplication) for user ${user.id} (${user.role})`);
-    
+
     return deduplicatedAlerts.map(alert => {
       let resolutionTime: number | null = null;
       if (alert.resolved && alert.resolvedAt) {
-        const startTime = alert.bordereau?.dateReception 
+        const startTime = alert.bordereau?.dateReception
           ? new Date(alert.bordereau.dateReception).getTime()
           : new Date(alert.createdAt).getTime();
         const endTime = new Date(alert.resolvedAt).getTime();
         const hours = Math.round((endTime - startTime) / (1000 * 60 * 60));
         resolutionTime = hours > 0 ? hours : null;
       }
-      
-      // UNIFIED SLA LOGIC: Percentage-based using delaiReglement (time factor)
+
       let calculatedAlertLevel = alert.alertLevel;
       let daysSinceReception = 0;
       let slaThreshold = 30;
       let percentElapsed = 0;
-      
+
       if (alert.bordereau && alert.bordereau.dateReception) {
         daysSinceReception = Math.round(
           (now.getTime() - new Date(alert.bordereau.dateReception).getTime()) / (1000 * 60 * 60 * 24)
         );
         slaThreshold = this.getSlaThreshold(alert.bordereau);
         percentElapsed = (daysSinceReception / slaThreshold) * 100;
-        
-        // UNIFIED RULE: ≤80% = green, >80% = orange/red
+
         if (alert.bordereau.statut !== 'CLOTURE') {
           if (percentElapsed > 100) {
             calculatedAlertLevel = 'red';
@@ -1131,7 +1117,7 @@ export class AlertsService {
           }
         }
       }
-      
+
       return {
         ...alert,
         alertLevel: calculatedAlertLevel,
@@ -1146,47 +1132,39 @@ export class AlertsService {
     });
   }
 
-  /**
-   * 5c. Mark alert as resolved
-   * IMPORTANT: This only marks the ALERT as resolved (acknowledged + action taken)
-   * It does NOT change the bordereau status or set closure dates
-   * The bordereau reaches CLOTURE only through the proper Finance workflow
-   */
   async resolveAlert(bordereauId: string, user: any, actionTaken?: string) {
     this.checkAlertsRole(user);
-    
+
     const now = new Date();
-    
-    // Get the bordereau to verify it exists
+
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
       select: { id: true, reference: true, statut: true }
     });
-    
+
     if (!bordereau) {
       throw new Error(`Bordereau ${bordereauId} not found`);
     }
-    
-    // Mark related alert logs as resolved with user info and action taken
+
     const updatedAlerts = await this.prisma.alertLog.updateMany({
-      where: { 
+      where: {
         bordereauId: bordereauId,
         resolved: false
       },
-      data: { 
-        resolved: true, 
+      data: {
+        resolved: true,
         resolvedAt: now,
         userId: user.id,
-        // Store action taken in message if provided
-        ...(actionTaken && { 
-          message: `[RESOLVED] ${actionTaken}` 
+        ...(actionTaken && {
+          message: `[RESOLVED] ${actionTaken}`
         })
       }
     });
-    
+
     this.logger.log(`✅ Alert resolved for bordereau ${bordereau.reference} by ${user.fullName || user.email}. Action: ${actionTaken || 'Not specified'}. Alerts updated: ${updatedAlerts.count}`);
-    
-    // Return the bordereau WITHOUT modifying its status
+
+    await this.redis.invalidatePrefix('alerts:dashboard:');
+
     return {
       success: true,
       bordereau: bordereau,
@@ -1197,52 +1175,41 @@ export class AlertsService {
     };
   }
 
-  /**
-   * 6. Prioritization of high-risk bordereaux
-   */
   async getPriorityList(user: any) {
     this.checkAlertsRole(user);
-    // Get all alerts and return them directly (they're already prioritized)
     const alerts = await this.getAlertsDashboard({}, user);
     return alerts;
   }
 
-  /**
-   * 7. Comparative analytics (planned vs actual)
-   */
   async getComparativeAnalytics(user: any) {
     this.checkAlertsRole(user);
-    
-    // Get actual processed bordereaux in last 7 days
-    const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const actualProcessed = await this.prisma.bordereau.count({
-      where: {
-        statut: 'CLOTURE',
-        updatedAt: { gte: last7Days }
-      }
+
+    return this.cached('alerts:comparative', 30, async () => {
+      const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const actualProcessed = await this.prisma.bordereau.count({
+        where: {
+          statut: 'CLOTURE',
+          updatedAt: { gte: last7Days }
+        }
+      });
+
+      const data = await this.getDelayPredictions(user);
+      const planned = Math.max(1, data.next_week_prediction || actualProcessed || 1);
+      const actual = actualProcessed;
+
+      return {
+        planned,
+        actual,
+        gap: actual - planned,
+      };
     });
-    
-    // Get prediction data
-    const data = await this.getDelayPredictions(user);
-    const planned = Math.max(1, data.next_week_prediction || actualProcessed || 1);
-    const actual = actualProcessed;
-    
-    return {
-      planned,
-      actual,
-      gap: actual - planned,
-    };
   }
 
-  /**
-   * Finance 24h alerts - specific implementation
-   */
   async getFinanceAlerts(user: any) {
     this.checkAlertsRole(user);
-    
+
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
-    // Get bordereaux that have virements older than 24h
+
     const overdueVirements = await this.prisma.bordereau.findMany({
       where: {
         virement: {
@@ -1254,14 +1221,13 @@ export class AlertsService {
         client: true
       }
     });
-    
-    // Create alerts for each overdue virement
+
     const alerts: any[] = [];
     for (const bordereau of overdueVirements) {
       const hoursOverdue = Math.floor(
         (Date.now() - bordereau.virement!.createdAt.getTime()) / (1000 * 60 * 60)
       );
-      
+
       alerts.push({
         bordereau,
         alertLevel: 'red' as const,
@@ -1269,8 +1235,7 @@ export class AlertsService {
         alertType: 'OV_NOT_PROCESSED_24H',
         hoursOverdue
       });
-      
-      // Send notification to finance team
+
       await this.notifyRole('FINANCE', {
         bordereau,
         alertLevel: 'red',
@@ -1278,29 +1243,24 @@ export class AlertsService {
         hoursOverdue
       });
     }
-    
+
     return alerts;
   }
-  
-  /**
-   * 8. KPI Dashboard Data
-   */
+
   async getAlertsKPI(user: any) {
     this.checkAlertsRole(user);
-    
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const last7Days = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    
+
     const whereClause: any = {};
-    
-    // Role-based filtering
+
     if (user.role === 'GESTIONNAIRE') {
       whereClause.userId = user.id;
     } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
-      // Get team members (gestionnaires) for this chef
       const teamMembers = await this.prisma.user.findMany({
-        where: { 
+        where: {
           teamLeaderId: user.id,
           role: 'GESTIONNAIRE'
         },
@@ -1308,13 +1268,11 @@ export class AlertsService {
       });
       whereClause.userId = { in: [user.id, ...teamMembers.map(m => m.id)] };
     }
-    
-    // Get actual alerts from dashboard (only red/orange)
+
     const dashboardAlerts = await this.getAlertsDashboard({}, user);
     const totalAlerts = dashboardAlerts.length;
     const criticalAlerts = dashboardAlerts.filter(a => a.alertLevel === 'red').length;
-    
-    // Get resolved today
+
     const resolvedToday = await this.prisma.alertLog.count({
       where: {
         resolved: true,
@@ -1322,8 +1280,7 @@ export class AlertsService {
         ...whereClause
       }
     });
-    
-    // Calculate average resolution time
+
     const resolvedAlerts = await this.prisma.alertLog.findMany({
       where: {
         resolved: true,
@@ -1331,39 +1288,37 @@ export class AlertsService {
       },
       select: { createdAt: true, resolvedAt: true }
     });
-    
-    const avgResolutionTime = resolvedAlerts.length > 0 
+
+    const avgResolutionTime = resolvedAlerts.length > 0
       ? resolvedAlerts.reduce((acc, alert) => {
           const diff = new Date(alert.resolvedAt!).getTime() - new Date(alert.createdAt).getTime();
-          return acc + (diff / (1000 * 60 * 60)); // Convert to hours
+          return acc + (diff / (1000 * 60 * 60));
         }, 0) / resolvedAlerts.length
       : 0;
-    
-    // Calculate SLA compliance
+
     const bordereaux = await this.prisma.bordereau.findMany({
       where: { createdAt: { gte: last7Days } },
       include: { client: true, contract: true }
     });
-    
+
     let compliantCount = 0;
     bordereaux.forEach(b => {
-      const daysSinceReception = b.dateReception 
-        ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) 
+      const daysSinceReception = b.dateReception
+        ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)
         : 0;
       const slaThreshold = this.getSlaThreshold(b);
-      
+
       if (b.statut === 'CLOTURE' || daysSinceReception <= slaThreshold) {
         compliantCount++;
       }
     });
-    
-    const slaCompliance = bordereaux.length > 0 
+
+    const slaCompliance = bordereaux.length > 0
       ? Math.round((compliantCount / bordereaux.length) * 100)
       : 100;
-    
-    // Get charts data
+
     const chartsData = await this.getChartsData(user);
-    
+
     return {
       totalAlerts,
       criticalAlerts,
@@ -1374,25 +1329,20 @@ export class AlertsService {
     };
   }
 
-  /**
-   * 9. Real-time alerts (last 5 minutes)
-   */
   async getRealTimeAlerts(user: any) {
     this.checkAlertsRole(user);
-    
+
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const where: any = {
       createdAt: { gte: fiveMinutesAgo },
       resolved: false
     };
-    
-    // Role-based filtering
+
     if (user.role === 'GESTIONNAIRE') {
       where.userId = user.id;
     } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
-      // Get alerts for team members
       const teamMembers = await this.prisma.user.findMany({
-        where: { 
+        where: {
           teamLeaderId: user.id,
           role: 'GESTIONNAIRE'
         },
@@ -1400,7 +1350,7 @@ export class AlertsService {
       });
       where.userId = { in: [user.id, ...teamMembers.map(m => m.id)] };
     }
-    
+
     return this.prisma.alertLog.findMany({
       where,
       include: { bordereau: true },
@@ -1409,13 +1359,9 @@ export class AlertsService {
     });
   }
 
-  /**
-   * Add comment to alert/bordereau
-   */
   async addAlertComment(bordereauId: string, comment: string, user: any) {
     this.checkAlertsRole(user);
-    
-    // Create alert log entry for the comment without foreign key constraints
+
     const alertComment = await this.prisma.alertLog.create({
       data: {
         bordereauId: null,
@@ -1428,9 +1374,9 @@ export class AlertsService {
         resolved: false
       }
     });
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       message: 'Comment added successfully',
       comment: {
         id: alertComment.id,
@@ -1441,9 +1387,6 @@ export class AlertsService {
     };
   }
 
-  /**
-   * Trigger alert method for other services
-   */
   async triggerAlert(alertData: any) {
     try {
       await this.prisma.alertLog.create({
@@ -1462,25 +1405,21 @@ export class AlertsService {
     }
   }
 
-  /**
-   * Generate SLA compliance chart data
-   */
   private async generateSlaComplianceChart(last7Days: Date) {
     const slaData: { date: string; compliance: number }[] = [];
-    
+
     for (let i = 6; i >= 0; i--) {
       const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
       const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
       const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-      
-      // Get bordereaux for this day
+
       const dayBordereaux = await this.prisma.bordereau.findMany({
         where: {
           createdAt: { gte: startOfDay, lt: endOfDay }
         },
         include: { client: true, contract: true }
       });
-      
+
       if (dayBordereaux.length === 0) {
         slaData.push({
           date: date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
@@ -1488,81 +1427,79 @@ export class AlertsService {
         });
         continue;
       }
-      
+
       let compliantCount = 0;
       const now = new Date();
-      
+
       dayBordereaux.forEach(b => {
-        const daysSinceReception = b.dateReception 
-          ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) 
+        const daysSinceReception = b.dateReception
+          ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)
           : 0;
         const slaThreshold = this.getSlaThreshold(b);
-        
+
         if (b.statut === 'CLOTURE' || daysSinceReception <= slaThreshold) {
           compliantCount++;
         }
       });
-      
+
       const compliance = Math.round((compliantCount / dayBordereaux.length) * 100);
       slaData.push({
         date: date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
         compliance
       });
     }
-    
+
     return slaData;
   }
 
-  /**
-   * 10. Charts data for analytics
-   */
   async getChartsData(user: any) {
     this.checkAlertsRole(user);
-    
-    const now = new Date();
-    
-    // Get ALL bordereaux with role-based filtering
-    const where: any = { archived: false };
-    if (user.role === 'GESTIONNAIRE') {
-      where.currentHandlerId = user.id;
-    } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
-      where.contract = { teamLeaderId: user.id };
-    }
-    
-    const bordereaux = await this.prisma.bordereau.findMany({
-      where,
-      include: { contract: true, client: true }
-    });
-    
-    // Calculate SLA status for each bordereau
-    let ontimeCount = 0;
-    let atriskCount = 0;
-    let overdueCount = 0;
-    
-    bordereaux.forEach(b => {
-      const daysSinceReception = b.dateReception 
-        ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24) 
-        : 0;
-      const slaThreshold = this.getSlaThreshold(b);
-      const percentElapsed = (daysSinceReception / slaThreshold) * 100;
-      
-      if (percentElapsed > 100) {
-        overdueCount++;
-      } else if (percentElapsed > 80) {
-        atriskCount++;
-      } else {
-        ontimeCount++;
+
+    const cacheKey = `alerts:charts:${user.role}:${user.id}`;
+    return this.cached(cacheKey, 30, async () => {
+      const now = new Date();
+
+      const where: any = { archived: false };
+      if (user.role === 'GESTIONNAIRE') {
+        where.currentHandlerId = user.id;
+      } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+        where.contract = { teamLeaderId: user.id };
       }
+
+      const bordereaux = await this.prisma.bordereau.findMany({
+        where,
+        include: { contract: true, client: true }
+      });
+
+      let ontimeCount = 0;
+      let atriskCount = 0;
+      let overdueCount = 0;
+
+      bordereaux.forEach(b => {
+        const daysSinceReception = b.dateReception
+          ? (now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)
+          : 0;
+        const slaThreshold = this.getSlaThreshold(b);
+        const percentElapsed = (daysSinceReception / slaThreshold) * 100;
+
+        if (percentElapsed > 100) {
+          overdueCount++;
+        } else if (percentElapsed > 80) {
+          atriskCount++;
+        } else {
+          ontimeCount++;
+        }
+      });
+
+      return {
+        alertsByDay: [],
+        alertsByType: [
+          { name: 'À temps', value: ontimeCount, color: '#52c41a' },
+          { name: 'À risque', value: atriskCount, color: '#faad14' },
+          { name: 'En retard', value: overdueCount, color: '#ff4d4f' }
+        ],
+        slaComplianceChart: await this.generateSlaComplianceChart(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+      };
     });
-    
-    return {
-      alertsByDay: [],
-      alertsByType: [
-        { name: 'À temps', value: ontimeCount, color: '#52c41a' },
-        { name: 'À risque', value: atriskCount, color: '#faad14' },
-        { name: 'En retard', value: overdueCount, color: '#ff4d4f' }
-      ],
-      slaComplianceChart: await this.generateSlaComplianceChart(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-    };
   }
 }

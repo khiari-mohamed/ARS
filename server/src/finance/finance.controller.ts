@@ -33,8 +33,10 @@ import { BankFormatConfigService } from './bank-format-config.service';
 import { RecouvrementService, BulkRecouvrementDto } from './recouvrement.service';
 import { SlaConfigurationService } from './sla-configuration.service';
 import { buildExportWorkbook } from './exportDashboard_exceljs';
+import type ExcelJS from 'exceljs';
 import { SageTxtGenerationService } from './sage-txt-generation.service';
 import { SageApiIntegrationService } from './sage-api-integration.service';
+import { notifySeniorPortfolioForOVStatus } from '../notifications/portfolio-notification.helper';
 
 function getUserFromRequest(req: any) {
   // Extract from JWT token - the JWT strategy returns: id, email, role
@@ -54,7 +56,7 @@ function getUserFromRequest(req: any) {
 // EXACT roles from specifications: Chef d'équipe, Gestionnaire Senior, Finance, Super Admin, Responsable Département
 @Controller('finance')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+@Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
 export class FinanceController {
   constructor(
     private adherentService: AdherentService,
@@ -86,8 +88,10 @@ export class FinanceController {
           ]
         },
         include: {
-          compagnieAssurance: true,
           contracts: {
+            include: {
+              compagnieAssurance: true,
+            },
             // Get ALL contracts, not just active ones (to ensure we get data)
             orderBy: { createdAt: 'desc' },
             take: 5  // Get last 5 contracts to check
@@ -98,12 +102,27 @@ export class FinanceController {
       if (!client) {
         throw new BadRequestException('Client not found');
       }
+
+      // Try to find active contract first, then fall back to most recent
+      const now = new Date();
+      let selectedContract = client.contracts.find(c => 
+        c.startDate <= now && c.endDate >= now
+      );
+
+      // If no active contract, use most recent one
+      if (!selectedContract && client.contracts.length > 0) {
+        selectedContract = client.contracts[0];
+        console.log('⚠️ No active contract found, using most recent:', {
+          id: selectedContract.id,
+          codeAssure: selectedContract.codeAssure
+        });
+      }
       
       console.log('✅ Client found:', {
         id: client.id,
         name: client.name,
-        hasInsurance: !!client.compagnieAssurance,
-        insuranceName: client.compagnieAssurance?.nom,
+        hasInsurance: !!selectedContract?.compagnieAssurance,
+        insuranceName: selectedContract?.compagnieAssurance?.nom,
         contractsCount: client.contracts.length,
         contracts: client.contracts.map(c => ({
           id: c.id,
@@ -114,24 +133,9 @@ export class FinanceController {
         }))
       });
       
-      // Try to find active contract first, then fall back to most recent
-      const now = new Date();
-      let selectedContract = client.contracts.find(c => 
-        c.startDate <= now && c.endDate >= now
-      );
-      
-      // If no active contract, use most recent one
-      if (!selectedContract && client.contracts.length > 0) {
-        selectedContract = client.contracts[0];
-        console.log('⚠️ No active contract found, using most recent:', {
-          id: selectedContract.id,
-          codeAssure: selectedContract.codeAssure
-        });
-      }
-      
       // Extract auto-fill data
       const autofillData = {
-        assurance: client.compagnieAssurance?.nom || '',
+        assurance: selectedContract?.compagnieAssurance?.nom || '',
         codeAssure: selectedContract?.codeAssure || '',
         numeroContrat: ''  // Leave empty - user must enter manually (per-adherent field)
       };
@@ -273,11 +277,13 @@ export class FinanceController {
       let skipped = 0;
       const errors: string[] = [];
       const blockedDuplicates: any[] = [];
+      const rowResults: Array<{ row: number; matricule: string; societe: string; rib: string; status: string; reason?: string; importedAdherent?: string; existingMatricule?: string; existingClient?: string }> = [];
       
       console.log(`📊 Total rows in Excel: ${data.length}`);
       
       for (let i = 0; i < data.length; i++) {
         const row = data[i] as any;
+        const rowNumber = i + 1;
         try {
           const matricule = row['Matricule'];
           const societe = row['Société'];
@@ -291,15 +297,19 @@ export class FinanceController {
           
           if (!matricule || !rib) {
             skipped++;
-            errors.push(`Ligne ${i + 1} ignorée: matricule=${matricule || 'vide'}, rib=${rib || 'vide'}`);
-            console.log(`⚠️ Row ${i + 1} skipped: missing data`);
+            const reason = `Matricule ou RIB manquant`;
+            errors.push(`Ligne ${rowNumber} ignorée: matricule=${matricule || 'vide'}, rib=${rib || 'vide'}`);
+            rowResults.push({ row: rowNumber, matricule: String(matricule || ''), societe: String(societe || ''), rib, status: 'SKIPPED', reason });
+            console.log(`⚠️ Row ${rowNumber} skipped: missing data`);
             continue;
           }
           
           if (rib.length !== 20) {
             skipped++;
-            errors.push(`Ligne ${i + 1}: RIB invalide (${rib.length} chiffres au lieu de 20)`);
-            console.log(`⚠️ Row ${i + 1} skipped: invalid RIB length ${rib.length}`);
+            const reason = `RIB invalide (${rib.length} chiffres au lieu de 20)`;
+            errors.push(`Ligne ${rowNumber}: ${reason}`);
+            rowResults.push({ row: rowNumber, matricule: String(matricule), societe: String(societe || ''), rib, status: 'ERROR', reason });
+            console.log(`⚠️ Row ${rowNumber} skipped: invalid RIB length ${rib.length}`);
             continue;
           }
           
@@ -310,18 +320,26 @@ export class FinanceController {
                 { name: { equals: societe, mode: 'insensitive' } }
               ]
             },
-            include: { compagnieAssurance: true }
+            include: {
+              contracts: {
+                include: { compagnieAssurance: true },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+              },
+            },
           });
           
           if (!targetClient) {
             skipped++;
-            const errorMsg = `Ligne ${i + 1}: Client "${societe}" n'existe pas dans le système. Veuillez créer le client d'abord.`;
+            const reason = `Client "${societe}" introuvable`;
+            const errorMsg = `Ligne ${rowNumber}: ${reason}. Veuillez créer le client d'abord.`;
             errors.push(errorMsg);
-            console.log(`❌ Row ${i + 1}: Client "${societe}" not found - REJECTED`);
+            rowResults.push({ row: rowNumber, matricule: String(matricule), societe: String(societe || ''), rib, status: 'ERROR', reason });
+            console.log(`❌ Row ${rowNumber}: Client "${societe}" not found - REJECTED`);
             continue;
           }
           
-          console.log(`✅ Row ${i + 1}: Matched client "${targetClient.name}" for société "${societe}"`);
+          console.log(`✅ Row ${rowNumber}: Matched client "${targetClient.name}" for société "${societe}"`);
           
           // Check matricule duplicate
           const existingAdherent = await this.prisma.adherent.findFirst({
@@ -329,8 +347,10 @@ export class FinanceController {
           });
           
           if (existingAdherent) {
-            console.log(`❌ Row ${i + 1} failed: Matricule ${matricule} already exists for this client`);
+            const reason = `Matricule ${matricule} déjà existant pour ce client`;
+            console.log(`❌ Row ${rowNumber} failed: ${reason}`);
             skipped++;
+            rowResults.push({ row: rowNumber, matricule: String(matricule), societe: String(societe || ''), rib, status: 'ERROR', reason });
             continue;
           }
           
@@ -341,7 +361,8 @@ export class FinanceController {
           });
           
           if (duplicateRib) {
-            console.log(`❌ Row ${i + 1} failed: RIB ${rib} already exists`);
+            const reason = `RIB ${rib} déjà existant pour ${duplicateRib.client.name}`;
+            console.log(`❌ Row ${rowNumber} failed: ${reason}`);
             blockedDuplicates.push({
               newAdherent: {
                 matricule: String(matricule),
@@ -374,6 +395,16 @@ export class FinanceController {
               }
             });
             skipped++;
+            rowResults.push({
+              row: rowNumber,
+              matricule: String(matricule),
+              societe: String(societe || ''),
+              rib,
+              status: 'BLOCKED_DUPLICATE',
+              reason,
+              existingMatricule: duplicateRib.matricule,
+              existingClient: duplicateRib.client.name
+            });
             continue;
           }
           
@@ -391,11 +422,28 @@ export class FinanceController {
           
           await this.adherentService.createAdherent(adherentData, user.id);
           imported++;
-          console.log(`✅ Row ${i + 1} imported: ${matricule}`);
+          rowResults.push({
+            row: rowNumber,
+            matricule: String(matricule),
+            societe: String(societe || ''),
+            rib,
+            status: 'IMPORTED',
+            importedAdherent: String(matricule)
+          });
+          console.log(`✅ Row ${rowNumber} imported: ${matricule}`);
         } catch (error: any) {
           skipped++;
-          errors.push(`Ligne ${i + 1}: ${error.message}`);
-          console.log(`❌ Row ${i + 1} failed: ${error.message}`);
+          const reason = error?.message || 'Erreur inconnue';
+          errors.push(`Ligne ${rowNumber}: ${reason}`);
+          rowResults.push({
+            row: rowNumber,
+            matricule: String((row as any)['Matricule'] || ''),
+            societe: String((row as any)['Société'] || ''),
+            rib: String((row as any)['RIB'] || '').replace(/\D/g, ''),
+            status: 'ERROR',
+            reason
+          });
+          console.log(`❌ Row ${rowNumber} failed: ${reason}`);
         }
       }
       
@@ -418,12 +466,193 @@ export class FinanceController {
         skipped,
         blocked: blockedCount,
         total: data.length,
+        rows: rowResults,
         errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
         message: `${imported} adhérent(s) importé(s) sur ${data.length}. ${skipped} ignoré(s) (dont ${blockedCount} RIB dupliqués).`
       };
     } catch (error : any) {
       throw new BadRequestException('Failed to process file: ' + error.message);
     }
+  }
+
+  // === EXPORT IMPORT RESULT DETAILS TO STYLED EXCEL ===
+  @Post('adherents/import/export-excel')
+  async exportAdherentImportResultExcel(
+    @Body() body: { rows: Array<{
+      row: number;
+      matricule: string;
+      societe: string;
+      rib: string;
+      status: string;
+      reason?: string;
+      existingMatricule?: string;
+      existingClient?: string;
+    }> },
+    @Res() res: Response,
+  ) {
+    const rows = body?.rows || [];
+    if (rows.length === 0) {
+      throw new BadRequestException('rows must be a non-empty array');
+    }
+
+    const ExcelJS = await import('exceljs');
+
+    const C = {
+      NAVY: 'FF1E3A5F', NAVY_LIGHT: 'FF2E5F8E', ACCENT: 'FF2196F3', SLATE: 'FF2C3E50',
+      WHITE: 'FFFFFFFF', ROW_ALT: 'FFF4F7FB', BORDER: 'FFD0D9E8', BORDER_DARK: 'FF8FA5C0',
+      GREEN: 'FF1B8A4C', GREEN_BG: 'FFE6F4ED', RED: 'FFC0392B', RED_BG: 'FFFDECEA',
+      ORANGE: 'FFD35400', ORANGE_BG: 'FFFFF3E0', GRAY: 'FF5A6A7E', GRAY_BG: 'FFEDEFF2',
+      TOTAL_BG: 'FF152D4A',
+    };
+
+    const fill = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+    const thin = (argb = C.BORDER): Partial<ExcelJS.Border> => ({ style: 'thin', color: { argb } });
+    const medium = (argb = C.BORDER_DARK): Partial<ExcelJS.Border> => ({ style: 'medium', color: { argb } });
+
+    const statusLabel = (s: string) => {
+      switch (s) {
+        case 'IMPORTED': return 'Importé';
+        case 'BLOCKED_DUPLICATE': return 'Bloqué (RIB dupliqué)';
+        case 'ERROR': return 'Erreur';
+        case 'SKIPPED': return 'Ignoré';
+        default: return (s || '—').replace(/_/g, ' ');
+      }
+    };
+
+    const statusColors = (s: string) => {
+      if (s === 'IMPORTED') return { fg: C.GREEN, bg: C.GREEN_BG };
+      if (s === 'BLOCKED_DUPLICATE') return { fg: C.ORANGE, bg: C.ORANGE_BG };
+      if (s === 'ERROR') return { fg: C.RED, bg: C.RED_BG };
+      return { fg: C.GRAY, bg: C.GRAY_BG };
+    };
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'ARS Finance System';
+    wb.created = new Date();
+
+    const ws = wb.addWorksheet('Résultats import', {
+      pageSetup: {
+        paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1,
+        margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 },
+      },
+      headerFooter: {
+        oddHeader: '&C&"Calibri,Bold"&12ARS — Détail Import Adhérents',
+        oddFooter: '&LExporté le &D &T&RPage &P / &N',
+      },
+    });
+
+    const COLUMNS = [
+      { header: 'Ligne', width: 9 },
+      { header: 'Matricule', width: 18 },
+      { header: 'Société', width: 30 },
+      { header: 'RIB', width: 24 },
+      { header: 'Statut', width: 22 },
+      { header: 'Raison', width: 42 },
+      { header: 'Matricule existant', width: 20 },
+      { header: 'Client existant', width: 26 },
+    ];
+    const COL_COUNT = COLUMNS.length;
+
+    const imported = rows.filter(r => r.status === 'IMPORTED').length;
+    const blocked = rows.filter(r => r.status === 'BLOCKED_DUPLICATE').length;
+    const errors = rows.filter(r => r.status === 'ERROR').length;
+    const skipped = rows.filter(r => r.status === 'SKIPPED').length;
+
+    ws.mergeCells(1, 1, 1, COL_COUNT);
+    const title = ws.getCell('A1');
+    title.value = "DÉTAIL DE L'IMPORT — ADHÉRENTS";
+    title.font = { name: 'Calibri', size: 14, bold: true, color: { argb: C.WHITE } };
+    title.fill = fill(C.NAVY);
+    title.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 40;
+
+    ws.mergeCells(2, 1, 2, COL_COUNT);
+    const sub = ws.getCell('A2');
+    const now = new Date();
+    sub.value = `Exporté le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}  ·  ${rows.length} ligne(s) — ${imported} importé(s), ${blocked} bloqué(s), ${errors} erreur(s), ${skipped} ignoré(s)`;
+    sub.font = { name: 'Calibri', size: 10, italic: true, color: { argb: C.WHITE } };
+    sub.fill = fill(C.NAVY_LIGHT);
+    sub.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 22;
+    ws.getRow(3).height = 6;
+
+    const hRow = ws.getRow(4);
+    hRow.height = 28;
+    COLUMNS.forEach((col, i) => {
+      ws.getColumn(i + 1).width = col.width;
+      const cell = hRow.getCell(i + 1);
+      cell.value = col.header;
+      cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: C.WHITE } };
+      cell.fill = fill(C.SLATE);
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = { top: medium(C.NAVY), bottom: medium(C.ACCENT), left: thin('FF3D5166'), right: thin('FF3D5166') };
+    });
+
+    rows.forEach((r, idx) => {
+      const rowNum = idx + 5;
+      const row = ws.getRow(rowNum);
+      const bg = idx % 2 === 0 ? C.WHITE : C.ROW_ALT;
+      const sc = statusColors(r.status);
+
+      const values: any[] = [
+        r.row,
+        r.matricule || '—',
+        r.societe || '—',
+        r.rib || '—',
+        statusLabel(r.status),
+        r.reason || '—',
+        r.existingMatricule || '—',
+        r.existingClient || '—',
+      ];
+
+      values.forEach((val, ci) => {
+        const cell = row.getCell(ci + 1);
+        cell.value = val;
+        cell.font = { name: 'Calibri', size: 9.5, color: { argb: C.SLATE } };
+        cell.fill = fill(bg);
+        cell.alignment = { vertical: 'middle', horizontal: ci === 0 ? 'center' : 'left', wrapText: ci === 5 };
+        cell.border = {
+          top: { style: 'hair', color: { argb: C.BORDER } },
+          bottom: { style: 'hair', color: { argb: C.BORDER } },
+          left: ci === 0 ? medium() : thin(),
+          right: ci === COL_COUNT - 1 ? medium() : thin(),
+        };
+        if (ci === 1) cell.font = { ...(cell.font as any), bold: true, color: { argb: C.NAVY } };
+        if (ci === 3) cell.font = { ...(cell.font as any), name: 'Consolas' };
+        if (ci === 4) {
+          cell.font = { ...(cell.font as any), color: { argb: sc.fg }, bold: true };
+          cell.fill = fill(sc.bg);
+          cell.alignment = { ...cell.alignment, horizontal: 'center' };
+        }
+      });
+      row.height = 20;
+    });
+
+    const totalRowNum = rows.length + 5;
+    const totalRow = ws.getRow(totalRowNum);
+    totalRow.height = 26;
+    ws.mergeCells(totalRowNum, 1, totalRowNum, 4);
+    const lbl = totalRow.getCell(1);
+    lbl.value = `TOTAL — ${rows.length} ligne(s) traitée(s)`;
+    lbl.font = { name: 'Calibri', size: 10, bold: true, color: { argb: C.WHITE } };
+    lbl.fill = fill(C.TOTAL_BG);
+    lbl.alignment = { horizontal: 'right', vertical: 'middle' };
+    lbl.border = { top: medium(C.ACCENT) };
+    for (let c = 5; c <= COL_COUNT; c++) {
+      const cell = totalRow.getCell(c);
+      cell.fill = fill(C.TOTAL_BG);
+      cell.border = { top: medium(C.ACCENT) };
+    }
+
+    ws.views = [{ state: 'frozen', ySplit: 4, xSplit: 1, activeCell: 'B5' }];
+    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: COL_COUNT } };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const filename = `import_adherents_details_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer as ArrayBuffer));
   }
 
   @Post('adherents/validate')
@@ -504,7 +733,53 @@ export class FinanceController {
   ) {
     const user = getUserFromRequest(req);
     dto.utilisateurFinance = user.id;
+
+    // Enforce role-based transitions for FINANCE (recouvrement) team
+    if (user.role === 'FINANCE') {
+      // Fetch current OV
+      const ov = await this.ordreVirementService.findOrdreVirementById(id);
+      // Finance team should only operate on VIREMENT_DEPOSE
+      if (ov.etatVirement !== 'VIREMENT_DEPOSE') {
+        throw new BadRequestException('Accès refusé: l\'équipe Finance ne peut modifier que les virements au statut Virement déposé');
+      }
+
+      // Allowed target statuses for Finance: VIREMENT_AUTORISE or BLOQUE
+      const allowed = ['VIREMENT_AUTORISE', 'BLOQUE'];
+      if (!allowed.includes(dto.etatVirement)) {
+        throw new BadRequestException('Transition non autorisée: l\'équipe Finance ne peut changer que vers Virement autorisé ou Virement bloqué');
+      }
+    }
+
     return this.ordreVirementService.updateEtatVirement(id, dto);
+  }
+
+  @Post('ordres-virement/bulk/etat')
+  async bulkUpdateEtatVirement(@Body() body: { ordreVirementIds: string[]; etatVirement: string; commentaire?: string }, @Req() req: any) {
+    const user = getUserFromRequest(req);
+    if (!body || !Array.isArray(body.ordreVirementIds) || body.ordreVirementIds.length === 0) {
+      throw new BadRequestException('ordreVirementIds are required');
+    }
+
+    // Finance role restrictions: can only act on VIREMENT_DEPOSE -> VIREMENT_AUTORISE|BLOQUE
+    if (user.role === 'FINANCE') {
+      const records = await this.ordreVirementService.findOrdreVirements({ ids: body.ordreVirementIds });
+      for (const r of records) {
+        if (r.etatVirement !== 'VIREMENT_DEPOSE') {
+          throw new BadRequestException('Accès refusé: l\'équipe Finance ne peut modifier que les virements au statut Virement déposé');
+        }
+      }
+      if (!['VIREMENT_AUTORISE', 'BLOQUE'].includes(body.etatVirement)) {
+        throw new BadRequestException('Transition non autorisée: l\'équipe Finance ne peut changer que vers Virement autorisé ou Virement bloqué');
+      }
+    }
+
+    const dto = {
+      etatVirement: body.etatVirement as any,
+      commentaire: body.commentaire,
+      utilisateurFinance: user.id
+    };
+
+    return this.ordreVirementService.bulkUpdateEtatVirement(body.ordreVirementIds, dto as any);
   }
 
   @Get('ordres-virement')
@@ -523,6 +798,11 @@ export class FinanceController {
       if (!filters.clientId) {
         filters.clientIds = clientIds;
       }
+    }
+    // Restrict Finance role to only see VIREMENT_DEPOSE entries in the tracker
+    if (user?.role === 'FINANCE') {
+      // Enforce filter to deposited virements only
+      filters.etatVirement = 'VIREMENT_DEPOSE';
     }
     
     return this.ordreVirementService.findOrdreVirements(filters);
@@ -582,7 +862,7 @@ export class FinanceController {
     return this.financeService.getFinanceDashboardWithFilters(filters, user as any);
   }
 
-  // NEW: Excel export for dashboard
+  // NEW: Excel export for dashboard (filtered, current view)
   @Get('dashboard/export')
   async exportDashboard(
     @Query() filters: {
@@ -597,12 +877,279 @@ export class FinanceController {
     const user = getUserFromRequest(req);
     const dashboardData = await this.financeService.getFinanceDashboardWithFilters(filters, user as any);
     
-    // Use the styled Excel export function
     const buffer = await buildExportWorkbook(dashboardData.ordresVirement);
     
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="tableau_bord_finance_${new Date().toISOString().split('T')[0]}.xlsx"`);
-    
+    res.send(Buffer.from(buffer as ArrayBuffer));
+  }
+
+  // Get available years for the history export modal
+  @Get('dashboard/export-all/years')
+  async getExportYears(@Req() req: any) {
+    const rows = await this.prisma.ordreVirement.findMany({
+      select: { dateCreation: true },
+      orderBy: { dateCreation: 'asc' },
+    });
+    const years = Array.from(new Set(rows.map(r => new Date(r.dateCreation).getFullYear())))
+      .sort((a, b) => b - a);
+    return { years, total: rows.length };
+  }
+
+  // Full history Excel export — ALL OVs or filtered by year, one sheet per year
+  @Get('dashboard/export-all')
+  async exportAllHistory(
+    @Query('year') yearParam: string | undefined,
+    @Res() res: Response,
+    @Req() req: any
+  ) {
+    const ExcelJS = await import('exceljs');
+
+    // Build where clause — no limit, optionally filter by year
+    const where: any = {};
+    if (yearParam && yearParam !== 'all') {
+      const y = parseInt(yearParam, 10);
+      where.dateCreation = {
+        gte: new Date(`${y}-01-01T00:00:00.000Z`),
+        lt:  new Date(`${y + 1}-01-01T00:00:00.000Z`),
+      };
+    }
+
+    // Fetch ALL matching OVs — no take/skip
+    const allOVs = await this.prisma.ordreVirement.findMany({
+      where,
+      include: {
+        client: true,
+        contract: { include: { compagnieAssurance: true } },
+        bordereau: { include: { client: true, contract: { include: { compagnieAssurance: true } } } },
+        donneurOrdre: true,
+        items: { include: { adherent: true }, take: 1, orderBy: { createdAt: 'asc' } },
+      },
+      orderBy: { dateCreation: 'asc' },
+    });
+
+    // Map to the display shape (same columns as the dashboard table)
+    const mapped = allOVs.map((ov) => {
+      const firstItem = ov.items?.[0];
+      return {
+        reference:            ov.reference,
+        referenceBordereau:   ov.bordereau?.reference || null,
+        compagnieAssurance:   ov.contract?.compagnieAssurance?.nom || ov.bordereau?.contract?.compagnieAssurance?.nom || ov.clientName || null,
+        client:               ov.bordereau?.client?.name || (ov as any).client?.name || ov.clientName || 'Entrée manuelle',
+        bordereau:            ov.bordereauId ? (ov.bordereau?.reference || 'Bordereau lié') : 'Entrée manuelle',
+        montant:              ov.montantTotal,
+        statut:               ov.etatVirement,
+        dateCreation:         ov.dateCreation,
+        dateExecution:        ov.dateTraitement || ov.dateCreation,
+        motifObservation:     (ov as any).validationComment || ov.motifObservation || null,
+        modeRecuperation:     ov.contract?.modeRecuperation || ov.bordereau?.contract?.modeRecuperation || null,
+        nomDonneur:           ov.donneurOrdre?.nom || null,
+        numeroContrat:        firstItem?.adherent?.numeroContrat || null,
+        demandeRecuperation:  ov.demandeRecuperation || false,
+        dateDemandeRecuperation: ov.dateDemandeRecuperation,
+        montantRecupere:      ov.montantRecupere || false,
+        dateMontantRecupere:  ov.dateMontantRecupere,
+        nombreAdherents:      ov.nombreAdherents || 0,
+        utilisateurSante:     ov.utilisateurSante || null,
+        utilisateurFinance:   ov.utilisateurFinance || null,
+        validationStatus:     ov.validationStatus || null,
+        commentaire:          ov.commentaire || null,
+        _year:                new Date(ov.dateCreation).getFullYear(),
+      };
+    });
+
+    // Group by year
+    const byYear = new Map<number, typeof mapped>();
+    for (const ov of mapped) {
+      if (!byYear.has(ov._year)) byYear.set(ov._year, []);
+      byYear.get(ov._year)!.push(ov);
+    }
+    const years = Array.from(byYear.keys()).sort((a, b) => b - a);
+
+    // Palette & helpers (inline — avoids workbook-copy fragility)
+    const C = {
+      NAVY: 'FF1E3A5F', NAVY_LIGHT: 'FF2E5F8E', ACCENT: 'FF2196F3', SLATE: 'FF2C3E50',
+      WHITE: 'FFFFFFFF', ROW_ALT: 'FFF4F7FB', BORDER: 'FFD0D9E8', BORDER_DARK: 'FF8FA5C0',
+      GREEN: 'FF1B8A4C', GREEN_BG: 'FFE6F4ED', RED: 'FFC0392B', RED_BG: 'FFFDECEA',
+      ORANGE: 'FFD35400', ORANGE_BG: 'FFFFF3E0', BLUE: 'FF1565C0', BLUE_BG: 'FFE3F0FF',
+      TOTAL_BG: 'FF152D4A', GRAY: 'FF5A6A7E',
+    };
+
+    const COLUMNS = [
+      { header: 'Référence OV',           key: 'reference',            width: 20 },
+      { header: 'Référence Bordereau',    key: 'referenceBordereau',   width: 30 },
+      { header: "Compagnie d'Assurance",  key: 'compagnieAssurance',   width: 26 },
+      { header: 'Client / Société',       key: 'client',               width: 24 },
+      { header: 'Bordereau',              key: 'bordereau',            width: 30 },
+      { header: 'Montant (TND)',          key: 'montant',              width: 17 },
+      { header: 'Statut',                key: 'statut',               width: 24 },
+      { header: 'Date Création',          key: 'dateCreation',         width: 18 },
+      { header: "Date d'Exécution",       key: 'dateExecution',        width: 18 },
+      { header: 'Motif / Observations',   key: 'motifObservation',     width: 32 },
+      { header: 'Mode Récupération',      key: 'modeRecuperation',     width: 24 },
+      { header: 'Nom Donneur',            key: 'nomDonneur',           width: 22 },
+      { header: 'N° Contrat',             key: 'numeroContrat',        width: 20 },
+      { header: 'Dem. Récupération',      key: 'demandeRecuperation',  width: 20 },
+      { header: 'Date Dem. Récup.',       key: 'dateDemandeRecuperation', width: 18 },
+      { header: 'Mnt Récupéré',           key: 'montantRecupere',      width: 16 },
+      { header: 'Date Mnt Récupéré',      key: 'dateMontantRecupere',  width: 18 },
+      { header: 'Nb Adhérents',           key: 'nombreAdherents',      width: 14 },
+      { header: 'Statut Validation',      key: 'validationStatus',     width: 22 },
+      { header: 'Commentaire',            key: 'commentaire',          width: 30 },
+    ];
+    const COL_COUNT = COLUMNS.length;
+
+    const fill = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+    const thin = (argb = C.BORDER): Partial<ExcelJS.Border> => ({ style: 'thin', color: { argb } });
+    const medium = (argb = C.BORDER_DARK): Partial<ExcelJS.Border> => ({ style: 'medium', color: { argb } });
+
+    const statusFg = (s: string) => {
+      if (['EXECUTE','VIREMENT_DEPOSE'].includes(s)) return { fg: C.GREEN, bg: C.GREEN_BG };
+      if (['REJETE','VIREMENT_NON_VALIDE'].includes(s)) return { fg: C.RED, bg: C.RED_BG };
+      if (['EN_COURS','PENDING','EN_COURS_VALIDATION','NON_EXECUTE'].includes(s)) return { fg: C.ORANGE, bg: C.ORANGE_BG };
+      return { fg: C.BLUE, bg: C.BLUE_BG };
+    };
+
+    const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('fr-FR') : '—';
+
+    const buildSheet = (wb: ExcelJS.Workbook, label: string, rows: typeof mapped) => {
+      const ws = wb.addWorksheet(label, {
+        pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1,
+          margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
+        headerFooter: { oddHeader: `&C&"Calibri,Bold"&12ARS — Historique Virements — ${label}`, oddFooter: '&LExporté le &D &T&RPage &P / &N' },
+      });
+
+      // Title row
+      ws.mergeCells(1, 1, 1, COL_COUNT);
+      const title = ws.getCell('A1');
+      title.value = `HISTORIQUE GLOBAL DES VIREMENTS — ${label.toUpperCase()}`;
+      title.font = { name: 'Calibri', size: 14, bold: true, color: { argb: C.WHITE } };
+      title.fill = fill(C.NAVY);
+      title.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 40;
+
+      // Subtitle
+      ws.mergeCells(2, 1, 2, COL_COUNT);
+      const sub = ws.getCell('A2');
+      const now = new Date();
+      sub.value = `Exporté le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}  ·  ${rows.length} virement(s)`;
+      sub.font = { name: 'Calibri', size: 10, italic: true, color: { argb: C.WHITE } };
+      sub.fill = fill(C.NAVY_LIGHT);
+      sub.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(2).height = 22;
+      ws.getRow(3).height = 6;
+
+      // Header row
+      const hRow = ws.getRow(4);
+      hRow.height = 32;
+      COLUMNS.forEach((col, i) => {
+        ws.getColumn(i + 1).width = col.width;
+        const cell = hRow.getCell(i + 1);
+        cell.value = col.header;
+        cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: C.WHITE } };
+        cell.fill = fill(C.SLATE);
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = { top: medium(C.NAVY), bottom: medium(C.ACCENT), left: thin('FF3D5166'), right: thin('FF3D5166') };
+      });
+
+      // Data rows
+      rows.forEach((ov, idx) => {
+        const rowNum = idx + 5;
+        const row = ws.getRow(rowNum);
+        const bg = idx % 2 === 0 ? C.WHITE : C.ROW_ALT;
+        const sc = statusFg(ov.statut);
+
+        const values: any[] = [
+          ov.reference || '—',
+          ov.referenceBordereau || '—',
+          ov.compagnieAssurance || '—',
+          ov.client || '—',
+          ov.bordereau || '—',
+          typeof ov.montant === 'number' ? ov.montant : 0,
+          ov.statut || '—',
+          fmtDate(ov.dateCreation),
+          fmtDate(ov.dateExecution),
+          ov.motifObservation || '—',
+          ov.modeRecuperation || '—',
+          ov.nomDonneur || '—',
+          ov.numeroContrat || '—',
+          ov.demandeRecuperation ? '✔ Oui' : 'Non',
+          fmtDate(ov.dateDemandeRecuperation),
+          ov.montantRecupere ? '✔ Oui' : 'Non',
+          fmtDate(ov.dateMontantRecupere),
+          ov.nombreAdherents,
+          ov.validationStatus || '—',
+          ov.commentaire || '—',
+        ];
+
+        values.forEach((val, ci) => {
+          const cell = row.getCell(ci + 1);
+          cell.value = val;
+          cell.font = { name: 'Calibri', size: 9.5, color: { argb: C.SLATE } };
+          cell.fill = fill(bg);
+          cell.alignment = { vertical: 'middle', horizontal: ci === 5 ? 'right' : 'left', wrapText: ci === 9 };
+          cell.border = {
+            top: { style: 'hair', color: { argb: C.BORDER } },
+            bottom: { style: 'hair', color: { argb: C.BORDER } },
+            left: ci === 0 ? medium() : thin(),
+            right: ci === COL_COUNT - 1 ? medium() : thin(),
+          };
+          if (ci === 0) cell.font = { ...cell.font as any, bold: true, color: { argb: C.NAVY } };
+          if (ci === 5) { cell.numFmt = '#,##0.000'; cell.font = { ...cell.font as any, bold: true }; }
+          if (ci === 6) { cell.font = { ...cell.font as any, color: { argb: sc.fg }, bold: true }; cell.fill = fill(sc.bg); cell.alignment = { ...cell.alignment, horizontal: 'center' }; }
+          if (ci === 13 || ci === 15) { const isOui = String(val).startsWith('✔'); cell.font = { ...cell.font as any, color: { argb: isOui ? C.GREEN : C.GRAY }, bold: isOui }; cell.alignment = { ...cell.alignment, horizontal: 'center' }; }
+        });
+        row.height = 20;
+      });
+
+      // Total row
+      const totalRowNum = rows.length + 5;
+      const totalRow = ws.getRow(totalRowNum);
+      totalRow.height = 28;
+      ws.mergeCells(totalRowNum, 1, totalRowNum, 5);
+      const lbl = totalRow.getCell(1);
+      lbl.value = `TOTAL — ${rows.length} virement(s)`;
+      lbl.font = { name: 'Calibri', size: 10, bold: true, color: { argb: C.WHITE } };
+      lbl.fill = fill(C.TOTAL_BG);
+      lbl.alignment = { horizontal: 'right', vertical: 'middle' };
+      lbl.border = { top: medium(C.ACCENT) };
+      const sumCell = totalRow.getCell(6);
+      sumCell.value = { formula: `SUM(F5:F${totalRowNum - 1})` };
+      sumCell.numFmt = '#,##0.000';
+      sumCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: C.WHITE } };
+      sumCell.fill = fill(C.TOTAL_BG);
+      sumCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      sumCell.border = { top: medium(C.ACCENT) };
+      for (let c = 7; c <= COL_COUNT; c++) {
+        const cell = totalRow.getCell(c);
+        cell.fill = fill(C.TOTAL_BG);
+        cell.border = { top: medium(C.ACCENT) };
+      }
+
+      ws.views = [{ state: 'frozen', ySplit: 4, xSplit: 1, activeCell: 'B5' }];
+      ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: COL_COUNT } };
+    };
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'ARS Finance System';
+    wb.created = new Date();
+
+    if (!yearParam || yearParam === 'all') {
+      // One sheet per year + "Tous" summary sheet
+      buildSheet(wb, 'Tous', mapped);
+      for (const y of years) buildSheet(wb, String(y), byYear.get(y)!);
+    } else {
+      // Single year sheet
+      const y = parseInt(yearParam, 10);
+      buildSheet(wb, String(y), byYear.get(y) || []);
+    }
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const yearLabel = (!yearParam || yearParam === 'all') ? 'Complet' : yearParam;
+    const filename = `Historique_Virements_${yearLabel}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(Buffer.from(buffer as ArrayBuffer));
   }
 
@@ -685,7 +1232,7 @@ export class FinanceController {
     // Get overdue virements directly
     const overdueVirements = await this.ordreVirementService['prisma'].ordreVirement.findMany({
       where: {
-        etatVirement: { in: ['NON_EXECUTE', 'EN_COURS_EXECUTION'] }
+        etatVirement: { in: ['NON_EXECUTE', 'EN_COURS_VALIDATION', 'VIREMENT_DEPOSE', 'VIREMENT_AUTORISE'] }
       },
       take: 50
     });
@@ -1043,7 +1590,7 @@ export class FinanceController {
   }
 
   @Put('ordres-virement/:id/recovery')
-  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async updateRecoveryInfo(
     @Param('id') id: string,
     @Body() body: {
@@ -1101,7 +1648,7 @@ export class FinanceController {
   }
   
   @Get('ordres-virement/:id/details')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN)
   async getOVDetails(
     @Param('id') id: string,
     @Req() req: any
@@ -1135,7 +1682,6 @@ export class FinanceController {
       throw new BadRequestException('Failed to fetch OV details: ' + error.message);
     }
   }
-  
   @Put('ordres-virement/:id/details')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async updateOVDetails(
@@ -1242,7 +1788,7 @@ export class FinanceController {
   // === BORDEREAUX TRAITÉS ENDPOINT ===
   // EXACT SPEC: Only bordereaux with status "TRAITÉ" appear in Finance module
   @Get('bordereaux-traites')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getBordereauxTraites(
     @Req() req: any,
     @Query() filters: {
@@ -1264,7 +1810,7 @@ export class FinanceController {
 
   // === MANUAL OV ENTRIES (WITHOUT BORDEREAU) ===
   @Get('manual-ov-entries')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async getManualOVEntries(
     @Req() req: any,
     @Query() filters: {
@@ -1304,37 +1850,78 @@ export class FinanceController {
     const manualOVs = await this.prisma.ordreVirement.findMany({
       where,
       include: {
-        client: true, // NEW: Include direct client for manual entries
-        contract: true, // NEW: Include direct contract for manual entries
+        client: {
+          include: {
+            contracts: {
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          }
+        },
+        contract: true,
         donneurOrdre: true
       },
       orderBy: { dateCreation: 'desc' }
     });
+
+    // For OVs with no clientId (old records using clientName string only),
+    // resolve the client by name to get the contract fallback
+    const clientNameFallbacks = new Map<string, any>();
+    const missingClientNames = manualOVs
+      .filter(ov => !(ov as any).client && ov.clientName)
+      .map(ov => ov.clientName as string);
     
-    return manualOVs.map(ov => ({
-      id: ov.id,
-      clientSociete: ov.client?.name || ov.clientName || 'Entrée manuelle',
-      referenceOV: ov.reference,
-      referenceBordereau: '-',
-      montantBordereau: ov.montantTotal || 0,
-      dateInjection: ov.dateCreation,
-      statutVirement: ov.etatVirement,
-      dateTraitementVirement: ov.dateTraitement,
-      motifObservation: ov.motifObservation,
-      demandeRecuperation: ov.demandeRecuperation || false,
-      dateDemandeRecuperation: ov.dateDemandeRecuperation,
-      montantRecupere: ov.montantRecupere || false,
-      dateMontantRecupere: ov.dateMontantRecupere,
-      modeRecuperation: ov.client?.modeRecuperation || null, // NEW: Get from direct client
-      nomDonneur: ov.donneurOrdre?.nom || null, // NEW: Nom du donneur
-      numeroContrat: ov.contract?.codeAssure || null // NEW: Get from direct contract (optional)
-    }));
+    if (missingClientNames.length > 0) {
+      const uniqueNames = [...new Set(missingClientNames)];
+      const resolvedClients = await this.prisma.client.findMany({
+        where: { name: { in: uniqueNames } },
+        include: {
+          contracts: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          }
+        }
+      });
+      for (const c of resolvedClients) {
+        clientNameFallbacks.set(c.name, c);
+      }
+    }
+    
+    return manualOVs.map(ov => {
+      // Priority: direct contract > client.contracts[0] > clientName-resolved client.contracts[0]
+      const clientByName = !(ov as any).client && ov.clientName ? clientNameFallbacks.get(ov.clientName) : null;
+      const resolvedContract = (ov as any).contract
+        || (ov as any).client?.contracts?.[0]
+        || clientByName?.contracts?.[0]
+        || null;
+      return {
+        id: ov.id,
+        clientSociete: (ov as any).client?.name || ov.clientName || 'Entrée manuelle',
+        referenceOV: ov.reference,
+        referenceBordereau: ov.referenceBordereau || '',
+        montantBordereau: ov.montantTotal || 0,
+        nombreAdherents: ov.nombreAdherents || 0,
+        observation: ov.motifObservation || ov.commentaire || '',
+        dateInjection: ov.dateCreation,
+        statutVirement: ov.etatVirement,
+        dateTraitementVirement: ov.dateTraitement,
+        motifObservation: ov.motifObservation || ov.commentaire || '',
+        demandeRecuperation: ov.demandeRecuperation || false,
+        dateDemandeRecuperation: ov.dateDemandeRecuperation,
+        montantRecupere: ov.montantRecupere || false,
+        dateMontantRecupere: ov.dateMontantRecupere,
+        modeRecuperation: resolvedContract?.modeRecuperation || null,
+        nomDonneur: ov.donneurOrdre?.nom || null,
+        numeroContrat: resolvedContract?.codeAssure || null,
+        statutGlobal: ov.statutGlobal || null
+      };
+    });
   }
 
   // === UPDATE BORDEREAU TRAITÉ ENDPOINT ===
   // EXACT SPEC: Finance can update virement status, recovery info
   @Put('bordereaux-traites/:id')
-  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN)
   async updateBordereauTraite(
     @Param('id') id: string,
     @Body() body: {
@@ -1354,7 +1941,7 @@ export class FinanceController {
 
   // === CREATE OV FROM BORDEREAU TRAITÉ ===
   @Post('ordres-virement/from-bordereau/:bordereauId')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN)
   async createOVFromBordereau(
     @Param('bordereauId') bordereauId: string,
     @Body() body: { donneurOrdreId: string },
@@ -1484,11 +2071,11 @@ export class FinanceController {
 
   // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
   @Put('ordres-virement/:id/status')
-  @Roles(UserRole.FINANCE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
+  @Roles(UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT)
   async updateOVStatus(
     @Param('id') id: string,
     @Body() body: {
-      etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_DEPOSE';
+      etatVirement: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
       motifObservation?: string;
       demandeRecuperation?: boolean;
       dateDemandeRecuperation?: string;
@@ -1502,18 +2089,7 @@ export class FinanceController {
     try {
       console.log('🔍 Update request body:', body);
       console.log('🔍 User attempting update:', { id: user.id, role: user.role });
-      
-      // EXACT SPEC: Responsable Département can ONLY set these statuses
-      if (user.role === 'RESPONSABLE_DEPARTEMENT') {
-        const allowedStatuses = ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'];
-        
-        if (!allowedStatuses.includes(body.etatVirement)) {
-          const error = `Responsable Département peut uniquement définir les statuts: Virement non validé (VIREMENT_NON_VALIDE) ou Virement déposé (VIREMENT_DEPOSE). Statut demandé: ${body.etatVirement}`;
-          console.error('❌ Role validation failed:', error);
-          throw new BadRequestException(error);
-        }
-      }
-      
+
       // Get current OV state before update
       console.log('🔍 Fetching current OV state for id:', id);
       const currentOV = await this.prisma.ordreVirement.findUnique({
@@ -1524,6 +2100,44 @@ export class FinanceController {
       if (!currentOV) {
         const error = 'Ordre de virement not found';
         console.error('❌ OV not found:', id);
+        throw new BadRequestException(error);
+      }
+
+      // LOCK: Once EXECUTE, no one except SUPER_ADMIN can change the status
+      if (currentOV.etatVirement === 'EXECUTE' && user.role !== 'SUPER_ADMIN') {
+        throw new BadRequestException(
+          `Ce virement est déjà exécuté (EXECUTE). Aucune modification n'est autorisée. Seul le Super Admin peut modifier un virement exécuté.`
+        );
+      }
+
+      // EXACT SPEC: Responsable Département can ONLY set these statuses
+      if (user.role === 'RESPONSABLE_DEPARTEMENT') {
+        const allowedStatuses = ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'];
+        
+        if (!allowedStatuses.includes(body.etatVirement)) {
+          const error = `Responsable Département peut uniquement définir les statuts: Virement non validé (VIREMENT_NON_VALIDE) ou Virement déposé (VIREMENT_DEPOSE). Statut demandé: ${body.etatVirement}`;
+          console.error('❌ Role validation failed:', error);
+          throw new BadRequestException(error);
+        }
+      } else if (user.role === 'FINANCE') {
+        const allowedStatuses = ['VIREMENT_AUTORISE', 'BLOQUE'];
+
+        if (!allowedStatuses.includes(body.etatVirement)) {
+          const error = `Équipe Finance peut uniquement définir les statuts: Virement autorisé (VIREMENT_AUTORISE) ou Virement bloqué (BLOQUE). Statut demandé: ${body.etatVirement}`;
+          console.error('❌ Role validation failed:', error);
+          throw new BadRequestException(error);
+        }
+      } else if (user.role === 'COMPTABILITE') {
+        const allowedStatuses = ['EXECUTE', 'REJETE'];
+
+        if (!allowedStatuses.includes(body.etatVirement)) {
+          const error = `Comptabilité peut uniquement définir les statuts: Virement exécuté (EXECUTE) ou Virement rejeté (REJETE). Statut demandé: ${body.etatVirement}`;
+          console.error('❌ Role validation failed:', error);
+          throw new BadRequestException(error);
+        }
+      } else if (user.role !== 'SUPER_ADMIN') {
+        const error = `Votre rôle ne peut pas modifier le statut d'un virement.`;
+        console.error('❌ Role validation failed:', error);
         throw new BadRequestException(error);
       }
 
@@ -1569,6 +2183,13 @@ export class FinanceController {
           donneurOrdre: true
         }
       });
+
+      await notifySeniorPortfolioForOVStatus(
+        this.prisma,
+        updatedOV,
+        body.etatVirement,
+        body.motifObservation,
+      );
       
       console.log('✅ Database update successful:', { id: updatedOV.id, newStatus: updatedOV.etatVirement });
 
@@ -2361,6 +2982,79 @@ async reDownloadSageTxt(
     return result;
   }
 
+  // === CHANGE DONNEUR D'ORDRE (SUPER ADMIN ONLY) ===
+  @Put('ordres-virement/:id/donneur')
+  @Roles(UserRole.SUPER_ADMIN)
+  async changeDonneurOrdre(
+    @Param('id') id: string,
+    @Body() body: { donneurOrdreId: string },
+    @Req() req: any,
+  ) {
+    const user = getUserFromRequest(req);
+    
+    try {
+      console.log('🔧 Change donneur request:', { ovId: id, newDonneurId: body.donneurOrdreId, user: user.id });
+      
+      // Validate OV exists
+      const ov = await this.prisma.ordreVirement.findUnique({
+        where: { id },
+        include: { donneurOrdre: true },
+      });
+      
+      if (!ov) {
+        throw new BadRequestException('Ordre de virement not found');
+      }
+      
+      // Validate new donneur exists
+      const newDonneur = await this.prisma.donneurOrdre.findUnique({
+        where: { id: body.donneurOrdreId },
+      });
+      
+      if (!newDonneur) {
+        throw new BadRequestException('Donneur d\'ordre not found');
+      }
+      
+      // Update the OV with new donneur
+      const updatedOV = await this.prisma.ordreVirement.update({
+        where: { id },
+        data: { donneurOrdreId: body.donneurOrdreId },
+        include: {
+          donneurOrdre: true,
+          bordereau: { include: { client: true } },
+        },
+      });
+      
+      // Log history
+      const { logVirementHistory, VIREMENT_ACTIONS } = await import('./virement-history.helper');
+      await logVirementHistory(
+        id,
+        VIREMENT_ACTIONS.CHANGEMENT_STATUT,
+        user.id,
+        {
+          previousState: ov.donneurOrdre?.nom || 'N/A',
+          newState: newDonneur.nom,
+          comment: `Donneur d'ordre changé de "${ov.donneurOrdre?.nom || 'N/A'}" à "${newDonneur.nom}" par ${user.fullName}`,
+        },
+      );
+      
+      console.log('✅ Donneur updated successfully:', { 
+        ovId: id, 
+        oldDonneur: ov.donneurOrdre?.nom, 
+        newDonneur: newDonneur.nom,
+        user: user.id 
+      });
+      
+      return {
+        success: true,
+        message: 'Donneur d\'ordre mis à jour avec succès',
+        ordreVirement: updatedOV,
+      };
+    } catch (error: any) {
+      console.error('❌ Failed to change donneur:', error);
+      throw new BadRequestException('Failed to change donneur: ' + error.message);
+    }
+  }
+
   @Patch('clients/:id/sage-config')
   async updateClientSageConfig(
     @Param('id') id: string,
@@ -2434,7 +3128,7 @@ async updateCompagnieSageConfig(
    * ROLE: FINANCE or SUPER_ADMIN (Recouvrement is a function, not a separate role)
    */
   @Post('recouvrement/bulk-validate')
-  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN)
   async bulkValidateRecouvrement(
     @Body() dto: BulkRecouvrementDto,
     @Req() req: any
@@ -2459,7 +3153,7 @@ async updateCompagnieSageConfig(
    * ROLE: FINANCE or SUPER_ADMIN
    */
   @Get('recouvrement/pending')
-  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN)
   async getPendingRecouvrementOVs(@Req() req: any) {
     const user = getUserFromRequest(req);
     return this.recouvrementService.getPendingRecouvrementOVs(user.role);
@@ -2481,7 +3175,7 @@ async updateCompagnieSageConfig(
    * ROLE: FINANCE or SUPER_ADMIN
    */
   @Get('recouvrement/all')
-  @Roles(UserRole.FINANCE, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.SUPER_ADMIN)
   async getAllRecouvrementOVs(
     @Query() filters: {
       status?: string;
@@ -2567,10 +3261,10 @@ async updateCompagnieSageConfig(
   @Delete('compagnies-assurance/:id')
   @Roles(UserRole.SUPER_ADMIN)
   async deleteCompagnieAssurance(@Param('id') id: string) {
-    // Safety check — don't delete if clients linked
-    const count = await this.prisma.client.count({ where: { compagnieAssuranceId: id } });
+    // Safety check — don't delete if contracts are still linked
+    const count = await this.prisma.contract.count({ where: { compagnieAssuranceId: id } });
     if (count > 0) {
-      throw new BadRequestException(`Impossible de supprimer: ${count} client(s) lié(s)`);
+      throw new BadRequestException(`Impossible de supprimer: ${count} contrat(s) lié(s)`);
     }
     return this.prisma.compagnieAssurance.delete({ where: { id } });
   }

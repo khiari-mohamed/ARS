@@ -21,10 +21,14 @@ interface BordereauTraite {
   referenceOV: string;
   referenceBordereau: string;
   montantBordereau: number;
+  nombreAdherents?: number; // UI label: "Nombre de BS" (DB field unchanged)
+  observation?: string;
   dateFinalisationBordereau?: string;
   dateInjection: string;
-  statutVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_DEPOSE' | 'VIREMENT_AUTORISE';
-  statutGlobal?: string; // NEW: Global workflow status
+  statutVirement: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
+  statutGlobal?: string;
+  modeRecuperation?: string;
+  numeroContrat?: string;
   dateTraitementVirement?: string;
   motifObservation?: string;
   demandeRecuperation: boolean;
@@ -55,6 +59,13 @@ const BODY_CELL_SX = {
   '&:last-child': { borderRight: 0 },
   verticalAlign: 'middle',
 } as const;
+
+/** Display a bank-ready bordereau ref. Never show "Entrée manuelle". */
+const displayRefBordereau = (record: BordereauTraite): string => {
+  const ref = record.referenceBordereau?.trim() || '';
+  if (!ref || /^entr[ée]e\s*manuelle$/i.test(ref)) return '—';
+  return ref;
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const TrackingTab: React.FC = () => {
@@ -106,10 +117,12 @@ const TrackingTab: React.FC = () => {
     dateFrom: '',
     dateTo: '',
     referenceBordereau: '',
+    referenceOV: '',
+    compagnie: '',
     modeRecuperation: '',
     nomDonneur: '',
     numeroContrat: '',
-    statutGlobal: '', // NEW: Global workflow status filter
+    statutGlobal: '',
   });
   const [editDialog, setEditDialog] = useState<{ open: boolean, record: BordereauTraite | null }>({
     open: false, record: null
@@ -128,11 +141,13 @@ const TrackingTab: React.FC = () => {
   const [createForm, setCreateForm] = useState({
     clientName: '',
     clientId: '',
-    contractId: '', // NEW: Optional contract ID
+    contractId: '',
     donneurOrdreId: '',
     montantTotal: '',
-    nombreAdherents: '',
-    generatedReference: ''
+    nombreAdherents: '', // UI: Nombre de BS
+    generatedReference: '',
+    referenceBordereau: '', // FREE TEXT — not a FK. Written into TXT/PDF/SAGE.
+    observation: '',
   });
   const [clientContracts, setClientContracts] = useState<any[]>([]);
   const [documentViewer, setDocumentViewer] = useState<{ open: boolean, url: string, title: string, type: 'pdf' | 'txt' }>({
@@ -149,6 +164,8 @@ const TrackingTab: React.FC = () => {
   const [reinjectSuccess, setReinjectSuccess] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [manualPage, setManualPage] = useState(0);
+  const [manualRowsPerPage, setManualRowsPerPage] = useState(20);
   const [correctOVOpen, setCorrectOVOpen] = useState(false);
   const [correctOVData, setCorrectOVData] = useState<any>(null);
   const [restartProcessingOpen, setRestartProcessingOpen] = useState(false);
@@ -159,8 +176,43 @@ const TrackingTab: React.FC = () => {
     reference: ''
   });
   const [globalHistoryDialog, setGlobalHistoryDialog] = useState(false);
+  const [donneurs, setDonneurs] = useState<any[]>([]);
+  const [changeDonneurDialog, setChangeDonneurDialog] = useState<{ open: boolean; record: BordereauTraite | null }>({ open: false, record: null });
+  const [selectedDonneurId, setSelectedDonneurId] = useState<string>('');
+  const [changeDonneurLoading, setChangeDonneurLoading] = useState(false);
 
-  // Helper functions for statutGlobal display
+  const loadDonneurs = async () => {
+    try {
+      const { LocalAPI } = await import('../../services/axios');
+      const response = await LocalAPI.get('/finance/donneurs-ordre');
+      setDonneurs(response.data);
+    } catch (error) {
+      console.error('Failed to load donneurs:', error);
+    }
+  };
+
+  const handleChangeDonneur = async () => {
+    if (!changeDonneurDialog.record || !selectedDonneurId) return;
+    
+    setChangeDonneurLoading(true);
+    try {
+      const { LocalAPI } = await import('../../services/axios');
+      await LocalAPI.put(`/finance/ordres-virement/${changeDonneurDialog.record.id}/donneur`, {
+        donneurOrdreId: selectedDonneurId
+      });
+      alert('Donneur mis à jour avec succès!');
+      setChangeDonneurDialog({ open: false, record: null });
+      setSelectedDonneurId('');
+      await loadBordereauxTraites();
+      await loadManualOVs();
+    } catch (error: any) {
+      console.error('Failed to change donneur:', error);
+      alert('Erreur lors du changement de donneur: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setChangeDonneurLoading(false);
+    }
+  };
+
   const getStatutGlobalLabel = (status: string): string => {
     const labels: Record<string, string> = {
       'EN_ATTENTE': 'En attente',
@@ -185,7 +237,6 @@ const TrackingTab: React.FC = () => {
     return colors[status] || 'default';
   };
 
-  // ── Data loading (unchanged) ────────────────────────────────────────────────
   const loadClients = async () => {
     try {
       const { fetchClients } = await import('../../services/clientService');
@@ -236,11 +287,11 @@ const TrackingTab: React.FC = () => {
 
   useEffect(() => {
     loadClients();
+    loadDonneurs();
     loadBordereauxTraites();
     loadManualOVs();
   }, []);
 
-  // Reload when filters change
   useEffect(() => {
     if (filters.society || filters.status || filters.dateFrom || filters.dateTo || filters.referenceBordereau) {
       loadBordereauxTraites();
@@ -251,17 +302,27 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     let filtered = bordereauxTraites;
 
-    // Finance role sees: NON_EXECUTE (to create OVs) + workflow statuses
     if (user?.role === 'FINANCE') {
-      filtered = filtered.filter(r => 
-        ['NON_EXECUTE', 'VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+      filtered = filtered.filter(r =>
+        ['VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
       );
     }
 
-    // EXACT SPEC: Responsable Département can only see virements with 2 specific statuses
+    if (user?.role === 'COMPTABILITE') {
+      filtered = filtered.filter(r =>
+        ['VIREMENT_AUTORISE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+      );
+    }
+
     if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
-      filtered = filtered.filter(r => 
+      filtered = filtered.filter(r =>
         ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'].includes(r.statutVirement)
+      );
+    }
+
+    if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
+      filtered = filtered.filter(r =>
+        ['NON_EXECUTE', 'EN_COURS_VALIDATION'].includes(r.statutVirement)
       );
     }
 
@@ -279,6 +340,12 @@ const TrackingTab: React.FC = () => {
     }
     if (filters.referenceBordereau) {
       filtered = filtered.filter(r => r.referenceBordereau.toLowerCase().includes(filters.referenceBordereau.toLowerCase()));
+    }
+    if (filters.referenceOV) {
+      filtered = filtered.filter(r => r.referenceOV?.toLowerCase().includes(filters.referenceOV.toLowerCase()));
+    }
+    if (filters.compagnie) {
+      filtered = filtered.filter(r => (r as any).compagnieAssurance?.toLowerCase().includes(filters.compagnie.toLowerCase()));
     }
     if (filters.modeRecuperation) {
       filtered = filtered.filter(r => (r as any).modeRecuperation?.toLowerCase().includes(filters.modeRecuperation.toLowerCase()));
@@ -305,17 +372,27 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     let filtered = manualOVs;
 
-    // Finance role sees: NON_EXECUTE + workflow statuses
     if (user?.role === 'FINANCE') {
-      filtered = filtered.filter(r => 
-        ['NON_EXECUTE', 'VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+      filtered = filtered.filter(r =>
+        ['VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
       );
     }
 
-    // EXACT SPEC: Responsable Département can only see virements with 2 specific statuses
+    if (user?.role === 'COMPTABILITE') {
+      filtered = filtered.filter(r =>
+        ['VIREMENT_AUTORISE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
+      );
+    }
+
     if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
-      filtered = filtered.filter(r => 
+      filtered = filtered.filter(r =>
         ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'].includes(r.statutVirement)
+      );
+    }
+
+    if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
+      filtered = filtered.filter(r =>
+        ['NON_EXECUTE', 'EN_COURS_VALIDATION'].includes(r.statutVirement)
       );
     }
 
@@ -332,7 +409,13 @@ const TrackingTab: React.FC = () => {
       filtered = filtered.filter(r => r.dateInjection <= filters.dateTo);
     }
     if (filters.referenceBordereau) {
-      filtered = filtered.filter(r => r.referenceOV?.toLowerCase().includes(filters.referenceBordereau.toLowerCase()));
+      filtered = filtered.filter(r => r.referenceOV?.toLowerCase().includes(filters.referenceBordereau.toLowerCase()) || r.referenceBordereau?.toLowerCase().includes(filters.referenceBordereau.toLowerCase()));
+    }
+    if (filters.referenceOV) {
+      filtered = filtered.filter(r => r.referenceOV?.toLowerCase().includes(filters.referenceOV.toLowerCase()));
+    }
+    if (filters.compagnie) {
+      filtered = filtered.filter(r => (r as any).compagnieAssurance?.toLowerCase().includes(filters.compagnie.toLowerCase()));
     }
     if (filters.modeRecuperation) {
       filtered = filtered.filter(r => (r as any).modeRecuperation?.toLowerCase().includes(filters.modeRecuperation.toLowerCase()));
@@ -354,47 +437,41 @@ const TrackingTab: React.FC = () => {
     });
 
     setFilteredManualOVs(filtered);
+    setManualPage(0);
   }, [manualOVs, filters, user?.role]);
 
-  // EXACT SPEC: Statuts de virement
   const getStatusChip = (status: string) => {
-    const statusLabels = {
-      'NON_EXECUTE': 'Virement non exécuté',
-      'EN_COURS_EXECUTION': 'Virement en cours d\'exécution',
-      'EXECUTE_PARTIELLEMENT': 'Virement exécuté partiellement',
-      'REJETE': 'Virement rejeté',
-      'BLOQUE': 'Virement bloqué',
-      'EXECUTE': 'Virement exécuté',
+    const statusLabels: Record<string, string> = {
+      'NON_EXECUTE':         'Virement non créé',
       'EN_COURS_VALIDATION': 'En cours de validation',
+      'VIREMENT_DEPOSE':     'Virement déposé',
       'VIREMENT_NON_VALIDE': 'Virement non validé',
-      'VIREMENT_DEPOSE': 'Virement déposé',
-      'VIREMENT_AUTORISE': 'Virement autorisé'
+      'VIREMENT_AUTORISE':   'Virement autorisé',
+      'BLOQUE':              'Virement bloqué',
+      'EXECUTE':             'Virement exécuté',
+      'REJETE':              'Virement rejeté',
     };
 
-    const statusColors = {
-      'NON_EXECUTE': 'default',
-      'EN_COURS_EXECUTION': 'info',
-      'EXECUTE_PARTIELLEMENT': 'warning',
-      'REJETE': 'error',
-      'BLOQUE': 'error',
-      'EXECUTE': 'success',
+    const statusColors: Record<string, string> = {
+      'NON_EXECUTE':         'default',
       'EN_COURS_VALIDATION': 'info',
+      'VIREMENT_DEPOSE':     'primary',
       'VIREMENT_NON_VALIDE': 'error',
-      'VIREMENT_DEPOSE': 'success',
-      'VIREMENT_AUTORISE': 'success'
+      'VIREMENT_AUTORISE':   'success',
+      'BLOQUE':              'warning',
+      'EXECUTE':             'success',
+      'REJETE':              'error',
     };
 
-    const statusIcons = {
-      'NON_EXECUTE': '⏳',
-      'EN_COURS_EXECUTION': '🔄',
-      'EXECUTE_PARTIELLEMENT': '⚠️',
-      'REJETE': '❌',
-      'BLOQUE': '⏸️',
-      'EXECUTE': '✅',
+    const statusIcons: Record<string, string> = {
+      'NON_EXECUTE':         '⏳',
       'EN_COURS_VALIDATION': '📝',
+      'VIREMENT_DEPOSE':     '📤',
       'VIREMENT_NON_VALIDE': '❌',
-      'VIREMENT_DEPOSE': '💼',
-      'VIREMENT_AUTORISE': '✅'
+      'VIREMENT_AUTORISE':   '✅',
+      'BLOQUE':              '⏸️',
+      'EXECUTE':             '✅',
+      'REJETE':              '❌',
     };
 
     return (
@@ -406,7 +483,6 @@ const TrackingTab: React.FC = () => {
     );
   };
 
-  // ── Handlers (unchanged) ───────────────────────────────────────────────────
   const handleEditClick = (record: BordereauTraite) => {
     setEditForm({
       statutVirement: record.statutVirement,
@@ -448,7 +524,6 @@ const TrackingTab: React.FC = () => {
     try {
       const financeService = await import('../../services/financeService');
 
-      // If record has OV reference, update OV directly
       if (editDialog.record.referenceOV) {
         await financeService.financeService.updateOVStatus(editDialog.record.id, {
           etatVirement: editForm.statutVirement as any,
@@ -459,7 +534,6 @@ const TrackingTab: React.FC = () => {
           dateMontantRecupere: editForm.montantRecupere ? editForm.dateMontantRecupere : undefined
         });
       } else {
-        // Otherwise update bordereau traite
         await financeService.financeService.updateBordereauTraite(editDialog.record.id, {
           statutVirement: editForm.statutVirement,
           dateTraitementVirement: editForm.dateTraitementVirement,
@@ -480,47 +554,70 @@ const TrackingTab: React.FC = () => {
     }
   };
 
+  const resetCreateForm = () => {
+    setCreateForm({
+      clientName: '',
+      clientId: '',
+      contractId: '',
+      donneurOrdreId: '',
+      montantTotal: '',
+      nombreAdherents: '',
+      generatedReference: '',
+      referenceBordereau: '',
+      observation: '',
+    });
+    setClientContracts([]);
+  };
+
   const handleCreateManualEntry = async () => {
-    // EXACT SPEC: Manual OV must follow same workflow as bordereau OV
+    const refBrdx = createForm.referenceBordereau.trim();
+    if (!refBrdx) {
+      alert('La référence bordereau est obligatoire : elle sera inscrite dans le fichier TXT envoyé à la banque.');
+      return;
+    }
+
     const manualOVPdfPath = sessionStorage.getItem('manualOVPdfPath');
 
-    // Clean montantTotal: remove all separators (spaces, commas, dots) and parse as number
     const cleanMontant = createForm.montantTotal.replace(/[\s,\.]/g, '');
     const montantTotal = parseFloat(cleanMontant) || 0;
 
+    // Persist the FREE-TEXT ref. No bordereauId is set — this is not a FK.
     sessionStorage.setItem('manualOVData', JSON.stringify({
-      // NO reference field - will be auto-generated by backend
       clientName: createForm.clientName,
       clientId: createForm.clientId,
-      contractId: createForm.contractId || null, // NEW: Optional contract ID
+      contractId: createForm.contractId || null,
       montantTotal: montantTotal,
-      nombreAdherents: parseInt(createForm.nombreAdherents) || 0,
+      nombreAdherents: parseInt(createForm.nombreAdherents) || 0, // Nombre de BS
+      referenceBordereau: refBrdx,
+      observation: createForm.observation.trim(),
       isManual: true,
       uploadedPdfPath: manualOVPdfPath
     }));
 
     setCreateDialog(false);
+    resetCreateForm();
 
-    // Redirect to OV Processing tab (tab index 2)
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.set('tab', '2');
     currentUrl.searchParams.set('manual', 'true');
     window.location.href = currentUrl.toString();
   };
 
+  const isLocked = (record: BordereauTraite) =>
+    record.statutVirement === 'EXECUTE' && user?.role !== 'SUPER_ADMIN';
+
   const canModifyStatus = () => {
-    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'RESPONSABLE_DEPARTEMENT';
+    return user?.role === 'FINANCE' || user?.role === 'COMPTABILITE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'RESPONSABLE_DEPARTEMENT';
   };
 
   const canBulkUpdate = () => {
-    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'RESPONSABLE_DEPARTEMENT';
+    return user?.role === 'FINANCE' || user?.role === 'COMPTABILITE' || user?.role === 'SUPER_ADMIN' || user?.role === 'RESPONSABLE_DEPARTEMENT';
   };
 
   const canReinject = () => {
     return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN' || user?.role === 'GESTIONNAIRE_SENIOR';
   };
 
-  // Statuses visible in the filter dropdown (view)
   const getAvailableStatuses = () => {
     if (user?.role === 'FINANCE') {
       return [
@@ -531,31 +628,9 @@ const TrackingTab: React.FC = () => {
         { value: 'REJETE', label: '❌ Virement rejeté' },
       ];
     }
-    if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
-      return [
-        { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-        { value: 'VIREMENT_DEPOSE', label: '✅ Virement déposé' },
-      ];
-    }
-    return [
-      { value: 'NON_EXECUTE', label: '⏳ Virement non exécuté' },
-      { value: 'EN_COURS_EXECUTION', label: '🔄 Virement en cours d\'exécution' },
-      { value: 'EXECUTE_PARTIELLEMENT', label: '⚠️ Virement exécuté partiellement' },
-      { value: 'REJETE', label: '❌ Virement rejeté' },
-      { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
-      { value: 'EXECUTE', label: '✅ Virement exécuté' },
-      { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
-      { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-      { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
-    ];
-  };
-
-  // Statuses Finance/roles can SET in edit/bulk dialogs (actions)
-  const getEditableStatuses = () => {
-    if (user?.role === 'FINANCE') {
+    if (user?.role === 'COMPTABILITE') {
       return [
         { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
-        { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
         { value: 'EXECUTE', label: '✅ Virement exécuté' },
         { value: 'REJETE', label: '❌ Virement rejeté' },
       ];
@@ -563,20 +638,60 @@ const TrackingTab: React.FC = () => {
     if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
       return [
         { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-        { value: 'VIREMENT_DEPOSE', label: '✅ Virement déposé' },
+        { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
+      ];
+    }
+    if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
+      return [
+        { value: 'NON_EXECUTE', label: '⏳ Virement non créé' },
+        { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
       ];
     }
     return [
-      { value: 'NON_EXECUTE', label: '⏳ Virement non exécuté' },
-      { value: 'EN_COURS_EXECUTION', label: '🔄 Virement en cours d\'exécution' },
-      { value: 'EXECUTE_PARTIELLEMENT', label: '⚠️ Virement exécuté partiellement' },
-      { value: 'REJETE', label: '❌ Virement rejeté' },
+      { value: 'NON_EXECUTE', label: '⏳ Virement non créé' },
+      { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
+      { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
+      { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
+      { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
       { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
       { value: 'EXECUTE', label: '✅ Virement exécuté' },
-      { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
-      { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-      { value: 'VIREMENT_DEPOSE', label: '✅ Virement autorisé' },
+      { value: 'REJETE', label: '❌ Virement rejeté' },
     ];
+  };
+
+  const getEditableStatuses = () => {
+    if (user?.role === 'FINANCE') {
+      return [
+        { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
+        { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
+      ];
+    }
+    if (user?.role === 'COMPTABILITE') {
+      return [
+        { value: 'EXECUTE', label: '✅ Virement exécuté' },
+        { value: 'REJETE', label: '❌ Virement rejeté' },
+      ];
+    }
+    if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
+      return [
+        { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
+        { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
+      ];
+    }
+    if (!user || user.role === 'SUPER_ADMIN') {
+      return [
+        { value: 'NON_EXECUTE', label: '⏳ Virement non créé' },
+        { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
+        { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
+        { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
+        { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
+        { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
+        { value: 'EXECUTE', label: '✅ Virement exécuté' },
+        { value: 'REJETE', label: '❌ Virement rejeté' },
+      ];
+    }
+
+    return [];
   };
 
   const handleCorrectOV = async (record: BordereauTraite) => {
@@ -656,22 +771,32 @@ const TrackingTab: React.FC = () => {
 
     try {
       const financeService = await import('../../services/financeService');
-      let successCount = 0;
-      let errorCount = 0;
       const errors: string[] = [];
-
+      const allowedIds: string[] = [];
       for (const virementId of selectedForBulkUpdate) {
-        try {
-          await financeService.financeService.updateOVStatus(virementId, {
-            etatVirement: bulkUpdateForm.statutVirement as any,
-            motifObservation: bulkUpdateForm.motifObservation
-          });
-          successCount++;
-        } catch (error: any) {
-          console.error(`Failed to update virement ${virementId}:`, error);
-          errorCount++;
-          errors.push(`Virement ${virementId}: ${error.message || 'Erreur inconnue'}`);
+        const record = [...filteredRecords, ...filteredManualOVs].find(r => r.id === virementId);
+        if (record && record.statutVirement === 'EXECUTE' && user?.role !== 'SUPER_ADMIN') {
+          errors.push(`Virement ${virementId}: Virement exécuté — modification verrouillée`);
+          continue;
         }
+        allowedIds.push(virementId);
+      }
+
+      if (allowedIds.length === 0) {
+        alert('Aucun virement autorisé à la mise à jour.');
+        return;
+      }
+
+      const resp = await financeService.financeService.bulkUpdateEtatVirement(allowedIds, {
+        etatVirement: bulkUpdateForm.statutVirement as any,
+        commentaire: bulkUpdateForm.motifObservation
+      });
+
+      const successCount = resp.updated || 0;
+      const failed: Array<{ id: string; success: boolean; error?: string }> = resp.failed || [];
+      const errorCount = failed.length + errors.length;
+      for (const f of failed) {
+        errors.push(`Virement ${f.id}: ${f.error || 'Erreur inconnue'}`);
       }
 
       await loadBordereauxTraites();
@@ -693,7 +818,15 @@ const TrackingTab: React.FC = () => {
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const createFormValid =
+    !!createForm.clientName &&
+    !!createForm.clientId &&
+    !!createForm.montantTotal &&
+    parseFloat(createForm.montantTotal.replace(/[\s,\.]/g, '')) > 0 &&
+    !!createForm.referenceBordereau.trim();
+
+  const selectedContract = clientContracts.find(contract => contract.id === createForm.contractId);
+
   return (
     <Box sx={{ p: 3 }}>
 
@@ -812,6 +945,28 @@ const TrackingTab: React.FC = () => {
             sx={{ minWidth: 150 }}
           />
 
+          <TextField
+            label="Référence OV"
+            value={filters.referenceOV}
+            onChange={(e) => setFilters({ ...filters, referenceOV: e.target.value })}
+            size="small"
+            placeholder="Ex: OV-2026-0001"
+            sx={{ minWidth: 160 }}
+          />
+
+          <Autocomplete
+            options={Array.from(new Set(bordereauxTraites.map((b: any) => b.compagnieAssurance).filter(Boolean))) as string[]}
+            getOptionLabel={(option) => option as string}
+            value={filters.compagnie || null}
+            onChange={(_, newValue) => setFilters({ ...filters, compagnie: (newValue as string) || '' })}
+            renderInput={(params) => (
+              <TextField {...params} label="Compagnie d'assurance" placeholder="Tapez pour rechercher..." size="small" />
+            )}
+            noOptionsText="Aucune compagnie trouvée"
+            size="small"
+            sx={{ minWidth: 200 }}
+          />
+
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Statut Virement</InputLabel>
             <Select
@@ -913,7 +1068,7 @@ const TrackingTab: React.FC = () => {
 
           <Button
             variant="outlined"
-            onClick={() => setFilters({ society: '', status: '', donneurOrdre: '', dateFrom: '', dateTo: '', referenceBordereau: '', modeRecuperation: '', nomDonneur: '', numeroContrat: '', statutGlobal: '' })}
+            onClick={() => setFilters({ society: '', status: '', donneurOrdre: '', dateFrom: '', dateTo: '', referenceBordereau: '', referenceOV: '', compagnie: '', modeRecuperation: '', nomDonneur: '', numeroContrat: '', statutGlobal: '' })}
             size="small"
             sx={{ alignSelf: 'center' }}
           >
@@ -933,7 +1088,6 @@ const TrackingTab: React.FC = () => {
         }}
       >
         <CardContent>
-          {/* Bulk Action Toolbar */}
           {canBulkUpdate() && selectedForBulkUpdate.length > 0 && (
             <Alert
               severity="info"
@@ -970,7 +1124,6 @@ const TrackingTab: React.FC = () => {
             </Alert>
           )}
 
-          {/* Card header */}
           <Box
             display="flex"
             justifyContent="space-between"
@@ -996,9 +1149,9 @@ const TrackingTab: React.FC = () => {
                   Affichage limité à vos clients uniquement
                 </Typography>
               )}
-              {user?.role === 'FINANCE' && (
+              {(user?.role === 'FINANCE' || user?.role === 'COMPTABILITE') && (
                 <Typography variant="caption" color="warning.main" sx={{ fontStyle: 'italic', display: 'block' }}>
-                  Finance: Affichage limité aux statuts Autorisé, Bloqué, Exécuté, Rejeté
+                  Finance / Comptabilité : Affichage limité aux statuts Autorisé, Bloqué, Exécuté, Rejeté
                 </Typography>
               )}
               {user?.role === 'RESPONSABLE_DEPARTEMENT' && (
@@ -1052,6 +1205,7 @@ const TrackingTab: React.FC = () => {
                       <TableCell sx={HEAD_CELL_SX}>Référence OV</TableCell>
                       <TableCell sx={HEAD_CELL_SX}>Réf. Bordereau</TableCell>
                       <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Montant</TableCell>
+                      <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Nombre de BS</TableCell>
                       <TableCell sx={HEAD_CELL_SX}>Date Finalisation</TableCell>
                       <TableCell sx={HEAD_CELL_SX}>Date Injection</TableCell>
                       <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Statut Virement</TableCell>
@@ -1072,7 +1226,10 @@ const TrackingTab: React.FC = () => {
                       <TableRow
                         key={record.id}
                         sx={{
-                          backgroundColor: index % 2 === 0 ? '#ffffff' : '#f4f7fb',
+                        backgroundColor: record.statutVirement === 'EXECUTE' && user?.role !== 'SUPER_ADMIN'
+                          ? '#f5f5f5'
+                          : index % 2 === 0 ? '#ffffff' : '#f4f7fb',
+                          opacity: record.statutVirement === 'EXECUTE' && user?.role !== 'SUPER_ADMIN' ? 0.75 : 1,
                           '&:hover': { backgroundColor: '#e8f0fe' },
                           '&:last-child td': { borderBottom: 0 },
                         }}
@@ -1105,12 +1262,17 @@ const TrackingTab: React.FC = () => {
                         <TableCell sx={{ ...BODY_CELL_SX, fontWeight: 700, color: '#1e3a5f', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
                           {record.referenceOV}
                         </TableCell>
-                        <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#37474f' }}>
-                          {record.referenceBordereau}
+                        <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#37474f', fontFamily: 'monospace', fontWeight: 600 }}>
+                          {displayRefBordereau(record)}
                         </TableCell>
                         <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', color: '#1b5e20' }}>
                           {record.montantBordereau.toLocaleString('fr-TN')}{' '}
                           <span style={{ fontSize: '0.72rem', color: '#78909c' }}>TND</span>
+                        </TableCell>
+                        <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', color: '#1e3a5f' }}>
+                          {record.nombreAdherents != null
+                            ? record.nombreAdherents.toLocaleString('fr-TN')
+                            : '—'}
                         </TableCell>
                         <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#546e7a' }}>
                           {record.dateFinalisationBordereau
@@ -1132,17 +1294,17 @@ const TrackingTab: React.FC = () => {
                         </TableCell>
                         <TableCell sx={{ ...BODY_CELL_SX, maxWidth: 200 }}>
                           <Typography variant="body2" sx={{ fontSize: '0.78rem', wordBreak: 'break-word', whiteSpace: 'pre-wrap', color: '#546e7a' }}>
-                            {record.motifObservation || '—'}
+                            {record.motifObservation || record.observation || '—'}
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
-                          {(record as any).modeRecuperation || '—'}
+                          {record.modeRecuperation || '—'}
                         </TableCell>
                         <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                           {(record as any).nomDonneur || '—'}
                         </TableCell>
                         <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontSize: '0.78rem', fontFamily: 'monospace' }}>
-                          {(record as any).numeroContrat || '—'}
+                          {record.numeroContrat || '—'}
                         </TableCell>
                         <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
                           {record.statutGlobal ? (
@@ -1273,7 +1435,6 @@ const TrackingTab: React.FC = () => {
                         </TableCell>
                         <TableCell sx={BODY_CELL_SX}>
                           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                            {/* Historique button - ALWAYS VISIBLE for all roles */}
                             <Button
                               size="small"
                               variant="outlined"
@@ -1286,20 +1447,20 @@ const TrackingTab: React.FC = () => {
                               Historique
                             </Button>
 
-                            {/* EXACT SPEC: Finance and Super Admin can always modify */}
                             {canModifyStatus() && (
                               <Button
                                 size="small"
                                 variant="outlined"
                                 startIcon={<EditIcon sx={{ fontSize: '0.8rem !important' }} />}
                                 onClick={() => handleEditClick(record)}
+                                disabled={isLocked(record)}
+                                title={isLocked(record) ? 'Virement exécuté — modification verrouillée' : 'Modifier'}
                                 sx={{ fontSize: '0.68rem', py: 0.3, px: 0.8, minWidth: 0, whiteSpace: 'nowrap' }}
                               >
-                                Modifier
+                                {isLocked(record) ? '🔒 Verrouillé' : 'Modifier'}
                               </Button>
                             )}
 
-                            {/* EXACT SPEC: Réinjecter button - ONLY for Chef d'équipe/Gestionnaire Senior AND ONLY for REJETE/VIREMENT_NON_VALIDE status */}
                             {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'SUPER_ADMIN') && (
                               <Button
                                 size="small"
@@ -1315,16 +1476,38 @@ const TrackingTab: React.FC = () => {
                                 title={record.statutVirement === 'REJETE' || record.statutVirement === 'VIREMENT_NON_VALIDE'
                                   ? "Réinjecter le virement avec nouveaux fichiers"
                                   : "Disponible uniquement pour les virements rejetés ou non validés"}
-                                sx={{ 
-                                  fontSize: '0.68rem', 
-                                  py: 0.3, 
-                                  px: 0.8, 
-                                  minWidth: 0, 
+                                sx={{
+                                  fontSize: '0.68rem',
+                                  py: 0.3,
+                                  px: 0.8,
+                                  minWidth: 0,
                                   whiteSpace: 'nowrap',
                                   opacity: (record.statutVirement === 'REJETE' || record.statutVirement === 'VIREMENT_NON_VALIDE') ? 1 : 0.5
                                 }}
                               >
                                 Réinjecter
+                              </Button>
+                            )}
+
+                            {user?.role === 'SUPER_ADMIN' && record.referenceOV && (
+                              <Button
+                                size="small"
+                                color="secondary"
+                                variant="outlined"
+                                onClick={() => {
+                                  setChangeDonneurDialog({ open: true, record });
+                                  setSelectedDonneurId('');
+                                }}
+                                title="Changer le donneur d'ordre (Super Admin uniquement)"
+                                sx={{
+                                  fontSize: '0.68rem',
+                                  py: 0.3,
+                                  px: 0.8,
+                                  minWidth: 0,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                🔧 Donneur
                               </Button>
                             )}
                           </Box>
@@ -1335,7 +1518,6 @@ const TrackingTab: React.FC = () => {
                 </Table>
               </TableContainer>
 
-              {/* Pagination */}
               <Box
                 sx={{
                   mt: 1.5, display: 'flex', justifyContent: 'flex-end',
@@ -1374,7 +1556,6 @@ const TrackingTab: React.FC = () => {
         }}
       >
         <CardContent>
-          {/* Card header */}
           <Box
             display="flex"
             justifyContent="space-between"
@@ -1388,7 +1569,7 @@ const TrackingTab: React.FC = () => {
                 Entrées manuelles (non liées à un bordereau)
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Affichage de {filteredManualOVs.length} entrée(s) manuelle(s)
+                Affichage de {filteredManualOVs.length} entrée(s) manuelle(s) — Page {manualPage + 1}
               </Typography>
             </Box>
           </Box>
@@ -1428,7 +1609,9 @@ const TrackingTab: React.FC = () => {
                   <TableRow>
                     <TableCell sx={HEAD_CELL_SX}>Client / Société</TableCell>
                     <TableCell sx={HEAD_CELL_SX}>Référence OV</TableCell>
+                    <TableCell sx={HEAD_CELL_SX}>Réf. Bordereau</TableCell>
                     <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Montant</TableCell>
+                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Nombre de BS</TableCell>
                     <TableCell sx={HEAD_CELL_SX}>Date Injection</TableCell>
                     <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Statut Virement</TableCell>
                     <TableCell sx={HEAD_CELL_SX}>Date Traitement</TableCell>
@@ -1443,11 +1626,14 @@ const TrackingTab: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredManualOVs.map((record, index) => (
+                  {filteredManualOVs.slice(manualPage * manualRowsPerPage, manualPage * manualRowsPerPage + manualRowsPerPage).map((record, index) => (
                     <TableRow
                       key={record.id}
                       sx={{
-                        backgroundColor: index % 2 === 0 ? '#ffffff' : '#f4f7fb',
+                        backgroundColor: record.statutVirement === 'EXECUTE' && user?.role !== 'SUPER_ADMIN'
+                          ? '#f5f5f5'
+                          : index % 2 === 0 ? '#ffffff' : '#f4f7fb',
+                          opacity: record.statutVirement === 'EXECUTE' && user?.role !== 'SUPER_ADMIN' ? 0.75 : 1,
                         '&:hover': { backgroundColor: '#e8f0fe' },
                         '&:last-child td': { borderBottom: 0 },
                       }}
@@ -1458,9 +1644,17 @@ const TrackingTab: React.FC = () => {
                       <TableCell sx={{ ...BODY_CELL_SX, fontWeight: 700, color: '#1e3a5f', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
                         {record.referenceOV}
                       </TableCell>
+                      <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#37474f', fontFamily: 'monospace', fontWeight: 600 }}>
+                        {displayRefBordereau(record)}
+                      </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', color: '#1b5e20' }}>
                         {record.montantBordereau.toLocaleString('fr-TN')}{' '}
                         <span style={{ fontSize: '0.72rem', color: '#78909c' }}>TND</span>
+                      </TableCell>
+                      <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', color: '#1e3a5f' }}>
+                        {record.nombreAdherents != null
+                          ? record.nombreAdherents.toLocaleString('fr-TN')
+                          : '—'}
                       </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#546e7a' }}>
                         {record.dateInjection && record.dateInjection !== '1970-01-01T00:00:00.000Z'
@@ -1477,17 +1671,17 @@ const TrackingTab: React.FC = () => {
                       </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, maxWidth: 200 }}>
                         <Typography variant="body2" sx={{ fontSize: '0.78rem', wordBreak: 'break-word', whiteSpace: 'pre-wrap', color: '#546e7a' }}>
-                          {record.motifObservation || '—'}
+                          {record.motifObservation || record.observation || '—'}
                         </Typography>
                       </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
-                        {(record as any).modeRecuperation || '—'}
+                        {record.modeRecuperation || '—'}
                       </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                         {(record as any).nomDonneur || '—'}
                       </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontSize: '0.78rem', fontFamily: 'monospace' }}>
-                        {(record as any).numeroContrat || '—'}
+                        {record.numeroContrat || '—'}
                       </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
                         {record.demandeRecuperation ? (
@@ -1590,7 +1784,6 @@ const TrackingTab: React.FC = () => {
                       </TableCell>
                       <TableCell sx={BODY_CELL_SX}>
                         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                          {/* Historique button - ALWAYS VISIBLE for all roles */}
                           <Button
                             size="small"
                             variant="outlined"
@@ -1609,13 +1802,14 @@ const TrackingTab: React.FC = () => {
                               variant="outlined"
                               startIcon={<EditIcon sx={{ fontSize: '0.8rem !important' }} />}
                               onClick={() => handleEditClick(record)}
+                              disabled={isLocked(record)}
+                              title={isLocked(record) ? 'Virement exécuté — modification verrouillée' : 'Modifier'}
                               sx={{ fontSize: '0.68rem', py: 0.3, px: 0.8, minWidth: 0, whiteSpace: 'nowrap' }}
                             >
-                              Modifier
+                              {isLocked(record) ? '🔒 Verrouillé' : 'Modifier'}
                             </Button>
                           )}
 
-                          {/* EXACT SPEC: Réinjecter button - ONLY for Chef d'équipe/Gestionnaire Senior AND ONLY for REJETE/VIREMENT_NON_VALIDE status */}
                           {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'SUPER_ADMIN') && (
                             <Button
                               size="small"
@@ -1630,16 +1824,38 @@ const TrackingTab: React.FC = () => {
                               title={record.statutVirement === 'REJETE' || record.statutVirement === 'VIREMENT_NON_VALIDE'
                                 ? "Réinjecter le virement avec nouveaux fichiers"
                                 : "Disponible uniquement pour les virements rejetés ou non validés"}
-                              sx={{ 
-                                fontSize: '0.68rem', 
-                                py: 0.3, 
-                                px: 0.8, 
-                                minWidth: 0, 
+                              sx={{
+                                fontSize: '0.68rem',
+                                py: 0.3,
+                                px: 0.8,
+                                minWidth: 0,
                                 whiteSpace: 'nowrap',
                                 opacity: (record.statutVirement === 'REJETE' || record.statutVirement === 'VIREMENT_NON_VALIDE') ? 1 : 0.5
                               }}
                             >
                               Réinjecter
+                            </Button>
+                          )}
+
+                          {user?.role === 'SUPER_ADMIN' && record.referenceOV && (
+                            <Button
+                              size="small"
+                              color="secondary"
+                              variant="outlined"
+                              onClick={() => {
+                                setChangeDonneurDialog({ open: true, record });
+                                setSelectedDonneurId('');
+                              }}
+                              title="Changer le donneur d'ordre (Super Admin uniquement)"
+                              sx={{
+                                fontSize: '0.68rem',
+                                py: 0.3,
+                                px: 0.8,
+                                minWidth: 0,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              🔧 Donneur
                             </Button>
                           )}
                         </Box>
@@ -1650,14 +1866,38 @@ const TrackingTab: React.FC = () => {
               </Table>
             </TableContainer>
           )}
+
+          {filteredManualOVs.length > 0 && (
+            <Box
+              sx={{
+                mt: 1.5, display: 'flex', justifyContent: 'flex-end',
+                bgcolor: '#f4f7fb', borderRadius: 1.5,
+                border: '1px solid #e0e7ef',
+              }}
+            >
+              <TablePagination
+                component="div"
+                count={filteredManualOVs.length}
+                page={manualPage}
+                onPageChange={(e, newPage) => setManualPage(newPage)}
+                rowsPerPage={manualRowsPerPage}
+                onRowsPerPageChange={(e) => {
+                  setManualRowsPerPage(parseInt(e.target.value, 10));
+                  setManualPage(0);
+                }}
+                rowsPerPageOptions={[10, 20, 50, 100]}
+                labelRowsPerPage="Lignes par page:"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+              />
+            </Box>
+          )}
         </CardContent>
       </Card>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          DIALOGS — zero logic changes, minor visual polish only
+          DIALOGS
       ══════════════════════════════════════════════════════════════════════ */}
 
-      {/* EXACT SPEC: Edit Dialog with role-based actions */}
       <Dialog
         open={editDialog.open}
         onClose={() => setEditDialog({ open: false, record: null })}
@@ -1670,12 +1910,11 @@ const TrackingTab: React.FC = () => {
             Modifier — {editDialog.record?.referenceOV}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Bordereau : {editDialog.record?.referenceBordereau}
+            Bordereau : {displayRefBordereau(editDialog.record || { referenceBordereau: '' } as BordereauTraite)}
           </Typography>
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 2 }}>
-            {/* EXACT SPEC: Service Financier peut modifier le statut de virement */}
             <FormControl fullWidth>
               <InputLabel>Statut de virement</InputLabel>
               <Select
@@ -1695,7 +1934,12 @@ const TrackingTab: React.FC = () => {
               )}
               {user?.role === 'FINANCE' && (
                 <Typography variant="caption" color="info.main" sx={{ mt: 0.5 }}>
-                  Finance: Accès limité à 4 statuts (Autorisé, Bloqué, Exécuté, Rejeté)
+                  Finance : Accès limité à 4 statuts (Autorisé, Bloqué, Exécuté, Rejeté)
+                </Typography>
+              )}
+              {user?.role === 'COMPTABILITE' && (
+                <Typography variant="caption" color="info.main" sx={{ mt: 0.5 }}>
+                  Comptabilité : Accès limité aux virements autorisés, puis uniquement à Exécuté ou Rejeté.
                 </Typography>
               )}
               {user?.role === 'RESPONSABLE_DEPARTEMENT' && (
@@ -1714,7 +1958,6 @@ const TrackingTab: React.FC = () => {
               fullWidth
             />
 
-            {/* EXACT SPEC: Motif / Observation - champ libre service financier */}
             {canModifyStatus() && (
               <>
                 <TextField
@@ -1728,7 +1971,6 @@ const TrackingTab: React.FC = () => {
                   placeholder="Saisir le motif ou observation..."
                 />
 
-                {/* EXACT SPEC: Demande de récupération : Oui / Non → si Oui, afficher la date */}
                 <Box sx={{ p: 2, bgcolor: '#f0f4ff', border: '1px solid #d0dff5', borderRadius: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: '#1e3a5f' }}>Demande de récupération</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -1754,7 +1996,6 @@ const TrackingTab: React.FC = () => {
                   </Box>
                 </Box>
 
-                {/* EXACT SPEC: Montant récupéré : Oui / Non → si Oui, afficher la date de récupération */}
                 <Box sx={{ p: 2, bgcolor: '#f0f4ff', border: '1px solid #d0dff5', borderRadius: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: '#1e3a5f' }}>Montant récupéré</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -1787,7 +2028,6 @@ const TrackingTab: React.FC = () => {
           <Button onClick={() => setEditDialog({ open: false, record: null })} variant="outlined">
             Annuler
           </Button>
-          {/* EXACT SPEC: Réinjecter button always visible inside Corriger popup */}
           {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR') && (
             <Button
               onClick={() => {
@@ -1806,10 +2046,10 @@ const TrackingTab: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* EXACT SPEC: Créer nouvelle entrée (non liée à un bordereau) */}
+      {/* Créer nouvelle entrée — Réf. Bordereau = champ texte, PAS une FK */}
       <Dialog
         open={createDialog}
-        onClose={() => setCreateDialog(false)}
+        onClose={() => { setCreateDialog(false); resetCreateForm(); }}
         maxWidth="md"
         fullWidth
         PaperProps={{ sx: { borderRadius: 2 } }}
@@ -1819,15 +2059,22 @@ const TrackingTab: React.FC = () => {
             Créer une nouvelle entrée
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Cette entrée n'est pas liée à un bordereau
+            Cette entrée n'est pas liée à un bordereau scanné
           </Typography>
         </DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2, mt: 2 }}>
-            Création manuelle d'un ordre de virement sans bordereau associé
+            Création manuelle d'un ordre de virement sans bordereau associé.
+            Le processus de génération (TXT / PDF / SAGE) est identique à celui d'un bordereau scanné.
           </Alert>
           <Alert severity="success" sx={{ mb: 2 }}>
             ✅ La référence OV sera générée automatiquement de manière séquentielle (ex: OV-2026-0001, OV-2026-0002, etc.)
+          </Alert>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            La <strong>Référence bordereau</strong> est obligatoire : la banque refuse tout fichier TXT
+            sans cette référence. Ce n'est <strong>pas</strong> un lien vers un bordereau existant —
+            c'est un champ libre, au même format qu'une réf. bordereau classique, inscrit tel quel
+            dans le TXT, le PDF et SAGE.
           </Alert>
           <Stack spacing={2.5}>
             <TextField
@@ -1839,13 +2086,24 @@ const TrackingTab: React.FC = () => {
               sx={{ bgcolor: '#f5f5f5' }}
             />
 
+            <TextField
+              label="Référence bordereau *"
+              value={createForm.referenceBordereau}
+              onChange={(e) => setCreateForm({ ...createForm, referenceBordereau: e.target.value })}
+              fullWidth
+              required
+              autoFocus
+              placeholder="Ex: BRD-2026-0142"
+              helperText="Format identique à une réf. bordereau. Inscrite dans le TXT banque — aucun lien avec un bordereau scanné."
+              inputProps={{ maxLength: 64 }}
+            />
+
             <Autocomplete
               options={clients}
               getOptionLabel={(option) => option.name}
               value={clients.find(c => c.name === createForm.clientName) || null}
               onChange={async (event, newValue) => {
                 setCreateForm({ ...createForm, clientName: newValue?.name || '', clientId: newValue?.id || '', contractId: '' });
-                // Load contracts for selected client
                 if (newValue?.id) {
                   try {
                     const { LocalAPI } = await import('../../services/axios');
@@ -1875,16 +2133,17 @@ const TrackingTab: React.FC = () => {
             <Autocomplete
               options={clientContracts}
               getOptionLabel={(option) => `${option.codeAssure || 'N/A'} - ${option.clientName}`}
-              value={clientContracts.find(c => c.id === createForm.contractId) || null}
+              value={selectedContract || null}
               onChange={(event, newValue) => {
                 setCreateForm({ ...createForm, contractId: newValue?.id || '' });
               }}
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Numéro de Contrat (optionnel)"
+                  label="Numéro de Contrat"
                   placeholder="Sélectionnez un contrat..."
-                  helperText="Optionnel - Sélectionnez un contrat si applicable"
+                  helperText="Requis pour afficher le Mode de Récupération et le N° Contrat dans le tableau"
+                  color={createForm.clientId && !createForm.contractId ? 'warning' : 'primary'}
                 />
               )}
               isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -1892,6 +2151,47 @@ const TrackingTab: React.FC = () => {
               disabled={!createForm.clientId}
               fullWidth
             />
+
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: selectedContract ? '#f0f4ff' : '#fafafa',
+                border: '1px solid',
+                borderColor: selectedContract ? '#d0dff5' : '#e0e0e0',
+                borderRadius: 1.5,
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 1 }}>
+                Informations récupérées du contrat
+                {!selectedContract && (
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 400 }}>
+                    — sélectionnez un contrat ci-dessus
+                  </Typography>
+                )}
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Mode de récupération"
+                    value={selectedContract?.modeRecuperation || '—'}
+                    fullWidth
+                    size="small"
+                    InputProps={{ readOnly: true }}
+                    sx={{ bgcolor: 'white' }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="N° Contrat / Code assuré"
+                    value={selectedContract?.codeAssure || '—'}
+                    fullWidth
+                    size="small"
+                    InputProps={{ readOnly: true }}
+                    sx={{ bgcolor: 'white' }}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
 
             <TextField
               label="Montant total (TND)"
@@ -1906,24 +2206,36 @@ const TrackingTab: React.FC = () => {
             />
 
             <TextField
-              label="Nombre d'adhérents"
+              label="Nombre de BS"
               type="text"
               value={createForm.nombreAdherents}
-              onChange={(e) => setCreateForm({ ...createForm, nombreAdherents: e.target.value })}
+              onChange={(e) => setCreateForm({ ...createForm, nombreAdherents: e.target.value.replace(/[^\d]/g, '') })}
               fullWidth
               required
               placeholder="0"
+              helperText="Nombre de bulletins de soin (anciennement « Nombre d'adhérents »)"
+            />
+
+            <TextField
+              label="Observation"
+              value={createForm.observation}
+              onChange={(e) => setCreateForm({ ...createForm, observation: e.target.value })}
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Saisir une observation (optionnel)..."
+              helperText="Champ libre — reporté sur l'OV et visible dans Suivi & Statut"
             />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e0e7ef', bgcolor: '#fafbfc', gap: 1 }}>
-          <Button onClick={() => setCreateDialog(false)} variant="outlined">
+          <Button onClick={() => { setCreateDialog(false); resetCreateForm(); }} variant="outlined">
             Annuler
           </Button>
           <Button
             onClick={handleCreateManualEntry}
             variant="contained"
-            disabled={!createForm.clientName || !createForm.clientId || !createForm.montantTotal || parseFloat(createForm.montantTotal.replace(/[\s,\.]/g, '')) <= 0}
+            disabled={!createFormValid}
             startIcon={<AddIcon />}
           >
             Créer l'entrée
@@ -1942,7 +2254,7 @@ const TrackingTab: React.FC = () => {
         <DialogTitle sx={{ borderBottom: '1px solid #e0e7ef', bgcolor: '#f4f7fb' }}>
           <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e3a5f' }}>Réinjecter OV</Typography>
           <Typography variant="caption" color="text.secondary">
-            {reinjectDialog.record?.referenceOV} — {reinjectDialog.record?.referenceBordereau}
+            {reinjectDialog.record?.referenceOV} — {displayRefBordereau(reinjectDialog.record || { referenceBordereau: '' } as BordereauTraite)}
           </Typography>
         </DialogTitle>
         <DialogContent>
@@ -1976,19 +2288,17 @@ const TrackingTab: React.FC = () => {
               }
               try {
                 const { LocalAPI } = await import('../../services/axios');
-                
-                // Create FormData to send files
+
                 const formData = new FormData();
                 formData.append('files', reinjectFiles.excel);
                 formData.append('files', reinjectFiles.pdf);
-                
-                // Send reinject request with files
+
                 await LocalAPI.put(`/finance/ordres-virement/${reinjectDialog.record!.id}/reinject`, formData, {
                   headers: {
                     'Content-Type': 'multipart/form-data'
                   }
                 });
-                
+
                 alert('OV réinjecté avec succès! Notification envoyée au Responsable.');
                 setReinjectDialog({ open: false, record: null });
                 setReinjectFiles({ excel: null, pdf: null });
@@ -2102,7 +2412,7 @@ const TrackingTab: React.FC = () => {
               <TextField
                 fullWidth
                 type="number"
-                label="Nombre Adhérents"
+                label="Nombre de BS"
                 value={correctOVData.nombreAdherents}
                 onChange={(e) => setCorrectOVData((prev: any) => ({ ...prev, nombreAdherents: parseInt(e.target.value) || 0 }))}
                 required
@@ -2153,8 +2463,8 @@ const TrackingTab: React.FC = () => {
                 <Grid container spacing={1.5}>
                   <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a', textTransform: 'uppercase', fontSize: '0.70rem' }}>Référence OV</Typography></Grid>
                   <Grid item xs={8}><Typography variant="body2" sx={{ fontWeight: 600, color: '#1e3a5f', fontFamily: 'monospace' }}>{selectedForRestart.referenceOV}</Typography></Grid>
-                  <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a', textTransform: 'uppercase', fontSize: '0.70rem' }}>Bordereau</Typography></Grid>
-                  <Grid item xs={8}><Typography variant="body2">{selectedForRestart.referenceBordereau || 'Entrée manuelle'}</Typography></Grid>
+                  <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a', textTransform: 'uppercase', fontSize: '0.70rem' }}>Réf. Bordereau</Typography></Grid>
+                  <Grid item xs={8}><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{displayRefBordereau(selectedForRestart)}</Typography></Grid>
                   <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a', textTransform: 'uppercase', fontSize: '0.70rem' }}>Statut actuel</Typography></Grid>
                   <Grid item xs={8}>{getStatusChip(selectedForRestart.statutVirement)}</Grid>
                   <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a', textTransform: 'uppercase', fontSize: '0.70rem' }}>Société</Typography></Grid>
@@ -2175,7 +2485,6 @@ const TrackingTab: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Virement History Dialog */}
       <VirementHistoryDialog
         open={historyDialog.open}
         onClose={() => setHistoryDialog({ open: false, virementId: '', reference: '' })}
@@ -2183,13 +2492,11 @@ const TrackingTab: React.FC = () => {
         virementReference={historyDialog.reference}
       />
 
-      {/* Global History Dialog */}
       <GlobalHistoryDialog
         open={globalHistoryDialog}
         onClose={() => setGlobalHistoryDialog(false)}
       />
 
-      {/* Bulk Update Status Dialog */}
       <Dialog
         open={bulkUpdateDialog}
         onClose={() => setBulkUpdateDialog(false)}
@@ -2223,9 +2530,9 @@ const TrackingTab: React.FC = () => {
                   <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
                 ))}
               </Select>
-              {user?.role === 'FINANCE' && (
+              {(user?.role === 'FINANCE' || user?.role === 'COMPTABILITE') && (
                 <Typography variant="caption" color="info.main" sx={{ mt: 1, display: 'block' }}>
-                  Finance: Accès limité à 4 statuts (Autorisé, Bloqué, Exécuté, Rejeté)
+                  Finance / Comptabilité : Accès limité à 4 statuts (Autorisé, Bloqué, Exécuté, Rejeté)
                 </Typography>
               )}
               {user?.role === 'RESPONSABLE_DEPARTEMENT' && (
@@ -2267,6 +2574,68 @@ const TrackingTab: React.FC = () => {
             disabled={!bulkUpdateForm.statutVirement}
           >
             Appliquer à {selectedForBulkUpdate.length} virement(s)
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Change Donneur Dialog - Super Admin only */}
+      <Dialog
+        open={changeDonneurDialog.open}
+        onClose={() => setChangeDonneurDialog({ open: false, record: null })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid #e0e7ef', bgcolor: '#f4f7fb' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e3a5f' }}>
+            🔧 Changement Donneur
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {changeDonneurDialog.record?.referenceOV} — {changeDonneurDialog.record?.clientSociete}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2, mt: 2 }}>
+            <strong>Super Admin uniquement</strong> — Cette action modifie le donneur d'ordre associé à ce virement.
+          </Alert>
+          <Stack spacing={2}>
+            <Box sx={{ p: 2, bgcolor: '#f4f7fb', borderRadius: 1.5, border: '1px solid #dde3ef' }}>
+              <Grid container spacing={1}>
+                <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a' }}>Référence OV</Typography></Grid>
+                <Grid item xs={8}><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{changeDonneurDialog.record?.referenceOV}</Typography></Grid>
+                <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a' }}>Client</Typography></Grid>
+                <Grid item xs={8}><Typography variant="body2">{changeDonneurDialog.record?.clientSociete}</Typography></Grid>
+                <Grid item xs={4}><Typography variant="caption" sx={{ fontWeight: 700, color: '#546e7a' }}>Donneur actuel</Typography></Grid>
+                <Grid item xs={8}><Typography variant="body2">{(changeDonneurDialog.record as any)?.nomDonneur || '—'}</Typography></Grid>
+              </Grid>
+            </Box>
+            
+            <FormControl fullWidth required>
+              <InputLabel>Nouveau Donneur d'Ordre</InputLabel>
+              <Select
+                value={selectedDonneurId}
+                onChange={(e) => setSelectedDonneurId(e.target.value)}
+                label="Nouveau Donneur d'Ordre"
+              >
+                {donneurs.map((d) => (
+                  <MenuItem key={d.id} value={d.id}>{d.nom} ({d.banque})</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e0e7ef', bgcolor: '#fafbfc', gap: 1 }}>
+          <Button onClick={() => setChangeDonneurDialog({ open: false, record: null })} variant="outlined">
+            Annuler
+          </Button>
+          <Button
+            onClick={handleChangeDonneur}
+            variant="contained"
+            color="primary"
+            disabled={!selectedDonneurId || changeDonneurLoading}
+            startIcon={changeDonneurLoading ? <CircularProgress size={16} /> : null}
+          >
+            {changeDonneurLoading ? 'Enregistrement...' : 'Confirmer le changement'}
           </Button>
         </DialogActions>
       </Dialog>

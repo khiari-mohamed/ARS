@@ -9,6 +9,7 @@ export enum UserRole {
   GESTIONNAIRE = 'GESTIONNAIRE',
   CLIENT_SERVICE = 'CLIENT_SERVICE',
   FINANCE = 'FINANCE',
+  COMPTABILITE = 'COMPTABILITE',
   SCAN_TEAM = 'SCAN_TEAM',
   BO = 'BO',
   BUREAU_ORDRE = 'BUREAU_ORDRE',
@@ -208,8 +209,9 @@ export const useRoleAccess = (): RolePermissions => {
         };
 
       case UserRole.FINANCE:
+      case UserRole.COMPTABILITE:
         return {
-          // Finance modules only
+          // Finance/Comptabilité modules only
           canAccessGlobalDashboard: false,
           canAccessTeamDashboard: false,
           canAccessPersonalDashboard: true,

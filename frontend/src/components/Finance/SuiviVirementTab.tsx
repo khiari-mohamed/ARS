@@ -17,7 +17,7 @@ interface SuiviVirement {
   utilisateurSante: string;
   dateTraitement?: string;
   utilisateurFinance?: string;
-  etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE';
+  etatVirement: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
   dateEtatFinal?: string;
   commentaire?: string;
   motifObservation?: string;
@@ -88,7 +88,11 @@ const SuiviVirementTab: React.FC = () => {
         dateMontantRecupere: record.dateMontantRecupere
       }));
       
-      setSuiviVirements(transformedData);
+      const filteredData = user?.role === 'COMPTABILITE'
+        ? transformedData.filter((record: SuiviVirement) => record.etatVirement === 'VIREMENT_AUTORISE')
+        : transformedData;
+
+      setSuiviVirements(filteredData);
     } catch (error) {
       console.error('Failed to load suivi virements:', error);
       setSuiviVirements([]);
@@ -188,14 +192,13 @@ const SuiviVirementTab: React.FC = () => {
     // EXACT SPEC: Same logic as FinanceDashboard
     const config = {
       'NON_EXECUTE': { label: '⏳ Virement non exécuté', color: 'default' as const },
-      'EN_COURS_EXECUTION': { label: '🔄 En cours d\'exécution', color: 'info' as const },
-      'EXECUTE_PARTIELLEMENT': { label: '⚠️ Exécuté partiellement', color: 'warning' as const },
-      'REJETE': { label: '❌ Rejeté', color: 'error' as const },
-      'BLOQUE': { label: '🚫 Bloqué', color: 'error' as const },
-      'EXECUTE': { label: '✅ Exécuté', color: 'success' as const },
+      'EN_COURS_VALIDATION': { label: '🔄 En cours de validation', color: 'info' as const },
       'VIREMENT_DEPOSE': { label: '✅ Virement déposé', color: 'success' as const },
       'VIREMENT_NON_VALIDE': { label: '❌ Non validé', color: 'error' as const },
-      'EN_COURS_VALIDATION': { label: '🔄 En validation', color: 'info' as const }
+      'VIREMENT_AUTORISE': { label: '🔓 Virement autorisé', color: 'success' as const },
+      'BLOQUE': { label: '🚫 Bloqué', color: 'error' as const },
+      'EXECUTE': { label: '✅ Exécuté', color: 'success' as const },
+      'REJETE': { label: '❌ Rejeté', color: 'error' as const }
     };
     
     const { label, color } = config[etat as keyof typeof config] || { label: etat, color: 'default' as const };
@@ -203,7 +206,7 @@ const SuiviVirementTab: React.FC = () => {
   };
   
   const canModifyStatus = () => {
-    return user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR';
+    return user?.role === 'FINANCE' || user?.role === 'COMPTABILITE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR';
   };
   
   const canReinject = () => {
@@ -242,11 +245,13 @@ const SuiviVirementTab: React.FC = () => {
               >
                 <MenuItem value="">Tous</MenuItem>
                 <MenuItem value="NON_EXECUTE">Non Exécuté</MenuItem>
-                <MenuItem value="EN_COURS_EXECUTION">En Cours</MenuItem>
-                <MenuItem value="EXECUTE_PARTIELLEMENT">Partiel</MenuItem>
-                <MenuItem value="REJETE">Rejeté</MenuItem>
+                <MenuItem value="EN_COURS_VALIDATION">En cours de validation</MenuItem>
+                <MenuItem value="VIREMENT_DEPOSE">Virement déposé</MenuItem>
+                <MenuItem value="VIREMENT_NON_VALIDE">Non validé</MenuItem>
+                <MenuItem value="VIREMENT_AUTORISE">Virement autorisé</MenuItem>
                 <MenuItem value="BLOQUE">Bloqué</MenuItem>
                 <MenuItem value="EXECUTE">Exécuté</MenuItem>
+                <MenuItem value="REJETE">Rejeté</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -507,12 +512,23 @@ const SuiviVirementTab: React.FC = () => {
                   label="État Virement"
                   onChange={(e) => setUpdateData(prev => ({ ...prev, etatVirement: e.target.value }))}
                 >
-                  <MenuItem value="NON_EXECUTE">Non Exécuté</MenuItem>
-                  <MenuItem value="EN_COURS_EXECUTION">En Cours d'Exécution</MenuItem>
-                  <MenuItem value="EXECUTE_PARTIELLEMENT">Exécuté Partiellement</MenuItem>
-                  <MenuItem value="REJETE">Rejeté</MenuItem>
-                  <MenuItem value="BLOQUE">Bloqué</MenuItem>
-                  <MenuItem value="EXECUTE">Exécuté</MenuItem>
+                  {user?.role === 'COMPTABILITE' ? (
+                    <>
+                      <MenuItem value="EXECUTE">Exécuté</MenuItem>
+                      <MenuItem value="REJETE">Rejeté</MenuItem>
+                    </>
+                  ) : (
+                    <>
+                      <MenuItem value="NON_EXECUTE">Non Exécuté</MenuItem>
+                      <MenuItem value="EN_COURS_VALIDATION">En cours de validation</MenuItem>
+                      <MenuItem value="VIREMENT_DEPOSE">Virement déposé</MenuItem>
+                      <MenuItem value="VIREMENT_NON_VALIDE">Virement non validé</MenuItem>
+                      <MenuItem value="VIREMENT_AUTORISE">Virement autorisé</MenuItem>
+                      <MenuItem value="REJETE">Rejeté</MenuItem>
+                      <MenuItem value="BLOQUE">Bloqué</MenuItem>
+                      <MenuItem value="EXECUTE">Exécuté</MenuItem>
+                    </>
+                  )}
                 </Select>
               </FormControl>
             </Grid>

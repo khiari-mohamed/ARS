@@ -24,6 +24,8 @@ import ScanDashboard from './pages/ScanDashboard';
 //import ChefEquipePage from './pages/ChefEquipePage';
 //import ChefEquipeTableauBordNew from './pages/dashboard/ChefEquipeTableauBordNew';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import BulletinSoinsIA from './pages/BulletinSoinsIA';
+import BSAIPage from './pages/bs/BSAIPage';
 import TuniclaimManager from './pages/TuniclaimManager';
 import GuideFlowPage from './components/guide/GuideFlowPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -67,7 +69,18 @@ const App: React.FC = () => {
               <BordereauxArchive />
             </ProtectedRoute>
           } />
-        
+
+          <Route path="/home/bulletin-soins-ia" element={
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT]}>
+              <BulletinSoinsIA />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/home/ia-suggestions" element={
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR]}>
+              <BSAIPage />
+            </ProtectedRoute>
+          } />
           
           <Route path="/home/analytics" element={
             <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT]}>
@@ -76,13 +89,13 @@ const App: React.FC = () => {
           } />
           
           <Route path="/home/finance" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE]}>
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.FINANCE, UserRole.COMPTABILITE]}>
               <FinanceTracker />
             </ProtectedRoute>
           } />
           
           <Route path="/home/sage" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.RESPONSABLE_DEPARTEMENT]}>
+            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.FINANCE, UserRole.COMPTABILITE, UserRole.RESPONSABLE_DEPARTEMENT]}>
               <SageManagement />
             </ProtectedRoute>
           } />

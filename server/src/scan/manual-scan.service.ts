@@ -403,6 +403,7 @@ export class ManualScanService {
       data: {
         statut: 'SCANNE',
         dateFinScan: new Date(),
+        currentHandlerId: userId,
         documentStatus: 'NORMAL' // Ensure it's not marked as returned
       }
     });

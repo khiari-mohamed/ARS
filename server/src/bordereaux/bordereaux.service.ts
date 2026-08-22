@@ -433,14 +433,11 @@ export class BordereauxService {
   }
 
   async getBordereauReadyForScan() {
-    console.log('🔍 DEBUG: getBordereauReadyForScan called');
-    
-    // Get UNIQUE bordereaux created by BO that are ready for scan OR returned for correction
     const bordereaux = await this.prisma.bordereau.findMany({
       where: {
         OR: [
-          { statut: 'A_SCANNER' }, // Created by BO, ready for scan
-          { documentStatus: 'RETOURNER_AU_SCAN' } // Returned by Chef for correction
+          { statut: 'A_SCANNER' },
+          { documentStatus: 'RETOURNER_AU_SCAN' }
         ],
         archived: false
       },
@@ -452,26 +449,18 @@ export class BordereauxService {
         }
       },
       orderBy: { dateReception: 'asc' },
-      distinct: ['id'] // Ensure no duplicates
+      distinct: ['id']
     });
 
-    console.log(`✅ Found ${bordereaux.length} unique bordereaux ready for scan`);
-    
-    // Remove duplicates by ID (extra safety)
     const uniqueBordereaux = Array.from(
       new Map(bordereaux.map(b => [b.id, b])).values()
     );
-    
-    console.log(`✅ After deduplication: ${uniqueBordereaux.length} bordereaux`);
-    
-    const result = uniqueBordereaux.map(b => ({
+
+    return uniqueBordereaux.map(b => ({
       ...BordereauResponseDto.fromEntity(b),
       documentCount: b._count.documents,
       scanStatus: b.documentStatus === 'RETOURNER_AU_SCAN' ? 'SCAN_EN_COURS' : b.scanStatus || 'NON_SCANNE'
     }));
-    
-    console.log('📤 Returning result with', result.length, 'items');
-    return result;
   }
 
   private getDocumentType(filename: string): string {
@@ -847,23 +836,6 @@ export class BordereauxService {
   }
   
   async findAll(filters: any = {}): Promise<BordereauResponseDto[] | { items: BordereauResponseDto[]; total: number }> {
-    console.log('🔍 findAll called with filters:', JSON.stringify(filters));
-    
-    // TEMP DEBUG: Check ALL bordereaux for VIREMENT_EXECUTE
-    if (filters.page) {
-      const allBordereaux = await this.prisma.bordereau.findMany({
-        where: { archived: false, statut: 'VIREMENT_EXECUTE' },
-        include: {
-          ordresVirement: { select: { dateEtatFinal: true, dateTraitement: true, etatVirement: true }, take: 1 }
-        },
-        take: 5
-      });
-      console.log(`🔍 GLOBAL CHECK: Found ${allBordereaux.length} VIREMENT_EXECUTE bordereaux in database`);
-      allBordereaux.forEach(b => {
-        console.log(`  - ${b.reference}: ordresVirement=${b.ordresVirement?.length || 0}, dateReceptionBO=${b.dateReceptionBO}`);
-      });
-    }
-    
     // Build Prisma where clause based on filters
     const where: any = {};
     if (filters.teamId) where.teamId = filters.teamId;
@@ -941,8 +913,8 @@ export class BordereauxService {
       where.documentStatus = filters.documentStatus;
     }
     
-    // ✅ AUTO-FIX: Check and update bordereaux that should be TRAITE (before querying)
-    await this.autoFixBordereauStatus();
+    // ✅ AUTO-FIX: throttled to run at most once per minute, not on every read
+    await this.throttledAutoFixBordereauStatus();
     
     // Handle pagination
     const page = filters.page ? parseInt(filters.page) : 1;
@@ -966,8 +938,8 @@ export class BordereauxService {
           assignedManager: true
         } 
       },
-      documents: true, // ✅ FULL documents for DTO calculation
-      BulletinSoin: true, // ✅ FULL BulletinSoin for DTO calculation
+      documents: { select: { id: true, status: true, uploadedAt: true } }, // just the fields required by DTO
+      BulletinSoin: { select: { id: true, etat: true, updatedAt: true } },
       currentHandler: { select: { id: true, fullName: true, role: true } },
       ordresVirement: {
         select: { dateTraitement: true, dateEtatFinal: true, etatVirement: true },
@@ -1010,22 +982,6 @@ export class BordereauxService {
         }),
         this.prisma.bordereau.count({ where })
       ]);
-      
-      console.log(`✅ Found ${bordereaux.length} bordereaux`);
-      
-      // Find VIREMENT_EXECUTE bordereaux
-      const virementExecute = bordereaux.filter(b => b.statut === 'VIREMENT_EXECUTE');
-      console.log(`🔍 Found ${virementExecute.length} bordereaux with VIREMENT_EXECUTE status`);
-      
-      if (virementExecute.length > 0) {
-        virementExecute.forEach(b => {
-          console.log(`  - ${b.reference}: ordresVirement=${b.ordresVirement?.length || 0}, dateReceptionBO=${b.dateReceptionBO}`);
-        });
-      }
-      
-      console.log('Sample bordereau ordresVirement:', bordereaux[0]?.ordresVirement);
-      console.log('Sample bordereau dateReceptionBO:', bordereaux[0]?.dateReceptionBO);
-      console.log('Sample bordereau statut:', bordereaux[0]?.statut);
       
       return {
         items: bordereaux.map(bordereau => {
@@ -1379,11 +1335,14 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       statut: {
         notIn: [Statut.CLOTURE, Statut.TRAITE],
       },
+      archived: false,
+      dateReception: { gte: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000) },
     },
     include: {
       client: true,
       contract: true,
     },
+    take: 2000,
   });
   // Filter bordereaux that are approaching deadline (3 days or less)
   const today = new Date();
@@ -1406,11 +1365,14 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
       statut: {
         notIn: [Statut.CLOTURE, Statut.TRAITE],
       },
+      archived: false,
+      dateReception: { gte: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000) },
     },
     include: {
       client: true,
       contract: true,
     },
+    take: 2000,
   });
   // Filter bordereaux that are overdue
   const today = new Date();
@@ -1426,7 +1388,20 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
    * Get KPIs for all bordereaux
    */
  async getBordereauKPIs(): Promise<BordereauKPI[]> {
-    const bordereaux = await this.prisma.bordereau.findMany();
+    const bordereaux = await this.prisma.bordereau.findMany({
+      where: { archived: false },
+      select: {
+        id: true,
+        reference: true,
+        statut: true,
+        dateReception: true,
+        delaiReglement: true,
+        dateDebutScan: true,
+        dateFinScan: true,
+        dateCloture: true,
+      },
+      take: 5000,
+    });
     const today = new Date();
 
     // Calculate global KPIs
@@ -1598,11 +1573,6 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
    * Update bordereau status when scan completes
    */
   async completeScan(id: string): Promise<BordereauResponseDto> {
-    console.log('🔴 ========================================');
-    console.log('🔴 COMPLETE SCAN CALLED');
-    console.log('🔴 Bordereau ID:', id);
-    console.log('🔴 ========================================');
-    
     const bordereau = await this.prisma.bordereau.update({
       where: { id },
       data: {
@@ -1625,16 +1595,6 @@ Généré le: ${new Date().toLocaleString('fr-FR')}
       },
     });
     
-    console.log('📊 Bordereau loaded:');
-    console.log('   Reference:', bordereau.reference);
-    console.log('   Contract ID:', bordereau.contractId);
-    console.log('   Contract exists:', !!bordereau.contract);
-    console.log('   Team Leader ID:', bordereau.contract?.teamLeaderId);
-    console.log('   Team Leader exists:', !!bordereau.contract?.teamLeader);
-    console.log('   Team Leader Role:', bordereau.contract?.teamLeader?.role);
-    
-    // Auto-progress to assignment stage
-    console.log('🔄 Calling progressWorkflow with SCAN_COMPLETED...');
     await this.progressWorkflow(id, 'SCAN_COMPLETED');
     
     // Check if Senior-managed (already handled by progressWorkflow)
@@ -2058,12 +2018,6 @@ private async logAction(bordereauId: string, action: string): Promise<void> {
  */
 private async progressWorkflow(bordereauId: string, trigger: string): Promise<void> {
   try {
-    console.log('🔵 ========================================');
-    console.log('🔵 PROGRESS WORKFLOW CALLED');
-    console.log('🔵 Bordereau ID:', bordereauId);
-    console.log('🔵 Trigger:', trigger);
-    console.log('🔵 ========================================');
-    
     const bordereau = await this.prisma.bordereau.findUnique({
       where: { id: bordereauId },
       include: { 
@@ -2077,15 +2031,7 @@ private async progressWorkflow(bordereauId: string, trigger: string): Promise<vo
         } 
       }
     });
-    
-    console.log('📊 Bordereau loaded in progressWorkflow:');
-    console.log('   Reference:', bordereau?.reference);
-    console.log('   Contract ID:', bordereau?.contractId);
-    console.log('   Contract exists:', !!bordereau?.contract);
-    console.log('   Team Leader ID:', bordereau?.contract?.teamLeaderId);
-    console.log('   Team Leader exists:', !!bordereau?.contract?.teamLeader);
-    console.log('   Team Leader Role:', bordereau?.contract?.teamLeader?.role);
-    
+
     if (!bordereau) return;
     
     let newStatus: Statut | null = null;
@@ -2106,34 +2052,15 @@ private async progressWorkflow(bordereauId: string, trigger: string): Promise<vo
       case 'SCAN_COMPLETED':
         // Scan completed -> check if Senior-managed or regular
         updateData.dateFinScan = new Date();
-        
-        console.log('🔍 SCAN_COMPLETED - Bordereau:', bordereau.reference);
-        console.log('🔍 Contract ID:', bordereau.contractId);
-        console.log('🔍 Contract exists:', !!bordereau.contract);
-        console.log('🔍 Team Leader ID:', bordereau.contract?.teamLeaderId);
-        console.log('🔍 Team Leader exists:', !!bordereau.contract?.teamLeader);
-        console.log('🔍 Team Leader Role:', bordereau.contract?.teamLeader?.role);
-        
-        // Check if Senior-managed (using loaded relation)
         const isSeniorManaged = bordereau.contract?.teamLeader?.role === 'GESTIONNAIRE_SENIOR';
-        
-        console.log('🔍 isSeniorManaged:', isSeniorManaged);
-        console.log('🔍 Condition check:', `${bordereau.contract?.teamLeader?.role} === 'GESTIONNAIRE_SENIOR'`);
-        
+
         if (isSeniorManaged && bordereau.contract?.teamLeaderId) {
-          // Senior-managed: Auto-transition directly to EN_COURS
           newStatus = Statut.EN_COURS;
           updateData.dateReceptionSante = new Date();
           updateData.assignedToUserId = bordereau.contract.teamLeaderId;
-          console.log('✅ SENIOR DETECTED! Auto-transitioning to EN_COURS');
-          console.log('✅ Assigning to:', bordereau.contract.teamLeaderId);
           this.logger.log(`✅ Senior-managed bordereau ${bordereau.reference}: Auto-transitioned SCAN_COMPLETED → EN_COURS`);
         } else {
-          // Regular flow: A_AFFECTER -> wait for Chef assignment
           newStatus = Statut.A_AFFECTER;
-          console.log('❌ NOT SENIOR - Going to A_AFFECTER');
-          console.log('❌ Reason: isSeniorManaged =', isSeniorManaged, ', teamLeaderId =', bordereau.contract?.teamLeaderId);
-          // Auto-assign to available gestionnaire
           setTimeout(() => this.autoAssignToGestionnaire(bordereauId), 1000);
         }
         break;
@@ -3516,6 +3443,19 @@ async searchBordereauxAndDocuments(query: string): Promise<any[]> {
     }
   }
   
+  private lastAutoFixRun = 0;
+  private readonly AUTO_FIX_INTERVAL_MS = 60_000; // 1 minute
+
+  private async throttledAutoFixBordereauStatus(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastAutoFixRun < this.AUTO_FIX_INTERVAL_MS) return;
+    this.lastAutoFixRun = now;
+    // Fire-and-forget: ne bloque pas la réponse au GET en cours
+    this.autoFixBordereauStatus().catch(err =>
+      this.logger.error(`autoFixBordereauStatus background run failed: ${err.message}`)
+    );
+  }
+
   // ✅ AUTO-FIX: Batch check and update all bordereaux that should be TRAITE
   private async autoFixBordereauStatus(): Promise<void> {
     try {

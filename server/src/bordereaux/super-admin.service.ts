@@ -41,28 +41,7 @@ export class SuperAdminService {
 
   async getSystemHealth(): Promise<SystemHealthMetrics> {
     try {
-      // SYNTHETIC DATA - COMMENTED OUT
-      // const cpuUsage = Math.random() * 30 + 20;
-      // const memoryUsage = Math.random() * 40 + 30;
-      // const diskUsage = Math.random() * 20 + 40;
-      
-      // let status: 'healthy' | 'warning' | 'critical' = 'healthy';
-      // if (cpuUsage > 80 || memoryUsage > 85 || diskUsage > 90) {
-      //   status = 'critical';
-      // } else if (cpuUsage > 60 || memoryUsage > 70 || diskUsage > 80) {
-      //   status = 'warning';
-      // }
-
-      // return {
-      //   status,
-      //   uptime: process.uptime(),
-      //   cpuUsage,
-      //   memoryUsage,
-      //   diskUsage,
-      //   activeConnections: Math.floor(Math.random() * 50) + 10,
-      //   responseTime: Math.random() * 100 + 50
-      // };
-      
+  
       // TODO: Use real system metrics from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts getSystemHealth() instead');
     } catch (error) {
@@ -81,35 +60,7 @@ export class SuperAdminService {
 
   async getAllQueuesOverview(): Promise<QueueOverview[]> {
     try {
-      // SYNTHETIC DATA - COMMENTED OUT
-      // const queues = [
-      //   'BO_ENTRY_QUEUE',
-      //   'SCAN_QUEUE',
-      //   'OCR_QUEUE',
-      //   'PROCESSING_QUEUE',
-      //   'VALIDATION_QUEUE',
-      //   'NOTIFICATION_QUEUE'
-      // ];
-
-      // const queueOverviews: QueueOverview[] = [];
-
-      // for (const queueName of queues) {
-      //   const pending = Math.floor(Math.random() * 20);
-      //   const processing = Math.floor(Math.random() * 5);
-      //   const completed = Math.floor(Math.random() * 100) + 50;
-      //   const failed = Math.floor(Math.random() * 5);
-
-      //   queueOverviews.push({
-      //     name: queueName,
-      //     pending,
-      //     processing,
-      //     completed,
-      //     failed,
-      //     avgProcessingTime: Math.random() * 300 + 60
-      //   });
-      // }
-
-      // return queueOverviews;
+    
       
       // TODO: Use real queue data from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts getQueuesOverview() instead');
@@ -121,22 +72,6 @@ export class SuperAdminService {
 
   async getSystemPerformanceMetrics(period: string = '24h') {
     try {
-      // SYNTHETIC DATA - COMMENTED OUT
-      // const hours = period === '24h' ? 24 : period === '7d' ? 168 : 720;
-      // const metrics: any[] = [];
-
-      // for (let i = 0; i < hours; i++) {
-      //   const timestamp = new Date(Date.now() - (hours - i) * 60 * 60 * 1000);
-      //   metrics.push({
-      //     timestamp: timestamp.toISOString(),
-      //     throughput: Math.floor(Math.random() * 50) + 20,
-      //     responseTime: Math.random() * 200 + 100,
-      //     errorRate: Math.random() * 5,
-      //     activeUsers: Math.floor(Math.random() * 30) + 10
-      //   });
-      // }
-
-      // return metrics;
       
       // TODO: Use real performance metrics from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts getPerformanceMetrics() instead');
@@ -148,31 +83,6 @@ export class SuperAdminService {
 
   async getSLAConfigurations(): Promise<SLAConfiguration[]> {
     try {
-      // HARDCODED DATA - COMMENTED OUT
-      // return [
-      //   {
-      //     id: 'sla_default',
-      //     name: 'SLA Standard',
-      //     documentType: 'BS',
-      //     thresholds: {
-      //       warning: 5,
-      //       critical: 7,
-      //       breach: 10
-      //     },
-      //     active: true
-      //   },
-      //   {
-      //     id: 'sla_urgent',
-      //     name: 'SLA Urgent',
-      //     documentType: 'BS_URGENT',
-      //     thresholds: {
-      //       warning: 2,
-      //       critical: 3,
-      //       breach: 5
-      //     },
-      //     active: true
-      //   }
-      // ];
       
       // TODO: Use real SLA configurations from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts getSLAConfigurations() instead');
@@ -262,10 +172,6 @@ export class SuperAdminService {
 
   async testEmailConfiguration(config: any): Promise<boolean> {
     try {
-      // SYNTHETIC DATA - COMMENTED OUT
-      // this.logger.log('Testing email configuration...');
-      // await new Promise(resolve => setTimeout(resolve, 1000));
-      // return Math.random() > 0.1;
       
       // TODO: Use real email test from super-admin.controller.ts
       throw new Error('Use super-admin.controller.ts testEmailConfiguration() instead');

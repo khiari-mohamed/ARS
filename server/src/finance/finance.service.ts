@@ -16,6 +16,7 @@ import { TxtGenerationService } from './txt-generation.service';
 import { WorkflowNotificationService } from '../workflow/workflow-notification.service';
 import { logVirementHistory, VIREMENT_ACTIONS } from './virement-history.helper';
 import { StatutGlobalService } from './statut-global.service';
+import { notifySeniorPortfolioForOVStatus } from '../notifications/portfolio-notification.helper';
 
 @Injectable()
 export class FinanceService {
@@ -36,7 +37,7 @@ export class FinanceService {
 
   private checkFinanceRole(user: User) {
     console.log('🔐 Checking role for user:', user?.role);
-    if (!['FINANCE', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'].includes(user.role)) {
+    if (!['FINANCE', 'COMPTABILITE', 'SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'RESPONSABLE_DEPARTEMENT'].includes(user.role)) {
       console.log('❌ Role check failed for:', user?.role);
       throw new ForbiddenException('Access denied');
     }
@@ -454,11 +455,11 @@ export class FinanceService {
   private mapBatchStatusToOV(status: string): string {
     const statusMap = {
       'CREATED': 'NON_EXECUTE',
-      'VALIDATED': 'EN_COURS',
+      'VALIDATED': 'VIREMENT_AUTORISE',
       'PROCESSED': 'EXECUTE',
       'REJECTED': 'REJETE',
       'ARCHIVED': 'EXECUTE',
-      'BLOCKED': 'REJETE'
+      'BLOCKED': 'BLOQUE'
     };
     return statusMap[status] || 'NON_EXECUTE';
   }
@@ -558,11 +559,13 @@ export class FinanceService {
   private mapOVStatusToBatch(ovStatus: string): string {
     const statusMap = {
       'NON_EXECUTE': 'CREATED',
-      'EN_COURS_EXECUTION': 'VALIDATED',
-      'EXECUTE_PARTIELLEMENT': 'VALIDATED',
-      'REJETE': 'REJECTED',
+      'EN_COURS_VALIDATION': 'VALIDATED',
+      'VIREMENT_DEPOSE': 'VALIDATED',
+      'VIREMENT_AUTORISE': 'VALIDATED',
+      'VIREMENT_NON_VALIDE': 'REJECTED',
       'BLOQUE': 'BLOCKED',
-      'EXECUTE': 'PROCESSED'
+      'EXECUTE': 'PROCESSED',
+      'REJETE': 'REJECTED'
     };
     return statusMap[ovStatus] || 'CREATED';
   }
@@ -1484,22 +1487,11 @@ Document généré automatiquement par ARS`;
           where.bordereau.client = {};
           
           if (filters.compagnie) {
-            where.bordereau.client.OR = [
-              {
-                compagnieAssurance: {
-                  nom: {
-                    contains: filters.compagnie,
-                    mode: 'insensitive'
-                  }
-                }
-              },
-              {
-                name: {
-                  contains: filters.compagnie,
-                  mode: 'insensitive'
-                }
+            where.bordereau.contract = {
+              compagnieAssurance: {
+                nom: { contains: filters.compagnie, mode: 'insensitive' }
               }
-            ];
+            };
           }
           
           if (filters.client) {
@@ -1539,16 +1531,11 @@ Document généré automatiquement par ARS`;
           contract: true, // NEW: Include direct contract for manual entries
           bordereau: { 
             include: { 
-              client: {
-                include: {
-                  compagnieAssurance: true
-                }
-              },
+              client: true,
               contract: {
                 include: {
-                  teamLeader: {
-                    select: { id: true, fullName: true }
-                  }
+                  teamLeader: { select: { id: true, fullName: true } },
+                  compagnieAssurance: true
                 }
               }
             } 
@@ -1556,12 +1543,11 @@ Document généré automatiquement par ARS`;
           donneurOrdre: true
         },
         orderBy: { dateTraitement: 'desc' }, // Sort by execution date
-        take: 50
       });
       
       const stats = {
         totalOrdres: ordresVirement.length,
-        ordresEnCours: ordresVirement.filter(ov => ['NON_EXECUTE', 'EN_COURS_EXECUTION', 'EN_COURS_VALIDATION'].includes(ov.etatVirement)).length,
+        ordresEnCours: ordresVirement.filter(ov => ['NON_EXECUTE', 'EN_COURS_VALIDATION'].includes(ov.etatVirement)).length,
         ordresExecutes: ordresVirement.filter(ov => ['EXECUTE', 'VIREMENT_DEPOSE'].includes(ov.etatVirement)).length,
         ordresRejetes: ordresVirement.filter(ov => ['REJETE', 'VIREMENT_NON_VALIDE'].includes(ov.etatVirement)).length,
         montantTotal: ordresVirement.reduce((sum, ov) => sum + ov.montantTotal, 0),
@@ -1583,7 +1569,7 @@ Document généré automatiquement par ARS`;
             id: ov.id,
             reference: ov.reference,
             referenceBordereau: ov.bordereau?.reference || null,
-            compagnieAssurance: ov.bordereau?.client?.compagnieAssurance?.nom || ov.clientName || null,
+            compagnieAssurance: ov.bordereau?.contract?.compagnieAssurance?.nom || ov.clientName || null,
             client: ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle',
             bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle',
             montant: ov.montantTotal,
@@ -1595,7 +1581,7 @@ Document généré automatiquement par ARS`;
             montantRecupere: ov.montantRecupere,
             dateMontantRecupere: ov.dateMontantRecupere,
             motifObservation: ov.validationComment || ov.motifObservation || null,
-            modeRecuperation: ov.client?.modeRecuperation || ov.bordereau?.client?.modeRecuperation || null,
+            modeRecuperation: ov.contract?.modeRecuperation || ov.bordereau?.contract?.modeRecuperation || null,
             nomDonneur: ov.donneurOrdre?.nom || null,
             numeroContrat: firstItem?.adherent?.numeroContrat || ov.bordereau?.contract?.codeAssure || ov.contract?.codeAssure || null
           };
@@ -1639,16 +1625,11 @@ Document généré automatiquement par ARS`;
       const bordereaux = await this.prisma.bordereau.findMany({
         where,
         include: {
-          client: {
-            include: {
-              compagnieAssurance: true
-            }
-          },
+          client: true,
           contract: {
             include: {
-              teamLeader: {
-                select: { id: true, fullName: true }
-              }
+              teamLeader: { select: { id: true, fullName: true } },
+              compagnieAssurance: true
             }
           },
           ordresVirement: {
@@ -1687,7 +1668,7 @@ Document généré automatiquement par ARS`;
           return {
             id: ov?.id || b.id,
             clientSociete: b.client.name,
-            compagnieAssurance: b.client.compagnieAssurance?.nom || null,
+            compagnieAssurance: b.contract?.compagnieAssurance?.nom || null,
             referenceOV: ov?.reference || null,
             referenceBordereau: b.reference,
             montantBordereau: ov?.montantTotal || 0,
@@ -1700,7 +1681,7 @@ Document généré automatiquement par ARS`;
             dateDemandeRecuperation: ov?.dateDemandeRecuperation ? ov.dateDemandeRecuperation.toISOString() : null,
             montantRecupere: ov?.montantRecupere || false,
             dateMontantRecupere: ov?.dateMontantRecupere ? ov.dateMontantRecupere.toISOString() : null,
-            modeRecuperation: b.client?.modeRecuperation || null,
+            modeRecuperation: b.contract?.modeRecuperation || null,
             nomDonneur: ov?.donneurOrdre?.nom || null,
             numeroContrat: numeroContrat
           };
@@ -1969,6 +1950,20 @@ Document généré automatiquement par ARS`;
           bordereau: { include: { client: true } }
         }
       });
+
+      await notifySeniorPortfolioForOVStatus(this.prisma, updatedOV, updateData.etatVirement, comment);
+
+      // Record the Responsable Département decision in the visible virement history.
+      await logVirementHistory(
+        id,
+        approved ? VIREMENT_ACTIONS.VALIDATION : VIREMENT_ACTIONS.REJET,
+        user.id,
+        {
+          previousState: ov.etatVirement,
+          newState: updateData.etatVirement,
+          comment: comment || (approved ? 'OV validé par le Responsable Département' : 'OV rejeté par le Responsable Département')
+        }
+      );
       
       // Update global status to VALIDE_INTERNE when approved
       if (approved) {
@@ -2148,7 +2143,7 @@ Document généré automatiquement par ARS`;
             utilisateurSante: user.id,
             montantTotal,
             nombreAdherents: bordereau.nombreBS,
-            etatVirement: 'EN_COURS_EXECUTION',
+            etatVirement: 'EN_COURS_VALIDATION',
             validationStatus: 'EN_COURS_VALIDATION'
           },
           include: {

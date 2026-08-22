@@ -25,7 +25,11 @@ const initialState = {
 };
 
 const ContractFormModal: React.FC<Props> = ({ contract, onClose, onSaved }) => {
-  const [form, setForm] = useState<any>(contract || initialState);
+  const [form, setForm] = useState<any>(
+    contract
+      ? { ...contract, notes: contract.notes ?? (contract as any).signature ?? '' }
+      : initialState
+  );
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);

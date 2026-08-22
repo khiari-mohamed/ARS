@@ -113,10 +113,13 @@ const FinanceModuleOverview: React.FC = () => {
 
   const workflowStates = [
     { state: 'NON_EXECUTE', label: 'Virement non exécuté', color: 'default' },
-    { state: 'EN_COURS_EXECUTION', label: 'Virement en cours', color: 'info' },
-    { state: 'EXECUTE_PARTIELLEMENT', label: 'Exécuté partiellement', color: 'warning' },
-    { state: 'REJETE', label: 'Virement rejeté', color: 'error' },
-    { state: 'EXECUTE', label: 'Virement exécuté', color: 'success' }
+    { state: 'EN_COURS_VALIDATION', label: 'En cours de validation', color: 'info' },
+    { state: 'VIREMENT_DEPOSE', label: 'Virement déposé', color: 'primary' },
+    { state: 'VIREMENT_NON_VALIDE', label: 'Virement non validé', color: 'error' },
+    { state: 'VIREMENT_AUTORISE', label: 'Virement autorisé', color: 'success' },
+    { state: 'BLOQUE', label: 'Virement bloqué', color: 'error' },
+    { state: 'EXECUTE', label: 'Virement exécuté', color: 'success' },
+    { state: 'REJETE', label: 'Virement rejeté', color: 'error' }
   ];
 
   return (

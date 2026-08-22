@@ -16,7 +16,7 @@ export class OverloadDetectionService {
     try {
       await this.detectAndNotifyOverload();
     } catch (error) {
-      this.logger.error(`Scheduled overload check failed: ${error.message}`);
+      this.logger.error(`Scheduled overload check failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -62,7 +62,7 @@ export class OverloadDetectionService {
 
       this.logger.log(`Overload check completed: ${overloadedUsers.length} overloaded users, ${unassignedCount} unassigned bordereaux`);
     } catch (error) {
-      this.logger.error(`Error detecting overload: ${error.message}`);
+      this.logger.error(`Error detecting overload: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -100,7 +100,7 @@ export class OverloadDetectionService {
 
       this.logger.log(`Notified ${superAdmins.length} Super Admin(s) about ${overloadedUsers.length} overloaded team member(s)`);
     } catch (error) {
-      this.logger.error(`Error notifying Super Admin about overload: ${error.message}`);
+      this.logger.error(`Error notifying Super Admin about overload: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -131,7 +131,7 @@ export class OverloadDetectionService {
 
       this.logger.log(`Notified Super Admin(s) about ${unassignedCount} unassigned bordereaux`);
     } catch (error) {
-      this.logger.error(`Error notifying Super Admin about unassigned: ${error.message}`);
+      this.logger.error(`Error notifying Super Admin about unassigned: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

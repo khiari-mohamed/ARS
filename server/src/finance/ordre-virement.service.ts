@@ -8,14 +8,18 @@ import { logVirementHistory, VIREMENT_ACTIONS } from './virement-history.helper'
 export interface CreateOrdreVirementDto {
   donneurOrdreId: string;
   bordereauId?: string;
+  referenceBordereau?: string;
   virementData: VirementData[];
   utilisateurSante: string;
   uploadedPdfPath?: string;
   clientName?: string;
+  clientId?: string;
+  contractId?: string | null;
+  motifObservation?: string;
 }
 
 export interface UpdateEtatVirementDto {
-  etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'EXECUTE';
+  etatVirement: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
   commentaire?: string;
   utilisateurFinance: string;
 }
@@ -64,6 +68,11 @@ export class OrdreVirementService {
     
     // Generate reference
     const reference = await this.generateReference();
+    const manualReferenceBordereau = dto.referenceBordereau?.trim();
+
+    if (!dto.bordereauId && !manualReferenceBordereau) {
+      throw new BadRequestException('Référence bordereau is required for manual OV entries');
+    }
 
     // Calculate totals - handle undefined virementData
     const virementData = dto.virementData || [];
@@ -116,11 +125,15 @@ export class OrdreVirementService {
         reference,
         donneurOrdreId: dto.donneurOrdreId,
         bordereauId: dto.bordereauId,
+        referenceBordereau: manualReferenceBordereau || null,
+        clientId: dto.clientId || null,
+        contractId: dto.contractId || null,
         utilisateurSante: dto.utilisateurSante,
         montantTotal,
         nombreAdherents,
         etatVirement: 'EN_COURS_VALIDATION',
         validationStatus: 'EN_ATTENTE_VALIDATION',
+        motifObservation: dto.motifObservation?.trim() || null,
         uploadedPdfPath,
         clientName: dto.clientName,
         typeOperation // Set the determined type
@@ -287,6 +300,61 @@ export class OrdreVirementService {
     }
 
     return updated;
+  }
+
+  /**
+   * Bulk update status for multiple OV ids in a transaction. Returns summary.
+   */
+  async bulkUpdateEtatVirement(ordreVirementIds: string[], dto: UpdateEtatVirementDto) {
+    const results: { id: string; success: boolean; error?: string }[] = [];
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const id of ordreVirementIds) {
+        try {
+          const ov = await tx.ordreVirement.findUnique({ where: { id } });
+          if (!ov) throw new Error('Ordre virement not found');
+
+          const previousEtat = ov.etatVirement as string;
+
+          const updated = await tx.ordreVirement.update({
+            where: { id },
+            data: {
+              etatVirement: dto.etatVirement,
+              commentaire: dto.commentaire,
+              utilisateurFinance: dto.utilisateurFinance,
+              dateTraitement: new Date(),
+              dateEtatFinal: ['EXECUTE', 'REJETE'].includes(dto.etatVirement) ? new Date() : undefined
+            }
+          });
+
+          // create history
+          await tx.virementHistorique.create({
+            data: {
+              ordreVirementId: id,
+              action: dto.etatVirement === 'EXECUTE' ? VIREMENT_ACTIONS.EXECUTION : dto.etatVirement === 'REJETE' ? VIREMENT_ACTIONS.REJET : VIREMENT_ACTIONS.CHANGEMENT_STATUT,
+              ancienEtat: previousEtat,
+              nouvelEtat: dto.etatVirement,
+              utilisateurId: dto.utilisateurFinance || 'system',
+              commentaire: dto.commentaire || null
+            }
+          });
+
+          // update bordereau if needed
+          if (ov.bordereauId && dto.etatVirement === 'EXECUTE') {
+            await tx.bordereau.update({ where: { id: ov.bordereauId }, data: { statut: 'VIREMENT_EXECUTE', dateExecutionVirement: new Date() } });
+          }
+
+          results.push({ id, success: true });
+        } catch (err: any) {
+          results.push({ id, success: false, error: err.message || 'Error' });
+        }
+      }
+    });
+
+    return {
+      updated: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success)
+    };
   }
 
   async processExcelImport(fileBuffer: Buffer, clientId: string, donneurOrdreId: string, userId: string, bordereauId?: string) {
@@ -463,10 +531,10 @@ export class OrdreVirementService {
 
     // Calculate combined stats
     const totalOrdres = ordreVirements.length + virements.length;
-    const ordresEnCours = ordreVirements.filter(o => o.etatVirement === 'EN_COURS_EXECUTION').length + 
-                         virements.filter(v => !v.confirmed).length;
-    const ordresExecutes = ordreVirements.filter(o => o.etatVirement === 'EXECUTE').length + 
-                          virements.filter(v => v.confirmed).length;
+    const ordresEnCours = ordreVirements.filter(o => o.etatVirement === 'EN_COURS_VALIDATION').length +
+      virements.filter(v => !v.confirmed).length;
+    const ordresExecutes = ordreVirements.filter(o => o.etatVirement === 'EXECUTE').length +
+      virements.filter(v => v.confirmed).length;
     const ordresRejetes = ordreVirements.filter(o => o.etatVirement === 'REJETE').length;
     const montantTotal = (ordreVirementTotal._sum.montantTotal || 0) + 
                         (virementTotal._sum.montant || 0) + 
@@ -569,10 +637,10 @@ export class OrdreVirementService {
         where: { id: bordereauId },
         data: { 
           statut: 'VIREMENT_EXECUTE',
-          dateCloture: new Date()
+          dateExecutionVirement: new Date()
         }
       });
     }
-    // For EN_COURS_EXECUTION, REJETE, etc. - NO STATUS CHANGE
+    // For EN_COURS_VALIDATION, REJETE, etc. - NO STATUS CHANGE
   }
 }

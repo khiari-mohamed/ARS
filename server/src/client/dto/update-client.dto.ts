@@ -6,10 +6,6 @@ export class UpdateClientDto {
   name?: string;
 
   @IsOptional()
-  @IsString()
-  compagnieAssurance?: string;
-
-  @IsOptional()
   @IsEmail()
   email?: string;
 
@@ -42,8 +38,4 @@ export class UpdateClientDto {
   @IsObject()
   slaConfig?: any;
 
-  @IsOptional()
-  @IsString()
-  @IsIn(['VIREMENT', 'CHEQUE', 'FEUILLE_CAISSE'])
-  modeRecuperation?: string;
 }

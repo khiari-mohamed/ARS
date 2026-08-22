@@ -14,6 +14,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import InfoIcon from '@mui/icons-material/Info';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import DownloadIcon from '@mui/icons-material/Download';
+
 
 interface Adherent {
   id: string;
@@ -54,6 +56,34 @@ const BODY_CELL_SX = {
   verticalAlign: 'middle',
 } as const;
 
+// ─── Import-result row status → chip mapping ───────────────────────────────────
+const getRowStatusChipProps = (
+  status: string
+): { label: string; color: 'success' | 'warning' | 'error' | 'default' } => {
+  switch (status) {
+    case 'IMPORTED':
+      return { label: '✅ Importé', color: 'success' };
+    case 'BLOCKED_DUPLICATE':
+      return { label: '⚠️ RIB dupliqué', color: 'warning' };
+    case 'ERROR':
+      return { label: '❌ Erreur', color: 'error' };
+    case 'SKIPPED':
+      return { label: '⏭️ Ignoré', color: 'default' };
+    default:
+      return { label: (status || '—').replace(/_/g, ' '), color: 'default' };
+  }
+};
+
+const getRowStatusLabel = (status: string): string => {
+  switch (status) {
+    case 'IMPORTED': return 'Importé';
+    case 'BLOCKED_DUPLICATE': return 'Bloqué (RIB dupliqué)';
+    case 'ERROR': return 'Erreur';
+    case 'SKIPPED': return 'Ignoré';
+    default: return (status || '—').replace(/_/g, ' ');
+  }
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 const AdherentsTab: React.FC = () => {
   const { user } = useAuth();
@@ -62,7 +92,8 @@ const AdherentsTab: React.FC = () => {
   const [filters, setFilters] = useState({
     society: '',
     status: '',
-    search: ''
+    search: '',
+    rib: ''
   });
   const [dialog, setDialog] = useState<{ open: boolean, adherent: Adherent | null }>({
     open: false, adherent: null
@@ -213,6 +244,10 @@ const AdherentsTab: React.FC = () => {
 
     if (filters.status) {
       filtered = filtered.filter(a => a.status === filters.status);
+    }
+
+    if (filters.rib) {
+      filtered = filtered.filter(a => a.rib.includes(filters.rib.trim()));
     }
 
     if (filters.search) {
@@ -382,6 +417,34 @@ const AdherentsTab: React.FC = () => {
 
   const duplicateRibCount = adherents.filter(a => a.duplicateRib).length;
 
+  const handleExportExcel = async () => {
+    const XLSX = await import('xlsx');
+
+    const rows = filteredAdherents.map((a) => ({
+      Matricule: a.matricule,
+      Société: a.society,
+      Nom: a.name,
+      Prénom: a.surname,
+      RIB: a.rib,
+      'Code Assuré': a.codeAssure || '',
+      'Numéro Contrat': a.numeroContrat || '',
+      Assurance: a.assurance || '',
+      Statut: a.status === 'active' ? 'ACTIF' : 'INACTIF',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+
+    // Column widths
+    worksheet['!cols'] = [
+      { wch: 14 }, { wch: 30 }, { wch: 20 }, { wch: 20 },
+      { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 25 }, { wch: 10 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Adhérents');
+    XLSX.writeFile(workbook, `adherents_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const handleDownloadTemplate = async () => {
     const XLSX = await import('xlsx');
 
@@ -401,6 +464,39 @@ const AdherentsTab: React.FC = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Adhérents');
     XLSX.writeFile(workbook, `template_adherents_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+// ── Import-result Excel export — styled file generated server-side (exceljs) ──
+  const handleExportImportResultExcel = async (rows: any[]) => {
+    if (!rows || rows.length === 0) return;
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/import/export-excel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ rows })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Échec de la génération du fichier Excel');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `import_adherents_details_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export import result Excel:', error);
+      alert('Erreur lors du téléchargement du détail Excel: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
+    }
   };
 
   const handleImportFile = async () => {
@@ -431,6 +527,7 @@ const AdherentsTab: React.FC = () => {
       const blocked = result.blocked || 0;
       const skipped = result.skipped || 0;
       const total = result.total || 0;
+      const rows = result.rows || [];
 
       console.log('📊 Import result:', { imported, blocked, skipped, total, result });
 
@@ -442,7 +539,8 @@ const AdherentsTab: React.FC = () => {
           blocked,
           skipped,
           total,
-          otherErrors: skipped - blocked
+          otherErrors: skipped - blocked,
+          rows
         }
       });
       setImportDialog(false);
@@ -514,6 +612,15 @@ const AdherentsTab: React.FC = () => {
             </Button>
           )}
           <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportExcel}
+            disabled={filteredAdherents.length === 0}
+            sx={{ fontWeight: 600, borderColor: '#2e7d32', color: '#2e7d32', '&:hover': { borderColor: '#1b5e20', bgcolor: '#f1f8e9' } }}
+          >
+            Export Excel ({filteredAdherents.length})
+          </Button>
+          <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleAdd}
@@ -554,6 +661,16 @@ const AdherentsTab: React.FC = () => {
           🔍 Recherche &amp; Filtres
         </Typography>
         <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+          <TextField
+            label="Recherche par RIB"
+            value={filters.rib}
+            onChange={(e) => setFilters({ ...filters, rib: e.target.value.replace(/\D/g, '') })}
+            size="small"
+            placeholder="Saisir tout ou partie du RIB..."
+            inputProps={{ maxLength: 20, pattern: '[0-9]*' }}
+            sx={{ minWidth: 220 }}
+          />
+
           <TextField
             label="Recherche"
             value={filters.search}
@@ -599,7 +716,7 @@ const AdherentsTab: React.FC = () => {
 
           <Button
             variant="outlined"
-            onClick={() => setFilters({ society: '', status: '', search: '' })}
+            onClick={() => setFilters({ society: '', status: '', search: '', rib: '' })}
             size="small"
             sx={{ alignSelf: 'center' }}
           >
@@ -1429,57 +1546,125 @@ const AdherentsTab: React.FC = () => {
         <DialogContent sx={{ mt: 2 }}>
           {duplicateRibDialog.data?.isBulkImport ? (
             <Box>
-              {duplicateRibDialog.data.imported > 0 && (
-                <Alert severity="success" sx={{ mb: 2, borderRadius: 1.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    ✅ {duplicateRibDialog.data.imported} adhérent(s) importé(s) avec succès
-                  </Typography>
-                </Alert>
-              )}
+              {/* ── Stat cards ── */}
+              <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#f4f7fb', border: '1px solid #dde3ef', textAlign: 'center' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#1e3a5f', lineHeight: 1 }}>
+                      {duplicateRibDialog.data.total}
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#607085', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', mt: 0.5 }}>
+                      Total traité
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#e6f4ed', border: '1px solid #a8dbc0', textAlign: 'center' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#1b8a4c', lineHeight: 1 }}>
+                      {duplicateRibDialog.data.imported}
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#1b8a4c', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', mt: 0.5 }}>
+                      ✅ Importés
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#fff3e0', border: '1px solid #ffcc80', textAlign: 'center' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#d35400', lineHeight: 1 }}>
+                      {duplicateRibDialog.data.blocked}
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#d35400', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', mt: 0.5 }}>
+                      ⚠️ RIB Bloqués
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={6} sm={3}>
+                  <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: '#fdecea', border: '1px solid #ef9a9a', textAlign: 'center' }}>
+                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#c0392b', lineHeight: 1 }}>
+                      {duplicateRibDialog.data.otherErrors}
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#c0392b', textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', mt: 0.5 }}>
+                      ❌ Autres erreurs
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
 
               {duplicateRibDialog.data.imported === 0 && duplicateRibDialog.data.total > 0 && (
                 <Alert severity="info" sx={{ mb: 2, borderRadius: 1.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    ℹ️ Aucun adhérent importé
-                  </Typography>
                   <Typography variant="body2">
-                    Tous les adhérents ont été rejetés (RIB dupliqués ou autres erreurs).
+                    Aucun adhérent n'a été importé — tous ont été rejetés (RIB dupliqués ou autres erreurs).
                   </Typography>
                 </Alert>
               )}
 
-              {duplicateRibDialog.data.blocked > 0 && (
-                <Alert severity="warning" sx={{ mb: 2, borderRadius: 1.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                    ❌ {duplicateRibDialog.data.blocked} adhérent(s) bloqué(s) (RIB dupliqués)
-                  </Typography>
-                  <Typography variant="body2">
-                    Ces adhérents ont été bloqués car leurs RIBs sont déjà utilisés par d'autres adhérents.
-                  </Typography>
-                </Alert>
-              )}
-
-              {duplicateRibDialog.data.otherErrors > 0 && (
-                <Alert severity="error" sx={{ mb: 2, borderRadius: 1.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    ⚠️ {duplicateRibDialog.data.otherErrors} autre(s) erreur(s)
-                  </Typography>
-                  <Typography variant="body2">
-                    Matricule dupliqué, client introuvable, RIB invalide, etc.
-                  </Typography>
-                </Alert>
-              )}
-
-              <Box sx={{ p: 2, mb: 2, bgcolor: '#f4f7fb', borderRadius: 1.5, border: '1px solid #dde3ef' }}>
-                <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: '#1e3a5f' }}>📊 Résumé :</Typography>
-                <Typography variant="body2">• Total traité : {duplicateRibDialog.data.total} ligne(s)</Typography>
-                <Typography variant="body2" color="success.main">• Importés : {duplicateRibDialog.data.imported}</Typography>
-                <Typography variant="body2" color="warning.main">• Bloqués (RIB dupliqués) : {duplicateRibDialog.data.blocked}</Typography>
-                <Typography variant="body2" color="error.main">• Autres erreurs : {duplicateRibDialog.data.otherErrors}</Typography>
+              {/* ── Table header + download button ── */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1e3a5f' }}>
+                  📋 Détail par ligne ({duplicateRibDialog.data.rows?.length || 0})
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<DownloadIcon />}
+                  onClick={() => handleExportImportResultExcel(duplicateRibDialog.data.rows || [])}
+                  disabled={!duplicateRibDialog.data.rows || duplicateRibDialog.data.rows.length === 0}
+                  sx={{ fontWeight: 600, bgcolor: '#2e7d32', '&:hover': { bgcolor: '#1b5e20' } }}
+                >
+                  Télécharger le détail Excel
+                </Button>
               </Box>
 
+              {duplicateRibDialog.data.rows && duplicateRibDialog.data.rows.length > 0 ? (
+                <TableContainer sx={{ maxHeight: 340, border: '1px solid #dde3ef', borderRadius: 1.5 }}>
+                  <Table size="small" stickyHeader sx={{ minWidth: 720 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ ...HEAD_CELL_SX, width: 64, textAlign: 'center' }}>Ligne</TableCell>
+                        <TableCell sx={HEAD_CELL_SX}>Matricule</TableCell>
+                        <TableCell sx={HEAD_CELL_SX}>RIB</TableCell>
+                        <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Statut</TableCell>
+                        <TableCell sx={HEAD_CELL_SX}>Raison</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {duplicateRibDialog.data.rows.map((row: any, idx: number) => {
+                        const chip = getRowStatusChipProps(row.status);
+                        return (
+                          <TableRow
+                            key={`${row.row}-${row.matricule}-${row.rib}`}
+                            sx={{
+                              backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f7f9fc',
+                              '&:last-child td': { borderBottom: 0 },
+                            }}
+                          >
+                            <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center', fontWeight: 600, color: '#607085' }}>
+                              {row.row}
+                            </TableCell>
+                            <TableCell sx={{ ...BODY_CELL_SX, fontWeight: 700, color: '#1e3a5f', fontFamily: 'monospace' }}>
+                              {row.matricule || '—'}
+                            </TableCell>
+                            <TableCell sx={{ ...BODY_CELL_SX, fontFamily: 'monospace', fontSize: '0.76rem' }}>
+                              {row.rib || '—'}
+                            </TableCell>
+                            <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
+                              <Chip label={chip.label} color={chip.color} size="small" sx={{ fontWeight: 600 }} />
+                            </TableCell>
+                            <TableCell sx={{ ...BODY_CELL_SX, color: '#546e7a' }}>
+                              {row.reason || '—'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Alert severity="info" sx={{ borderRadius: 1.5 }}>Aucun détail disponible pour cet import.</Alert>
+              )}
+
               {duplicateRibDialog.data.blocked > 0 && (
-                <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+                <Alert severity="info" sx={{ mt: 2, borderRadius: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                     🔔 Notification envoyée
                   </Typography>

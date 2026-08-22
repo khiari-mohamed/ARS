@@ -25,7 +25,7 @@ export class SuiviVirementController {
   async updateEtatVirement(
     @Param('ordreVirementId') ordreVirementId: string,
     @Body() body: {
-      nouvelEtat: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'EXECUTE';
+      nouvelEtat: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
       utilisateurFinanceId: string;
       commentaire?: string;
     }

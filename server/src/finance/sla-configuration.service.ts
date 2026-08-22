@@ -272,7 +272,7 @@ export class SlaConfigurationService {
     const ordresVirement = await this.prisma.ordreVirement.findMany({
       where: {
         etatVirement: {
-          in: ['NON_EXECUTE', 'EN_COURS_EXECUTION']
+          in: ['NON_EXECUTE', 'EN_COURS_VALIDATION']
         }
       },
       include: {

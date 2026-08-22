@@ -7,11 +7,9 @@ import { AlertsService } from '../alerts/alerts.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { TuniclaimService } from '../integrations/tuniclaim.service';
 import { hasDashboardAccess, getRolePermissions } from './dashboard-roles.constants';
-import axios from 'axios';
-
-const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
-const AI_USERNAME = process.env.AI_USERNAME || 'admin';
-const AI_PASSWORD = process.env.AI_PASSWORD || 'secret';
+import { RedisService } from '../shared/redis.service';
+import { DashboardAiService } from './dashboard-ai.service';
+import { calculateAllSLAs, isSLABreached, BordereauForSLA } from '../utils/sla-calculator';
 
 @Injectable()
 export class DashboardService {
@@ -23,7 +21,12 @@ export class DashboardService {
     private alerts: AlertsService,
     private analytics: AnalyticsService,
     private tuniclaim: TuniclaimService,
+    private redis: RedisService,
+    private dashboardAi: DashboardAiService,
   ) {}
+
+  private readonly DASHBOARD_CACHE_TTL = 30;
+  private readonly DASHBOARD_CACHE_PREFIX = 'dashboard:role-based:';
 
   async getKpis(user: any, filters: any = {}) {
     try {
@@ -32,7 +35,15 @@ export class DashboardService {
       
       // Get real-time data from database
       const [bordereaux, reclamations, virements, bulletinSoins] = await Promise.all([
-        this.prisma.bordereau.findMany({ where, include: { client: true, virement: true, documents: true } }),
+        this.prisma.bordereau.findMany({
+          where,
+          include: {
+            client: true,
+            virement: true,
+            documents: true,
+            ordresVirement: { select: { etatVirement: true, dateEtatFinal: true, dateTraitement: true } },
+          },
+        }),
         this.prisma.reclamation.findMany({ 
           where: { 
             status: { in: ['OPEN', 'IN_PROGRESS', 'PENDING'] }
@@ -58,20 +69,24 @@ export class DashboardService {
       const bsInProgress = bordereaux.filter(b => ['EN_COURS', 'ASSIGNE', 'SCAN_EN_COURS'].includes(b.statut)).length;
       const bsPending = bordereaux.filter(b => ['EN_ATTENTE', 'A_SCANNER', 'A_AFFECTER'].includes(b.statut)).length;
       
-      // Calculate SLA breaches with real logic
+      // ✅ FIXED: was raw `daysSince > delaiReglement` math that ignored freeze
+      // logic (a bordereau frozen months ago at VIREMENT_EXECUTE kept counting
+      // as a breach on every dashboard load). Now uses the centralized
+      // calculator's "SLA de règlement BO" indicator, which correctly stops
+      // counting once the virement was executed.
       const now = new Date();
-      const slaBreaches = bordereaux.filter(b => {
-        if (!b.dateReception || !b.delaiReglement) return false;
-        const daysSince = Math.floor((now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
-        return daysSince > b.delaiReglement && !['CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut);
-      }).length;
+      const slaBreaches = bordereaux.filter(b => isSLABreached(b as unknown as BordereauForSLA)).length;
       
       // Calculate processing efficiency
       const avgProcessingTime = this.calculateAvgProcessingTime(bordereaux);
       const slaCompliance = totalBordereaux > 0 ? ((totalBordereaux - slaBreaches) / totalBordereaux * 100) : 100;
       
-      // Get AI-powered insights
-      const aiInsights = await this.getAIInsights(bordereaux, user);
+      // Non-bloquant: keep KPIs fast and let the frontend fetch AI insights separately.
+      const aiInsights = {
+        slaRisks: 0,
+        highPriorityItems: [],
+        recommendations: ['Données de base utilisées - Insights IA chargés séparément']
+      };
       
       return {
         // Core KPIs
@@ -107,7 +122,11 @@ export class DashboardService {
     }
   }
 
-  async getPerformance(user: any, filters: any = {}) {
+  // FIX: includeAi (default true) preserves behavior for any other caller of
+  // this method (e.g. GET /dashboard/performance directly). Only the main
+  // role-based dashboard load passes false, so the AI reassignment call no
+  // longer fires just from opening the dashboard.
+  async getPerformance(user: any, filters: any = {}, includeAi: boolean = true) {
     try {
       const where = this.buildUserFilters(user, filters);
       
@@ -119,36 +138,56 @@ export class DashboardService {
         _avg: { delaiReglement: true }
       });
       
-      // Get user details and calculate metrics
+      // Get user details and batch all related bordereaux once for the whole set
       const userIds = performanceData.map(p => p.assignedToUserId).filter(Boolean) as string[];
       const users = await this.prisma.user.findMany({
         where: { id: { in: userIds } },
         select: { id: true, fullName: true, role: true, department: true }
       });
+
+      const allUserBordereaux = userIds.length > 0 ? await this.prisma.bordereau.findMany({
+        where: { ...where, assignedToUserId: { in: userIds } },
+        select: {
+          assignedToUserId: true,
+          dateReception: true,
+          dateCloture: true,
+          delaiReglement: true,
+          statut: true
+        }
+      }) : [];
+
+      const workloadData = userIds.length > 0 ? await this.prisma.bordereau.groupBy({
+        by: ['assignedToUserId'],
+        where: { ...where, assignedToUserId: { in: userIds }, statut: { in: ['ASSIGNE', 'EN_COURS'] } },
+        _count: { id: true }
+      }) : [];
+
+      const workloadMap = new Map(workloadData.map(item => [item.assignedToUserId, item._count.id]));
+
+      const enrichedPerformance = performanceData.map((perf) => {
+        const userData = users.find(u => u.id === perf.assignedToUserId);
+        const userBordereaux = allUserBordereaux.filter(b => b.assignedToUserId === perf.assignedToUserId);
+        const processingTimes = this.computeProcessingTimesFromList(userBordereaux);
+
+        return {
+          userId: perf.assignedToUserId,
+          userName: userData?.fullName || 'Unknown',
+          role: userData?.role || 'Unknown',
+          department: userData?.department || 'Unknown',
+          bsProcessed: perf._count.id,
+          avgSlaTime: perf._avg.delaiReglement || 0,
+          avgProcessingTime: processingTimes.avg,
+          efficiency: processingTimes.efficiency,
+          slaCompliance: processingTimes.slaCompliance,
+          workload: workloadMap.get(perf.assignedToUserId) || 0
+        };
+      });
       
-      // Calculate processing times and efficiency
-      const enrichedPerformance = await Promise.all(
-        performanceData.map(async (perf) => {
-          const userData = users.find(u => u.id === perf.assignedToUserId);
-          const processingTimes = await this.calculateUserProcessingTimes(perf.assignedToUserId!, where);
-          
-          return {
-            userId: perf.assignedToUserId,
-            userName: userData?.fullName || 'Unknown',
-            role: userData?.role || 'Unknown',
-            department: userData?.department || 'Unknown',
-            bsProcessed: perf._count.id,
-            avgSlaTime: perf._avg.delaiReglement || 0,
-            avgProcessingTime: processingTimes.avg,
-            efficiency: processingTimes.efficiency,
-            slaCompliance: processingTimes.slaCompliance,
-            workload: await this.calculateCurrentWorkload(perf.assignedToUserId!)
-          };
-        })
-      );
-      
-      // Get AI performance recommendations
-      const aiRecommendations = await this.getPerformanceRecommendations(enrichedPerformance);
+      // Get AI performance recommendations — skipped when includeAi is false
+      // (i.e. when this is called as part of the main dashboard load).
+      const aiRecommendations = includeAi
+        ? await this.dashboardAi.getPerformanceRecommendations(enrichedPerformance)
+        : [];
       
       return {
         performance: enrichedPerformance,
@@ -226,83 +265,114 @@ export class DashboardService {
   async getSlaStatus(user: any, filters: any = {}) {
     try {
       const where = this.buildUserFilters(user, filters);
-      const now = new Date();
       
       // Get all bordereaux with SLA calculations
       const bordereaux = await this.prisma.bordereau.findMany({
         where,
-        include: { client: true, contract: true, documents: true }
+        include: {
+          client: true,
+          contract: true,
+          documents: true,
+          ordresVirement: { select: { etatVirement: true, dateEtatFinal: true, dateTraitement: true } },
+        },
       });
-      
-      // Calculate SLA status categories with document type exemptions
-      const slaAnalysis = bordereaux.map(b => {
-        const daysSinceReception = b.dateReception ? 
-          Math.floor((now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)) : 0;
-        const slaLimit = b.delaiReglement || b.contract?.delaiReglement || 5;
-        const remainingDays = slaLimit - daysSinceReception;
-        
-        // SLA exemptions for specific document types
-        const exemptDocumentTypes = ['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
+
+      // Document-type SLA exemptions (unchanged business rule) — these
+      // bordereaux are excluded from breach/at-risk counting entirely.
+      const exemptDocumentTypes = ['CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
+
+      // ✅ FIXED: was raw `remainingDays = slaLimit - daysSinceReception` math
+      // with no freeze logic, and only ever reported "the" SLA (règlement).
+      // Now uses the centralized calculator and reports all four company
+      // indicators (scan / traitement / règlement BO / règlement Finance),
+      // each correctly frozen once its end-milestone happens.
+      const buckets = {
+        scan: { withinSla: 0, atRisk: 0, breached: 0, total: 0 },
+        traitement: { withinSla: 0, atRisk: 0, breached: 0, total: 0 },
+        reglementBO: { withinSla: 0, atRisk: 0, breached: 0, total: 0 },
+        reglementFinance: { withinSla: 0, atRisk: 0, breached: 0, total: 0 },
+      };
+
+      for (const b of bordereaux) {
         const hasExemptDocuments = b.documents?.some(doc => exemptDocumentTypes.includes(doc.type));
-        
-        let status: 'green' | 'orange' | 'red';
-        if (hasExemptDocuments) {
-          status = 'green'; // Exempt documents are always green (no SLA)
-        } else if (remainingDays > 2) {
-          status = 'green';
-        } else if (remainingDays > 0) {
-          status = 'orange';
-        } else {
-          status = 'red';
-        }
-        
-        return {
-          id: b.id,
-          reference: b.reference,
-          status,
-          remainingDays,
-          daysSinceReception,
-          slaLimit,
-          isCompleted: ['CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut),
-          isExempt: hasExemptDocuments
-        };
-      });
-      
-      // Group by status (excluding exempt documents from breach calculations)
-      const withinSla = slaAnalysis.filter(s => s.status === 'green').length;
-      const atRisk = slaAnalysis.filter(s => s.status === 'orange').length;
-      const breached = slaAnalysis.filter(s => s.status === 'red' && !s.isCompleted && !s.isExempt).length;
-      const total = bordereaux.length;
-      const exemptCount = slaAnalysis.filter(s => s.isExempt).length;
-      
-      // Get AI SLA predictions
-      const aiPredictions = await this.getSLAPredictions(bordereaux);
-      
+        if (hasExemptDocuments) continue; // exempt bordereaux don't count toward any indicator
+
+        const slaThreshold = b.delaiReglement || b.contract?.delaiReglement || 5;
+        const all = calculateAllSLAs({
+          dateReception: b.dateReception,
+          delaiReglement: slaThreshold,
+          statut: b.statut,
+          dateDebutScan: b.dateDebutScan,
+          dateFinScan: b.dateFinScan,
+          dateCloture: b.dateCloture,
+          dateExecutionVirement: b.dateExecutionVirement,
+          ordresVirement: b.ordresVirement,
+        });
+
+        (['scan', 'traitement', 'reglementBO', 'reglementFinance'] as const).forEach((key) => {
+          const metric = all[key];
+          if (!metric.applicable || metric.percentElapsed === null) return;
+          buckets[key].total++;
+          if (metric.percentElapsed <= 80) buckets[key].withinSla++;
+          else if (metric.percentElapsed <= 100) buckets[key].atRisk++;
+          else buckets[key].breached++;
+        });
+      }
+
+      // Legacy shape (règlement BO only) — kept so existing SLAStatusPanel
+      // aggregate-mode consumers keep working unchanged.
+      const legacy = buckets.reglementBO;
+      const totalConsidered = legacy.total;
+
       return [
         {
           type: 'Dans les délais',
           status: 'green',
-          value: withinSla,
-          percentage: total > 0 ? Math.round((withinSla / total) * 100) : 0
+          value: legacy.withinSla,
+          percentage: totalConsidered > 0 ? Math.round((legacy.withinSla / totalConsidered) * 100) : 0
         },
         {
           type: 'À risque',
           status: 'orange', 
-          value: atRisk,
-          percentage: total > 0 ? Math.round((atRisk / total) * 100) : 0
+          value: legacy.atRisk,
+          percentage: totalConsidered > 0 ? Math.round((legacy.atRisk / totalConsidered) * 100) : 0
         },
         {
           type: 'Dépassés',
           status: 'red',
-          value: breached,
-          percentage: total > 0 ? Math.round((breached / total) * 100) : 0
+          value: legacy.breached,
+          percentage: totalConsidered > 0 ? Math.round((legacy.breached / totalConsidered) * 100) : 0
         },
         {
           type: 'Conformité SLA Globale',
-          status: breached === 0 ? 'green' : breached < total * 0.1 ? 'orange' : 'red',
-          value: total > 0 ? Math.round(((total - breached) / total) * 100) : 100,
+          status: legacy.breached === 0 ? 'green' : legacy.breached < totalConsidered * 0.1 ? 'orange' : 'red',
+          value: totalConsidered > 0 ? Math.round(((totalConsidered - legacy.breached) / totalConsidered) * 100) : 100,
           percentage: 100
-        }
+        },
+        // ✅ NEW: the four company indicators, each with its own compliance %.
+        // Additive — appended after the legacy four entries so nothing that
+        // reads array[0..3] by position breaks.
+        {
+          type: 'SLA de scan',
+          status: buckets.scan.breached === 0 ? 'green' : buckets.scan.breached < buckets.scan.total * 0.1 ? 'orange' : 'red',
+          value: buckets.scan.total > 0 ? Math.round(((buckets.scan.total - buckets.scan.breached) / buckets.scan.total) * 100) : 100,
+          percentage: 100,
+          indicator: 'scan',
+        },
+        {
+          type: 'SLA de traitement',
+          status: buckets.traitement.breached === 0 ? 'green' : buckets.traitement.breached < buckets.traitement.total * 0.1 ? 'orange' : 'red',
+          value: buckets.traitement.total > 0 ? Math.round(((buckets.traitement.total - buckets.traitement.breached) / buckets.traitement.total) * 100) : 100,
+          percentage: 100,
+          indicator: 'traitement',
+        },
+        {
+          type: 'SLA de règlement Finance',
+          status: buckets.reglementFinance.breached === 0 ? 'green' : buckets.reglementFinance.breached < buckets.reglementFinance.total * 0.1 ? 'orange' : 'red',
+          value: buckets.reglementFinance.total > 0 ? Math.round(((buckets.reglementFinance.total - buckets.reglementFinance.breached) / buckets.reglementFinance.total) * 100) : 100,
+          percentage: 100,
+          indicator: 'reglementFinance',
+        },
       ];
     } catch (error) {
       console.error('Error getting SLA status:', error);
@@ -352,14 +422,18 @@ export class DashboardService {
     }
   }
 
-  async getAlerts(user: any, filters: any = {}) {
+  // FIX: includeAi (default true) preserves behavior for any other caller of
+  // this method (e.g. GET /dashboard/alerts directly). Only the main
+  // role-based dashboard load passes false, so the AI automated-decisions
+  // call no longer fires just from opening the dashboard.
+  async getAlerts(user: any, filters: any = {}, includeAi: boolean = true) {
     try {
       // Get real-time alerts from database
       const where = this.buildUserFilters(user, filters);
       const alerts = await this.alerts.getAlertsDashboard(filters, user);
       
-      // Get AI-powered alert analysis
-      const aiAlerts = await this.getAIAlerts(where, user);
+      // Get AI-powered alert analysis — skipped when includeAi is false
+      const aiAlerts = includeAi ? await this.dashboardAi.getAIAlerts(where, user) : [];
       
       // Combine and prioritize alerts
       const combinedAlerts = [...alerts, ...aiAlerts]
@@ -694,30 +768,34 @@ export class DashboardService {
         statut: true
       }
     });
-    
-    const processedBordereaux = userBordereaux.filter(b => 
-      b.dateReception && b.dateCloture && ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)
+
+    return this.computeProcessingTimesFromList(userBordereaux);
+  }
+
+  private computeProcessingTimesFromList(bordereaux: Array<{ dateReception: Date | null; dateCloture: Date | null; delaiReglement: number | null; statut: string | null }>) {
+    const processedBordereaux = bordereaux.filter(b =>
+      b.dateReception && b.dateCloture && ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut || '')
     );
-    
+
     if (processedBordereaux.length === 0) {
       return { avg: 0, efficiency: 0, slaCompliance: 0 };
     }
-    
+
     const processingTimes = processedBordereaux.map(b => {
       const processingTime = new Date(b.dateCloture!).getTime() - new Date(b.dateReception!).getTime();
-      return processingTime / (1000 * 60 * 60 * 24); // Convert to days
+      return processingTime / (1000 * 60 * 60 * 24);
     });
-    
+
     const avgTime = processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length;
     const slaCompliant = processedBordereaux.filter(b => {
       const processingTime = new Date(b.dateCloture!).getTime() - new Date(b.dateReception!).getTime();
       const days = processingTime / (1000 * 60 * 60 * 24);
       return days <= (b.delaiReglement || 5);
     }).length;
-    
+
     const slaCompliance = (slaCompliant / processedBordereaux.length) * 100;
-    const efficiency = Math.max(0, 100 - (avgTime * 10)); // Simple efficiency calculation
-    
+    const efficiency = Math.max(0, 100 - (avgTime * 10));
+
     return {
       avg: Math.round(avgTime * 100) / 100,
       efficiency: Math.round(efficiency * 100) / 100,
@@ -735,209 +813,18 @@ export class DashboardService {
     return activeCount;
   }
   
-  private async getAIToken(): Promise<string> {
-    try {
-      const credentials = [
-        { username: 'admin', password: 'secret' },
-        { username: 'analyst', password: 'secret' },
-        { username: AI_USERNAME, password: AI_PASSWORD }
-      ];
-      
-      for (const cred of credentials) {
-        try {
-          const formData = new URLSearchParams();
-          formData.append('grant_type', 'password');
-          formData.append('username', cred.username);
-          formData.append('password', cred.password);
-          
-          const tokenResponse = await axios.post(`${AI_MICROSERVICE_URL}/token`, formData, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 300000
-          });
-          
-      // console.log(`✅ Dashboard AI authenticated with ${cred.username}`);
-          return tokenResponse.data.access_token;
-        } catch (credError: any) {
-          // console.warn(`❌ Dashboard AI auth failed with ${cred.username}: ${credError.response?.status || credError.message}`);
-          continue;
-        }
-      }
-      throw new Error('All credentials failed');
-    } catch (error: any) {
-      console.error('🚫 Dashboard AI authentication failed:', error.message);
-      throw new Error('AI authentication failed');
-    }
-  }
-  
-  private async getAIInsights(bordereaux: any[], user: any) {
-    try {
-      const token = await this.getAIToken();
-      
-      // Prepare data for AI analysis
-      const analysisData = bordereaux.slice(0, 10).map(b => ({
-        id: b.id,
-        start_date: b.dateReception,
-        deadline: new Date(new Date(b.dateReception!).getTime() + (b.delaiReglement || 5) * 24 * 60 * 60 * 1000).toISOString(),
-        current_progress: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut) ? 100 : 
-                         ['EN_COURS', 'ASSIGNE'].includes(b.statut) ? 50 : 10,
-        total_required: 100,
-        sla_days: b.delaiReglement || 5
-      }));
-      
-      // Get AI predictions and recommendations with better error handling
-      const makeAIRequest = async (endpoint: string, data: any) => {
-        try {
-          return await axios.post(`${AI_MICROSERVICE_URL}${endpoint}`, data, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            timeout: 300000
-          });
-        } catch (error: any) {
-          if (error.response?.status === 401 || error.response?.status === 403) {
-            // Token expired, get new one and retry
-            const newToken = await this.getAIToken();
-            return await axios.post(`${AI_MICROSERVICE_URL}${endpoint}`, data, {
-              headers: { 'Authorization': `Bearer ${newToken}` },
-              timeout: 300000
-            });
-          }
-          throw error;
-        }
-      };
-      
-      // Make requests sequentially to avoid overwhelming the AI service
-      let slaResult, prioritiesResult;
-      
-      try {
-        slaResult = { status: 'fulfilled', value: await makeAIRequest('/sla_prediction', analysisData) };
-      } catch (error) {
-        slaResult = { status: 'rejected', reason: error };
-      }
-      
-      // Small delay between requests
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      try {
-        prioritiesResult = { status: 'fulfilled', value: await makeAIRequest('/priorities', analysisData) };
-      } catch (error) {
-        prioritiesResult = { status: 'rejected', reason: error };
-      }
-      
-      const slaData = slaResult.status === 'fulfilled' ? slaResult.value.data : null;
-      const prioritiesData = prioritiesResult.status === 'fulfilled' ? prioritiesResult.value.data : null;
-      
-      return {
-        slaRisks: slaData?.sla_predictions?.filter(p => p.risk === '🔴' || p.risk === '🟠').length || 0,
-        highPriorityItems: prioritiesData?.priorities?.slice(0, 5) || [],
-        recommendations: [
-          'Réaffecter les dossiers critiques',
-          'Augmenter les ressources pour les équipes surchargées',
-          'Optimiser les processus de traitement'
-        ]
-      };
-    } catch (error: any) {
-      console.warn('Dashboard AI insights unavailable:', error.message);
-      return {
-        slaRisks: 0,
-        highPriorityItems: [],
-        recommendations: ['Service IA temporairement indisponible - Données de base utilisées']
-      };
-    }
-  }
-  
-  private async getSLAPredictions(bordereaux: any[]) {
-    try {
-      const token = await this.getAIToken();
-      const analysisData = bordereaux.map(b => ({
-        id: b.id,
-        start_date: b.dateReception,
-        deadline: new Date(new Date(b.dateReception!).getTime() + (b.delaiReglement || 5) * 24 * 60 * 60 * 1000).toISOString(),
-        current_progress: ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut) ? 100 : 
-                         ['EN_COURS', 'ASSIGNE'].includes(b.statut) ? 50 : 10,
-        total_required: 100
-      }));
-      
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/sla_prediction`, analysisData, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
-      return response.data.sla_predictions || [];
-    } catch (error) {
-      return [];
-    }
-  }
-  
-  private async getPerformanceRecommendations(performanceData: any[]) {
-    try {
-      const token = await this.getAIToken();
-      const payload = {
-        managers: performanceData.map(p => ({
-          id: p.userId,
-          avg_time: p.avgProcessingTime,
-          norm_time: 3, // Standard processing time
-          workload: p.workload
-        })),
-        threshold: 1.5
-      };
-      
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/reassignment`, payload, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
-      return response.data.reassignment || [];
-    } catch (error: any) {
-      console.warn('Performance recommendations unavailable:', error.message);
-      return [];
-    }
-  }
-  
-  private async getAIAlerts(where: any, user: any) {
-    try {
-      // Get current workload data
-      const workloadData = await this.prisma.bordereau.groupBy({
-        by: ['assignedToUserId'],
-        where: { ...where, statut: { in: ['ASSIGNE', 'EN_COURS'] } },
-        _count: { id: true }
-      });
-      
-      const token = await this.getAIToken();
-      const payload = {
-        context: {
-          team_workloads: workloadData.map(w => ({
-            team_id: w.assignedToUserId,
-            workload: w._count.id
-          }))
-        },
-        decision_type: 'workload_rebalancing'
-      };
-      
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/automated_decisions`, payload, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
-      return (response.data.decisions || []).map(decision => ({
-        id: `ai_${Date.now()}_${Math.random()}`,
-        alertType: 'AI_RECOMMENDATION',
-        alertLevel: decision.priority?.toUpperCase() || 'MEDIUM',
-        message: decision.action || 'Recommandation IA',
-        reason: decision.recommendations?.join(', ') || 'Optimisation suggérée',
-        createdAt: new Date(),
-        source: 'AI_ENGINE'
-      }));
-    } catch (error: any) {
-      console.warn('AI alerts unavailable:', error.message);
-      return [];
-    }
-  }
-  
   private async getFallbackKpis(filters: any, user: any) {
     // Get real data from database even when AI is unavailable
     try {
       const where = this.buildUserFilters(user, filters);
       const [bordereaux, reclamations] = await Promise.all([
-        this.prisma.bordereau.findMany({ where, include: { documents: true } }),
+        this.prisma.bordereau.findMany({
+          where,
+          include: {
+            documents: true,
+            ordresVirement: { select: { etatVirement: true, dateEtatFinal: true, dateTraitement: true } },
+          },
+        }),
         this.prisma.reclamation.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS', 'PENDING'] } } })
       ]);
       
@@ -946,13 +833,9 @@ export class DashboardService {
       const bsInProgress = bordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length;
       const bsPending = bordereaux.filter(b => ['EN_ATTENTE', 'A_SCANNER', 'A_AFFECTER'].includes(b.statut)).length;
       
-      // Calculate SLA breaches with real ARS logic
-      const now = new Date();
-      const slaBreaches = bordereaux.filter(b => {
-        if (!b.dateReception || !b.delaiReglement) return false;
-        const daysSince = Math.floor((now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
-        return daysSince > b.delaiReglement && !['CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut);
-      }).length;
+      // ✅ FIXED: same centralized-calculator fix as getKpis() — was raw
+      // daysSince > delaiReglement math with no freeze logic.
+      const slaBreaches = bordereaux.filter(b => isSLABreached(b as unknown as BordereauForSLA)).length;
       
       return {
         totalBordereaux,
@@ -1014,50 +897,72 @@ export class DashboardService {
   // Real-time dashboard for different roles
   async getRoleBasedDashboard(user: any, filters: any = {}) {
     try {
-      // Validate user role access
       if (!this.hasValidDashboardAccess(user.role)) {
         throw new Error('Unauthorized dashboard access');
       }
 
+      const cacheKey = `${this.DASHBOARD_CACHE_PREFIX}${user.id}-${user.role}-${JSON.stringify(filters)}`;
+      const cached = await this.redis.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      // FIX: getPerformance/getAlerts called with includeAi=false here — this
+      // is the main dashboard load path, so the AI reassignment /
+      // automated_decisions calls no longer fire just from opening the
+      // dashboard. Any other caller of getPerformance/getAlerts (e.g. direct
+      // GET /dashboard/performance or /dashboard/alerts) keeps getting AI
+      // enrichment as before, since includeAi defaults to true there.
       const baseData = await Promise.all([
         this.getKpis(user, filters),
-        this.getPerformance(user, filters),
+        this.getPerformance(user, filters, false),
         this.getSlaStatus(user, filters),
-        this.getAlerts(user, filters)
+        this.getAlerts(user, filters, false)
       ]);
-      
+
       const [kpis, performance, slaStatus, alerts] = baseData;
-      
+      let result;
+
       switch (user.role) {
         case 'SUPER_ADMIN':
-          return this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
         case 'ADMINISTRATEUR':
-          return this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         case 'RESPONSABLE_DEPARTEMENT':
-          // RESPONSABLE_DEPARTEMENT gets exact same data as SUPER_ADMIN but read-only
-          const responsableDashboard = await this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
-          responsableDashboard.role = 'SUPER_ADMIN'; // Keep as SUPER_ADMIN for frontend compatibility
-          responsableDashboard.permissions = [...responsableDashboard.permissions, 'READ_ONLY'];
-          return responsableDashboard;
+          result = await this.getSuperAdminDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result.role = 'SUPER_ADMIN';
+          result.permissions = [...result.permissions, 'READ_ONLY'];
+          break;
         case 'GESTIONNAIRE_SENIOR':
-          return this.getGestionnaireSeniorDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getGestionnaireSeniorDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         case 'CHEF_EQUIPE':
-          return this.getChefEquipeDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getChefEquipeDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         case 'GESTIONNAIRE':
-          return this.getGestionnaireDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getGestionnaireDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         case 'FINANCE':
-          return this.getFinanceDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getFinanceDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         case 'BO':
         case 'BUREAU_ORDRE':
-          return this.getBODashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getBODashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         case 'SCAN_TEAM':
-          return this.getScanDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getScanDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         case 'CLIENT_SERVICE':
-          return this.getClientServiceDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getClientServiceDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
         default:
           console.warn(`Unrecognized role: ${user.role}`);
-          return this.getBasicDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          result = await this.getBasicDashboard(kpis, performance, slaStatus, alerts, user, filters);
+          break;
       }
+
+      await this.redis.set(cacheKey, result, this.DASHBOARD_CACHE_TTL);
+      return result;
     } catch (error) {
       console.error('Error in getRoleBasedDashboard:', error);
       throw error;
@@ -1250,51 +1155,63 @@ export class DashboardService {
       where: { role: 'CHEF_EQUIPE' },
       select: { id: true, fullName: true, department: true }
     });
-    
-    const teamsData = await Promise.all(
-      chefEquipes.map(async (chef) => {
-        const teamDocuments = await this.prisma.document.count({
-          where: {
-            bordereau: { 
-              archived: false,
-              OR: [
-                { assignedToUserId: chef.id },
-                {
-                  contract: {
-                    teamLeaderId: chef.id
-                  }
-                }
-              ]
-            }
-          }
-        });
-        
-        const teamPrestations = await this.prisma.document.count({
-          where: {
-            type: 'BULLETIN_SOIN',
-            bordereau: { 
-              archived: false,
-              OR: [
-                { assignedToUserId: chef.id },
-                {
-                  contract: {
-                    teamLeaderId: chef.id
-                  }
-                }
-              ]
-            }
-          }
-        });
-        
-        return {
-          chefEquipe: chef.fullName,
-          department: chef.department,
-          totalDocuments: teamDocuments,
-          prestations: teamPrestations
-        };
-      })
-    );
-    
+
+    if (chefEquipes.length === 0) {
+      return {
+        teams: [],
+        totalTeams: 0,
+        aggregatedPrestations: 0,
+        aggregatedDocuments: 0
+      };
+    }
+
+    // Count documents in the database instead of loading every document into
+    // Node and scanning the full list once per chef.
+    const chefIds = chefEquipes.map(c => c.id);
+    const [directCounts, directBsCounts, teamContracts] = await Promise.all([
+      this.prisma.document.groupBy({
+        by: ['assignedToUserId'] as any,
+        _count: { id: true },
+        where: { bordereau: { archived: false }, assignedToUserId: { in: chefIds } },
+      }),
+      this.prisma.document.groupBy({
+        by: ['assignedToUserId'] as any,
+        _count: { id: true },
+        where: { bordereau: { archived: false }, assignedToUserId: { in: chefIds }, type: 'BULLETIN_SOIN' },
+      }),
+      this.prisma.contract.findMany({
+        where: { teamLeaderId: { in: chefIds } },
+        select: {
+          teamLeaderId: true,
+          bordereaux: {
+            where: { archived: false },
+            select: { _count: { select: { documents: true } } },
+          },
+        },
+      }),
+    ]);
+
+    const directMap = new Map(directCounts.map((c: any) => [c.assignedToUserId, c._count.id]));
+    const directBsMap = new Map(directBsCounts.map((c: any) => [c.assignedToUserId, c._count.id]));
+
+    const teamDocMap = new Map<string, number>();
+    for (const contract of teamContracts) {
+      const total = contract.bordereaux.reduce((sum, b) => sum + b._count.documents, 0);
+      teamDocMap.set(contract.teamLeaderId!, (teamDocMap.get(contract.teamLeaderId!) || 0) + total);
+    }
+
+    const teamsData = chefEquipes.map((chef) => {
+      const totalDocuments = (directMap.get(chef.id) || 0) + (teamDocMap.get(chef.id) || 0);
+      const prestations = directBsMap.get(chef.id) || 0;
+
+      return {
+        chefEquipe: chef.fullName,
+        department: chef.department,
+        totalDocuments,
+        prestations
+      };
+    });
+
     return {
       teams: teamsData,
       totalTeams: chefEquipes.length,
@@ -1573,7 +1490,7 @@ export class DashboardService {
       currentWorkload,
       targetWorkload: currentStaff * 10,
       efficiency: Math.min(100, (currentStaff * 10 / Math.max(currentWorkload, 1)) * 100),
-      recommendations: await this.getAIWorkforceRecommendations(currentStaff, requiredStaff, currentWorkload),
+      recommendations: await this.dashboardAi.getAIWorkforceRecommendations(currentStaff, requiredStaff, currentWorkload),
       departmentAnalysis
     };
   }
@@ -1844,39 +1761,6 @@ export class DashboardService {
         return 'BORDEREAU_ISSUE';
       default:
         return 'BORDEREAU_OTHER';
-    }
-  }
-
-  private async getAIWorkforceRecommendations(currentStaff: number, requiredStaff: number, currentWorkload: number): Promise<string[]> {
-    try {
-      const token = await this.getAIToken();
-      const workloadData = await this.prisma.bordereau.groupBy({
-        by: ['assignedToUserId'],
-        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } },
-        _count: { id: true }
-      });
-      
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, {
-        workload: workloadData.map(w => ({ teamId: w.assignedToUserId, _count: { id: w._count.id } }))
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
-      const aiRecommendations = response.data.recommendations || [];
-      return aiRecommendations.slice(0, 3).map((rec: any) => 
-        rec.title || rec.recommendation || rec.description || 'Recommandation IA'
-      );
-    } catch (error) {
-      const recommendations: string[] = [];
-      if (requiredStaff > currentStaff) {
-        recommendations.push(`Ajouter ${requiredStaff - currentStaff} gestionnaire(s) pour traiter la charge actuelle`);
-      } else {
-        recommendations.push('Effectif optimal pour la charge actuelle');
-      }
-      recommendations.push('Optimiser la répartition des tâches entre équipes');
-      recommendations.push('Former les nouveaux gestionnaires sur les processus ARS');
-      return recommendations;
     }
   }
 

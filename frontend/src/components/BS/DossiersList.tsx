@@ -31,9 +31,82 @@ import {
 } from '@ant-design/icons';
 import { LocalAPI } from '../../services/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import { useIsReadOnly } from '../ReadOnlyWrapper';
 
 const { Panel } = Collapse;
 const { Text } = Typography;
+
+// ─── Shared color palette (matches EnhancedDashboard's theme) ─────────────────
+// Kept local to this file on purpose — EnhancedDashboard's internal theme
+// object/components aren't exported, and duplicating just the few tokens we
+// need here is safer than reaching into another file's internals.
+const palette = {
+  success: '#1a9c5b',
+  successSoft: '#e9f9f1',
+  successBorder: '#b6ecd2',
+  warning: '#c17a09',
+  warningSoft: '#fef6e7',
+  warningBorder: '#f6ddab',
+  danger: '#d13438',
+  dangerSoft: '#fdecec',
+  dangerBorder: '#f5c6c6',
+  info: '#2461c0',
+  infoSoft: '#eaf2fd',
+  infoBorder: '#c3dbf8',
+  neutral: '#5b6072',
+  neutralSoft: '#f3f4f8',
+  neutralBorder: '#e7e9f0',
+  text: '#161a24',
+  textFaint: '#9498a8',
+};
+
+// ─── % Finalisation — colored progress bar (from the old Dossiers Individuels table) ─
+const CompletionBar: React.FC<{ pct: number }> = ({ pct }) => {
+  const color = pct >= 80 ? palette.success : pct >= 50 ? palette.warning : palette.danger;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 56, height: 7, background: palette.neutralSoft, borderRadius: 999, overflow: 'hidden', flexShrink: 0 }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 999, transition: 'width .3s ease' }} />
+      </div>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: palette.text, minWidth: 32 }}>{pct}%</span>
+    </div>
+  );
+};
+
+// ─── États Dossiers — colored badges, one per document state (e.g. "Traité 3/5") ──
+const getStateColor = (state: string) => {
+  if (state.startsWith('Traité')) return { bg: palette.successSoft, text: palette.success, border: palette.successBorder };
+  if (state.startsWith('En cours')) return { bg: palette.warningSoft, text: palette.warning, border: palette.warningBorder };
+  if (state.startsWith('Scanné')) return { bg: palette.infoSoft, text: palette.info, border: palette.infoBorder };
+  return { bg: palette.neutralSoft, text: palette.neutral, border: palette.neutralBorder };
+};
+
+const DossierStatesBadges: React.FC<{ states?: string[] }> = ({ states }) => {
+  if (!states || states.length === 0) {
+    return <span style={{ color: palette.textFaint, fontStyle: 'italic', fontSize: 12 }}>—</span>;
+  }
+  return (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      {states.map((s, i) => {
+        const { bg, text, border } = getStateColor(s);
+        return (
+          <span
+            key={i}
+            style={{
+              display: 'inline-flex', alignItems: 'center',
+              padding: '2px 8px', borderRadius: 999,
+              fontSize: 10.5, fontWeight: 700,
+              background: bg, color: text, border: `1px solid ${border}`,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {s}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
 
 // Documents Viewer Component
 interface DocumentsViewerProps {
@@ -242,6 +315,14 @@ interface Dossier {
     unassigned: number;
     assignedTo: string[];
   };
+  // ── Merged in from the old "Dossiers Individuels" table ──────────────────
+  // These are already returned by /derniers-dossiers on the backend
+  // (chef-equipe-tableau-bord.controller.ts), they just weren't being read
+  // here before.
+  type?: string;
+  completionPercentage?: number;
+  dossierStates?: string[];
+  gestionnaireRole?: string | null;
 }
 
 interface DossiersListProps {
@@ -251,6 +332,7 @@ interface DossiersListProps {
 
 const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) => {
   const { user } = useAuth();
+  const isReadOnly = useIsReadOnly();
   const [dossiers, setDossiers] = useState<Dossier[]>([]);
   const [filteredDossiers, setFilteredDossiers] = useState<Dossier[]>([]);
   const [loading, setLoading] = useState(false);
@@ -312,6 +394,10 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           assignedToUserId: item.assignedToUserId,
           documents: [],
           gestionnaireRole: item.gestionnaireRole,
+          // ── Merged from the old Dossiers Individuels endpoint ──
+          type: item.type || 'Prestation',
+          completionPercentage: item.completionPercentage ?? 0,
+          dossierStates: item.dossierStates || [],
           documentAssignments: {
             total: 0,
             assigned: 0,
@@ -335,6 +421,14 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       setLoading(false);
     }
   };
+
+  // Unique document types present in the currently loaded dossiers, used to
+  // populate the "Type" filter dropdown (replaces the old hard-coded list
+  // that never matched anything since `documents` wasn't populated here).
+  const uniqueTypes = React.useMemo(() => {
+    const types = dossiers.map(d => d.type).filter(Boolean) as string[];
+    return [...new Set(types)].sort();
+  }, [dossiers]);
 
   // Apply filters
   useEffect(() => {
@@ -384,10 +478,9 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     }
 
     if (filters.documentType) {
-      filtered = filtered.filter(d => {
-        const documents = d.documents || [];
-        return documents.some(doc => doc.type === filters.documentType);
-      });
+      // Filters on the dossier-level aggregated type (from /derniers-dossiers),
+      // not the per-document array which isn't loaded at list level.
+      filtered = filtered.filter(d => d.type === filters.documentType);
     }
 
     if (filters.dateDebut) {
@@ -430,6 +523,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   };
 
   const handleSelectDossier = (dossierId: string, checked: boolean) => {
+    if (isReadOnly) return;
     const dossier = dossiers.find(d => d.id === dossierId);
     
     // Check if dossier is already assigned to a gestionnaire
@@ -714,7 +808,9 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         <Checkbox
           checked={selectedDossiers.length === dossiers.length && dossiers.length > 0}
           indeterminate={selectedDossiers.length > 0 && selectedDossiers.length < dossiers.length}
+          disabled={isReadOnly}
           onChange={(e) => {
+            if (isReadOnly) return;
             if (e.target.checked) {
               const allIds = dossiers.map(d => d.id);
               const allBSIds = dossiers.flatMap(d => d.bulletinSoins?.map(bs => bs.id) || []);
@@ -730,7 +826,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       render: (_: any, dossier: Dossier) => (
         <Checkbox
           checked={selectedDossiers.includes(dossier.id)}
-          disabled={!!dossier.assignedToUserId}
+          disabled={!!dossier.assignedToUserId || isReadOnly}
           onChange={(e) => handleSelectDossier(dossier.id, e.target.checked)}
         />
       )
@@ -739,7 +835,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       title: 'Référence',
       dataIndex: 'reference',
       key: 'reference',
-      width: 150,
+      width: 170,
       render: (text: string, dossier: Dossier) => (
         <Space>
           <Button
@@ -761,14 +857,21 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     {
       title: 'Client',
       key: 'client',
-      width: 200,
+      width: 190,
       render: (_: any, dossier: Dossier) => dossier.client?.name || 'N/A'
+    },
+    {
+      title: 'Type',
+      dataIndex: 'type',
+      key: 'type',
+      width: 150,
+      render: (type: string) => type || 'Prestation'
     },
     {
       title: 'Statut Dossier',
       dataIndex: 'statut',
       key: 'statut',
-      width: 120,
+      width: 130,
       render: (status: string) => (
         <Tag color={getStatusColor(status)}>
           {status}
@@ -776,11 +879,25 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       )
     },
     {
+      title: 'États Dossiers',
+      key: 'dossierStates',
+      width: 210,
+      render: (_: any, dossier: Dossier) => <DossierStatesBadges states={dossier.dossierStates} />
+    },
+    {
       title: 'Documents',
       key: 'documents',
-      width: 80,
+      width: 90,
       render: (_: any, dossier: Dossier) => (
         <Badge count={dossier.nombreBS || 0} showZero />
+      )
+    },
+    {
+      title: '% Finalisation',
+      key: 'completion',
+      width: 130,
+      render: (_: any, dossier: Dossier) => (
+        <CompletionBar pct={dossier.statut === 'Traité' ? 100 : dossier.completionPercentage ?? 0} />
       )
     },
     {
@@ -793,7 +910,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     {
       title: 'Assigné à',
       key: 'assignedTo',
-      width: 200,
+      width: 210,
       render: (_: any, dossier: Dossier) => {
         const assignedTo = dossier.documentAssignments?.assignedTo || [];
         const role = (dossier as any).gestionnaireRole;
@@ -836,7 +953,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     {
       title: 'Actions',
       key: 'actions',
-      width: 120,
+      width: 140,
       render: (_: any, dossier: Dossier) => (
         <Space>
           <Tooltip title="Voir détails">
@@ -850,6 +967,20 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
               }}
             />
           </Tooltip>
+          {!isReadOnly && (
+            <Tooltip title="Changer le statut">
+              <Button
+                type="text"
+                icon={<CheckOutlined />}
+                size="small"
+                onClick={() => {
+                  setSelectedDossiers([dossier.id]);
+                  setSelectedStatus('');
+                  setStatusModalVisible(true);
+                }}
+              />
+            </Tooltip>
+          )}
         </Space>
       )
     }
@@ -924,20 +1055,14 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           </Col>
           <Col xs={24} sm={12} md={6}>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>Type Document</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>Type</Text>
               <Select
                 placeholder="Tous types"
                 value={filters.documentType || undefined}
                 onChange={(value) => setFilters({ ...filters, documentType: value || '' })}
                 allowClear
                 style={{ width: '100%' }}
-                options={[
-                  { value: 'BULLETIN_SOIN', label: 'Bulletin de soin' },
-                  { value: 'FACTURE', label: 'Facture' },
-                  { value: 'JUSTIFICATIF', label: 'Justificatif' },
-                  { value: 'CONTRAT', label: 'Contrat' },
-                  { value: 'AUTRE', label: 'Autre' }
-                ]}
+                options={uniqueTypes.map(t => ({ value: t, label: t }))}
               />
             </div>
           </Col>
@@ -988,21 +1113,21 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           <Button
             type="primary"
             icon={<UserOutlined />}
-            disabled={selectedDossiers.length === 0 && selectedBS.length === 0}
+            disabled={isReadOnly || (selectedDossiers.length === 0 && selectedBS.length === 0)}
             onClick={() => setAssignModalVisible(true)}
           >
             Assigner
           </Button>
           <Button
             icon={<CheckOutlined />}
-            disabled={selectedDossiers.length === 0}
+            disabled={isReadOnly || selectedDossiers.length === 0}
             onClick={() => setStatusModalVisible(true)}
           >
             Changer Statut Bordereau
           </Button>
           <Button
             icon={<CheckOutlined />}
-            disabled={selectedBS.length === 0}
+            disabled={isReadOnly || selectedBS.length === 0}
             onClick={() => setDocumentStatusModalVisible(true)}
           >
             Changer Statut Document
@@ -1038,7 +1163,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
             onParamsChange && onParamsChange({ ...params, page, limit: pageSize });
           }
         }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1650 }}
         size="middle"
       />
 
@@ -1164,9 +1289,14 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
             <div style={{ marginBottom: 16 }}>
               <Text strong>Référence:</Text> {selectedDossier.reference}<br/>
               <Text strong>Client:</Text> {selectedDossier.client?.name}<br/>
+              <Text strong>Type:</Text> {selectedDossier.type || 'Prestation'}<br/>
               <Text strong>Statut:</Text> <Tag color={getStatusColor(selectedDossier.statut)}>{selectedDossier.statut}</Tag><br/>
               <Text strong>Date Réception:</Text> {new Date(selectedDossier.dateReception).toLocaleDateString('fr-FR')}<br/>
-              <Text strong>Nombre Documents:</Text> {selectedDossier.nombreBS}
+              <Text strong>Nombre Documents:</Text> {selectedDossier.nombreBS}<br/>
+              <div style={{ marginTop: 10, marginBottom: 4 }}><Text strong>% Finalisation:</Text></div>
+              <CompletionBar pct={selectedDossier.completionPercentage ?? 0} />
+              <div style={{ marginTop: 10, marginBottom: 4 }}><Text strong>États Dossiers:</Text></div>
+              <DossierStatesBadges states={selectedDossier.dossierStates} />
             </div>
             
             <DocumentsViewer 

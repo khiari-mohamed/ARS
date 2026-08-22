@@ -24,7 +24,8 @@ interface DonneurOrdre {
 
 const DonneursTab: React.FC = () => {
   const { user } = useAuth();
-  const isViewOnly = user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE';
+  const userRole = user?.role ?? '';
+  const isViewOnly = ['GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE', 'COMPTABILITE'].includes(userRole);
   const [donneurs, setDonneurs] = useState<DonneurOrdre[]>([]);
   const [dialog, setDialog] = useState<{open: boolean, donneur: DonneurOrdre | null}>({
     open: false, donneur: null
@@ -205,7 +206,11 @@ const DonneursTab: React.FC = () => {
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Liste des Donneurs ({donneurs.length})
           </Typography>
-          {!isViewOnly && (
+          {isViewOnly ? (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Mode lecture seule pour Comptabilité
+            </Typography>
+          ) : (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -286,122 +291,124 @@ const DonneursTab: React.FC = () => {
       </Paper>
 
       {/* EXACT SPEC: Formulaire Ajout/Modification */}
-      <Dialog open={dialog.open} onClose={() => setDialog({open: false, donneur: null})} maxWidth="md" fullWidth>
-        <DialogTitle>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            {dialog.donneur ? 'Modifier' : 'Ajouter'} un Donneur d'Ordre
-          </Typography>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-              Chaque donneur d'ordre est défini par un nom, un RIB, une banque, une structure de fichier TXT associée et un statut actif/inactif.
+      {!isViewOnly && (
+        <Dialog open={dialog.open} onClose={() => setDialog({open: false, donneur: null})} maxWidth="md" fullWidth>
+          <DialogTitle>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              {dialog.donneur ? 'Modifier' : 'Ajouter'} un Donneur d'Ordre
             </Typography>
-            <Grid container spacing={2.5}>
-              <Grid item xs={12}>
-                <TextField
-                  label="Nom du Donneur"
-                  value={form.name}
-                  onChange={(e) => setForm({...form, name: e.target.value})}
-                  fullWidth
-                  required
-                  placeholder="Ex: AMEN GROUP"
-                  helperText="Le nom de l'émetteur"
-                />
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+                Chaque donneur d'ordre est défini par un nom, un RIB, une banque, une structure de fichier TXT associée et un statut actif/inactif.
+              </Typography>
+              <Grid container spacing={2.5}>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Nom du Donneur"
+                    value={form.name}
+                    onChange={(e) => setForm({...form, name: e.target.value})}
+                    fullWidth
+                    required
+                    placeholder="Ex: AMEN GROUP"
+                    helperText="Le nom de l'émetteur"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Banque"
+                    value={form.bank}
+                    onChange={(e) => setForm({...form, bank: e.target.value})}
+                    fullWidth
+                    required
+                    placeholder="Ex: BNP Paribas"
+                    helperText="La banque associée"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="RIB (20 chiffres)"
+                    value={form.rib}
+                    onChange={(e) => setForm({...form, rib: e.target.value})}
+                    fullWidth
+                    required
+                    helperText="Le RIB utilisé pour l'émission - exactement 20 chiffres"
+                    inputProps={{ maxLength: 20, pattern: '[0-9]*' }}
+                    placeholder="12345678901234567890"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Structure fichier TXT associée</InputLabel>
+                    <Select
+                      value={form.txtFormat}
+                      onChange={(e) => setForm({...form, txtFormat: e.target.value})}
+                      label="Structure fichier TXT associée"
+                    >
+                      <MenuItem value="BTK_COMAR">BTK COMAR (Format V1/V2)</MenuItem>
+                      <MenuItem value="BTK_ASTREE">BTK ASTREE (Format V1/V2)</MenuItem>
+                      <MenuItem value="ATTIJARI">ATTIJARI (Format 110104)</MenuItem>
+                      <MenuItem value="BNA">BNA (Banque Nationale Agricole)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Statut</InputLabel>
+                    <Select
+                      value={form.status}
+                      onChange={(e) => setForm({...form, status: e.target.value as 'active' | 'inactive'})}
+                      label="Statut"
+                    >
+                      <MenuItem value="active">🟢 Actif</MenuItem>
+                      <MenuItem value="inactive">⚫ Inactif</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Code Journal Sage"
+                    value={form.codeJournal || ''}
+                    onChange={(e) => setForm({...form, codeJournal: e.target.value})}
+                    fullWidth
+                    placeholder="Ex: BTK580, ATT411, BTK134"
+                    helperText="Code journal pour les écritures Sage 100"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Compte Trésorerie Sage"
+                    value={form.compteTresorerie || ''}
+                    onChange={(e) => setForm({...form, compteTresorerie: e.target.value})}
+                    fullWidth
+                    placeholder="Ex: 53221650, 53220900"
+                    helperText="Compte comptable trésorerie dans Sage"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Compte Général Tiers Sage"
+                    value={form.compteGeneralTiers || ''}
+                    onChange={(e) => setForm({...form, compteGeneralTiers: e.target.value})}
+                    fullWidth
+                    placeholder="Ex: 41100007, 41100005"
+                    helperText="Ex: 41100007 = ASTREE, 41100005 = COMAR 501"
+                  />
+                </Grid>
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="Banque"
-                  value={form.bank}
-                  onChange={(e) => setForm({...form, bank: e.target.value})}
-                  fullWidth
-                  required
-                  placeholder="Ex: BNP Paribas"
-                  helperText="La banque associée"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  label="RIB (20 chiffres)"
-                  value={form.rib}
-                  onChange={(e) => setForm({...form, rib: e.target.value})}
-                  fullWidth
-                  required
-                  helperText="Le RIB utilisé pour l'émission - exactement 20 chiffres"
-                  inputProps={{ maxLength: 20, pattern: '[0-9]*' }}
-                  placeholder="12345678901234567890"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Structure fichier TXT associée</InputLabel>
-                  <Select
-                    value={form.txtFormat}
-                    onChange={(e) => setForm({...form, txtFormat: e.target.value})}
-                    label="Structure fichier TXT associée"
-                  >
-                    <MenuItem value="BTK_COMAR">BTK COMAR (Format V1/V2)</MenuItem>
-                    <MenuItem value="BTK_ASTREE">BTK ASTREE (Format V1/V2)</MenuItem>
-                    <MenuItem value="ATTIJARI">ATTIJARI (Format 110104)</MenuItem>
-                    <MenuItem value="BNA">BNA (Banque Nationale Agricole)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Statut</InputLabel>
-                  <Select
-                    value={form.status}
-                    onChange={(e) => setForm({...form, status: e.target.value as 'active' | 'inactive'})}
-                    label="Statut"
-                  >
-                    <MenuItem value="active">🟢 Actif</MenuItem>
-                    <MenuItem value="inactive">⚫ Inactif</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Code Journal Sage"
-                  value={form.codeJournal || ''}
-                  onChange={(e) => setForm({...form, codeJournal: e.target.value})}
-                  fullWidth
-                  placeholder="Ex: BTK580, ATT411, BTK134"
-                  helperText="Code journal pour les écritures Sage 100"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Compte Trésorerie Sage"
-                  value={form.compteTresorerie || ''}
-                  onChange={(e) => setForm({...form, compteTresorerie: e.target.value})}
-                  fullWidth
-                  placeholder="Ex: 53221650, 53220900"
-                  helperText="Compte comptable trésorerie dans Sage"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Compte Général Tiers Sage"
-                  value={form.compteGeneralTiers || ''}
-                  onChange={(e) => setForm({...form, compteGeneralTiers: e.target.value})}
-                  fullWidth
-                  placeholder="Ex: 41100007, 41100005"
-                  helperText="Ex: 41100007 = ASTREE, 41100005 = COMAR 501"
-                />
-              </Grid>
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={() => setDialog({open: false, donneur: null})} variant="outlined">
-            Annuler
-          </Button>
-          <Button onClick={handleSave} variant="contained" size="large">
-            {dialog.donneur ? '💾 Enregistrer' : '+ Ajouter'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, gap: 1 }}>
+            <Button onClick={() => setDialog({open: false, donneur: null})} variant="outlined">
+              Annuler
+            </Button>
+            <Button onClick={handleSave} variant="contained" size="large">
+              {dialog.donneur ? '💾 Enregistrer' : '+ Ajouter'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 };

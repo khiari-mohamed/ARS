@@ -1,3 +1,4 @@
+// src/bordereaux/bordereaux.controller.ts
 import {
   Controller,
   Get,
@@ -13,6 +14,8 @@ import {
   UploadedFiles,
   Res,
   Req,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Statut } from '@prisma/client';
@@ -25,6 +28,7 @@ import { BordereauResponseDto } from './dto/bordereau-response.dto';
 import { BordereauKPI } from './interfaces/kpi.interface';
 import { CreateBSDto, UpdateBSDto } from './dto/bs.dto';
 import { AuditLogService } from './audit-log.service';
+import { RedisService } from '../shared/redis.service';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -33,6 +37,8 @@ import { UserRole } from '../auth/user-role.enum';
 import { UseGuards } from '@nestjs/common';
 import { UpdateBulletinSoinDto } from '../bulletin-soin/dto/update-bulletin-soin.dto';
 import { Express } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('bordereaux')
@@ -42,6 +48,7 @@ export class BordereauxController {
     private readonly bordereauxService: BordereauxService,
     private readonly auditLogService: AuditLogService,
     private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
   ) {}
 
   @Post()
@@ -220,12 +227,24 @@ export class BordereauxController {
 
   @Post('assign')
   assignBordereau(@Body() assignDto: AssignBordereauDto): Promise<BordereauResponseDto> {
+    // If a bordereauId was provided, ensure it's not locked by an executed payment
+    // (Gestionnaire Senior / Chef équipe protections require this)
+    if ((assignDto as any)?.bordereauId) {
+      // caller may be async; return promise chain
+      return (async () => {
+        await this.ensureBordereauNotVirementExecuted((assignDto as any).bordereauId);
+        return this.bordereauxService.assignBordereau(assignDto);
+      })();
+    }
     return this.bordereauxService.assignBordereau(assignDto);
   }
 
   @Post(':id/assign')
   assignBordereauById(@Param('id') id: string, @Body() assignDto: { userId: string }): Promise<BordereauResponseDto> {
-    return this.bordereauxService.assignBordereau({ bordereauId: id, assignedToUserId: assignDto.userId });
+    return (async () => {
+      await this.ensureBordereauNotVirementExecuted(id);
+      return this.bordereauxService.assignBordereau({ bordereauId: id, assignedToUserId: assignDto.userId });
+    })();
   }
 
   @Post(':id/process')
@@ -294,6 +313,11 @@ export class BordereauxController {
 
       // Process each file and create BS entries
       const results: any[] = [];
+      const uploadsDir = path.join(process.cwd(), 'uploads', 'bulletins', bordereauId);
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         
@@ -303,7 +327,11 @@ export class BordereauxController {
           throw new Error('No active user found for BS creation');
         }
         
-        // Create BS entry with file info
+        const safeFileName = `${Date.now()}_${i}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const filePath = path.join(uploadsDir, safeFileName);
+        fs.writeFileSync(filePath, file.buffer);
+
+        // Create BS entry with the persisted file path. Existing BS records are untouched.
         const bsData: CreateBSDto = {
           bordereauId,
           ownerId: defaultUser.id,
@@ -320,7 +348,7 @@ export class BordereauxController {
           acte: 'N/A',
           nomPrestation: 'Upload',
           nomBordereau: 'N/A',
-          lien: 'N/A',
+          lien: `/uploads/bulletins/${bordereauId}/${safeFileName}`,
           dateCreation: new Date().toISOString(),
           dateMaladie: new Date().toISOString(),
           totalPec: 0,
@@ -335,6 +363,13 @@ export class BordereauxController {
       
       // Recalculate bordereau progress
       await this.bordereauxService.recalculateBordereauProgress(bordereauId);
+
+      // Keep the bordereau count synchronized with the actual BS records.
+      const totalBS = await this.prisma.bulletinSoin.count({ where: { bordereauId } });
+      await this.prisma.bordereau.update({
+        where: { id: bordereauId },
+        data: { nombreBS: totalBS }
+      });
       
      // console.log('✅ Multiple BS Upload successful:', results.length, 'BS created');
       return { 
@@ -386,34 +421,49 @@ export class BordereauxController {
   }
 
   @Post('chef-equipe/upload-document-to-bordereau')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FilesInterceptor('files', undefined, { limits: { fileSize: 50 * 1024 * 1024 } }))
   @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async uploadDocumentToBordereau(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() files: Express.Multer.File[],
     @Body() data: { bordereauId: string; userId?: string },
     @Req() req
   ) {
     const user = req.user;
     const validUserId = data.userId || user.id;
-    
-    console.log('📤 Upload Document - User Role:', user.role);
-    console.log('📤 Upload Document - Bordereau ID:', data.bordereauId);
-    
-    const documentData = {
-      file,
-      uploadedById: validUserId,
-      name: file.originalname,
-      type: 'BULLETIN_SOIN'
-    };
-    
-    const document = await this.bordereauxService.uploadDocument(data.bordereauId, documentData, user.role);
-    
-    console.log('✅ Document created with status:', document.status);
-    
+
+    if (!files || files.length === 0) throw new BadRequestException('Aucun fichier uploadé');
+    if (!data.bordereauId) throw new BadRequestException('ID bordereau requis');
+
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: data.bordereauId },
+      select: { id: true, statut: true },
+    });
+    if (!bordereau) throw new BadRequestException('Bordereau introuvable');
+    if (bordereau.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
+
+    // No cap on count — every selected BS gets uploaded and linked.
+    const documents: any[] = [];
+    for (const file of files) {
+      const document = await this.bordereauxService.uploadDocument(
+        data.bordereauId,
+        { file, uploadedById: validUserId, name: file.originalname, type: 'BULLETIN_SOIN' },
+        user.role
+      );
+      documents.push(document);
+    }
+
+    // Bust the chef-equipe dashboard cache so the merged "Bordereaux" table
+    // and "Dossiers Individuels" table reflect the new document(s) immediately
+    // instead of waiting out the 30s Redis TTL.
+    await this.redis.invalidatePrefix('dashboard:chef-equipe:');
+
     return {
       success: true,
-      document,
-      message: 'Document uploadé avec succès'
+      documents,
+      count: documents.length,
+      message: `${documents.length} document(s) uploadé(s) avec succès`
     };
   }
 
@@ -664,6 +714,7 @@ export class BordereauxController {
     
     for (const bordereauId of data.bordereauIds) {
       try {
+        await this.ensureBordereauNotVirementExecuted(bordereauId);
         const result = await this.bordereauxService.assignBordereau({ bordereauId, assignedToUserId: data.userId });
         results.push({ bordereauId, success: true, result });
       } catch (error: any) {
@@ -685,6 +736,13 @@ export class BordereauxController {
     if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
       throw new Error('Gestionnaire Senior ne peut pas affecter des documents à d\'autres gestionnaires');
     }
+    // Ensure none of the documents belong to a bordereau with VIREMENT_EXECUTE
+    const docs = await this.prisma.document.findMany({ where: { id: { in: data.documentIds } }, select: { id: true, bordereauId: true } });
+    const bordereauIds = Array.from(new Set(docs.map(d => d.bordereauId).filter(Boolean)));
+    for (const bid of bordereauIds) {
+      await this.ensureBordereauNotVirementExecuted(bid as string);
+    }
+
     await this.prisma.document.updateMany({
       where: { id: { in: data.documentIds } },
       data: { assignedToUserId: data.userId }
@@ -713,6 +771,7 @@ export class BordereauxController {
     //console.log('Comment:', data.comment);
    // console.log('Request Body:', JSON.stringify(data, null, 2));
     
+    await this.ensureBordereauNotVirementExecuted(bordereauId);
     const result = await this.bordereauxService.reassignBordereau(bordereauId, data.newUserId, data.comment);
     
     console.log('✅ REASSIGN SUCCESS');
@@ -779,6 +838,15 @@ export class BordereauxController {
   @Post(':id/documents/:documentId/link')
   @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async linkDocument(@Param('id') bordereauId: string, @Param('documentId') documentId: string) {
+    // Ensure target bordereau is not locked
+    await this.ensureBordereauNotVirementExecuted(bordereauId);
+
+    // Also ensure source bordereau (if any) is not locked
+    const doc = await this.prisma.document.findUnique({ where: { id: documentId }, select: { bordereauId: true } });
+    if (doc?.bordereauId) {
+      await this.ensureBordereauNotVirementExecuted(doc.bordereauId);
+    }
+
     await this.bordereauxService.linkDocumentToBordereau(bordereauId, documentId);
     return { success: true };
   }
@@ -852,6 +920,9 @@ export class BordereauxController {
     }
     
     try {
+      // Prevent updates on bordereaux that already had the payment executed
+      await this.ensureBordereauNotVirementExecuted(bordereauId);
+
       const bordereau = await this.prisma.bordereau.update({
         where: { id: bordereauId },
         data: { documentStatus: data.documentStatus }
@@ -928,11 +999,23 @@ export class BordereauxController {
       console.log('👑 Super Admin/Admin - no filtering');
     }
     
+    const activeUnassignedStatuses = [
+      'EN_ATTENTE',
+      'A_SCANNER',
+      'SCAN_EN_COURS',
+      'SCANNE',
+      'A_AFFECTER',
+      'ASSIGNE',
+      'EN_COURS',
+      'EN_DIFFICULTE',
+      'REJETE'
+    ];
+
     const [nonAffectes, enCours, traites] = await Promise.all([
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
-          statut: { in: ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'] },
+          statut: { in: activeUnassignedStatuses },
           assignedToUserId: null
         },
         include: {
@@ -1489,30 +1572,37 @@ export class BordereauxController {
   @Get('chef-equipe/dashboard-dossiers')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE)
   async getChefEquipeDashboardDossiers(@Req() req) {
+    const user = req.user;
+    const accessFilter: any = { archived: false };
+    if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+      accessFilter.contract = { teamLeaderId: user.id };
+    }
+
     const [documents, bordereaux] = await Promise.all([
       this.prisma.document.findMany({
-        include: {
-          bordereau: { include: { client: true } },
-          assignedTo: { select: { fullName: true } }
+        select: {
+          id: true, name: true, type: true, status: true, uploadedAt: true,
+          bordereau: { select: { id: true, reference: true, statut: true, client: { select: { name: true } } } },
+          assignedTo: { select: { fullName: true } },
         },
-        where: { bordereau: { archived: false } },
+        where: { bordereau: accessFilter },
         orderBy: { uploadedAt: 'desc' },
-        take: 50
+        take: 50,
       }),
       this.prisma.bordereau.findMany({
-        include: {
-          client: true,
-          currentHandler: { select: { fullName: true } }
+        select: {
+          id: true, reference: true, statut: true, dateReception: true,
+          client: { select: { name: true } },
+          currentHandler: { select: { fullName: true } },
         },
-        where: { archived: false },
+        where: accessFilter,
         orderBy: { dateReception: 'desc' },
-        take: 50
-      })
+        take: 50,
+      }),
     ]);
 
     const dossiers: any[] = [];
 
-    // Add documents as dossiers
     documents.forEach(doc => {
       dossiers.push({
         id: doc.id,
@@ -1522,11 +1612,11 @@ export class BordereauxController {
         type: this.getDocumentTypeLabel(doc.type),
         statut: this.getDocumentStatusLabel(doc.status ?? 'UPLOADED'),
         date: doc.uploadedAt.toISOString().split('T')[0],
-        gestionnaire: doc.assignedTo?.fullName || 'Non assigné'
+        gestionnaire: doc.assignedTo?.fullName || 'Non assigné',
+        bordereauStatutRaw: doc.bordereau?.statut,
       });
     });
 
-    // Add bordereaux as dossiers
     bordereaux.forEach(bordereau => {
       dossiers.push({
         id: bordereau.id,
@@ -1536,7 +1626,8 @@ export class BordereauxController {
         type: 'Prestation',
         statut: this.getStatutLabel(bordereau.statut),
         date: bordereau.dateReception?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné'
+        gestionnaire: bordereau.currentHandler?.fullName || 'Non assigné',
+        statutRaw: bordereau.statut,
       });
     });
 
@@ -1546,7 +1637,7 @@ export class BordereauxController {
   private getDocumentTypeLabel(type: string): string {
     const typeMap = {
       'BULLETIN_SOIN': 'Prestation',
-      'COMPLEMENT_INFORMATION': 'Complément de dossier',
+      'COMPLEMENT_INFORMATION': "Complément d'information",
       'ADHESION': 'Adhésion',
       'RECLAMATION': 'Réclamation',
       'CONTRAT_AVENANT': 'Avenant',
@@ -1659,6 +1750,9 @@ export class BordereauxController {
     }
     
     // Update status
+    // Prevent updates on bordereaux with executed payments
+    await this.ensureBordereauNotVirementExecuted(bordereauId);
+
     const updatedBordereau = await this.bordereauxService.update(bordereauId, {
       statut: data.newStatus as any
     });
@@ -1993,6 +2087,8 @@ export class BordereauxController {
         date: doc.uploadedAt.toISOString().split('T')[0],
         gestionnaire: gestionnaireDisplay,
         bordereauReference: doc.bordereau?.reference || 'N/A',
+        bordereauId: doc.bordereau?.id,
+        bordereauStatutRaw: doc.bordereau?.statut,
         isDocument: true,
         isBordereau: false
       });
@@ -2040,6 +2136,7 @@ export class BordereauxController {
         dossierStateCounts: stateCounts,
         totalDocs,
         priorite: 'Normale',
+        statutRaw: bordereau.statut,
         isDocument: false,
         isBordereau: true
       });
@@ -2055,11 +2152,99 @@ export class BordereauxController {
     return [];
   }
 
+  // Gestionnaire Senior: Return bordereau to Scan
+  @Post('gestionnaire-senior/return-to-scan')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async returnToScanSenior(@Body() body: { dossierId: string; reason?: string }, @Req() req) {
+    const { dossierId, reason } = body;
+    if (!reason || !reason.trim()) {
+      throw new BadRequestException('Veuillez indiquer une raison pour le retour vers le Scan.');
+    }
+
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: dossierId }, select: { id: true, statut: true }
+    });
+    if (!bordereau) throw new NotFoundException('Bordereau introuvable');
+    if (bordereau.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
+
+    // Only the bordereau-level statut/scanStatus move back to scan. Document (BS)
+    // statuses are deliberately left untouched — a BS already "Traité" stays "Traité".
+    await this.prisma.bordereau.update({
+      where: { id: dossierId },
+      data: { statut: 'A_SCANNER' as any, scanStatus: 'NON_SCANNE' },
+    });
+
+    await this.prisma.bordereauAuditLog.create({
+      data: { bordereauId: dossierId, action: 'RETOUR_SCAN', userId: req.user?.id, details: reason },
+    });
+
+    return { success: true, message: "Bordereau retourné vers l'équipe Scan avec succès" };
+  }
+
   // Gestionnaire Senior: Modify dossier status
   @Post('gestionnaire-senior/modify-dossier-status')
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async modifyDossierStatusSenior(@Body() body: { dossierId: string; newStatus: string }) {
-    return this.bordereauxService.modifyDossierStatus(body.dossierId, body.newStatus);
+    const { dossierId, newStatus } = body;
+    const BORDEREAU_STATUS_MAPPING: Record<string, string> = {
+      Nouveau: 'EN_ATTENTE', 'En cours': 'EN_COURS', Traité: 'TRAITE'
+    };
+    const DOCUMENT_STATUS_MAPPING: Record<string, string> = {
+      Nouveau: 'UPLOADED', 'En cours': 'EN_COURS', Traité: 'TRAITE', Rejeté: 'REJETE', Retourné: 'RETOUR_ADMIN'
+    };
+
+    const bordereau = await this.prisma.bordereau.findUnique({
+      where: { id: dossierId }, select: { id: true, statut: true }
+    });
+
+    if (bordereau) {
+      if (bordereau.statut === 'VIREMENT_EXECUTE') {
+        throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+      }
+      if (!Object.prototype.hasOwnProperty.call(BORDEREAU_STATUS_MAPPING, newStatus)) {
+        throw new BadRequestException(`Statut invalide: "${newStatus}"`);
+      }
+      await this.prisma.bordereau.update({
+        where: { id: dossierId },
+        data: {
+          statut: BORDEREAU_STATUS_MAPPING[newStatus] as any,
+          dateCloture: newStatus === 'Traité' ? new Date() : null,
+        },
+      });
+      return { success: true, message: 'Statut du bordereau modifié avec succès' };
+    }
+
+    const document = await this.prisma.document.findUnique({
+      where: { id: dossierId },
+      select: { id: true, bordereauId: true, bordereau: { select: { statut: true } } },
+    });
+    if (!document) {
+      return { success: false, message: 'Bordereau ou document non trouvé' };
+    }
+    if (document.bordereau?.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
+    if (!Object.prototype.hasOwnProperty.call(DOCUMENT_STATUS_MAPPING, newStatus)) {
+      throw new BadRequestException(`Statut invalide: "${newStatus}"`);
+    }
+    const mappedStatus = DOCUMENT_STATUS_MAPPING[newStatus];
+
+    await this.prisma.document.update({ where: { id: dossierId }, data: { status: mappedStatus as any } });
+
+    if (document.bordereauId && mappedStatus === 'TRAITE') {
+      const allDocs = await this.prisma.document.findMany({
+        where: { bordereauId: document.bordereauId }, select: { status: true }
+      });
+      if (allDocs.every(d => d.status === 'TRAITE')) {
+        await this.prisma.bordereau.update({
+          where: { id: document.bordereauId }, data: { statut: 'TRAITE', dateCloture: new Date() }
+        });
+      }
+    }
+
+    return { success: true, message: 'Statut du document modifié avec succès' };
   }
 
   // Gestionnaire Senior: Remplacer document
@@ -2070,6 +2255,14 @@ export class BordereauxController {
     @UploadedFile() file: Express.Multer.File,
     @Body('documentId') documentId: string
   ) {
+    const document = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { id: true, bordereau: { select: { statut: true } } },
+    });
+    if (!document) throw new NotFoundException('Document introuvable');
+    if (document.bordereau?.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
     return this.bordereauxService.remplacerDocument(documentId, file);
   }
 
@@ -2080,7 +2273,29 @@ export class BordereauxController {
     @Body() body: { documentIds: string[]; targetBordereauId: string },
     @Req() req
   ) {
+    const targetBordereau = await this.prisma.bordereau.findUnique({
+      where: { id: body.targetBordereauId }, select: { id: true, statut: true }
+    });
+    if (!targetBordereau) throw new NotFoundException('Bordereau cible introuvable');
+    if (targetBordereau.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour le bordereau cible.');
+    }
+    const lockedSourceCount = await this.prisma.document.count({
+      where: { id: { in: body.documentIds }, bordereau: { statut: 'VIREMENT_EXECUTE' } }
+    });
+    if (lockedSourceCount > 0) {
+      throw new BadRequestException('Un ou plusieurs documents appartiennent à un bordereau dont le virement a déjà été exécuté.');
+    }
     const user = req.user;
     return this.bordereauxService.reaffecterDocuments(body.documentIds, body.targetBordereauId, user.id);
+  }
+
+  private async ensureBordereauNotVirementExecuted(bordereauId?: string) {
+    if (!bordereauId) return;
+    const bordereau = await this.prisma.bordereau.findUnique({ where: { id: bordereauId }, select: { statut: true } });
+    if (!bordereau) throw new NotFoundException('Bordereau introuvable');
+    if (bordereau.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
   }
 }

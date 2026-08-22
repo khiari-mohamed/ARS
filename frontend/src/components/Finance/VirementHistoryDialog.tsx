@@ -82,6 +82,7 @@ const ROLE_LABELS: Record<string, string> = {
   'CHEF_EQUIPE': 'Chef d\'Équipe',
   'GESTIONNAIRE_SENIOR': 'Gestionnaire Senior',
   'GESTIONNAIRE': 'Gestionnaire',
+  'RESPONSABLE_DEPARTEMENT': 'Responsable de Département',
   'RESPONSABLE': 'Responsable',
 };
 

@@ -7,6 +7,7 @@ export type UserRole =
   | 'GESTIONNAIRE'
   | 'CLIENT_SERVICE'
   | 'FINANCE'
+  | 'COMPTABILITE'
   | 'SCAN_TEAM'
   | 'BO';
 
@@ -156,6 +157,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   GESTIONNAIRE: 'Gestionnaire',
   CLIENT_SERVICE: 'Service Client',
   FINANCE: 'Finance',
+  COMPTABILITE: 'Comptabilité',
   SCAN_TEAM: 'Équipe Scan',
   BO: 'Bureau d\'Ordre'
 };

@@ -162,6 +162,7 @@ export const canUserManageRole = (currentRole: UserRole, targetRole: UserRole): 
     'GESTIONNAIRE': 3,
     'CLIENT_SERVICE': 3,
     'FINANCE': 3,
+    'COMPTABILITE': 3,
     'SCAN_TEAM': 2,
     'BO': 2
   };

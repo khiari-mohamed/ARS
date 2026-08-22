@@ -29,7 +29,7 @@ export interface OrdreVirement {
   dateTraitement?: string;
   utilisateurSante: string;
   utilisateurFinance?: string;
-  etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'EXECUTE';
+  etatVirement: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
   commentaire?: string;
   montantTotal: number;
   nombreAdherents: number;
@@ -137,6 +137,12 @@ class FinanceService {
   async createOrdreVirement(ordre: {
     donneurOrdreId: string;
     bordereauId?: string;
+    clientId?: string;
+    contractId?: string | null;
+    referenceBordereau?: string;
+    motifObservation?: string;
+    clientName?: string;
+    uploadedPdfPath?: string;
     virementData: any[];
   }) {
     const { data } = await LocalAPI.post('/finance/ordres-virement', ordre);
@@ -148,6 +154,15 @@ class FinanceService {
     commentaire?: string;
   }) {
     const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/etat`, etat);
+    return data;
+  }
+
+  async bulkUpdateEtatVirement(ordreVirementIds: string[], payload: { etatVirement: string; commentaire?: string }) {
+    const { data } = await LocalAPI.post('/finance/ordres-virement/bulk/etat', {
+      ordreVirementIds,
+      etatVirement: payload.etatVirement,
+      commentaire: payload.commentaire
+    });
     return data;
   }
 
@@ -213,7 +228,7 @@ class FinanceService {
     return data;
   }
 
-  // NEW: Excel export for dashboard
+  // NEW: Excel export for dashboard (filtered, current view)
   async exportDashboardExcel(filters: any = {}) {
     const params = new URLSearchParams();
     Object.keys(filters).forEach(key => {
@@ -231,6 +246,31 @@ class FinanceService {
     const link = document.createElement('a');
     link.href = url;
     link.download = `tableau_bord_finance_${new Date().toISOString().split('T')[0]}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  // Get available years for the history export modal
+  async getExportYears(): Promise<{ years: number[]; total: number }> {
+    const { data } = await LocalAPI.get('/finance/dashboard/export-all/years');
+    return data;
+  }
+
+  // Full history Excel export — ALL OVs or filtered by year
+  async exportAllHistoryExcel(year?: number | 'all') {
+    const params = year && year !== 'all' ? `?year=${year}` : '?year=all';
+    const response = await LocalAPI.get(`/finance/dashboard/export-all${params}`, {
+      responseType: 'blob',
+      timeout: 120000,
+    });
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const label = year && year !== 'all' ? String(year) : 'Complet';
+    link.download = `Historique_Virements_${label}_${new Date().toISOString().split('T')[0]}.xlsx`;
     link.click();
     window.URL.revokeObjectURL(url);
   }
@@ -337,11 +377,13 @@ class FinanceService {
   getEtatVirementLabel(etat: string): string {
     const labels: Record<string, string> = {
       'NON_EXECUTE': 'Virement non exécuté',
-      'EN_COURS_EXECUTION': 'Virement en cours d\'exécution',
-      'EXECUTE_PARTIELLEMENT': 'Virement exécuté partiellement',
-      'REJETE': 'Virement rejeté',
+      'EN_COURS_VALIDATION': 'En cours de validation',
+      'VIREMENT_DEPOSE': 'Virement déposé',
+      'VIREMENT_NON_VALIDE': 'Virement non validé',
+      'VIREMENT_AUTORISE': 'Virement autorisé',
       'BLOQUE': 'Virement bloqué',
-      'EXECUTE': 'Virement exécuté'
+      'EXECUTE': 'Virement exécuté',
+      'REJETE': 'Virement rejeté'
     };
     return labels[etat] || etat;
   }
@@ -349,11 +391,13 @@ class FinanceService {
   getEtatVirementColor(etat: string): 'success' | 'warning' | 'error' | 'info' | 'default' {
     const colors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
       'NON_EXECUTE': 'default',
-      'EN_COURS_EXECUTION': 'info',
-      'EXECUTE_PARTIELLEMENT': 'warning',
-      'REJETE': 'error',
+      'EN_COURS_VALIDATION': 'info',
+      'VIREMENT_DEPOSE': 'info',
+      'VIREMENT_NON_VALIDE': 'error',
+      'VIREMENT_AUTORISE': 'success',
       'BLOQUE': 'error',
-      'EXECUTE': 'success'
+      'EXECUTE': 'success',
+      'REJETE': 'error'
     };
     return colors[etat] || 'default';
   }
@@ -565,7 +609,7 @@ class FinanceService {
 
   // === UPDATE OV STATUS DIRECTLY (FINANCE WORKFLOW) ===
   async updateOVStatus(id: string, statusData: {
-    etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'BLOQUE' | 'EXECUTE' | 'EN_COURS_VALIDATION';
+    etatVirement: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
     motifObservation?: string;
     demandeRecuperation?: boolean;
     dateDemandeRecuperation?: string;

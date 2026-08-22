@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { notifySeniorPortfolioForOVStatus } from '../notifications/portfolio-notification.helper';
 
 export interface SuiviVirementData {
   numeroBordereau: string;
@@ -8,7 +9,7 @@ export interface SuiviVirementData {
   utilisateurSante: string;
   dateTraitement?: Date;
   utilisateurFinance?: string;
-  etatVirement: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'EXECUTE';
+  etatVirement: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE';
   dateEtatFinal?: Date;
   commentaire?: string;
   ordreVirementId?: string;
@@ -111,7 +112,7 @@ export class SuiviVirementService {
 
   async updateEtatVirement(
     ordreVirementId: string, 
-    nouvelEtat: 'NON_EXECUTE' | 'EN_COURS_EXECUTION' | 'EXECUTE_PARTIELLEMENT' | 'REJETE' | 'EXECUTE',
+    nouvelEtat: 'NON_EXECUTE' | 'EN_COURS_VALIDATION' | 'VIREMENT_DEPOSE' | 'VIREMENT_NON_VALIDE' | 'VIREMENT_AUTORISE' | 'BLOQUE' | 'EXECUTE' | 'REJETE',
     utilisateurFinanceId: string,
     commentaire?: string
   ): Promise<void> {
@@ -161,6 +162,13 @@ export class SuiviVirementService {
       }
     });
 
+    await notifySeniorPortfolioForOVStatus(
+      this.prisma,
+      ordreVirement,
+      nouvelEtat,
+      commentaire,
+    );
+
     // Update bordereau status based on virement state
     if (ordreVirement.bordereauId) {
       const updateData: any = {};
@@ -168,7 +176,7 @@ export class SuiviVirementService {
       // EXACT SPEC: When virement is EXECUTE, bordereau status changes to VIREMENT_EXECUTE
       if (nouvelEtat === 'EXECUTE') {
         updateData.statut = 'VIREMENT_EXECUTE';
-        updateData.dateCloture = new Date();
+        updateData.dateExecutionVirement = new Date();
         this.logger.log(`✅ AUTO-STATUS: Bordereau ${ordreVirement.bordereauId} changed TRAITE → VIREMENT_EXECUTE (virement executed)`);
         
         await this.prisma.bordereau.update({
@@ -176,7 +184,7 @@ export class SuiviVirementService {
           data: updateData
         });
       }
-      // For all other virement states (NON_EXECUTE, EN_COURS_EXECUTION, REJETE, etc.)
+      // For all other virement states (NON_EXECUTE, EN_COURS_VALIDATION, VIREMENT_DEPOSE, VIREMENT_NON_VALIDE, VIREMENT_AUTORISE, BLOQUE, REJETE, etc.)
       // Bordereau status remains TRAITE - NO CHANGE
     }
 
@@ -451,10 +459,13 @@ export class SuiviVirementService {
 
     const etatStats = {
       NON_EXECUTE: 0,
-      EN_COURS_EXECUTION: 0,
-      EXECUTE_PARTIELLEMENT: 0,
-      REJETE: 0,
-      EXECUTE: 0
+      EN_COURS_VALIDATION: 0,
+      VIREMENT_DEPOSE: 0,
+      VIREMENT_NON_VALIDE: 0,
+      VIREMENT_AUTORISE: 0,
+      BLOQUE: 0,
+      EXECUTE: 0,
+      REJETE: 0
     };
 
     virementsByEtat.forEach(stat => {
@@ -462,7 +473,7 @@ export class SuiviVirementService {
     });
 
     const tauxReussite = totalVirements > 0 
-      ? ((etatStats.EXECUTE + etatStats.EXECUTE_PARTIELLEMENT) / totalVirements) * 100 
+      ? (etatStats.EXECUTE / totalVirements) * 100 
       : 0;
 
     return {
@@ -471,10 +482,12 @@ export class SuiviVirementService {
         tauxReussite,
         avgProcessingTime,
         enAttente: etatStats.NON_EXECUTE,
-        enCours: etatStats.EN_COURS_EXECUTION,
+        enCours: etatStats.EN_COURS_VALIDATION,
+        deposes: etatStats.VIREMENT_DEPOSE,
+        autorises: etatStats.VIREMENT_AUTORISE,
+        bloques: etatStats.BLOQUE,
         executes: etatStats.EXECUTE,
-        rejetes: etatStats.REJETE,
-        partiels: etatStats.EXECUTE_PARTIELLEMENT
+        rejetes: etatStats.REJETE + etatStats.VIREMENT_NON_VALIDE
       },
       etatDistribution: etatStats,
       recentVirements: recentVirements.map(v => ({
@@ -494,7 +507,7 @@ export class SuiviVirementService {
       where: {
         ...where,
         dateTraitement: { not: null },
-        etatVirement: { in: ['EXECUTE', 'REJETE', 'EXECUTE_PARTIELLEMENT'] }
+        etatVirement: { in: ['EXECUTE', 'REJETE', 'VIREMENT_NON_VALIDE'] }
       }
     });
 

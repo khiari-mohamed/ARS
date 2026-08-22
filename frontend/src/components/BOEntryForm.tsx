@@ -38,6 +38,7 @@ interface Contract {
   name?: string;
   clientName?: string;
   delaiReglement?: number;
+  signature?: string; // maps to contract "notes" field in DB
 }
 
 interface Classification {
@@ -66,15 +67,8 @@ interface Props {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DOCUMENT_TYPES = [
-  { value: 'BULLETIN_SOIN', label: 'Bulletin de Soin' },
-  { value: 'COMPLEMENT_INFORMATION', label: 'Complément Information' },
-  { value: 'ADHESION', label: 'Adhésion' },
-  { value: 'RECLAMATION', label: 'Réclamation' },
-  { value: 'CONTRAT_AVENANT', label: 'Contrat/Avenant' },
-  { value: 'DEMANDE_RESILIATION', label: 'Demande Résiliation' },
-  { value: 'CONVENTION_TIERS_PAYANT', label: 'Convention Tiers Payant' },
-  { value: 'FACTURE', label: 'Facture' },
-  { value: 'AUTRE', label: 'Autre' },
+  { value: 'BULLETIN_SOIN', label: 'Bulletin de Soins' },
+  { value: 'COMPLEMENT_INFORMATION', label: 'Complément d\'information' },
 ] as const;
 
 const DEFAULT_FORM: FormData = {
@@ -239,6 +233,7 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [classification, setClassification] = useState<Classification | null>(null);
+  const [contractNotes, setContractNotes] = useState<string>('');
 
   // Prevent stale-closure issues in effects
   const clientsRef = useRef<Client[]>([]);
@@ -283,16 +278,20 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
       .catch(() => console.error('Failed to load contracts'));
   }, [formData.clientId]);
 
-  // ── Sync delaiReglement with selected contract ────────────────────────────
+  // ── Sync delaiReglement and notes with selected contract ─────────────────
 
   useEffect(() => {
-    if (!formData.contractId) return;
+    if (!formData.contractId) {
+      setContractNotes('');
+      return;
+    }
     const selected = contracts.find((c) => c.id === formData.contractId);
     if (selected) {
       setFormData((prev) => ({
         ...prev,
         delaiReglement: selected.delaiReglement ?? 30,
       }));
+      setContractNotes(selected.signature ?? '');
     }
   }, [formData.contractId, contracts]);
 
@@ -318,6 +317,7 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
     setError(null);
     setValidationErrors({});
     setClassification(null);
+    setContractNotes('');
     referenceUserEdited.current = false;
   }, []);
 
@@ -575,6 +575,27 @@ const BOEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
                 </Select>
               </FormControl>
             </Grid>
+
+            {formData.contractId && (
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  label="Notes du contrat"
+                  value={contractNotes}
+                  disabled
+                  size="small"
+                  placeholder="Aucune note pour ce contrat"
+                  helperText="Information provenant du contrat sélectionné — lecture seule"
+                  sx={{
+                    ...sx.inputSx,
+                    '& .MuiInputBase-root': { background: '#f4f7fb' },
+                    '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: '#546e7a', cursor: 'default' },
+                  }}
+                />
+              </Grid>
+            )}
           </Grid>
         </Box>
 

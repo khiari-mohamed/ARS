@@ -18,6 +18,7 @@ import InputIcon from '@mui/icons-material/Input';
 import ScannerIcon from '@mui/icons-material/Scanner';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 //import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArchiveIcon from '@mui/icons-material/Archive';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -32,8 +33,8 @@ const sidebarLinks = [
   { to: "/home/super-admin", label: "Interface Super Admin", icon: <SupervisorAccountIcon />, roles: ['SUPER_ADMIN'] },
   { to: "/home/archives", label: "Archives", icon: <ArchiveIcon />, roles: ['SUPER_ADMIN'] },
   { to: "/home/analytics", label: "Analytics", icon: <BarChartIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
-  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
-  { to: "/home/sage", label: "Gestion Sage", icon: <AccountBalanceWalletIcon />, roles: ['SUPER_ADMIN', 'FINANCE', 'RESPONSABLE_DEPARTEMENT'] },
+  { to: "/home/finance", label: "Finance", icon: <AccountBalanceIcon />, roles: ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE', 'COMPTABILITE'] },
+  { to: "/home/sage", label: "Gestion Sage", icon: <AccountBalanceWalletIcon />, roles: ['SUPER_ADMIN', 'FINANCE', 'COMPTABILITE', 'RESPONSABLE_DEPARTEMENT'] },
   
   // RESPONSABLE_DEPARTEMENT: Read-only access to all modules like Super Admin
   { to: "/home/contracts", label: "Contrats", icon: <DescriptionIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
@@ -43,9 +44,11 @@ const sidebarLinks = [
   { to: "/home/clients", label: "Clients", icon: <PeopleIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'CLIENT_SERVICE'] },
   { to: "/home/bo", label: "Bureau d'Ordre", icon: <InputIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'BO', 'BUREAU_ORDRE'] },
   { to: "/home/scan", label: "Service SCAN", icon: <ScannerIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'SCAN_TEAM'] },
-  { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'SCAN_TEAM'] },
-  { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'CLIENT_SERVICE'] },
-  { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
+  // { to: "/home/ged", label: "GED", icon: <FolderIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'GESTIONNAIRE', 'SCAN_TEAM'] },
+  // { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'CLIENT_SERVICE'] },
+  // { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
+  { to: "/home/bulletin-soins-ia", label: "Module IA - Bulletin de Soins", icon: <SmartToyIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
+  { to: "/home/ia-suggestions", label: "IA & Suggestions", icon: <SmartToyIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'] },
   
 ];
 

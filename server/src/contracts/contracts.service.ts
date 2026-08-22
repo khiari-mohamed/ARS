@@ -66,7 +66,9 @@ export class ContractsService {
       const contractData: any = {
         clientId: dto.clientId,
         clientName: dto.contractNumber,
-        codeAssure: dto.codeAssure || null,  // NEW: Code Assuré field
+        codeAssure: dto.codeAssure || null,
+        compagnieAssuranceId: dto.compagnieAssuranceId || null,
+        modeRecuperation: dto.modeRecuperation || null,
         delaiReglement: parseInt(dto.treatmentDelay.toString()),
         delaiReclamation: parseInt(dto.claimsReplyDelay.toString()),
         escalationThreshold: dto.warningThreshold ? parseInt(dto.warningThreshold.toString()) : null,
@@ -89,7 +91,8 @@ export class ContractsService {
         include: {
           client: true,
           assignedManager: true,
-          teamLeader: true
+          teamLeader: true,
+          compagnieAssurance: true
         }
       });
       
@@ -141,7 +144,8 @@ export class ContractsService {
       include: {
         client: true,
         assignedManager: true,
-        teamLeader: true
+        teamLeader: true,
+        compagnieAssurance: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -154,7 +158,8 @@ export class ContractsService {
       include: {
         client: true,
         assignedManager: true,
-        teamLeader: true
+        teamLeader: true,
+        compagnieAssurance: true
       }
     });
 
@@ -176,7 +181,9 @@ export class ContractsService {
     const updateData: any = {};
     
     if (dto.contractNumber) updateData.clientName = dto.contractNumber;
-    if (dto.codeAssure !== undefined) updateData.codeAssure = dto.codeAssure || null;  // NEW: Code Assuré field
+    if (dto.codeAssure !== undefined) updateData.codeAssure = dto.codeAssure || null;
+    if (dto.compagnieAssuranceId !== undefined) updateData.compagnieAssuranceId = dto.compagnieAssuranceId || null;
+    if (dto.modeRecuperation !== undefined) updateData.modeRecuperation = dto.modeRecuperation || null;
     if (dto.treatmentDelay) updateData.delaiReglement = parseInt(dto.treatmentDelay.toString());
     if (dto.claimsReplyDelay) updateData.delaiReclamation = parseInt(dto.claimsReplyDelay.toString());
     if (dto.paymentDelay) updateData.delaiReglement = parseInt(dto.paymentDelay.toString());
@@ -185,7 +192,7 @@ export class ContractsService {
     if (dto.teamLeaderId !== undefined) updateData.teamLeaderId = dto.teamLeaderId || null;
     if (dto.startDate) updateData.startDate = new Date(dto.startDate);
     if (dto.endDate) updateData.endDate = new Date(dto.endDate);
-    if (dto.notes) updateData.signature = dto.notes;
+    if (dto.notes !== undefined) updateData.signature = dto.notes ?? null;
     
     updateData.updatedAt = new Date();
 
@@ -195,7 +202,8 @@ export class ContractsService {
       include: {
         client: true,
         assignedManager: true,
-        teamLeader: true
+        teamLeader: true,
+        compagnieAssurance: true
       }
     });
 

@@ -59,6 +59,41 @@ export class ClientExcelGenerator extends ExcelService {
     return Buffer.from(buffer);
   }
 
+  private _getActiveContract(client: any): any {
+    if (!client || !Array.isArray(client.contracts) || client.contracts.length === 0) {
+      return null;
+    }
+
+    const now = new Date();
+    return (
+      client.contracts.find((contract: any) =>
+        contract.startDate && contract.endDate && contract.startDate <= now && contract.endDate >= now
+      ) ||
+      client.contracts[0] ||
+      null
+    );
+  }
+
+  private _getContractInsuranceName(client: any): string {
+    const activeContract = this._getActiveContract(client);
+    if (activeContract?.compagnieAssurance?.nom) {
+      return activeContract.compagnieAssurance.nom;
+    }
+
+    const fallback = client?.contracts?.find((contract: any) => contract.compagnieAssurance)?.compagnieAssurance;
+    return fallback?.nom || '—';
+  }
+
+  private _getContractMode(client: any): string | null {
+    const activeContract = this._getActiveContract(client);
+    if (activeContract?.modeRecuperation) {
+      return activeContract.modeRecuperation;
+    }
+
+    const fallback = client?.contracts?.find((contract: any) => contract.modeRecuperation);
+    return fallback?.modeRecuperation || null;
+  }
+
   // ══════════════════════════════════════════════════════════════════════════════
   // SHEET 1 — Liste des Clients
   // ══════════════════════════════════════════════════════════════════════════════
@@ -285,7 +320,7 @@ export class ClientExcelGenerator extends ExcelService {
 
     const modes = ['VIREMENT', 'CHEQUE', 'FEUILLE_CAISSE', undefined];
     modes.forEach((mode, i) => {
-      const count = clients.filter(c => c.modeRecuperation === (mode ?? null) || (!mode && !c.modeRecuperation)).length;
+      const count = clients.filter(c => this._getContractMode(c) === (mode ?? null) || (!mode && !this._getContractMode(c))).length;
       const pct   = clients.length ? count / clients.length : 0;
       const r     = 32 + i;
       sheet.getRow(r).height = 22;
@@ -365,7 +400,8 @@ export class ClientExcelGenerator extends ExcelService {
       nameCell.value = client.name; nameCell.font = FONTS.dataCellBold;
       nameCell.fill = bgFill; nameCell.border = BORDERS.allThin; nameCell.alignment = ALIGNMENTS.leftMiddle;
 
-      setCel(3, client.compagnieAssurance?.nom || '—');
+      const clientInsuranceName = this._getContractInsuranceName(client);
+      setCel(3, clientInsuranceName);
       setCel(4, client.reglementDelay, true);
       setCel(5, client.reclamationDelay, true);
       setCel(6, client.bordereaux?.length || 0, true);
@@ -450,18 +486,20 @@ export class ClientExcelGenerator extends ExcelService {
       sheet.getRow(rowNum).height = 20;
 
       const gestNames = (client.gestionnaires || []).map((g: any) => g.fullName).join(', ');
+      const contractMode = this._getContractMode(client);
+      const modeLabel = contractMode ? getModeLabel(contractMode) : 'Non défini';
 
       const vals = [
         client.id,
         client.name,
-        client.compagnieAssurance?.nom || '',
+        this._getContractInsuranceName(client),
         client.status || 'active',
         client.email || '',
         client.phone || '',
         client.address || '',
         client.reglementDelay,
         client.reclamationDelay,
-        getModeLabel(client.modeRecuperation),
+        modeLabel,
         client.chargeCompte?.fullName || '',
         client.chargeCompte?.email || '',
         gestNames,
@@ -493,18 +531,20 @@ export class ClientExcelGenerator extends ExcelService {
   private _buildRowValues(client: any, idx: number): Array<string | number | null> {
     const gestNames = (client.gestionnaires || []).map((g: any) => g.fullName).join(', ');
     const avgSla    = client.reglementDelay; // fallback; real avg from analytics if available
+    const contractMode = this._getContractMode(client);
+    const modeLabel = contractMode ? getModeLabel(contractMode) : 'Non défini';
 
     return [
       idx + 1,                                                  // #
       client.name,                                              // Nom
-      client.compagnieAssurance?.nom || '—',                   // Compagnie
+      this._getContractInsuranceName(client),                   // Compagnie
       null,                                                      // Status (handled specially)
       client.email || '—',                                      // Email
       client.phone || '—',                                      // Téléphone
       client.address || '—',                                    // Adresse
       null,                                                      // Règlement delay (handled specially)
       client.reclamationDelay,                                  // Réclamation delay
-      getModeLabel(client.modeRecuperation),                   // Mode récupération
+      modeLabel,                                                // Mode récupération
       client.chargeCompte?.fullName || '—',                    // Chef équipe
       gestNames || '—',                                         // Gestionnaires
       client.bordereaux?.length   || 0,                        // Bordereaux

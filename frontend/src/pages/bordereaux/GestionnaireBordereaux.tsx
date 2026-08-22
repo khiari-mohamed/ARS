@@ -6,6 +6,81 @@ import { LocalAPI } from '../../services/axios';
 import "../../styles/gestionnaire.css";
 import "../../styles/chef-equipe.css";
 
+// ────────────────────────────────────────────────────────────────────────────
+// "Registre" design tokens — inline CSS overrides applied throughout.
+// Logic, state, handlers, effects, and component structure are unchanged.
+// Existing classNames (gestionnaire-*, chef-equipe-*) are kept as-is (they may
+// carry non-visual behavior from the external stylesheets); inline `style`
+// props are layered on top to enforce the Registre look consistently.
+// ────────────────────────────────────────────────────────────────────────────
+const T = {
+  ink900: '#0F1B2D',
+  ink700: '#24344A',
+  ink500: '#5B6B82',
+  ink300: '#9AA7B8',
+  line: '#E2E6EC',
+  surface: '#FFFFFF',
+  canvas: '#F3F5F9',
+  brand: '#A82A2E',
+  brandDark: '#7E1F22',
+  ok: '#1E8E5A',
+  okBg: '#E7F5EE',
+  warn: '#B4740E',
+  warnBg: '#FBF1DF',
+  danger: '#B3272D',
+  dangerBg: '#FBEAEA',
+  info: '#2A5DA8',
+  infoBg: '#E9F0FA',
+  purple: '#6E4A9E',
+  purpleBg: '#F1ECF9',
+  sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  mono: "'IBM Plex Mono', SFMono-Regular, Consolas, monospace",
+};
+
+const panelStyle: React.CSSProperties = {
+  background: T.surface,
+  borderRadius: 10,
+  border: `1px solid ${T.line}`,
+};
+
+const thStyle: React.CSSProperties = {
+  padding: '11px 10px',
+  textAlign: 'left',
+  fontSize: 11,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.03em',
+  color: T.ink500,
+  fontFamily: T.sans,
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '11px 10px',
+  fontSize: 13,
+  fontFamily: T.sans,
+  color: T.ink900,
+};
+
+const refCellStyle: React.CSSProperties = {
+  ...tdStyle,
+  fontFamily: T.mono,
+  fontWeight: 600,
+  color: T.info,
+};
+
+function pillStyle(bg: string, fg: string): React.CSSProperties {
+  return {
+    background: bg,
+    color: fg,
+    padding: '4px 9px',
+    borderRadius: 20,
+    fontSize: 11.5,
+    fontWeight: 700,
+    fontFamily: T.sans,
+    display: 'inline-block',
+  };
+}
+
 function GestionnaireBordereaux() {
   const { user } = useAuth();
   const [userBordereaux, setUserBordereaux] = useState<any[]>([]);
@@ -83,92 +158,127 @@ function GestionnaireBordereaux() {
   const tabData = getTabData();
 
   return (
-    <div className="gestionnaire-container">
+    <div className="gestionnaire-container" style={{ fontFamily: T.sans, background: T.canvas, minHeight: '100vh', padding: '24px 20px 60px' }}>
       <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        <div className="gestionnaire-header">
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
-            <div className="gestionnaire-icon">📋</div>
+        <div className="gestionnaire-header" style={{ ...panelStyle, padding: '22px', marginBottom: '20px', borderTop: `3px solid ${T.brand}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+            <div className="gestionnaire-icon" style={{
+              background: `linear-gradient(135deg, ${T.ink900} 0%, #16263D 100%)`,
+              color: 'white',
+              width: 56,
+              height: 56,
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 26,
+              marginRight: 18
+            }}>📋</div>
             <div>
-              <h1 style={{ fontSize: '42px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Mes Bordereaux</h1>
-              <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>Interface personnalisée pour gestionnaire</p>
+              <h1 style={{ fontSize: 24, fontWeight: 700, color: T.ink900, margin: '0 0 4px 0', fontFamily: T.sans }}>Mes Bordereaux</h1>
+              <p style={{ color: T.ink500, fontSize: 14, margin: 0, fontFamily: T.sans }}>Interface personnalisée pour gestionnaire</p>
             </div>
           </div>
-          <div className="gestionnaire-warning">
+          <div className="gestionnaire-warning" style={{ background: T.warnBg, borderRadius: 8, padding: '14px 18px', border: `1px solid ${T.warn}22` }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '28px', marginRight: '20px' }}>⚠️</span>
+              <span style={{ fontSize: 22, marginRight: 16 }}>⚠️</span>
               <div>
-                <div style={{ fontWeight: 'bold', color: '#f57c00', fontSize: '18px', marginBottom: '4px' }}>Accès Gestionnaire</div>
-                <div style={{ color: '#ef6c00', fontSize: '15px', lineHeight: '1.4' }}>Vous ne voyez que les bordereaux qui vous sont personnellement assignés</div>
+                <div style={{ fontWeight: 700, color: T.warn, fontSize: 14, marginBottom: '2px', fontFamily: T.sans }}>Accès Gestionnaire</div>
+                <div style={{ color: T.ink700, fontSize: 13, lineHeight: 1.4, fontFamily: T.sans }}>Vous ne voyez que les bordereaux qui vous sont personnellement assignés</div>
               </div>
             </div>
           </div>
         </div>
 
         {userBordereaux.length === 0 ? (
-          <div className="gestionnaire-empty">
-            <div className="gestionnaire-empty-icon">📋</div>
-            <h3 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '16px', letterSpacing: '-0.5px' }}>Aucun bordereau assigné</h3>
-            <p style={{ color: '#666', fontSize: '20px', marginBottom: '40px', lineHeight: '1.5' }}>Vous n'avez actuellement aucun bordereau à traiter.</p>
-            <div className="gestionnaire-info-box">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                <span style={{ fontSize: '32px', marginRight: '16px' }}>👨💼</span>
-                <span style={{ color: '#1976d2', fontWeight: 'bold', fontSize: '22px' }}>Information</span>
+          <div className="gestionnaire-empty" style={{ ...panelStyle, padding: '48px 24px', textAlign: 'center' }}>
+            <div className="gestionnaire-empty-icon" style={{ fontSize: 40, color: T.ink300, marginBottom: '16px' }}>📋</div>
+            <h3 style={{ fontSize: 20, fontWeight: 700, color: T.ink700, marginBottom: '10px', fontFamily: T.sans }}>Aucun bordereau assigné</h3>
+            <p style={{ color: T.ink500, fontSize: 14, marginBottom: '28px', lineHeight: 1.5, fontFamily: T.sans }}>Vous n'avez actuellement aucun bordereau à traiter.</p>
+            <div className="gestionnaire-info-box" style={{ background: T.infoBg, borderRadius: 8, padding: '20px', border: `1px solid ${T.info}22` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px' }}>
+                <span style={{ fontSize: 24, marginRight: 12 }}>👨‍💼</span>
+                <span style={{ color: T.info, fontWeight: 700, fontSize: 15, fontFamily: T.sans }}>Information</span>
               </div>
-              <p style={{ color: '#1565c0', fontSize: '17px', lineHeight: '1.6', margin: 0, fontWeight: '500' }}>
+              <p style={{ color: T.ink700, fontSize: 13, lineHeight: 1.6, margin: 0, fontFamily: T.sans }}>
                 Les bordereaux vous seront assignés par votre chef d'équipe selon la charge de travail et vos compétences.
               </p>
             </div>
           </div>
         ) : (
           <>
-            <div className="gestionnaire-stats">
-              <div className="gestionnaire-stat-card" onClick={() => { setModalType('all'); setModalData(userBordereaux); setShowModal(true); }} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+            <div className="gestionnaire-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+              <div
+                className="gestionnaire-stat-card"
+                onClick={() => { setModalType('all'); setModalData(userBordereaux); setShowModal(true); }}
+                style={{ ...panelStyle, padding: '18px', borderTop: `3px solid ${T.brand}`, cursor: 'pointer', transition: 'transform 0.15s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(33, 150, 243, 0.2)' }}>
-                    <span style={{ fontSize: '32px' }}>📊</span>
+                  <div style={{ background: T.ink900, padding: '14px', borderRadius: '50%', marginRight: 16, display: 'flex' }}>
+                    <span style={{ fontSize: 22 }}>📊</span>
                   </div>
                   <div>
-                    <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#2196f3', marginBottom: '4px' }}>{userBordereaux.length}</div>
-                    <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Total assignés</div>
-                    <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: T.ink900, marginBottom: '2px', fontFamily: T.mono }}>{userBordereaux.length}</div>
+                    <div style={{ fontSize: 13, color: T.ink700, fontWeight: 600, fontFamily: T.sans }}>Total assignés</div>
+                    <div style={{ fontSize: 11, color: T.ink300, marginTop: '2px', fontFamily: T.sans }}>Cliquer pour voir</div>
                   </div>
                 </div>
               </div>
-              <div className="gestionnaire-stat-card" onClick={() => { setModalType('a-traiter'); setModalData(userBordereaux.filter((b: any) => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER', 'EN_COURS', 'ASSIGNE'].includes(b.statut))); setShowModal(true); }} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              <div
+                className="gestionnaire-stat-card"
+                onClick={() => { setModalType('a-traiter'); setModalData(userBordereaux.filter((b: any) => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER', 'EN_COURS', 'ASSIGNE'].includes(b.statut))); setShowModal(true); }}
+                style={{ ...panelStyle, padding: '18px', borderTop: `3px solid ${T.warn}`, cursor: 'pointer', transition: 'transform 0.15s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ background: 'linear-gradient(135deg, #fff3e0 0%, #ffcc02 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(255, 152, 0, 0.2)' }}>
-                    <span style={{ fontSize: '32px' }}>⏳</span>
+                  <div style={{ background: T.warnBg, padding: '14px', borderRadius: '50%', marginRight: 16, display: 'flex' }}>
+                    <span style={{ fontSize: 22 }}>⏳</span>
                   </div>
                   <div>
-                    <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#ff9800', marginBottom: '4px' }}>{userBordereaux.filter((b: any) => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER', 'EN_COURS', 'ASSIGNE'].includes(b.statut)).length}</div>
-                    <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>En cours</div>
-                    <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: T.warn, marginBottom: '2px', fontFamily: T.mono }}>{userBordereaux.filter((b: any) => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER', 'EN_COURS', 'ASSIGNE'].includes(b.statut)).length}</div>
+                    <div style={{ fontSize: 13, color: T.ink700, fontWeight: 600, fontFamily: T.sans }}>En cours</div>
+                    <div style={{ fontSize: 11, color: T.ink300, marginTop: '2px', fontFamily: T.sans }}>Cliquer pour voir</div>
                   </div>
                 </div>
               </div>
-              <div className="gestionnaire-stat-card" onClick={() => { setModalType('traites'); setModalData(userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut))); setShowModal(true); }} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              <div
+                className="gestionnaire-stat-card"
+                onClick={() => { setModalType('traites'); setModalData(userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut))); setShowModal(true); }}
+                style={{ ...panelStyle, padding: '18px', borderTop: `3px solid ${T.ok}`, cursor: 'pointer', transition: 'transform 0.15s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ background: 'linear-gradient(135deg, #e8f5e8 0%, #4caf50 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(76, 175, 80, 0.2)' }}>
-                    <span style={{ fontSize: '32px' }}>✅</span>
+                  <div style={{ background: T.okBg, padding: '14px', borderRadius: '50%', marginRight: 16, display: 'flex' }}>
+                    <span style={{ fontSize: 22 }}>✅</span>
                   </div>
                   <div>
-                    <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#4caf50', marginBottom: '4px' }}>{userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}</div>
-                    <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Traités</div>
-                    <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: T.ok, marginBottom: '2px', fontFamily: T.mono }}>{userBordereaux.filter((b: any) => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}</div>
+                    <div style={{ fontSize: 13, color: T.ink700, fontWeight: 600, fontFamily: T.sans }}>Traités</div>
+                    <div style={{ fontSize: 11, color: T.ink300, marginTop: '2px', fontFamily: T.sans }}>Cliquer pour voir</div>
                   </div>
                 </div>
               </div>
               {/* RETOURNES BOX - COMMENTED OUT */}
               {false && (
-              <div className="gestionnaire-stat-card" onClick={() => { setModalType('retournes'); setModalData(userBordereaux.filter((b: any) => b.statut === 'REJETE' || b.statut === 'RETOURNE')); setShowModal(true); }} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+              <div
+                className="gestionnaire-stat-card"
+                onClick={() => { setModalType('retournes'); setModalData(userBordereaux.filter((b: any) => b.statut === 'REJETE' || b.statut === 'RETOURNE')); setShowModal(true); }}
+                style={{ ...panelStyle, padding: '18px', borderTop: `3px solid ${T.danger}`, cursor: 'pointer', transition: 'transform 0.15s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ background: 'linear-gradient(135deg, #ffebee 0%, #f44336 100%)', padding: '20px', borderRadius: '50%', marginRight: '20px', boxShadow: '0 8px 20px rgba(244, 67, 54, 0.2)' }}>
-                    <span style={{ fontSize: '32px' }}>⚠️</span>
+                  <div style={{ background: T.dangerBg, padding: '14px', borderRadius: '50%', marginRight: 16, display: 'flex' }}>
+                    <span style={{ fontSize: 22 }}>⚠️</span>
                   </div>
                   <div>
-                    <div style={{ fontSize: '40px', fontWeight: 'bold', color: '#f44336', marginBottom: '4px' }}>{userBordereaux.filter((b: any) => b.statut === 'REJETE' || b.statut === 'RETOURNE').length}</div>
-                    <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>Retournés</div>
-                    <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>Cliquer pour voir</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: T.danger, marginBottom: '2px', fontFamily: T.mono }}>{userBordereaux.filter((b: any) => b.statut === 'REJETE' || b.statut === 'RETOURNE').length}</div>
+                    <div style={{ fontSize: 13, color: T.ink700, fontWeight: 600, fontFamily: T.sans }}>Retournés</div>
+                    <div style={{ fontSize: 11, color: T.ink300, marginTop: '2px', fontFamily: T.sans }}>Cliquer pour voir</div>
                   </div>
                 </div>
               </div>
@@ -176,26 +286,50 @@ function GestionnaireBordereaux() {
             </div>
 
             {/* Tabs */}
-            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden', marginBottom: '24px' }}>
-              <div className="chef-equipe-tabs">
+            <div style={{ ...panelStyle, overflow: 'hidden', marginBottom: '20px' }}>
+              <div className="chef-equipe-tabs" style={{ display: 'flex', borderBottom: `1px solid ${T.line}`, background: T.canvas }}>
                 <button
                   className={`chef-equipe-tab ${activeTab === 'en-cours' ? 'active' : ''}`}
                   onClick={() => setActiveTab('en-cours')}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    border: 'none',
+                    background: activeTab === 'en-cours' ? T.surface : 'transparent',
+                    borderBottom: activeTab === 'en-cours' ? `3px solid ${T.brand}` : '3px solid transparent',
+                    color: activeTab === 'en-cours' ? T.brand : T.ink500,
+                    fontWeight: 700,
+                    fontSize: 13,
+                    fontFamily: T.sans,
+                    cursor: 'pointer'
+                  }}
                 >
                   En cours ({userBordereaux.filter(b => !['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
                 </button>
                 <button
                   className={`chef-equipe-tab ${activeTab === 'traites' ? 'active' : ''}`}
                   onClick={() => setActiveTab('traites')}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    border: 'none',
+                    background: activeTab === 'traites' ? T.surface : 'transparent',
+                    borderBottom: activeTab === 'traites' ? `3px solid ${T.brand}` : '3px solid transparent',
+                    color: activeTab === 'traites' ? T.brand : T.ink500,
+                    fontWeight: 700,
+                    fontSize: 13,
+                    fontFamily: T.sans,
+                    cursor: 'pointer'
+                  }}
                 >
                   Traités ({userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length})
                 </button>
               </div>
 
               {tabData.length === 0 ? (
-                <div className="chef-equipe-empty">
-                  <div className="chef-equipe-empty-icon">📋</div>
-                  <h3 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '16px', letterSpacing: '-0.5px' }}>
+                <div className="chef-equipe-empty" style={{ padding: '48px 24px', textAlign: 'center' }}>
+                  <div className="chef-equipe-empty-icon" style={{ fontSize: 36, color: T.ink300, marginBottom: '14px' }}>📋</div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: T.ink700, marginBottom: '8px', fontFamily: T.sans }}>
                     Aucun dossier {activeTab === 'en-cours' ? 'en cours' : 'traité'}
                   </h3>
                 </div>
@@ -203,15 +337,15 @@ function GestionnaireBordereaux() {
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr style={{ background: '#f8f9fa' }}>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Client / Prestataire</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Référence Bordereau</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date réception BO</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Bulletin de soins</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date fin de Scannérisation</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Délais contractuels de règlement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de traitement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Durée de règlement</th>
+                      <tr style={{ background: T.canvas }}>
+                        <th style={thStyle}>Client / Prestataire</th>
+                        <th style={thStyle}>Référence Bordereau</th>
+                        <th style={thStyle}>Date réception BO</th>
+                        <th style={thStyle}>Bulletin de soins</th>
+                        <th style={thStyle}>Date fin de Scannérisation</th>
+                        <th style={thStyle}>Délais contractuels de règlement</th>
+                        <th style={thStyle}>Durée de traitement</th>
+                        <th style={thStyle}>Durée de règlement</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -219,34 +353,34 @@ function GestionnaireBordereaux() {
                         const dt = getDureeTraitement(bordereau);
                         const dr = getDureeReglement(bordereau);
                         return (
-                          <tr key={bordereau.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8f9fa' }}>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>{bordereau.client?.name || 'N/A'}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc', borderBottom: '1px solid #dee2e6' }}>{bordereau.reference}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>{bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                          <tr key={bordereau.id} style={{ background: index % 2 === 0 ? T.surface : '#FAFBFD', borderBottom: `1px solid ${T.line}` }}>
+                            <td style={tdStyle}>{bordereau.client?.name || 'N/A'}</td>
+                            <td style={refCellStyle}>{bordereau.reference}</td>
+                            <td style={{ ...tdStyle, fontFamily: T.mono }}>{bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={tdStyle}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{bordereau.nombreBS || 0} BS</span>
+                                <span style={pillStyle(T.infoBg, T.info)}>{bordereau.nombreBS || 0} BS</span>
                                 {bordereau.BulletinSoin && bordereau.BulletinSoin.length > 0 && (
-                                  <span style={{ fontSize: '12px', color: '#666' }}>({bordereau.BulletinSoin.filter((bs: any) => bs.etat === 'VALIDATED').length} traités)</span>
+                                  <span style={{ fontSize: 12, color: T.ink500, fontFamily: T.sans }}>({bordereau.BulletinSoin.filter((bs: any) => bs.etat === 'VALIDATED').length} traités)</span>
                                 )}
                               </div>
                             </td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>{bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
-                              <span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{bordereau.delaiReglement || 0} jours</span>
+                            <td style={{ ...tdStyle, fontFamily: T.mono }}>{bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={tdStyle}>
+                              <span style={pillStyle(T.warnBg, T.warn)}>{bordereau.delaiReglement || 0} jours</span>
                             </td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                            <td style={tdStyle}>
                               {dt.days === null || dt.days === undefined
-                                ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span>
-                                : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', display: 'inline-block' }}>{dt.days} jour{dt.days !== 1 ? 's' : ''}</span>
+                                ? <span style={{ color: T.ink300, fontSize: 12, fontFamily: T.sans }}>En cours</span>
+                                : <span style={pillStyle(dt.isOnTime ? T.okBg : T.dangerBg, dt.isOnTime ? T.ok : T.danger)}>{dt.days} jour{dt.days !== 1 ? 's' : ''}</span>
                               }
                             </td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
+                            <td style={tdStyle}>
                               {bordereau.statut === 'VIREMENT_EXECUTE' || bordereau.statut === 'CLOTURE' || bordereau.statut === 'PAYE'
-                                ? <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span>
+                                ? <span style={{ color: T.ok, fontSize: 12, fontWeight: 700, fontFamily: T.sans }}>✓ Réglé ({dr.days || 0}j)</span>
                                 : dr.days === null || dr.days === undefined
-                                  ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span>
-                                  : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', display: 'inline-block' }}>{dr.days} jour{dr.days !== 1 ? 's' : ''}</span>
+                                  ? <span style={{ color: T.ink300, fontSize: 12, fontFamily: T.sans }}>En attente</span>
+                                  : <span style={pillStyle(dr.isOnTime ? T.okBg : T.dangerBg, dr.isOnTime ? T.ok : T.danger)}>{dr.days} jour{dr.days !== 1 ? 's' : ''}</span>
                               }
                             </td>
                           </tr>
@@ -260,64 +394,75 @@ function GestionnaireBordereaux() {
           </>
         )}
 
-        <div className="gestionnaire-performance">
-          <div className="gestionnaire-perf-header">
-            <div className="gestionnaire-perf-icon">📈</div>
+        <div className="gestionnaire-performance" style={{ ...panelStyle, padding: '22px' }}>
+          <div className="gestionnaire-perf-header" style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+            <div className="gestionnaire-perf-icon" style={{
+              background: `linear-gradient(135deg, ${T.ink900} 0%, #16263D 100%)`,
+              color: 'white',
+              width: 48,
+              height: 48,
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 22,
+              marginRight: 16
+            }}>📈</div>
             <div>
-              <h2 style={{ fontSize: '32px', fontWeight: 'bold', color: '#1a1a1a', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>Ma Performance Personnelle</h2>
-              <p style={{ color: '#666', fontSize: '18px', margin: 0, fontWeight: '500' }}>Statistiques de votre activité</p>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: T.ink900, margin: '0 0 4px 0', fontFamily: T.sans }}>Ma Performance Personnelle</h2>
+              <p style={{ color: T.ink500, fontSize: 13, margin: 0, fontFamily: T.sans }}>Statistiques de votre activité</p>
             </div>
           </div>
-          <div className="gestionnaire-perf-grid">
-            <div className="gestionnaire-perf-card green">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '12px' }}>{userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}</div>
-              <div style={{ fontSize: '16px', color: '#2e7d32', fontWeight: 'bold' }}>Total traités</div>
+          <div className="gestionnaire-perf-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div className="gestionnaire-perf-card green" style={{ background: T.okBg, borderRadius: 8, padding: '18px', border: `1px solid ${T.ok}22` }}>
+              <div style={{ fontSize: 30, fontWeight: 700, color: T.ok, marginBottom: '8px', fontFamily: T.mono }}>{userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length}</div>
+              <div style={{ fontSize: 13, color: T.ok, fontWeight: 700, fontFamily: T.sans }}>Total traités</div>
             </div>
-            <div className="gestionnaire-perf-card red">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#c62828', marginBottom: '12px' }}>{userBordereaux.filter(b => b.statut === 'EN_DIFFICULTE').length}</div>
-              <div style={{ fontSize: '16px', color: '#c62828', fontWeight: 'bold' }}>En difficulté</div>
+            <div className="gestionnaire-perf-card red" style={{ background: T.dangerBg, borderRadius: 8, padding: '18px', border: `1px solid ${T.danger}22` }}>
+              <div style={{ fontSize: 30, fontWeight: 700, color: T.danger, marginBottom: '8px', fontFamily: T.mono }}>{userBordereaux.filter(b => b.statut === 'EN_DIFFICULTE').length}</div>
+              <div style={{ fontSize: 13, color: T.danger, fontWeight: 700, fontFamily: T.sans }}>En difficulté</div>
             </div>
-            <div className="gestionnaire-perf-card blue">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#1565c0', marginBottom: '12px' }}>{userBordereaux.filter(b => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER', 'EN_COURS', 'ASSIGNE'].includes(b.statut)).length}</div>
-              <div style={{ fontSize: '16px', color: '#1565c0', fontWeight: 'bold' }}>En cours</div>
+            <div className="gestionnaire-perf-card blue" style={{ background: T.infoBg, borderRadius: 8, padding: '18px', border: `1px solid ${T.info}22` }}>
+              <div style={{ fontSize: 30, fontWeight: 700, color: T.info, marginBottom: '8px', fontFamily: T.mono }}>{userBordereaux.filter(b => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER', 'EN_COURS', 'ASSIGNE'].includes(b.statut)).length}</div>
+              <div style={{ fontSize: 13, color: T.info, fontWeight: 700, fontFamily: T.sans }}>En cours</div>
             </div>
-            <div className="gestionnaire-perf-card purple">
-              <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#6a1b9a', marginBottom: '12px' }}>{userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%</div>
-              <div style={{ fontSize: '16px', color: '#6a1b9a', fontWeight: 'bold' }}>Taux de réussite</div>
+            <div className="gestionnaire-perf-card purple" style={{ background: T.purpleBg, borderRadius: 8, padding: '18px', border: `1px solid ${T.purple}22` }}>
+              <div style={{ fontSize: 30, fontWeight: 700, color: T.purple, marginBottom: '8px', fontFamily: T.mono }}>{userBordereaux.length > 0 ? Math.round((userBordereaux.filter(b => ['TRAITE', 'CLOTURE', 'VIREMENT_EXECUTE'].includes(b.statut)).length / userBordereaux.length) * 100) : 0}%</div>
+              <div style={{ fontSize: 13, color: T.purple, fontWeight: 700, fontFamily: T.sans }}>Taux de réussite</div>
             </div>
           </div>
         </div>
 
         {showModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-            <div style={{ backgroundColor: 'white', borderRadius: '12px', width: '90%', maxWidth: '1200px', maxHeight: '80vh', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)' }}>
-              <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8f9fa' }}>
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,27,45,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ backgroundColor: T.surface, borderRadius: 10, width: '90%', maxWidth: '1200px', maxHeight: '80vh', overflow: 'hidden', boxShadow: '0 8px 24px rgba(15,27,45,0.16)' }}>
+              <div style={{ padding: '18px 22px', borderBottom: `1px solid ${T.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: T.canvas }}>
                 <div>
-                  <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>
+                  <h2 style={{ fontSize: 17, fontWeight: 700, color: T.ink900, margin: 0, fontFamily: T.sans }}>
                     {modalType === 'all' ? '📊 Tous les Bordereaux' : modalType === 'a-traiter' ? '⏳ Bordereaux En Cours' : modalType === 'traites' ? '✅ Bordereaux Traités' : '⚠️ Bordereaux Retournés'}
                   </h2>
-                  <p style={{ color: '#666', fontSize: '14px', margin: '4px 0 0 0' }}>{modalData.length} bordereau(x)</p>
+                  <p style={{ color: T.ink500, fontSize: 12.5, margin: '4px 0 0 0', fontFamily: T.sans }}>{modalData.length} bordereau(x)</p>
                 </div>
-                <button onClick={() => setShowModal(false)} style={{ background: '#dc3545', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 16px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>Fermer</button>
+                <button onClick={() => setShowModal(false)} style={{ background: T.danger, color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: T.sans }}>Fermer</button>
               </div>
               <div style={{ padding: '20px', maxHeight: '60vh', overflow: 'auto' }}>
                 {modalData.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '40px' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>{modalType === 'all' ? '📊' : modalType === 'a-traiter' ? '⏳' : modalType === 'traites' ? '✅' : '⚠️'}</div>
-                    <h3 style={{ fontSize: '20px', color: '#666' }}>Aucun bordereau</h3>
+                    <div style={{ fontSize: 40, marginBottom: '16px', color: T.ink300 }}>{modalType === 'all' ? '📊' : modalType === 'a-traiter' ? '⏳' : modalType === 'traites' ? '✅' : '⚠️'}</div>
+                    <h3 style={{ fontSize: 16, color: T.ink500, fontFamily: T.sans }}>Aucun bordereau</h3>
                   </div>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Client</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Référence</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Date Réception</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Documents</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Date Scan</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Délai</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Durée Traitement</th>
-                        <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d' }}>Durée Règlement</th>
+                      <tr style={{ background: T.canvas, borderBottom: `2px solid ${T.line}` }}>
+                        <th style={thStyle}>Client</th>
+                        <th style={thStyle}>Référence</th>
+                        <th style={thStyle}>Date Réception</th>
+                        <th style={thStyle}>Documents</th>
+                        <th style={thStyle}>Date Scan</th>
+                        <th style={thStyle}>Délai</th>
+                        <th style={thStyle}>Durée Traitement</th>
+                        <th style={thStyle}>Durée Règlement</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -325,15 +470,15 @@ function GestionnaireBordereaux() {
                         const dt = getDureeTraitement(b);
                         const dr = getDureeReglement(b);
                         return (
-                          <tr key={b.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: i % 2 === 0 ? '#ffffff' : '#fafafa' }}>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.client?.name || 'N/A'}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: '#0066cc' }}>{b.reference}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.dateReception ? new Date(b.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}><span style={{ background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{b.nombreBS || 0} documents</span></td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.dateFinScan ? new Date(b.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}><span style={{ background: '#fff3e0', color: '#f57c00', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{b.delaiReglement || 0}j</span></td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>{dt.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En cours</span> : <span style={{ background: dt.isOnTime ? '#e8f5e9' : '#ffebee', color: dt.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dt.days}j</span>}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px' }}>{b.statut === 'VIREMENT_EXECUTE' || b.statut === 'CLOTURE' || b.statut === 'PAYE' ? <span style={{ color: '#4caf50', fontSize: '12px', fontWeight: 'bold' }}>✓ Réglé ({dr.days || 0}j)</span> : dr.days === null ? <span style={{ color: '#999', fontSize: '12px' }}>En attente</span> : <span style={{ background: dr.isOnTime ? '#e8f5e9' : '#ffebee', color: dr.isOnTime ? '#2e7d32' : '#c62828', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{dr.days}j</span>}</td>
+                          <tr key={b.id} style={{ borderBottom: `1px solid ${T.line}`, backgroundColor: i % 2 === 0 ? T.surface : '#FAFBFD' }}>
+                            <td style={tdStyle}>{b.client?.name || 'N/A'}</td>
+                            <td style={refCellStyle}>{b.reference}</td>
+                            <td style={{ ...tdStyle, fontFamily: T.mono }}>{b.dateReception ? new Date(b.dateReception).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={tdStyle}><span style={pillStyle(T.infoBg, T.info)}>{b.nombreBS || 0} documents</span></td>
+                            <td style={{ ...tdStyle, fontFamily: T.mono }}>{b.dateFinScan ? new Date(b.dateFinScan).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td style={tdStyle}><span style={pillStyle(T.warnBg, T.warn)}>{b.delaiReglement || 0}j</span></td>
+                            <td style={tdStyle}>{dt.days === null ? <span style={{ color: T.ink300, fontSize: 12, fontFamily: T.sans }}>En cours</span> : <span style={pillStyle(dt.isOnTime ? T.okBg : T.dangerBg, dt.isOnTime ? T.ok : T.danger)}>{dt.days}j</span>}</td>
+                            <td style={tdStyle}>{b.statut === 'VIREMENT_EXECUTE' || b.statut === 'CLOTURE' || b.statut === 'PAYE' ? <span style={{ color: T.ok, fontSize: 12, fontWeight: 700, fontFamily: T.sans }}>✓ Réglé ({dr.days || 0}j)</span> : dr.days === null ? <span style={{ color: T.ink300, fontSize: 12, fontFamily: T.sans }}>En attente</span> : <span style={pillStyle(dr.isOnTime ? T.okBg : T.dangerBg, dr.isOnTime ? T.ok : T.danger)}>{dr.days}j</span>}</td>
                           </tr>
                         );
                       })}

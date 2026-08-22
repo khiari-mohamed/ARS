@@ -604,7 +604,6 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
     if (ordreVirement.bordereau) {
       // Bordereau-linked OV
       clientName = ordreVirement.bordereau.client?.name || undefined;
-      bordereauRef = ordreVirement.bordereau.reference || undefined;
       
       // Fallback to Contract.codeAssure only if no adherent contract number
       if (!contractNumber) {
@@ -629,9 +628,13 @@ private addFooterInfoAbsolute(doc: any, data: OVPdfData) {
           contractNumber = client.contracts?.[0]?.codeAssure || undefined;
         }
       }
-      
-      bordereauRef = 'Entrée manuelle';
     }
+
+    // Same rule as TXT. Independent of clientName. Never "Entrée manuelle".
+    bordereauRef =
+      (ordreVirement.bordereau?.reference || '').trim() ||
+      (ordreVirement.referenceBordereau || '').trim() ||
+      ordreVirement.reference;
     
     // Get proper user name - must exist
     const createdByName = createdByUser?.fullName || createdByUser?.email || undefined;

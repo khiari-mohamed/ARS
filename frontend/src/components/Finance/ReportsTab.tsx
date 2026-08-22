@@ -66,7 +66,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 // ─── Status badge helper ───────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; bg: string; color: string; border: string }> = {
   EXECUTE:             { label: 'Exécuté',       bg: '#e6f4ed', color: '#1b6b3a', border: '#a5d6a7' },
-  EN_COURS_EXECUTION:  { label: 'En cours',      bg: '#e3f2fd', color: '#0d47a1', border: '#90caf9' },
+  EN_COURS_VALIDATION: { label: 'En validation', bg: '#e3f2fd', color: '#0d47a1', border: '#90caf9' },
   REJETE:              { label: 'Rejeté',        bg: '#fdecea', color: '#b71c1c', border: '#ef9a9a' },
   NON_EXECUTE:         { label: 'Non exécuté',   bg: '#fff8e1', color: '#e65100', border: '#ffcc80' },
 };
@@ -162,7 +162,7 @@ const ReportsTab: React.FC = () => {
         const total = realData.length;
         const realStatusData = [
           { name: 'Exécuté',     value: Math.round((statusCounts['EXECUTE'] || 0) / total * 100),            color: '#4caf50', count: statusCounts['EXECUTE'] || 0 },
-          { name: 'En Cours',    value: Math.round((statusCounts['EN_COURS_EXECUTION'] || 0) / total * 100), color: '#2196f3', count: statusCounts['EN_COURS_EXECUTION'] || 0 },
+          { name: 'En validation', value: Math.round((statusCounts['EN_COURS_VALIDATION'] || 0) / total * 100), color: '#2196f3', count: statusCounts['EN_COURS_VALIDATION'] || 0 },
           { name: 'Rejeté',      value: Math.round((statusCounts['REJETE'] || 0) / total * 100),             color: '#f44336', count: statusCounts['REJETE'] || 0 },
           { name: 'Non Exécuté', value: Math.round((statusCounts['NON_EXECUTE'] || 0) / total * 100),        color: '#ff9800', count: statusCounts['NON_EXECUTE'] || 0 }
         ];
@@ -179,7 +179,7 @@ const ReportsTab: React.FC = () => {
         const realSlaData = Object.keys(donneurGroups).slice(0, 5).map(society => {
           const items = donneurGroups[society];
           const executed = items.filter((i: any) => i.etatVirement === 'EXECUTE').length;
-          const inProgress = items.filter((i: any) => i.etatVirement === 'EN_COURS_EXECUTION').length;
+          const inProgress = items.filter((i: any) => i.etatVirement === 'EN_COURS_VALIDATION').length;
           const failed = items.filter((i: any) => i.etatVirement === 'REJETE').length;
           const total = items.length;
           return {

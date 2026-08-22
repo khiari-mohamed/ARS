@@ -24,6 +24,7 @@ const RoleBasedDashboard: React.FC = () => {
     // Auto-redirect other roles to their primary module
     switch (userRole) {
       case UserRole.FINANCE:
+      case UserRole.COMPTABILITE:
         navigate('/home/finance', { replace: true });
         return;
       case UserRole.CHEF_EQUIPE:
@@ -139,8 +140,8 @@ const RoleBasedDashboard: React.FC = () => {
     );
   }
 
-  // Finance - Auto-redirected to /home/finance, this fallback should not be reached
-  if (userRole === UserRole.FINANCE) {
+  // Finance / Comptabilité - Auto-redirected to /home/finance, this fallback should not be reached
+  if (userRole === UserRole.FINANCE || userRole === UserRole.COMPTABILITE) {
     // Fallback UI in case redirect fails
     return (
       <Box>

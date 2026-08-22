@@ -2,13 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path'; 
-import { Cron, CronExpression } from '@nestjs/schedule';
+// import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class PaperStreamIntegrationService {
   private readonly logger = new Logger(PaperStreamIntegrationService.name);
   private readonly watchFolder = process.env.PAPERSTREAM_WATCH_FOLDER || './paperstream-input';
   private readonly processedFolder = process.env.PAPERSTREAM_PROCESSED_FOLDER || './paperstream-processed';
+  private isProcessingScannedFiles = false;
 
   constructor(private prisma: PrismaService) {
     this.ensureFoldersExist();
@@ -22,27 +23,10 @@ export class PaperStreamIntegrationService {
     });
   }
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  // @Cron(CronExpression.EVERY_5_MINUTES)
   async processNewScannedFiles() {
-    try {
-      // Check for batch folders first
-      const items = fs.readdirSync(this.watchFolder);
-      
-      for (const item of items) {
-        const itemPath = path.join(this.watchFolder, item);
-        const stats = fs.statSync(itemPath);
-        
-        if (stats.isDirectory()) {
-          // Process as batch folder
-          await this.processBatchFolder(itemPath);
-        } else if (stats.isFile() && /\.(pdf|jpg|jpeg|png|tiff|tif)$/i.test(item)) {
-          // Process individual file (legacy mode)
-          await this.processScannedFile(item);
-        }
-      }
-    } catch (error) {
-      this.logger.error('Error processing scanned files:', error);
-    }
+    this.logger.log('PaperStream scheduled processing is disabled');
+    return;
   }
   
   private async processBatchFolder(batchFolderPath: string) {

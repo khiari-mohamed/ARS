@@ -48,6 +48,7 @@
     "exceljs": "^4.4.0",
     "fast-csv": "^5.0.2",
     "imap": "^0.8.19",
+    "ioredis": "^6.0.0",
     "jspdf": "^3.0.2",
     "mailparser": "^3.7.4",
     "multer": "^2.0.0",

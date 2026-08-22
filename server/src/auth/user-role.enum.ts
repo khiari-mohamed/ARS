@@ -13,6 +13,7 @@ export enum UserRole {
   CLIENT_SERVICE = 'CLIENT_SERVICE',
   SERVICE_CLIENT = 'SERVICE_CLIENT', // Service client profile as gestionnaire role
   FINANCE = 'FINANCE',
+  COMPTABILITE = 'COMPTABILITE',
   SCAN_TEAM = 'SCAN_TEAM',
   BO = 'BO',
   BUREAU_ORDRE = 'BUREAU_ORDRE', // Alternative name for BO

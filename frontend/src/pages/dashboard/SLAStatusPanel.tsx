@@ -1,13 +1,25 @@
 import React from 'react';
 import StatusBadge from '../../components/StatusBadge';
+import BordereauSLAIndicators from '../../components/BordereauSLAIndicators';
+import type { BordereauSLAIndicators as BordereauSLAIndicatorsType } from '../../types/sla';
 
-interface SLAStatusPanelProps {
-  slaStatus: any[];
+interface LegacySLAEntry {
+  type: string;
+  status: 'green' | 'orange' | 'red';
+  value: number;
 }
 
-const getSlaSummary = (slaStatus: any[]) => {
+interface SLAStatusPanelProps {
+  /** Legacy mode: aggregate counts by color, e.g. for a global dashboard summary */
+  slaStatus?: LegacySLAEntry[];
+  /** New mode: render the four unified indicators for one bordereau */
+  bordereauSla?: BordereauSLAIndicatorsType;
+  bordereauReference?: string;
+}
+
+const getSlaSummary = (slaStatus: LegacySLAEntry[]) => {
   let withinDeadline = 0, atRisk = 0, breached = 0;
-  slaStatus.forEach(sla => {
+  slaStatus.forEach((sla) => {
     if (sla.status === 'green') withinDeadline += sla.value || 1;
     else if (sla.status === 'orange') atRisk += sla.value || 1;
     else if (sla.status === 'red') breached += sla.value || 1;
@@ -15,8 +27,21 @@ const getSlaSummary = (slaStatus: any[]) => {
   return { withinDeadline, atRisk, breached };
 };
 
-const SLAStatusPanel: React.FC<SLAStatusPanelProps> = ({ slaStatus }) => {
-  const summary = getSlaSummary(slaStatus);
+const SLAStatusPanel: React.FC<SLAStatusPanelProps> = ({ slaStatus, bordereauSla, bordereauReference }) => {
+  // New mode: a specific bordereau's four company SLA indicators.
+  if (bordereauSla) {
+    return (
+      <div className="sla-panel-container">
+        <h3 className="sla-panel-title">
+          Conformité SLA{bordereauReference ? ` — ${bordereauReference}` : ''}
+        </h3>
+        <BordereauSLAIndicators sla={bordereauSla} variant="detailed" />
+      </div>
+    );
+  }
+
+  // Legacy mode: aggregate summary table (unchanged behaviour).
+  const summary = getSlaSummary(slaStatus || []);
   return (
     <div className="sla-panel-container">
       <h3 className="sla-panel-title">Conformité SLA</h3>
@@ -35,7 +60,7 @@ const SLAStatusPanel: React.FC<SLAStatusPanelProps> = ({ slaStatus }) => {
             </tr>
           </thead>
           <tbody>
-            {slaStatus.map((sla, idx) => (
+            {(slaStatus || []).map((sla, idx) => (
               <tr key={idx}>
                 <td>{sla.type}</td>
                 <td><StatusBadge status={sla.status} /></td>

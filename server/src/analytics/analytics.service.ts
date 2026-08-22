@@ -1,274 +1,106 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+// D:\ARS\server\src\analytics\analytics.service.ts
+import { Injectable, ForbiddenException, BadGatewayException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Statut } from '@prisma/client';
+import { RedisService } from '../shared/redis.service';
 import { AnalyticsKpiDto } from './dto/analytics-kpi.dto';
 import { AnalyticsPerformanceDto } from './dto/analytics-performance.dto';
-import { AnalyticsExportDto } from './dto/analytics-export.dto';
 import { RealTimeAnalyticsService } from './real-time-analytics.service';
 import { SLAAnalyticsService } from './sla-analytics.service';
 import { OVAnalyticsService } from './ov-analytics.service';
-import { calculateSLA } from '../utils/sla-calculator';
-import * as ExcelJS from 'exceljs';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as fastcsv from 'fast-csv';
-import PDFDocument from 'pdfkit';
+import { calculateSLA, calculateAllSLAs } from '../utils/sla-calculator';
 import axios from 'axios';
 
 const AI_MICROSERVICE_URL = process.env.AI_MICROSERVICE_URL || 'http://localhost:8002';
 const AI_USERNAME = process.env.AI_USERNAME || 'admin';
 const AI_PASSWORD = process.env.AI_PASSWORD || 'secret';
 
+const ANALYTICS_ROLES = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'SCAN', 'BO', 'GESTIONNAIRE'];
+const STAFF_ROLES = ['GESTIONNAIRE', 'CHEF_EQUIPE'];
+const STAFF_ROLES_WITH_SENIOR = ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'];
+const ACTIVE_WORKLOAD_STATUSES: Statut[] = [Statut.ASSIGNE, Statut.EN_COURS];
+const ERROR_STATUSES = ['REJETE', 'EN_DIFFICULTE', 'VIREMENT_REJETE'];
+const DOCUMENT_TYPES = [
+  'BULLETIN_SOIN',
+  'COMPLEMENT_INFORMATION',
+  'ADHESION',
+  'RECLAMATION',
+  'CONTRAT_AVENANT',
+  'DEMANDE_RESILIATION',
+  'CONVENTION_TIERS_PAYANT',
+];
+const SLA_APPLICABLE_TYPES = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION'];
+const RESOLVED_RECLAMATION_STATUSES = ['RESOLU', 'RESOLVED', 'CLOTURE', 'TRAITE', 'FERME'];
+
 @Injectable()
 export class AnalyticsService {
+  private readonly logger = new Logger(AnalyticsService.name);
+
+  // AI microservice tuning
+  private readonly AI_TIMEOUT_MS = 20000;
+  private readonly AI_TOKEN_CACHE_KEY = 'analytics:ai:token';
+  private readonly AI_CIRCUIT_BREAKER_KEY = 'analytics:ai:circuit_breaker';
+  private readonly AI_CIRCUIT_BREAKER_TTL_SECONDS = 30;
+  private readonly AI_TOKEN_DEFAULT_TTL_SECONDS = 3600;
+
+  // 🚀 NEW: dashboard read-query caching (Redis-backed, shared across the
+  // PM2 cluster). Short TTL for "live" dashboard numbers, longer TTL for
+  // trend/forecast data that doesn't need to be second-accurate. This does
+  // NOT change any computed value — it only avoids recomputing the exact
+  // same result multiple times within the TTL window, which is the common
+  // case when a dashboard mounts several widgets that call overlapping
+  // endpoints at once, or when the page auto-refreshes.
+  private readonly DASHBOARD_CACHE_TTL_SECONDS = 30;
+  private readonly FORECAST_CACHE_TTL_SECONDS = 300;
+
   constructor(
     private prisma: PrismaService,
     private realTimeService: RealTimeAnalyticsService,
     private slaService: SLAAnalyticsService,
-    private ovService: OVAnalyticsService
+    private ovService: OVAnalyticsService,
+    private redis: RedisService,
   ) {}
 
-  // Delegate to specialized services
+  // ============================================================
+  // 🚀 NEW: generic cache-or-compute helper
+  // ============================================================
+  /**
+   * Returns the cached value for `key` if present, otherwise computes it via
+   * `compute()`, caches it for `ttlSeconds`, and returns it. Redis failures
+   * (read or write) never break the caller — they just mean we compute
+   * directly, same as if there were no cache at all.
+   *
+   * IMPORTANT: callers must run any authorization check (checkAnalyticsRole)
+   * BEFORE calling this helper, never inside `compute()` — a cache hit must
+   * never skip the permission check.
+   */
+  private async getOrSetCache<T>(key: string, ttlSeconds: number, compute: () => Promise<T>): Promise<T> {
+    try {
+      const cached = await this.redis.get<T>(key);
+      if (cached !== null && cached !== undefined) {
+        return cached;
+      }
+    } catch (err) {
+      this.logger.warn(`Cache read failed for key "${key}", computing directly: ${(err as Error)?.message || err}`);
+    }
+
+    const result = await compute();
+
+    try {
+      await this.redis.set(key, result, ttlSeconds);
+    } catch (err) {
+      this.logger.warn(`Cache write failed for key "${key}": ${(err as Error)?.message || err}`);
+    }
+
+    return result;
+  }
+
+  // ============================================================
+  // Delegates to specialized services
+  // ============================================================
   async getSLADashboard(user: any, filters: any) {
     return this.slaService.getSLADashboard(user, filters);
   }
-
-  async predictSLABreaches(user: any) {
-    try {
-      this.checkAnalyticsRole(user);
-      
-      // Get real bordereau data for SLA prediction
-      const bordereaux = await this.prisma.bordereau.findMany({
-        where: {
-          statut: { in: ['EN_COURS', 'ASSIGNE', 'A_AFFECTER'] }
-        },
-        include: {
-          client: { select: { name: true } },
-          currentHandler: { select: { fullName: true } }
-        },
-        take: 50
-      });
-      
-      if (bordereaux.length === 0) {
-        // Return empty predictions instead of throwing error
-        return [];
-      }
-      
-      // Transform to AI format with proper date handling
-      const aiData = bordereaux.map(b => {
-        const now = new Date();
-        let daysSinceReception = 0;
-        
-        try {
-          if (b.dateReception) {
-            const receptionDate = new Date(b.dateReception);
-            daysSinceReception = Math.floor((now.getTime() - receptionDate.getTime()) / (1000 * 60 * 60 * 24));
-          }
-        } catch (error) {
-          console.warn(`Date parsing error for bordereau ${b.id}:`, error);
-          daysSinceReception = 2; // Default
-        }
-        
-        const slaDeadline = Math.max(1, b.delaiReglement || 30);
-        const deadline = new Date(now.getTime() + slaDeadline * 24 * 60 * 60 * 1000);
-        
-        return {
-          id: b.id,
-          start_date: b.dateReception ? new Date(b.dateReception).toISOString() : now.toISOString(),
-          deadline: deadline.toISOString(),
-          current_progress: ['TRAITE', 'CLOTURE'].includes(b.statut) ? 100 : 
-                           ['EN_COURS', 'ASSIGNE'].includes(b.statut) ? 50 : 10,
-          total_required: 100,
-          sla_days: slaDeadline
-        };
-      });
-      
-      // Call AI microservice for real SLA prediction
-      try {
-        const token = await this.getAIToken();
-        const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/sla_prediction`, aiData, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          timeout: 300000
-        });
-        
-        // Transform AI response back to expected format
-        const aiPredictions = aiResponse.data.sla_predictions || [];
-        // console.log(`AI returned ${aiPredictions.length} predictions for ${bordereaux.length} bordereaux`);
-        // console.log('🔍 AI predictions raw data:', JSON.stringify(aiPredictions, null, 2));
-        // console.log('🔍 Bordereaux data:', JSON.stringify(bordereaux.map(b => ({ id: b.id, reference: b.reference, client: b.client?.name })), null, 2));
-        
-        if (aiPredictions.length === 0) {
-          // console.log('AI returned empty predictions - throwing error');
-          throw new Error('AI service returned no predictions');
-        }
-        
-        const mappedPredictions = aiPredictions.map((pred: any) => {
-          const bordereau = bordereaux.find(b => b.id === pred.bordereau_id);
-          return {
-            id: pred.bordereau_id,
-            risk: pred.status_color || '🟡',
-            score: pred.risk_score || 0.5,
-            days_left: pred.days_remaining || 0,
-            bordereau: {
-              reference: bordereau?.reference || pred.reference || pred.bordereau_id,
-              clientName: bordereau?.client?.name || 'Client inconnu',
-              assignedTo: bordereau?.currentHandler?.fullName || 'Non assigné'
-            }
-          };
-        });
-        
-        // console.log('✅ Final mapped predictions:', JSON.stringify(mappedPredictions, null, 2));
-        return mappedPredictions;
-        
-      } catch (aiError) {
-        console.error('AI SLA prediction failed:', aiError);
-        throw new Error('AI SLA prediction service unavailable');
-      }
-      
-    } catch (error) {
-      console.error('SLA prediction failed:', error);
-      throw error;
-    }
-  }
-
-  async getCapacityAnalysis(user: any) {
-    try {
-      this.checkAnalyticsRole(user);
-      
-      // Get all active users
-      const users = await this.prisma.user.findMany({
-        where: {
-          active: true,
-          role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] }
-        },
-        select: {
-          id: true,
-          fullName: true,
-          capacity: true
-        }
-      });
-      
-      if (users.length === 0) {
-        throw new Error('No user data available for capacity analysis');
-      }
-      
-      const capacityAnalysis: Array<{
-        userId: string;
-        userName: string;
-        activeBordereaux: number;
-        avgProcessingTime: number;
-        dailyCapacity: number;
-        daysToComplete: number;
-        capacityStatus: 'available' | 'at_capacity' | 'overloaded';
-        recommendation: string;
-      }> = [];
-      
-      for (const user of users) {
-        // Count assigned documents (not bordereaux) since documents are what's actually assigned
-        const activeDocuments = await this.prisma.document.count({
-          where: {
-            assignedToUserId: user.id
-          }
-        });
-        
-        const dailyCapacity = user.capacity || 20;
-        const utilizationRate = (activeDocuments / dailyCapacity) * 100;
-        const daysToComplete = activeDocuments > 0 ? activeDocuments / dailyCapacity : 0;
-        
-        let capacityStatus: 'available' | 'at_capacity' | 'overloaded';
-        let recommendation: string;
-        
-        if (utilizationRate > 120) {
-          capacityStatus = 'overloaded';
-          recommendation = `Surcharge critique: ${activeDocuments} dossiers / ${dailyCapacity} capacité - +${Math.round((activeDocuments / dailyCapacity - 1) * 100)}%`;
-        } else if (utilizationRate > 80) {
-          capacityStatus = 'at_capacity';
-          recommendation = `Charge élevée: ${activeDocuments} dossiers / ${dailyCapacity} capacité - ${Math.round(utilizationRate)}%`;
-        } else {
-          capacityStatus = 'available';
-          recommendation = 'Capacité disponible pour nouvelles tâches';
-        }
-        
-        capacityAnalysis.push({
-          userId: user.id,
-          userName: user.fullName,
-          activeBordereaux: activeDocuments,
-          avgProcessingTime: 2.5,
-          dailyCapacity,
-          daysToComplete,
-          capacityStatus,
-          recommendation
-        });
-      }
-      
-      return capacityAnalysis;
-      
-    } catch (error) {
-      console.error('Capacity analysis failed:', error);
-      throw error;
-    }
-  }
-  
-  private async getSystemMetricsForOptimization() {
-    try {
-      const metrics = await this.prisma.bordereau.aggregate({
-        _avg: { delaiReglement: true },
-        _count: { id: true },
-        where: {
-          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-        }
-      });
-      
-      return {
-        avg_processing_time: metrics._avg.delaiReglement || 0,
-        total_volume: metrics._count.id || 0,
-        system_load: 0.75,
-        resource_utilization: 0.68
-      };
-    } catch (error) {
-      console.error('Failed to get system metrics:', error);
-      return {
-        avg_processing_time: 0,
-        total_volume: 0,
-        system_load: 0.5,
-        resource_utilization: 0.5
-      };
-    }
-  }
-  
-  private async getPerformanceDataForAnalysis() {
-    try {
-      const users = await this.prisma.user.findMany({
-        where: {
-          active: true,
-          role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] }
-        },
-        include: {
-          bordereauxCurrentHandler: {
-            where: {
-              statut: { in: ['EN_COURS', 'ASSIGNE'] }
-            }
-          }
-        }
-      });
-      
-      return users.map(user => ({
-        user_id: user.id,
-        user_name: user.fullName,
-        role: user.role,
-        active_workload: user.bordereauxCurrentHandler.length,
-        capacity: user.capacity || 20,
-        performance_score: 0.8
-      }));
-    } catch (error) {
-      console.error('Failed to get performance data:', error);
-      return [];
-    }
-  }
-  
-
 
   async getOVDashboard(user: any, filters: any) {
     return this.ovService.getOVDashboard(user, filters);
@@ -286,326 +118,540 @@ export class AnalyticsService {
     return this.realTimeService.processRealTimeEvent(eventType, data);
   }
 
+  // ============================================================
+  // Access control
+  // ============================================================
   private checkAnalyticsRole(user: any) {
-    if (!['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'SCAN', 'BO', 'GESTIONNAIRE'].includes(user.role)) {
+    if (!ANALYTICS_ROLES.includes(user.role)) {
       throw new ForbiddenException('Access denied');
     }
   }
 
-  async getDailyKpis(query: AnalyticsKpiDto, user: any) {
+  // ============================================================
+  // SLA prediction (AI-only — cached, no local fallback)
+  // ============================================================
+  async predictSLABreaches(user: any) {
     this.checkAnalyticsRole(user);
-    console.log('📊 getDailyKpis filters:', query);
-    
-    const where: any = { archived: false };
-    
-    if (user.role === 'GESTIONNAIRE') {
-      where.assignedToUserId = user.id;
-    } else if (user.role === 'CHEF_EQUIPE') {
-      const teamMembers = await this.prisma.user.findMany({
-        where: { id: user.id },
-        select: { id: true }
-      });
-      where.assignedToUserId = { in: teamMembers.map(m => m.id) };
-    }
-    
-    if (query.clientId) {
-      where.clientId = query.clientId;
-      console.log('✅ Applying clientId filter:', query.clientId);
-    }
-    
-    // NEW: Support for gestionnaire filters
-    if ((query as any).gestionnaireId) {
-      where.assignedToUserId = (query as any).gestionnaireId;
-      console.log('✅ Applying gestionnaireId filter:', (query as any).gestionnaireId);
-    }
-    if ((query as any).gestionnaireSeniorId) {
-      // Get contracts managed by this senior
-      const contracts = await this.prisma.contract.findMany({
-        where: { teamLeaderId: (query as any).gestionnaireSeniorId },
-        select: { id: true }
-      });
-      if (contracts.length > 0) {
-        where.contractId = { in: contracts.map(c => c.id) };
-        console.log('✅ Applying gestionnaireSeniorId filter - contracts:', contracts.length);
-      }
-    }
-    if ((query as any).chefEquipeId) {
-      // Get team members for this chef
-      const teamMembers = await this.prisma.user.findMany({
-        where: {
-          OR: [
-            { id: (query as any).chefEquipeId },
-            { teamLeaderId: (query as any).chefEquipeId }
-          ]
-        },
-        select: { id: true }
-      });
-      if (teamMembers.length > 0) {
-        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
-        console.log('✅ Applying chefEquipeId filter - team members:', teamMembers.length);
-      }
-    }
-    
-    if (query.teamId) where.teamId = query.teamId;
-    if (query.userId) where.assignedToUserId = query.userId;
-    if (query.fromDate || query.toDate) {
-      where.createdAt = {};
-      if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
-      if (query.toDate) where.createdAt.lte = new Date(query.toDate);
-      console.log('✅ Applying date filter:', query.fromDate, '-', query.toDate);
-    }
-    
-    console.log('🔍 Final where clause:', JSON.stringify(where, null, 2));
-    
-    // console.log('🔍 Final where clause:', JSON.stringify(where, null, 2));
-    
-    // Get ALL bordereaux first
-    const allBordereaux = await this.prisma.bordereau.findMany({
-      where,
-      select: {
-        id: true,
-        createdAt: true,
-        dateReception: true,
-        delaiReglement: true,
-        statut: true,
-        contract: { select: { delaiReglement: true } },
-        client: { select: { reglementDelay: true } }
+
+    const cacheKey = `analytics:sla-predictions`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      try {
+        const bordereaux = await this.prisma.bordereau.findMany({
+          where: { statut: { in: ['EN_COURS', 'ASSIGNE', 'A_AFFECTER'] } },
+          include: {
+            client: { select: { name: true } },
+            currentHandler: { select: { fullName: true } },
+          },
+          take: 50,
+        });
+
+        if (bordereaux.length === 0) {
+          return [];
+        }
+
+        const aiData = bordereaux.map((b) => {
+          const now = new Date();
+          let daysSinceReception = 0;
+
+          try {
+            if (b.dateReception) {
+              daysSinceReception = Math.floor((now.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24));
+            }
+          } catch (error) {
+            this.logger.warn(`Date parsing error for bordereau ${b.id}: ${error}`);
+            daysSinceReception = 2;
+          }
+
+          const slaDeadline = Math.max(1, b.delaiReglement || 30);
+          const deadline = new Date(now.getTime() + slaDeadline * 24 * 60 * 60 * 1000);
+
+          return {
+            id: b.id,
+            start_date: b.dateReception ? new Date(b.dateReception).toISOString() : now.toISOString(),
+            deadline: deadline.toISOString(),
+            current_progress: ['TRAITE', 'CLOTURE'].includes(b.statut)
+              ? 100
+              : ['EN_COURS', 'ASSIGNE'].includes(b.statut)
+                ? 50
+                : 10,
+            total_required: 100,
+            sla_days: slaDeadline,
+          };
+        });
+
+        try {
+          const token = await this.getAIToken();
+          const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/sla_prediction`, aiData, {
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            timeout: this.AI_TIMEOUT_MS,
+          });
+
+          const aiPredictions = aiResponse.data.sla_predictions || [];
+
+          if (aiPredictions.length === 0) {
+            throw new Error('AI service returned no predictions');
+          }
+
+          return aiPredictions.map((pred: any) => {
+            const bordereau = bordereaux.find((b) => b.id === pred.bordereau_id);
+            return {
+              id: pred.bordereau_id,
+              risk: pred.status_color || '🟡',
+              score: pred.risk_score || 0.5,
+              days_left: pred.days_remaining || 0,
+              bordereau: {
+                reference: bordereau?.reference || pred.reference || pred.bordereau_id,
+                clientName: bordereau?.client?.name || 'Client inconnu',
+                assignedTo: bordereau?.currentHandler?.fullName || 'Non assigné',
+              },
+            };
+          });
+        } catch (aiError) {
+          this.logger.error('AI SLA prediction failed', aiError as Error);
+          throw new Error('AI SLA prediction service unavailable');
+        }
+      } catch (error) {
+        this.logger.error('SLA prediction failed', error as Error);
+        throw error;
       }
     });
-    
-    // Apply slaStatus filter AFTER calculating SLA
-    let filteredBordereaux = allBordereaux;
-    if (query.slaStatus) {
-      // console.log('✅ Applying slaStatus filter to KPIs:', query.slaStatus);
-      const now = new Date();
-      filteredBordereaux = allBordereaux.filter(b => {
-        const slaThreshold = b.delaiReglement || b.contract?.delaiReglement || b.client?.reglementDelay || 30;
-        const validDate = b.dateReception || b.createdAt;
-        const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
-        const percentElapsed = (daysElapsed / slaThreshold) * 100;
-        
-        if (query.slaStatus === 'overdue') return percentElapsed > 100;
-        if (query.slaStatus === 'atrisk') return percentElapsed > 80 && percentElapsed <= 100;
-        if (query.slaStatus === 'ontime') return percentElapsed <= 80;
-        return true;
+  }
+
+  // ============================================================
+  // Capacity analysis (batched — no N+1, cached)
+  // ============================================================
+  async getCapacityAnalysis(user: any) {
+    this.checkAnalyticsRole(user);
+
+    const cacheKey = `analytics:capacity`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      try {
+        const users = await this.prisma.user.findMany({
+          where: { active: true, role: { in: STAFF_ROLES } },
+          select: { id: true, fullName: true, capacity: true },
+        });
+
+        if (users.length === 0) {
+          throw new Error('No user data available for capacity analysis');
+        }
+
+        const userIds = users.map((u) => u.id);
+
+        const [documentCounts, completedBordereaux] = await Promise.all([
+          this.prisma.document.groupBy({
+            by: ['assignedToUserId'],
+            _count: { id: true },
+            where: { assignedToUserId: { in: userIds } },
+          }),
+          this.prisma.bordereau.findMany({
+            where: { assignedToUserId: { in: userIds }, dateCloture: { not: null } },
+            select: { assignedToUserId: true, dateReception: true, dateCloture: true },
+          }),
+        ]);
+
+        const documentCountMap = new Map(documentCounts.map((d) => [d.assignedToUserId, d._count.id]));
+
+        const processingTimeMap = new Map<string, { totalDays: number; count: number }>();
+        for (const b of completedBordereaux) {
+          if (!b.assignedToUserId || !b.dateCloture) continue;
+          const days = (new Date(b.dateCloture).getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24);
+          const entry = processingTimeMap.get(b.assignedToUserId) || { totalDays: 0, count: 0 };
+          entry.totalDays += days;
+          entry.count += 1;
+          processingTimeMap.set(b.assignedToUserId, entry);
+        }
+
+        const capacityAnalysis: Array<{
+          userId: string;
+          userName: string;
+          activeBordereaux: number;
+          avgProcessingTime: number;
+          dailyCapacity: number;
+          daysToComplete: number;
+          capacityStatus: 'available' | 'at_capacity' | 'overloaded';
+          recommendation: string;
+        }> = [];
+
+        for (const user of users) {
+          const activeDocuments = documentCountMap.get(user.id) || 0;
+          const dailyCapacity = user.capacity || 20;
+          const utilizationRate = (activeDocuments / dailyCapacity) * 100;
+          const daysToComplete = activeDocuments > 0 ? activeDocuments / dailyCapacity : 0;
+          const timing = processingTimeMap.get(user.id);
+          const avgProcessingTime = timing && timing.count > 0 ? Number((timing.totalDays / timing.count).toFixed(2)) : 0;
+
+          let capacityStatus: 'available' | 'at_capacity' | 'overloaded';
+          let recommendation: string;
+
+          if (utilizationRate > 120) {
+            capacityStatus = 'overloaded';
+            recommendation = `Surcharge critique: ${activeDocuments} dossiers / ${dailyCapacity} capacité - +${Math.round((activeDocuments / dailyCapacity - 1) * 100)}%`;
+          } else if (utilizationRate > 80) {
+            capacityStatus = 'at_capacity';
+            recommendation = `Charge élevée: ${activeDocuments} dossiers / ${dailyCapacity} capacité - ${Math.round(utilizationRate)}%`;
+          } else {
+            capacityStatus = 'available';
+            recommendation = 'Capacité disponible pour nouvelles tâches';
+          }
+
+          capacityAnalysis.push({
+            userId: user.id,
+            userName: user.fullName,
+            activeBordereaux: activeDocuments,
+            avgProcessingTime,
+            dailyCapacity,
+            daysToComplete,
+            capacityStatus,
+            recommendation,
+          });
+        }
+
+        return capacityAnalysis;
+      } catch (error) {
+        this.logger.error('Capacity analysis failed', error as Error);
+        throw error;
+      }
+    });
+  }
+
+  private async getSystemMetricsForOptimization() {
+    try {
+      const [metrics, currentWorkload, staff] = await Promise.all([
+        this.prisma.bordereau.aggregate({
+          _avg: { delaiReglement: true },
+          _count: { id: true },
+          where: { createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+        }),
+        this.prisma.bordereau.count({ where: { statut: { in: ACTIVE_WORKLOAD_STATUSES } } }),
+        this.prisma.user.aggregate({
+          _sum: { capacity: true },
+          where: { active: true, role: { in: STAFF_ROLES_WITH_SENIOR } },
+        }),
+      ]);
+
+      const totalCapacity = staff._sum.capacity || 0;
+      const resourceUtilization = totalCapacity > 0 ? Math.min(1, currentWorkload / totalCapacity) : 0;
+
+      return {
+        avg_processing_time: metrics._avg.delaiReglement || 0,
+        total_volume: metrics._count.id || 0,
+        system_load: Number(resourceUtilization.toFixed(2)),
+        resource_utilization: Number(resourceUtilization.toFixed(2)),
+      };
+    } catch (error) {
+      this.logger.error('Failed to get system metrics', error as Error);
+      return { avg_processing_time: 0, total_volume: 0, system_load: 0, resource_utilization: 0 };
+    }
+  }
+
+  private async getPerformanceDataForAnalysis() {
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { active: true, role: { in: STAFF_ROLES } },
+        include: {
+          bordereauxCurrentHandler: { where: { statut: { in: ACTIVE_WORKLOAD_STATUSES } } },
+        },
       });
-      // console.log(`📊 Filtered from ${allBordereaux.length} to ${filteredBordereaux.length} bordereaux`);
+
+      const userIds = users.map((u) => u.id);
+      const allAssigned = await this.prisma.bordereau.findMany({
+        where: { assignedToUserId: { in: userIds } },
+        select: { assignedToUserId: true, delaiReglement: true, dateReception: true, dateCloture: true },
+      });
+
+      const complianceMap = new Map<string, { total: number; compliant: number }>();
+      for (const b of allAssigned) {
+        if (!b.assignedToUserId) continue;
+        const entry = complianceMap.get(b.assignedToUserId) || { total: 0, compliant: 0 };
+        entry.total += 1;
+        const endDate = b.dateCloture ? new Date(b.dateCloture) : new Date();
+        const daysElapsed = (endDate.getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysElapsed <= (b.delaiReglement || 30)) entry.compliant += 1;
+        complianceMap.set(b.assignedToUserId, entry);
+      }
+
+      return users.map((user) => {
+        const compliance = complianceMap.get(user.id);
+        const performanceScore =
+          compliance && compliance.total > 0 ? Number((compliance.compliant / compliance.total).toFixed(2)) : 1;
+
+        return {
+          user_id: user.id,
+          user_name: user.fullName,
+          role: user.role,
+          active_workload: user.bordereauxCurrentHandler.length,
+          capacity: user.capacity || 20,
+          performance_score: performanceScore,
+        };
+      });
+    } catch (error) {
+      this.logger.error('Failed to get performance data', error as Error);
+      return [];
     }
-    
-    const totalCount = filteredBordereaux.length;
-    const processedCount = filteredBordereaux.filter(b => ['CLOTURE', 'TRAITE'].includes(b.statut)).length;
-    const enAttenteCount = filteredBordereaux.filter(b => ['EN_ATTENTE', 'A_SCANNER', 'SCAN_EN_COURS', 'A_AFFECTER', 'ASSIGNE'].includes(b.statut)).length;
-    
-    const avgDelay = filteredBordereaux.reduce((sum, b) => sum + (b.delaiReglement || 0), 0) / Math.max(filteredBordereaux.length, 1);
-    
-    // Group by date
-    const dateMap = new Map<string, number>();
-    for (const b of filteredBordereaux) {
-      const date = new Date(b.createdAt).toISOString().split('T')[0];
-      dateMap.set(date, (dateMap.get(date) || 0) + 1);
-    }
-    
-    const bsPerDay = Array.from(dateMap.entries())
-      .map(([date, count]) => ({
-        createdAt: new Date(date),
-        _count: { id: count }
-      }))
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    
-    return {
-      bsPerDay,
-      avgDelay,
-      totalCount,
-      processedCount,
-      enAttenteCount,
-      timestamp: new Date().toISOString()
-    };
+  }
+
+  // ============================================================
+  // KPIs (cached — role check always runs fresh, never cached)
+  // ============================================================
+  async getDailyKpis(query: AnalyticsKpiDto, user: any) {
+    this.checkAnalyticsRole(user);
+    this.logger.debug(`getDailyKpis filters: ${JSON.stringify(query)}`);
+
+    const cacheKey = `analytics:kpis:${user.id}:${user.role}:${JSON.stringify(query)}`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      const where: any = { archived: false };
+
+      if (user.role === 'GESTIONNAIRE') {
+        where.assignedToUserId = user.id;
+      } else if (user.role === 'CHEF_EQUIPE') {
+        const teamMembers = await this.prisma.user.findMany({ where: { id: user.id }, select: { id: true } });
+        where.assignedToUserId = { in: teamMembers.map((m) => m.id) };
+      }
+
+      if (query.clientId) {
+        where.clientId = query.clientId;
+      }
+
+      if ((query as any).gestionnaireId) {
+        where.assignedToUserId = (query as any).gestionnaireId;
+      }
+      if ((query as any).gestionnaireSeniorId) {
+        const contracts = await this.prisma.contract.findMany({
+          where: { teamLeaderId: (query as any).gestionnaireSeniorId },
+          select: { id: true },
+        });
+        if (contracts.length > 0) {
+          where.contractId = { in: contracts.map((c) => c.id) };
+        }
+      }
+      if ((query as any).chefEquipeId) {
+        const teamMembers = await this.prisma.user.findMany({
+          where: { OR: [{ id: (query as any).chefEquipeId }, { teamLeaderId: (query as any).chefEquipeId }] },
+          select: { id: true },
+        });
+        if (teamMembers.length > 0) {
+          where.assignedToUserId = { in: teamMembers.map((m) => m.id) };
+        }
+      }
+
+      if (query.teamId) where.teamId = query.teamId;
+      if (query.userId) where.assignedToUserId = query.userId;
+      if (query.fromDate || query.toDate) {
+        where.createdAt = {};
+        if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
+        if (query.toDate) where.createdAt.lte = new Date(query.toDate);
+      }
+
+      const allBordereaux = await this.prisma.bordereau.findMany({
+        where,
+        select: {
+          id: true,
+          createdAt: true,
+          dateReception: true,
+          delaiReglement: true,
+          statut: true,
+          contract: { select: { delaiReglement: true } },
+          client: { select: { reglementDelay: true } },
+        },
+      });
+
+      let filteredBordereaux = allBordereaux;
+      if (query.slaStatus) {
+        const now = new Date();
+        filteredBordereaux = allBordereaux.filter((b) => {
+          const slaThreshold = b.delaiReglement || b.contract?.delaiReglement || b.client?.reglementDelay || 30;
+          const validDate = b.dateReception || b.createdAt;
+          const daysElapsed = Math.floor((now.getTime() - new Date(validDate).getTime()) / (1000 * 60 * 60 * 24));
+          const percentElapsed = (daysElapsed / slaThreshold) * 100;
+
+          if (query.slaStatus === 'overdue') return percentElapsed > 100;
+          if (query.slaStatus === 'atrisk') return percentElapsed > 80 && percentElapsed <= 100;
+          if (query.slaStatus === 'ontime') return percentElapsed <= 80;
+          return true;
+        });
+      }
+
+      const totalCount = filteredBordereaux.length;
+      const processedCount = filteredBordereaux.filter((b) => ['CLOTURE', 'TRAITE'].includes(b.statut)).length;
+      const enAttenteCount = filteredBordereaux.filter((b) =>
+        ['EN_ATTENTE', 'A_SCANNER', 'SCAN_EN_COURS', 'A_AFFECTER', 'ASSIGNE'].includes(b.statut),
+      ).length;
+
+      const avgDelay = filteredBordereaux.reduce((sum, b) => sum + (b.delaiReglement || 0), 0) / Math.max(filteredBordereaux.length, 1);
+
+      const dateMap = new Map<string, number>();
+      for (const b of filteredBordereaux) {
+        const date = new Date(b.createdAt).toISOString().split('T')[0];
+        dateMap.set(date, (dateMap.get(date) || 0) + 1);
+      }
+
+      const bsPerDay = Array.from(dateMap.entries())
+        .map(([date, count]) => ({ createdAt: new Date(date), _count: { id: count } }))
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+      return {
+        bsPerDay,
+        avgDelay,
+        totalCount,
+        processedCount,
+        enAttenteCount,
+        timestamp: new Date().toISOString(),
+      };
+    });
   }
 
   async getPerformance(query: AnalyticsPerformanceDto, user: any) {
     this.checkAnalyticsRole(user);
     const where: any = { archived: false };
-    
-    // Apply filters
+
     if (query.clientId) where.clientId = query.clientId;
     if (query.teamId) where.teamId = query.teamId;
-    if (query.userId) where.userId = query.userId;
-    if (query.role) where.role = query.role;
-    
-    // NEW: Support for gestionnaire filters
+    if (query.userId) where.assignedToUserId = query.userId;
+
     if ((query as any).gestionnaireId) {
       where.assignedToUserId = (query as any).gestionnaireId;
     }
     if ((query as any).gestionnaireSeniorId) {
-      // Get contracts managed by this senior
       const contracts = await this.prisma.contract.findMany({
         where: { teamLeaderId: (query as any).gestionnaireSeniorId },
-        select: { id: true }
+        select: { id: true },
       });
       if (contracts.length > 0) {
-        where.contractId = { in: contracts.map(c => c.id) };
+        where.contractId = { in: contracts.map((c) => c.id) };
       }
     }
     if ((query as any).chefEquipeId) {
-      // Get team members for this chef
       const teamMembers = await this.prisma.user.findMany({
-        where: { 
-          OR: [
-            { id: (query as any).chefEquipeId },
-            { teamLeaderId: (query as any).chefEquipeId }
-          ]
-        },
-        select: { id: true }
+        where: { OR: [{ id: (query as any).chefEquipeId }, { teamLeaderId: (query as any).chefEquipeId }] },
+        select: { id: true },
       });
       if (teamMembers.length > 0) {
-        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
+        where.assignedToUserId = { in: teamMembers.map((m) => m.id) };
       }
     }
-    
+
     if (query.fromDate || query.toDate) {
       where.createdAt = {};
       if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
       if (query.toDate) where.createdAt.lte = new Date(query.toDate);
     }
-    const processedByUser = await this.prisma.bordereau.groupBy({
-      by: ['clientId'],
-      _count: { id: true },
-      where,
-    });
-    const slaCompliant = await this.prisma.bordereau.count({
-      where: { ...where, delaiReglement: { lte: 3 } },
-    });
-    return {
-      processedByUser,
-      slaCompliant,
-    };
+
+    const [processedByUser, slaCompliant] = await Promise.all([
+      this.prisma.bordereau.groupBy({ by: ['clientId'], _count: { id: true }, where }),
+      this.prisma.bordereau.count({ where: { ...where, delaiReglement: { lte: 3 } } }),
+    ]);
+
+    return { processedByUser, slaCompliant };
   }
 
+  // ============================================================
+  // Alerts — unchanged behaviour, still règlement-BO based (this endpoint
+  // is consumed by the legacy single-SLA alert widget). For the full
+  // four-indicator alert feed, see SLAAnalyticsService.getSLADashboard().
+  // Cached — role check always runs fresh.
+  // ============================================================
   async getAlerts(user: any, filters: any = {}) {
     this.checkAnalyticsRole(user);
-    console.log('🚨 getAlerts filters:', filters);
-    
-    const where: any = { archived: false };
-    
-    // Apply database filters
-    if (filters.clientId) {
-      where.clientId = filters.clientId;
-      console.log('✅ Applying clientId filter to alerts:', filters.clientId);
-    }
-    
-    // NEW: Support for gestionnaire filters
-    if (filters.gestionnaireId) {
-      where.assignedToUserId = filters.gestionnaireId;
-      console.log('✅ Applying gestionnaireId filter to alerts:', filters.gestionnaireId);
-    }
-    if (filters.gestionnaireSeniorId) {
-      // Get contracts managed by this senior
-      const contracts = await this.prisma.contract.findMany({
-        where: { teamLeaderId: filters.gestionnaireSeniorId },
-        select: { id: true }
-      });
-      if (contracts.length > 0) {
-        where.contractId = { in: contracts.map(c => c.id) };
-        console.log('✅ Applying gestionnaireSeniorId filter to alerts - contracts:', contracts.length);
+    this.logger.debug(`getAlerts filters: ${JSON.stringify(filters)}`);
+
+    const cacheKey = `analytics:alerts:${user.id}:${user.role}:${JSON.stringify(filters)}`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      const where: any = { archived: false };
+
+      if (filters.clientId) {
+        where.clientId = filters.clientId;
       }
-    }
-    if (filters.chefEquipeId) {
-      // Get team members for this chef
-      const teamMembers = await this.prisma.user.findMany({
-        where: {
-          OR: [
-            { id: filters.chefEquipeId },
-            { teamLeaderId: filters.chefEquipeId }
-          ]
+
+      if (filters.gestionnaireId) {
+        where.assignedToUserId = filters.gestionnaireId;
+      }
+      if (filters.gestionnaireSeniorId) {
+        const contracts = await this.prisma.contract.findMany({
+          where: { teamLeaderId: filters.gestionnaireSeniorId },
+          select: { id: true },
+        });
+        if (contracts.length > 0) {
+          where.contractId = { in: contracts.map((c) => c.id) };
+        }
+      }
+      if (filters.chefEquipeId) {
+        const teamMembers = await this.prisma.user.findMany({
+          where: { OR: [{ id: filters.chefEquipeId }, { teamLeaderId: filters.chefEquipeId }] },
+          select: { id: true },
+        });
+        if (teamMembers.length > 0) {
+          where.assignedToUserId = { in: teamMembers.map((m) => m.id) };
+        }
+      }
+
+      if (filters.fromDate || filters.toDate) {
+        where.createdAt = {};
+        if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
+        if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
+      }
+
+      const allBordereaux = await this.prisma.bordereau.findMany({
+        where,
+        select: {
+          id: true,
+          reference: true,
+          dateReception: true,
+          dateReceptionBO: true,
+          delaiReglement: true,
+          statut: true,
+          clientId: true,
+          assignedToUserId: true,
+          createdAt: true,
+          dateCloture: true,
+          dateExecutionVirement: true,
+          ordresVirement: true,
         },
-        select: { id: true }
       });
-      if (teamMembers.length > 0) {
-        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
-        console.log('✅ Applying chefEquipeId filter to alerts - team members:', teamMembers.length);
+
+      const critical: any[] = [];
+      const warning: any[] = [];
+      const ok: any[] = [];
+
+      for (const bordereau of allBordereaux) {
+        // ✅ calculateSLA() = "SLA de règlement BO" from the unified calculator (unchanged call site)
+        const slaData = calculateSLA(bordereau);
+
+        if (slaData.isFrozen) continue;
+
+        if (slaData.percentElapsed > 100) {
+          critical.push({ ...bordereau, statusLevel: 'red', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
+        } else if (slaData.percentElapsed > 80) {
+          warning.push({ ...bordereau, statusLevel: 'orange', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
+        } else {
+          ok.push({ ...bordereau, statusLevel: 'green', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
+        }
       }
-    }
-    
-    if (filters.fromDate || filters.toDate) {
-      where.createdAt = {};
-      if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
-      if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
-      console.log('✅ Applying date filter to alerts:', filters.fromDate, '-', filters.toDate);
-    }
-    
-    console.log('🔍 Alerts where clause:', JSON.stringify(where, null, 2));
-    
-    const allBordereaux = await this.prisma.bordereau.findMany({
-      where,
-      select: {
-        id: true,
-        reference: true,
-        dateReception: true,
-        dateReceptionBO: true,
-        delaiReglement: true,
-        statut: true,
-        clientId: true,
-        assignedToUserId: true,
-        createdAt: true,
-        ordresVirement: true
+
+      let filteredCritical = critical;
+      let filteredWarning = warning;
+      let filteredOk = ok;
+
+      if (filters.slaStatus) {
+        if (filters.slaStatus === 'overdue') {
+          filteredWarning = [];
+          filteredOk = [];
+        } else if (filters.slaStatus === 'atrisk') {
+          filteredCritical = [];
+          filteredOk = [];
+        } else if (filters.slaStatus === 'ontime') {
+          filteredCritical = [];
+          filteredWarning = [];
+        }
       }
+
+      return { critical: filteredCritical, warning: filteredWarning, ok: filteredOk };
     });
-    
-    const critical: any[] = [];
-    const warning: any[] = [];
-    const ok: any[] = [];
-    
-    for (const bordereau of allBordereaux) {
-      const slaData = calculateSLA(bordereau);
-      
-      // Skip frozen bordereaux
-      if (slaData.isFrozen) {
-        continue;
-      }
-      
-      // RÈGLE SLA UNIFIÉE: Basée sur pourcentage du délai écoulé
-      if (slaData.percentElapsed > 100) {
-        critical.push({ ...bordereau, statusLevel: 'red', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
-      } else if (slaData.percentElapsed > 80) {
-        warning.push({ ...bordereau, statusLevel: 'orange', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
-      } else {
-        ok.push({ ...bordereau, statusLevel: 'green', daysSinceReception: slaData.daysElapsed, slaThreshold: bordereau.delaiReglement });
-      }
-    }
-    
-    // Apply SLA status filter AFTER calculating status
-    let filteredCritical = critical;
-    let filteredWarning = warning;
-    let filteredOk = ok;
-    
-    if (filters.slaStatus) {
-      // console.log('✅ Applying slaStatus filter:', filters.slaStatus);
-      if (filters.slaStatus === 'overdue') {
-        filteredWarning = [];
-        filteredOk = [];
-      } else if (filters.slaStatus === 'atrisk') {
-        filteredCritical = [];
-        filteredOk = [];
-      } else if (filters.slaStatus === 'ontime') {
-        filteredCritical = [];
-        filteredWarning = [];
-      }
-    }
-    
-    // console.log(`📊 Alert counts: critical=${filteredCritical.length}, warning=${filteredWarning.length}, ok=${filteredOk.length}`);
-    
-    return {
-      critical: filteredCritical,
-      warning: filteredWarning,
-      ok: filteredOk
-    };
   }
 
   async getSlaComplianceByUser(user: any, filters: any = {}) {
     this.checkAnalyticsRole(user);
     const where: any = { archived: false };
-    
-    // Apply filters
+
     if (filters.clientId) where.clientId = filters.clientId;
     if (filters.teamId) where.teamId = filters.teamId;
     if (filters.fromDate || filters.toDate) {
@@ -613,28 +659,26 @@ export class AnalyticsService {
       if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
       if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
     }
-    
+
     try {
-      const users = await this.prisma.bordereau.groupBy({
-        by: ['assignedToUserId'] as any,
-        _count: { id: true },
-        where,
-      });
-      const sla = await this.prisma.bordereau.groupBy({
-        by: ['assignedToUserId'] as any,
-        where: { ...where, delaiReglement: { lte: 3 } },
-        _count: { id: true },
-      });
+      const [users, sla] = await Promise.all([
+        this.prisma.bordereau.groupBy({ by: ['assignedToUserId'] as any, _count: { id: true }, where }),
+        this.prisma.bordereau.groupBy({
+          by: ['assignedToUserId'] as any,
+          where: { ...where, delaiReglement: { lte: 3 } },
+          _count: { id: true },
+        }),
+      ]);
+
       const slaMap = Object.fromEntries(sla.map((u: any) => [u.assignedToUserId, u._count?.id ?? 0]));
-      
-      // Get real user information
-      const userIds = users.map((u: any) => u.assignedToUserId).filter(id => id);
+
+      const userIds = users.map((u: any) => u.assignedToUserId).filter((id) => id);
       const userDetails = await this.prisma.user.findMany({
         where: { id: { in: userIds } },
-        select: { id: true, fullName: true, email: true, department: true }
+        select: { id: true, fullName: true, email: true, department: true },
       });
-      const userMap = Object.fromEntries(userDetails.map(u => [u.id, u]));
-      
+      const userMap = Object.fromEntries(userDetails.map((u) => [u.id, u]));
+
       return users
         .filter((u: any) => u.assignedToUserId)
         .map((u: any) => {
@@ -645,22 +689,29 @@ export class AnalyticsService {
             department: userInfo?.department || null,
             total: u._count?.id ?? 0,
             slaCompliant: slaMap[u.assignedToUserId] || 0,
-            complianceRate: (u._count?.id ?? 0) > 0 ? ((slaMap[u.assignedToUserId] || 0) / (u._count?.id ?? 0)) * 100 : 0
+            complianceRate: (u._count?.id ?? 0) > 0 ? ((slaMap[u.assignedToUserId] || 0) / (u._count?.id ?? 0)) * 100 : 0,
           };
         })
-        .filter(u => u.userName !== null);
+        .filter((u) => u.userName !== null);
     } catch (error) {
-      console.error('Error getting SLA compliance by user:', error);
+      this.logger.error('Error getting SLA compliance by user', error as Error);
       return [];
     }
   }
 
-  // AI Integration
+  // ============================================================
+  // AI Integration — all AI-only, no local fallback substitutes.
+  // ============================================================
   async getPrioritiesAI(items: any[]) {
     try {
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/priorities`, items);
+      const token = await this.getAIToken();
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/priorities`, items, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
+      });
       return response.data;
     } catch (error: any) {
+      this.logger.error(`AI priorities failed: ${error.message}`);
       throw new Error('AI priorities failed: ' + error.message);
     }
   }
@@ -669,15 +720,12 @@ export class AnalyticsService {
     try {
       const token = await this.getAIToken();
       const response = await axios.post(`${AI_MICROSERVICE_URL}/reassignment`, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 300000
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
       });
       return response.data;
     } catch (error: any) {
-      console.error('AI reassignment failed:', error.response?.data || error.message);
+      this.logger.error('AI reassignment failed', error.response?.data || error.message);
       throw new Error('AI reassignment failed: ' + (error.response?.data?.detail || error.message));
     }
   }
@@ -686,109 +734,106 @@ export class AnalyticsService {
     try {
       const token = await this.getAIToken();
       const response = await axios.post(`${AI_MICROSERVICE_URL}/analytics/ai/reassign-suggestion`, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 300000
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
       });
       return response.data;
     } catch (error: any) {
-      console.error('AI reassign suggestion failed:', error.response?.data || error.message);
+      this.logger.error('AI reassign suggestion failed', error.response?.data || error.message);
       throw new Error('AI reassign suggestion failed: ' + (error.response?.data?.detail || error.message));
     }
   }
 
+  /**
+   * Fetches an AI microservice bearer token. Cached in Redis for its lifetime,
+   * and gated by a circuit breaker so a downed AI service fails fast (no
+   * repeated network calls / log spam) for AI_CIRCUIT_BREAKER_TTL_SECONDS.
+   * This is resilience, not a fallback: on failure we throw, we never
+   * substitute a locally-computed answer for the AI's.
+   */
   private async getAIToken(): Promise<string> {
+    const breakerTripped = await this.redis.get<boolean>(this.AI_CIRCUIT_BREAKER_KEY);
+    if (breakerTripped) {
+      throw new Error('AI authentication failed');
+    }
+
+    const cachedToken = await this.redis.get<string>(this.AI_TOKEN_CACHE_KEY);
+    if (cachedToken) {
+      return cachedToken;
+    }
+
     try {
-      // Try multiple credential combinations
-      const credentials = [
-        { username: 'admin', password: 'secret' },
-        { username: 'analyst', password: 'secret' },
-        { username: AI_USERNAME, password: AI_PASSWORD }
-      ];
-      
-      for (const cred of credentials) {
-        try {
-          const formData = new URLSearchParams();
-          formData.append('grant_type', 'password');
-          formData.append('username', cred.username);
-          formData.append('password', cred.password);
-          
-          const tokenResponse = await axios.post(`${AI_MICROSERVICE_URL}/token`, formData, {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            timeout: 300000
-          });
-          
-          // console.log(`✅ AI Token obtained with ${cred.username}`);
-          return tokenResponse.data.access_token;
-          
-        } catch (credError: any) {
-          // console.log(`❌ Failed with ${cred.username}: ${credError.response?.status}`);
-          continue;
-        }
-      }
-      
-      throw new Error('All credentials failed');
-      
+      const formData = new URLSearchParams();
+      formData.append('grant_type', 'password');
+      formData.append('username', AI_USERNAME);
+      formData.append('password', AI_PASSWORD);
+
+      const tokenResponse = await axios.post(`${AI_MICROSERVICE_URL}/token`, formData, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: this.AI_TIMEOUT_MS,
+      });
+
+      const token = tokenResponse.data.access_token;
+      const expiresIn = Number(tokenResponse.data.expires_in) || this.AI_TOKEN_DEFAULT_TTL_SECONDS;
+      const cacheTtl = Math.max(30, expiresIn - 30);
+
+      await this.redis.set(this.AI_TOKEN_CACHE_KEY, token, cacheTtl);
+      return token;
     } catch (error: any) {
-      console.error('AI Token Error - using fallback data');
+      this.logger.error('AI Token Error - authentication failed');
+      await this.redis.set(this.AI_CIRCUIT_BREAKER_KEY, true, this.AI_CIRCUIT_BREAKER_TTL_SECONDS);
       throw new Error('AI authentication failed');
     }
   }
 
   async getPerformanceAI(payload: any) {
-    // console.log('AI Performance request received:', payload);
-    
     try {
-      // Get real performance data from database
       const performanceData = await this.getPerformanceDataForAnalysis();
-      
-      // Get AI token and use real AI service
       const token = await this.getAIToken();
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/performance`, {
-        users: payload.users || [],
-        analysis_type: payload.analysis_type || 'standard',
-        performance_data: performanceData
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+
+      const response = await axios.post(
+        `${AI_MICROSERVICE_URL}/performance`,
+        {
+          users: payload.users || [],
+          analysis_type: payload.analysis_type || 'standard',
+          performance_data: performanceData,
         },
-        timeout: 300000
-      });
-      
-      // console.log('✅ AI Performance Service response received');
-      
-      // Save AI result for continuous learning
+        {
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          timeout: this.AI_TIMEOUT_MS,
+        },
+      );
+
       await this.saveAIAnalysisResult('performance_analysis', payload, response.data, { id: 'system' });
-      
+
       return response.data;
-      
     } catch (error: any) {
-      console.error('AI Performance analysis failed:', error.message || error);
+      this.logger.error(`AI Performance analysis failed: ${error.message || error}`);
       throw new Error('AI performance analysis unavailable');
     }
   }
 
-
-
   async getComparePerformanceAI(payload: any) {
-    const { BadGatewayException } = await import('@nestjs/common');
     try {
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/compare_performance`, payload);
+      const token = await this.getAIToken();
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/compare_performance`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
+      });
       return response.data;
     } catch (error: any) {
-      console.error('AI compare performance error:', error?.response?.data || error?.message || error);
+      this.logger.error('AI compare performance error', error?.response?.data || error?.message || error);
       throw new BadGatewayException('AI compare performance failed: ' + (error?.response?.data?.error || error?.message || error));
     }
   }
 
   async getDiagnosticOptimisationAI(payload: any) {
     try {
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/diagnostic_optimisation`, payload);
+      const token = await this.getAIToken();
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/diagnostic_optimisation`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
+      });
       return response.data;
     } catch (error: any) {
       throw new Error('AI diagnostic optimisation failed: ' + error.message);
@@ -797,7 +842,11 @@ export class AnalyticsService {
 
   async getPredictResourcesAI(payload: any) {
     try {
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/predict_resources`, payload);
+      const token = await this.getAIToken();
+      const response = await axios.post(`${AI_MICROSERVICE_URL}/predict_resources`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
+      });
       return response.data;
     } catch (error: any) {
       throw new Error('AI predict resources failed: ' + error.message);
@@ -808,39 +857,46 @@ export class AnalyticsService {
     try {
       const token = await this.getAIToken();
       const response = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, historicalData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 300000
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
       });
       return response.data;
     } catch (error: any) {
-      console.error('AI forecast trends failed:', error);
+      this.logger.error('AI forecast trends failed', error as Error);
       throw new Error('AI forecast trends failed: ' + error.message);
     }
   }
 
-  // Missing methods with minimal implementation
+  // ============================================================
+  // Reclamations / courriers
+  // ============================================================
   async getReclamationPerformance(user: any, query: any) {
     this.checkAnalyticsRole(user);
     try {
-      // Calculate total reclamations from courrier + reclamation tables
-      const totalReclamations = await this.prisma.reclamation.count();
-      const totalCourriers = await this.prisma.courrier.count();
-      const totalClaims = totalReclamations + totalCourriers;
-      
-      // Calculate resolved (84% as per script)
-      const resolvedReclamations = Math.floor(totalClaims * 0.84);
-      const resolutionRate = 84;
-      const avgResolutionTime = 2.4;
+      const [totalReclamations, totalCourriers, resolvedReclamations, byStatus, resolvedDurations] = await Promise.all([
+        this.prisma.reclamation.count(),
+        this.prisma.courrier.count(),
+        this.prisma.reclamation.count({ where: { status: { in: RESOLVED_RECLAMATION_STATUSES } } }),
+        this.prisma.reclamation.groupBy({ by: ['status'], _count: { id: true }, orderBy: { _count: { id: 'desc' } } }),
+        this.prisma.reclamation.findMany({
+          where: { status: { in: RESOLVED_RECLAMATION_STATUSES } },
+          select: { createdAt: true, updatedAt: true },
+        }),
+      ]);
 
-      // Get reclamations by status for trend
-      const byStatus = await this.prisma.reclamation.groupBy({
-        by: ['status'],
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } }
-      });
+      const totalClaims = totalReclamations + totalCourriers;
+      const resolutionRate = totalReclamations > 0 ? Number(((resolvedReclamations / totalReclamations) * 100).toFixed(1)) : 0;
+      const avgResolutionTime =
+        resolvedDurations.length > 0
+          ? Number(
+              (
+                resolvedDurations.reduce(
+                  (sum, r) => sum + (new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+                  0,
+                ) / resolvedDurations.length
+              ).toFixed(2),
+            )
+          : 0;
 
       return {
         totalReclamations: totalClaims,
@@ -848,17 +904,17 @@ export class AnalyticsService {
         resolutionRate,
         avgResolutionTime,
         byStatus,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('Error getting reclamation performance:', error);
+      this.logger.error('Error getting reclamation performance', error as Error);
       return {
-        totalReclamations: 15,
-        resolvedReclamations: 21,
-        resolutionRate: 84,
-        avgResolutionTime: 2.4,
+        totalReclamations: 0,
+        resolvedReclamations: 0,
+        resolutionRate: 0,
+        avgResolutionTime: 0,
         byStatus: [],
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
   }
@@ -896,89 +952,97 @@ export class AnalyticsService {
   async getEnhancedRecommendations(user: any) {
     try {
       this.checkAnalyticsRole(user);
-      
-      // Return sample AI recommendations for demo
-      const recommendations = [
-        {
+
+      const [alerts, capacityAnalysis, throughputGap] = await Promise.all([
+        this.getAlerts(user, {}),
+        this.getCapacityAnalysis(user),
+        this.getThroughputGap(user),
+      ]);
+
+      const recommendations: any[] = [];
+      const now = new Date().toISOString();
+
+      const overloaded = capacityAnalysis.filter((c) => c.capacityStatus === 'overloaded');
+      if (overloaded.length > 0) {
+        recommendations.push({
           type: 'reassignment',
           priority: 'high',
-          title: '🤖 IA: Réassignation Optimale Suggérée',
-          description: 'Gestionnaire 2 surchargé détecté par l\'IA - réassignation recommandée',
-          impact: 'Réduction de 2 jours du délai de traitement',
+          title: 'Réassignation Optimale Suggérée',
+          description: `${overloaded.length} gestionnaire(s) surchargé(s) détecté(s) - réassignation recommandée`,
+          impact: 'Réduction potentielle du délai de traitement',
           actionRequired: true,
-          aiGenerated: true,
-          confidence: 0.87,
-          timestamp: new Date().toISOString()
-        },
-        {
+          aiGenerated: false,
+          confidence: 1,
+          timestamp: now,
+        });
+      }
+
+      if (alerts.critical.length > 0) {
+        recommendations.push({
           type: 'process',
           priority: 'high',
-          title: '🤖 IA: Risque SLA Critique Détecté',
-          description: '3 bordereaux à risque critique selon l\'analyse prédictive',
+          title: 'Risque SLA Critique Détecté',
+          description: `${alerts.critical.length} bordereau(x) en dépassement de SLA`,
           impact: 'Probabilité élevée de non-conformité contractuelle',
           actionRequired: true,
-          aiGenerated: true,
-          confidence: 0.92,
-          timestamp: new Date().toISOString()
-        },
-        {
+          aiGenerated: false,
+          confidence: 1,
+          timestamp: now,
+        });
+      }
+
+      if (throughputGap.gap > 0) {
+        recommendations.push({
           type: 'staffing',
           priority: 'medium',
-          title: '🤖 IA: Renforcement d\'Équipe Prévu',
-          description: 'Tendance croissante détectée. 2 gestionnaires supplémentaires recommandés',
-          impact: 'Anticipation des besoins en personnel basée sur les prévisions IA',
+          title: "Renforcement d'Équipe Recommandé",
+          description: `Écart de capacité détecté: ${throughputGap.gap} dossier(s) au-delà de la capacité actuelle`,
+          impact: 'Anticipation des besoins en personnel',
           actionRequired: false,
-          aiGenerated: true,
-          confidence: 0.78,
-          timestamp: new Date().toISOString()
-        },
-        {
+          aiGenerated: false,
+          confidence: 1,
+          timestamp: now,
+        });
+      }
+
+      if (alerts.warning.length > 0) {
+        recommendations.push({
           type: 'process',
           priority: 'medium',
-          title: '🤖 IA: Anomalies Détectées',
-          description: '2 anomalies dans les performances détectées',
-          impact: 'Investigation recommandée pour optimiser les processus',
+          title: 'Bordereaux à Risque',
+          description: `${alerts.warning.length} bordereau(x) approchant leur échéance SLA`,
+          impact: 'Investigation recommandée pour éviter un dépassement',
           actionRequired: false,
-          aiGenerated: true,
-          confidence: 0.73,
-          timestamp: new Date().toISOString()
-        }
-      ];
-      
+          aiGenerated: false,
+          confidence: 1,
+          timestamp: now,
+        });
+      }
+
       return recommendations;
-      
     } catch (error) {
-      console.error('Enhanced recommendations failed:', error);
+      this.logger.error('Enhanced recommendations failed', error as Error);
       throw error;
     }
   }
 
   async getCourrierVolume(user: any) {
     this.checkAnalyticsRole(user);
-    try {
-      // Get courriers grouped by type
-      const byType = await this.prisma.courrier.groupBy({
-        by: ['type'],
-        _count: { id: true },
-        orderBy: { _count: { id: 'desc' } }
-      });
 
-      // Get total volume
-      const totalVolume = await this.prisma.courrier.count();
+    const cacheKey = `analytics:courrier-volume`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      try {
+        const [byType, totalVolume] = await Promise.all([
+          this.prisma.courrier.groupBy({ by: ['type'], _count: { id: true }, orderBy: { _count: { id: 'desc' } } }),
+          this.prisma.courrier.count(),
+        ]);
 
-      return {
-        byType,
-        totalVolume,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Error getting courrier volume:', error);
-      return {
-        byType: [{ type: 'REGLEMENT', _count: { id: 10 } }],
-        totalVolume: 10,
-        timestamp: new Date().toISOString()
-      };
-    }
+        return { byType, totalVolume, timestamp: new Date().toISOString() };
+      } catch (error) {
+        this.logger.error('Error getting courrier volume', error as Error);
+        return { byType: [], totalVolume: 0, timestamp: new Date().toISOString() };
+      }
+    });
   }
 
   async getCourrierSlaBreaches(user: any) {
@@ -998,32 +1062,27 @@ export class AnalyticsService {
 
   async getRecommendations(user: any) {
     this.checkAnalyticsRole(user);
-    
-    try {
-      // Get real workload data
-      const currentWorkload = await this.prisma.bordereau.count({
-        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
-      });
-      
-      const currentStaff = await this.prisma.user.count({
-        where: { 
-          role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] },
-          active: true
-        }
-      });
-      
-      // Calculate needed staff based on workload (10 bordereaux per person)
-      const neededStaff = Math.ceil(currentWorkload / 10);
-      
-      return { 
-        recommendations: [], 
-        neededStaff, 
-        recommendation: neededStaff > currentStaff ? 'INCREASE_STAFF' : 'OK' 
-      };
-    } catch (error) {
-      console.error('Recommendations calculation failed:', error);
-      throw error;
-    }
+
+    const cacheKey = `analytics:recommendations-basic`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      try {
+        const [currentWorkload, currentStaff] = await Promise.all([
+          this.prisma.bordereau.count({ where: { statut: { in: ACTIVE_WORKLOAD_STATUSES } } }),
+          this.prisma.user.count({ where: { role: { in: STAFF_ROLES }, active: true } }),
+        ]);
+
+        const neededStaff = Math.ceil(currentWorkload / 10);
+
+        return {
+          recommendations: [],
+          neededStaff,
+          recommendation: neededStaff > currentStaff ? 'INCREASE_STAFF' : 'OK',
+        };
+      } catch (error) {
+        this.logger.error('Recommendations calculation failed', error as Error);
+        throw error;
+      }
+    });
   }
 
   async getTrends(user: any, period: string) {
@@ -1031,98 +1090,74 @@ export class AnalyticsService {
     return [];
   }
 
+  // ============================================================
+  // Forecasting (AI-only — no local override of the AI's output;
+  // cached with a longer TTL since trend data doesn't need to be
+  // second-fresh).
+  // ============================================================
   async getForecast(user: any) {
-    try {
-      this.checkAnalyticsRole(user);
-      
-      // console.log('📊 Getting forecast with REAL data...');
-      
-      // Get ALL historical data (not just 30 days) for better AI predictions
-      const historicalBordereaux = await this.prisma.bordereau.findMany({
-        select: { createdAt: true },
-        orderBy: { createdAt: 'asc' }
-      });
-      
-      // console.log(`📈 Found ${historicalBordereaux.length} total bordereaux for forecasting`);
-      
-      // Group by date to get daily counts
-      const dailyCounts = new Map<string, number>();
-      historicalBordereaux.forEach(b => {
-        const dateStr = new Date(b.createdAt).toISOString().split('T')[0];
-        dailyCounts.set(dateStr, (dailyCounts.get(dateStr) || 0) + 1);
-      });
-      
-      // Convert to array and sort by date
-      const forecastData = Array.from(dailyCounts.entries())
-        .map(([date, value]) => ({ date, value }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-      
-      // console.log(`📅 Prepared ${forecastData.length} days of data for AI`);
-      // console.log(`📊 Sample data: ${JSON.stringify(forecastData.slice(0, 5))}`);
-      // console.log(`📊 Total volume: ${forecastData.reduce((sum, d) => sum + d.value, 0)} bordereaux`);
-      
-      if (forecastData.length === 0) {
-        throw new Error('No historical data available for forecasting');
+    this.checkAnalyticsRole(user);
+
+    const cacheKey = `analytics:forecast`;
+    return this.getOrSetCache(cacheKey, this.FORECAST_CACHE_TTL_SECONDS, async () => {
+      try {
+        const historicalBordereaux = await this.prisma.bordereau.findMany({
+          select: { createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        const dailyCounts = new Map<string, number>();
+        historicalBordereaux.forEach((b) => {
+          const dateStr = new Date(b.createdAt).toISOString().split('T')[0];
+          dailyCounts.set(dateStr, (dailyCounts.get(dateStr) || 0) + 1);
+        });
+
+        const forecastData = Array.from(dailyCounts.entries())
+          .map(([date, value]) => ({ date, value }))
+          .sort((a, b) => a.date.localeCompare(b.date));
+
+        if (forecastData.length === 0) {
+          throw new Error('No historical data available for forecasting');
+        }
+
+        const token = await this.getAIToken();
+
+        const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, forecastData, {
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          timeout: this.AI_TIMEOUT_MS,
+        });
+
+        const forecast = aiResponse.data.forecast || [];
+        // AI-only: trust the AI's aggregated forecast directly — no local
+        // sanity-clamp recomputation standing in for it.
+        const nextWeekForecast = forecast.reduce((sum: number, day: any) => sum + (day.predicted_value || 0), 0);
+
+        const history = forecast.map((day: any, index: number) => ({
+          day: index + 1,
+          count: Math.round(day.predicted_value || 0),
+        }));
+
+        const monthlyForecast = Math.round(nextWeekForecast * 4.3);
+
+        return {
+          nextWeekForecast: Math.round(nextWeekForecast),
+          nextMonthForecast: monthlyForecast,
+          slope: this.sanitizeNumber(this.calculateTrendSlope(forecast)),
+          history: Array.isArray(history) ? history : [],
+          aiGenerated: true,
+          modelPerformance: aiResponse.data.model_performance,
+          trendDirection: aiResponse.data.trend_direction || 'stable',
+          dataSource: 'real',
+          dataPoints: forecastData.length,
+          avgPerDay: Math.round((forecastData.reduce((sum, d) => sum + d.value, 0) / forecastData.length) * 10) / 10,
+        };
+      } catch (error: any) {
+        this.logger.error('AI Forecast failed', error);
+        throw new Error(`AI forecasting failed: ${error.message}`);
       }
-      
-      // Call AI microservice with REAL data
-      const token = await this.getAIToken();
-      // console.log('🤖 Calling AI forecast with real data...');
-      
-      const aiResponse = await axios.post(`${AI_MICROSERVICE_URL}/forecast_trends`, forecastData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 300000
-      });
-      
-      // console.log('✅ AI forecast response received');
-      
-      const forecast = aiResponse.data.forecast || [];
-      let nextWeekForecast = forecast.reduce((sum: number, day: any) => sum + (day.predicted_value || 0), 0);
-      
-      // console.log(`📈 AI raw prediction: ${Math.round(nextWeekForecast)} bordereaux for next week`);
-      // console.log(`📊 Trend direction: ${aiResponse.data.trend_direction}`);
-      
-      // Fallback: If AI predicts 0 or unrealistic values, use historical average
-      if (nextWeekForecast < 1 || nextWeekForecast > historicalBordereaux.length * 2) {
-        const totalBordereaux = forecastData.reduce((sum, d) => sum + d.value, 0);
-        const avgPerDay = totalBordereaux / forecastData.length;
-        nextWeekForecast = Math.round(avgPerDay * 7);
-        // console.log(`⚠️ AI prediction unrealistic, using historical average: ${nextWeekForecast} bordereaux/week`);
-      }
-      
-      // Transform AI response to expected format
-      const history = forecast.map((day: any, index: number) => ({
-        day: index + 1,
-        count: Math.round(day.predicted_value || 0)
-      }));
-      
-      // Calculate monthly forecast
-      const monthlyForecast = Math.round(nextWeekForecast * 4.3);
-      
-      // console.log(`✅ Final prediction: ${nextWeekForecast} per week, ${monthlyForecast} per month`);
-      
-      return {
-        nextWeekForecast: Math.round(nextWeekForecast),
-        nextMonthForecast: monthlyForecast,
-        slope: this.sanitizeNumber(this.calculateTrendSlope(forecast)),
-        history: Array.isArray(history) ? history : [],
-        aiGenerated: true,
-        modelPerformance: aiResponse.data.model_performance,
-        trendDirection: aiResponse.data.trend_direction || 'stable',
-        dataSource: 'real',
-        dataPoints: forecastData.length,
-        avgPerDay: Math.round((forecastData.reduce((sum, d) => sum + d.value, 0) / forecastData.length) * 10) / 10
-      };
-      
-    } catch (error: any) {
-      console.error('❌ AI Forecast failed:', error);
-      throw new Error(`AI forecasting failed: ${error.message}`);
-    }
+    });
   }
-  
+
   private calculateTrendSlope(forecast: any[]): number {
     if (!Array.isArray(forecast) || forecast.length < 2) return 0;
     const firstValue = forecast[0]?.predicted_value || 0;
@@ -1137,32 +1172,29 @@ export class AnalyticsService {
 
   async getThroughputGap(user: any) {
     this.checkAnalyticsRole(user);
-    try {
-      // Get current throughput vs capacity
-      const currentWorkload = await this.prisma.bordereau.count({
-        where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } }
-      });
-      
-      const activeStaff = await this.prisma.user.count({
-        where: { 
-          role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] },
-          active: true
-        }
-      });
-      
-      const capacity = activeStaff * 10; // 10 bordereaux per person
-      const gap = currentWorkload - capacity;
-      
-      return { 
-        gap,
-        currentWorkload,
-        capacity,
-        utilizationRate: capacity > 0 ? (currentWorkload / capacity) * 100 : 0
-      };
-    } catch (error) {
-      console.error('Throughput gap calculation failed:', error);
-      return { gap: 0, currentWorkload: 0, capacity: 0, utilizationRate: 0 };
-    }
+
+    const cacheKey = `analytics:throughput-gap`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      try {
+        const [currentWorkload, activeStaff] = await Promise.all([
+          this.prisma.bordereau.count({ where: { statut: { in: ACTIVE_WORKLOAD_STATUSES } } }),
+          this.prisma.user.count({ where: { role: { in: STAFF_ROLES }, active: true } }),
+        ]);
+
+        const capacity = activeStaff * 10;
+        const gap = currentWorkload - capacity;
+
+        return {
+          gap,
+          currentWorkload,
+          capacity,
+          utilizationRate: capacity > 0 ? (currentWorkload / capacity) * 100 : 0,
+        };
+      } catch (error) {
+        this.logger.error('Throughput gap calculation failed', error as Error);
+        return { gap: 0, currentWorkload: 0, capacity: 0, utilizationRate: 0 };
+      }
+    });
   }
 
   async exportAnalytics(query: any, user: any) {
@@ -1176,8 +1208,6 @@ export class AnalyticsService {
   }
 
   async getFilteredKpis(filters: any, user: any) {
-    // Implement your filtering logic here
-    // For now, return a stub response
     return {
       total: 0,
       processed: 0,
@@ -1185,458 +1215,364 @@ export class AnalyticsService {
       slaBreaches: 0,
       overdueVirements: 0,
       pendingReclamations: 0,
-      appliedFilters: filters
+      appliedFilters: filters,
     };
   }
 
   async estimateResources(filters: any, user: any) {
-    // Implement your resource estimation logic here
-    // For now, return a stub response
-    return {
-      estimatedResources: 0,
-      details: [],
-      appliedFilters: filters
-    };
+    return { estimatedResources: 0, details: [], appliedFilters: filters };
   }
 
   async getCurrentStaff(user: any) {
     this.checkAnalyticsRole(user);
-    const count = await this.prisma.user.count({
-      where: { 
-        role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] },
-        active: true
-      }
+
+    const cacheKey = `analytics:current-staff`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      const count = await this.prisma.user.count({ where: { role: { in: STAFF_ROLES }, active: true } });
+      return { count };
     });
-    return { count };
   }
 
   async getPlannedVsActual(user: any, dateRange: any) {
     this.checkAnalyticsRole(user);
-    // Try to fetch forecast up-front (used for planned values/fallback)
-    let forecast: any = { history: [] };
-    try {
-      forecast = await this.getForecast(user);
-    } catch (err) {
-      forecast = { history: [] };
-    }
 
-    const history = Array.isArray(forecast?.history) ? forecast.history : [];
-
-    // Determine number of buckets (periods) to show. Prefer explicit bucketCount, then forecast history length, then default 8.
-    const defaultBuckets = 8;
-    const bucketCount = Number(dateRange?.bucketCount) || (history.length > 0 ? history.length : defaultBuckets);
-
-    // Resolve date range
-    const now = new Date();
-    const to = dateRange?.toDate ? new Date(dateRange.toDate) : now;
-    let from = dateRange?.fromDate ? new Date(dateRange.fromDate) : new Date(to.getTime() - bucketCount * 7 * 24 * 60 * 60 * 1000);
-    if (from.getTime() > to.getTime()) {
-      // Guard: if user passed an inverted range, fallback to a sensible window
-      from = new Date(to.getTime() - bucketCount * 7 * 24 * 60 * 60 * 1000);
-    }
-
-    const totalMs = Math.max(1, to.getTime() - from.getTime());
-    const bucketMs = Math.ceil(totalMs / bucketCount);
-    const msPerDay = 24 * 60 * 60 * 1000;
-
-    // Load raw actual rows for the date range and aggregate into buckets
-    const rows = await this.prisma.bordereau.findMany({
-      where: {
-        createdAt: {
-          gte: from,
-          lte: to,
-        },
-      },
-      select: { createdAt: true },
-    });
-
-    const buckets: number[] = new Array(bucketCount).fill(0);
-    for (const r of rows) {
-      const ts = new Date(r.createdAt).getTime();
-      let idx = Math.floor((ts - from.getTime()) / bucketMs);
-      if (idx < 0) idx = 0;
-      if (idx >= bucketCount) idx = bucketCount - 1;
-      buckets[idx] = (buckets[idx] || 0) + 1;
-    }
-
-    // Map forecast history to planned values per bucket.
-    const planned: number[] = [];
-    if (history.length === bucketCount) {
-      for (let i = 0; i < bucketCount; i++) planned.push(history[i]?.count || 0);
-    } else if (history.length > 0) {
-      const totalForecast = history.reduce((s: number, h: any) => s + (h.count || 0), 0);
-      const avgPerDay = totalForecast / Math.max(1, history.length);
-      const daysPerBucket = Math.max(1, Math.round(bucketMs / msPerDay));
-      for (let i = 0; i < bucketCount; i++) planned.push(Math.round(avgPerDay * daysPerBucket));
-    } else {
-      for (let i = 0; i < bucketCount; i++) planned.push(0);
-    }
-
-    // Helper: week number
-    const getWeekNumber = (d: Date) => {
-      const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-      const dayNum = date.getUTCDay() || 7;
-      date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-      const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-      return Math.ceil((((date.getTime() - yearStart.getTime()) / msPerDay) + 1) / 7);
-    };
-
-    const formatLabel = (start: Date, end: Date) => {
-      // If large bucket (month+), show month-year
-      if (bucketMs >= 27 * msPerDay) {
-        return start.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+    const cacheKey = `analytics:planned-vs-actual:${JSON.stringify(dateRange || {})}`;
+    return this.getOrSetCache(cacheKey, this.FORECAST_CACHE_TTL_SECONDS, async () => {
+      let forecast: any = { history: [] };
+      try {
+        forecast = await this.getForecast(user);
+      } catch (err) {
+        forecast = { history: [] };
       }
-      // If week-sized bucket show week number
-      if (bucketMs >= 6 * msPerDay) {
-        return `Sem ${getWeekNumber(start)} ${start.getFullYear()}`;
-      }
-      // Otherwise show a short date range
-      const s = start.toLocaleDateString('fr-FR');
-      const e = end.toLocaleDateString('fr-FR');
-      return s === e ? s : `${s} → ${e}`;
-    };
 
-    const result: any[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const start = new Date(from.getTime() + i * bucketMs);
-      const end = new Date(Math.min(to.getTime(), from.getTime() + (i + 1) * bucketMs - 1));
-      const plannedVal = planned[i] || 0;
-      const actualVal = buckets[i] || 0;
-      const variance = plannedVal ? Math.round(((actualVal - plannedVal) / Math.max(plannedVal, 1)) * 100) : 0;
-      result.push({
-        period: formatLabel(start, end),
-        planned: plannedVal,
-        actual: actualVal,
-        variance,
+      const history = Array.isArray(forecast?.history) ? forecast.history : [];
+
+      const defaultBuckets = 8;
+      const bucketCount = Number(dateRange?.bucketCount) || (history.length > 0 ? history.length : defaultBuckets);
+
+      const now = new Date();
+      const to = dateRange?.toDate ? new Date(dateRange.toDate) : now;
+      let from = dateRange?.fromDate ? new Date(dateRange.fromDate) : new Date(to.getTime() - bucketCount * 7 * 24 * 60 * 60 * 1000);
+      if (from.getTime() > to.getTime()) {
+        from = new Date(to.getTime() - bucketCount * 7 * 24 * 60 * 60 * 1000);
+      }
+
+      const totalMs = Math.max(1, to.getTime() - from.getTime());
+      const bucketMs = Math.ceil(totalMs / bucketCount);
+      const msPerDay = 24 * 60 * 60 * 1000;
+
+      const rows = await this.prisma.bordereau.findMany({
+        where: { createdAt: { gte: from, lte: to } },
+        select: { createdAt: true },
       });
-    }
 
-    // debug logs removed
+      const buckets: number[] = new Array(bucketCount).fill(0);
+      for (const r of rows) {
+        const ts = new Date(r.createdAt).getTime();
+        let idx = Math.floor((ts - from.getTime()) / bucketMs);
+        if (idx < 0) idx = 0;
+        if (idx >= bucketCount) idx = bucketCount - 1;
+        buckets[idx] = (buckets[idx] || 0) + 1;
+      }
 
-    return result;
+      const planned: number[] = [];
+      if (history.length === bucketCount) {
+        for (let i = 0; i < bucketCount; i++) planned.push(history[i]?.count || 0);
+      } else if (history.length > 0) {
+        const totalForecast = history.reduce((s: number, h: any) => s + (h.count || 0), 0);
+        const avgPerDay = totalForecast / Math.max(1, history.length);
+        const daysPerBucket = Math.max(1, Math.round(bucketMs / msPerDay));
+        for (let i = 0; i < bucketCount; i++) planned.push(Math.round(avgPerDay * daysPerBucket));
+      } else {
+        for (let i = 0; i < bucketCount; i++) planned.push(0);
+      }
+
+      const getWeekNumber = (d: Date) => {
+        const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        const dayNum = date.getUTCDay() || 7;
+        date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+        return Math.ceil(((date.getTime() - yearStart.getTime()) / msPerDay + 1) / 7);
+      };
+
+      const formatLabel = (start: Date, end: Date) => {
+        if (bucketMs >= 27 * msPerDay) {
+          return start.toLocaleString('fr-FR', { month: 'short', year: 'numeric' });
+        }
+        if (bucketMs >= 6 * msPerDay) {
+          return `Sem ${getWeekNumber(start)} ${start.getFullYear()}`;
+        }
+        const s = start.toLocaleDateString('fr-FR');
+        const e = end.toLocaleDateString('fr-FR');
+        return s === e ? s : `${s} → ${e}`;
+      };
+
+      const result: any[] = [];
+      for (let i = 0; i < bucketCount; i++) {
+        const start = new Date(from.getTime() + i * bucketMs);
+        const end = new Date(Math.min(to.getTime(), from.getTime() + (i + 1) * bucketMs - 1));
+        const plannedVal = planned[i] || 0;
+        const actualVal = buckets[i] || 0;
+        const variance = plannedVal ? Math.round(((actualVal - plannedVal) / Math.max(plannedVal, 1)) * 100) : 0;
+        result.push({ period: formatLabel(start, end), planned: plannedVal, actual: actualVal, variance });
+      }
+
+      return result;
+    });
   }
 
+  // ============================================================
+  // AI recommendations — AI-only: on failure/empty response we now
+  // return an empty list instead of a hardcoded canned list that used
+  // to masquerade as AI output.
+  // ============================================================
   async getAIRecommendations(user: any) {
     this.checkAnalyticsRole(user);
-    
+
     try {
-      // console.log('🔍 Getting AI recommendations...');
-      // console.log('🔍 Backend AI recommendations method called');
       const token = await this.getAIToken();
-      // console.log('🔍 AI token obtained for recommendations');
-      
-      // Get real system data for AI recommendations
-      const currentWorkload = await this.prisma.bordereau.count({ where: { statut: { in: ['ASSIGNE', 'EN_COURS'] } } });
-      const staffCount = await this.prisma.user.count({ where: { active: true, role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] } } });
-      const slaBreaches = await this.prisma.bordereau.count({ where: { delaiReglement: { lt: 0 } } });
-      
+
+      const [currentWorkload, staffCount, slaBreaches, systemMetrics] = await Promise.all([
+        this.prisma.bordereau.count({ where: { statut: { in: ACTIVE_WORKLOAD_STATUSES } } }),
+        this.prisma.user.count({ where: { active: true, role: { in: STAFF_ROLES } } }),
+        this.prisma.bordereau.count({ where: { delaiReglement: { lt: 0 } } }),
+        this.getSystemMetricsForOptimization(),
+      ]);
+
       const systemData = {
         optimization_focus: ['forecasting', 'resource_planning', 'capacity'],
-        current_workload: Math.max(currentWorkload, 25), // Simulate higher workload
+        current_workload: currentWorkload,
         staff_count: staffCount,
-        sla_breaches: Math.max(slaBreaches, 3), // Simulate some SLA breaches
-        avg_processing_time: 4.2, // Higher processing time
-        capacity_utilization: 0.95, // High utilization
-        performance_issues: [
-          'High processing delays detected',
-          'Resource allocation suboptimal',
-          'SLA compliance at risk'
-        ],
-        bottlenecks: ['Document processing', 'Assignment delays'],
-        trend_analysis: 'workload_increasing'
+        sla_breaches: slaBreaches,
+        avg_processing_time: systemMetrics.avg_processing_time,
+        capacity_utilization: systemMetrics.resource_utilization,
+        trend_analysis: 'workload_stable',
       };
-      
-      // console.log('🔍 Sending system data to AI:', systemData);
-      
+
       const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, systemData, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 5000 // 5 second timeout
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
       });
-      
-      // console.log('🔍 AI recommendations response:', response.data);
-      
-      // Handle null or empty response
+
       if (!response.data || !response.data.recommendations) {
-        // console.warn('⚠️ AI returned null/empty recommendations');
-        return {
-          recommendations: [
-            'Optimiser la répartition des tâches entre équipes',
-            'Surveiller les délais de traitement critiques',
-            'Renforcer les effectifs pendant les pics de charge'
-          ]
-        };
+        this.logger.warn('AI returned no recommendations');
+        return { recommendations: [] };
       }
-      
+
       const recommendations = response.data.recommendations.map((rec: any) => rec.title || rec.description || rec);
-      // console.log('✅ Mapped recommendations:', recommendations);
-      // console.log('🔍 Returning recommendations to frontend');
-      
-      return {
-        recommendations
-      };
+      return { recommendations };
     } catch (error: any) {
-      console.error('❌ AI recommendations failed:', error.message);
-      console.error('❌ Full error:', error);
-      // Return default recommendations instead of empty array
-      return { 
-        recommendations: [
-          'Optimiser la répartition des tâches entre équipes',
-          'Surveiller les délais de traitement critiques',
-          'Renforcer les effectifs pendant les pics de charge'
-        ] 
-      };
+      this.logger.error(`AI recommendations failed: ${error.message}`);
+      return { recommendations: [] };
     }
   }
 
   async getResourcePlanning(user: any) {
     this.checkAnalyticsRole(user);
-    
-    const currentStaff = await this.getCurrentStaff(user);
-    const recommendations = await this.getRecommendations(user);
-    const neededStaff = recommendations.neededStaff || currentStaff.count;
-    
-    return [
-      { 
-        resource: 'Gestionnaires', 
-        current: currentStaff.count, 
-        needed: neededStaff, 
-        gap: neededStaff - currentStaff.count 
-      },
-      { 
-        resource: 'Superviseurs', 
-        current: Math.ceil(currentStaff.count / 4), 
-        needed: Math.ceil(neededStaff / 4), 
-        gap: Math.ceil(neededStaff / 4) - Math.ceil(currentStaff.count / 4)
-      },
-      { 
-        resource: 'Support', 
-        current: Math.ceil(currentStaff.count / 2), 
-        needed: Math.ceil(neededStaff / 2), 
-        gap: Math.ceil(neededStaff / 2) - Math.ceil(currentStaff.count / 2)
-      }
-    ];
+
+    const cacheKey = `analytics:resource-planning`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      const currentStaff = await this.getCurrentStaff(user);
+      const recommendations = await this.getRecommendations(user);
+      const neededStaff = recommendations.neededStaff || currentStaff.count;
+
+      return [
+        { resource: 'Gestionnaires', current: currentStaff.count, needed: neededStaff, gap: neededStaff - currentStaff.count },
+        {
+          resource: 'Superviseurs',
+          current: Math.ceil(currentStaff.count / 4),
+          needed: Math.ceil(neededStaff / 4),
+          gap: Math.ceil(neededStaff / 4) - Math.ceil(currentStaff.count / 4),
+        },
+        {
+          resource: 'Support',
+          current: Math.ceil(currentStaff.count / 2),
+          needed: Math.ceil(neededStaff / 2),
+          gap: Math.ceil(neededStaff / 2) - Math.ceil(currentStaff.count / 2),
+        },
+      ];
+    });
   }
 
-  // Filter options methods
+  // ============================================================
+  // Filter options
+  // ============================================================
   async getDepartments() {
     try {
-      // Return the 4 departments from script results
-      return [
-        { id: 'BO', name: 'Bureau d\'Ordre' },
-        { id: 'SANTE', name: 'Équipe Santé' },
-        { id: 'SCAN', name: 'Service Scan' },
-        { id: 'FINANCE', name: 'Service Finance' }
-      ];
+      const departments = await this.prisma.department.findMany({
+        where: { active: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+      return departments.map((d) => ({ id: d.id, name: d.name }));
     } catch (error) {
-      console.error('Error getting departments:', error);
+      this.logger.error('Error getting departments', error as Error);
       return [];
     }
   }
 
   async getTeams() {
     try {
-      // Get teams from users with CHEF_EQUIPE role
       const teamLeaders = await this.prisma.user.findMany({
-        where: {
-          role: 'CHEF_EQUIPE',
-          active: true
-        },
-        select: {
-          id: true,
-          fullName: true,
-          department: true
-        }
+        where: { role: 'CHEF_EQUIPE', active: true },
+        select: { id: true, fullName: true, department: true },
       });
 
-      return teamLeaders.map(leader => ({
+      return teamLeaders.map((leader) => ({
         id: leader.id,
-        name: `Équipe ${leader.fullName}${leader.department ? ` (${leader.department})` : ''}`
+        name: `Équipe ${leader.fullName}${leader.department ? ` (${leader.department})` : ''}`,
       }));
     } catch (error) {
-      console.error('Error getting teams:', error);
+      this.logger.error('Error getting teams', error as Error);
       return [];
     }
   }
 
   async getWorkforceEstimator(query: any, user: any) {
-    try {
-      this.checkAnalyticsRole(user);
-      
-      const period = query.period || 'current';
-      
-      // 1. Include GESTIONNAIRE_SENIOR in staff count
-      const currentStaff = await this.prisma.user.count({
-        where: { 
-          role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'] },
-          active: true
-        }
-      });
-      
-      // 2. Get current workload - ALL ACTIVE bordereaux (exclude only closed/completed)
-      const currentWorkload = await this.prisma.bordereau.count({        where: { 
-          statut: { 
-            notIn: ['CLOTURE', 'PAYE', 'REJETE'] 
-          }
-        }
-      });
-      
-      // 3. Calculate required staff with explanation
-      const requiredStaff = Math.ceil(currentWorkload / 10);
-      const requiredStaffCalculation = `${currentWorkload} bordereaux ÷ 10 bordereaux/personne = ${requiredStaff} personnes`;
-      
-      // 4. Calculate target and current workload with explanation
-      const targetWorkload = currentStaff * 10;
-      const targetWorkloadCalculation = `${currentStaff} personnes × 10 bordereaux/personne = ${targetWorkload} bordereaux`;
-      const currentWorkloadCalculation = `Bordereaux actifs (hors archivés/clôturés) = ${currentWorkload}`;
-      
-      // 5. Get departments with GESTIONNAIRE + GESTIONNAIRE_SENIOR + CHEF_EQUIPE
-      const departments = await this.prisma.department.findMany({
-        where: { active: true },
-        include: {
-          users: {
-            where: { 
-              active: true,
-              role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'] }
-            }
-          }
-        }
-      });
-      
-      // 6. Filter departments with staff and calculate metrics
-      const departmentAnalysis = departments
-        .filter(dept => dept.users.length > 0)
-        .map(dept => {
-          const deptStaff = dept.users.length;
-          const deptWorkload = Math.floor(currentWorkload * (deptStaff / Math.max(currentStaff, 1)));
-          const deptRequired = Math.ceil(deptWorkload / 10);
-          const deptEfficiency = Math.min(100, (deptStaff * 10 / Math.max(deptWorkload, 1)) * 100);
-          
-          return {
-            department: dept.name,
-            currentStaff: deptStaff,
-            requiredStaff: deptRequired,
-            workload: deptWorkload,
-            efficiency: Math.round(deptEfficiency),
-            status: deptStaff < deptRequired ? 'understaffed' as const : deptStaff > deptRequired ? 'overstaffed' as const : 'optimal' as const
-          };
-        });
-      
-      return {
-        currentStaff,
-        requiredStaff,
-        requiredStaffCalculation,
-        currentWorkload,
-        currentWorkloadCalculation,
-        targetWorkload,
-        targetWorkloadCalculation,
-        efficiency: Math.min(100, (currentStaff * 10 / Math.max(currentWorkload, 1)) * 100),
-        recommendations: await this.getAIWorkforceRecommendations(currentStaff, requiredStaff, currentWorkload),
-        departmentAnalysis
-      };
-    } catch (error) {
-      console.error('Error getting workforce estimator:', error);
-      return {
-        currentStaff: 0,
-        requiredStaff: 0,
-        currentWorkload: 0,
-        targetWorkload: 0,
-        efficiency: 0,
-        recommendations: [],
-        departmentAnalysis: []
-      };
-    }
-  }
+    this.checkAnalyticsRole(user);
 
-  private async getDepartmentWorkforce(department: string) {
-    const staff = await this.prisma.user.count({
-      where: { department }
-    });
-    
-    const workload = await this.prisma.bordereau.count({
-      where: { 
-        statut: { in: ['ASSIGNE', 'EN_COURS'] }
+    const cacheKey = `analytics:workforce-estimator:${JSON.stringify(query || {})}`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      try {
+        const [currentStaff, currentWorkload, departments] = await Promise.all([
+          this.prisma.user.count({ where: { role: { in: STAFF_ROLES_WITH_SENIOR }, active: true } }),
+          this.prisma.bordereau.count({ where: { statut: { notIn: ['CLOTURE', 'PAYE', 'REJETE'] } } }),
+          this.prisma.department.findMany({
+            where: { active: true },
+            include: { users: { where: { active: true, role: { in: STAFF_ROLES_WITH_SENIOR } } } },
+          }),
+        ]);
+
+        const requiredStaff = Math.ceil(currentWorkload / 10);
+        const requiredStaffCalculation = `${currentWorkload} bordereaux ÷ 10 bordereaux/personne = ${requiredStaff} personnes`;
+
+        const targetWorkload = currentStaff * 10;
+        const targetWorkloadCalculation = `${currentStaff} personnes × 10 bordereaux/personne = ${targetWorkload} bordereaux`;
+        const currentWorkloadCalculation = `Bordereaux actifs (hors archivés/clôturés) = ${currentWorkload}`;
+
+        const departmentAnalysis = departments
+          .filter((dept) => dept.users.length > 0)
+          .map((dept) => {
+            const deptStaff = dept.users.length;
+            const deptWorkload = Math.floor(currentWorkload * (deptStaff / Math.max(currentStaff, 1)));
+            const deptRequired = Math.ceil(deptWorkload / 10);
+            const deptEfficiency = Math.min(100, ((deptStaff * 10) / Math.max(deptWorkload, 1)) * 100);
+
+            return {
+              department: dept.name,
+              currentStaff: deptStaff,
+              requiredStaff: deptRequired,
+              workload: deptWorkload,
+              efficiency: Math.round(deptEfficiency),
+              status: deptStaff < deptRequired ? ('understaffed' as const) : deptStaff > deptRequired ? ('overstaffed' as const) : ('optimal' as const),
+            };
+          });
+
+        return {
+          currentStaff,
+          requiredStaff,
+          requiredStaffCalculation,
+          currentWorkload,
+          currentWorkloadCalculation,
+          targetWorkload,
+          targetWorkloadCalculation,
+          efficiency: Math.min(100, ((currentStaff * 10) / Math.max(currentWorkload, 1)) * 100),
+          recommendations: await this.getAIWorkforceRecommendations(currentStaff, requiredStaff, currentWorkload),
+          departmentAnalysis,
+        };
+      } catch (error) {
+        this.logger.error('Error getting workforce estimator', error as Error);
+        return {
+          currentStaff: 0,
+          requiredStaff: 0,
+          currentWorkload: 0,
+          targetWorkload: 0,
+          efficiency: 0,
+          recommendations: [],
+          departmentAnalysis: [],
+        };
       }
     });
-    
-    const requiredStaff = Math.ceil(workload / 10);
-    
-    return {
-      department,
-      currentStaff: staff,
-      requiredStaff,
-      workload,
-      efficiency: Math.min(100, (staff * 10 / Math.max(workload, 1)) * 100),
-      status: staff < requiredStaff ? 'understaffed' : staff > requiredStaff ? 'overstaffed' : 'optimal'
-    };
   }
 
   private async getAIWorkforceRecommendations(currentStaff: number, requiredStaff: number, currentWorkload: number): Promise<string[]> {
     try {
       const token = await this.getAIToken();
-      
-      // Get SLA data for AI analysis - ALL ACTIVE bordereaux
-      const slaItems = await this.prisma.bordereau.findMany({
-        where: { 
-          statut: { 
-            notIn: ['CLOTURE', 'PAYE', 'REJETE'] 
-          }
-        },
-        select: {
-          id: true,
-          statut: true,
-          delaiReglement: true,
-          dateReception: true,
-          dateReceptionBO: true,
-          createdAt: true,
-          updatedAt: true
-        }
-      });
-      
-      // Calculate days remaining for each bordereau using dateReceptionBO
+
+      // 🚀 NEW: these two reads are independent — run them concurrently
+      // instead of one-after-the-other.
+      const [slaItems, agents] = await Promise.all([
+        this.prisma.bordereau.findMany({
+          where: { statut: { notIn: ['CLOTURE', 'PAYE', 'REJETE'] } },
+          select: {
+            id: true,
+            statut: true,
+            delaiReglement: true,
+            dateReception: true,
+            dateReceptionBO: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.user.findMany({
+          where: { active: true, role: { in: STAFF_ROLES_WITH_SENIOR } },
+        }),
+      ]);
+
       const now = new Date();
-      const bordereaux = slaItems.map(b => {
-        // Use dateReceptionBO (Bureau d'Ordre) as primary date
+      const bordereaux = slaItems.map((b) => {
         const receptionDate = b.dateReceptionBO || b.dateReception || b.createdAt;
         const slaThreshold = b.delaiReglement || 30;
         const deadline = new Date(receptionDate);
         deadline.setDate(deadline.getDate() + slaThreshold);
         const daysRemaining = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        
-        return {
-          id: b.id,
-          status: b.statut,
-          days_remaining: daysRemaining,
-          sla_days: slaThreshold
-        };
+
+        return { id: b.id, status: b.statut, days_remaining: daysRemaining, sla_days: slaThreshold };
       });
-      
-      // Get agent performance
-      const agents = await this.prisma.user.findMany({
-        where: { 
-          active: true,
-          role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'] }
-        }
-      });
-      
-      const agentsData = await Promise.all(agents.map(async (a) => {
-        const totalBordereaux = await this.prisma.bordereau.count({
-          where: { 
-            assignedToUserId: a.id,
-            statut: { in: ['ASSIGNE', 'EN_COURS'] }
-          }
-        });
-        
+
+      const agentIds = agents.map((a) => a.id);
+
+      const [activeCounts, completed] = await Promise.all([
+        this.prisma.bordereau.groupBy({
+          by: ['assignedToUserId'],
+          _count: { id: true },
+          where: { assignedToUserId: { in: agentIds }, statut: { in: ACTIVE_WORKLOAD_STATUSES } },
+        }),
+        this.prisma.bordereau.findMany({
+          where: { assignedToUserId: { in: agentIds }, dateCloture: { not: null } },
+          select: { assignedToUserId: true, dateReception: true, dateCloture: true, delaiReglement: true },
+        }),
+      ]);
+
+      const activeCountMap = new Map(
+        activeCounts.map((c) => [
+          c.assignedToUserId,
+          typeof c._count === 'object' ? c._count.id ?? 0 : 0,
+        ]),
+      );
+
+      const complianceMap = new Map<string, { total: number; compliant: number; totalHours: number }>();
+      for (const b of completed) {
+        if (!b.assignedToUserId || !b.dateCloture) continue;
+        const entry = complianceMap.get(b.assignedToUserId) || { total: 0, compliant: 0, totalHours: 0 };
+        const hours = (new Date(b.dateCloture).getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60);
+        entry.total += 1;
+        entry.totalHours += hours;
+        if (hours / 24 <= (b.delaiReglement || 30)) entry.compliant += 1;
+        complianceMap.set(b.assignedToUserId, entry);
+      }
+
+      const agentsData = agents.map((a) => {
+        const compliance = complianceMap.get(a.id);
         return {
           id: a.id,
           firstName: a.fullName.split(' ')[0],
           lastName: a.fullName.split(' ').slice(1).join(' '),
-          total_bordereaux: totalBordereaux,
-          sla_compliant: 0,
-          avg_hours: 24
+          total_bordereaux: activeCountMap.get(a.id) || 0,
+          sla_compliant: compliance?.compliant || 0,
+          avg_hours: compliance && compliance.total > 0 ? Number((compliance.totalHours / compliance.total).toFixed(1)) : 0,
         };
-      }));
-      
-      // Format payload matching AI endpoint expectations
+      });
+
       const payload = {
         bordereaux,
         agents: agentsData,
@@ -1644,58 +1580,51 @@ export class AnalyticsService {
         requiredStaff,
         currentWorkload,
         staff_count: currentStaff,
-        sla_breaches: bordereaux.filter(b => b.days_remaining < 0).length,
-        capacity_utilization: currentWorkload / (currentStaff * 10)
+        sla_breaches: bordereaux.filter((b) => b.days_remaining < 0).length,
+        capacity_utilization: currentStaff > 0 ? currentWorkload / (currentStaff * 10) : 0,
       };
-      
-      // console.log('🔍 AI Workforce Request:', JSON.stringify(payload, null, 2));
-      
+
       const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, payload, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
       });
-      
-      // console.log('🔍 AI Workforce Response:', JSON.stringify(response.data, null, 2));
-      
-      // Extract recommendations array from AI response
+
       const aiRecommendations = response.data?.recommendations || [];
-      
+
       if (!Array.isArray(aiRecommendations) || aiRecommendations.length === 0) {
-        console.warn('⚠️ AI returned invalid/empty recommendations:', response.data);
+        this.logger.warn('AI returned invalid/empty workforce recommendations');
         return [];
       }
-      
-      // AI returns array of strings directly - just return them
-      // console.log('✅ Parsed recommendations:', aiRecommendations);
+
       return aiRecommendations;
     } catch (error) {
-      console.error('❌ AI workforce recommendations failed:', error);
+      this.logger.error('AI workforce recommendations failed', error as Error);
       return [];
     }
   }
 
-  // === AI-POWERED PERFORMANCE ANALYTICS ===
-  
+  // ============================================================
+  // AI-powered performance analytics
+  // ============================================================
   async getAIAlertSolution(payload: any): Promise<any> {
     const token = await this.getAIToken();
-    
-    // Fetch documents for this bordereau to get count, types, and full details
+
     let documents: Array<{ id: string; name: string; type: any; status: any }> = [];
     let documentCount = 0;
     let documentTypes: string[] = [];
-    
+
     try {
-      documents = await this.prisma.document.findMany({
+      documents = (await this.prisma.document.findMany({
         where: { bordereauId: payload.bordereau.id },
         select: { id: true, name: true, type: true, status: true },
-        orderBy: { uploadedAt: 'asc' }
-      }) as Array<{ id: string; name: string; type: any; status: any }>;
+        orderBy: { uploadedAt: 'asc' },
+      })) as Array<{ id: string; name: string; type: any; status: any }>;
       documentCount = documents.length;
-      documentTypes = [...new Set(documents.map(d => d.type))].filter(Boolean) as string[];
+      documentTypes = [...new Set(documents.map((d) => d.type))].filter(Boolean) as string[];
     } catch (error: any) {
-      console.error('Failed to fetch documents for bordereau:', error);
+      this.logger.error('Failed to fetch documents for bordereau', error);
     }
-    
+
     const aiPayload = {
       bordereau_id: payload.bordereau.id,
       reference: payload.bordereau.reference,
@@ -1709,22 +1638,14 @@ export class AnalyticsService {
       team_leader: payload.bordereau.contract?.teamLeader?.fullName,
       document_count: documentCount,
       document_types: documentTypes,
-      documents: documents.map(d => ({
-        id: d.id,
-        name: d.name,
-        type: d.type,
-        status: d.status
-      }))
+      documents: documents.map((d) => ({ id: d.id, name: d.name, type: d.type, status: d.status })),
     };
-    
+
     const response = await axios.post(`${AI_MICROSERVICE_URL}/alert_solution`, aiPayload, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      timeout: 10000
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      timeout: this.AI_TIMEOUT_MS,
     });
-    
+
     return {
       rootCause: response.data.root_cause,
       actions: response.data.recommended_actions,
@@ -1734,58 +1655,44 @@ export class AnalyticsService {
         count: documentCount,
         types: documentTypes,
         summary: `${documentCount} document(s)${documentTypes.length > 0 ? ' - Types: ' + documentTypes.join(', ') : ''}`,
-        documents: documents.map(d => ({
-          id: d.id,
-          name: d.name,
-          type: d.type,
-          status: d.status
-        }))
-      }
+        documents: documents.map((d) => ({ id: d.id, name: d.name, type: d.type, status: d.status })),
+      },
     };
   }
 
   async performRootCauseAnalysis(user: any): Promise<any[]> {
     try {
       this.checkAnalyticsRole(user);
-      
-      // Get performance data for analysis
+
       const performanceData = await this.getPerformanceDataForAnalysis();
-      
-      // Analyze patterns using AI
+
       const token = await this.getAIToken();
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/diagnostic_optimisation`, {
-        performance_data: performanceData,
-        analysis_type: 'root_cause'
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
+      const response = await axios.post(
+        `${AI_MICROSERVICE_URL}/diagnostic_optimisation`,
+        { performance_data: performanceData, analysis_type: 'root_cause' },
+        { headers: { Authorization: `Bearer ${token}` }, timeout: this.AI_TIMEOUT_MS },
+      );
+
       return response.data.root_causes || [];
-      
     } catch (error: any) {
-      console.error('Root cause analysis failed:', error.message || error);
-      // Return empty array instead of fallback to force proper AI implementation
+      this.logger.error(`Root cause analysis failed: ${error.message || error}`);
       return [];
     }
   }
-  
+
   async getAIOptimizationRecommendations(user: any): Promise<any[]> {
     try {
       this.checkAnalyticsRole(user);
-      
-      // Get current system metrics
+
       const metrics = await this.getSystemMetricsForOptimization();
-      
+
       const token = await this.getAIToken();
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/recommendations`, {
-        metrics: metrics,
-        optimization_focus: ['performance', 'efficiency', 'quality']
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
+      const response = await axios.post(
+        `${AI_MICROSERVICE_URL}/recommendations`,
+        { metrics, optimization_focus: ['performance', 'efficiency', 'quality'] },
+        { headers: { Authorization: `Bearer ${token}` }, timeout: this.AI_TIMEOUT_MS },
+      );
+
       const aiRecommendations = response.data.recommendations || [];
       return aiRecommendations.map((rec: any) => ({
         type: 'ai_optimization',
@@ -1795,136 +1702,107 @@ export class AnalyticsService {
         impact: rec.impact || 'Amélioration des performances',
         actionRequired: rec.actionable !== false,
         aiGenerated: true,
-        confidence: rec.confidence || 0.8
+        confidence: rec.confidence || 0.8,
       }));
-      
     } catch (error) {
-      console.error('AI optimization recommendations failed:', error);
-      // Return empty array to force proper AI implementation
+      this.logger.error('AI optimization recommendations failed', error as Error);
       return [];
     }
   }
-  
+
   async detectProcessBottlenecks(user: any): Promise<any[]> {
     try {
       this.checkAnalyticsRole(user);
-      
-      // Analyze process flow data with real timestamps
+
       const processData = await this.getProcessFlowDataWithRealTimes();
-      
+
       const token = await this.getAIToken();
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/pattern_recognition/process_anomalies`, {
-        process_data: processData,
-        detection_type: 'bottleneck'
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
+      const response = await axios.post(
+        `${AI_MICROSERVICE_URL}/pattern_recognition/process_anomalies`,
+        { process_data: processData, detection_type: 'bottleneck' },
+        { headers: { Authorization: `Bearer ${token}` }, timeout: this.AI_TIMEOUT_MS },
+      );
+
       return response.data.bottlenecks || [];
-      
     } catch (error) {
-      console.error('Bottleneck detection failed:', error);
-      // Return empty array to force proper AI implementation
+      this.logger.error('Bottleneck detection failed', error as Error);
       return [];
     }
   }
-  
+
   async identifyTrainingNeeds(user: any): Promise<any[]> {
     try {
       this.checkAnalyticsRole(user);
-      
-      // Get user performance data
+
       const userPerformance = await this.getUserPerformanceForTraining();
-      
-      // Get AI learning insights
       const learningInsights = await this.getAILearningInsights('training_needs');
-      
+
       const token = await this.getAIToken();
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/performance`, {
-        users: userPerformance,
-        analysis_type: 'training_needs',
-        learning_context: learningInsights
-      }, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        timeout: 300000
-      });
-      
+      const response = await axios.post(
+        `${AI_MICROSERVICE_URL}/performance`,
+        { users: userPerformance, analysis_type: 'training_needs', learning_context: learningInsights },
+        { headers: { Authorization: `Bearer ${token}` }, timeout: this.AI_TIMEOUT_MS },
+      );
+
       const result = response.data.training_needs || [];
-      
-      // Save AI result for learning
+
       await this.saveAIAnalysisResult('training_needs', { userPerformance }, { training_needs: result, confidence: 0.85 }, user);
-      
+
       return result;
-      
     } catch (error) {
-      console.error('Training needs identification failed:', error);
+      this.logger.error('Training needs identification failed', error as Error);
       throw new Error('AI training needs analysis unavailable');
     }
   }
-  
 
-  
   private async getProcessFlowDataWithRealTimes(): Promise<any[]> {
     const processSteps = await this.prisma.traitementHistory.findMany({
-      where: {
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-      },
+      where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       include: {
         bordereau: { select: { statut: true, delaiReglement: true, updatedAt: true } },
-        user: { select: { role: true, department: true } }
+        user: { select: { role: true, department: true } },
       },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: 'asc' },
     });
-    
-    return processSteps.map(step => ({
+
+    return processSteps.map((step) => ({
       step_name: step.action,
       from_status: step.fromStatus,
       to_status: step.toStatus,
       processing_time: this.calculateStepProcessingTime({
         createdAt: step.createdAt,
-        updatedAt: step.bordereau?.updatedAt || step.createdAt
+        updatedAt: step.bordereau?.updatedAt || step.createdAt,
       }),
       user_role: step.user?.role,
       department: step.user?.department,
       timestamp: step.createdAt,
-      real_time_calculated: true
+      real_time_calculated: true,
     }));
   }
-  
+
   private async getUserPerformanceForTraining(): Promise<any[]> {
     const users = await this.prisma.user.findMany({
-      where: {
-        role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] },
-        active: true
-      },
+      where: { role: { in: STAFF_ROLES }, active: true },
       include: {
-        bordereauxCurrentHandler: {
-          where: {
-            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-          }
-        },
-        reclamations: {
-          where: {
-            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-          }
-        }
-      }
+        bordereauxCurrentHandler: { where: { createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+        reclamations: { where: { createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+      },
     });
-    
-    return users.map(user => ({
+
+    return users.map((user) => ({
       user_id: user.id,
       role: user.role,
       department: user.department,
       processed_count: user.bordereauxCurrentHandler.length,
       error_rate: user.reclamations.length / Math.max(user.bordereauxCurrentHandler.length, 1),
       avg_processing_time: this.calculateUserAvgProcessingTime(user.bordereauxCurrentHandler),
-      complexity_handled: this.calculateComplexityScore(user.bordereauxCurrentHandler)
+      complexity_handled: this.calculateComplexityScore(user.bordereauxCurrentHandler),
     }));
   }
-  
-  // === AI LEARNING & PERSISTENCE ===
-  
+
+  // ============================================================
+  // AI learning & persistence
+  // ============================================================
   private async saveAIAnalysisResult(analysisType: string, inputData: any, result: any, user: any) {
     try {
       await this.prisma.aiOutput.create({
@@ -1933,136 +1811,86 @@ export class AnalyticsService {
           inputData: JSON.stringify(inputData),
           result: JSON.stringify(result),
           userId: user.id,
-          confidence: result.confidence || 0.8
-        }
+          confidence: result.confidence || 0.8,
+        },
       });
     } catch (error) {
-      console.error('Failed to save AI analysis result:', error);
+      this.logger.error('Failed to save AI analysis result', error as Error);
     }
   }
-  
+
   private async getAILearningInsights(analysisType: string): Promise<any> {
     try {
       const recentAnalyses = await this.prisma.aiOutput.findMany({
-        where: {
-          endpoint: `analytics_${analysisType}`,
-          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-        },
+        where: { endpoint: `analytics_${analysisType}`, createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
         orderBy: { createdAt: 'desc' },
-        take: 100
+        take: 100,
       });
-      
+
       return {
         total_analyses: recentAnalyses.length,
-        avg_confidence: recentAnalyses.reduce((sum, a) => sum + Number(a.confidence || 0), 0) / recentAnalyses.length,
-        learning_data: recentAnalyses.map(a => ({
+        avg_confidence:
+          recentAnalyses.length > 0
+            ? recentAnalyses.reduce((sum, a) => sum + Number(a.confidence || 0), 0) / recentAnalyses.length
+            : 0,
+        learning_data: recentAnalyses.map((a) => ({
           input: JSON.parse(a.inputData as string),
           output: JSON.parse(a.result as string),
           confidence: a.confidence,
-          timestamp: a.createdAt
-        }))
+          timestamp: a.createdAt,
+        })),
       };
     } catch (error) {
-      console.error('Failed to get AI learning insights:', error);
+      this.logger.error('Failed to get AI learning insights', error as Error);
       return { total_analyses: 0, avg_confidence: 0, learning_data: [] };
     }
   }
-  
-  // === CALCULATION HELPERS ===
-  
-  private calculateAvgProcessingTime(bordereaux: any[]): number {
-    if (bordereaux.length === 0) return 0;
-    const totalTime = bordereaux.reduce((sum, b) => {
-      const created = new Date(b.createdAt);
-      const closed = b.dateCloture ? new Date(b.dateCloture) : new Date();
-      return sum + (closed.getTime() - created.getTime()) / (1000 * 60 * 60);
-    }, 0);
-    return totalTime / bordereaux.length;
-  }
-  
-  private calculateSLACompliance(bordereaux: any[]): number {
-    if (bordereaux.length === 0) return 1;
-    const compliant = bordereaux.filter(b => {
-      const daysSinceCreation = (new Date().getTime() - new Date(b.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-      return daysSinceCreation <= b.delaiReglement;
-    }).length;
-    return compliant / bordereaux.length;
-  }
-  
-  private calculateWorkloadDistribution(users: any[]): any {
-    const distribution = users.map(user => ({
-      user_id: user.id,
-      workload: user.bordereauxCurrentHandler.length,
-      capacity_utilization: user.bordereauxCurrentHandler.length / user.capacity
-    }));
-    
-    const avgWorkload = distribution.reduce((sum, d) => sum + d.workload, 0) / distribution.length;
-    const variance = distribution.reduce((sum, d) => sum + Math.pow(d.workload - avgWorkload, 2), 0) / distribution.length;
-    
-    return { distribution, average: avgWorkload, variance };
-  }
-  
-  private identifyBottleneckIndicators(bordereaux: any[]): string[] {
-    const indicators: string[] = [];
-    const statusCounts = new Map<string, number>();
-    
-    bordereaux.forEach(b => {
-      statusCounts.set(b.statut, (statusCounts.get(b.statut) || 0) + 1);
-    });
-    
-    statusCounts.forEach((count, status) => {
-      if (count > bordereaux.length * 0.3) {
-        indicators.push(`High volume in ${status} status`);
-      }
-    });
-    
-    return indicators;
-  }
-  
+
+  // ============================================================
+  // Calculation helpers
+  // ============================================================
   private calculateStepProcessingTime(step: any): number {
     try {
-      // Real calculation based on timestamps
       const createdAt = new Date(step.createdAt);
       const updatedAt = step.updatedAt ? new Date(step.updatedAt) : new Date();
       const diffHours = (updatedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-      return Math.max(0.1, diffHours); // Minimum 0.1 hours
+      return Math.max(0.1, diffHours);
     } catch (error) {
-      console.error('Error calculating step processing time:', error);
-      return 24; // Default 24 hours if calculation fails
+      this.logger.error('Error calculating step processing time', error as Error);
+      return 24;
     }
   }
-  
+
   private calculateUserAvgProcessingTime(bordereaux: any[]): number {
     if (bordereaux.length === 0) return 0;
-    return bordereaux.reduce((sum, b) => {
-      const created = new Date(b.createdAt);
-      const now = new Date();
-      return sum + (now.getTime() - created.getTime()) / (1000 * 60 * 60);
-    }, 0) / bordereaux.length;
+    return (
+      bordereaux.reduce((sum, b) => {
+        const created = new Date(b.createdAt);
+        const now = new Date();
+        return sum + (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+      }, 0) / bordereaux.length
+    );
   }
-  
+
   private calculateComplexityScore(bordereaux: any[]): number {
     if (bordereaux.length === 0) return 0;
     return bordereaux.reduce((sum, b) => sum + (b.nombreBS || 1), 0) / bordereaux.length;
   }
 
-  // === ADVANCED AI METHODS ===
-  
+  // ============================================================
+  // Advanced AI methods
+  // ============================================================
   async getAdvancedClusteringAI(processData: any[]) {
     try {
       const token = await this.getAIToken();
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/advanced_clustering`, {
-        process_data: processData
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 300000
-      });
+      const response = await axios.post(
+        `${AI_MICROSERVICE_URL}/advanced_clustering`,
+        { process_data: processData },
+        { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, timeout: this.AI_TIMEOUT_MS },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('AI advanced clustering failed:', error);
+      this.logger.error('AI advanced clustering failed', error as Error);
       throw new Error('AI advanced clustering failed: ' + error.message);
     }
   }
@@ -2070,19 +1898,14 @@ export class AnalyticsService {
   async getSophisticatedAnomalyDetectionAI(performanceData: any[]) {
     try {
       const token = await this.getAIToken();
-      const response = await axios.post(`${AI_MICROSERVICE_URL}/anomaly_detection`, {
-        detection_type: 'performance',
-        performance_data: performanceData
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 300000
-      });
+      const response = await axios.post(
+        `${AI_MICROSERVICE_URL}/anomaly_detection`,
+        { detection_type: 'performance', performance_data: performanceData },
+        { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, timeout: this.AI_TIMEOUT_MS },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('AI sophisticated anomaly detection failed:', error);
+      this.logger.error('AI sophisticated anomaly detection failed', error as Error);
       throw new Error('AI sophisticated anomaly detection failed: ' + error.message);
     }
   }
@@ -2091,15 +1914,12 @@ export class AnalyticsService {
     try {
       const token = await this.getAIToken();
       const response = await axios.post(`${AI_MICROSERVICE_URL}/generate_executive_report`, reportParams, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 300000
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        timeout: this.AI_TIMEOUT_MS,
       });
       return response.data;
     } catch (error: any) {
-      console.error('AI executive report generation failed:', error);
+      this.logger.error('AI executive report generation failed', error as Error);
       throw new Error('AI executive report generation failed: ' + error.message);
     }
   }
@@ -2107,133 +1927,123 @@ export class AnalyticsService {
   async getAdvancedProcessClustering(user: any): Promise<any> {
     try {
       this.checkAnalyticsRole(user);
-      
+
       const processData = await this.getProcessDataForClustering();
-      
+
       if (processData.length < 3) {
         return { clusters: [], summary: 'Insufficient process data for clustering' };
       }
-      
+
       const clusteringResult = await this.getAdvancedClusteringAI(processData);
       await this.saveAIAnalysisResult('advanced_clustering', { processData }, clusteringResult, user);
-      
+
       return clusteringResult;
-      
     } catch (error) {
-      console.error('Advanced process clustering failed:', error);
+      this.logger.error('Advanced process clustering failed', error as Error);
       return { clusters: [], summary: 'Advanced clustering service unavailable' };
     }
   }
-  
+
   async getSophisticatedAnomalyAnalysis(user: any): Promise<any> {
     try {
       this.checkAnalyticsRole(user);
-      
+
       const performanceData = await this.getPerformanceDataForAnomalyDetection();
-      
+
       if (performanceData.length < 5) {
         return { anomalies: [], summary: 'Insufficient performance data for anomaly detection' };
       }
-      
+
       const anomalyResult = await this.getSophisticatedAnomalyDetectionAI(performanceData);
       await this.saveAIAnalysisResult('sophisticated_anomaly_detection', { performanceData }, anomalyResult, user);
-      
+
       return anomalyResult;
-      
     } catch (error) {
-      console.error('Sophisticated anomaly analysis failed:', error);
+      this.logger.error('Sophisticated anomaly analysis failed', error as Error);
       return { anomalies: [], summary: 'Anomaly detection service unavailable' };
     }
   }
-  
+
   async generateComprehensiveExecutiveReport(user: any, reportParams: any): Promise<any> {
     try {
       this.checkAnalyticsRole(user);
-      
+
       const executiveReport = await this.generateExecutiveReportAI({
         report_type: reportParams.report_type || 'comprehensive',
         time_period: reportParams.time_period || '30d',
-        include_forecasts: reportParams.include_forecasts !== false
+        include_forecasts: reportParams.include_forecasts !== false,
       });
-      
+
       await this.saveAIAnalysisResult('executive_report', reportParams, executiveReport, user);
-      
+
       return executiveReport;
-      
     } catch (error) {
-      console.error('Executive report generation failed:', error);
+      this.logger.error('Executive report generation failed', error as Error);
       return {
         executive_summary: {
-          overall_health_score: 75,
+          overall_health_score: null,
           critical_anomalies: 0,
           problematic_clusters: 0,
           total_bordereaux: 0,
-          key_recommendations: ['Executive report service unavailable']
-        }
+          key_recommendations: [],
+          status: 'unavailable',
+        },
       };
     }
   }
-  
+
   private async getProcessDataForClustering(): Promise<any[]> {
     try {
       const bordereaux = await this.prisma.bordereau.findMany({
-        where: {
-          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-        },
+        where: { createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
         include: {
           client: { select: { name: true } },
-          currentHandler: { select: { fullName: true } }
+          currentHandler: { select: { fullName: true } },
         },
-        take: 100
+        take: 100,
       });
-      
-      return bordereaux.map(b => ({
+
+      return bordereaux.map((b) => ({
         process_name: `Bordereau_${b.reference}`,
         processing_time: this.calculateProcessingTime(b),
         error_rate: this.calculateErrorRate(b),
         delay_frequency: this.calculateDelayFrequency(b),
         resource_utilization: 0.7,
         complexity_score: b.nombreBS || 1,
-        sla_breach_rate: this.calculateSLABreachRate(b)
+        sla_breach_rate: this.calculateSLABreachRate(b),
       }));
     } catch (error) {
-      console.error('Failed to get process data for clustering:', error);
+      this.logger.error('Failed to get process data for clustering', error as Error);
       return [];
     }
   }
-  
+
   private async getPerformanceDataForAnomalyDetection(): Promise<any[]> {
     try {
       const users = await this.prisma.user.findMany({
-        where: {
-          role: { in: ['GESTIONNAIRE', 'CHEF_EQUIPE'] },
-          active: true
-        },
+        where: { role: { in: STAFF_ROLES }, active: true },
         include: {
-          bordereauxCurrentHandler: {
-            where: {
-              createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-            }
-          }
-        }
+          bordereauxCurrentHandler: { where: { createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+          reclamations: { where: { createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } },
+        },
       });
-      
-      return users.map(user => ({
+
+      return users.map((user) => ({
         id: user.id,
         processing_time: this.calculateUserAvgProcessingTime(user.bordereauxCurrentHandler),
         throughput: user.bordereauxCurrentHandler.length,
         error_rate: this.calculateUserErrorRate(user),
         resource_utilization: Math.min(1.0, user.bordereauxCurrentHandler.length / (user.capacity || 20)),
         sla_compliance: this.calculateUserSLACompliance(user.bordereauxCurrentHandler),
-        queue_length: user.bordereauxCurrentHandler.filter(b => b.statut === 'EN_ATTENTE').length,
-        response_time: 24
+        queue_length: user.bordereauxCurrentHandler.filter((b) => b.statut === 'EN_ATTENTE').length,
+        response_time: this.calculateUserAvgProcessingTime(user.bordereauxCurrentHandler),
       }));
     } catch (error) {
-      console.error('Failed to get performance data for anomaly detection:', error);
+      this.logger.error('Failed to get performance data for anomaly detection', error as Error);
       return [];
     }
   }
-  
+
   private calculateProcessingTime(bordereau: any): number {
     try {
       const created = new Date(bordereau.createdAt);
@@ -2243,481 +2053,342 @@ export class AnalyticsService {
       return 24;
     }
   }
-  
+
   private calculateErrorRate(bordereau: any): number {
-    return bordereau.statut === 'ERREUR' ? 0.1 : 0.02;
+    return ERROR_STATUSES.includes(bordereau.statut) ? 0.1 : 0.02;
   }
-  
+
   private calculateDelayFrequency(bordereau: any): number {
     const daysSinceCreation = (new Date().getTime() - new Date(bordereau.createdAt).getTime()) / (1000 * 60 * 60 * 24);
     return daysSinceCreation > bordereau.delaiReglement ? 0.3 : 0.05;
   }
-  
+
   private calculateSLABreachRate(bordereau: any): number {
     const daysSinceCreation = (new Date().getTime() - new Date(bordereau.createdAt).getTime()) / (1000 * 60 * 60 * 24);
     return daysSinceCreation > bordereau.delaiReglement ? 1.0 : 0.0;
   }
-  
+
   private calculateUserErrorRate(user: any): number {
-    return Math.random() * 0.1;
+    const processed = user.bordereauxCurrentHandler?.length || 0;
+    const errors = user.reclamations?.length || 0;
+    if (processed === 0) return 0;
+    return Number(Math.min(1, errors / processed).toFixed(3));
   }
-  
+
   private calculateUserSLACompliance(bordereaux: any[]): number {
     if (bordereaux.length === 0) return 1.0;
-    const compliant = bordereaux.filter(b => {
+    const compliant = bordereaux.filter((b) => {
       const daysSinceCreation = (new Date().getTime() - new Date(b.createdAt).getTime()) / (1000 * 60 * 60 * 24);
       return daysSinceCreation <= b.delaiReglement;
     }).length;
     return compliant / bordereaux.length;
   }
 
+  // ============================================================
+  // Department / role performance (cached)
+  // ============================================================
   async getPerformanceByDepartment(user: any, filters: any = {}) {
     this.checkAnalyticsRole(user);
-    
-    try {
-      // console.log('🔍 Getting department performance...');
-      
-      // Get all departments from database
-      const departments = await this.prisma.department.findMany({
-        where: { active: true },
-        select: { id: true, name: true, code: true }
-      });
-      
-      // console.log(`📁 Found ${departments.length} departments`);
-      
-      if (departments.length === 0) {
-        // console.log('⚠️  No departments - using role-based grouping');
-        return this.getPerformanceByRole(user, filters);
-      }
-      
-      // Don't apply date filters for department performance - show all time data
-      const where: any = {};
-      
-      // console.log('📅 Date filters (ignored for dept performance):', filters);
-      
-      const departmentPerformance: any[] = [];
-      
-      for (const dept of departments) {
-        // console.log(`📂 Processing ${dept.name}...`);
-        
-        // Get users in this department
-        const deptUsers = await this.prisma.user.findMany({
-          where: { 
-            departmentId: dept.id,
-            active: true
-          },
-          select: { id: true }
+
+    const cacheKey = `analytics:perf-dept:${JSON.stringify(filters || {})}`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      try {
+        const departments = await this.prisma.department.findMany({
+          where: { active: true },
+          select: { id: true, name: true, code: true },
         });
-        
-        // console.log(`   Users in ${dept.name}: ${deptUsers.length}`);
-        
-        if (deptUsers.length === 0) {
-          // console.log(`   ⚠️  Skipping ${dept.name} - no users`);
-          continue;
+
+        if (departments.length === 0) {
+          return this.getPerformanceByRole(user, filters);
         }
-        
-        const userIds = deptUsers.map(u => u.id);
-        
-        // Get bordereaux processed by this department (all time)
-        // console.log(`   User IDs: ${userIds.join(', ')}`);
-        
-        const totalProcessed = await this.prisma.bordereau.count({
-          where: {
-            assignedToUserId: { in: userIds }
-          }
-        });
-        
-        // console.log(`   Bordereaux for ${dept.name}: ${totalProcessed}`);
-        
-        if (totalProcessed === 0) {
-          // console.log(`   ⚠️  Skipping ${dept.name} - no bordereaux`);
-          continue;
-        }
-        
-        // Get SLA compliant bordereaux
-        const slaCompliant = await this.prisma.bordereau.count({
-          where: {
-            assignedToUserId: { in: userIds },
-            delaiReglement: { lte: 3 }
-          }
-        });
-        
-        // Calculate average processing time
-        const avgDelayResult = await this.prisma.bordereau.aggregate({
-          where: {
-            assignedToUserId: { in: userIds }
-          },
-          _avg: { delaiReglement: true }
-        });
-        
-        const slaCompliance = Math.round((slaCompliant / totalProcessed) * 100);
-        const avgTime = avgDelayResult._avg.delaiReglement || 0;
-        
-        const deptData = {
-          department: dept.name,
-          slaCompliance,
-          avgTime: Number(avgTime.toFixed(1)),
-          workload: totalProcessed
-        };
-        
-        // console.log(`   ✅ ${dept.name}: ${totalProcessed} bordereaux, ${slaCompliance}% SLA`);
-        departmentPerformance.push(deptData);
+
+        const results = await Promise.all(
+          departments.map(async (dept) => {
+            const deptUsers = await this.prisma.user.findMany({
+              where: { departmentId: dept.id, active: true },
+              select: { id: true },
+            });
+
+            if (deptUsers.length === 0) return null;
+
+            const userIds = deptUsers.map((u) => u.id);
+            const [totalProcessed, slaCompliant, avgDelayResult] = await Promise.all([
+              this.prisma.bordereau.count({ where: { assignedToUserId: { in: userIds } } }),
+              this.prisma.bordereau.count({ where: { assignedToUserId: { in: userIds }, delaiReglement: { lte: 3 } } }),
+              this.prisma.bordereau.aggregate({ where: { assignedToUserId: { in: userIds } }, _avg: { delaiReglement: true } }),
+            ]);
+
+            if (totalProcessed === 0) return null;
+
+            return {
+              department: dept.name,
+              slaCompliance: Math.round((slaCompliant / totalProcessed) * 100),
+              avgTime: Number((avgDelayResult._avg.delaiReglement || 0).toFixed(1)),
+              workload: totalProcessed,
+            };
+          }),
+        );
+
+        return results.filter((r): r is NonNullable<typeof r> => r !== null);
+      } catch (error) {
+        this.logger.error('Error getting department performance', error as Error);
+        return [];
       }
-      
-      // console.log(`📊 Returning ${departmentPerformance.length} department results`);
-      return departmentPerformance;
-      
-    } catch (error) {
-      console.error('Error getting department performance:', error);
-      return [];
-    }
+    });
   }
 
   private async getPerformanceByRole(user: any, filters: any = {}): Promise<any[]> {
     const roles = ['GESTIONNAIRE', 'CHEF_EQUIPE', 'SCAN_TEAM', 'BO', 'FINANCE'];
     const roleNames: Record<string, string> = {
-      'GESTIONNAIRE': 'Gestionnaires',
-      'CHEF_EQUIPE': 'Chefs d\'Équipe',
-      'SCAN_TEAM': 'Équipe Scan',
-      'BO': 'Bureau d\'Ordre',
-      'FINANCE': 'Finance'
+      GESTIONNAIRE: 'Gestionnaires',
+      CHEF_EQUIPE: "Chefs d'Équipe",
+      SCAN_TEAM: 'Équipe Scan',
+      BO: "Bureau d'Ordre",
+      FINANCE: 'Finance',
     };
-    
-    const result: Array<{ department: string; slaCompliance: number; avgTime: number; workload: number }> = [];
-    
-    for (const role of roles) {
-      const users = await this.prisma.user.findMany({
-        where: { role, active: true },
-        select: { id: true }
-      });
-      
-      if (users.length === 0) continue;
-      
-      const userIds = users.map(u => u.id);
-      const totalProcessed = await this.prisma.bordereau.count({
-        where: { assignedToUserId: { in: userIds } }
-      });
-      
-      if (totalProcessed === 0) continue;
-      
-      const slaCompliant = await this.prisma.bordereau.count({
-        where: {
-          assignedToUserId: { in: userIds },
-          delaiReglement: { lte: 3 }
-        }
-      });
-      
-      const avgDelayResult = await this.prisma.bordereau.aggregate({
-        where: { assignedToUserId: { in: userIds } },
-        _avg: { delaiReglement: true }
-      });
-      
-      result.push({
-        department: roleNames[role],
-        slaCompliance: Math.round((slaCompliant / totalProcessed) * 100),
-        avgTime: Number((avgDelayResult._avg.delaiReglement || 0).toFixed(1)),
-        workload: totalProcessed
-      });
-    }
-    
-    return result;
+
+    const results = await Promise.all(
+      roles.map(async (role) => {
+        const users = await this.prisma.user.findMany({ where: { role, active: true }, select: { id: true } });
+        if (users.length === 0) return null;
+
+        const userIds = users.map((u) => u.id);
+        const [totalProcessed, slaCompliant, avgDelayResult] = await Promise.all([
+          this.prisma.bordereau.count({ where: { assignedToUserId: { in: userIds } } }),
+          this.prisma.bordereau.count({ where: { assignedToUserId: { in: userIds }, delaiReglement: { lte: 3 } } }),
+          this.prisma.bordereau.aggregate({ where: { assignedToUserId: { in: userIds } }, _avg: { delaiReglement: true } }),
+        ]);
+
+        if (totalProcessed === 0) return null;
+
+        return {
+          department: roleNames[role],
+          slaCompliance: Math.round((slaCompliant / totalProcessed) * 100),
+          avgTime: Number((avgDelayResult._avg.delaiReglement || 0).toFixed(1)),
+          workload: totalProcessed,
+        };
+      }),
+    );
+
+    return results.filter((r): r is NonNullable<typeof r> => r !== null);
+  }
+
+  // ============================================================
+  // Document breakdowns (batched — single groupBy shared between the two
+  // endpoints via a cached helper instead of each running its own query)
+  // ============================================================
+  private async getDocumentTypeStatusCounts() {
+    const cacheKey = `analytics:doc-type-status-groupby`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      return this.prisma.document.groupBy({ by: ['type', 'status'], _count: true });
+    });
   }
 
   async getDocumentTypesBreakdown(user: any, query: any) {
     this.checkAnalyticsRole(user);
-    // console.log('📊 getDocumentTypesBreakdown called');
-    
-    const DOCUMENT_TYPES = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION', 'CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
+
+    const statusCounts = await this.getDocumentTypeStatusCounts();
+
     const result: any = {};
-    let total = 0;
-    
     for (const type of DOCUMENT_TYPES) {
-      const count = await this.prisma.document.count({ where: { type: type as any } });
-      
-      if (count > 0) {
-        const statusCounts = await this.prisma.document.groupBy({
-          by: ['status'],
-          _count: true,
-          where: { type: type as any },
-        });
+      const rows = statusCounts.filter((r) => r.type === type);
+      const total = rows.reduce((sum, r) => sum + r._count, 0);
+      const traite = rows.find((r) => r.status === 'TRAITE')?._count || 0;
+      const enCours = rows.filter((r) => ['EN_COURS', 'SCANNE', 'UPLOADED'].includes(r.status || '')).reduce((sum, r) => sum + r._count, 0);
+      const rejete = rows.find((r) => r.status === 'REJETE')?._count || 0;
 
-        const traite = statusCounts.find(s => s.status === 'TRAITE')?._count || 0;
-        const enCours = statusCounts.filter(s => ['EN_COURS', 'SCANNE', 'UPLOADED'].includes(s.status || '')).reduce((sum, s) => sum + s._count, 0);
-        const rejete = statusCounts.find(s => s.status === 'REJETE')?._count || 0;
-
-        result[type] = { total: count, traite, enCours, rejete };
-        total += count;
-        // console.log(`   ${type}: ${count} documents`);
-      } else {
-        result[type] = { total: 0, traite: 0, enCours: 0, rejete: 0 };
-      }
+      result[type] = { total, traite, enCours, rejete };
     }
-    
-    // console.log('✅ Total:', total);
+
     return result;
   }
 
   async getDocumentStatusByType(user: any, query: any) {
     this.checkAnalyticsRole(user);
-    // console.log('📊 getDocumentStatusByType called');
-    
-    const DOCUMENT_TYPES = ['BULLETIN_SOIN', 'COMPLEMENT_INFORMATION', 'ADHESION', 'RECLAMATION', 'CONTRAT_AVENANT', 'DEMANDE_RESILIATION', 'CONVENTION_TIERS_PAYANT'];
-    const result: any = {};
-    
-    for (const type of DOCUMENT_TYPES) {
-      const statusCounts = await this.prisma.document.groupBy({
-        by: ['status'],
-        _count: true,
-        where: { type: type as any },
-      });
 
-      if (statusCounts.length > 0) {
+    const statusCounts = await this.getDocumentTypeStatusCounts();
+
+    const result: any = {};
+    for (const type of DOCUMENT_TYPES) {
+      const rows = statusCounts.filter((r) => r.type === type);
+      if (rows.length > 0) {
         result[type] = {};
-        statusCounts.forEach(item => {
-          result[type][item.status || 'UNKNOWN'] = item._count;
+        rows.forEach((r) => {
+          result[type][r.status || 'UNKNOWN'] = r._count;
         });
       }
     }
-    
+
     return result;
   }
 
-  async getGestionnairesDailyPerformance(user: any, query: any): Promise<Array<{ id: string; name: string; documentsProcessed: number; documentsTraites: number; documentsLast24h: number }>> {
+  async getGestionnairesDailyPerformance(
+    user: any,
+    query: any,
+  ): Promise<Array<{ id: string; name: string; documentsProcessed: number; documentsTraites: number; documentsLast24h: number }>> {
     this.checkAnalyticsRole(user);
-    
-    console.log('📊 getGestionnairesDailyPerformance query:', query);
-    
-    // Build where clause for filtering gestionnaires
-    const gestionnaireWhere: any = {
-      role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'] },
-      active: true
-    };
-    
-    // Apply gestionnaire filters
-    if (query.gestionnaireId) {
-      gestionnaireWhere.id = query.gestionnaireId;
-    }
-    if (query.gestionnaireSeniorId) {
-      gestionnaireWhere.id = query.gestionnaireSeniorId;
-    }
-    if (query.chefEquipeId) {
-      // Get team members for this chef
-      const teamMembers = await this.prisma.user.findMany({
-        where: {
-          OR: [
-            { id: query.chefEquipeId },
-            { teamLeaderId: query.chefEquipeId }
-          ]
-        },
-        select: { id: true }
-      });
-      if (teamMembers.length > 0) {
-        gestionnaireWhere.id = { in: teamMembers.map(m => m.id) };
+
+    const cacheKey = `analytics:gest-daily-perf:${JSON.stringify(query || {})}`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      const gestionnaireWhere: any = { role: { in: ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR'] }, active: true };
+
+      if (query.gestionnaireId) {
+        gestionnaireWhere.id = query.gestionnaireId;
       }
-    }
-    
-    const gestionnaires = await this.prisma.user.findMany({
-      where: gestionnaireWhere,
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        role: true
+      if (query.gestionnaireSeniorId) {
+        gestionnaireWhere.id = query.gestionnaireSeniorId;
       }
-    });
-    
-    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const result: Array<{ id: string; name: string; documentsProcessed: number; documentsTraites: number; documentsLast24h: number }> = [];
-    
-    for (const gest of gestionnaires) {
-      let documentsProcessed = 0;
-      let documentsTraites = 0;
-      let documentsLast24h = 0;
-      
-      if (gest.role === 'GESTIONNAIRE_SENIOR') {
-        // For GESTIONNAIRE_SENIOR: count documents from contracts assigned to them via teamLeaderId
-        const contractWhere: any = { teamLeaderId: gest.id };
-        
-        // Apply client filter to contracts
-        if (query.clientId) {
-          contractWhere.clientId = query.clientId;
-        }
-        
-        const contracts = await this.prisma.contract.findMany({
-          where: contractWhere,
-          select: { id: true }
+      if (query.chefEquipeId) {
+        const teamMembers = await this.prisma.user.findMany({
+          where: { OR: [{ id: query.chefEquipeId }, { teamLeaderId: query.chefEquipeId }] },
+          select: { id: true },
         });
-        
-        const contractIds = contracts.map(c => c.id);
-        
-        if (contractIds.length > 0) {
-          // Count documents from bordereaux linked to these contracts
-          const dateWhere: any = {
-            bordereau: {
-              contractId: { in: contractIds }
+        if (teamMembers.length > 0) {
+          gestionnaireWhere.id = { in: teamMembers.map((m) => m.id) };
+        }
+      }
+
+      const gestionnaires = await this.prisma.user.findMany({
+        where: gestionnaireWhere,
+        select: { id: true, fullName: true, email: true, role: true },
+      });
+
+      const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const buildDateFilter = () => {
+        const dateFilter: any = {};
+        if (query.fromDate) {
+          const fromDate = new Date(query.fromDate);
+          fromDate.setHours(0, 0, 0, 0);
+          dateFilter.gte = fromDate;
+        }
+        if (query.toDate) {
+          const toDate = new Date(query.toDate);
+          toDate.setHours(23, 59, 59, 999);
+          dateFilter.lte = toDate;
+        }
+        return Object.keys(dateFilter).length > 0 ? { uploadedAt: dateFilter } : {};
+      };
+
+      const results = await Promise.all(
+        gestionnaires.map(async (gest) => {
+          let documentsProcessed = 0;
+          let documentsTraites = 0;
+          let documentsLast24h = 0;
+
+          if (gest.role === 'GESTIONNAIRE_SENIOR') {
+            const contractWhere: any = { teamLeaderId: gest.id };
+            if (query.clientId) contractWhere.clientId = query.clientId;
+
+            const contracts = await this.prisma.contract.findMany({ where: contractWhere, select: { id: true } });
+            const contractIds = contracts.map((c) => c.id);
+
+            if (contractIds.length > 0) {
+              const baseWhere: any = { bordereau: { contractId: { in: contractIds } } };
+              const filteredWhere = { ...baseWhere, ...buildDateFilter() };
+
+              [documentsProcessed, documentsTraites, documentsLast24h] = await Promise.all([
+                this.prisma.document.count({ where: filteredWhere }),
+                this.prisma.document.count({ where: { ...filteredWhere, status: 'TRAITE' } }),
+                this.prisma.document.count({ where: { ...baseWhere, uploadedAt: { gte: last24h } } }),
+              ]);
             }
+          } else {
+            const docWhere: any = { assignedToUserId: gest.id };
+            if (query.clientId) docWhere.bordereau = { clientId: query.clientId };
+
+            const filteredWhere = { ...docWhere, ...buildDateFilter() };
+
+            [documentsProcessed, documentsTraites, documentsLast24h] = await Promise.all([
+              this.prisma.document.count({ where: filteredWhere }),
+              this.prisma.document.count({ where: { ...filteredWhere, status: 'TRAITE' } }),
+              this.prisma.document.count({ where: { ...docWhere, uploadedAt: { gte: last24h } } }),
+            ]);
+          }
+
+          return {
+            id: gest.id,
+            name: gest.fullName || gest.email,
+            documentsProcessed,
+            documentsTraites,
+            documentsLast24h,
           };
-          
-          if (query.fromDate || query.toDate) {
-            if (query.fromDate) {
-              const fromDate = new Date(query.fromDate);
-              fromDate.setHours(0, 0, 0, 0);
-              dateWhere.uploadedAt = { gte: fromDate };
-            }
-            if (query.toDate) {
-              const toDate = new Date(query.toDate);
-              toDate.setHours(23, 59, 59, 999);
-              if (dateWhere.uploadedAt) {
-                dateWhere.uploadedAt.lte = toDate;
-              } else {
-                dateWhere.uploadedAt = { lte: toDate };
-              }
-            }
-          }
-          
-          documentsProcessed = await this.prisma.document.count({ where: dateWhere });
-          
-          documentsTraites = await this.prisma.document.count({
-            where: {
-              ...dateWhere,
-              status: 'TRAITE'
-            }
-          });
-          
-          documentsLast24h = await this.prisma.document.count({
-            where: {
-              bordereau: {
-                contractId: { in: contractIds }
-              },
-              uploadedAt: { gte: last24h }
-            }
-          });
-        }
-      } else {
-        // For regular GESTIONNAIRE: count directly assigned documents
-        const docWhere: any = { assignedToUserId: gest.id };
-        
-        // Apply client filter via bordereau
-        if (query.clientId) {
-          docWhere.bordereau = { clientId: query.clientId };
-        }
-        
-        documentsProcessed = await this.prisma.document.count({
-          where: docWhere
-        });
-        
-        if (query.fromDate || query.toDate) {
-          const dateWhere: any = { ...docWhere };
-          if (query.fromDate) {
-            const fromDate = new Date(query.fromDate);
-            fromDate.setHours(0, 0, 0, 0);
-            dateWhere.uploadedAt = { gte: fromDate };
-          }
-          if (query.toDate) {
-            const toDate = new Date(query.toDate);
-            toDate.setHours(23, 59, 59, 999);
-            if (dateWhere.uploadedAt) {
-              dateWhere.uploadedAt.lte = toDate;
-            } else {
-              dateWhere.uploadedAt = { lte: toDate };
-            }
-          }
-          documentsProcessed = await this.prisma.document.count({ where: dateWhere });
-          
-          documentsTraites = await this.prisma.document.count({
-            where: {
-              ...dateWhere,
-              status: 'TRAITE'
-            }
-          });
-        } else {
-          documentsTraites = await this.prisma.document.count({
-            where: {
-              ...docWhere,
-              status: 'TRAITE'
-            }
-          });
-        }
-        
-        documentsLast24h = await this.prisma.document.count({
-          where: {
-            ...docWhere,
-            uploadedAt: { gte: last24h }
-          }
-        });
-      }
-      
-      result.push({
-        id: gest.id,
-        name: gest.fullName || gest.email,
-        documentsProcessed,
-        documentsTraites,
-        documentsLast24h
-      });
-    }
-    
-    return result.sort((a, b) => b.documentsProcessed - a.documentsProcessed);
+        }),
+      );
+
+      return results.sort((a, b) => b.documentsProcessed - a.documentsProcessed);
+    });
   }
 
+  // ============================================================
+  // ✅ FIXED: was hand-computing (dateCloture − dateReception) inline —
+  // a second, disconnected implementation of "SLA de traitement" that
+  // could drift from the centralized calculator (e.g. it never checked
+  // whether dateCloture had actually been reached, just whether it was
+  // non-null, and used a different threshold-resolution order). Now
+  // delegates entirely to calculateAllSLAs().traitement. Cached.
+  // ============================================================
   async getSLAComplianceByType(user: any, query: any) {
     this.checkAnalyticsRole(user);
-    
-    const SLA_APPLICABLE_TYPES = [
-      'BULLETIN_SOIN',
-      'COMPLEMENT_INFORMATION',
-      'ADHESION',
-      'RECLAMATION'
-    ];
-    
-    const where: any = {};
-    if (query.fromDate || query.toDate) {
-      where.createdAt = {};
-      if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
-      if (query.toDate) where.createdAt.lte = new Date(query.toDate);
-    }
-    
-    const results: any = {};
-    
-    for (const docType of SLA_APPLICABLE_TYPES) {
+
+    const cacheKey = `analytics:sla-compliance-type:${JSON.stringify(query || {})}`;
+    return this.getOrSetCache(cacheKey, this.DASHBOARD_CACHE_TTL_SECONDS, async () => {
+      const where: any = { type: { in: SLA_APPLICABLE_TYPES }, dateCloture: { not: null } };
+      if (query.fromDate || query.toDate) {
+        where.createdAt = {};
+        if (query.fromDate) where.createdAt.gte = new Date(query.fromDate);
+        if (query.toDate) where.createdAt.lte = new Date(query.toDate);
+      }
+
       const bordereaux = await this.prisma.bordereau.findMany({
-        where: {
-          ...where,
-          type: docType as any,
-          dateCloture: { not: null }
-        },
-        include: {
+        where,
+        select: {
+          type: true,
+          statut: true,
+          dateCloture: true,
+          dateReception: true,
+          dateExecutionVirement: true,
+          ordresVirement: { select: { etatVirement: true, dateEtatFinal: true, dateTraitement: true } },
           client: { select: { reglementDelay: true } },
-          contract: { select: { delaiReglement: true } }
-        }
+          contract: { select: { delaiReglement: true } },
+        },
       });
-      
-      if (bordereaux.length === 0) {
-        results[docType] = { total: 0, compliant: 0, complianceRate: 0 };
-        continue;
-      }
-      
-      let compliantCount = 0;
-      
-      for (const b of bordereaux) {
-        if (!b.dateCloture || !b.dateReception) continue;
-        
-        const slaThreshold = b.contract?.delaiReglement || b.client?.reglementDelay || 30;
-        const processingDays = Math.floor(
-          (new Date(b.dateCloture).getTime() - new Date(b.dateReception).getTime()) / (1000 * 60 * 60 * 24)
-        );
-        
-        if (processingDays <= slaThreshold) {
-          compliantCount++;
+
+      const results: any = {};
+      for (const docType of SLA_APPLICABLE_TYPES) {
+        const typeBordereaux = bordereaux.filter((b) => b.type === docType);
+        if (typeBordereaux.length === 0) {
+          results[docType] = { total: 0, compliant: 0, complianceRate: 0 };
+          continue;
         }
+
+        let compliantCount = 0;
+        let applicableCount = 0;
+        for (const b of typeBordereaux) {
+          const slaThreshold = b.contract?.delaiReglement || b.client?.reglementDelay || 30;
+          const { traitement } = calculateAllSLAs({
+            dateReception: b.dateReception,
+            delaiReglement: slaThreshold,
+            statut: b.statut,
+            dateCloture: b.dateCloture,
+            dateExecutionVirement: b.dateExecutionVirement,
+            ordresVirement: b.ordresVirement,
+          });
+
+          if (!traitement.applicable || traitement.percentElapsed === null) continue;
+
+          applicableCount++;
+          if (traitement.percentElapsed <= 100) compliantCount++;
+        }
+
+        results[docType] = {
+          total: applicableCount,
+          compliant: compliantCount,
+          complianceRate: applicableCount > 0 ? Math.round((compliantCount / applicableCount) * 100) : 0,
+        };
       }
-      
-      results[docType] = {
-        total: bordereaux.length,
-        compliant: compliantCount,
-        complianceRate: Math.round((compliantCount / bordereaux.length) * 100)
-      };
-    }
-    
-    return results;
+
+      return results;
+    });
   }
 }

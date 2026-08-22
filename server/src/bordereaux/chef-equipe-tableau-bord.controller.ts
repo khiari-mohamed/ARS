@@ -9,37 +9,36 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
+import { RedisService } from '../shared/redis.service';
 
 @Controller('bordereaux/chef-equipe/tableau-bord')
 export class ChefEquipeTableauBordController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
-  // ── Simple in-memory cache for the slow dashboard read endpoints ─────────────
+  // ── Redis-backed cache for the slow dashboard read endpoints ───────────────
   // 30s TTL. Keyed per-user + per-role (+ relevant query params) so no user ever
   // sees another user's cached data. This does NOT touch any write endpoint
   // (modify-dossier-status, return-to-scan, etc.) — those still hit the DB live,
   // and they invalidate the relevant cache keys below so the dashboard reflects
   // changes immediately after an action instead of waiting out the TTL.
-  private cache = new Map<string, { data: any; expires: number }>();
-  private readonly CACHE_TTL = 30_000; // 30 seconds
+  private readonly CACHE_TTL_SECONDS = 30;
+  private readonly CACHE_PREFIX = 'dashboard:chef-equipe:';
+  private readonly EN_COURS_STATUTS = ['EN_COURS', 'ASSIGNE', 'SCAN_EN_COURS', 'A_AFFECTER', 'SCANNE', 'A_SCANNER'];
 
-  private getCached<T>(key: string): T | null {
-    const cached = this.cache.get(key);
-    if (cached && cached.expires > Date.now()) {
-      return cached.data as T;
-    }
-    if (cached) this.cache.delete(key);
-    return null;
+  private async getCached<T>(key: string): Promise<T | null> {
+    return this.redis.get<T>(this.CACHE_PREFIX + key);
   }
 
-  private setCache(key: string, data: any): void {
-    this.cache.set(key, { data, expires: Date.now() + this.CACHE_TTL });
+  private async setCache(key: string, data: any): Promise<void> {
+    await this.redis.set(this.CACHE_PREFIX + key, data, this.CACHE_TTL_SECONDS);
   }
 
-  /** Invalidate every cached dashboard entry. Called after any mutation so the
-   * next read (even within the 30s window) gets fresh data instead of stale. */
-  private invalidateCache(): void {
-    this.cache.clear();
+  /** Invalide uniquement les clés dashboard (plus de clear() global sur tout le process) */
+  private async invalidateCache(): Promise<void> {
+    await this.redis.invalidatePrefix(this.CACHE_PREFIX);
   }
 
   @Get('stats')
@@ -47,7 +46,7 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getTableauBordStats(@Req() req: any) {
     const cacheKey = `stats-${req.user?.id}-${req.user?.role}`;
-    const cached = this.getCached(cacheKey);
+    const cached = await this.getCached(cacheKey);
     if (cached) return cached;
 
     const accessFilter = this.buildAccessFilter(req.user);
@@ -70,7 +69,7 @@ export class ChefEquipeTableauBordController {
       }
     };
 
-    this.setCache(cacheKey, result);
+    await this.setCache(cacheKey, result);
     return result;
   }
 
@@ -79,7 +78,7 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getTypesDetail(@Req() req: any) {
     const cacheKey = `types-detail-${req.user?.id}-${req.user?.role}`;
-    const cached = this.getCached(cacheKey);
+    const cached = await this.getCached(cacheKey);
     if (cached) return cached;
 
     const accessFilter = this.buildAccessFilter(req.user);
@@ -166,7 +165,7 @@ export class ChefEquipeTableauBordController {
       }
     });
 
-    this.setCache(cacheKey, types);
+    await this.setCache(cacheKey, types);
     return types;
   }
 
@@ -175,7 +174,7 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDerniersDossiers(@Req() req: any) {
     const cacheKey = `derniers-${req.user?.id}-${req.user?.role}`;
-    const cached = this.getCached(cacheKey);
+    const cached = await this.getCached(cacheKey);
     if (cached) return cached;
 
     const accessFilter = this.buildAccessFilter(req.user);
@@ -317,7 +316,7 @@ export class ChefEquipeTableauBordController {
       };
     });
 
-    this.setCache(cacheKey, result);
+    await this.setCache(cacheKey, result);
     return result;
   }
 
@@ -326,7 +325,7 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDossiersEnCours(@Req() req: any, @Query('type') typeFilter?: string, @Query('statut') statutFilter?: string) {
     const cacheKey = `en-cours-${req.user?.id}-${req.user?.role}-${typeFilter ?? ''}-${statutFilter ?? ''}`;
-    const cached = this.getCached(cacheKey);
+    const cached = await this.getCached(cacheKey);
     if (cached) return cached;
 
     const accessFilter = this.buildAccessFilter(req.user);
@@ -485,8 +484,128 @@ export class ChefEquipeTableauBordController {
       };
     });
 
-    this.setCache(cacheKey, result);
+    await this.setCache(cacheKey, result);
     return result;
+  }
+
+  // ── UNIFIED endpoint ─────────────────────────────────────────────────────
+  // Replaces the old pair (derniers-dossiers + dossiers-en-cours), which the
+  // frontend called back-to-back and which frequently returned the SAME rows
+  // anyway (dossiers-en-cours fell back to derniers-dossiers whenever its own
+  // filtered set was empty). Now it's ONE Prisma query with the full include
+  // set, ONE Redis entry, and each row is tagged with `isEnCours` so the
+  // frontend can slice "Tous" vs "En cours" client-side without re-fetching.
+  @Get('bordereaux-unified')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
+  async getBordereauxUnified(@Req() req: any) {
+    const cacheKey = `unified-${req.user?.id}-${req.user?.role}`;
+    const cached = await this.getCached(cacheKey);
+    if (cached) return cached;
+
+    const accessFilter = this.buildAccessFilter(req.user);
+    const includeShape = {
+      client: { select: { id: true, name: true } },
+      contract: {
+        include: {
+          client: { select: { id: true, name: true } },
+          teamLeader: { select: { id: true, fullName: true, role: true } },
+        },
+      },
+      documents: {
+        include: { assignedTo: { select: { id: true, fullName: true } } },
+      },
+      currentHandler: { select: { id: true, fullName: true, role: true } },
+    } as const;
+
+    let bordereaux;
+
+    if (req.user?.role === 'GESTIONNAIRE') {
+      const gestionnaire = await this.prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { teamLeaderId: true },
+      });
+
+      const where = gestionnaire?.teamLeaderId
+        ? { archived: false, contract: { teamLeaderId: gestionnaire.teamLeaderId } }
+        : { archived: false, documents: { some: { assignedToUserId: req.user.id } } };
+
+      bordereaux = await this.prisma.bordereau.findMany({
+        where,
+        include: includeShape,
+        orderBy: { createdAt: 'desc' },
+      });
+    } else {
+      bordereaux = await this.prisma.bordereau.findMany({
+        where: { ...accessFilter, archived: false },
+        include: includeShape,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    const items = bordereaux.map((bordereau) => {
+      const totalDocuments = bordereau.documents.length;
+      const traitedDocuments = bordereau.documents.filter((d) => d.status === 'TRAITE').length;
+      const enCoursDocuments = bordereau.documents.filter((d) => d.status === 'EN_COURS').length;
+      const scanneDocuments = bordereau.documents.filter((d) => d.status === 'SCANNE').length;
+      const uploadedDocuments = bordereau.documents.filter((d) => d.status === 'UPLOADED' || !d.status).length;
+
+      const completionPercentage = totalDocuments > 0 ? Math.round((traitedDocuments / totalDocuments) * 100) : 0;
+      const documentTypes = [...new Set(bordereau.documents.map((d) => this.getDocumentTypeLabel(d.type)))].join(', ');
+
+      const states: string[] = [];
+      if (traitedDocuments > 0) states.push(`Traité ${traitedDocuments}/${totalDocuments}`);
+      if (enCoursDocuments > 0) states.push(`En cours ${enCoursDocuments}/${totalDocuments}`);
+      if (scanneDocuments > 0) states.push(`Scanné ${scanneDocuments}/${totalDocuments}`);
+      if (uploadedDocuments > 0) states.push(`Nouveau ${uploadedDocuments}/${totalDocuments}`);
+
+      let gestionnaireDisplay = 'Non assigné';
+      let gestionnaireRole: string | null = null;
+      const assignedGestionnaires = [...new Set(
+        bordereau.documents.filter((d) => d.assignedTo).map((d) => d.assignedTo!.fullName),
+      )];
+      if (assignedGestionnaires.length > 0) {
+        gestionnaireDisplay = assignedGestionnaires.join(', ');
+        gestionnaireRole = 'GESTIONNAIRE';
+      } else if (bordereau.contract?.teamLeader) {
+        gestionnaireDisplay = bordereau.contract.teamLeader.fullName;
+        gestionnaireRole = bordereau.contract.teamLeader.role;
+      } else if (bordereau.currentHandler) {
+        gestionnaireDisplay = bordereau.currentHandler.fullName;
+        gestionnaireRole = (bordereau.currentHandler as any).role ?? null;
+      }
+
+      const joursEnCours = Math.floor((Date.now() - new Date(bordereau.dateReception).getTime()) / 86_400_000);
+
+      return {
+        id: bordereau.id,
+        reference: bordereau.reference,
+        client: bordereau.contract?.client?.name || bordereau.client?.name || 'N/A',
+        type: documentTypes || 'Aucun document',
+        statut: this.getStatutLabel(bordereau.statut),
+        statutRaw: bordereau.statut,
+        isEnCours: this.EN_COURS_STATUTS.includes(bordereau.statut),
+        gestionnaire: gestionnaireDisplay,
+        gestionnaireRole,
+        documentCount: totalDocuments,
+        date: bordereau.dateReception.toLocaleDateString('fr-FR'),
+        dateSort: bordereau.dateReception.toISOString(),
+        completionPercentage,
+        dossierStates: states.length > 0 ? states : ['Nouveau'],
+        joursEnCours,
+        priorite: this.calculatePriorite(bordereau),
+      };
+    });
+
+    const payload = {
+      items,
+      total: items.length,
+      enCoursCount: items.filter((i) => i.isEnCours).length,
+      generatedAt: new Date().toISOString(),
+    };
+
+    await this.setCache(cacheKey, payload);
+    return payload;
   }
 
   @Get('search')
@@ -586,7 +705,7 @@ export class ChefEquipeTableauBordController {
       }
     });
 
-    this.invalidateCache();
+    await this.invalidateCache();
     return { success: true, message: 'Type de dossier modifié avec succès' };
   }
 
@@ -696,7 +815,7 @@ export class ChefEquipeTableauBordController {
       });
     }
 
-    this.invalidateCache();
+    await this.invalidateCache();
     return { success: true };
   }
 
@@ -881,7 +1000,7 @@ export class ChefEquipeTableauBordController {
           where: { id: body.dossierId },
           data: { statut: bordereauxStatusMapping[body.newStatus] as any }
         });
-        this.invalidateCache();
+        await this.invalidateCache();
         return { success: true, message: 'Statut du bordereau modifié avec succès' };
       }
     }
@@ -982,7 +1101,7 @@ export class ChefEquipeTableauBordController {
         }
       }
 
-      this.invalidateCache();
+      await this.invalidateCache();
       return { success: true, message: 'Statut modifié avec succès' };
     }
 
@@ -1002,7 +1121,7 @@ export class ChefEquipeTableauBordController {
         where: { id: body.dossierId },
         data: { statut: bordereauxStatusMapping[body.newStatus] as any }
       });
-      this.invalidateCache();
+      await this.invalidateCache();
       return { success: true, message: 'Statut modifié avec succès' };
     }
 
@@ -1174,7 +1293,7 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getDocumentsIndividuels(@Req() req: any) {
     const cacheKey = `docs-individuels-${req.user?.id}-${req.user?.role}`;
-    const cached = this.getCached(cacheKey);
+    const cached = await this.getCached(cacheKey);
     if (cached) return cached;
 
     const accessFilter = this.buildAccessFilter(req.user);
@@ -1308,7 +1427,7 @@ export class ChefEquipeTableauBordController {
       };
     });
 
-    this.setCache(cacheKey, result);
+    await this.setCache(cacheKey, result);
     return result;
   }
 
@@ -1316,7 +1435,7 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireSeniorAssignments(@Req() req: any) {
     const cacheKey = `senior-assignments-${req.user?.id}`;
-    const cached = this.getCached(cacheKey);
+    const cached = await this.getCached(cacheKey);
     if (cached) return cached;
 
     const seniorGestionnaires = await this.prisma.user.findMany({
@@ -1395,7 +1514,7 @@ export class ChefEquipeTableauBordController {
       });
     }
 
-    this.setCache(cacheKey, assignments);
+    await this.setCache(cacheKey, assignments);
     return assignments;
   }
 
@@ -1403,7 +1522,7 @@ export class ChefEquipeTableauBordController {
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.RESPONSABLE_DEPARTEMENT)
   async getGestionnaireAssignmentsDossiers(@Req() req: any) {
     const cacheKey = `assignments-dossiers-${req.user?.id}-${req.user?.role}`;
-    const cached = this.getCached(cacheKey);
+    const cached = await this.getCached(cacheKey);
     if (cached) return cached;
 
     const accessFilter = this.buildAccessFilter(req.user);
@@ -1431,7 +1550,7 @@ export class ChefEquipeTableauBordController {
     });
 
     if (gestionnaires.length === 0) {
-      this.setCache(cacheKey, []);
+      await this.setCache(cacheKey, []);
       return [];
     }
 
@@ -1538,9 +1657,9 @@ export class ChefEquipeTableauBordController {
         returnedBy,
         documentsByType: docsByType
       };
-    });
+    }).filter((assignment) => assignment.totalAssigned > 0);
 
-    this.setCache(cacheKey, assignments);
+    await this.setCache(cacheKey, assignments);
     return assignments;
   }
 

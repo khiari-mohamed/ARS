@@ -74,16 +74,19 @@ export class TxtGenerationService {
   // BNA – FICHIER SALAIRE (PowerCard salary-card loading format)
   //
   // Spec: "Fichier Salaire" — all records are exactly 100 characters.
+  // Line terminator: CRLF ("\r\n") after EVERY record, including the trailer
+  // (verified byte-for-byte against BNA reference files: 100 chars + CRLF = 102
+  // bytes per record; a file with N records is exactly N × 102 bytes).
   //
   //  HEADER  [10]: len=100
   //    [1-2]    record_type      '10' (fixed)
   //    [3-12]   file_id          10 spaces (blank, optional field)
-  //    [13-22]  file_reference   10-char numeric, right-padded spaces
+  //    [13-22]  file_reference   10-char numeric, right-padded spaces (OBLIGATOIRE)
   //    [23-36]  file_date        YYYYMMDDhhmmss (14 chars)
   //    [37]     file_origine     '4' (Autre – fixed)
   //    [38-46]  gap              9 spaces
   //    [47-49]  currency_code    '788' (TND – fixed)
-  //    [50-59]  employer_ref     10-char CNSS/PowerCard ref, right-padded spaces
+  //    [50-59]  employer_ref     10-char CNSS/PowerCard ref, right-padded spaces (OBLIGATOIRE)
   //    [60-83]  employer_account RIB (20 digits) + 4 trailing spaces = 24 chars
   //    [84-94]  gap              11 spaces
   //    [95-100] record_number    '000001' (6 chars, zero-padded left)
@@ -122,7 +125,15 @@ export class TxtGenerationService {
 
     // file_reference: extract the last 10 numeric chars from the OV reference,
     // right-pad with spaces if shorter than 10.
-    const numericRef = data.reference.replace(/[^0-9]/g, '').slice(-10).padEnd(10, ' ');
+    // Spec: OBLIGATOIRE in the HEADER record — must never be blank.
+    const referenceDigits = data.reference.replace(/[^0-9]/g, '');
+    if (!referenceDigits) {
+      throw new Error(
+        `BNA: Impossible d'extraire une référence numérique de fichier depuis "${data.reference}". ` +
+          `Le champ file_reference est obligatoire (positions 13-22 du HEADER).`,
+      );
+    }
+    const numericRef = referenceDigits.slice(-10).padEnd(10, ' ');
 
     // file_date: YYYYMMDDhhmmss (14 chars)
     const fileDateStr = this.formatDateBNA(data.dateCreation);
@@ -131,8 +142,16 @@ export class TxtGenerationService {
     // Populated from donneurOrdre.employerRef if provided; otherwise the first
     // 10 digits of the RIB are used as a stable numeric fallback.
     // → For production, store the BNA PowerCard employer ref in DonneurOrdre.agence.
-    const rawEmployerRef = data.donneurOrdre.employerRef
+    // Spec: OBLIGATOIRE in the HEADER record — must never be blank.
+    const rawEmployerRef = (data.donneurOrdre.employerRef || '').replace(/\D/g, '')
       || data.donneurOrdre.rib.replace(/\D/g, '').substring(0, 10);
+    if (!rawEmployerRef) {
+      throw new Error(
+        `BNA: Référence employeur (CNSS/PowerCard) manquante ou invalide. ` +
+          `Le champ employer_ref est obligatoire (positions 50-59 du HEADER). ` +
+          `Configurez DonneurOrdre.agence avec la référence PowerCard à 10 chiffres.`,
+      );
+    }
     const employerRef = rawEmployerRef.substring(0, 10).padEnd(10, ' '); // right-pad to 10
 
     // employer_account: RIB (20 digits) placed at pos 60-79, then 4 trailing spaces → 24 chars total
@@ -224,7 +243,27 @@ export class TxtGenerationService {
     }
 
     // ── Assemble ─────────────────────────────────────────────────────────────────
-    return [headerLine, ...detailLines, trailerLine].join('\n');
+    // CRITICAL FIX: BNA requires CRLF ("\r\n") line endings, with a terminator
+    // after EVERY record — including the trailer. The previous implementation
+    // joined records with a bare "\n" and had no trailing terminator at all,
+    // which is the exact defect that produced "Structure du fichier généré
+    // erronée" even though every field position was already correct.
+    //
+    // Verified against 5 real BNA reference files: each is exactly
+    // (numRecords × 102) bytes — 100 chars + CRLF per record, no exceptions.
+    const allLines = [headerLine, ...detailLines, trailerLine];
+    const assembled = allLines.map((line) => line + '\r\n').join('');
+
+    // Safety assertion — never silently emit a malformed file
+    const expectedLength = allLines.length * (BNA_RECORD_LEN + 2);
+    if (assembled.length !== expectedLength) {
+      throw new Error(
+        `BNA: Longueur fichier invalide: ${assembled.length} octets (attendu ${expectedLength} octets ` +
+          `pour ${allLines.length} enregistrements de ${BNA_RECORD_LEN} caractères + CRLF).`,
+      );
+    }
+
+    return assembled;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -722,7 +761,9 @@ export class TxtGenerationService {
       virements,
       dateCreation: ordreVirement.dateCreation,
       reference: ordreVirement.reference,
-      bordereauReference: ordreVirement.bordereau?.reference // Pass bordereau reference for Attijari motif
+      bordereauReference: ordreVirement.bordereau?.reference
+        ?? (ordreVirement as any).referenceBordereau
+        ?? undefined // Pass bordereau reference for Attijari motif
     };
 
     console.log('TXT Data prepared:', {

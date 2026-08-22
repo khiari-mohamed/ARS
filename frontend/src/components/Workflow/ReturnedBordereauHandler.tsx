@@ -51,6 +51,7 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
   const [newDateReception, setNewDateReception] = useState('');
   const [documentNameFilter, setDocumentNameFilter] = useState('');
   const [documentStatusFilter, setDocumentStatusFilter] = useState('');
+  const [addingBS, setAddingBS] = useState(false);
 
   useEffect(() => {
     loadReturnedBordereaux();
@@ -181,6 +182,50 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
         } catch (error: any) {
           alert(`❌ Erreur: ${error.response?.data?.message || error.message}`);
         }
+      }
+    };
+    input.click();
+  };
+
+  const handleAddBulletins = () => {
+    if (!selectedBordereau) return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.jpg,.jpeg,.png,.tiff,.tif';
+    input.multiple = true;
+    input.onchange = async (event: Event) => {
+      const files = Array.from((event.target as HTMLInputElement).files || []);
+      if (files.length === 0) return;
+
+      setAddingBS(true);
+      try {
+        const formData = new FormData();
+        files.forEach(file => formData.append('files', file));
+
+        const { LocalAPI } = await import('../../services/axios');
+        const response = await LocalAPI.post(
+          `/bordereaux/${selectedBordereau.id}/bs/upload-multiple`,
+          formData,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+
+        if (!response.data?.success) {
+          throw new Error(response.data?.error || 'Erreur lors de l\'ajout des BS');
+        }
+
+        const updatedResponse = await LocalAPI.get(`/scan/bordereau/${selectedBordereau.id}`);
+        setSelectedBordereau(updatedResponse.data);
+        await loadReturnedBordereaux();
+
+        alert(
+          `${response.data.bsCreated || files.length} BS ajouté(s) avec succès. ` +
+          'Les statuts des BS existants ont été conservés.'
+        );
+      } catch (error: any) {
+        alert(`❌ Erreur lors de l'ajout des BS: ${error.response?.data?.message || error.message}`);
+      } finally {
+        setAddingBS(false);
       }
     };
     input.click();
@@ -504,6 +549,26 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                 </Alert>
               )}
               
+              {/* Add Missing Document Section */}
+              <Paper sx={{ p: 3, bgcolor: '#e3f2fd', border: '2px solid #1976d2', mb: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ color: '#1565c0' }}>
+                  Ajouter des Bulletins de Soins (BS)
+                </Typography>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Sélectionnez un seul fichier pour ajouter un BS à l'unité ou plusieurs fichiers pour un ajout en masse.
+                  Les statuts existants (Traité / En cours) ne seront pas modifiés.
+                </Alert>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  disabled={addingBS}
+                  onClick={handleAddBulletins}
+                >
+                  {addingBS ? 'Ajout des BS en cours...' : '➕ Sélectionner et Ajouter'}
+                </Button>
+              </Paper>
+
               {/* Add Missing Document Section */}
               <Paper sx={{ p: 3, bgcolor: '#e8f5e8', border: '2px solid #4caf50' }}>
                 <Typography variant="h6" gutterBottom sx={{ color: '#2e7d32', display: 'flex', alignItems: 'center', gap: 1 }}>

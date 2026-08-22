@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { calculateAllSLAs } from '../utils/sla-calculator';
 
 export interface WorkflowMetrics {
   totalProcessed: number;
@@ -106,14 +107,26 @@ export class WorkflowAnalyticsService {
         dateCloture: { gte: startDate },
         statut: 'CLOTURE'
       },
-      include: { client: true }
+      include: {
+        contract: { select: { delaiReglement: true } },
+        ordresVirement: true,
+      }
     });
 
     if (bordereaux.length === 0) return 100;
 
-    const compliantCount = bordereaux.filter(b => {
-      const processingDays = Math.floor((b.dateCloture!.getTime() - b.dateReception.getTime()) / (1000 * 60 * 60 * 24));
-      return processingDays <= b.client.reglementDelay;
+    const compliantCount = bordereaux.filter((b) => {
+      const sla = calculateAllSLAs({
+        dateReception: b.dateReception,
+        delaiReglement: b.delaiReglement || b.contract?.delaiReglement || 30,
+        statut: b.statut,
+        dateDebutScan: b.dateDebutScan,
+        dateFinScan: b.dateFinScan,
+        dateCloture: b.dateCloture,
+        dateExecutionVirement: b.dateExecutionVirement,
+        ordresVirement: b.ordresVirement,
+      });
+      return sla.reglementBO.statusColor !== 'RED';
     }).length;
 
     return (compliantCount / bordereaux.length) * 100;
@@ -172,14 +185,27 @@ export class WorkflowAnalyticsService {
         dateCloture: { gte: startDate },
         statut: 'CLOTURE'
       },
-      include: { client: true }
+      include: {
+        contract: { select: { delaiReglement: true } },
+        ordresVirement: true,
+      }
     });
 
     if (bordereaux.length === 0) return 100;
 
-    const efficiencyScores = bordereaux.map(b => {
-      const actualDays = Math.floor((b.dateCloture!.getTime() - b.dateReception.getTime()) / (1000 * 60 * 60 * 24));
-      const expectedDays = b.client.reglementDelay;
+    const efficiencyScores = bordereaux.map((b) => {
+      const sla = calculateAllSLAs({
+        dateReception: b.dateReception,
+        delaiReglement: b.delaiReglement || b.contract?.delaiReglement || 30,
+        statut: b.statut,
+        dateDebutScan: b.dateDebutScan,
+        dateFinScan: b.dateFinScan,
+        dateCloture: b.dateCloture,
+        dateExecutionVirement: b.dateExecutionVirement,
+        ordresVirement: b.ordresVirement,
+      });
+      const actualDays = Math.max(sla.traitement.daysElapsed ?? 0, 1);
+      const expectedDays = sla.traitement.thresholdDays;
       
       // Efficiency = (expected / actual) * 100, capped at 100%
       return Math.min((expectedDays / actualDays) * 100, 100);
@@ -365,7 +391,15 @@ export class WorkflowAnalyticsService {
         dateFinScan: { gte: startDate },
         dateDebutScan: { not: null }
       },
-      select: { dateDebutScan: true, dateFinScan: true }
+      select: {
+        dateReception: true,
+        dateDebutScan: true,
+        dateFinScan: true,
+        dateCloture: true,
+        dateExecutionVirement: true,
+        delaiReglement: true,
+        statut: true,
+      }
     });
 
     if (bordereaux.length === 0) return 0;
@@ -381,23 +415,35 @@ export class WorkflowAnalyticsService {
   }
 
   private async calculateScanSLACompliance(startDate: Date): Promise<number> {
-    // SCAN SLA target: 4 hours
     const bordereaux = await this.prisma.bordereau.findMany({
       where: { 
         dateFinScan: { gte: startDate },
         dateDebutScan: { not: null }
       },
-      select: { dateDebutScan: true, dateFinScan: true }
+      select: {
+        dateReception: true,
+        dateDebutScan: true,
+        dateFinScan: true,
+        dateCloture: true,
+        dateExecutionVirement: true,
+        delaiReglement: true,
+        statut: true,
+      }
     });
 
     if (bordereaux.length === 0) return 100;
 
-    const compliantCount = bordereaux.filter(b => {
-      if (b.dateDebutScan && b.dateFinScan) {
-        const hours = (b.dateFinScan.getTime() - b.dateDebutScan.getTime()) / (1000 * 60 * 60);
-        return hours <= 4;
-      }
-      return false;
+    const compliantCount = bordereaux.filter((b) => {
+      const sla = calculateAllSLAs({
+        dateReception: b.dateReception,
+        delaiReglement: b.delaiReglement || 30,
+        statut: b.statut,
+        dateDebutScan: b.dateDebutScan,
+        dateFinScan: b.dateFinScan,
+        dateCloture: b.dateCloture,
+        dateExecutionVirement: b.dateExecutionVirement,
+      });
+      return sla.scan.applicable && sla.scan.statusColor !== 'RED';
     }).length;
 
     return (compliantCount / bordereaux.length) * 100;
@@ -431,17 +477,26 @@ export class WorkflowAnalyticsService {
         dateReceptionEquipeSante: { gte: startDate },
         dateCloture: { not: null }
       },
-      include: { client: true }
+      include: {
+        contract: { select: { delaiReglement: true } },
+        ordresVirement: true,
+      }
     });
 
     if (bordereaux.length === 0) return 100;
 
-    const compliantCount = bordereaux.filter(b => {
-      if (b.dateReceptionEquipeSante && b.dateCloture) {
-        const hours = (b.dateCloture.getTime() - b.dateReceptionEquipeSante.getTime()) / (1000 * 60 * 60);
-        return hours <= (b.client.reglementDelay * 24);
-      }
-      return false;
+    const compliantCount = bordereaux.filter((b) => {
+      const sla = calculateAllSLAs({
+        dateReception: b.dateReception,
+        delaiReglement: b.delaiReglement || b.contract?.delaiReglement || 30,
+        statut: b.statut,
+        dateDebutScan: b.dateDebutScan,
+        dateFinScan: b.dateFinScan,
+        dateCloture: b.dateCloture,
+        dateExecutionVirement: b.dateExecutionVirement,
+        ordresVirement: b.ordresVirement,
+      });
+      return sla.traitement.applicable && sla.traitement.statusColor !== 'RED';
     }).length;
 
     return (compliantCount / bordereaux.length) * 100;
@@ -483,23 +538,40 @@ export class WorkflowAnalyticsService {
   }
 
   private async calculateFinanceSLACompliance(startDate: Date): Promise<number> {
-    // FINANCE SLA target: 24 hours
     const ordres = await this.prisma.ordreVirement.findMany({
       where: { 
         dateCreation: { gte: startDate },
-        dateTraitement: { not: null }
+        etatVirement: 'EXECUTE',
+        OR: [
+          { dateEtatFinal: { not: null } },
+          { dateTraitement: { not: null } },
+        ],
       },
-      select: { dateCreation: true, dateTraitement: true }
+      include: {
+        bordereau: {
+          include: {
+            contract: { select: { delaiReglement: true } },
+            ordresVirement: true,
+          },
+        },
+      }
     });
 
     if (ordres.length === 0) return 100;
 
-    const compliantCount = ordres.filter(o => {
-      if (o.dateTraitement) {
-        const hours = (o.dateTraitement.getTime() - o.dateCreation.getTime()) / (1000 * 60 * 60);
-        return hours <= 24;
-      }
-      return false;
+    const compliantCount = ordres.filter((o) => {
+      if (!o.bordereau) return false;
+      const sla = calculateAllSLAs({
+        dateReception: o.bordereau.dateReception,
+        delaiReglement: o.bordereau.delaiReglement || o.bordereau.contract?.delaiReglement || 30,
+        statut: o.bordereau.statut,
+        dateDebutScan: o.bordereau.dateDebutScan,
+        dateFinScan: o.bordereau.dateFinScan,
+        dateCloture: o.bordereau.dateCloture,
+        dateExecutionVirement: o.bordereau.dateExecutionVirement,
+        ordresVirement: o.bordereau.ordresVirement,
+      });
+      return sla.reglementFinance.applicable && sla.reglementFinance.statusColor !== 'RED';
     }).length;
 
     return (compliantCount / ordres.length) * 100;

@@ -157,47 +157,72 @@ export class AdherentService {
       });
 
       if (duplicateRib) {
-        // Send notification about blocked duplicate
-        await this.notifyDuplicateRibBlocked(
-          userId,
-          [{
-            newAdherent: {
-              matricule: current.matricule,
-              nom: current.nom,
-              prenom: current.prenom,
-              rib: dto.rib,
-              clientId: current.clientId,
-              clientName: current.client.name,
-              codeAssure: current.codeAssure || undefined,
-              numeroContrat: current.numeroContrat || undefined
-            },
-            existingAdherent: {
-              id: duplicateRib.id,
-              matricule: duplicateRib.matricule,
-              nom: duplicateRib.nom,
-              prenom: duplicateRib.prenom,
-              rib: duplicateRib.rib,
-              clientName: duplicateRib.client.name
-            },
-            pendingData: {
-              matricule: current.matricule,
-              nom: dto.nom || current.nom,
-              prenom: dto.prenom || current.prenom,
-              clientId: current.clientId,  // already a UUID
-              rib: dto.rib,
-              codeAssure: (dto.codeAssure || current.codeAssure) || undefined,
-              numeroContrat: (dto.numeroContrat || current.numeroContrat) || undefined,
-              assurance: (dto.assurance || current.assurance) || undefined,
-              statut: dto.statut || current.statut
-            }
-          }],
-          0,
-          1
-        );
+        // Check if the existing holder of this RIB was approved as a shared-RIB couple partner
+        // (i.e. they share the same RIB as the current adherent — old shared RIB)
+        const existingHolderWasApprovedCouple = await this.prisma.adherentHistory.findFirst({
+          where: {
+            adherentId: duplicateRib.id,
+            field: 'duplicate_rib_approved'
+          }
+        });
 
-        throw new BadRequestException(
-          `RIB ${dto.rib} already exists for adherent ${duplicateRib.nom} ${duplicateRib.prenom} (Matricule: ${duplicateRib.matricule}, Société: ${duplicateRib.client.name})`
-        );
+        const currentWasApprovedCouple = await this.prisma.adherentHistory.findFirst({
+          where: {
+            adherentId: id,
+            field: 'duplicate_rib_approved'
+          }
+        });
+
+        // Also allow if both adherents currently share the same RIB (couple updating to new shared RIB)
+        const bothShareCurrentRib = duplicateRib.rib === current.rib;
+
+        const isKnownCoupleUpdate = bothShareCurrentRib || existingHolderWasApprovedCouple || currentWasApprovedCouple;
+
+        if (!isKnownCoupleUpdate) {
+          // Send notification about blocked duplicate
+          await this.notifyDuplicateRibBlocked(
+            userId,
+            [{
+              newAdherent: {
+                matricule: current.matricule,
+                nom: current.nom,
+                prenom: current.prenom,
+                rib: dto.rib,
+                clientId: current.clientId,
+                clientName: current.client.name,
+                codeAssure: current.codeAssure || undefined,
+                numeroContrat: current.numeroContrat || undefined
+              },
+              existingAdherent: {
+                id: duplicateRib.id,
+                matricule: duplicateRib.matricule,
+                nom: duplicateRib.nom,
+                prenom: duplicateRib.prenom,
+                rib: duplicateRib.rib,
+                clientName: duplicateRib.client.name
+              },
+              pendingData: {
+                matricule: current.matricule,
+                nom: dto.nom || current.nom,
+                prenom: dto.prenom || current.prenom,
+                clientId: current.clientId,
+                rib: dto.rib,
+                codeAssure: (dto.codeAssure || current.codeAssure) || undefined,
+                numeroContrat: (dto.numeroContrat || current.numeroContrat) || undefined,
+                assurance: (dto.assurance || current.assurance) || undefined,
+                statut: dto.statut || current.statut
+              }
+            }],
+            0,
+            1
+          );
+
+          throw new BadRequestException(
+            `RIB ${dto.rib} already exists for adherent ${duplicateRib.nom} ${duplicateRib.prenom} (Matricule: ${duplicateRib.matricule}, Société: ${duplicateRib.client.name})`
+          );
+        }
+        // Known couple update — allow it through, log it
+        this.logger.log(`✅ Couple RIB update allowed: ${current.matricule} updating to RIB already held by ${duplicateRib.matricule}`);
       }
     }
 

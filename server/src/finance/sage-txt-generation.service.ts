@@ -563,12 +563,13 @@ export class SageTxtGenerationService {
    * (fills with zeros) so other lines in a batch are not lost.
    */
   private buildTiersCompte(ov: any, codes: { codeJournal: string }): string {
-    // Resolve Client (from bordereau or direct link)
+    // Resolve client and contract in contract-owned model
     const client = ov.bordereau?.client ?? ov.client;
+    const contract = ov.contract ?? ov.bordereau?.contract;
 
-    // Part 1: Compte général from the insurance company
+    // Part 1: Compte général from the insurance company on the contract
     const compteGeneral: string =
-      client?.compagnieAssurance?.compteGeneralSage ??
+      contract?.compagnieAssurance?.compteGeneralSage ??
       this.inferCompteGeneralFallback(client, codes.codeJournal);
 
     // Part 2: Compte auxiliaire from the client record
@@ -634,7 +635,7 @@ export class SageTxtGenerationService {
 
     // Try the linked compagnieAssurance name first
     const compagnieName: string =
-      client?.compagnieAssurance?.nom?.toUpperCase() ?? '';
+      client?.contracts?.[0]?.compagnieAssurance?.nom?.toUpperCase() ?? '';
 
     for (const [key, code] of Object.entries(COMPAGNIE_MAP)) {
       if (compagnieName.includes(key) || key.includes(compagnieName)) {
@@ -796,17 +797,15 @@ export class SageTxtGenerationService {
         donneurOrdre: true,
         bordereau: {
           include: {
-            client: {
-              include: {
-                compagnieAssurance: true,
-              },
+            client: true,
+            contract: {
+              include: { compagnieAssurance: true },
             },
           },
         },
-        client: {
-          include: {
-            compagnieAssurance: true,
-          },
+        client: true,
+        contract: {
+          include: { compagnieAssurance: true },
         },
       },
     });

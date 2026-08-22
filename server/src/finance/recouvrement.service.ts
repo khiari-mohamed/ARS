@@ -48,8 +48,8 @@ export class RecouvrementService {
     userId: string,
     userRole: string,
   ): Promise<RecouvrementValidationResult> {
-    // EXACT SPEC: Only Finance or Super Admin can validate (they ARE the recouvrement team)
-    if (userRole !== 'FINANCE' && userRole !== 'SUPER_ADMIN') {
+    // Comptabilité can participate in the SAGE recouvrement workflow but only for the accounting gate.
+    if (!['FINANCE', 'COMPTABILITE', 'SUPER_ADMIN'].includes(userRole)) {
       throw new ForbiddenException(
         'Seul le service Finance ou Super Admin peut valider les recouvrements',
       );
@@ -171,7 +171,7 @@ export class RecouvrementService {
    * ROLE RESTRICTION: FINANCE or SUPER_ADMIN only
    */
   async getPendingRecouvrementOVs(userRole: string) {
-    if (userRole !== 'FINANCE' && userRole !== 'SUPER_ADMIN') {
+    if (!['FINANCE', 'COMPTABILITE', 'SUPER_ADMIN'].includes(userRole)) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -184,10 +184,13 @@ export class RecouvrementService {
           select: { nom: true, banque: true },
         },
         bordereau: {
-          select: { reference: true, client: { select: { name: true, modeRecuperation: true } } },
+          select: { reference: true, client: { select: { name: true } }, contract: { select: { modeRecuperation: true } } },
         },
         client: {
-          select: { name: true, modeRecuperation: true },
+          select: { name: true },
+        },
+        contract: {
+          select: { modeRecuperation: true },
         },
       },
       orderBy: { dateCreation: 'desc' },
@@ -212,10 +215,13 @@ export class RecouvrementService {
           select: { nom: true, banque: true },
         },
         bordereau: {
-          select: { reference: true, client: { select: { name: true, modeRecuperation: true } } },
+          select: { reference: true, client: { select: { name: true } }, contract: { select: { modeRecuperation: true } } },
         },
         client: {
-          select: { name: true, modeRecuperation: true },
+          select: { name: true },
+        },
+        contract: {
+          select: { modeRecuperation: true },
         },
         recouvrementValidator: {
           select: { fullName: true, email: true },
@@ -238,11 +244,14 @@ export class RecouvrementService {
       clientId?: string;
     },
   ) {
-    if (userRole !== 'FINANCE' && userRole !== 'SUPER_ADMIN') {
+    if (!['FINANCE', 'COMPTABILITE', 'SUPER_ADMIN'].includes(userRole)) {
       throw new ForbiddenException('Access denied');
     }
 
-    const where: any = {};
+    const where: any = {
+      // Only OVs that are executed or deposited on Cash Management
+      etatVirement: { in: ['VIREMENT_DEPOSE', 'EXECUTE'] },
+    };
 
     // EXACT SPEC: Non-Super Admin cannot see NON_AUTORISE
     if (userRole !== 'SUPER_ADMIN') {
@@ -292,16 +301,15 @@ export class RecouvrementService {
         bordereau: {
           select: { 
             reference: true, 
-            client: { 
-              select: { name: true, modeRecuperation: true } 
-            } 
+            client: { select: { name: true } },
+            contract: { select: { modeRecuperation: true } }
           },
         },
         client: {
-          select: { name: true, modeRecuperation: true },
+          select: { name: true },
         },
         contract: {
-          select: { codeAssure: true },
+          select: { codeAssure: true, modeRecuperation: true },
         },
         items: {
           select: { 
@@ -338,7 +346,7 @@ export class RecouvrementService {
       const clientName = ov.bordereau?.client?.name || ov.client?.name || null;
       
       // Resolve mode recuperation
-      const modeRecuperation = ov.bordereau?.client?.modeRecuperation || ov.client?.modeRecuperation || null;
+      const modeRecuperation = ov.bordereau?.contract?.modeRecuperation || ov.contract?.modeRecuperation || null;
       
       return {
         id: ov.id,

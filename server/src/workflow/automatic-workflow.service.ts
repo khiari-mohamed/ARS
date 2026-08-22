@@ -8,6 +8,7 @@ import { calculateSLA } from '../utils/sla-calculator';
 @Injectable()
 export class AutomaticWorkflowService {
   private readonly logger = new Logger(AutomaticWorkflowService.name);
+  private isProcessingWorkflowQueue = false;
 
   constructor(
     private prisma: PrismaService,
@@ -15,14 +16,23 @@ export class AutomaticWorkflowService {
     private teamRouting: TeamRoutingService
   ) {}
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async processWorkflowQueue() {
+    if (this.isProcessingWorkflowQueue) {
+      this.logger.debug('Workflow queue processing already in progress, skipping run');
+      return;
+    }
+
+    this.isProcessingWorkflowQueue = true;
     try {
       await this.processBOToScanTransitions();
       await this.processScanToChefTransitions();
       await this.processOverloadAlerts();
-    } catch (error) {
-      this.logger.error(`Workflow queue processing failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Workflow queue processing failed: ${message}`);
+    } finally {
+      this.isProcessingWorkflowQueue = false;
     }
   }
 
@@ -56,8 +66,9 @@ export class AutomaticWorkflowService {
         );
 
         this.logger.log(`Auto-transitioned bordereau ${bordereau.reference} to A_SCANNER`);
-      } catch (error) {
-        this.logger.error(`Failed to transition bordereau ${bordereau.id}: ${error.message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to transition bordereau ${bordereau.id}: ${message}`);
       }
     }
   }
@@ -85,8 +96,9 @@ export class AutomaticWorkflowService {
         if (assignedTeamId) {
           this.logger.log(`Auto-routed bordereau ${bordereau.reference} to team ${assignedTeamId}`);
         }
-      } catch (error) {
-        this.logger.error(`Failed to route bordereau ${bordereau.id}: ${error.message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to route bordereau ${bordereau.id}: ${message}`);
       }
     }
   }
@@ -193,8 +205,9 @@ export class AutomaticWorkflowService {
         previousStatus: currentStatus,
         newStatus: targetStatus
       };
-    } catch (error) {
-      this.logger.error(`Force workflow progression failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Force workflow progression failed: ${message}`);
       throw error;
     }
   }
@@ -206,6 +219,7 @@ export class AutomaticWorkflowService {
       },
       include: {
         client: { select: { name: true } },
+        contract: { select: { delaiReglement: true } },
         currentHandler: { select: { fullName: true } },
         ordresVirement: true
       },
@@ -214,14 +228,21 @@ export class AutomaticWorkflowService {
 
     return breaches
       .map(bordereau => {
-        const slaData = calculateSLA(bordereau);
+        const slaData = calculateSLA({
+          dateReception: bordereau.dateReception,
+          delaiReglement: bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30,
+          statut: bordereau.statut,
+          dateCloture: bordereau.dateCloture,
+          dateExecutionVirement: bordereau.dateExecutionVirement,
+          ordresVirement: bordereau.ordresVirement,
+        });
         
-        // Skip frozen bordereaux
-        if (slaData.isFrozen) {
+        // Skip completed on-time bordereaux, but keep late frozen ones visible.
+        if (slaData.isFrozen && !slaData.isOverdue) {
           return null;
         }
         
-        const daysOverdue = slaData.daysElapsed - bordereau.delaiReglement;
+        const daysOverdue = Math.max(0, -slaData.daysRemaining);
         
         // Only include actual breaches
         if (daysOverdue <= 0) {
@@ -234,7 +255,7 @@ export class AutomaticWorkflowService {
           clientName: bordereau.client?.name,
           assignedTo: bordereau.currentHandler?.fullName,
           daysSinceReception: slaData.daysElapsed,
-          slaLimit: bordereau.delaiReglement,
+          slaLimit: bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30,
           daysOverdue,
           severity: daysOverdue > 10 ? 'CRITICAL' : daysOverdue > 5 ? 'HIGH' : 'MEDIUM'
         };
@@ -270,8 +291,9 @@ export class AutomaticWorkflowService {
         }
 
         this.logger.warn(`Escalated critical SLA breach for bordereau ${breach.reference}`);
-      } catch (error) {
-        this.logger.error(`Failed to escalate SLA breach for ${breach.reference}: ${error.message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to escalate SLA breach for ${breach.reference}: ${message}`);
       }
     }
 

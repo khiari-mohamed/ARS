@@ -1,0 +1,193 @@
+Password Reset Report — 2026-08-19T11:45:43.700Z
+New password: Azerty123@
+Total users: 47
+============================================================
+
+Name:  Sana Menzli
+Email: sana.menzli@arstunisie.com
+Role:  BO
+----------------------------------------
+Name:  Insaf Mechergui
+Email: insaf.mechergui@arstunisie.com
+Role:  BO
+----------------------------------------
+Name:  Mohamed Frad
+Email: mohamed.frad@arstunisie.com
+Role:  CHEF_EQUIPE
+----------------------------------------
+Name:  Ahlem Hamdi
+Email: ahlem.hamdi@arstunisie.com
+Role:  FINANCE
+----------------------------------------
+Name:  MED RADHI FALLEH
+Email: Mohamedradhi.elfallah@arstunisie.com
+Role:  FINANCE
+----------------------------------------
+Name:  TAHER BEN SLIMEN
+Email: taher.ben.slimen@arstunisie.com
+Role:  FINANCE
+----------------------------------------
+Name:  SOFIEN BEN ZAKOUR
+Email: sofien.benzakour@arstunisie.com
+Role:  FINANCE
+----------------------------------------
+Name:  CHIHEB FERCHICHI
+Email: chiheb.ferchichi@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Jihed Yahyaoui
+Email: jihed.yahyaoui@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Manar Dabbousi
+Email: manar.dabboussi@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Islem Marzouki
+Email: islem.marzouki@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  HEDIA TERGUI
+Email: hedia.tergui@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Marwen Jamezi
+Email: marwen.jamazi@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Siwar Ben Ftima
+Email: siwar.ben.ftima@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Nesrine Boubakri
+Email: nesrine.boubakri@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Mariem Abbesi
+Email: mariem.abessi@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  Mohamed Benlamir
+Email: mohamed.benlamirhassen@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  MARIEM MAMNI
+Email: mariem.mamni@arstunisie.com
+Role:  GESTIONNAIRE
+----------------------------------------
+Name:  HATEM OUNI
+Email: hatem.ouni@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  AMENI MEFTEH
+Email: ameni.mefteh@
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Mortadha Bodguiga
+Email: mortadha.bodguiga@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Fatma El Behi
+Email: fatma.elbehi@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  MONIA DRIDI
+Email: monia.dridi@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  MARIEM ABESSI
+Email: Mariem.abessi@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Ameni Dhrif
+Email: ameni.dhrif@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Siwar Ayari
+Email: siwar.ayari@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Ahlem Khemissi
+Email: ahlem.khemissi@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Cyrine Chouk
+Email: cyrine.chouk@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Sonia Bouaicha
+Email: sonia.bouaicha@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Kaouther Louiz
+Email: kaouther.louiz@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Sabrine Missaoui
+Email: sabrine.missaoui@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Asma Hadded
+Email: asma.haddad@arstunisie.com
+Role:  GESTIONNAIRE_SENIOR
+----------------------------------------
+Name:  Hamza Yaakoubi
+Email: hamza.yaakoubi@arstunisie.com
+Role:  RESPONSABLE_DEPARTEMENT
+----------------------------------------
+Name:  Ameni Laaouini
+Email: ameni.laaouini@arstunisie.com
+Role:  SCAN_TEAM
+----------------------------------------
+Name:  Sarra Trabelsi
+Email: sarra.trabelsi@arstunisie.com
+Role:  SCAN_TEAM
+----------------------------------------
+Name:  MED AMIR
+Email: Mohamed.benlamirhassen@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  Imen Zouari
+Email: imen.zouari@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  MED AMIR
+Email: MED AMIR HSAN
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  Karim Hafaiedh
+Email: karim.hafaiedh@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  MOHAMED MOGAADI
+Email: mohamed.mogaadi@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  Cyrine Hafaiedh
+Email: cyrine.hafaiedh@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  Hamza yaakoubi
+Email: hamza.yaakoubi@ars
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  ameni mefteh
+Email: ameni.mefteh@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  Imen Zouari
+Email: Imen.zouari@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  YASMINE RAKROUKI
+Email: yasmine.rakrouki@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  Naim Boughanmi
+Email: naim.boughanmi@arstunisie.com
+Role:  SUPER_ADMIN
+----------------------------------------
+Name:  mohamed khiari
+Email: finalahmed290@gmail.com
+Role:  SUPER_ADMIN
+----------------------------------------

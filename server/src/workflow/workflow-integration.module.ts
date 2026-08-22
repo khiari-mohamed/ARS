@@ -1,8 +1,6 @@
-import { Module } from '@nestjs/common';
-import { PrismaModule } from '../prisma/prisma.module';
-import { TeamRoutingService } from './team-routing.service';
-import { WorkflowNotificationsService } from './workflow-notifications.service';
-import { OverloadDetectionService } from './overload-detection.service';
+// D:\ARS\server\src\workflow\workflow-integration.module.ts
+import { Module, forwardRef } from '@nestjs/common';
+import { WorkflowModule } from './workflow.module';
 import { TeamWorkloadConfigService } from './team-workload-config.service';
 import { TeamStructureService } from './team-structure.service';
 import { ComprehensiveNotificationService } from './comprehensive-notification.service';
@@ -16,14 +14,16 @@ import { WorkflowOrchestrationService } from './workflow-orchestration.service';
 import { WorkflowAnalyticsService } from './workflow-analytics.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [
+    // ✅ FIXED: was redeclaring TeamRoutingService, WorkflowNotificationsService,
+    // and OverloadDetectionService as its own providers alongside workflow.module.ts,
+    // which meant Nest instantiated OverloadDetectionService twice — two
+    // independent @Cron(EVERY_HOUR) overload scans firing together, forever.
+    // Now imports WorkflowModule and reuses its exported instances instead.
+    forwardRef(() => WorkflowModule),
+  ],
   providers: [
-    // Core workflow services
-    TeamRoutingService,
-    WorkflowNotificationsService,
-    OverloadDetectionService,
-    
-    // Enhanced services for 100% completion
+    // Enhanced services for 100% completion — unique to this module, kept as-is
     TeamWorkloadConfigService,
     TeamStructureService,
     ComprehensiveNotificationService,
@@ -35,9 +35,6 @@ import { WorkflowAnalyticsService } from './workflow-analytics.service';
     EnhancedCorbeilleController,
   ],
   exports: [
-    TeamRoutingService,
-    WorkflowNotificationsService,
-    OverloadDetectionService,
     TeamWorkloadConfigService,
     TeamStructureService,
     ComprehensiveNotificationService,

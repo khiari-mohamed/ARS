@@ -26,6 +26,7 @@ const roleLabels: Record<UserRole, string> = {
   GESTIONNAIRE: 'Gestionnaire',
   CLIENT_SERVICE: 'Service Client',
   FINANCE: 'Finance',
+  COMPTABILITE: 'Comptabilité',
   SCAN_TEAM: 'Équipe Scan',
   BO: 'Bureau d’Ordre',
 };

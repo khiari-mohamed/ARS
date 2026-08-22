@@ -14,6 +14,7 @@ export class PaperStreamWatcherService {
   private readonly logger = new Logger(PaperStreamWatcherService.name);
   private readonly watchFolder = process.env.PAPERSTREAM_WATCH_FOLDER || './paperstream-input';
   private folderWatcher: any = null;
+  private isProcessingFiles = false;
 
   constructor(
     private prisma: PrismaService,
@@ -123,8 +124,14 @@ export class PaperStreamWatcherService {
     }
   }
   
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async watchForNewFiles() {
+    if (this.isProcessingFiles) {
+      this.logger.debug('PaperStream file watching already in progress, skipping run');
+      return;
+    }
+
+    this.isProcessingFiles = true;
     try {
       const files = fs.readdirSync(this.watchFolder);
       for (const filename of files) {
@@ -136,6 +143,8 @@ export class PaperStreamWatcherService {
       }
     } catch (error) {
       this.logger.error('Error in legacy file watching:', error);
+    } finally {
+      this.isProcessingFiles = false;
     }
   }
 

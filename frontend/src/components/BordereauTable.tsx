@@ -74,7 +74,7 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
   const isGestionnaire = user?.role === 'GESTIONNAIRE';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdministrateur = user?.role === 'ADMINISTRATEUR';
-  const isFinanceTeam = user?.role === 'FINANCE' || user?.role === 'SERVICE_FINANCIER';
+  const isFinanceTeam = user?.role === 'FINANCE' || user?.role === 'COMPTABILITE' || user?.role === 'SERVICE_FINANCIER';
   
   // Permissions based on workflow roles
   const canCreate = isBureauOrdre || isChefEquipe || isAdministrateur || isSuperAdmin;

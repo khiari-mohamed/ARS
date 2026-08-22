@@ -730,24 +730,19 @@ export class ChefEquipeActionsService {
       ordresVirement: bordereau.ordresVirement,
     });
     
-    const { daysElapsed, daysRemaining, percentElapsed, isFrozen } = slaResult;
-    const slaLimit = bordereau.delaiReglement || bordereau.contract?.delaiReglement || 30;
+    const { daysRemaining, percentElapsed, statusColor, isFrozen } = slaResult;
     const remainingTimeHours = Math.max(0, daysRemaining * 24);
 
     let slaStatus: 'ON_TIME' | 'AT_RISK' | 'OVERDUE' | 'CRITICAL';
     let priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-    // If frozen (completed), always show ON_TIME
-    if (isFrozen) {
-      slaStatus = 'ON_TIME';
-      priority = 'LOW';
-    } else if (percentElapsed > 100) {
+    if (statusColor === 'RED' || percentElapsed > 100) {
       slaStatus = 'OVERDUE';
       priority = 'URGENT';
-    } else if (remainingTimeHours <= 24) {
+    } else if (!isFrozen && remainingTimeHours <= 24) {
       slaStatus = 'CRITICAL';
       priority = 'URGENT';
-    } else if (remainingTimeHours <= 72) {
+    } else if (statusColor === 'ORANGE' || (!isFrozen && remainingTimeHours <= 72)) {
       slaStatus = 'AT_RISK';
       priority = 'HIGH';
     } else {

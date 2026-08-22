@@ -45,7 +45,13 @@ interface OrdreVirement {
   dateRecouvrementRecouvre: string | null;
   recouvrementComment: string | null;
   statutGlobal: 'EN_ATTENTE' | 'VALIDE_INTERNE' | 'VALIDE_RECOUVREMENT' | 'BLOQUE_RECOUVREMENT' | 'COMPTABILISE' | 'INTEGRE_SAGE';
-  client: { name?: string; nom?: string; modeRecuperation: string };
+  client: { name?: string; nom?: string };
+  contract?: {
+    modeRecuperation?: string | null;
+    compagnieAssurance?: { nom?: string | null } | null;
+  };
+  modeRecuperation?: string | null;
+  compagnieAssurance?: string | null;
   createdAt: string;
   // ── Additional fields used by new filters (returned by backend) ──
   dateCreation?: string;
@@ -815,7 +821,11 @@ const RecouvrementTab: React.FC = () => {
                             {ov.codeAssure || '—'}
                           </TableCell>
                           <TableCell sx={BODY_CELL_SX}>
-                            <Chip label={ov.client?.modeRecuperation || '—'} size="small" sx={{ fontSize: '0.70rem' }} />
+                            <Chip
+                              label={ov.contract?.modeRecuperation || ov.modeRecuperation || '—'}
+                              size="small"
+                              sx={{ fontSize: '0.70rem' }}
+                            />
                           </TableCell>
                           <TableCell sx={BODY_CELL_SX}>
                             {ov.typeOperation ? (

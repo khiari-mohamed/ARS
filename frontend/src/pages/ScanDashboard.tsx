@@ -40,6 +40,8 @@ import {
   Add,
   History,
   QueuePlayNext,
+  Download,
+  Search,
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -311,7 +313,25 @@ const ScanDashboard: React.FC = () => {
   const [availableClients, setAvailableClients] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory]     = useState(false);
   const [historyData, setHistoryData]           = useState<any[]>([]);
+  const [historySearchText, setHistorySearchText] = useState('');
+  const [historyFilterStatus, setHistoryFilterStatus] = useState<string>('ALL');
   const [showEntryForm, setShowEntryForm]       = useState(false);
+  const [searchQuery, setSearchQuery]           = useState('');
+  const [filterClient, setFilterClient]         = useState('');
+  const [bypassingScan, setBypassingScan]       = useState<string | null>(null);
+
+  const filteredHistoryData = historyData
+    .filter((b: any) => {
+      const matchesSearch = historySearchText === '' ||
+        b.reference?.toLowerCase().includes(historySearchText.toLowerCase()) ||
+        b.client?.name?.toLowerCase().includes(historySearchText.toLowerCase());
+      const matchesStatus = historyFilterStatus === 'ALL' || b.statut === historyFilterStatus;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a: any, b: any) =>
+      new Date(b.dateFinScan || b.updatedAt || b.createdAt).getTime() -
+      new Date(a.dateFinScan || a.updatedAt || a.createdAt).getTime()
+    );
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -338,7 +358,7 @@ const ScanDashboard: React.FC = () => {
     try {
       const [
         statusData, activityData, queueData, overloadData,
-        chartDataRes, manualScanData, allBordereaux, docStatsData,
+        chartDataRes, manualScanData, docStatsData,
       ] = await Promise.all([
         fetchScanStatus(),
         fetchScanActivity(),
@@ -346,9 +366,6 @@ const ScanDashboard: React.FC = () => {
         checkScanOverload(),
         getScanActivityChart(),
         getBordereauForManualScan(),
-        import('../services/axios').then(({ LocalAPI }) =>
-          LocalAPI.get('/bordereaux').then(r => r.data)
-        ),
         import('../services/axios').then(({ LocalAPI }) =>
           LocalAPI.get('/scan/document-stats-by-type').then(r => {
             const data = r.data;
@@ -369,12 +386,8 @@ const ScanDashboard: React.FC = () => {
       setScanStatus(statusData);
       setScanActivity(activityData);
 
-      // Deduplicate scan queue
-      const relevant = (allBordereaux || []).filter((b: any) =>
-        ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'].includes(b.statut)
-      );
-      const combined = [...queueData, ...relevant];
-      const unique = Array.from(new Map(combined.map((b: any) => [b.id, b])).values());
+      // getScanQueue already returns all relevant statuses from /scan/queue
+      const unique = Array.from(new Map((queueData || []).map((b: any) => [b.id, b])).values());
       setScanQueue(unique);
 
       setOverloadStatus(overloadData);
@@ -481,6 +494,26 @@ const ScanDashboard: React.FC = () => {
     }
   };
 
+  const handleBypassScan = async (bordereauId: string) => {
+    setBypassingScan(bordereauId);
+    try {
+      const { LocalAPI } = await import('../services/axios');
+      await LocalAPI.patch(`/bordereaux/${bordereauId}`, {
+        statut: 'SCANNE',
+        dateFinScan: new Date().toISOString(),
+        scanStatus: 'SCANNE',
+        completionRate: 100,
+      });
+      alert('✅ Bordereau passé au statut "Scan finalisé" sans numérisation');
+      await loadDashboard();
+    } catch (err: any) {
+      console.error('Failed to bypass scan:', err);
+      alert(`❌ Erreur lors du passage au statut "Scan finalisé": ${err.response?.data?.message || err.message}`);
+    } finally {
+      setBypassingScan(null);
+    }
+  };
+
   const handleLoadHistory = async () => {
     setLoadingHistory(true);
     try {
@@ -530,7 +563,9 @@ const ScanDashboard: React.FC = () => {
   };
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const queueToScan    = scanQueue.filter(b => b.statut === 'A_SCANNER');
+  const queueToScan    = scanQueue
+    .filter(b => b.statut === 'A_SCANNER')
+    .sort((a, b) => new Date(a.dateReception).getTime() - new Date(b.dateReception).getTime());
   const queueInScan    = scanQueue.filter(b => b.statut === 'SCAN_EN_COURS');
   const queueDone      = scanQueue.filter(b => ['SCANNE', 'A_AFFECTER'].includes(b.statut));
   const queueActive    = scanQueue.filter(b => ['A_SCANNER', 'SCAN_EN_COURS', 'SCANNE', 'A_AFFECTER'].includes(b.statut));
@@ -733,21 +768,37 @@ const ScanDashboard: React.FC = () => {
                     <Typography variant="h4" fontWeight={800} sx={{ color: NAV_BG, mt: 0.5, lineHeight: 1, mb: 1.5 }}>
                       {queueDone.length}
                     </Typography>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<History sx={{ fontSize: 14 }} />}
-                      disabled={loadingHistory}
-                      onClick={handleLoadHistory}
-                      sx={{
-                        fontSize: '0.72rem',
-                        borderColor: '#1b6b3a',
-                        color: '#1b6b3a',
-                        '&:hover': { bgcolor: '#1b6b3a', color: '#fff' },
-                      }}
-                    >
-                      {loadingHistory ? 'Chargement…' : 'Historique'}
-                    </Button>
+                    <Box display="flex" gap={1}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<CheckCircle sx={{ fontSize: 14 }} />}
+                        onClick={() => { setSelectedProgressionType('SCANNE'); setActiveDialog('progression-popup'); }}
+                        sx={{
+                          fontSize: '0.72rem',
+                          borderColor: '#1b6b3a',
+                          color: '#1b6b3a',
+                          '&:hover': { bgcolor: '#1b6b3a', color: '#fff' },
+                        }}
+                      >
+                        Voir
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<History sx={{ fontSize: 14 }} />}
+                        disabled={loadingHistory}
+                        onClick={handleLoadHistory}
+                        sx={{
+                          fontSize: '0.72rem',
+                          borderColor: '#1b6b3a',
+                          color: '#1b6b3a',
+                          '&:hover': { bgcolor: '#1b6b3a', color: '#fff' },
+                        }}
+                      >
+                        {loadingHistory ? 'Chargement…' : 'Historique'}
+                      </Button>
+                    </Box>
                   </Box>
                   <Box sx={{ width: 44, height: 44, borderRadius: '50%', bgcolor: '#1b6b3a17', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1b6b3a' }}>
                     <CheckCircle sx={{ fontSize: 22 }} />
@@ -1422,98 +1473,185 @@ const ScanDashboard: React.FC = () => {
         >
           Historique Complet des Scans
         </NavyDialogTitle>
-        <DialogContent sx={{ pt: '20px !important', p: 0 }}>
-          <StyledTableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TH>Référence</TH>
-                  <TH>Client</TH>
-                  <TH>Date Scan</TH>
-                  <TH>Scanné Par</TH>
-                  <TH>Documents</TH>
-                  <TH>Durée</TH>
-                  <TH>Statut</TH>
-                  <TH last>Actions</TH>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {[...historyData]
-                  .sort((a, b) =>
-                    new Date(b.dateFinScan || b.updatedAt || b.createdAt).getTime() -
-                    new Date(a.dateFinScan || a.updatedAt || a.createdAt).getTime()
-                  )
-                  .map((bordereau: any, idx: number) => {
-                    const history  = bordereau.enhancedHistory;
-                    const scanUser = history?.timeline?.find((t: any) => t.action === 'SCAN_COMPLETED')?.user || history?.summary?.scanUser;
-                    const duration = history?.summary?.totalDuration;
-                    const docCount = bordereau.documents?.length || history?.summary?.documentsScanned || 0;
-                    return (
-                      <TR key={bordereau.id} idx={idx}>
-                        <TD>
-                          <Typography variant="body2" fontWeight={700} sx={{ color: NAV_BG }}>{bordereau.reference}</Typography>
-                        </TD>
-                        <TD><Typography variant="body2">{bordereau.client?.name || 'N/A'}</Typography></TD>
-                        <TD>
-                          <Typography variant="body2">
-                            {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleString('fr-FR') : 'N/A'}
-                          </Typography>
-                        </TD>
-                        <TD>
-                          <Typography variant="body2">{scanUser?.fullName || scanUser?.username || 'N/A'}</Typography>
-                          {scanUser?.role && (
-                            <Typography variant="caption" sx={{ color: '#546e7a' }}>{scanUser.role}</Typography>
-                          )}
-                        </TD>
-                        <TD center>
-                          <Box component="span" sx={{ px: 1.25, py: 0.25, bgcolor: '#e3f2fd', color: '#0d47a1', border: '1px solid #90caf9', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 700 }}>
-                            {docCount} doc(s)
-                          </Box>
-                        </TD>
-                        <TD>
-                          <Typography variant="body2">{duration ? `${Math.round(duration)} min` : 'N/A'}</Typography>
-                        </TD>
-                        <TD><StatusPill statut={bordereau.statut} /></TD>
-                        <TD last>
-                          <Box display="flex" gap={0.75}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<Visibility sx={{ fontSize: 14 }} />}
-                              onClick={() => handleViewBordereau(bordereau.id)}
-                              sx={{ fontSize: '0.7rem', borderColor: NAV_BG, color: NAV_BG, '&:hover': { bgcolor: NAV_BG, color: '#fff' } }}
-                            >
-                              Voir
-                            </Button>
-                            {history && (
-                              <Tooltip title="Timeline détaillée">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => { setSelectedBordereau(bordereau); setActiveDialog('detailed-history'); }}
-                                  sx={{ color: '#2196f3', '&:hover': { bgcolor: '#e3f2fd' } }}
-                                >
-                                  <History sx={{ fontSize: 18 }} />
-                                </IconButton>
-                              </Tooltip>
+        <DialogContent sx={{ pt: '20px !important', p: 2 }}>
+          {/* Search and Filter Bar */}
+          <Box sx={{ mb: 2.5, pb: 2.5, borderBottom: `1px solid ${BORDER}` }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  placeholder="Rechercher par référence, client..."
+                  size="small"
+                  value={historySearchText}
+                  onChange={(e) => setHistorySearchText(e.target.value)}
+                  InputProps={{
+                    startAdornment: <Search sx={{ mr: 1, color: '#546e7a', fontSize: 18 }} />,
+                  }}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Statut</InputLabel>
+                  <Select
+                    value={historyFilterStatus}
+                    label="Statut"
+                    onChange={(e) => setHistoryFilterStatus(e.target.value)}
+                  >
+                    <MenuItem value="ALL">Tous les statuts</MenuItem>
+                    <MenuItem value="A_SCANNER">À Scanner</MenuItem>
+                    <MenuItem value="SCAN_EN_COURS">Scan en Cours</MenuItem>
+                    <MenuItem value="SCANNE">Scanné</MenuItem>
+                    <MenuItem value="A_AFFECTER">À Affecter</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={<Download sx={{ fontSize: 16 }} />}
+                  onClick={async () => {
+                    try {
+                      const XLSX = await import('xlsx');
+
+                      const rows = filteredHistoryData.map((bordereau: any) => {
+                        const history = bordereau.enhancedHistory;
+                        const scanUser = history?.timeline?.find((t: any) => t.action === 'SCAN_COMPLETED')?.user || history?.summary?.scanUser;
+                        const duration = history?.summary?.totalDuration;
+                        const docCount = bordereau.documents?.length || history?.summary?.documentsScanned || 0;
+                        const dateScan = bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleString('fr-FR') : 'N/A';
+
+                        return {
+                          Référence: bordereau.reference,
+                          Client: bordereau.client?.name || 'N/A',
+                          'Date Scan': dateScan,
+                          'Scanné Par': scanUser?.fullName || scanUser?.username || 'N/A',
+                          Rôle: scanUser?.role || 'N/A',
+                          Documents: docCount,
+                          'Durée (min)': duration ? Math.round(duration) : 'N/A',
+                          Statut: bordereau.statut,
+                          'Date Réception': bordereau.dateReception ? new Date(bordereau.dateReception).toLocaleString('fr-FR') : 'N/A',
+                        };
+                      });
+
+                      if (rows.length === 0) {
+                        alert('Aucun résultat à exporter');
+                        return;
+                      }
+
+                      const ws = XLSX.utils.json_to_sheet(rows);
+                      const wb = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(wb, ws, 'Historique Scans');
+
+                      ws['!cols'] = [
+                        { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 15 },
+                        { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 22 }
+                      ];
+
+                      XLSX.writeFile(wb, `Historique_Scans_${new Date().toISOString().slice(0, 10)}.xlsx`);
+                      alert('✅ Fichier Excel exporté avec succès');
+                    } catch (err: any) {
+                      console.error('Export failed:', err);
+                      alert(`❌ Erreur lors de l'export: ${err.message}`);
+                    }
+                  }}
+                  sx={{ bgcolor: '#1b6b3a', '&:hover': { bgcolor: '#145530' } }}
+                >
+                  Excel
+                </Button>
+              </Grid>
+            </Grid>
+          </Box>
+          {(() => {
+            return (
+              <StyledTableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TH>Référence</TH>
+                      <TH>Client</TH>
+                      <TH>Date Scan</TH>
+                      <TH>Scanné Par</TH>
+                      <TH>Documents</TH>
+                      <TH>Durée</TH>
+                      <TH>Statut</TH>
+                      <TH last>Actions</TH>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredHistoryData.map((bordereau: any, idx: number) => {
+                      const history  = bordereau.enhancedHistory;
+                      const scanUser = history?.timeline?.find((t: any) => t.action === 'SCAN_COMPLETED')?.user || history?.summary?.scanUser;
+                      const duration = history?.summary?.totalDuration;
+                      const docCount = bordereau.documents?.length || history?.summary?.documentsScanned || 0;
+                      return (
+                        <TR key={bordereau.id} idx={idx}>
+                          <TD>
+                            <Typography variant="body2" fontWeight={700} sx={{ color: NAV_BG }}>{bordereau.reference}</Typography>
+                          </TD>
+                          <TD><Typography variant="body2">{bordereau.client?.name || 'N/A'}</Typography></TD>
+                          <TD>
+                            <Typography variant="body2">
+                              {bordereau.dateFinScan ? new Date(bordereau.dateFinScan).toLocaleString('fr-FR') : 'N/A'}
+                            </Typography>
+                          </TD>
+                          <TD>
+                            <Typography variant="body2">{scanUser?.fullName || scanUser?.username || 'N/A'}</Typography>
+                            {scanUser?.role && (
+                              <Typography variant="caption" sx={{ color: '#546e7a' }}>{scanUser.role}</Typography>
                             )}
-                          </Box>
-                        </TD>
-                      </TR>
-                    );
-                  })
-                }
-                {historyData.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} sx={{ textAlign: 'center', py: 5 }}>
-                      <Typography variant="body2" sx={{ color: '#546e7a' }}>
-                        {loadingHistory ? 'Chargement…' : "Aucun bordereau dans l'historique"}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </StyledTableContainer>
+                          </TD>
+                          <TD center>
+                            <Box component="span" sx={{ px: 1.25, py: 0.25, bgcolor: '#e3f2fd', color: '#0d47a1', border: '1px solid #90caf9', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 700 }}>
+                              {docCount} doc(s)
+                            </Box>
+                          </TD>
+                          <TD>
+                            <Typography variant="body2">{duration ? `${Math.round(duration)} min` : 'N/A'}</Typography>
+                          </TD>
+                          <TD><StatusPill statut={bordereau.statut} /></TD>
+                          <TD last>
+                            <Box display="flex" gap={0.75}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Visibility sx={{ fontSize: 14 }} />}
+                                onClick={() => handleViewBordereau(bordereau.id)}
+                                sx={{ fontSize: '0.7rem', borderColor: NAV_BG, color: NAV_BG, '&:hover': { bgcolor: NAV_BG, color: '#fff' } }}
+                              >
+                                Voir
+                              </Button>
+                              {history && (
+                                <Tooltip title="Timeline détaillée">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => { setSelectedBordereau(bordereau); setActiveDialog('detailed-history'); }}
+                                    sx={{ color: '#2196f3', '&:hover': { bgcolor: '#e3f2fd' } }}
+                                  >
+                                    <History sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </Box>
+                          </TD>
+                        </TR>
+                      );
+                    })}
+                    {filteredHistoryData.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} sx={{ textAlign: 'center', py: 5 }}>
+                          <Typography variant="body2" sx={{ color: '#546e7a' }}>
+                            {loadingHistory ? 'Chargement…' : historySearchText || historyFilterStatus !== 'ALL' ? 'Aucun résultat' : "Aucun bordereau dans l'historique"}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </StyledTableContainer>
+            );
+          })()}
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${BORDER}`, px: 3, py: 2 }}>
           <Button onClick={() => setActiveDialog(null)} sx={{ color: '#546e7a' }}>Fermer</Button>
@@ -1793,7 +1931,7 @@ const ScanDashboard: React.FC = () => {
       {/* Progression popup */}
       <Dialog
         open={activeDialog === 'progression-popup'}
-        onClose={() => { setActiveDialog(null); setSelectedProgressionType(null); }}
+        onClose={() => { setActiveDialog(null); setSelectedProgressionType(null); setSearchQuery(''); setFilterClient(''); }}
         maxWidth="lg"
         fullWidth
         PaperProps={{ sx: { borderRadius: 2 } }}
@@ -1803,13 +1941,44 @@ const ScanDashboard: React.FC = () => {
           {selectedProgressionType === 'SCAN_EN_COURS' && 'Bordereaux Scan en Cours'}
           {selectedProgressionType === 'SCANNE'        && 'Scans Finalisés'}
         </NavyDialogTitle>
-        <DialogContent sx={{ p: 0 }}>
+        <DialogContent sx={{ p: 3 }}>
+          {selectedProgressionType === 'A_SCANNER' && (
+            <Box sx={{ mb: 3, p: 2, bgcolor: ROW_ODD, borderRadius: 1.5, border: `1px solid ${BORDER}` }}>
+              <Typography variant="caption" sx={{ color: '#546e7a', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, mb: 2, display: 'block' }}>Recherche et Filtrage</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Rechercher par référence..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    sx={{ bgcolor: '#fff', borderRadius: 1 }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Filtrer par client</InputLabel>
+                    <Select value={filterClient} label="Filtrer par client" onChange={(e) => setFilterClient(e.target.value)}>
+                      <MenuItem value=""><em>Tous les clients</em></MenuItem>
+                      {Array.from(new Set(queueToScan.map(b => b.client?.name).filter(Boolean))).map((clientName: any) => (
+                        <MenuItem key={clientName} value={clientName}>{clientName}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+              <Typography variant="caption" sx={{ color: '#546e7a', mt: 2, display: 'block' }}>ℹ️ Triés par date d'ajout (ancien au plus récent) - {queueToScan.filter(b => (!searchQuery || b.reference.toLowerCase().includes(searchQuery.toLowerCase())) && (!filterClient || b.client?.name === filterClient)).length} / {queueToScan.length} bordereau(x)</Typography>
+            </Box>
+          )}
+
           <StyledTableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TH>Référence</TH>
                   <TH>Client</TH>
+                  <TH>Date Ajout</TH>
                   <TH>Statut</TH>
                   <TH last>Actions</TH>
                 </TableRow>
@@ -1822,37 +1991,58 @@ const ScanDashboard: React.FC = () => {
                     if (selectedProgressionType === 'SCANNE')        return ['SCANNE', 'A_AFFECTER'].includes(b.statut);
                     return false;
                   })
+                  .filter(b => {
+                    if (selectedProgressionType !== 'A_SCANNER') return true;
+                    return (!searchQuery || b.reference.toLowerCase().includes(searchQuery.toLowerCase())) &&
+                           (!filterClient || b.client?.name === filterClient);
+                  })
                   .map((bordereau: any, idx: number) => (
                     <TR key={bordereau.id} idx={idx}>
                       <TD>
                         <Typography variant="body2" fontWeight={700} sx={{ color: NAV_BG }}>{bordereau.reference}</Typography>
-                        <Typography variant="caption" sx={{ color: '#546e7a' }}>{new Date(bordereau.createdAt).toLocaleDateString('fr-FR')}</Typography>
                       </TD>
                       <TD><Typography variant="body2">{bordereau.client?.name || 'N/A'}</Typography></TD>
+                      <TD>
+                        <Typography variant="caption" sx={{ color: '#546e7a' }}>
+                          {new Date(bordereau.dateReception || bordereau.createdAt).toLocaleDateString('fr-FR')} à {new Date(bordereau.dateReception || bordereau.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      </TD>
                       <TD>
                         <Box display="flex" gap={0.75} flexWrap="wrap" alignItems="center">
                           <StatusPill statut={bordereau.statut} />
                           {bordereau.statut === 'SCAN_EN_COURS' && (
                             <Box component="span" sx={{ px: 1, py: 0.2, bgcolor: '#e3f2fd', color: '#0d47a1', border: '1px solid #90caf9', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 700 }}>
-                              Scan Multiple
+                              Multiple
                             </Box>
                           )}
                         </Box>
                       </TD>
                       <TD last>
-                        <Box display="flex" gap={0.75}>
+                        <Box display="flex" gap={0.5} flexWrap="wrap">
                           <Button
                             size="small"
                             variant="contained"
                             startIcon={<Scanner sx={{ fontSize: 14 }} />}
                             onClick={() => { setSelectedBordereau(bordereau); setActiveDialog('manual-scan-direct'); }}
-                            sx={{ fontSize: '0.72rem', bgcolor: '#8b5cf6', '&:hover': { bgcolor: '#7c3aed' } }}
+                            sx={{ fontSize: '0.7rem', bgcolor: '#8b5cf6', '&:hover': { bgcolor: '#7c3aed' }, whiteSpace: 'nowrap' }}
                           >
-                            Scan Manuel{bordereau.statut === 'SCAN_EN_COURS' && ' +'}
+                            Scan{bordereau.statut === 'SCAN_EN_COURS' && ' +'}
                           </Button>
-                          <Tooltip title="Voir les détails">
+                          {selectedProgressionType === 'A_SCANNER' && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<CheckCircle sx={{ fontSize: 14 }} />}
+                              disabled={bypassingScan === bordereau.id}
+                              onClick={() => handleBypassScan(bordereau.id)}
+                              sx={{ fontSize: '0.7rem', borderColor: '#1b6b3a', color: '#1b6b3a', '&:hover': { bgcolor: '#e6f4ed' }, whiteSpace: 'nowrap' }}
+                            >
+                              {bypassingScan === bordereau.id ? 'En cours...' : 'Pas de scan'}
+                            </Button>
+                          )}
+                          <Tooltip title="Détails">
                             <IconButton size="small" onClick={() => handleViewBordereau(bordereau.id)} sx={{ color: '#2196f3', '&:hover': { bgcolor: '#e3f2fd' } }}>
-                              <Visibility sx={{ fontSize: 18 }} />
+                              <Visibility sx={{ fontSize: 16 }} />
                             </IconButton>
                           </Tooltip>
                         </Box>
@@ -1861,13 +2051,16 @@ const ScanDashboard: React.FC = () => {
                   ))
                 }
                 {scanQueue.filter(b => {
-                  if (selectedProgressionType === 'A_SCANNER')    return b.statut === 'A_SCANNER';
-                  if (selectedProgressionType === 'SCAN_EN_COURS') return b.statut === 'SCAN_EN_COURS';
-                  if (selectedProgressionType === 'SCANNE')        return ['SCANNE', 'A_AFFECTER'].includes(b.statut);
-                  return false;
+                  const passesStatus = selectedProgressionType === 'A_SCANNER' ? b.statut === 'A_SCANNER' :
+                                      selectedProgressionType === 'SCAN_EN_COURS' ? b.statut === 'SCAN_EN_COURS' :
+                                      ['SCANNE', 'A_AFFECTER'].includes(b.statut);
+                  const passesSearch = selectedProgressionType !== 'A_SCANNER' ? true :
+                                      (!searchQuery || b.reference.toLowerCase().includes(searchQuery.toLowerCase())) &&
+                                      (!filterClient || b.client?.name === filterClient);
+                  return passesStatus && passesSearch;
                 }).length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} sx={{ textAlign: 'center', py: 5 }}>
+                    <TableCell colSpan={5} sx={{ textAlign: 'center', py: 5 }}>
                       <Typography variant="body2" sx={{ color: '#546e7a' }}>Aucun bordereau dans cette catégorie</Typography>
                     </TableCell>
                   </TableRow>
@@ -1877,7 +2070,7 @@ const ScanDashboard: React.FC = () => {
           </StyledTableContainer>
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${BORDER}`, px: 3, py: 2 }}>
-          <Button onClick={() => { setActiveDialog(null); setSelectedProgressionType(null); }} sx={{ color: '#546e7a' }}>Fermer</Button>
+          <Button onClick={() => { setActiveDialog(null); setSelectedProgressionType(null); setSearchQuery(''); setFilterClient(''); }} sx={{ color: '#546e7a' }}>Fermer</Button>
         </DialogActions>
       </Dialog>
 

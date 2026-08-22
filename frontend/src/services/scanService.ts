@@ -98,8 +98,7 @@ export const triggerPaperStreamImport = async () => {
 };
 
 export const getScanQueue = async () => {
-  // This should show bordereaux created by BO without documents
-  const { data } = await LocalAPI.get('/bordereaux/scan/ready-for-import');
+  const { data } = await LocalAPI.get('/scan/queue');
   return data;
 };
 
