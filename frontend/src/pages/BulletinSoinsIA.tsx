@@ -5,6 +5,7 @@ import { LocalAPI } from '../services/axios';
 import { AssignmentSuggestions } from '../components/BS/AssignmentSuggestions';
 import { RebalancingSuggestions } from '../components/BS/RebalancingSuggestions';
 import { PrioritiesDashboard } from '../components/BS/PrioritiesDashboard';
+import WorkforceEstimator from '../components/analytics/WorkforceEstimator';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,16 @@ const Banner: React.FC<BannerProps> = ({ icon, color, border, title, desc, child
   </div>
 );
 
+const statusStyles: Record<string, { background: string; color: string; border: string }> = {
+  EN_COURS: { background: '#eaf2fd', color: '#1d4f9e', border: '#c3dbf8' },
+  A_AFFECTER: { background: '#fdedf5', color: '#9d1361', border: '#f4c3de' },
+  A_SCANNER: { background: '#fef6e7', color: '#8f5a06', border: '#f6ddab' },
+  TRAITE: { background: '#e9f9f1', color: '#0f7a49', border: '#b6ecd2' },
+  VIREMENT_EXECUTE: { background: '#eaf2fd', color: '#1544a8', border: '#c3dbf8' },
+  ASSIGNE: { background: '#f1edfc', color: '#5334a8', border: '#dad0f5' },
+  CLOTURE: { background: '#f3f4f8', color: '#4b5164', border: '#e7e9f0' },
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const BulletinSoinsIA: React.FC = () => {
@@ -68,6 +79,60 @@ const BulletinSoinsIA: React.FC = () => {
 
   const fetchInFlight = useRef(false);
   const aiInFlight = useRef(false);
+
+  const renderOperationalStats = () => {
+    const departmentStats = dashboardData?.departmentStats ?? [];
+    const clientStats = dashboardData?.clientStats ?? [];
+    const statuses = ['EN_COURS', 'A_AFFECTER', 'A_SCANNER', 'TRAITE', 'VIREMENT_EXECUTE', 'ASSIGNE', 'CLOTURE'];
+    const groupedDepartments = departmentStats.reduce((groups: Record<string, any[]>, item: any) => {
+      (groups[item.department] ??= []).push(item);
+      return groups;
+    }, {});
+
+    return (
+      <div style={{ display: 'grid', gap: '1.25rem', margin: '1.5rem 0' }}>
+        <div style={{ padding: '1.1rem 1.25rem', border: '1px solid #e7e9f0', borderRadius: 12, background: '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.85rem' }}>
+            <div style={{ width: 3, height: 16, background: '#2461c0', marginRight: '0.65rem', borderRadius: 2 }} />
+            <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#161a24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Statistiques par Département</h3>
+            <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#5b6072', fontWeight: 600 }}>
+              {departmentStats.reduce((total: number, item: any) => total + (item.count ?? 0), 0)} dossiers total
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.85rem' }}>
+            {statuses.filter(status => departmentStats.some((item: any) => item.status === status)).map(status => {
+              const style = statusStyles[status] ?? { background: '#f3f4f8', color: '#4b5164', border: '#e7e9f0' };
+              return <span key={status} style={{ padding: '0.2rem 0.55rem', borderRadius: 999, background: style.background, border: `1px solid ${style.border}`, color: style.color, fontSize: '0.7rem', fontWeight: 700 }}>{status}</span>;
+            })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+            {(Object.entries(groupedDepartments) as [string, any[]][]).map(([name, items]) => {
+              const total = items.reduce((sum, item) => sum + (item.count ?? 0), 0);
+              return (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.6rem 0.85rem', borderRadius: 10, background: '#fafbfd', border: '1px solid #eef0f5' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2461c0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ color: '#fff', fontWeight: 700, fontSize: '0.78rem' }}>{name.charAt(0)}</span></div>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#161a24', minWidth: 108 }}>{name}</span>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#5b6072', background: '#f3f4f8', padding: '0.15rem 0.5rem', borderRadius: 999 }}>{total}</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', flex: 1 }}>{items.map((item: any, index: number) => { const style = statusStyles[item.status] ?? statusStyles.CLOTURE; return <span key={index} style={{ padding: '0.2rem 0.55rem', borderRadius: 999, background: style.background, border: `1px solid ${style.border}`, color: style.color, fontSize: '0.7rem' }}><strong>{item.count}</strong> {item.status}</span>; })}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ padding: '1.1rem 1.25rem', border: '1px solid #e7e9f0', borderRadius: 12, background: '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.85rem' }}>
+            <div style={{ width: 3, height: 16, background: '#6d4bce', marginRight: '0.65rem', borderRadius: 2 }} />
+            <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#161a24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Clients</h3>
+            <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#5b6072', fontWeight: 600 }}>{clientStats.length} clients</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {clientStats.map((client: any, index: number) => <div key={client.id ?? index} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.55rem 0.85rem', borderRadius: 10, background: '#fafbfd', border: '1px solid #eef0f5' }}><div style={{ width: 28, height: 28, borderRadius: '50%', background: ['#6d4bce', '#8b6fe0', '#a98cec', '#c7b3f4'][Math.min(index, 3)], display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ color: '#fff', fontWeight: 700, fontSize: '0.78rem' }}>{client.name?.charAt(0)}</span></div><span style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: '#161a24' }}>{client.name}</span><span style={{ color: '#1a9c5b', fontWeight: 700 }}>{client._count?.bordereaux ?? 0} bordereaux</span><span style={{ color: '#5b6072', fontSize: '0.78rem' }}>{client._count?.reclamations ?? 0} réclamation(s)</span></div>)}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ── Fetch light dashboard data (kpis + performance) needed to feed AI recommendations ──
   const fetchDashboardData = useCallback(async () => {
@@ -205,6 +270,10 @@ const BulletinSoinsIA: React.FC = () => {
             </Banner>
           )}
         </div>
+
+        {renderOperationalStats()}
+
+        <WorkforceEstimator />
 
         {/* Module Bulletin de Soins */}
         {canViewModule && (

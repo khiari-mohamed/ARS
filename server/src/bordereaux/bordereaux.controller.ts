@@ -699,11 +699,12 @@ export class BordereauxController {
   }
 
   @Post('bulk-assign')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async bulkAssignBordereaux(@Body() data: { bordereauIds: string[]; userId: string }, @Req() req) {
-    // GESTIONNAIRE_SENIOR cannot assign to others
-    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
-      throw new Error('Gestionnaire Senior ne peut pas affecter des dossiers à d\'autres gestionnaires');
+    const targetUser = await this.prisma.user.findUnique({ where: { id: data.userId }, select: { role: true } });
+    if (!targetUser) throw new BadRequestException('Utilisateur cible introuvable');
+    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR && targetUser.role !== UserRole.GESTIONNAIRE_SENIOR) {
+      throw new BadRequestException('Un Gestionnaire Senior ne peut affecter qu\'un autre Gestionnaire Senior');
     }
     const results: Array<{
       bordereauId: string;
@@ -730,11 +731,15 @@ export class BordereauxController {
   }
 
   @Post('bulk-assign-documents')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async bulkAssignDocuments(@Body() data: { documentIds: string[]; userId: string }, @Req() req) {
-    // GESTIONNAIRE_SENIOR cannot assign documents to others
-    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
-      throw new Error('Gestionnaire Senior ne peut pas affecter des documents à d\'autres gestionnaires');
+    const targetUser = await this.prisma.user.findUnique({ where: { id: data.userId }, select: { role: true } });
+    if (!targetUser) throw new BadRequestException('Utilisateur cible introuvable');
+    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR && targetUser.role !== UserRole.GESTIONNAIRE_SENIOR) {
+      throw new BadRequestException('Un Gestionnaire Senior ne peut affecter qu\'un autre Gestionnaire Senior');
+    }
+    if (!['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'].includes(targetUser.role)) {
+      throw new BadRequestException('Utilisateur cible non autorisé pour cette assignation');
     }
     // Ensure none of the documents belong to a bordereau with VIREMENT_EXECUTE
     const docs = await this.prisma.document.findMany({ where: { id: { in: data.documentIds } }, select: { id: true, bordereauId: true } });
@@ -755,15 +760,16 @@ export class BordereauxController {
   }
 
   @Post(':id/reassign')
-  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async reassignBordereau(
     @Param('id') bordereauId: string,
     @Body() data: { newUserId: string; comment?: string; timestamp?: string },
     @Req() req
   ) {
-    // GESTIONNAIRE_SENIOR cannot reassign to others
-    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR) {
-      throw new Error('Gestionnaire Senior ne peut pas réaffecter des dossiers à d\'autres gestionnaires');
+    const targetUser = await this.prisma.user.findUnique({ where: { id: data.newUserId }, select: { role: true } });
+    if (!targetUser) throw new BadRequestException('Utilisateur cible introuvable');
+    if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR && targetUser.role !== UserRole.GESTIONNAIRE_SENIOR) {
+      throw new BadRequestException('Un Gestionnaire Senior ne peut réaffecter qu\'à un autre Gestionnaire Senior');
     }
     //console.log('🔄 REASSIGN ENDPOINT HIT');
    // console.log('Bordereau ID:', bordereauId);

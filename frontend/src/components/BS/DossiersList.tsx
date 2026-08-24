@@ -15,6 +15,7 @@ import {
   List,
   Card,
   Input,
+  InputNumber,
   DatePicker,
   Row,
   Col
@@ -359,10 +360,15 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     reference: '',
     client: '',
     statut: '',
+    dossierState: '',
     gestionnaire: '',
     documentType: '',
     dateDebut: null as any,
-    dateFin: null as any
+    dateFin: null as any,
+    documentsMin: null as number | null,
+    documentsMax: null as number | null,
+    completionMin: null as number | null,
+    completionMax: null as number | null
   });
 
   useEffect(() => {
@@ -430,6 +436,11 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     return [...new Set(types)].sort();
   }, [dossiers]);
 
+  const uniqueDossierStates = React.useMemo(() => {
+    const states = dossiers.flatMap(d => d.dossierStates ?? []).filter(Boolean);
+    return [...new Set(states)].sort();
+  }, [dossiers]);
+
   // Apply filters
   useEffect(() => {
     let filtered = [...dossiers];
@@ -468,6 +479,10 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       filtered = filtered.filter(d => matchValues.includes(d.statut));
     }
 
+    if (filters.dossierState) {
+      filtered = filtered.filter(d => (d.dossierStates ?? []).includes(filters.dossierState));
+    }
+
     if (filters.gestionnaire) {
       filtered = filtered.filter(d => {
         const assignedUsers = d.documentAssignments?.assignedTo || [];
@@ -495,6 +510,22 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       );
     }
 
+    if (filters.documentsMin !== null) {
+      filtered = filtered.filter(d => d.nombreBS >= filters.documentsMin!);
+    }
+
+    if (filters.documentsMax !== null) {
+      filtered = filtered.filter(d => d.nombreBS <= filters.documentsMax!);
+    }
+
+    if (filters.completionMin !== null) {
+      filtered = filtered.filter(d => (d.statut === 'Traité' ? 100 : d.completionPercentage ?? 0) >= filters.completionMin!);
+    }
+
+    if (filters.completionMax !== null) {
+      filtered = filtered.filter(d => (d.statut === 'Traité' ? 100 : d.completionPercentage ?? 0) <= filters.completionMax!);
+    }
+
     setFilteredDossiers(filtered);
     setPagination(prev => ({ ...prev, current: 1, total: filtered.length }));
   }, [filters, dossiers]);
@@ -504,10 +535,15 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       reference: '',
       client: '',
       statut: '',
+      dossierState: '',
       gestionnaire: '',
       documentType: '',
       dateDebut: null,
-      dateFin: null
+      dateFin: null,
+      documentsMin: null,
+      documentsMax: null,
+      completionMin: null,
+      completionMax: null
     });
   };
 
@@ -525,12 +561,6 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   const handleSelectDossier = (dossierId: string, checked: boolean) => {
     if (isReadOnly) return;
     const dossier = dossiers.find(d => d.id === dossierId);
-    
-    // Check if dossier is already assigned to a gestionnaire
-    if (dossier?.assignedToUserId && checked) {
-      message.warning('Ce dossier est déjà assigné à un gestionnaire');
-      return;
-    }
     
     if (checked) {
       setSelectedDossiers(prev => [...prev, dossierId]);
@@ -578,12 +608,22 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     }
 
     try {
-      // Assign bordereaux if selected
+      // Assign or reassign bordereaux without changing their current status.
       if (selectedDossiers.length > 0) {
-        await LocalAPI.post('/bordereaux/bulk-assign', {
-          bordereauIds: selectedDossiers,
-          userId: selectedAssignee
-        });
+        await Promise.all(selectedDossiers.map(async dossierId => {
+          const dossier = dossiers.find(item => item.id === dossierId);
+          if (dossier?.assignedToUserId) {
+            await LocalAPI.post(`/bordereaux/${dossierId}/reassign`, {
+              newUserId: selectedAssignee,
+              comment: 'Réaffectation depuis la liste des dossiers'
+            });
+          } else {
+            await LocalAPI.post('/bordereaux/bulk-assign', {
+              bordereauIds: [dossierId],
+              userId: selectedAssignee
+            });
+          }
+        }));
       }
       
       // Assign individual BS if selected
@@ -593,16 +633,6 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           userId: selectedAssignee
         });
         
-        // Update status to EN_COURS for reassigned documents
-        for (const docId of selectedBS) {
-          await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-            dossierId: docId,
-            newStatus: 'En cours'
-          });
-        }
-        
-        // Update bordereau status based on document assignments
-        await updateBordereauStatusBasedOnDocuments(selectedBS);
       }
       
       const totalAssigned = selectedDossiers.length + selectedBS.length;
@@ -826,7 +856,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
       render: (_: any, dossier: Dossier) => (
         <Checkbox
           checked={selectedDossiers.includes(dossier.id)}
-          disabled={!!dossier.assignedToUserId || isReadOnly}
+          disabled={isReadOnly}
           onChange={(e) => handleSelectDossier(dossier.id, e.target.checked)}
         />
       )
@@ -993,7 +1023,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} md={6}>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>Réf. Dossier</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>Réf. Bordereau</Text>
               <Input
                 placeholder="Référence"
                 value={filters.reference}
@@ -1044,6 +1074,19 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           </Col>
           <Col xs={24} sm={12} md={6}>
             <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>État dossier</Text>
+              <Select
+                placeholder="Tous les états"
+                value={filters.dossierState || undefined}
+                onChange={(value) => setFilters({ ...filters, dossierState: value || '' })}
+                allowClear
+                style={{ width: '100%' }}
+                options={uniqueDossierStates.map(state => ({ value: state, label: state }))}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
               <Text type="secondary" style={{ fontSize: 12 }}>Gestionnaire</Text>
               <Input
                 placeholder="Nom gestionnaire"
@@ -1063,6 +1106,56 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
                 allowClear
                 style={{ width: '100%' }}
                 options={uniqueTypes.map(t => ({ value: t, label: t }))}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Documents min.</Text>
+              <InputNumber
+                min={0}
+                placeholder="Minimum"
+                value={filters.documentsMin}
+                onChange={(value) => setFilters({ ...filters, documentsMin: value })}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Documents max.</Text>
+              <InputNumber
+                min={0}
+                placeholder="Maximum"
+                value={filters.documentsMax}
+                onChange={(value) => setFilters({ ...filters, documentsMax: value })}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Finalisation min. (%)</Text>
+              <InputNumber
+                min={0}
+                max={100}
+                placeholder="0"
+                value={filters.completionMin}
+                onChange={(value) => setFilters({ ...filters, completionMin: value })}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Finalisation max. (%)</Text>
+              <InputNumber
+                min={0}
+                max={100}
+                placeholder="100"
+                value={filters.completionMax}
+                onChange={(value) => setFilters({ ...filters, completionMax: value })}
+                style={{ width: '100%' }}
               />
             </div>
           </Col>
@@ -1182,6 +1275,9 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
         <div style={{ marginBottom: 16 }}>
           <Text>Dossiers sélectionnés: {selectedDossiers.length}</Text><br/>
           <Text>BS individuels sélectionnés: {selectedBS.length}</Text><br/>
+          {selectedDossiers.some(dossierId => dossiers.find(dossier => dossier.id === dossierId)?.assignedToUserId) && (
+            <Text type="warning">Les dossiers déjà assignés seront réaffectés en conservant leur statut.</Text>
+          )}
           <Text strong>Total à assigner: {selectedDossiers.length + selectedBS.length}</Text>
         </div>
         <Select

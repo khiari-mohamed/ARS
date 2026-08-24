@@ -2326,8 +2326,8 @@ async reassignBordereau(bordereauId: string, newUserId: string, comment?: string
     throw new NotFoundException(`User with ID ${newUserId} not found`);
   }
   
-  if (!['GESTIONNAIRE', 'CHEF_EQUIPE'].includes(newUser.role)) {
-    throw new BadRequestException('User must have GESTIONNAIRE or CHEF_EQUIPE role');
+  if (!['GESTIONNAIRE', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'].includes(newUser.role)) {
+    throw new BadRequestException('User must have GESTIONNAIRE, GESTIONNAIRE_SENIOR, or CHEF_EQUIPE role');
   }
   
   // Store old assignment for logging
@@ -2337,13 +2337,12 @@ async reassignBordereau(bordereauId: string, newUserId: string, comment?: string
   console.log('From:', oldUserId);
   console.log('To:', newUserId);
   
-  // Update the bordereau assignment (BOTH assignedToUserId AND currentHandlerId)
+  // Update assignment only. Reassignment must preserve the dossier status.
   const updatedBordereau = await this.prisma.bordereau.update({
     where: { id: bordereauId },
     data: {
       assignedToUserId: newUserId,
-      currentHandlerId: newUserId, // CRITICAL: Update currentHandler for display
-      statut: Statut.ASSIGNE // Ensure proper status
+      currentHandlerId: newUserId // CRITICAL: Update currentHandler for display
     },
     include: { client: true, contract: true }
   });
@@ -2382,6 +2381,35 @@ async reassignBordereau(bordereauId: string, newUserId: string, comment?: string
       }))
     });
     console.log(`📝 Logged ${documents.length} document assignment histories`);
+  }
+
+  // Keep normalized BulletinSoin ownership in sync without changing `etat`.
+  // Assignment and processing state are independent in the schema.
+  const bulletinSoins = await this.prisma.bulletinSoin.findMany({
+    where: { bordereauId, deletedAt: null },
+    select: { id: true, ownerId: true, etat: true }
+  });
+  if (bulletinSoins.length > 0) {
+    const assignmentUserId = oldUserId || newUserId;
+    await this.prisma.bulletinSoin.updateMany({
+      where: { bordereauId, deletedAt: null },
+      data: {
+        ownerId: newUserId,
+        assignedAt: new Date(),
+        assignedByUserId: assignmentUserId
+      }
+    });
+    await this.prisma.bulletinSoinAssignmentHistory.createMany({
+      data: bulletinSoins.map(bs => ({
+        bulletinSoinId: bs.id,
+        assignedToUserId: newUserId,
+        assignedByUserId: assignmentUserId,
+        fromUserId: bs.ownerId,
+        action: bs.ownerId ? 'REASSIGNED' : 'ASSIGNED',
+        reason: comment || 'Réaffectation du bordereau',
+        etatAtAssignment: bs.etat
+      }))
+    });
   }
   
   // Log the reassignment action with comment

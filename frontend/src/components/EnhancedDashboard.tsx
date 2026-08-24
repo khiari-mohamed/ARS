@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { LocalAPI } from '../services/axios';
-import { hasDashboardAccess, canViewFeature } from '../utils/dashboardRoles';
-import WorkforceEstimator from './analytics/WorkforceEstimator';
+import { hasDashboardAccess } from '../utils/dashboardRoles';
 import DossiersList from './BS/DossiersList';
 import { useIsReadOnly } from './ReadOnlyWrapper';
 
@@ -384,6 +383,7 @@ const EnhancedDashboard: React.FC = () => {
   // FIX: use a ref to track whether a fetch is already in-flight
   // Prevents duplicate parallel requests on 30-s timer fires
   const fetchInFlight = useRef(false);
+  const superAdminDataInFlight = useRef(false);
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   const [filters, setFilters] = useState({ departmentId: '', fromDate: '', toDate: '', period: 'day' });
@@ -655,6 +655,8 @@ const EnhancedDashboard: React.FC = () => {
   // (DossiersList.tsx), cutting this batch to 5 calls.
   const fetchSuperAdminData = useCallback(async () => {
     if (!['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')) return;
+    if (superAdminDataInFlight.current) return;
+    superAdminDataInFlight.current = true;
     try {
       const [
         statsRes,        // tableau-bord/stats
@@ -700,6 +702,8 @@ const EnhancedDashboard: React.FC = () => {
       setSuperAdminGestionnaireSeniorAssignments(seniorRes.data ?? []);
     } catch (e) {
       console.error('Error loading Super Admin data:', e);
+    } finally {
+      superAdminDataInFlight.current = false;
     }
   }, [user?.role]);
 
@@ -724,18 +728,30 @@ const EnhancedDashboard: React.FC = () => {
         return;
       }
 
-      // Super admin batch (5 calls, single Promise.all) + the role-based dashboard
-      // batch below now all fire together rather than super-admin awaiting first.
-      const superAdminPromise = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '')
-        ? fetchSuperAdminData()
-        : Promise.resolve();
+      const isSuperAdmin = ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role ?? '');
+
+      // The Super Admin screen has its own data batch below. Do not block the
+      // first paint on the same heavy aggregate queries a second time.
+      if (isSuperAdmin) {
+        void fetchSuperAdminData();
+        setDashboardData({
+          role: user?.role === 'RESPONSABLE_DEPARTEMENT' ? 'SUPER_ADMIN' : user?.role ?? 'SUPER_ADMIN',
+          permissions: user?.role === 'RESPONSABLE_DEPARTEMENT' ? ['READ_ONLY'] : [],
+          kpis: { dataSource: 'DATABASE' },
+          performance: {},
+          slaStatus: [],
+          alerts: {},
+        });
+        setDepartments([]);
+        setLastUpdated(new Date());
+        return;
+      }
 
       const [dashRes, deptRes, docStatsRes, docStatusRes] = await Promise.all([
         LocalAPI.get('/dashboard/role-based', { params: filters, timeout: 300_000 }),
         LocalAPI.get('/super-admin/departments').catch(() => ({ data: [] })),
         LocalAPI.get('/dashboard/documents/all-types', { params: filters }).catch(() => ({ data: {} })),
         LocalAPI.get('/dashboard/documents/status-breakdown', { params: filters }).catch(() => ({ data: {} })),
-        superAdminPromise,
       ]);
 
       const ds = docStatsRes.data ?? {};
@@ -1064,106 +1080,7 @@ const EnhancedDashboard: React.FC = () => {
       case 'SUPER_ADMIN':
       case 'ADMINISTRATEUR':
       case 'RESPONSABLE_DEPARTEMENT':
-        return (
-          <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
-            {/* Department Stats */}
-            <div style={{ ...cardBase, marginBottom: '1.1rem', padding: '1.1rem 1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.85rem' }}>
-                <div style={{ width: 3, height: 16, backgroundColor: theme.info, marginRight: '0.65rem', borderRadius: 2 }}></div>
-                <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: theme.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Statistiques par Département</h3>
-                <button onClick={() => setShowDepartmentExplanationModal(true)} title="Comment fonctionnent ces statistiques ?" style={{ cursor: 'pointer', background: theme.info, color: 'white', borderRadius: '50%', width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, marginLeft: 8, border: 'none', flexShrink: 0 }}>?</button>
-                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: theme.textMuted, fontWeight: 600 }}>
-                  {(dashboardData.departmentStats ?? []).reduce((s: number, d: any) => s + (d.count ?? 0), 0)} dossiers total
-                </span>
-              </div>
-              {/* Status legend */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.85rem', paddingBottom: '0.75rem', borderBottom: `1px solid ${theme.divider}` }}>
-                {[
-                  { key: 'EN_COURS' }, { key: 'A_AFFECTER' }, { key: 'A_SCANNER' },
-                  { key: 'TRAITE' }, { key: 'VIREMENT_EXECUTE' }, { key: 'ASSIGNE' }, { key: 'CLOTURE' },
-                ].filter(s => (dashboardData.departmentStats ?? []).some((d: any) => d.status === s.key)).map(s => (
-                  <StatusBadge key={s.key} status={s.key} small />
-                ))}
-              </div>
-              {/* Dept rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                {Object.entries(
-                  (dashboardData.departmentStats ?? []).reduce((acc: Record<string, any[]>, dept: any) => {
-                    if (!acc[dept.department]) acc[dept.department] = [];
-                    acc[dept.department].push(dept);
-                    return acc;
-                  }, {})
-                ).map(([name, items]: [string, any[]]) => {
-                  const total = items.reduce((s: number, d: any) => s + (d.count ?? 0), 0);
-                  return (
-                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.6rem 0.85rem', borderRadius: theme.radiusMd, backgroundColor: theme.surfaceSubtle, border: `1px solid ${theme.divider}` }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: theme.info, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <span style={{ color: 'white', fontWeight: 700, fontSize: '0.78rem' }}>{name.charAt(0)}</span>
-                      </div>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: theme.text, minWidth: 108, flexShrink: 0 }}>{name}</span>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: theme.textMuted, background: theme.surfaceMuted, padding: '0.15rem 0.5rem', borderRadius: 999, flexShrink: 0 }}>{total}</span>
-                      <div style={{ width: 1, height: 16, background: theme.borderStrong, flexShrink: 0 }} />
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', flex: 1 }}>
-                        {items.map((item: any, i: number) => {
-                          const { bg, text, border } = getStatusStyle(item.status);
-                          return (
-                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0.2rem 0.55rem', borderRadius: 999, background: bg, border: `1px solid ${border}`, fontSize: '0.7rem' }}>
-                              <span style={{ fontWeight: 700, color: text }}>{item.count}</span>
-                              <span style={{ color: text, opacity: .8, fontWeight: 500 }}>{item.status}</span>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Top Clients */}
-            <div style={{ ...cardBase, padding: '1.1rem 1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.85rem' }}>
-                <div style={{ width: 3, height: 16, backgroundColor: theme.violet, marginRight: '0.65rem', borderRadius: 2 }}></div>
-                <h3 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: theme.text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Clients</h3>
-                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: theme.textMuted, fontWeight: 600 }}>{(dashboardData.clientStats ?? []).length} clients</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {dashboardData.clientStats?.map((client: any, index: number) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.55rem 0.85rem', borderRadius: theme.radiusMd, backgroundColor: theme.surfaceSubtle, border: `1px solid ${theme.divider}` }}>
-                    <div style={{ position: 'relative', flexShrink: 0 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: ['#6d4bce','#8b6fe0','#a98cec','#c7b3f4'][Math.min(index,3)], display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ color: 'white', fontWeight: 700, fontSize: '0.78rem' }}>{client.name.charAt(0)}</span>
-                      </div>
-                      {index < 3 && (
-                        <span style={{ position: 'absolute', top: -4, right: -4, width: 13, height: 13, borderRadius: '50%', background: [theme.warning, theme.textFaint, theme.primaryDark][index], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', color: 'white', fontWeight: 800, border: `1px solid ${theme.surface}` }}>
-                          {index + 1}
-                        </span>
-                      )}
-                    </div>
-                    <span style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={client.name}>{client.name}</span>
-                    <div style={{ width: 80, textAlign: 'center', flexShrink: 0, display: 'grid', gap: 4 }}>
-                      <span style={{ background: theme.successSoft, fontSize: '0.78rem', fontWeight: 700, color: theme.success, padding: '0.15rem 0.55rem', borderRadius: 999, border: `1px solid ${theme.successBorder}` }}>{client._count.bordereaux}</span>
-                      <span style={{ fontSize: '0.65rem', color: theme.textFaint }}>Bordereaux</span>
-                    </div>
-                    <div style={{ width: 90, textAlign: 'center', flexShrink: 0, display: 'grid', gap: 4 }}>
-                      <span
-                        title={client._count.reclamations > 0
-                          ? `${client._count.reclamations} réclamation(s) associée(s) à ce client`
-                          : 'Aucune réclamation enregistrée pour ce client'
-                        }
-                        style={{ background: client._count.reclamations > 0 ? theme.dangerSoft : theme.surfaceMuted, fontSize: '0.78rem', fontWeight: 700, color: client._count.reclamations > 0 ? theme.danger : theme.textFaint, padding: '0.15rem 0.55rem', borderRadius: 999, border: `1px solid ${client._count.reclamations > 0 ? theme.dangerBorder : theme.divider}` }}
-                      >
-                        {client._count.reclamations}
-                      </span>
-                      <span style={{ fontSize: '0.65rem', color: theme.textFaint }}>Réclamations</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-
+        return null;
       case 'CHEF_EQUIPE':
         return (
           <div style={{ marginTop: '1.75rem', fontFamily: theme.font }}>
@@ -1506,30 +1423,9 @@ const EnhancedDashboard: React.FC = () => {
         {isSuperAdminRole && renderSuperAdminContent()}
 
         <div style={{ padding: isSuperAdminRole ? '0 24px' : 0, maxWidth: 1440, margin: '0 auto' }}>
-          {/* Status banner */}
-          {dashboardData?.kpis?.dataSource && (
-            <div style={{ margin: isSuperAdminRole ? '18px 0 0' : '0 0 1.25rem' }}>
-              <Banner
-                icon={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? '⚠️' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? '🚨' : '✅'}
-                color={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? theme.warningSoft : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? theme.dangerSoft : theme.successSoft}
-                border={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? theme.warningBorder : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? theme.dangerBorder : theme.successBorder}
-                title={dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? 'Mode Dégradé ARS' : dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? 'Erreur Système ARS' : 'Système ARS Opérationnel'}
-                desc={
-                  dashboardData.kpis.dataSource === 'ARS_DATABASE_FALLBACK' ? 'Données réelles disponibles — Service IA temporairement indisponible' :
-                  dashboardData.kpis.dataSource === 'ERROR_FALLBACK' ? 'Problème base de données — Contactez l\'administrateur' :
-                  'Tous les services ARS fonctionnent normalement'
-                }
-              />
-            </div>
-          )}
-
           {/* Shared content (all roles) */}
           {dashboardData && (
             <>
-              {canViewFeature(user?.role, 'workforce_estimator') && (
-                <div style={{ marginTop: '1.75rem' }}><WorkforceEstimator /></div>
-              )}
-
               {renderRoleSpecificContent()}
 
               {/* DossiersList — now includes everything the old "Dossiers Individuels"
@@ -1595,18 +1491,6 @@ const ActionBtn: React.FC<{ color: string; onClick: (e: React.MouseEvent) => voi
 
 const InfoBox: React.FC<{ color: string; border: string; children: React.ReactNode }> = ({ color, border, children }) => (
   <div style={{ padding: '11px 15px', background: color, border: `1px solid ${border}`, borderRadius: theme.radiusMd, fontSize: 13.5, fontFamily: theme.font }}>{children}</div>
-);
-
-interface BannerProps { icon: string; color: string; border: string; title: string; desc?: string; children?: React.ReactNode }
-const Banner: React.FC<BannerProps> = ({ icon, color, border, title, desc, children }) => (
-  <div style={{ padding: '13px 17px', background: color, border: `1px solid ${border}`, borderRadius: theme.radiusMd, display: 'flex', alignItems: 'center', gap: 13, fontFamily: theme.font }}>
-    <span style={{ fontSize: 20, flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
-    <div style={{ flex: 1 }}>
-      <p style={{ margin: 0, fontWeight: 800, fontSize: 13.5, color: theme.text }}>{title}</p>
-      {desc && <p style={{ margin: '2px 0 0', fontSize: 12, color: theme.textMuted }}>{desc}</p>}
-    </div>
-    {children && <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>{children}</div>}
-  </div>
 );
 
 export default EnhancedDashboard;

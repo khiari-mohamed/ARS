@@ -48,7 +48,7 @@ const sidebarLinks = [
   // { to: "/home/gec", label: "GEC", icon: <MailIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'CLIENT_SERVICE'] },
   // { to: "/home/tuniclaim", label: "MY TUNICLAIM", icon: <CloudSyncIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'FINANCE'] },
   { to: "/home/bulletin-soins-ia", label: "Module IA - Bulletin de Soins", icon: <SmartToyIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT'] },
-  { to: "/home/ia-suggestions", label: "IA & Suggestions", icon: <SmartToyIcon />, roles: ['SUPER_ADMIN', 'ADMINISTRATEUR', 'RESPONSABLE_DEPARTEMENT', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'] },
+  { to: "/home/ia-suggestions", label: "IA & Suggestions", icon: <SmartToyIcon />, roles: ['CHEF_EQUIPE'] },
   
 ];
 

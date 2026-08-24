@@ -49,7 +49,7 @@ const BSModule: React.FC = () => {
         if (isMobile) setMobileMenuOpen(false);
       }
     },
-    {
+    ...(user?.role === 'CHEF_EQUIPE' ? [{
       key: '/home/bs/ai',
       icon: <RobotOutlined />,
       label: 'IA & Suggestions',
@@ -57,7 +57,7 @@ const BSModule: React.FC = () => {
         navigate('/home/bs/ai');
         if (isMobile) setMobileMenuOpen(false);
       }
-    },
+    }] : []),
   ];
 
   // Add role-specific menu items

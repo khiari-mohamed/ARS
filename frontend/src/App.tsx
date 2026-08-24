@@ -77,7 +77,7 @@ const App: React.FC = () => {
           } />
 
           <Route path="/home/ia-suggestions" element={
-            <ProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN, UserRole.ADMINISTRATEUR, UserRole.RESPONSABLE_DEPARTEMENT, UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR]}>
+            <ProtectedRoute allowedRoles={[UserRole.CHEF_EQUIPE]}>
               <BSAIPage />
             </ProtectedRoute>
           } />

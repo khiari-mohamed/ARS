@@ -233,8 +233,6 @@ function ChefEquipeDashboard() {
   const [selectedBordereauForDoc, setSelectedBordereauForDoc] = useState<string | null>(null);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [uploadingCount, setUploadingCount] = useState(0);
-  const [documentsPage, setDocumentsPage] = useState(1);
-  const documentsPerPage = 20;
   const [reassignedDocs, setReassignedDocs] = useState<any[]>([]);
   const [reassignedByMember, setReassignedByMember] = useState<Record<string, { name: string; count: number }>>({});
   const [loadingReassigned, setLoadingReassigned] = useState(false);
@@ -248,10 +246,6 @@ function ChefEquipeDashboard() {
   const [filteredMergedBordereaux, setFilteredMergedBordereaux] = useState<Dossier[]>([]);
   const [mergedPage, setMergedPage] = useState(1);
   const mergedPerPage = 10;
-
-  // Documents Individuels table filters
-  const [filterDocuments, setFilterDocuments] = useState({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' });
-  const [filteredDocumentsTable, setFilteredDocumentsTable] = useState<Dossier[]>([]);
 
   const uniqueStatuts = useMemo(() => 
     [...new Set([...dossiers, ...documents].map((d: any) => d.statut).filter(Boolean))].sort(),
@@ -327,22 +321,6 @@ function ChefEquipeDashboard() {
     setMergedPage(1);
   }, [mergedFilters, dossiers]);
 
-  // Documents Individuels table filter
-  useEffect(() => {
-    const f3 = documents.filter((d: any) =>
-      (!filterDocuments.reference || String(d.reference || '').trim().toLowerCase().includes(filterDocuments.reference.trim().toLowerCase())) &&
-      (!filterDocuments.bordereauReference || String(d.bordereauReference || '').trim().toLowerCase().includes(filterDocuments.bordereauReference.trim().toLowerCase())) &&
-      (!filterDocuments.client || String(d.client || '').trim().toLowerCase().includes(filterDocuments.client.trim().toLowerCase())) &&
-      (!filterDocuments.type || d.type === filterDocuments.type) &&
-      (!filterDocuments.statut || d.statut === filterDocuments.statut) &&
-      (!filterDocuments.gestionnaire || (d.gestionnaire && String(d.gestionnaire).trim().toLowerCase().includes(filterDocuments.gestionnaire.trim().toLowerCase()))) &&
-      (!filterDocuments.dateFrom || new Date(d.date) >= new Date(filterDocuments.dateFrom)) &&
-      (!filterDocuments.dateTo || new Date(d.date) <= new Date(filterDocuments.dateTo))
-    );
-    setFilteredDocumentsTable(f3);
-    setDocumentsPage(1);
-  }, [filterDocuments, documents]);
-
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -350,10 +328,12 @@ function ChefEquipeDashboard() {
       // NOTE: 'derniers-dossiers' + a separate 'dossiers-en-cours' call were replaced by the
       // single cached 'bordereaux-unified' endpoint (30s Redis TTL, one Prisma query,
       // isEnCours flag per row) — this is what now powers the merged "Bordereaux" table below.
-      const [statsResponse, dossiersResponse, documentsResponse, assignmentsResponse, seniorAssignmentsResponse] = await Promise.all([
+      // The former "Dossiers Individuels" table's '/documents-individuels' call has been
+      // dropped entirely — that table was merged into "Liste Dossiers" (DossiersList.tsx)
+      // below, same as the Super Admin dashboard, so this batch is now 4 calls instead of 5.
+      const [statsResponse, dossiersResponse, assignmentsResponse, seniorAssignmentsResponse] = await Promise.all([
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/types-detail'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/bordereaux-unified'),
-        LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/documents-individuels'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-assignments-dossiers'),
         LocalAPI.get('/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments')
       ]);
@@ -363,13 +343,6 @@ function ChefEquipeDashboard() {
 
       const uniqueSocietes = [...new Set(dossiersList.map((d: Dossier) => d.client).filter(Boolean))] as string[];
       setSocietes(uniqueSocietes.sort());
-
-      if (documentsResponse.data) {
-        setDocuments(documentsResponse.data);
-        setFilteredDocuments(documentsResponse.data);
-      } else {
-        console.warn('⚠️ No documents data received');
-      }
 
       if (statsResponse.data) {
         const transformedStats = {
@@ -524,24 +497,6 @@ function ChefEquipeDashboard() {
     }
   };
 
-  const handleViewPDF = async (dossierId: string) => {
-    try {
-      const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${dossierId}`);
-      if (response.data.success && response.data.hasDocument) {
-        const dossier = filteredDossiers.find(d => d.id === dossierId);
-        const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
-        setCurrentPDFUrl(`${serverBaseUrl}${response.data.pdfUrl}`);
-        setCurrentDossier(dossier);
-        setShowPDFModal(true);
-      } else {
-        alert(response.data.error || 'PDF non disponible pour ce dossier');
-      }
-    } catch (error) {
-      console.error('PDF view error:', error);
-      alert('Erreur lors de l\'ouverture du PDF');
-    }
-  };
-
   const closePDFModal = () => {
     setShowPDFModal(false);
     setCurrentPDFUrl('');
@@ -604,27 +559,6 @@ function ChefEquipeDashboard() {
     }
   };
 
-  const handleMarkAsTraite = async (bordereauId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Traité ?')) return;
-    
-    try {
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-        dossierId: bordereauId,
-        newStatus: 'Traité'
-      });
-      
-      if (response.data.success) {
-        alert('Bordereau marqué comme Traité avec succès');
-        loadDashboardData();
-      } else {
-        alert('Erreur lors de la modification du statut');
-      }
-    } catch (error) {
-      console.error('Mark as traité error:', error);
-      alert('Erreur lors de la modification du statut');
-    }
-  };
-
   const handleRetourScan = async (dossierId: string) => {
     setSelectedDossierForRetour(dossierId);
     setRetourScanReason('');
@@ -640,24 +574,6 @@ function ChefEquipeDashboard() {
     }
     
     setShowRetourScanModal(true);
-  };
-
-  const handleRemoveDocument = async (documentId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir retirer ce document du bordereau ?')) return;
-    
-    try {
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/remove-document-from-bordereau', {
-        documentId
-      });
-      
-      if (response.data.success) {
-        alert('Document retiré avec succès');
-        loadDashboardData();
-      }
-    } catch (error) {
-      console.error('Remove document error:', error);
-      alert('Erreur lors du retrait du document');
-    }
   };
 
   const handleAddDocument = (bordereauId: string) => {
@@ -1160,125 +1076,6 @@ function ChefEquipeDashboard() {
                 onClick={() => setMergedPage(prev => Math.min(Math.ceil(filteredMergedBordereaux.length / mergedPerPage), prev + 1))}
                 disabled={mergedPage >= Math.ceil(filteredMergedBordereaux.length / mergedPerPage)}
                 style={paginationBtnStyle(mergedPage >= Math.ceil(filteredMergedBordereaux.length / mergedPerPage))}
-              >
-                Suivant →
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Dossiers Section (Table) */}
-        <div style={{ ...panelStyle, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px 14px', borderBottom: `1px solid ${T.line}` }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: T.ink700, margin: 0, fontFamily: T.sans }}>Dossiers Individuels</h3>
-            <p style={{ fontSize: 12, color: T.ink500, margin: '4px 0 0 0', fontFamily: T.sans }}>Affichage par dossier (non par bordereau)</p>
-          </div>
-          {/* Filters */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: '8px', padding: '12px', background: T.canvas }}>
-            <input type="text" placeholder="Réf. Dossier" value={filterDocuments.reference} onChange={(e) => setFilterDocuments({...filterDocuments, reference: e.target.value})} style={inputStyle} />
-            <input type="text" placeholder="Réf. Bordereau" value={filterDocuments.bordereauReference} onChange={(e) => setFilterDocuments({...filterDocuments, bordereauReference: e.target.value})} style={inputStyle} />
-            <input type="text" placeholder="Client" value={filterDocuments.client} onChange={(e) => setFilterDocuments({...filterDocuments, client: e.target.value})} style={inputStyle} />
-            <select value={filterDocuments.type} onChange={(e) => setFilterDocuments({...filterDocuments, type: e.target.value})} style={inputStyle}>
-              <option value="">Tous types</option>
-              {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <select value={filterDocuments.statut} onChange={(e) => setFilterDocuments({...filterDocuments, statut: e.target.value})} style={inputStyle}>
-              <option value="">Tous statuts</option>
-              {uniqueStatuts.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <input type="text" placeholder="Gestionnaire" value={filterDocuments.gestionnaire} onChange={(e) => setFilterDocuments({...filterDocuments, gestionnaire: e.target.value})} style={inputStyle} />
-            <input type="date" placeholder="Date début" value={filterDocuments.dateFrom} onChange={(e) => setFilterDocuments({...filterDocuments, dateFrom: e.target.value})} style={inputStyle} />
-            <input type="date" placeholder="Date fin" value={filterDocuments.dateTo} onChange={(e) => setFilterDocuments({...filterDocuments, dateTo: e.target.value})} style={inputStyle} />
-            <button onClick={() => setFilterDocuments({ reference: '', bordereauReference: '', client: '', type: '', statut: '', gestionnaire: '', dateFrom: '', dateTo: '' })} style={btnStyle('danger')}>Effacer</button>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-              <thead>
-                <tr style={{ background: T.ink900 }}>
-                  <th style={thStyle}>
-                    <input 
-                      type="checkbox" 
-                      checked={selectedDossiers.length === filteredDocuments.length && filteredDocuments.length > 0}
-                      onChange={handleSelectAll}
-                      style={{ cursor: 'pointer' }}
-                    />
-                  </th>
-                  <th style={thStyle}>Réf. Dossier</th>
-                  <th style={thStyle}>Réf. Bordereau</th>
-                  <th style={thStyle}>Client</th>
-                  <th style={thStyle}>Type</th>
-                  <th style={thStyle}>Statut Dossier</th>
-                  <th style={thStyle}>Gestionnaire</th>
-                  <th style={thStyle}>Date</th>
-                  <th style={thStyle}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDocumentsTable.slice((documentsPage - 1) * documentsPerPage, documentsPage * documentsPerPage).map((document, index) => {
-                  const pair = document.statut === 'Traité' ? getSemanticPair('ok') : document.statut === 'En cours' ? getSemanticPair('warn') : getSemanticPair('info');
-                  return (
-                  <tr key={document.id} style={{ background: index % 2 === 0 ? T.surface : '#FAFBFD', borderBottom: `1px solid ${T.line}` }}>
-                    <td style={tdStyle}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedDossiers.includes(document.id)}
-                        onChange={() => handleSelectDossier(document.id)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                    </td>
-                    <td style={refCellStyle}>{document.reference}</td>
-                    <td style={{ ...refCellStyle, color: T.purple }}>{(document as any).bordereauReference || 'N/A'}</td>
-                    <td style={tdStyle}>{document.client}</td>
-                    <td style={tdStyle}>{document.type}</td>
-                    <td style={tdStyle}>
-                      <span style={statusPillStyle(pair.bg, pair.fg)}>
-                        {document.statut}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>{document.gestionnaire || 'Non assigné'}</td>
-                    <td style={{ ...tdStyle, fontFamily: T.mono }}>{document.date}</td>
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <button 
-                          onClick={() => handleViewPDF(document.id)}
-                          style={linkBtnStyle(T.info)}
-                          title="Voir PDF du document"
-                        >
-                          Voir PDF
-                        </button>
-                        <button onClick={() => handleMarkAsTraite(document.id)} style={{ ...btnStyle('ok'), padding: '4px 9px', fontSize: 11, borderRadius: 5 }} title="Marquer comme Traité">✓ Traité</button>
-                        <button 
-                          onClick={() => handleRemoveDocument(document.id)}
-                          style={linkBtnStyle(T.danger)}
-                          title="Retirer du bordereau"
-                        >
-                          Retirer
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {/* Pagination for Dossiers Individuels */}
-          {filteredDocumentsTable.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px', gap: '8px' }}>
-              <button
-                onClick={() => setDocumentsPage(prev => Math.max(1, prev - 1))}
-                disabled={documentsPage === 1}
-                style={paginationBtnStyle(documentsPage === 1)}
-              >
-                ← Précédent
-              </button>
-              <span style={{ padding: '8px 16px', fontSize: 13, color: T.ink500, fontFamily: T.sans }}>
-                Page {documentsPage} sur {Math.ceil(filteredDocumentsTable.length / documentsPerPage)}
-              </span>
-              <button
-                onClick={() => setDocumentsPage(prev => Math.min(Math.ceil(filteredDocumentsTable.length / documentsPerPage), prev + 1))}
-                disabled={documentsPage >= Math.ceil(filteredDocumentsTable.length / documentsPerPage)}
-                style={paginationBtnStyle(documentsPage >= Math.ceil(filteredDocumentsTable.length / documentsPerPage))}
               >
                 Suivant →
               </button>

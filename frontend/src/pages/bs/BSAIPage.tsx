@@ -11,7 +11,7 @@ const BSAIPage: React.FC = () => {
       <p style={{ marginBottom: 24, color: '#666' }}>
         Intelligence artificielle pour l'optimisation des assignations et la gestion des priorités
       </p>
-      
+
       <Row gutter={[8, 8]}>
         <Col xs={24} lg={12} style={{ marginBottom: '8px' }}>
           <AssignmentSuggestions />

@@ -58710,3 +58710,225 @@ cwd: None
 2026-06-15 17:50:53,138 - monitoring - INFO - Completed generate_executive_report in 0.00s
 2026-06-15 17:50:53,143 - monitoring - INFO - Starting anomaly_detection endpoint call
 2026-06-15 17:50:53,764 - monitoring - INFO - Completed anomaly_detection in 0.62s
+2026-08-22 20:45:19,219 - learning_engine - INFO - ARS learning database initialized successfully
+2026-08-22 20:45:19,221 - learning_engine - INFO - Loaded 25 terms from company lexicon
+2026-08-22 20:45:19,226 - generative_ai - INFO - Generative AI database initialized
+2026-08-22 20:45:55,364 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:46:16,393 - database - ERROR - Failed to initialize database: [WinError 121] Le délai de temporisation de sémaphore a expiré
+2026-08-22 20:46:16,456 - monitoring - INFO - Completed sla_prediction in 21.09s
+2026-08-22 20:46:50,658 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:46:50,783 - monitoring - INFO - Completed sla_prediction in 0.12s
+2026-08-22 20:47:50,670 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:47:50,810 - monitoring - INFO - Completed sla_prediction in 0.14s
+2026-08-22 20:48:50,638 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:48:50,816 - monitoring - INFO - Completed sla_prediction in 0.18s
+2026-08-22 20:49:50,694 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:49:50,873 - monitoring - INFO - Completed sla_prediction in 0.18s
+2026-08-22 20:50:00,346 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-08-22 20:50:50,765 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:50:50,855 - monitoring - INFO - Completed sla_prediction in 0.09s
+2026-08-22 20:51:50,648 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:51:58,029 - monitoring - INFO - Completed sla_prediction in 7.38s
+2026-08-22 20:52:51,194 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:52:51,387 - monitoring - INFO - Completed sla_prediction in 0.19s
+2026-08-22 20:52:54,822 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 20:52:54,995 - monitoring - INFO - Completed recommendations in 0.17s
+2026-08-22 20:53:50,684 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:53:50,835 - monitoring - INFO - Completed sla_prediction in 0.15s
+2026-08-22 20:53:54,151 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 20:53:54,163 - monitoring - INFO - Completed recommendations in 0.01s
+2026-08-22 20:54:50,680 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:54:50,735 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 20:54:54,962 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 20:54:54,973 - monitoring - INFO - Completed recommendations in 0.01s
+2026-08-22 20:55:50,772 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:55:50,948 - monitoring - INFO - Completed sla_prediction in 0.18s
+2026-08-22 20:57:08,525 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:57:08,824 - monitoring - INFO - Completed sla_prediction in 0.30s
+2026-08-22 20:57:53,045 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:57:53,345 - monitoring - INFO - Completed sla_prediction in 0.30s
+2026-08-22 20:57:54,555 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:57:54,882 - monitoring - INFO - Completed sla_prediction in 0.33s
+2026-08-22 20:57:55,233 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:57:58,978 - monitoring - INFO - Completed sla_prediction in 3.75s
+2026-08-22 20:58:53,126 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:58:53,468 - monitoring - INFO - Completed sla_prediction in 0.34s
+2026-08-22 20:58:54,686 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 20:58:55,193 - monitoring - INFO - Completed sla_prediction in 0.51s
+2026-08-22 20:58:58,657 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 20:58:58,776 - monitoring - INFO - Completed recommendations in 0.12s
+2026-08-22 20:59:59,906 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:00:00,183 - monitoring - INFO - Completed sla_prediction in 0.28s
+2026-08-22 21:00:06,854 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-08-22 21:00:59,864 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:01:00,099 - monitoring - INFO - Completed sla_prediction in 0.23s
+2026-08-22 21:01:59,935 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:02:00,362 - monitoring - INFO - Completed sla_prediction in 0.43s
+2026-08-22 21:02:59,985 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:03:00,126 - monitoring - INFO - Completed sla_prediction in 0.14s
+2026-08-22 21:04:04,721 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:04:05,024 - monitoring - INFO - Completed sla_prediction in 0.30s
+2026-08-22 21:06:16,605 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:06:24,318 - monitoring - INFO - Completed sla_prediction in 7.71s
+2026-08-22 21:06:52,080 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:06:52,397 - monitoring - INFO - Completed sla_prediction in 0.32s
+2026-08-22 21:06:54,112 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:06:54,628 - monitoring - INFO - Completed sla_prediction in 0.52s
+2026-08-22 21:08:13,603 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:08:13,741 - monitoring - INFO - Completed sla_prediction in 0.14s
+2026-08-22 21:08:54,828 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:08:55,084 - monitoring - INFO - Completed sla_prediction in 0.26s
+2026-08-22 21:08:57,113 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:08:57,399 - monitoring - INFO - Completed sla_prediction in 0.29s
+2026-08-22 21:09:00,303 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:09:00,310 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:09:00,313 - monitoring - ERROR - Error in recommendations after 0.01s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:09:00,316 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:12:09,057 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:12:09,192 - monitoring - INFO - Completed sla_prediction in 0.13s
+2026-08-22 21:13:05,262 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:13:05,448 - monitoring - INFO - Completed sla_prediction in 0.19s
+2026-08-22 21:13:05,615 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:13:05,769 - monitoring - INFO - Completed sla_prediction in 0.15s
+2026-08-22 21:14:00,064 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:14:00,065 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:14:00,065 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:14:00,066 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:14:05,284 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:14:05,340 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:14:05,438 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:14:05,500 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:14:05,625 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:14:05,674 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:15:06,558 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:15:06,871 - monitoring - INFO - Completed sla_prediction in 0.31s
+2026-08-22 21:15:47,009 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:15:47,009 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:15:47,009 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:15:47,010 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:16:06,327 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:16:06,855 - monitoring - INFO - Completed sla_prediction in 0.53s
+2026-08-22 21:16:10,419 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:16:10,421 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:16:10,422 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:16:10,423 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:16:45,215 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:16:45,215 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:16:45,215 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:16:45,216 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:17:10,531 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:17:10,737 - monitoring - INFO - Completed sla_prediction in 0.21s
+2026-08-22 21:17:33,193 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:17:33,194 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:17:33,194 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:17:33,195 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:17:48,560 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:17:48,561 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:17:48,562 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:17:48,563 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:17:51,030 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:17:51,206 - monitoring - INFO - Completed recommendations in 0.18s
+2026-08-22 21:18:06,144 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:18:06,388 - monitoring - INFO - Completed sla_prediction in 0.24s
+2026-08-22 21:19:06,188 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:19:06,285 - monitoring - INFO - Completed sla_prediction in 0.10s
+2026-08-22 21:19:07,037 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:19:07,038 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:19:07,038 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:19:07,039 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:19:22,022 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:19:22,040 - monitoring - INFO - Completed recommendations in 0.02s
+2026-08-22 21:20:00,949 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-08-22 21:20:06,134 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:20:06,278 - monitoring - INFO - Completed sla_prediction in 0.14s
+2026-08-22 21:20:30,898 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:20:30,916 - monitoring - INFO - Completed recommendations in 0.02s
+2026-08-22 21:20:37,689 - monitoring - INFO - Starting recommendations endpoint call
+2026-08-22 21:20:37,689 - monitoring - ERROR - Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:20:37,689 - monitoring - ERROR - Error in recommendations after 0.00s: 500: Recommendations generation failed: 'NoneType' object has no attribute 'get'
+2026-08-22 21:20:37,690 - connection_middleware - WARNING - Error response 500 for http://localhost:8002/recommendations
+2026-08-22 21:21:07,994 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:21:41,887 - monitoring - INFO - Completed sla_prediction in 33.89s
+2026-08-22 21:22:06,139 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:22:06,218 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:23:06,159 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:23:06,256 - monitoring - INFO - Completed sla_prediction in 0.10s
+2026-08-22 21:24:06,408 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:24:06,626 - monitoring - INFO - Completed sla_prediction in 0.22s
+2026-08-22 21:25:06,142 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:25:06,193 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:25:06,249 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:25:06,298 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:26:06,145 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:26:06,199 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:26:06,255 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:26:06,312 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:27:06,181 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:27:06,360 - monitoring - INFO - Completed sla_prediction in 0.18s
+2026-08-22 21:28:06,789 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:28:07,018 - monitoring - INFO - Completed sla_prediction in 0.23s
+2026-08-22 21:29:06,170 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:29:06,255 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:30:00,287 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-08-22 21:30:06,165 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:30:06,224 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:30:06,276 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:30:06,335 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:31:08,407 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:31:08,724 - monitoring - INFO - Completed sla_prediction in 0.32s
+2026-08-22 21:32:08,097 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:32:08,652 - monitoring - INFO - Completed sla_prediction in 0.56s
+2026-08-22 21:35:12,430 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:35:12,637 - monitoring - INFO - Completed sla_prediction in 0.21s
+2026-08-22 21:36:08,269 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:36:08,332 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:36:08,392 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:36:08,442 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:37:08,281 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:37:08,358 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:38:08,568 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:38:08,625 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:39:08,281 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:39:08,334 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:39:08,414 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:39:08,463 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:40:00,201 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token
+2026-08-22 21:40:08,332 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:40:08,387 - monitoring - INFO - Completed sla_prediction in 0.05s
+2026-08-22 21:41:08,294 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:41:08,349 - monitoring - INFO - Completed sla_prediction in 0.06s
+2026-08-22 21:41:08,449 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:41:08,524 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:41:17,324 - monitoring - INFO - Starting priorities endpoint call
+2026-08-22 21:41:17,376 - monitoring - INFO - Completed priorities in 0.05s
+2026-08-22 21:41:21,030 - monitoring - INFO - Starting priorities endpoint call
+2026-08-22 21:41:21,034 - monitoring - INFO - Completed priorities in 0.00s
+2026-08-22 21:42:08,302 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:42:08,383 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:42:08,459 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:42:08,527 - monitoring - INFO - Completed sla_prediction in 0.07s
+2026-08-22 21:43:08,316 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:43:08,392 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:43:08,472 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:43:08,553 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:44:08,338 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:44:08,423 - monitoring - INFO - Completed sla_prediction in 0.09s
+2026-08-22 21:45:08,382 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:45:08,476 - monitoring - INFO - Completed sla_prediction in 0.09s
+2026-08-22 21:46:08,343 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:46:08,421 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:46:08,498 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:46:08,577 - monitoring - INFO - Completed sla_prediction in 0.08s
+2026-08-22 21:47:08,339 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:47:08,571 - monitoring - INFO - Completed sla_prediction in 0.23s
+2026-08-22 21:48:08,644 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:48:19,400 - monitoring - INFO - Completed sla_prediction in 10.76s
+2026-08-22 21:49:08,384 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:49:08,583 - monitoring - INFO - Completed sla_prediction in 0.20s
+2026-08-22 21:49:25,864 - monitoring - INFO - Starting priorities endpoint call
+2026-08-22 21:49:25,867 - monitoring - INFO - Completed priorities in 0.00s
+2026-08-22 21:49:26,538 - monitoring - INFO - Starting priorities endpoint call
+2026-08-22 21:49:26,558 - monitoring - INFO - Completed priorities in 0.02s
+2026-08-22 21:50:08,588 - monitoring - INFO - Starting sla_prediction endpoint call
+2026-08-22 21:50:18,424 - monitoring - INFO - Completed sla_prediction in 9.84s
+2026-08-22 21:50:18,840 - connection_middleware - WARNING - Error response 422 for http://localhost:8002/token

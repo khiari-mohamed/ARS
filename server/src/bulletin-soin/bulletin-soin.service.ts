@@ -230,7 +230,7 @@ export class BulletinSoinService {
       //console.log('🔍 Querying users with GESTIONNAIRE role for user:', currentUser?.role);
       
       let whereClause: any = { 
-        role: { in: ['GESTIONNAIRE', 'gestionnaire'] },
+        role: { in: ['GESTIONNAIRE', 'gestionnaire', 'GESTIONNAIRE_SENIOR'] },
         active: true
       };
       

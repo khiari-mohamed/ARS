@@ -1348,9 +1348,11 @@ function GestionnaireDashboardNew() {
             </div>
           )}
         </div>
-        <div style={panelStyle}>
-          <BSAIPage />
-        </div>
+        {user?.role === 'CHEF_EQUIPE' && (
+          <div style={panelStyle}>
+            <BSAIPage />
+          </div>
+        )}
 
       </div>
       
