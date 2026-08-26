@@ -6,20 +6,24 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 
 interface Props {
   onTabChange: (tab: number) => void;
+  tabs: Array<{ label: string }>;
 }
 
-const FinanceMobileView: React.FC<Props> = ({ onTabChange }) => {
-  const quickActions = [
-    { label: 'Ordre de Virement', tab: 0, icon: '💰', color: '#1976d2' },
-    { label: 'Suivi & Statut', tab: 1, icon: '📊', color: '#2e7d32' },
-    { label: 'Donneurs d\'Ordre', tab: 2, icon: '🏦', color: '#ed6c02' },
-    { label: 'Adhérents', tab: 3, icon: '👥', color: '#9c27b0' },
-    { label: 'Alertes & Retards', tab: 4, icon: '⚠️', color: '#d32f2f' },
-    { label: 'Formats Bancaires', tab: 5, icon: '🏛️', color: '#795548' },
-    { label: 'Rapprochement Auto', tab: 6, icon: '🔄', color: '#607d8b' },
-    { label: 'Rapports Financiers', tab: 7, icon: '📈', color: '#ff5722' },
-    { label: 'Rapports', tab: 8, icon: '📄', color: '#3f51b5' }
+const FinanceMobileView: React.FC<Props> = ({ onTabChange, tabs }) => {
+  const actionStyles = [
+    { icon: '💰', color: '#1976d2' },
+    { icon: '📊', color: '#2e7d32' },
+    { icon: '🏦', color: '#ed6c02' },
+    { icon: '👥', color: '#9c27b0' },
+    { icon: '⚠️', color: '#d32f2f' },
+    { icon: '🏛️', color: '#795548' },
+    { icon: '🔄', color: '#607d8b' },
+    { icon: '📈', color: '#ff5722' },
+    { icon: '📄', color: '#3f51b5' }
   ];
+  const quickActions = tabs
+    .map((tab, index) => ({ ...tab, tab: index, ...actionStyles[index] }))
+    .filter(action => action.label !== 'Ordre de Virement');
 
   return (
     <Box sx={{ p: 2 }}>

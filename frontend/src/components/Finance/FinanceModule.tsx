@@ -89,6 +89,7 @@ const FinanceModule: React.FC = () => {
     );
   } else if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
     financeTabs.push(
+      { label: 'Ordre de Virement', component: <OVProcessingTab onSwitchToTab={handleTabChange} /> },
       { label: 'Donneur d\'Ordre', component: <DonneursTab /> },
       { label: 'Adhérents', component: <AdherentsTab /> },
       { label: 'Historique & Archives', component: <ReportsTab /> }
@@ -134,7 +135,10 @@ const FinanceModule: React.FC = () => {
       {/* Mobile View */}
       {isMobile && (
         <>
-          <FinanceMobileView onTabChange={handleTabChange} />
+          <FinanceMobileView
+            onTabChange={handleTabChange}
+            tabs={financeTabs.map(({ label }) => ({ label }))}
+          />
           
           {/* Mobile Tab Content */}
           <Paper elevation={2} sx={{ p: 2, mt: 2 }}>
@@ -162,6 +166,10 @@ const FinanceModule: React.FC = () => {
               <Tab 
                 key={index} 
                 label={tabItem.label}
+                sx={tabItem.label === 'Ordre de Virement' &&
+                  (user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR')
+                  ? { display: 'none' }
+                  : undefined}
               />
             ))}
           </Tabs>
