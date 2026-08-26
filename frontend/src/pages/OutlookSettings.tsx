@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+export {};
+
+/*import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 const API_BASE = '/outlook';
@@ -78,3 +80,4 @@ const OutlookSettings: React.FC = () => {
 };
 
 export default OutlookSettings;
+*/

@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+export {};
+
+/*import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole, ROLE_LABELS } from '../../types/user.d';
 import {
@@ -295,7 +297,7 @@ export default function UserRoles() {
         Vue d'ensemble des rôles système et de leurs permissions associées.
       </Typography>
 
-      {/* Role Overview Cards */}
+
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {Object.entries(ROLE_LABELS).map(([role, label]) => (
           <Grid item xs={12} sm={6} md={4} key={role}>
@@ -322,7 +324,7 @@ export default function UserRoles() {
         ))}
       </Grid>
 
-      {/* Detailed Permissions */}
+
       <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>
         Permissions Détaillées
       </Typography>
@@ -393,7 +395,7 @@ export default function UserRoles() {
         </Accordion>
       ))}
 
-      {/* Role Hierarchy */}
+ 
       <Card sx={{ mt: 4 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
@@ -452,3 +454,4 @@ export default function UserRoles() {
     </Box>
   );
 }
+  */

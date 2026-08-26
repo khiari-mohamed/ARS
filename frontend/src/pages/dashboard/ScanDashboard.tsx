@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+export {};
+
+/*import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Alert, Progress, Modal, Upload, message, Tabs, Tooltip } from 'antd';
 import { 
   ScanOutlined, 
@@ -361,7 +363,7 @@ const ScanDashboard: React.FC = () => {
     <div style={{ padding: 24 }}>
       <h1>Équipe SCAN - Numérisation BS</h1>
       
-      {/* KPI Cards */}
+   
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card>
@@ -406,7 +408,6 @@ const ScanDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Alerts */}
       {slaAlerts > 0 && (
         <Alert
           type="error"
@@ -587,7 +588,7 @@ const ScanDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Manual Upload Modal */}
+    
       <Modal
         title="Correction de Document"
         open={manualUploadModal}
@@ -635,3 +636,4 @@ const ScanDashboard: React.FC = () => {
 };
 
 export default ScanDashboard;
+*/

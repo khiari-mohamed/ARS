@@ -10,9 +10,7 @@ interface LegacySLAEntry {
 }
 
 interface SLAStatusPanelProps {
-  /** Legacy mode: aggregate counts by color, e.g. for a global dashboard summary */
   slaStatus?: LegacySLAEntry[];
-  /** New mode: render the four unified indicators for one bordereau */
   bordereauSla?: BordereauSLAIndicatorsType;
   bordereauReference?: string;
 }

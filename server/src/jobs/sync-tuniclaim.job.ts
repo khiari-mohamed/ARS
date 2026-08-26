@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+/*import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { TuniclaimService } from '../integrations/tuniclaim.service';
 
@@ -16,3 +16,4 @@ export class SyncTuniclaimJob {
     this.logger.log(`Tuniclaim sync complete: ${result.imported} imported, ${result.errors} errors`);
   }
 }
+  */

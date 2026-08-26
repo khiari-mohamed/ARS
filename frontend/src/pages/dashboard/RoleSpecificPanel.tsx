@@ -1,4 +1,6 @@
-import React from 'react';
+export {};
+
+/*import React from 'react';
 import KpiDashboard from '../../components/analytics/KpiDashboard';
 import PerformanceDashboard from '../../components/analytics/PerformanceDashboard';
 import TeamPerformanceDashboard from '../../components/analytics/TeamPerformanceDashboard';
@@ -26,7 +28,7 @@ const RoleSpecificPanel: React.FC<RoleSpecificPanelProps> = ({ role, data }) => 
     case 'RESPONSABLE_DEPARTEMENT':
       return (
         <div role="region" aria-label="Admin Dashboard">
-          {/* These components fetch their own data, do not pass 'data' */}
+
           <KpiDashboard />
           <PerformanceDashboard />
         </div>
@@ -34,7 +36,7 @@ const RoleSpecificPanel: React.FC<RoleSpecificPanelProps> = ({ role, data }) => 
     case 'CHEF_EQUIPE':
       return (
         <div role="region" aria-label="Team Performance Dashboard">
-          {/* If TeamPerformanceDashboard expects data, pass it; otherwise, remove 'data' */}
+
           <TeamPerformanceDashboard data={data.performance} />
         </div>
       );
@@ -63,3 +65,4 @@ const RoleSpecificPanel: React.FC<RoleSpecificPanelProps> = ({ role, data }) => 
 };
 
 export default RoleSpecificPanel;
+*/

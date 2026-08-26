@@ -247,9 +247,6 @@ const RealTimeSuperAdminDashboard: React.FC<RealTimeSuperAdminDashboardProps> = 
         fetchQueuesOverview(),
         LocalAPI.get('/super-admin/team-workload'),
       ]);
-      console.log('📊 Real-Time Data:', realTime);
-      console.log('👥 Team Workload:', teamWorkload.data);
-      console.log('📋 Queues:', queues);
       setRealTimeData({ ...realTime, teamWorkloadDetails: teamWorkload.data });
       setQueuesData(queues);
       setLastUpdate(new Date());

@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+export {};
+
+/*import React, { useState } from 'react';
 import { Card, Row, Col, Statistic, Form, Input, Select, Button, DatePicker, message, Alert } from 'antd';
 import { 
   FileAddOutlined, 
@@ -64,7 +66,7 @@ const BODashboard: React.FC = () => {
     <div style={{ padding: 24 }}>
       <h1>Bureau d'Ordre - Enregistrement BS</h1>
       
-      {/* KPI Cards */}
+  
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card>
@@ -238,7 +240,7 @@ const BODashboard: React.FC = () => {
         </Col>
       </Row>
       
-      {/* Enhanced BO Interface Form */}
+    
       <BOInterfaceForm
         open={showInterfaceForm}
         onClose={() => setShowInterfaceForm(false)}
@@ -248,7 +250,7 @@ const BODashboard: React.FC = () => {
         }}
       />
       
-      {/* Document Entry Form */}
+    
       <DocumentEntryForm
         open={showDocumentForm}
         onClose={() => setShowDocumentForm(false)}
@@ -262,3 +264,4 @@ const BODashboard: React.FC = () => {
 };
 
 export default BODashboard;
+*/

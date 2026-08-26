@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+export {};
+
+/*import { useEffect, useState } from "react";
 import { useAuth } from '../../contexts/AuthContext';
 import { LocalAPI } from '../../services/axios';
 
@@ -191,7 +193,7 @@ function ChefEquipeTableauBord() {
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh' }}>
-      {/* Header */}
+      {/* Header *
       <div style={{ 
         background: '#d32f2f', 
         color: 'white', 
@@ -215,7 +217,7 @@ function ChefEquipeTableauBord() {
       </div>
 
       <div style={{ padding: '20px 40px' }}>
-        {/* Search Section */}
+        {/* Search Section *
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -290,7 +292,7 @@ function ChefEquipeTableauBord() {
           </div>
         </div>
 
-        {/* KPI Cards */}
+        {/* KPI Cards 
         <div style={{ marginBottom: '20px' }}>
           <div style={{ 
             display: 'flex', 
@@ -315,7 +317,7 @@ function ChefEquipeTableauBord() {
             gridTemplateColumns: 'repeat(4, 1fr)', 
             gap: '20px' 
           }}>
-            {/* Total Dossiers */}
+            {/* Total Dossiers *
             <div style={{ 
               background: '#d32f2f', 
               color: 'white', 
@@ -343,7 +345,7 @@ function ChefEquipeTableauBord() {
               </div>
             </div>
 
-            {/* Clôturés */}
+            {/* Clôturés *
             <div style={{ 
               background: '#4caf50', 
               color: 'white', 
@@ -370,7 +372,7 @@ function ChefEquipeTableauBord() {
               </div>
             </div>
 
-            {/* En cours */}
+            {/* En cours *
             <div style={{ 
               background: '#ff9800', 
               color: 'white', 
@@ -397,7 +399,7 @@ function ChefEquipeTableauBord() {
               </div>
             </div>
 
-            {/* Non Affectés */}
+            {/* Non Affectés *
             <div style={{ 
               background: '#2196f3', 
               color: 'white', 
@@ -426,7 +428,7 @@ function ChefEquipeTableauBord() {
           </div>
         </div>
 
-        {/* Détail par Type */}
+        {/* Détail par Type *
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -492,7 +494,7 @@ function ChefEquipeTableauBord() {
           </div>
         </div>
 
-        {/* Derniers Dossiers */}
+        {/* Derniers Dossiers *
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -648,7 +650,7 @@ function ChefEquipeTableauBord() {
           </div>
         </div>
 
-        {/* Dossiers En Cours */}
+        {/* Dossiers En Cours 
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -799,3 +801,4 @@ function ChefEquipeTableauBord() {
 }
 
 export default ChefEquipeTableauBord;
+*/

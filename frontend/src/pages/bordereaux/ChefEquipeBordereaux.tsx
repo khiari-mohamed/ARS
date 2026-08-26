@@ -223,18 +223,7 @@ function ChefEquipeBordereaux() {
     loadGestionnaires();
   }, [teamId]);
 
-  // Debug userBordereaux for gestionnaire
   useEffect(() => {
-    if (isGestionnaire && userBordereaux.length > 0) {
-      console.log('🔍 GESTIONNAIRE DEBUG - userBordereaux:', userBordereaux);
-      console.log('📊 GESTIONNAIRE STATUS BREAKDOWN:', {
-        total: userBordereaux.length,
-        enCours: userBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length,
-        traites: userBordereaux.filter(b => ['TRAITE', 'CLOTURE'].includes(b.statut)).length,
-        retournes: userBordereaux.filter(b => b.statut === 'RETOURNE' || b.statut === 'REJETE').length,
-        statuses: userBordereaux.map(b => ({ ref: b.reference, status: b.statut }))
-      });
-    }
   }, [userBordereaux, isGestionnaire]);
 
   const loadData = async () => {
@@ -252,14 +241,8 @@ function ChefEquipeBordereaux() {
         setUserBordereaux(userAssigned || []);
       } else {
         // Chef d'équipe sees only bordereaux from contracts assigned to them
-        console.log('🔍 Loading data for Chef d\'équipe:', user?.id);
         const response = await LocalAPI.get('/bordereaux/chef-equipe/corbeille');
         const data = response.data;
-
-        console.log('📊 Chef équipe corbeille data:', data);
-        console.log('📊 Non affectés:', data.nonAffectes?.length || 0);
-        console.log('📊 En cours:', data.enCours?.length || 0);
-        console.log('📊 Traités:', data.traites?.length || 0);
 
         setUnassignedBordereaux(data.nonAffectes || []);
         setTeamBordereaux([...data.enCours || [], ...data.traites || []]);
@@ -291,7 +274,6 @@ function ChefEquipeBordereaux() {
           }));
       }
 
-      console.log('🔍 Filtered gestionnaires for chef:', user?.id, 'Count:', filteredGestionnaires.length);
       setGestionnaires(filteredGestionnaires);
     } catch (error) {
       console.error('Error loading gestionnaires:', error);
@@ -346,7 +328,6 @@ function ChefEquipeBordereaux() {
         comment: `Status changed to ${newStatus} by ${isGestionnaire ? 'Gestionnaire' : 'Chef d\'équipe'}`
       });
 
-      console.log('✅ Status updated:', response.data.message);
       setShowStatusModal(false);
       await loadData(); // Refresh data
     } catch (error: any) {
@@ -381,16 +362,7 @@ function ChefEquipeBordereaux() {
         break;
     }
 
-    console.log('🔍 Opening stats modal:', type, 'Data count:', data.length);
     if (type === 'traites' && data.length > 0) {
-      console.log('📊 Sample traites data:', data.slice(0, 2).map(b => ({
-        ref: b.reference,
-        statut: b.statut,
-        dateExecutionVirement: b.dateExecutionVirement,
-        virement: b.virement,
-        dureeReglement: b.dureeReglement,
-        dureeReglementStatus: b.dureeReglementStatus
-      })));
     }
 
     setStatsModalType(type);

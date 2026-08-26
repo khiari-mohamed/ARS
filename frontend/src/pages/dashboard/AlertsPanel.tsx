@@ -1,4 +1,6 @@
-import React from 'react';
+export {};
+
+/*import React from 'react';
 
 interface AlertsPanelProps {
   alerts: any[];
@@ -114,3 +116,4 @@ const AlertsPanel: React.FC<AlertsPanelProps> = ({ alerts }) => {
 };
 
 export default AlertsPanel;
+*/

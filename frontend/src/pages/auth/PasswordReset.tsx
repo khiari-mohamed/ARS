@@ -399,8 +399,8 @@ const PasswordReset: React.FC = () => {
       setError('Les mots de passe ne correspondent pas.');
       return;
     }
-    if (strength.score < 3) {
-      setError('Le mot de passe doit contenir au moins 8 caractères, une majuscule et un chiffre.');
+    if (strength.score < 4) {
+      setError('Le mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un caractère spécial.');
       return;
     }
     setLoading(true);

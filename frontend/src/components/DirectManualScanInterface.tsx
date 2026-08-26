@@ -108,10 +108,6 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
       return;
     }
 
-    // DEBUG: Log file types before upload
-    console.log('🔍 DEBUG: File types before upload:', fileTypes);
-    console.log('🔍 DEBUG: Files:', uploadedFiles.map((f, i) => `${i}: ${f.name} -> ${fileTypes[i]}`));
-
     setUploading(true);
     try {
       const { validateMultipleScanCapability, uploadAdditionalDocuments, uploadManualDocuments } = await import('../services/manualScanService');
@@ -126,11 +122,9 @@ const DirectManualScanInterface: React.FC<Props> = ({ bordereau, onComplete }) =
       let response;
       if (validation.canScanMultiple) {
         // Use additional upload with document types
-        console.log('📤 Uploading additional documents with types:', fileTypes);
         response = await uploadAdditionalDocuments(bordereau.id, uploadedFiles, notes, fileTypes);
       } else {
         // Use regular upload with document types
-        console.log('📤 Uploading documents with types:', fileTypes);
         response = await uploadManualDocuments(bordereau.id, uploadedFiles, fileTypes);
       }
 

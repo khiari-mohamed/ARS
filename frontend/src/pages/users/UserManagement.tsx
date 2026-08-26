@@ -1,4 +1,6 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+export {};
+
+/*import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUsers, useUserDashboardStats } from '../../hooks/useUsers';
 import { canUserManageRole, validatePassword, generateTempPassword } from '../../api/usersApi';
@@ -652,7 +654,6 @@ export default function UserManagement() {
       {renderActiveFilters()}
       {renderUsersTable()}
 
-      {/* Create User FAB */}
       {canManageUsers && (
         <Fab
           color="primary"
@@ -664,7 +665,7 @@ export default function UserManagement() {
         </Fab>
       )}
 
-      {/* User Actions Menu */}
+     
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -707,7 +708,7 @@ export default function UserManagement() {
         )}
       </Menu>
 
-      {/* Create User Dialog */}
+   
       <Dialog
         fullScreen={isMobile}
         open={showCreateDialog}
@@ -791,7 +792,7 @@ export default function UserManagement() {
         </DialogActions>
       </Dialog>
 
-      {/* Edit User Dialog */}
+  
       <Dialog
         fullScreen={isMobile}
         open={Boolean(showEditDialog)}
@@ -901,7 +902,7 @@ export default function UserManagement() {
         </DialogActions>
       </Dialog>
 
-      {/* User Dashboard Dialog */}
+    
       <Dialog
         open={Boolean(showUserDashboard)}
         onClose={() => setShowUserDashboard(null)}
@@ -922,7 +923,7 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Actions Component */}
+    
       <BulkUserActions
         selectedUsers={users.filter(u => selectedUsers.includes(u.id))}
         onBulkAction={handleBulkAction}
@@ -930,7 +931,7 @@ export default function UserManagement() {
         currentUserRole={currentUser?.role as UserRole}
       />
 
-      {/* Snackbar for notifications */}
+   
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -946,3 +947,4 @@ export default function UserManagement() {
     </Box>
   );
 }
+  */

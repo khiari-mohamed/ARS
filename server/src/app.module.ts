@@ -29,9 +29,9 @@ import { BulletinSoinModule } from './bulletin-soin/bulletin-soin.module';
 
 import { DashboardModule } from './dashboard/dashboard.module';
 import { IntegrationModule } from './integrations/integration.module';
-import { FeedbackModule } from './feedback/feedback.module';
+//import { FeedbackModule } from './feedback/feedback.module';
 import { PrismaService } from './prisma/prisma.service';
-import { SeedController } from './seed.controller';
+//import { SeedController } from './seed.controller';
 import { SuperAdminController } from './super-admin.controller';
 import { BsAssignmentController } from './bs-assignment.controller';
 import { BsAssignmentService } from './bs-assignment.service';
@@ -41,14 +41,14 @@ import { BsAssignmentService } from './bs-assignment.service';
   imports: [AuthModule, UsersModule, ContractsModule, BordereauxModule, TraitementModule, ReclamationsModule, GedModule, GecModule, FinanceModule, WireTransferModule, OcrModule, AnalyticsModule, AlertsModule, SharedModule, ConfigModule,
         DashboardModule,
     IntegrationModule,
-    FeedbackModule,
+    //FeedbackModule,
     ClientModule,
     WorkflowModule,
     BOModule,
     ScanModule,
     BulletinSoinModule
   ],
-  controllers: [AppController, SeedController, SuperAdminController, BsAssignmentController],
+  controllers: [AppController, /*SeedController,*/ SuperAdminController, BsAssignmentController],
   providers: [AppService, PrismaService, BsAssignmentService],
 })
 export class AppModule {}

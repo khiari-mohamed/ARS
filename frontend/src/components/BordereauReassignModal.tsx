@@ -30,24 +30,11 @@ const BordereauReassignModal: React.FC<BordereauReassignModalProps> = ({
         ]);
         
         setBordereau(bordereauxData);
-        console.log('=== REASSIGNMENT DEBUG ===');
-        console.log('API Response - usersData:', usersData);
-        console.log('Users count:', usersData?.length || 0);
-        console.log('Users array:', JSON.stringify(usersData, null, 2));
-        console.log('Filter used: { role: "GESTIONNAIRE" }');
-        console.log('=========================');
         
         setUsers(usersData || []);
         
         if (!usersData || usersData.length === 0) {
           console.warn('❌ No gestionnaires found for reassignment!');
-          console.log('Possible issues:');
-          console.log('1. No users with role GESTIONNAIRE in database');
-          console.log('2. API endpoint /users/with-workload not working');
-          console.log('3. Fallback to /users not working');
-          console.log('4. Network connectivity issues');
-        } else {
-          console.log('✅ Successfully loaded', usersData.length, 'gestionnaires');
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -57,8 +44,6 @@ const BordereauReassignModal: React.FC<BordereauReassignModalProps> = ({
       }
     };
 
-    // Add debug logging
-    console.log('Loading reassignment data for bordereau:', bordereauId);
     loadData();
   }, [bordereauId]);
 
@@ -82,9 +67,7 @@ const BordereauReassignModal: React.FC<BordereauReassignModalProps> = ({
             selectedUserId,
             comment.trim() || undefined
           );
-          console.log('✅ Notification sent successfully');
         } catch (notificationError) {
-          console.log('⚠️ Notification failed (non-critical):', notificationError);
           // Don't fail the whole operation if notification fails
         }
       }

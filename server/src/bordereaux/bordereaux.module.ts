@@ -14,7 +14,7 @@ import { ScanSLAController } from './scan-sla.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AlertsModule } from '../alerts/alerts.module';
 import { AuditLogModule } from './audit-log.module'; 
-import { SeedController } from '../seed.controller';
+//import { SeedController } from '../seed.controller';
 import { WorkflowModule } from '../workflow/workflow.module';
 import { BordereauxExcelService } from './bordereaux-excel.service';
 @Module({
@@ -27,7 +27,7 @@ import { BordereauxExcelService } from './bordereaux-excel.service';
   ],
   controllers: [
     BordereauxController, 
-    SeedController, 
+    //SeedController, 
     AssignmentEngineController, 
     TeamAnalyticsController, 
     ChefEquipeTableauBordController, 

@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+export {};
+
+/*import React, { useState } from 'react';
 import { Card, Row, Col, Statistic, Table, Button, Space, Tag, Alert, Tabs } from 'antd';
 import { 
   TeamOutlined, 
@@ -284,7 +286,7 @@ const ChefDashboard: React.FC = () => {
     <div style={{ padding: '12px 8px', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>Tableau de bord Chef d'équipe</h1>
       
-      {/* KPI Cards */}
+     
       <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={12} md={6} lg={6}>
           <Card>
@@ -328,7 +330,7 @@ const ChefDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Alerts */}
+  
       {(overdueBS.length > 0 || teamStats.highRiskMembers > 0) && (
         <Alert
           type="warning"
@@ -429,3 +431,4 @@ const ChefDashboard: React.FC = () => {
 };
 
 export default ChefDashboard;
+*/

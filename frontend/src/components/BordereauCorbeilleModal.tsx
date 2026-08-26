@@ -21,10 +21,7 @@ const BordereauCorbeilleModal: React.FC<BordereauCorbeilleModalProps> = ({
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const handleQuickFilter = (filters: any) => {
-    console.log('🔍 Corbeille: Applying filter:', filters);
-    console.log('🔍 Corbeille: Calling onFilterChange...');
     onFilterChange(filters);
-    console.log('🔍 Corbeille: Closing modal...');
     onClose();
   };
 

@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+export {};
+
+/*import React, { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 const sidebarLinks = [
@@ -53,3 +55,5 @@ export default function Home() {
     </div>
   );
 }
+
+*/

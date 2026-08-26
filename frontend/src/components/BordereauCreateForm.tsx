@@ -152,15 +152,6 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
       return;
     }
     
-    console.log('📝 Creating bordereau with payload:', {
-      reference,
-      dateReception,
-      clientId,
-      contractId,
-      delaiReglement: Number(delaiReglement),
-      nombreBS: Number(nombreBS),
-      montantTotal: montantTotal ? Number(montantTotal) : undefined
-    });
     setLoading(true);
     try {
       // Prepare notification payload (backend will handle notification)
@@ -176,7 +167,6 @@ const BordereauCreateForm: React.FC<Props> = ({ onSuccess }) => {
         createdBy: user?.id
       };
       const result = await createBordereau(payload);
-      console.log('✅ Bordereau created successfully:', result);
       setSuccess(`Bordereau ${reference} créé avec succès et prêt pour numérisation.`);
       
       // Reset form

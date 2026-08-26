@@ -1,4 +1,6 @@
-import React from 'react';
+export {};
+
+/*import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import EnhancedDashboard from '../../components/EnhancedDashboard';
 import ChefEquipeDashboard from './ChefEquipeDashboard';
@@ -15,3 +17,4 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+*/

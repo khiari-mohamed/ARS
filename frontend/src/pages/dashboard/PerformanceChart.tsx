@@ -1,4 +1,6 @@
-import React from 'react';
+export {};
+
+/*import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 interface PerformanceChartProps {
@@ -25,3 +27,4 @@ const PerformanceChart: React.FC<PerformanceChartProps> = ({ data }) => (
 );
 
 export default PerformanceChart;
+*/

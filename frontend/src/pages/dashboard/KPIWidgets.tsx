@@ -1,4 +1,6 @@
-import React from 'react';
+export {};
+
+/*import React from 'react';
 import KPIBox from '../../components/KPIBox';
 
 interface KPIWidgetsProps {
@@ -35,3 +37,4 @@ const KPIWidgets: React.FC<KPIWidgetsProps> = ({ kpis }) => (
 );
 
 export default KPIWidgets;
+*/

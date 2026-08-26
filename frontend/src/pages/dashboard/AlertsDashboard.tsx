@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+export {};
+
+/*import React, { useState } from 'react';
 import {
   useAlertsDashboard,
   useDelayPredictions,
@@ -143,12 +145,12 @@ const AlertsDashboard: React.FC = () => {
         </Typography>
       </Box>
       
-      {/* KPI Cards Section */}
+    
       <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <AlertsKPICards data={kpiData} loading={loadingKPI} />
       </Box>
       
-      {/* Charts Section */}
+   
       <Box sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
         <AlertsCharts data={kpiData} loading={loadingKPI} />
       </Box>
@@ -204,8 +206,7 @@ const AlertsDashboard: React.FC = () => {
                 <AlertCard key={alert.bordereau.id} alert={alert} onResolved={handleAlertResolved} />
               ));
             })()}
-            
-            {/* Pagination */}
+          
             {filteredAlerts && filteredAlerts.length > alertsPerPage && (
               <Box display="flex" justifyContent="center" alignItems="center" mt={2} gap={1}>
                 <Button 
@@ -303,3 +304,4 @@ const AlertsDashboard: React.FC = () => {
 };
 
 export default AlertsDashboard;
+*/

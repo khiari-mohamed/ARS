@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Tabs, Tab, Box, Badge, useTheme, useMediaQuery } from '@mui/material';
-import AlertsDashboard from './dashboard/AlertsDashboard';
+//import AlertsDashboard from './dashboard/AlertsDashboard';
 import ActiveAlerts from '../components/ActiveAlerts';
 import ResolvedAlerts from '../components/ResolvedAlerts';
 import AlertsAnalytics from '../components/AlertsAnalytics';
@@ -72,7 +72,7 @@ const AlertsModule: React.FC = () => {
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: isMobile ? 1 : 2 }}>
-        {activeTab === 0 && <AlertsDashboard />}
+        {/* {activeTab === 0 && <AlertsDashboard />} */}
         {activeTab === 1 && <ActiveAlerts />}
         {activeTab === 2 && <ResolvedAlerts />}
         {/* COMMENTED OUT: Escalation rules tab */}

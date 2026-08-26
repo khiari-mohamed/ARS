@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+export {};
+
+/*import React, { useState, useEffect } from 'react';
 import { LocalAPI } from '../../services/axios';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -437,7 +439,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh' }}>
-      {/* Header */}
+      {/* Header *
       <div style={{ 
         background: '#d32f2f', 
         color: 'white', 
@@ -481,7 +483,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
             </div>
           </div>
         )}
-        {/* Search Section */}
+        {/* Search Section *
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -598,7 +600,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           )}
         </div>
 
-        {/* KPI Cards */}
+        {/* KPI Cards 
         <div style={{ marginBottom: '20px' }}>
           <div style={{ 
             display: 'flex', 
@@ -623,7 +625,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
             gridTemplateColumns: 'repeat(4, 1fr)', 
             gap: '20px' 
           }}>
-            {/* Total Dossiers */}
+            {/* Total Dossiers 
             <div style={{ 
               background: '#d32f2f', 
               color: 'white', 
@@ -651,7 +653,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
               </div>
             </div>
 
-            {/* Clôturés */}
+            {/* Clôturés *
             <div style={{ 
               background: '#4caf50', 
               color: 'white', 
@@ -678,7 +680,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
               </div>
             </div>
 
-            {/* En cours */}
+            {/* En cours 
             <div style={{ 
               background: '#ff9800', 
               color: 'white', 
@@ -705,7 +707,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
               </div>
             </div>
 
-            {/* Non Affectés */}
+      
             <div style={{ 
               background: '#2196f3', 
               color: 'white', 
@@ -734,7 +736,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           </div>
         </div>
 
-        {/* Détail par Type */}
+  
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -800,7 +802,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           </div>
         </div>
 
-        {/* Affectations par Gestionnaire */}
+      
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -888,7 +890,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           </div>
         </div>
 
-        {/* Derniers Dossiers */}
+        
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -1120,7 +1122,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           </div>
         </div>
 
-        {/* Dossiers Individuels */}
+       
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -1249,7 +1251,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
               </tbody>
             </table>
           </div>
-          {/* Pagination for Dossiers Individuels */}
+          
           {dossiersIndividuels.length > dossiersIndividuelsPerPage && (
             <div style={{ 
               display: 'flex', 
@@ -1299,7 +1301,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
           )}
         </div>
 
-        {/* Dossiers En Cours */}
+      
         <div style={{ 
           background: 'white', 
           borderRadius: '8px', 
@@ -1467,7 +1469,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
         </div>
       </div>
 
-      {/* PDF View Modal */}
+  
       {pdfViewModalOpen && selectedDossier && (
         <div style={{
           position: 'fixed',
@@ -1569,7 +1571,6 @@ const ChefEquipeTableauBordNew: React.FC = () => {
         </div>
       )}
 
-      {/* Status Modify Modal */}
       {statusModifyModalOpen && selectedDossier && (
         <div style={{
           position: 'fixed',
@@ -1709,7 +1710,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
         </div>
       )}
 
-      {/* Modal */}
+    
       {modalOpen && selectedDossier && (
         <div style={{
           position: 'fixed',
@@ -1948,7 +1949,7 @@ const ChefEquipeTableauBordNew: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Type Modal */}
+   
       {editModalOpen && (
         <div style={{
           position: 'fixed',
@@ -2099,3 +2100,4 @@ const ChefEquipeTableauBordNew: React.FC = () => {
 };
 
 export default ChefEquipeTableauBordNew;
+*/

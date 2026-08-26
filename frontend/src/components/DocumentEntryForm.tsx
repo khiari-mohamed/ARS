@@ -104,12 +104,6 @@ const DocumentEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
     setError(null);
     setLoading(true);
     
-    console.log('🚀 [FRONTEND] Submitting document creation:', {
-      reference: formData.reference,
-      type: formData.documentType,
-      clientId: formData.clientId
-    });
-    
     try {
       const { LocalAPI } = await import('../services/axios');
       
@@ -129,7 +123,6 @@ const DocumentEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
           }
         });
         
-        console.log('✅ [FRONTEND] Document uploaded successfully:', response.data);
       } else {
         // Create without file
         const response = await LocalAPI.post('/documents', {
@@ -140,7 +133,6 @@ const DocumentEntryForm: React.FC<Props> = ({ open, onClose, onSuccess }) => {
           dateReception: formData.dateReception
         });
         
-        console.log('✅ [FRONTEND] Document created successfully:', response.data);
       }
       
       onSuccess();

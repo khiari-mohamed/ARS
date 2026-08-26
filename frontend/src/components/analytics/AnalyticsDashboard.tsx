@@ -100,8 +100,6 @@ const AnalyticsDashboard: React.FC = () => {
 
       const users = usersResponse.data || [];
       
-      console.log('👥 [Analytics] Loaded users:', users.length);
-      console.log('👥 [Analytics] Sample user:', users[0]);
       
       // Filter and map users by role
       const gestionnaires = users.filter((u: any) => 
@@ -115,10 +113,6 @@ const AnalyticsDashboard: React.FC = () => {
       const chefsEquipe = users.filter((u: any) => 
         u.role === 'CHEF_EQUIPE' && u.active
       ).map((u: any) => ({ id: u.id, name: u.fullName, role: u.role }));
-
-      console.log('👥 [Analytics] Gestionnaires:', gestionnaires.length);
-      console.log('👥 [Analytics] Gestionnaires Seniors:', gestionnaireSeniors.length);
-      console.log('👥 [Analytics] Chefs d\'\u00e9quipe:', chefsEquipe.length);
 
       setFilterOptions({
         clients: clientsResponse.data || [],
@@ -146,9 +140,8 @@ const AnalyticsDashboard: React.FC = () => {
 
       const [kpisResponse, documentStatsResponse] = await Promise.all([
         LocalAPI.get('/analytics/kpis/daily', { params: filterParams }),
-        LocalAPI.get('/analytics/documents/all-types', { params: filterParams })
+        LocalAPI.get('/analytics/documents/comprehensive-stats', { params: filterParams })
       ]);
-
       setGlobalKPIs({
         slaCompliance: kpisResponse.data.slaCompliance || 0,
         totalBordereaux: kpisResponse.data.totalCount || 0,
@@ -273,7 +266,6 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const applyFilters = () => {
-    console.log('Applying filters:', filters);
     loadAnalyticsData();
     updateAppliedFilters();
   };

@@ -87,6 +87,7 @@ const ROLE_META: Record<string, { label: string; bg: string; color: string; bord
   BO:                      { label: "Bureau d'Ordre",        bg: '#f3e5f5', color: '#6a1b9a', border: '#ce93d8' },
   SCAN_TEAM:               { label: 'Équipe Scan',           bg: '#e8f5e9', color: '#2e7d32', border: '#a5d6a7' },
   FINANCE:                 { label: 'Finance',               bg: '#e0f7fa', color: '#00695c', border: '#80cbc4' },
+  COMPTABILITE:            { label: 'Équipe Comptabilité',    bg: '#fff3e0', color: '#e65100', border: '#ffcc80' },
   CLIENT_SERVICE:          { label: 'Service Client',        bg: '#fce4ec', color: '#880e4f', border: '#f48fb1' },
 };
 
@@ -280,7 +281,7 @@ const AdvancedUserManagement: React.FC = () => {
   const loadData = async () => {
     try {
       const [usersData, templatesData, departmentsData, chefEquipesData] = await Promise.all([
-        LocalAPI.get('/users').then((res: any) => res.data),
+        fetchAllUsers(),
         getRoleTemplates(),
         LocalAPI.get('/super-admin/departments').then((res: any) => res.data).catch(() => []),
         LocalAPI.get('/users/chef-equipes').then((res: any) => res.data).catch(() => []),
@@ -399,9 +400,7 @@ const AdvancedUserManagement: React.FC = () => {
 
   const confirmDeactivateUser = async () => {
     try {
-      console.log('Deactivating user:', selectedUser?.id);
       await LocalAPI.patch(`/users/${selectedUser.id}/disable`);
-      console.log('User deactivated successfully');
       setDeleteDialogOpen(false);
       setSelectedUser(null);
       await loadData();
@@ -1014,6 +1013,7 @@ const AdvancedUserManagement: React.FC = () => {
                   <MenuItem value="BO">Bureau d'Ordre</MenuItem>
                   <MenuItem value="SCAN_TEAM">Équipe Scan</MenuItem>
                   <MenuItem value="FINANCE">Finance</MenuItem>
+                  <MenuItem value="COMPTABILITE">Équipe Comptabilité</MenuItem>
                   <MenuItem value="CLIENT_SERVICE">Service Client</MenuItem>
                 </Select>
               </FormControl>
@@ -1106,6 +1106,7 @@ const AdvancedUserManagement: React.FC = () => {
                   <MenuItem value="BO">Bureau d'Ordre</MenuItem>
                   <MenuItem value="SCAN_TEAM">Équipe Scan</MenuItem>
                   <MenuItem value="FINANCE">Finance</MenuItem>
+                  <MenuItem value="COMPTABILITE">Équipe Comptabilité</MenuItem>
                   <MenuItem value="CLIENT_SERVICE">Service Client</MenuItem>
                 </Select>
               </FormControl>

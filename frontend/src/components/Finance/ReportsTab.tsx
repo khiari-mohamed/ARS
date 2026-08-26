@@ -1,9 +1,11 @@
+// D:\ARS\frontend\src\components\Finance\ReportsTab.tsx
 import React, { useState, useEffect } from 'react';
 import {
   Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem,
   TextField, Button, Card, CardContent, Box, Stack, CircularProgress,
   Dialog, DialogTitle, DialogContent, DialogActions, FormControlLabel,
-  Checkbox, Alert, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, Chip
+  Checkbox, Alert, TableContainer, Table, TableHead, TableRow, TableCell,
+  TableBody, Chip, TablePagination
 } from '@mui/material';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -13,6 +15,16 @@ import GetAppIcon from '@mui/icons-material/GetApp';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import TableViewIcon from '@mui/icons-material/TableView';
 import RefreshIcon from '@mui/icons-material/Refresh';
+
+// ── Export libraries (client-side generation — no backend round-trip) ──────────
+import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
+import {
+  Document, Packer, Paragraph, Table as DocxTable, TableRow as DocxTableRow,
+  TableCell as DocxTableCell, TextRun, HeadingLevel, WidthType, ShadingType
+} from 'docx';
 
 // ─── Shared table cell styles (mirrors dashboard design) ──────────────────────
 const HEAD_CELL_SX = {
@@ -73,8 +85,571 @@ const STATUS_MAP: Record<string, { label: string; bg: string; color: string; bor
 function getStatusStyle(status: string) {
   return STATUS_MAP[status] ?? { label: status, bg: '#f5f5f5', color: '#546e7a', border: '#cfd8dc' };
 }
+const STATUS_LABELS: Record<string, string> = {
+  EXECUTE: 'Exécuté',
+  EN_COURS_VALIDATION: 'En validation',
+  REJETE: 'Rejeté',
+  NON_EXECUTE: 'Non exécuté',
+};
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// ── EXPORT HELPERS — build real PDF / Excel / Word files entirely client-side ──
+// ═════════════════════════════════════════════════════════════════════════════
+
+interface ReportFilters {
+  dateFrom: string;
+  dateTo: string;
+  society: string;
+  donneurOrdre: string;
+}
+
+interface ReportExportData {
+  filters: ReportFilters;
+  reportData: any[];
+  statusData: any[];
+  slaData: any[];
+  trendData: any[];
+}
+
+interface ReportSections {
+  includeCharts: boolean;
+  includeDetails: boolean;
+  includeSLA: boolean;
+  includeExceptions: boolean;
+}
+
+function formatDateFR(d?: string | Date | null) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('fr-FR');
+}
+
+function formatMontant(v?: number | null) {
+  return `${(v ?? 0).toLocaleString('fr-TN')} TND`;
+}
+
+function buildFilterSummary(filters: ReportFilters) {
+  const parts: string[] = [];
+  if (filters.dateFrom) parts.push(`Du ${formatDateFR(filters.dateFrom)}`);
+  if (filters.dateTo) parts.push(`Au ${formatDateFR(filters.dateTo)}`);
+  if (filters.society) parts.push(`Société: ${filters.society}`);
+  if (filters.donneurOrdre) parts.push(`Donneur: ${filters.donneurOrdre}`);
+  return parts.length ? parts.join('  •  ') : 'Aucun filtre appliqué';
+}
+
+function computeKPIs(reportData: any[]) {
+  const total = reportData?.length || 0;
+  const totalMontant = (reportData || []).reduce((s: number, r: any) => s + (r.montantTotal || 0), 0);
+  const executed = (reportData || []).filter((r: any) => r.etatVirement === 'EXECUTE').length;
+  const rejected = (reportData || []).filter((r: any) => r.etatVirement === 'REJETE').length;
+  return { total, totalMontant, executed, rejected };
+}
+
+// ── PDF ─────────────────────────────────────────────────────────────────────
+async function generatePDFReport(data: ReportExportData, options: ReportSections): Promise<Blob> {
+  const { filters, reportData, statusData, slaData, trendData } = data;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const { total, totalMontant, executed, rejected } = computeKPIs(reportData);
+
+  // Header band
+  doc.setFillColor(30, 58, 95);
+  doc.rect(0, 0, pageWidth, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ARS TUNISIE — Rapport Financier des Virements', 10, 12);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const now = new Date();
+  doc.text(
+    `Généré le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+    10, 18
+  );
+
+  let y = 30;
+  doc.setTextColor(60, 60, 60);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.text(`Filtres : ${buildFilterSummary(filters)}`, 10, y);
+  y += 8;
+
+  // KPI cards
+  const kpis = [
+    { label: 'Total Ordres', value: String(total) },
+    { label: 'Montant Total', value: formatMontant(totalMontant) },
+    { label: 'Exécutés', value: `${executed} (${total ? Math.round(executed / total * 100) : 0}%)` },
+    { label: 'Rejetés', value: `${rejected} (${total ? Math.round(rejected / total * 100) : 0}%)` },
+  ];
+  const kpiWidth = (pageWidth - 20 - 3 * 4) / 4;
+  kpis.forEach((k, i) => {
+    const x = 10 + i * (kpiWidth + 4);
+    doc.setFillColor(240, 244, 255);
+    doc.setDrawColor(208, 223, 245);
+    doc.roundedRect(x, y, kpiWidth, 18, 2, 2, 'FD');
+    doc.setTextColor(30, 58, 95);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(k.value, x + 4, y + 8);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(90, 106, 126);
+    doc.text(k.label, x + 4, y + 14);
+  });
+  y += 26;
+
+  if (options.includeCharts && statusData?.length) {
+    doc.setTextColor(30, 58, 95);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Répartition par Statut', 10, y);
+    y += 4;
+    autoTable(doc, {
+      startY: y,
+      head: [['Statut', 'Nombre', 'Pourcentage']],
+      body: statusData.map((s: any) => [s.name, String(s.count || 0), `${s.value}%`]),
+      theme: 'grid',
+      headStyles: { fillColor: [30, 58, 95], textColor: 255, fontSize: 9 },
+      bodyStyles: { fontSize: 8.5 },
+      margin: { left: 10, right: 10 },
+      tableWidth: (pageWidth - 20) / 2 - 5,
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+  }
+
+  if (options.includeSLA && slaData?.length) {
+    doc.setTextColor(30, 58, 95);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Conformité SLA par Société', 10, y);
+    y += 4;
+    autoTable(doc, {
+      startY: y,
+      head: [['Société', 'À temps', 'À risque', 'En retard']],
+      body: slaData.map((s: any) => [s.society, `${s.onTime}%`, `${s.atRisk}%`, `${s.overdue}%`]),
+      theme: 'grid',
+      headStyles: { fillColor: [30, 58, 95], textColor: 255, fontSize: 9 },
+      bodyStyles: { fontSize: 8.5 },
+      margin: { left: 10, right: 10 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+  }
+
+  if (options.includeCharts && trendData?.length) {
+    if (y > 160) { doc.addPage(); y = 15; }
+    doc.setTextColor(30, 58, 95);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Évolution — 7 derniers jours', 10, y);
+    y += 4;
+    autoTable(doc, {
+      startY: y,
+      head: [['Date', 'Total', 'Exécutés', 'Montant']],
+      body: trendData.map((t: any) => [t.date, String(t.total), String(t.executed), formatMontant(t.amount)]),
+      theme: 'grid',
+      headStyles: { fillColor: [30, 58, 95], textColor: 255, fontSize: 9 },
+      bodyStyles: { fontSize: 8.5 },
+      margin: { left: 10, right: 10 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+  }
+
+  if (options.includeDetails && reportData?.length) {
+    if (y > 170) { doc.addPage(); y = 15; }
+    doc.setTextColor(30, 58, 95);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Liste des Ordres de Virement', 10, y);
+    y += 4;
+    autoTable(doc, {
+      startY: y,
+      head: [['Référence', 'Client', 'Montant', 'Statut', 'Date']],
+      body: reportData.map((ov: any) => [
+        ov.reference || '—',
+        ov.bordereau?.client?.name || 'Entrée manuelle',
+        formatMontant(ov.montantTotal),
+        STATUS_LABELS[ov.etatVirement] || ov.etatVirement,
+        formatDateFR(ov.dateCreation),
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [30, 58, 95], textColor: 255, fontSize: 9 },
+      bodyStyles: { fontSize: 8 },
+      alternateRowStyles: { fillColor: [244, 247, 251] },
+      margin: { left: 10, right: 10 },
+    });
+  }
+
+  if (options.includeExceptions) {
+    const rejectedList = (reportData || []).filter((r: any) => r.etatVirement === 'REJETE');
+    if (rejectedList.length) {
+      doc.addPage();
+      let ey = 15;
+      doc.setTextColor(183, 28, 28);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Exceptions et Alertes — Virements Rejetés', 10, ey);
+      ey += 4;
+      autoTable(doc, {
+        startY: ey,
+        head: [['Référence', 'Client', 'Montant', 'Date', 'Commentaire']],
+        body: rejectedList.map((ov: any) => [
+          ov.reference || '—',
+          ov.bordereau?.client?.name || 'Entrée manuelle',
+          formatMontant(ov.montantTotal),
+          formatDateFR(ov.dateCreation),
+          ov.commentaire || ov.motifObservation || '—',
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [183, 28, 28], textColor: 255, fontSize: 9 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 10, right: 10 },
+      });
+    }
+  }
+
+  // Page numbers on every page
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Page ${i} / ${pageCount}`, pageWidth - 30, doc.internal.pageSize.getHeight() - 6);
+  }
+
+  return doc.output('blob');
+}
+
+// ── EXCEL ────────────────────────────────────────────────────────────────────
+async function generateExcelReport(data: ReportExportData, options: ReportSections): Promise<Blob> {
+  const { filters, reportData, statusData, slaData, trendData } = data;
+  const { total, totalMontant, executed, rejected } = computeKPIs(reportData);
+
+  const C = {
+    NAVY: 'FF1E3A5F', NAVY_LIGHT: 'FF2E5F8E', SLATE: 'FF2C3E50',
+    WHITE: 'FFFFFFFF', ROW_ALT: 'FFF4F7FB', BORDER: 'FFD0D9E8',
+    GREEN: 'FF1B8A4C', GREEN_BG: 'FFE6F4ED', RED: 'FFC0392B', RED_BG: 'FFFDECEA',
+    ORANGE: 'FFD35400', ORANGE_BG: 'FFFFF3E0', BLUE: 'FF1565C0', BLUE_BG: 'FFE3F0FF',
+    TOTAL_BG: 'FF152D4A',
+  };
+  const fill = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+  const thin = (argb = C.BORDER): Partial<ExcelJS.Border> => ({ style: 'thin', color: { argb } });
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'ARS Finance System';
+  wb.created = new Date();
+
+  // ── Sheet: Résumé ──
+  const wsSummary = wb.addWorksheet('Résumé', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
+  });
+  wsSummary.mergeCells('A1:D1');
+  const title = wsSummary.getCell('A1');
+  title.value = 'RAPPORT FINANCIER — ORDRES DE VIREMENT';
+  title.font = { name: 'Calibri', size: 14, bold: true, color: { argb: C.WHITE } };
+  title.fill = fill(C.NAVY);
+  title.alignment = { horizontal: 'center', vertical: 'middle' };
+  wsSummary.getRow(1).height = 32;
+
+  wsSummary.mergeCells('A2:D2');
+  const sub = wsSummary.getCell('A2');
+  const now = new Date();
+  sub.value = `Généré le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  sub.font = { name: 'Calibri', size: 10, italic: true, color: { argb: C.WHITE } };
+  sub.fill = fill(C.NAVY_LIGHT);
+  sub.alignment = { horizontal: 'center' };
+  wsSummary.getRow(2).height = 20;
+
+  wsSummary.getCell('A4').value = 'Filtres appliqués';
+  wsSummary.getCell('A4').font = { bold: true, color: { argb: C.NAVY } };
+  wsSummary.mergeCells('A5:D5');
+  wsSummary.getCell('A5').value = buildFilterSummary(filters);
+
+  const kpiRows: [string, number][] = [
+    ['Total Ordres', total],
+    ['Montant Total (TND)', totalMontant],
+    ['Exécutés', executed],
+    ['Rejetés', rejected],
+  ];
+  const kr = 7;
+  wsSummary.getCell(`A${kr}`).value = 'Indicateur';
+  wsSummary.getCell(`B${kr}`).value = 'Valeur';
+  [wsSummary.getCell(`A${kr}`), wsSummary.getCell(`B${kr}`)].forEach(c => {
+    c.font = { bold: true, color: { argb: C.WHITE } };
+    c.fill = fill(C.SLATE);
+  });
+  kpiRows.forEach((row, i) => {
+    const r = kr + 1 + i;
+    wsSummary.getCell(`A${r}`).value = row[0];
+    wsSummary.getCell(`B${r}`).value = row[1];
+    const bg = i % 2 === 0 ? C.WHITE : C.ROW_ALT;
+    wsSummary.getCell(`A${r}`).fill = fill(bg);
+    wsSummary.getCell(`B${r}`).fill = fill(bg);
+    if (row[0] === 'Montant Total (TND)') wsSummary.getCell(`B${r}`).numFmt = '#,##0.000';
+  });
+  [1, 2, 3, 4].forEach(i => { wsSummary.getColumn(i).width = 24; });
+
+  // ── Sheet: Répartition Statuts ──
+  if (options.includeCharts && statusData?.length) {
+    const ws = wb.addWorksheet('Répartition Statuts');
+    ws.addRow(['Statut', 'Nombre', 'Pourcentage']);
+    ws.getRow(1).eachCell(c => {
+      c.font = { bold: true, color: { argb: C.WHITE } };
+      c.fill = fill(C.NAVY);
+      c.alignment = { horizontal: 'center' };
+    });
+    statusData.forEach((s: any, i: number) => {
+      const row = ws.addRow([s.name, s.count || 0, `${s.value}%`]);
+      row.eachCell(c => { c.fill = fill(i % 2 === 0 ? C.WHITE : C.ROW_ALT); });
+    });
+    ws.columns.forEach(col => { col.width = 22; });
+  }
+
+  // ── Sheet: SLA ──
+  if (options.includeSLA && slaData?.length) {
+    const ws = wb.addWorksheet('SLA par Société');
+    ws.addRow(['Société', 'À temps (%)', 'À risque (%)', 'En retard (%)']);
+    ws.getRow(1).eachCell(c => {
+      c.font = { bold: true, color: { argb: C.WHITE } };
+      c.fill = fill(C.NAVY);
+      c.alignment = { horizontal: 'center' };
+    });
+    slaData.forEach((s: any, i: number) => {
+      const row = ws.addRow([s.society, s.onTime, s.atRisk, s.overdue]);
+      row.eachCell(c => { c.fill = fill(i % 2 === 0 ? C.WHITE : C.ROW_ALT); });
+    });
+    ws.columns.forEach(col => { col.width = 24; });
+  }
+
+  // ── Sheet: Évolution 7 jours ──
+  if (options.includeCharts && trendData?.length) {
+    const ws = wb.addWorksheet('Évolution 7 jours');
+    ws.addRow(['Date', 'Total', 'Exécutés', 'Montant (TND)']);
+    ws.getRow(1).eachCell(c => {
+      c.font = { bold: true, color: { argb: C.WHITE } };
+      c.fill = fill(C.NAVY);
+      c.alignment = { horizontal: 'center' };
+    });
+    trendData.forEach((t: any, i: number) => {
+      const row = ws.addRow([t.date, t.total, t.executed, t.amount]);
+      row.getCell(4).numFmt = '#,##0.000';
+      row.eachCell(c => { c.fill = fill(i % 2 === 0 ? C.WHITE : C.ROW_ALT); });
+    });
+    ws.columns.forEach(col => { col.width = 20; });
+  }
+
+  // ── Sheet: Détail OV ──
+  if (options.includeDetails && reportData?.length) {
+    const ws = wb.addWorksheet('Détail OV', {
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
+    });
+    const COLUMNS = [
+      { header: 'Référence', width: 20 },
+      { header: 'Client', width: 28 },
+      { header: 'Montant (TND)', width: 18 },
+      { header: 'Statut', width: 20 },
+      { header: 'Date Création', width: 18 },
+    ];
+    const hRow = ws.addRow(COLUMNS.map(c => c.header));
+    hRow.eachCell((c, i) => {
+      c.font = { bold: true, color: { argb: C.WHITE } };
+      c.fill = fill(C.SLATE);
+      c.alignment = { horizontal: 'center' };
+      ws.getColumn(i).width = COLUMNS[i - 1].width;
+    });
+
+    const statusColors: Record<string, { fg: string; bg: string }> = {
+      EXECUTE: { fg: C.GREEN, bg: C.GREEN_BG },
+      REJETE: { fg: C.RED, bg: C.RED_BG },
+      EN_COURS_VALIDATION: { fg: C.BLUE, bg: C.BLUE_BG },
+      NON_EXECUTE: { fg: C.ORANGE, bg: C.ORANGE_BG },
+    };
+
+    reportData.forEach((ov: any, i: number) => {
+      const row = ws.addRow([
+        ov.reference || '—',
+        ov.bordereau?.client?.name || 'Entrée manuelle',
+        ov.montantTotal || 0,
+        STATUS_LABELS[ov.etatVirement] || ov.etatVirement,
+        formatDateFR(ov.dateCreation),
+      ]);
+      const bg = i % 2 === 0 ? C.WHITE : C.ROW_ALT;
+      row.eachCell(c => { c.fill = fill(bg); c.border = { top: thin(), bottom: thin(), left: thin(), right: thin() }; });
+      row.getCell(3).numFmt = '#,##0.000';
+      const sc = statusColors[ov.etatVirement] || { fg: C.SLATE, bg: C.WHITE };
+      row.getCell(4).font = { color: { argb: sc.fg }, bold: true };
+      row.getCell(4).fill = fill(sc.bg);
+      row.getCell(4).alignment = { horizontal: 'center' };
+    });
+
+    const totalRow = ws.addRow(['TOTAL', '', totalMontant, '', `${reportData.length} enregistrement(s)`]);
+    totalRow.eachCell(c => { c.font = { bold: true, color: { argb: C.WHITE } }; c.fill = fill(C.TOTAL_BG); });
+    totalRow.getCell(3).numFmt = '#,##0.000';
+
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLUMNS.length } };
+  }
+
+  // ── Sheet: Exceptions ──
+  if (options.includeExceptions) {
+    const rejectedList = (reportData || []).filter((r: any) => r.etatVirement === 'REJETE');
+    if (rejectedList.length) {
+      const ws = wb.addWorksheet('Exceptions');
+      ws.addRow(['Référence', 'Client', 'Montant (TND)', 'Date', 'Commentaire']);
+      ws.getRow(1).eachCell(c => {
+        c.font = { bold: true, color: { argb: C.WHITE } };
+        c.fill = fill(C.RED);
+        c.alignment = { horizontal: 'center' };
+      });
+      rejectedList.forEach((ov: any, i: number) => {
+        const row = ws.addRow([
+          ov.reference || '—',
+          ov.bordereau?.client?.name || 'Entrée manuelle',
+          ov.montantTotal || 0,
+          formatDateFR(ov.dateCreation),
+          ov.commentaire || ov.motifObservation || '—',
+        ]);
+        row.getCell(3).numFmt = '#,##0.000';
+        row.eachCell(c => { c.fill = fill(i % 2 === 0 ? C.WHITE : C.RED_BG); });
+      });
+      ws.columns.forEach(col => { col.width = 24; });
+    }
+  }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+// ── WORD (.docx) ─────────────────────────────────────────────────────────────
+async function generateWordReport(data: ReportExportData, options: ReportSections): Promise<Blob> {
+  const { filters, reportData, statusData, slaData, trendData } = data;
+  const { total, totalMontant, executed, rejected } = computeKPIs(reportData);
+  const NAVY = '1E3A5F';
+  const RED = 'B71C1C';
+
+  const headerCell = (text: string, bg = NAVY) => new DocxTableCell({
+    shading: { type: ShadingType.CLEAR, fill: bg, color: 'auto' },
+    children: [new Paragraph({ children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 18 })] })],
+  });
+  const cell = (text: string) => new DocxTableCell({
+    children: [new Paragraph({ children: [new TextRun({ text: text ?? '—', size: 18 })] })],
+  });
+
+  const children: any[] = [
+    new Paragraph({
+      heading: HeadingLevel.TITLE,
+      children: [new TextRun({ text: 'ARS TUNISIE — Rapport Financier des Virements', bold: true, color: NAVY })],
+    }),
+    new Paragraph({
+      children: [new TextRun({
+        text: `Généré le ${new Date().toLocaleDateString('fr-FR')} — ${buildFilterSummary(filters)}`,
+        italics: true, size: 18,
+      })],
+      spacing: { after: 300 },
+    }),
+    new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Indicateurs clés' }),
+    new DocxTable({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new DocxTableRow({ children: [headerCell('Indicateur'), headerCell('Valeur')] }),
+        new DocxTableRow({ children: [cell('Total Ordres'), cell(String(total))] }),
+        new DocxTableRow({ children: [cell('Montant Total'), cell(formatMontant(totalMontant))] }),
+        new DocxTableRow({ children: [cell('Exécutés'), cell(`${executed} (${total ? Math.round(executed / total * 100) : 0}%)`)] }),
+        new DocxTableRow({ children: [cell('Rejetés'), cell(`${rejected} (${total ? Math.round(rejected / total * 100) : 0}%)`)] }),
+      ],
+    }),
+    new Paragraph({ text: '', spacing: { after: 300 } }),
+  ];
+
+  if (options.includeCharts && statusData?.length) {
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Répartition par Statut' }));
+    children.push(new DocxTable({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new DocxTableRow({ children: [headerCell('Statut'), headerCell('Nombre'), headerCell('Pourcentage')] }),
+        ...statusData.map((s: any) => new DocxTableRow({
+          children: [cell(s.name), cell(String(s.count || 0)), cell(`${s.value}%`)],
+        })),
+      ],
+    }));
+    children.push(new Paragraph({ text: '', spacing: { after: 300 } }));
+  }
+
+  if (options.includeSLA && slaData?.length) {
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Conformité SLA par Société' }));
+    children.push(new DocxTable({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new DocxTableRow({ children: [headerCell('Société'), headerCell('À temps'), headerCell('À risque'), headerCell('En retard')] }),
+        ...slaData.map((s: any) => new DocxTableRow({
+          children: [cell(s.society), cell(`${s.onTime}%`), cell(`${s.atRisk}%`), cell(`${s.overdue}%`)],
+        })),
+      ],
+    }));
+    children.push(new Paragraph({ text: '', spacing: { after: 300 } }));
+  }
+
+  if (options.includeCharts && trendData?.length) {
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Évolution — 7 derniers jours' }));
+    children.push(new DocxTable({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new DocxTableRow({ children: [headerCell('Date'), headerCell('Total'), headerCell('Exécutés'), headerCell('Montant')] }),
+        ...trendData.map((t: any) => new DocxTableRow({
+          children: [cell(t.date), cell(String(t.total)), cell(String(t.executed)), cell(formatMontant(t.amount))],
+        })),
+      ],
+    }));
+    children.push(new Paragraph({ text: '', spacing: { after: 300 } }));
+  }
+
+  if (options.includeDetails && reportData?.length) {
+    children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Liste des Ordres de Virement' }));
+    children.push(new DocxTable({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new DocxTableRow({ children: [headerCell('Référence'), headerCell('Client'), headerCell('Montant'), headerCell('Statut'), headerCell('Date')] }),
+        ...reportData.map((ov: any) => new DocxTableRow({
+          children: [
+            cell(ov.reference),
+            cell(ov.bordereau?.client?.name || 'Entrée manuelle'),
+            cell(formatMontant(ov.montantTotal)),
+            cell(STATUS_LABELS[ov.etatVirement] || ov.etatVirement),
+            cell(formatDateFR(ov.dateCreation)),
+          ],
+        })),
+      ],
+    }));
+    children.push(new Paragraph({ text: '', spacing: { after: 300 } }));
+  }
+
+  if (options.includeExceptions) {
+    const rejectedList = (reportData || []).filter((r: any) => r.etatVirement === 'REJETE');
+    if (rejectedList.length) {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: 'Exceptions et Alertes' }));
+      children.push(new DocxTable({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new DocxTableRow({ children: [headerCell('Référence', RED), headerCell('Client', RED), headerCell('Montant', RED), headerCell('Date', RED), headerCell('Commentaire', RED)] }),
+          ...rejectedList.map((ov: any) => new DocxTableRow({
+            children: [
+              cell(ov.reference),
+              cell(ov.bordereau?.client?.name || 'Entrée manuelle'),
+              cell(formatMontant(ov.montantTotal)),
+              cell(formatDateFR(ov.dateCreation)),
+              cell(ov.commentaire || ov.motifObservation || '—'),
+            ],
+          })),
+        ],
+      }));
+    }
+  }
+
+  const wordDoc = new Document({ sections: [{ children }] });
+  return await Packer.toBlob(wordDoc);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── Component ────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
 const ReportsTab: React.FC = () => {
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -96,9 +671,18 @@ const ReportsTab: React.FC = () => {
   const [slaData, setSlaData] = useState<any[]>([]);
   const [trendData, setTrendData] = useState<any[]>([]);
 
+  // ── Pagination state for the OV table ──
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
   useEffect(() => {
     loadReportData();
   }, [filters]);
+
+  // Reset to first page whenever the underlying dataset changes
+  useEffect(() => {
+    setPage(0);
+  }, [reportData]);
 
   const loadReportData = async () => {
     setLoading(true);
@@ -228,33 +812,30 @@ const ReportsTab: React.FC = () => {
     }
   };
 
+  // ── Quick export (PDF or Excel) — full report, all sections ──
   const handleExport = async (format: 'pdf' | 'excel') => {
+    if (!reportData || reportData.length === 0) {
+      alert('Aucune donnée à exporter. Modifiez les filtres.');
+      return;
+    }
     try {
       setLoading(true);
       console.log('🔄 ReportsTab: Starting export with format:', format);
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/suivi-virement/export-report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ format, filters, data: reportData, statusData, slaData, trendData })
-      });
+      const exportData: ReportExportData = { filters, reportData, statusData, slaData, trendData };
+      const opts: ReportSections = { includeCharts: true, includeDetails: true, includeSLA: true, includeExceptions: true };
+      const dateStr = new Date().toISOString().split('T')[0];
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const filename = `rapport_financier_${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        console.log('✅ ReportsTab: Export successful:', filename);
-        alert(`Rapport généré avec succès: ${filename}`);
+      if (format === 'pdf') {
+        const blob = await generatePDFReport(exportData, opts);
+        const filename = `rapport_financier_${dateStr}.pdf`;
+        saveAs(blob, filename);
+        console.log('✅ ReportsTab: PDF export successful:', filename);
       } else {
-        throw new Error(`Export failed: ${response.statusText}`);
+        const blob = await generateExcelReport(exportData, opts);
+        const filename = `rapport_financier_${dateStr}.xlsx`;
+        saveAs(blob, filename);
+        console.log('✅ ReportsTab: Excel export successful:', filename);
       }
     } catch (error) {
       console.error('❌ ReportsTab: Export failed:', error);
@@ -264,56 +845,43 @@ const ReportsTab: React.FC = () => {
     }
   };
 
+  // ── Custom report — respects the sections & format chosen in the dialog ──
   const handleCustomReport = async () => {
+    if (!reportData || reportData.length === 0) {
+      alert('Aucune donnée à exporter. Modifiez les filtres.');
+      return;
+    }
     try {
       setLoading(true);
-      console.log('🔄 ReportsTab: Starting custom report generation');
+      console.log('🔄 ReportsTab: Starting custom report generation', customReportOptions);
 
-      const customData = {
-        format: customReportOptions.format,
-        filters,
-        data: reportData,
-        statusData:  customReportOptions.includeCharts ? statusData : [],
-        slaData:     customReportOptions.includeSLA    ? slaData    : [],
-        trendData:   customReportOptions.includeCharts ? trendData  : [],
-        includeDetails:    customReportOptions.includeDetails,
+      const exportData: ReportExportData = { filters, reportData, statusData, slaData, trendData };
+      const opts: ReportSections = {
+        includeCharts: customReportOptions.includeCharts,
+        includeDetails: customReportOptions.includeDetails,
+        includeSLA: customReportOptions.includeSLA,
         includeExceptions: customReportOptions.includeExceptions,
-        generatedAt: new Date().toISOString()
       };
+      const dateStr = new Date().toISOString().split('T')[0];
 
-      console.log('📦 ReportsTab: Custom report data:', customData);
+      let blob: Blob;
+      let filename: string;
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/suivi-virement/export-report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(customData)
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const filename = `rapport_personnalise_${new Date().toISOString().split('T')[0]}.${customReportOptions.format === 'pdf' ? 'pdf' : 'csv'}`;
-
-        if (blob.size === 0) throw new Error('Le fichier généré est vide');
-
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
-
-        console.log('✅ ReportsTab: Custom report generated successfully:', filename);
-        alert(`Rapport personnalisé généré avec succès: ${filename}`);
+      if (customReportOptions.format === 'pdf') {
+        blob = await generatePDFReport(exportData, opts);
+        filename = `rapport_personnalise_${dateStr}.pdf`;
+      } else if (customReportOptions.format === 'excel') {
+        blob = await generateExcelReport(exportData, opts);
+        filename = `rapport_personnalise_${dateStr}.xlsx`;
       } else {
-        const errorText = await response.text();
-        throw new Error(`Export failed: ${response.status} - ${errorText}`);
+        blob = await generateWordReport(exportData, opts);
+        filename = `rapport_personnalise_${dateStr}.docx`;
       }
 
+      if (blob.size === 0) throw new Error('Le fichier généré est vide');
+
+      saveAs(blob, filename);
+      console.log('✅ ReportsTab: Custom report generated successfully:', filename);
       setCustomReportDialog(false);
     } catch (error) {
       console.error('❌ ReportsTab: Custom report failed:', error);
@@ -321,6 +889,20 @@ const ReportsTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Paginated slice of the OV list for the table
+  const paginatedData: any[] = reportData
+    ? reportData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+    : [];
+
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -672,7 +1254,7 @@ const ReportsTab: React.FC = () => {
             </Card>
           </Grid>
 
-          {/* ── OV Records Table ── */}
+          {/* ── OV Records Table (with pagination) ── */}
           <Grid item xs={12}>
             <Card
               elevation={0}
@@ -701,71 +1283,89 @@ const ReportsTab: React.FC = () => {
                 </Box>
 
                 {reportData && reportData.length > 0 ? (
-                  <TableContainer
-                    sx={{
-                      borderRadius: 1.5,
-                      border: '1px solid #dde3ef',
-                      overflow: 'auto',
-                      '&::-webkit-scrollbar': { height: 6, width: 6 },
-                      '&::-webkit-scrollbar-track': { bgcolor: '#f0f4ff' },
-                      '&::-webkit-scrollbar-thumb': { bgcolor: '#90a4be', borderRadius: 3 },
-                    }}
-                  >
-                    <Table size="small" stickyHeader>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={HEAD_CELL_SX}>Référence</TableCell>
-                          <TableCell sx={HEAD_CELL_SX}>Client</TableCell>
-                          <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Montant</TableCell>
-                          <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Statut</TableCell>
-                          <TableCell sx={HEAD_CELL_SX}>Date</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {reportData.map((ov: any, index: number) => {
-                          const st = getStatusStyle(ov.etatVirement);
-                          return (
-                            <TableRow
-                              key={index}
-                              sx={{
-                                backgroundColor: index % 2 === 0 ? '#ffffff' : '#f4f7fb',
-                                '&:hover': { backgroundColor: '#e8f0fe' },
-                                '&:last-child td': { borderBottom: 0 },
-                              }}
-                            >
-                              <TableCell sx={{ ...BODY_CELL_SX, fontWeight: 700, color: '#1e3a5f', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                                {ov.reference}
-                              </TableCell>
-                              <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontWeight: 600 }}>
-                                {ov.bordereau?.client?.name || 'Entrée manuelle'}
-                              </TableCell>
-                              <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', color: '#1b5e20' }}>
-                                {ov.montantTotal?.toLocaleString('fr-TN')}{' '}
-                                <span style={{ fontSize: '0.72rem', color: '#78909c' }}>TND</span>
-                              </TableCell>
-                              <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
-                                <Box
-                                  sx={{
-                                    display: 'inline-flex', alignItems: 'center',
-                                    px: 1, py: 0.3, borderRadius: 1,
-                                    fontSize: '0.70rem', fontWeight: 700, whiteSpace: 'nowrap',
-                                    backgroundColor: st.bg,
-                                    color: st.color,
-                                    border: `1px solid ${st.border}`,
-                                  }}
-                                >
-                                  {st.label}
-                                </Box>
-                              </TableCell>
-                              <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#546e7a' }}>
-                                {new Date(ov.dateCreation).toLocaleDateString('fr-FR')}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <>
+                    <TableContainer
+                      sx={{
+                        borderRadius: 1.5,
+                        border: '1px solid #dde3ef',
+                        overflow: 'auto',
+                        '&::-webkit-scrollbar': { height: 6, width: 6 },
+                        '&::-webkit-scrollbar-track': { bgcolor: '#f0f4ff' },
+                        '&::-webkit-scrollbar-thumb': { bgcolor: '#90a4be', borderRadius: 3 },
+                      }}
+                    >
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={HEAD_CELL_SX}>Référence</TableCell>
+                            <TableCell sx={HEAD_CELL_SX}>Client</TableCell>
+                            <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Montant</TableCell>
+                            <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Statut</TableCell>
+                            <TableCell sx={HEAD_CELL_SX}>Date</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {paginatedData.map((ov: any, index: number) => {
+                            const st = getStatusStyle(ov.etatVirement);
+                            return (
+                              <TableRow
+                                key={ov.id ?? index}
+                                sx={{
+                                  backgroundColor: index % 2 === 0 ? '#ffffff' : '#f4f7fb',
+                                  '&:hover': { backgroundColor: '#e8f0fe' },
+                                  '&:last-child td': { borderBottom: 0 },
+                                }}
+                              >
+                                <TableCell sx={{ ...BODY_CELL_SX, fontWeight: 700, color: '#1e3a5f', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                                  {ov.reference}
+                                </TableCell>
+                                <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', fontWeight: 600 }}>
+                                  {ov.bordereau?.client?.name || 'Entrée manuelle'}
+                                </TableCell>
+                                <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', color: '#1b5e20' }}>
+                                  {ov.montantTotal?.toLocaleString('fr-TN')}{' '}
+                                  <span style={{ fontSize: '0.72rem', color: '#78909c' }}>TND</span>
+                                </TableCell>
+                                <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
+                                  <Box
+                                    sx={{
+                                      display: 'inline-flex', alignItems: 'center',
+                                      px: 1, py: 0.3, borderRadius: 1,
+                                      fontSize: '0.70rem', fontWeight: 700, whiteSpace: 'nowrap',
+                                      backgroundColor: st.bg,
+                                      color: st.color,
+                                      border: `1px solid ${st.border}`,
+                                    }}
+                                  >
+                                    {st.label}
+                                  </Box>
+                                </TableCell>
+                                <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#546e7a' }}>
+                                  {new Date(ov.dateCreation).toLocaleDateString('fr-FR')}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    <TablePagination
+                      component="div"
+                      count={reportData.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                      labelRowsPerPage="Lignes par page"
+                      labelDisplayedRows={({ from, to, count }) => `${from}–${to} sur ${count}`}
+                      sx={{
+                        mt: 1,
+                        '.MuiTablePagination-toolbar': { pl: 0 },
+                      }}
+                    />
+                  </>
                 ) : (
                   <Box
                     sx={{
@@ -843,7 +1443,7 @@ const ReportsTab: React.FC = () => {
                         startIcon={<PictureAsPdfIcon />}
                         onClick={() => handleExport('pdf')}
                         fullWidth
-                        disabled={loading}
+                        disabled={loading || !reportData || reportData.length === 0}
                         sx={{ fontWeight: 600 }}
                       >
                         📄 Générer rapport PDF
@@ -888,7 +1488,7 @@ const ReportsTab: React.FC = () => {
                         startIcon={<TableViewIcon />}
                         onClick={() => handleExport('excel')}
                         fullWidth
-                        disabled={loading}
+                        disabled={loading || !reportData || reportData.length === 0}
                         sx={{ fontWeight: 600 }}
                       >
                         📈 Exporter Excel
@@ -933,6 +1533,7 @@ const ReportsTab: React.FC = () => {
                         startIcon={<GetAppIcon />}
                         onClick={() => setCustomReportDialog(true)}
                         fullWidth
+                        disabled={!reportData || reportData.length === 0}
                         sx={{ fontWeight: 600 }}
                       >
                         📤 Configurer &amp; Exporter

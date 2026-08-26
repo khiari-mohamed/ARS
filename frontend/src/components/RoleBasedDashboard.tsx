@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRoleAccess, UserRole } from '../hooks/useRoleAccess';
 import { useNavigate } from 'react-router-dom';
 import EnhancedDashboard from './EnhancedDashboard';
-import ChefEquipePage from '../pages/ChefEquipePage';
+//import ChefEquipePage from '../pages/ChefEquipePage';
 
 const RoleBasedDashboard: React.FC = () => {
   const { user } = useAuth();

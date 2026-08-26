@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import BODashboard from '../../pages/dashboard/BODashboard';
-import ScanDashboard from '../../pages/dashboard/ScanDashboard';
+//import BODashboard from '../../pages/dashboard/BODashboard';
+//import ScanDashboard from '../../pages/dashboard/ScanDashboard';
 // COMMENTED OUT: Chef dashboard - Use dedicated Chef d'équipe module instead
 // import ChefDashboard from '../../pages/dashboard/ChefDashboard';
 //import GestionnaireDashboard from '../../pages/dashboard/GestionnaireDashboard';
@@ -27,11 +27,11 @@ export const BSWorkflowRouter: React.FC = () => {
   switch (user.role?.toLowerCase()) {
     case 'bo':
     case 'bureau_ordre':
-      return <BODashboard />;
+     // return <BODashboard />;
     
     case 'scan':
     case 'scanner':
-      return <ScanDashboard />;
+     // return <ScanDashboard />;
     
     case 'chef':
     case 'chef_equipe':

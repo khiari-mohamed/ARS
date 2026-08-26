@@ -168,7 +168,6 @@ const BordereauxDashboard: React.FC = () => {
     if (referenceFilter) newFilters.reference = referenceFilter;
     if (statusFilter) newFilters.statut = statusFilter;
     
-    console.log('🔍 Applying filters:', newFilters);
     setFilters(newFilters);
   };
 
@@ -380,18 +379,6 @@ const BordereauxDashboard: React.FC = () => {
       return b.ordresVirement[0].etatVirement === virementFilter;
     }
     return false;
-  });
-  
-  // Log SLA filter results for debugging
-  console.log('🔍 SLA Filter Applied:', slaFilter);
-  console.log('🔍 Virement Filter Applied:', virementFilter);
-  console.log('📊 Total bordereaux:', bordereaux.length);
-  console.log('📊 Filtered by SLA:', filteredBySLA.length);
-  console.log('📊 Filtered by Virement:', filteredByVirement.length);
-  console.log('📊 SLA Breakdown:', {
-    onTime: bordereaux.filter(b => calculateSLAStatus(b) === 'ON_TIME').length,
-    atRisk: bordereaux.filter(b => calculateSLAStatus(b) === 'AT_RISK').length,
-    overdue: bordereaux.filter(b => calculateSLAStatus(b) === 'OVERDUE').length
   });
   
   const totalPages = Math.ceil(filteredByVirement.length / itemsPerPage);
@@ -1393,10 +1380,7 @@ const BordereauxDashboard: React.FC = () => {
           bordereaux={bordereaux}
           onClose={() => setShowCorbeilleModal(false)}
           onFilterChange={(newFilters) => {
-            console.log('🔄 Dashboard: Applying new filters:', newFilters);
-            console.log('🔄 Dashboard: Previous filters:', filters);
             setFilters(newFilters);
-            console.log('🔄 Dashboard: Filters updated, triggering reload...');
           }}
           getSLAStatus={(b: any) => {
             const status = calculateSLAStatus(b);

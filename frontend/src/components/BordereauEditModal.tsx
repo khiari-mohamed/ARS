@@ -107,7 +107,6 @@ const BordereauEditModal: React.FC<BordereauEditModalProps> = ({
     setUploading(true);
     try {
       const files = fileList.map(file => file.originFileObj || file);
-      console.log('📤 Uploading files:', files.length);
       
       const formData = new FormData();
       files.forEach((file, index) => {

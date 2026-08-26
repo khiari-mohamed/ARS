@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+export {};
+
+/*import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchUserById, fetchUserPerformance, fetchUserActivity, updateUser } from '../../api/usersApi';
@@ -149,7 +151,7 @@ export default function UserProfile() {
 
   return (
     <Box p={3}>
-      {/* Header */}
+ 
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">
           Profil utilisateur
@@ -162,7 +164,7 @@ export default function UserProfile() {
         </Button>
       </Box>
 
-      {/* User Header Card */}
+    
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box display="flex" alignItems="center" gap={3}>
@@ -241,7 +243,7 @@ export default function UserProfile() {
         </CardContent>
       </Card>
 
-      {/* Tabs */}
+  
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
           <Tab label="Informations" icon={<Person />} />
@@ -250,7 +252,7 @@ export default function UserProfile() {
         </Tabs>
       </Box>
 
-      {/* Tab Panels */}
+    
       <TabPanel value={tabValue} index={0}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
@@ -534,7 +536,7 @@ export default function UserProfile() {
         )}
       </TabPanel>
 
-      {/* Snackbar */}
+    
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -550,3 +552,4 @@ export default function UserProfile() {
     </Box>
   );
 }
+  */

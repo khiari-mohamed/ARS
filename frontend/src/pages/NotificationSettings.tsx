@@ -1,4 +1,6 @@
-import React from 'react';
+export {};
+
+/*import React from 'react';
 import { Container, Typography, Box } from '@mui/material';
 import { NotificationPreferences } from '../components/NotificationPreferences';
 
@@ -19,3 +21,4 @@ const NotificationSettings: React.FC = () => {
 };
 
 export default NotificationSettings;
+*/

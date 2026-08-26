@@ -240,15 +240,11 @@ const DocumentAnalyticsDashboard: React.FC = () => {
     try {
       const response = await LocalAPI.get('/super-admin/team-workload');
       const users = response.data || [];
-      console.log('👥 All users from team-workload:', users);
-      console.log('👥 User roles:', users.map((u: any) => ({ name: u.name, role: u.role })));
       const gestionnairesList = users.filter((u: any) =>
         (u.role === 'GESTIONNAIRE' || u.role === 'GESTIONNAIRE_SENIOR') &&
         !u.name.startsWith('Équipe')
       );
       const chefsList = users.filter((u: any) => u.role === 'CHEF_EQUIPE');
-      console.log('👥 Gestionnaires list:', gestionnairesList.map((g: any) => ({ name: g.name, role: g.role })));
-      console.log('👥 Chefs list:', chefsList.map((c: any) => ({ name: c.name, role: c.role })));
       setGestionnaires(gestionnairesList);
       setChefs(chefsList);
     } catch (error) {
@@ -259,13 +255,6 @@ const DocumentAnalyticsDashboard: React.FC = () => {
   const loadDocumentAnalytics = async () => {
     setLoading(true);
     try {
-      console.log('📊 [loadDocumentAnalytics] Fetching with filters:', {
-        documentType: selectedType !== 'ALL' ? selectedType : undefined,
-        gestionnaire: filters.gestionnaire || undefined,
-        chefEquipe: filters.chefEquipe || undefined,
-        slaStatus: filters.slaStatus || undefined,
-      });
-
       const [statsResponse, assignmentsResponse, hierarchyResponse] = await Promise.all([
         LocalAPI.get('/super-admin/documents/comprehensive-stats', {
           params: { documentType: selectedType !== 'ALL' ? selectedType : undefined },
@@ -281,7 +270,6 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         LocalAPI.get('/super-admin/hierarchy/validation'),
       ]);
 
-      console.log('📊 Document Assignments:', assignmentsResponse.data);
 
       const allDocumentTypes = [
         { type: 'BULLETIN_SOIN',           displayName: 'Bulletins de soins',           slaApplicable: true  },
@@ -293,11 +281,9 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         { type: 'CONVENTION_TIERS_PAYANT',  displayName: 'Conventions tiers payant',      slaApplicable: false },
       ];
 
-      console.log('📊 Stats Response:', statsResponse.data);
 
       const processedStats = allDocumentTypes.map(docType => {
         const stats = statsResponse.data[docType.type] || {};
-        console.log(`Processing ${docType.type}:`, stats);
 
         if (filters.gestionnaire || filters.chefEquipe) {
           const filteredDocs = (assignmentsResponse.data.assignments || []).filter(
@@ -338,7 +324,6 @@ const DocumentAnalyticsDashboard: React.FC = () => {
         };
       });
 
-      console.log('📊 Processed Stats (with filters applied):', processedStats);
       setDocumentStats(processedStats);
       setAssignmentStats(assignmentsResponse.data.assignments || []);
       setFaultyDataCount(assignmentsResponse.data.withIssues || 0);

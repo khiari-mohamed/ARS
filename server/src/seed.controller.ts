@@ -1,4 +1,4 @@
-import { Controller, Post } from '@nestjs/common';
+/*import { Controller, Post } from '@nestjs/common';
 import { BordereauxService } from './bordereaux/bordereaux.service';
 
 @Controller('seed')
@@ -17,3 +17,4 @@ export class SeedController {
     }
   }
 }
+  */

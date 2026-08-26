@@ -51,7 +51,6 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
     setLoading(true);
     try {
       const { LocalAPI } = await import('../services/axios');
-      console.log('🔍 Loading documents for type:', documentType);
       
       // Get all documents and filter by type with cache busting
       const response = await LocalAPI.get(`/documents/search?_t=${Date.now()}`, {
@@ -64,13 +63,6 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
       
       // Filter documents by the specific type
       const filteredDocuments = allDocuments.filter((doc: any) => doc.type === documentType);
-      
-      console.log('📊 Found documents:', {
-        total: allDocuments.length,
-        filtered: filteredDocuments.length,
-        type: documentType,
-        statuses: filteredDocuments.map((d: any) => `${d.name}: ${d.status}`)
-      });
       
       setDocuments(filteredDocuments);
     } catch (error) {
@@ -239,9 +231,7 @@ const DocumentTypeModal: React.FC<DocumentTypeModalProps> = ({
                                 setProcessing(doc.id);
                                 try {
                                   const { LocalAPI } = await import('../services/axios');
-                                  console.log('Updating document status:', doc.id, 'to SCANNE');
                                   const response = await LocalAPI.patch(`/documents/${doc.id}/status`, { status: 'SCANNE' });
-                                  console.log('Status update response:', response.data);
                                   // Force refresh the documents list
                                   await loadDocuments();
                                 } catch (error) {

@@ -577,7 +577,6 @@ const BordereauTable: React.FC<BordereauTableProps> = ({ filters: externalFilter
 
   const renderActionButtons = (bordereau: any) => {
     const status = bordereau.statut;
-    console.log('Rendering buttons for role:', user?.role, 'status:', status, 'bordereau:', bordereau.id);
     
     return (
       <div className="flex items-center gap-1 min-w-[200px]">

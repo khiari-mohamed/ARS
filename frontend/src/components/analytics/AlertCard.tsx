@@ -94,7 +94,6 @@ const AlertCard: React.FC<AlertCardProps> = ({ alert, onResolved }) => {
         })
       });
       const data = await response.json();
-      console.log('AI Response:', data);
       
       // Parse alert resolution response with clean formatting
       let suggestion = 'Aucune suggestion disponible';
