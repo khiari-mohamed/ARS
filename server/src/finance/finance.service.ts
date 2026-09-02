@@ -44,6 +44,43 @@ export class FinanceService {
     console.log('✅ Role check passed');
   }
 
+  private async getAccessibleClientIds(user: User): Promise<string[] | null> {
+    if (!['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'].includes(user.role)) return null;
+
+    const [directClients, contracts, bordereaux] = await Promise.all([
+      this.prisma.client.findMany({
+        where: {
+          OR: [
+            { gestionnaires: { some: { id: user.id } } },
+            { chargeCompteId: user.id }
+          ]
+        },
+        select: { id: true }
+      }),
+      this.prisma.contract.findMany({
+        where: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] },
+        select: { clientId: true }
+      }),
+      this.prisma.bordereau.findMany({
+        where: {
+          OR: [
+            { currentHandlerId: user.id },
+            { assignedToUserId: user.id },
+            { teamId: user.id },
+            { chargeCompteId: user.id }
+          ]
+        },
+        select: { clientId: true }
+      })
+    ]);
+
+    return [...new Set([
+      ...directClients.map(client => client.id),
+      ...contracts.map(contract => contract.clientId),
+      ...bordereaux.map(bordereau => bordereau.clientId)
+    ])];
+  }
+
   async createVirement(dto: CreateVirementDto, user: User): Promise<Virement> {
     this.checkFinanceRole(user);
     // Defensive: ensure bordereau exists and is CLOTURE
@@ -1063,13 +1100,19 @@ Document généré automatiquement par ARS`;
   }
 
   async updateRecoveryInfo(id: string, data: any, user: User) {
-    // EXACT SPEC: Finance, Chef d'équipe, Gestionnaire Senior, and Super Admin can update recovery
-    if (!['FINANCE', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'SUPER_ADMIN'].includes(user.role)) {
-      throw new ForbiddenException('Only Finance service, Chef d\'équipe, and Gestionnaire Senior can update recovery information');
+    // Recovery information remains editable by Comptabilité after execution.
+    if (!['FINANCE', 'COMPTABILITE', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Finance, Comptabilité, Chef d\'équipe, Gestionnaire Senior, and Super Admin can update recovery information');
     }
     
     try {
       const updateData: any = {};
+
+      if (data.dateTraitementVirement !== undefined) {
+        updateData.dateTraitement = data.dateTraitementVirement
+          ? new Date(data.dateTraitementVirement)
+          : null;
+      }
       
       // EXACT SPEC: Demande de récupération: Oui/Non + date
       if (data.demandeRecuperation !== undefined) {
@@ -1099,7 +1142,7 @@ Document généré automatiquement par ARS`;
       if (data.motifObservation !== undefined) {
         updateData.motifObservation = data.motifObservation;
       }
-      
+
       const ordreVirement = await this.prisma.ordreVirement.update({
         where: { id },
         data: updateData,
@@ -1249,16 +1292,23 @@ Document généré automatiquement par ARS`;
       }
       
       // ✅ STEP 1: Parse Excel file using ExcelValidationService (same as original import)
-      // Get client ID from bordereau or direct link
-      const clientId = ordreVirement.bordereau?.clientId || ordreVirement.clientId;
-      if (!clientId) {
-        throw new BadRequestException('Cannot determine client ID for this OV');
+      // Legacy manual OVs may have clientName without a clientId.
+      let resolvedClientId = ordreVirement.bordereau?.clientId || ordreVirement.clientId;
+      if (!resolvedClientId && ordreVirement.clientName) {
+        const client = await this.prisma.client.findFirst({
+          where: { name: { equals: ordreVirement.clientName, mode: 'insensitive' } },
+          select: { id: true }
+        });
+        resolvedClientId = client?.id || null;
+      }
+      if (!resolvedClientId) {
+        throw new BadRequestException(`Impossible de déterminer le client pour l'OV ${ordreVirement.reference}`);
       }
       
       // Process Excel file using the same validation service as original import
       const validationResult = await this.excelValidationService.validateExcelFile(
         excelFile.buffer, 
-        clientId, 
+        resolvedClientId, 
         ordreVirement.bordereauId || undefined
       );
       
@@ -1454,22 +1504,13 @@ Document généré automatiquement par ARS`;
     try {
       const where: any = {};
       
-      // EXACT SPEC: Chef d'équipe and Gestionnaire Senior see only their clients
-      if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+      const accessibleClientIds = await this.getAccessibleClientIds(user);
+      if (accessibleClientIds) {
         where.OR = [
-          // Manual entries created by this user
-          {
-            bordereauId: null,
-            utilisateurSante: user.id
-          },
-          // Bordereaux from contracts assigned to this user's team
-          {
-            bordereau: {
-              contract: {
-                teamLeaderId: user.id
-              }
-            }
-          }
+          { clientId: { in: accessibleClientIds } },
+          { bordereau: { clientId: { in: accessibleClientIds } } },
+          { items: { some: { adherent: { clientId: { in: accessibleClientIds } } } } },
+          { bordereauId: null, utilisateurSante: user.id }
         ];
       }
       
@@ -1526,21 +1567,32 @@ Document généré automatiquement par ARS`;
       
       const ordresVirement = await this.prisma.ordreVirement.findMany({
         where,
-        include: {
-          client: true, // NEW: Include direct client for manual entries
-          contract: true, // NEW: Include direct contract for manual entries
-          bordereau: { 
-            include: { 
-              client: true,
+        select: {
+          id: true, reference: true, bordereauId: true, dateCreation: true,
+          dateTraitement: true, etatVirement: true, montantTotal: true,
+          demandeRecuperation: true, dateDemandeRecuperation: true,
+          montantRecupere: true, dateMontantRecupere: true,
+          validationComment: true, motifObservation: true, clientName: true,
+          client: { select: { id: true, name: true } },
+          contract: { select: { modeRecuperation: true, codeAssure: true } },
+          donneurOrdre: { select: { nom: true } },
+          bordereau: {
+            select: {
+              reference: true,
+              client: { select: { id: true, name: true } },
               contract: {
-                include: {
-                  teamLeader: { select: { id: true, fullName: true } },
-                  compagnieAssurance: true
+                select: {
+                  codeAssure: true, modeRecuperation: true,
+                  compagnieAssurance: { select: { nom: true } }
                 }
               }
-            } 
+            }
           },
-          donneurOrdre: true
+          items: {
+            select: { adherent: { select: { numeroContrat: true } } },
+            orderBy: { createdAt: 'asc' },
+            take: 1
+          }
         },
         orderBy: { dateTraitement: 'desc' }, // Sort by execution date
       });
@@ -1555,22 +1607,14 @@ Document généré automatiquement par ARS`;
         montantsRecuperes: ordresVirement.filter(ov => ov.montantRecupere).length
       };
       
-      // For each OV, get the first adherent's contract number
-      const ordresWithContractNumbers = await Promise.all(
-        ordresVirement.map(async (ov) => {
-          // Get first adherent's contract number
-          const firstItem = await this.prisma.virementItem.findFirst({
-            where: { ordreVirementId: ov.id },
-            include: { adherent: true },
-            orderBy: { createdAt: 'asc' }
-          });
-          
+      const ordresWithContractNumbers = ordresVirement.map((ov) => {
+          const firstItem = ov.items[0];
           return {
             id: ov.id,
             reference: ov.reference,
             referenceBordereau: ov.bordereau?.reference || null,
             compagnieAssurance: ov.bordereau?.contract?.compagnieAssurance?.nom || ov.clientName || null,
-            client: ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle',
+            client: ov.client?.name || ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle',
             bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle',
             montant: ov.montantTotal,
             statut: ov.etatVirement,
@@ -1585,8 +1629,7 @@ Document généré automatiquement par ARS`;
             nomDonneur: ov.donneurOrdre?.nom || null,
             numeroContrat: firstItem?.adherent?.numeroContrat || ov.bordereau?.contract?.codeAssure || ov.contract?.codeAssure || null
           };
-        })
-      );
+        });
       
       return {
         ordresVirement: ordresWithContractNumbers,
@@ -1608,8 +1651,10 @@ Document généré automatiquement par ARS`;
     this.checkFinanceRole(user);
     
     try {
-      // EXACT SPEC: GESTIONNAIRE_SENIOR sees only their assigned contracts
-      const accessFilter = this.buildAccessFilter(user);
+      const accessibleClientIds = await this.getAccessibleClientIds(user);
+      const accessFilter = accessibleClientIds
+        ? { archived: false, clientId: { in: accessibleClientIds } }
+        : this.buildAccessFilter(user);
       
       // KEEP bordereaux visible even after OV is created
       const where: any = {
@@ -1633,10 +1678,19 @@ Document généré automatiquement par ARS`;
             }
           },
           ordresVirement: {
-            include: {
-              donneurOrdre: true
+            select: {
+              id: true, reference: true, dateCreation: true, montantTotal: true,
+              etatVirement: true, dateTraitement: true, validationComment: true,
+              motifObservation: true, demandeRecuperation: true,
+              dateDemandeRecuperation: true, montantRecupere: true,
+              dateMontantRecupere: true,
+              donneurOrdre: { select: { nom: true } },
+              items: {
+                select: { adherent: { select: { numeroContrat: true } } },
+                orderBy: { createdAt: 'asc' }, take: 1
+              }
             },
-            orderBy: { dateCreation: 'desc' }
+            orderBy: { dateCreation: 'desc' }, take: 1
           }
         },
         orderBy: { dateCloture: 'desc' }
@@ -1654,15 +1708,8 @@ Document généré automatiquement par ARS`;
           
           // Get first adherent's contract number if OV exists
           let numeroContrat = b.contract?.codeAssure || null;
-          if (ov?.id) {
-            const firstItem = await this.prisma.virementItem.findFirst({
-              where: { ordreVirementId: ov.id },
-              include: { adherent: true },
-              orderBy: { createdAt: 'asc' }
-            });
-            if (firstItem?.adherent?.numeroContrat) {
-              numeroContrat = firstItem.adherent.numeroContrat;
-            }
+          if (ov?.items[0]?.adherent?.numeroContrat) {
+            numeroContrat = ov.items[0].adherent.numeroContrat;
           }
           
           return {

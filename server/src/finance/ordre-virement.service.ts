@@ -74,9 +74,31 @@ export class OrdreVirementService {
       throw new BadRequestException('Référence bordereau is required for manual OV entries');
     }
 
+    if (!dto.bordereauId && manualReferenceBordereau) {
+      const existingManualOV = await this.prisma.ordreVirement.findFirst({
+        where: {
+          utilisateurSante: dto.utilisateurSante,
+          referenceBordereau: manualReferenceBordereau,
+          clientId: dto.clientId || null
+        },
+        select: { id: true, reference: true, createdAt: true }
+      });
+
+      if (existingManualOV) {
+        this.logger.warn(`DUPLICATE PREVENTION: manual OV already exists for reference ${manualReferenceBordereau}`);
+        return this.prisma.ordreVirement.findUnique({
+          where: { id: existingManualOV.id },
+          include: { donneurOrdre: true, client: true, contract: true, items: { include: { adherent: true } } }
+        });
+      }
+    }
+
     // Calculate totals - handle undefined virementData
     const virementData = dto.virementData || [];
     const validItems = virementData.filter(v => v.statut === 'VALIDE');
+    if (validItems.length === 0) {
+      throw new BadRequestException('Aucune ligne valide à enregistrer. Les lignes en erreur ne peuvent pas créer un OV.');
+    }
     const montantTotal = validItems.reduce((sum, item) => sum + item.montant, 0);
     const nombreAdherents = validItems.length;
 
@@ -392,9 +414,11 @@ export class OrdreVirementService {
     
     // GESTIONNAIRE_SENIOR & CHEF_EQUIPE: Filter by assigned clients
     if (filters.clientIds && Array.isArray(filters.clientIds)) {
-      where.bordereau = {
-        clientId: { in: filters.clientIds }
-      };
+      where.OR = [
+        { clientId: { in: filters.clientIds } },
+        { bordereau: { clientId: { in: filters.clientIds } } },
+        { items: { some: { adherent: { clientId: { in: filters.clientIds } } } } }
+      ];
     }
 
     return await this.prisma.ordreVirement.findMany({

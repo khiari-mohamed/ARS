@@ -31,13 +31,17 @@ export class MailService implements OnModuleInit {
   }
 
   async sendPasswordResetEmail(to: string, fullName: string, token: string): Promise<void> {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+    if (!frontendUrl) {
+      throw new Error('FRONTEND_URL must be configured before sending password reset emails');
+    }
     const resetLink = `${frontendUrl}/password-reset?token=${token}`;
+    const logoUrl = process.env.EMAIL_LOGO_URL || `${frontendUrl}/logo192.png`;
     const from = process.env.SMTP_FROM || 'ARS Tunisia <donotreply@arstunisie.com>';
     const year = new Date().getFullYear();
     const firstName = fullName.split(' ')[0];
 
-    const html = `<!DOCTYPE html>
+    const legacyHtml = `<!DOCTYPE html>
 <html lang="fr" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="UTF-8" />
@@ -277,11 +281,13 @@ export class MailService implements OnModuleInit {
 </body>
 </html>`;
 
+    const html = this.buildPasswordResetHtml(firstName, resetLink, logoUrl, year);
+
     try {
       await this.transporter.sendMail({
         from,
         to,
-        subject: '&#128274; R&#233;initialisation de votre mot de passe &#8212; ARS Tunisie',
+        subject: 'Réinitialisation de votre mot de passe - ARS Tunisie',
         html,
         text: `Bonjour ${firstName},\n\nNous avons reçu une demande de réinitialisation du mot de passe pour votre compte ARS Tunisie.\n\nCliquez sur ce lien pour réinitialiser votre mot de passe (valable 30 minutes) :\n${resetLink}\n\nSi vous n'avez pas fait cette demande, ignorez cet email. Votre mot de passe restera inchangé.\n\n© ${year} ARS Tunisie — Tous droits réservés.`,
       });
@@ -290,5 +296,41 @@ export class MailService implements OnModuleInit {
       this.logger.error(`Failed to send password reset email to ${to}:`, error);
       throw error;
     }
+  }
+
+  private buildPasswordResetHtml(firstName: string, resetLink: string, logoUrl: string, year: number): string {
+    return `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Réinitialisation du mot de passe - ARS Tunisie</title>
+</head>
+<body style="margin:0;background:#f3f5f7;color:#263238;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f5f7;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid #e2e6e9;">
+        <tr><td style="height:5px;background:#d52b36;font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td style="padding:28px 36px 22px;background:#1e3a5f;">
+          <img src="${logoUrl}" alt="ARS Tunisie" width="96" style="display:block;width:96px;height:auto;margin:0 0 20px;">
+          <h1 style="margin:0;color:#ffffff;font-size:26px;line-height:1.25;font-weight:700;">Réinitialisation du<br>mot de passe</h1>
+        </td></tr>
+        <tr><td style="padding:36px;">
+          <p style="margin:0 0 12px;color:#1e3a5f;font-size:18px;font-weight:700;">Bonjour ${firstName},</p>
+          <p style="margin:0 0 24px;color:#52616b;font-size:15px;line-height:1.7;">Nous avons reçu une demande de réinitialisation du mot de passe de votre compte ARS Tunisie. Utilisez le bouton ci-dessous pour définir un nouveau mot de passe.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 26px;"><tr><td style="background:#d52b36;">
+            <a href="${resetLink}" style="display:inline-block;padding:15px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;">Réinitialiser mon mot de passe</a>
+          </td></tr></table>
+          <p style="margin:0 0 18px;padding:14px 16px;background:#fff8e1;border-left:4px solid #f59e0b;color:#6b4f00;font-size:13px;line-height:1.6;">Ce lien est valable pendant 30 minutes. Après expiration, vous devrez faire une nouvelle demande.</p>
+          <p style="margin:0 0 24px;color:#52616b;font-size:13px;line-height:1.6;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet email. Votre mot de passe restera inchangé.</p>
+          <p style="margin:0 0 8px;color:#71808a;font-size:12px;line-height:1.5;">Lien direct de réinitialisation :</p>
+          <p style="margin:0;word-break:break-all;font-size:12px;line-height:1.6;"><a href="${resetLink}" style="color:#1e5a91;">${resetLink}</a></p>
+        </td></tr>
+        <tr><td style="padding:20px 36px;background:#f7f8f9;border-top:1px solid #e2e6e9;color:#7a8790;font-size:11px;line-height:1.5;">Email automatique - ARS Tunisie<br>&copy; ${year} ARS Tunisie. Tous droits réservés.</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
   }
 }

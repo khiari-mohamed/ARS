@@ -310,6 +310,7 @@ interface Dossier {
   bulletinSoins: BS[];
   assignedToUserId?: string;
   documents?: any[];
+  documentReferences?: string[];
   documentAssignments?: {
     total: number;
     assigned: number;
@@ -358,6 +359,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   // Filter states
   const [filters, setFilters] = useState({
     reference: '',
+    documentReference: '',
     client: '',
     statut: '',
     dossierState: '',
@@ -399,6 +401,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           bulletinSoins: [],
           assignedToUserId: item.assignedToUserId,
           documents: [],
+          documentReferences: item.documentReferences || [],
           gestionnaireRole: item.gestionnaireRole,
           // ── Merged from the old Dossiers Individuels endpoint ──
           type: item.type || 'Prestation',
@@ -448,6 +451,14 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     if (filters.reference) {
       filtered = filtered.filter(d => 
         d.reference.toLowerCase().includes(filters.reference.toLowerCase())
+      );
+    }
+
+    if (filters.documentReference) {
+      filtered = filtered.filter(d =>
+        (d.documentReferences ?? []).some(reference =>
+          reference.toLowerCase().includes(filters.documentReference.toLowerCase())
+        )
       );
     }
 
@@ -533,6 +544,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
   const handleClearFilters = () => {
     setFilters({
       reference: '',
+      documentReference: '',
       client: '',
       statut: '',
       dossierState: '',
@@ -1039,6 +1051,17 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
                 placeholder="Nom du client"
                 value={filters.client}
                 onChange={(e) => setFilters({ ...filters, client: e.target.value })}
+                allowClear
+              />
+            </div>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Réf. Dossier</Text>
+              <Input
+                placeholder="Référence du document"
+                value={filters.documentReference}
+                onChange={(e) => setFilters({ ...filters, documentReference: e.target.value })}
                 allowClear
               />
             </div>

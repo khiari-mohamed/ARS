@@ -526,6 +526,7 @@ class FinanceService {
 
   // === RECOVERY & REINJECT METHODS ===
   async updateRecoveryInfo(id: string, data: {
+    dateTraitementVirement?: string | null;
     demandeRecuperation?: boolean;
     dateDemandeRecuperation?: string | null;
     montantRecupere?: boolean;

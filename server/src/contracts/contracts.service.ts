@@ -528,17 +528,10 @@ export class ContractsService {
       throw new NotFoundException('Chef d\'équipe not found');
     }
     
-    // Validate role-based reassignment rules:
-    // - CHEF_EQUIPE can only reassign to another CHEF_EQUIPE
-    // - GESTIONNAIRE_SENIOR can reassign to either CHEF_EQUIPE or GESTIONNAIRE_SENIOR
+    // Reassignment is allowed between either supported leadership role.
     const validRoles = ['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'];
     if (!validRoles.includes(newChef.role)) {
       throw new BadRequestException('User must be a Chef d\'équipe or Senior');
-    }
-    
-    // If current team leader is CHEF_EQUIPE, new chef must also be CHEF_EQUIPE
-    if (contract.teamLeader?.role === 'CHEF_EQUIPE' && newChef.role !== 'CHEF_EQUIPE') {
-      throw new BadRequestException('Chef d\'équipe can only be reassigned to another Chef d\'équipe');
     }
 
     const oldChefId = contract.teamLeaderId;

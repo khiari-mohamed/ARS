@@ -14,6 +14,7 @@ import {
   Req,
   Res,
   BadRequestException,
+  ForbiddenException,
   UseGuards
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
@@ -72,6 +73,45 @@ export class FinanceController {
     private prisma: PrismaService
     
   ) {}
+
+  private async assertPortfolioAccess(ids: string[], user: any): Promise<void> {
+    if (!['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'].includes(user.role)) return;
+
+    const clients = await this.prisma.client.findMany({
+      where: {
+        OR: [
+          { gestionnaires: { some: { id: user.id } } },
+          { chargeCompteId: user.id },
+          { contracts: { some: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] } } },
+          { bordereaux: { some: { OR: [{ currentHandlerId: user.id }, { assignedToUserId: user.id }, { teamId: user.id }, { chargeCompteId: user.id }] } } }
+        ]
+      },
+      select: { id: true, name: true }
+    });
+    const clientIds = clients.map(client => client.id);
+    const clientNames = new Set(clients.map(client => client.name.toLowerCase()));
+    const records = await this.prisma.ordreVirement.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true, clientId: true, clientName: true, utilisateurSante: true,
+        bordereau: { select: { clientId: true } },
+        items: { select: { adherent: { select: { clientId: true } } } }
+      }
+    });
+    const allowed = new Set(clientIds);
+    const unauthorized = records.some(record => {
+      const belongsToClient = [
+        record.clientId,
+        record.bordereau?.clientId,
+        ...record.items.map(item => item.adherent.clientId)
+      ].some(clientId => clientId && allowed.has(clientId));
+      const belongsToLegacyClientName = !!record.clientName && clientNames.has(record.clientName.toLowerCase());
+      return record.utilisateurSante !== user.id && !belongsToClient && !belongsToLegacyClientName;
+    });
+    if (records.length !== ids.length || unauthorized) {
+      throw new ForbiddenException('Accès refusé: cet ordre de virement n\'appartient pas à votre portefeuille');
+    }
+  }
 
   // === GET CLIENT AUTO-FILL DATA FOR ADHERENT FORM ===
   @Get('clients/:clientId/autofill-data')
@@ -733,6 +773,7 @@ export class FinanceController {
   ) {
     const user = getUserFromRequest(req);
     dto.utilisateurFinance = user.id;
+    await this.assertPortfolioAccess([id], user);
 
     // Enforce role-based transitions for FINANCE (recouvrement) team
     if (user.role === 'FINANCE') {
@@ -759,6 +800,7 @@ export class FinanceController {
     if (!body || !Array.isArray(body.ordreVirementIds) || body.ordreVirementIds.length === 0) {
       throw new BadRequestException('ordreVirementIds are required');
     }
+    await this.assertPortfolioAccess(body.ordreVirementIds, user);
 
     // Finance role restrictions: can only act on VIREMENT_DEPOSE -> VIREMENT_AUTORISE|BLOQUE
     if (user.role === 'FINANCE') {
@@ -786,18 +828,18 @@ export class FinanceController {
   async getOrdresVirement(@Query() filters: any, @Req() req?: any) {
     const user = req ? getUserFromRequest(req) : undefined;
     
-    // GESTIONNAIRE_SENIOR & CHEF_EQUIPE: Filter by assigned contracts
+    // GESTIONNAIRE_SENIOR & CHEF_EQUIPE: filter by their complete client portfolio
     if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
-      const assignedContracts = await this.prisma.contract.findMany({
-        where: { teamLeaderId: user.id },
-        select: { clientId: true }
+      const clients = await this.prisma.client.findMany({
+        where: { OR: [
+          { gestionnaires: { some: { id: user.id } } },
+          { chargeCompteId: user.id },
+          { contracts: { some: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] } } },
+          { bordereaux: { some: { OR: [{ currentHandlerId: user.id }, { assignedToUserId: user.id }, { teamId: user.id }, { chargeCompteId: user.id }] } } }
+        ] },
+        select: { id: true }
       });
-      const clientIds = assignedContracts.map(c => c.clientId);
-      
-      // Add client filter to existing filters
-      if (!filters.clientId) {
-        filters.clientIds = clientIds;
-      }
+      if (!filters.clientId) filters.clientIds = clients.map(client => client.id);
     }
     // Restrict Finance role to only see VIREMENT_DEPOSE entries in the tracker
     if (user?.role === 'FINANCE') {
@@ -1594,6 +1636,7 @@ export class FinanceController {
   async updateRecoveryInfo(
     @Param('id') id: string,
     @Body() body: {
+      dateTraitementVirement?: string;
       demandeRecuperation?: boolean;
       dateDemandeRecuperation?: string;
       montantRecupere?: boolean;
@@ -1631,6 +1674,7 @@ export class FinanceController {
     @Req() req: any
   ) {
     const user = getUserFromRequest(req);
+    await this.assertPortfolioAccess([id], user);
     
     if (!files || files.length < 2) {
       throw new BadRequestException('Both Excel and PDF files are required for reinject');
@@ -1826,13 +1870,53 @@ export class FinanceController {
       bordereauId: null  // Only manual entries without bordereau
     };
     
-    // EXACT SPEC: GESTIONNAIRE_SENIOR sees only their created manual OVs
+    // Senior and team-lead users see manual OVs in their complete client portfolio.
     if (user.role === 'GESTIONNAIRE_SENIOR' || user.role === 'CHEF_EQUIPE') {
-      where.utilisateurSante = user.id;
+      const [directClients, contracts, bordereaux] = await Promise.all([
+        this.prisma.client.findMany({
+          where: {
+            OR: [
+              { gestionnaires: { some: { id: user.id } } },
+              { chargeCompteId: user.id }
+            ]
+          },
+          select: { id: true }
+        }),
+        this.prisma.contract.findMany({
+          where: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] },
+          select: { clientId: true }
+        }),
+        this.prisma.bordereau.findMany({
+          where: {
+            OR: [
+              { currentHandlerId: user.id },
+              { assignedToUserId: user.id },
+              { teamId: user.id },
+              { chargeCompteId: user.id }
+            ]
+          },
+          select: { clientId: true }
+        })
+      ]);
+      const accessibleClientIds = [...new Set([
+        ...directClients.map(client => client.id),
+        ...contracts.map(contract => contract.clientId),
+        ...bordereaux.map(bordereau => bordereau.clientId)
+      ])];
+      where.OR = [
+        { clientId: { in: accessibleClientIds } },
+        { contract: { clientId: { in: accessibleClientIds } } },
+        { items: { some: { adherent: { clientId: { in: accessibleClientIds } } } } },
+        { utilisateurSante: user.id }
+      ];
     }
     
-    if (filters.client) {
-      where.clientName = { contains: filters.client, mode: 'insensitive' };
+    if (filters.client || (filters as any).society) {
+      where.OR = [
+        ...(where.OR || []),
+        { clientName: { contains: filters.client || (filters as any).society, mode: 'insensitive' } },
+        { client: { name: { contains: filters.client || (filters as any).society, mode: 'insensitive' } } }
+      ];
     }
     
     if (filters.dateFrom) {

@@ -90,6 +90,7 @@ function GestionnaireSeniorDashboard() {
   const [successMessage, setSuccessMessage] = useState('');
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
+  const [loadingPdfDocId, setLoadingPdfDocId] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [seniorAssignments, setSeniorAssignments] = useState<any[]>([]);
   const [reassignedDocuments, setReassignedDocuments] = useState<any[]>([]);
@@ -947,53 +948,64 @@ function GestionnaireSeniorDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDocumentsTable.slice((documentsPage - 1) * documentsPerPage, documentsPage * documentsPerPage).map((document) => {
-                  const locked = isRowLocked(document);
+                {filteredDocumentsTable.slice((documentsPage - 1) * documentsPerPage, documentsPage * documentsPerPage).map((doc) => {
+                  const locked = isRowLocked(doc);
                   return (
                   <tr
-                    key={document.id}
+                    key={doc.id}
                     className={[
-                      highlightedDocId === document.id ? 'gsd-row--highlight' : '',
+                      highlightedDocId === doc.id ? 'gsd-row--highlight' : '',
                       locked ? 'gsd-row--locked' : ''
                     ].filter(Boolean).join(' ') || undefined}
                   >
-                    <td className="gsd-cell--ref">{document.reference}</td>
-                    <td className="gsd-cell--ref-alt">{(document as any).bordereauReference || 'N/A'}</td>
-                    <td>{document.client || document.societe || 'N/A'}</td>
-                    <td>{document.type}</td>
+                    <td className="gsd-cell--ref">{doc.reference}</td>
+                    <td className="gsd-cell--ref-alt">{(doc as any).bordereauReference || 'N/A'}</td>
+                    <td>{doc.client || doc.societe || 'N/A'}</td>
+                    <td>{doc.type}</td>
                     <td>
-                      <span className={`gsd-status gsd-status--${document.statut === 'Traité' ? 'ok' : (document.statut === 'En cours' || document.statut === 'Nouveau') ? 'warn' : 'info'}`}>
-                        {document.statut === 'Nouveau' ? 'En cours' : document.statut}
+                      <span className={`gsd-status gsd-status--${doc.statut === 'Traité' ? 'ok' : (doc.statut === 'En cours' || doc.statut === 'Nouveau') ? 'warn' : 'info'}`}>
+                        {doc.statut === 'Nouveau' ? 'En cours' : doc.statut}
                       </span>
                       {locked && <span className="gsd-locked-badge gsd-locked-badge--icon">🔒</span>}
                     </td>
-                    <td>{document.gestionnaire || 'Non assigné'}</td>
-                    <td className="gsd-muted">{document.date}</td>
+                    <td>{doc.gestionnaire || 'Non assigné'}</td>
+                    <td className="gsd-muted">{doc.date}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="gsd-doc-actions" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           className="gsd-btn gsd-btn--sm gsd-btn--blue"
+                          disabled={loadingPdfDocId === doc.id}
                           onClick={async (e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            setLoadingPdfDocId(doc.id);
                             try {
-                              const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${document.id}`);
+                              const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${doc.id}?t=${Date.now()}`);
                               if (response.data.success && response.data.hasDocument) {
-                                const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || window.location.origin;
-                                setPdfUrl(`${serverBaseUrl}${response.data.pdfUrl}`);
-                                setCurrentDossier({ ...document, isDocument: true });
+                                const serverBaseUrl = (process.env.REACT_APP_API_URL || '').replace(/\/api\/?$/, '') || window.location.origin;
+                                const pdfPath = response.data.pdfUrl || '';
+                                const resolvedPdfUrl = pdfPath.startsWith('http') ? pdfPath : `${serverBaseUrl}${pdfPath}`;
+                                setPdfUrl(resolvedPdfUrl);
+                                setCurrentDossier({ ...doc, isDocument: true });
                                 setShowPdfModal(true);
                               } else {
-                                alert(response.data.error || 'PDF non disponible pour ce dossier');
+                                const message = response.data?.error || 'PDF non disponible pour ce dossier (le document peut être absent ou encore en cours de génération).';
+                                alert(message);
                               }
-                            } catch (error) {
+                            } catch (error: any) {
                               console.error('PDF view error:', error);
-                              alert('Erreur lors de l\'ouverture du PDF');
+                              if (error.response?.status === 401 || error.response?.status === 403) {
+                                alert('Session expirée ou droits insuffisants — reconnectez-vous.');
+                              } else {
+                                alert('Erreur lors de l\'ouverture du PDF. Vérifiez que le fichier existe bien et réessayez.');
+                              }
+                            } finally {
+                              setLoadingPdfDocId(null);
                             }
                           }}
                         >
-                          📄 Voir PDF
+                          {loadingPdfDocId === doc.id ? '⏳ Chargement…' : '📄 Voir PDF'}
                         </button>
                         <div className="gsd-actions-menu-wrap" data-actions-menu onClick={(e) => e.stopPropagation()}>
                           <button
@@ -1005,12 +1017,12 @@ function GestionnaireSeniorDashboard() {
                               e.preventDefault();
                               e.stopPropagation();
                               e.nativeEvent.stopImmediatePropagation();
-                              const isOpen = showActionsMenu === document.id;
+                              const isOpen = showActionsMenu === doc.id;
                               if (isOpen) {
                                 setShowActionsMenu(null);
                                 setSelectedDocForAction(null);
                               } else {
-                                handleOpenActionsMenu(document, e);
+                                handleOpenActionsMenu(doc, e);
                               }
                               return false;
                             }}
@@ -1023,17 +1035,17 @@ function GestionnaireSeniorDashboard() {
                           >
                             ⚙ Actions ▾
                           </button>
-                          {showActionsMenu === document.id && !locked && (
+                          {showActionsMenu === doc.id && !locked && (
                             <div className={`gsd-dropdown gsd-dropdown--${actionsMenuPosition}`} onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
-                                disabled={!(document as any).bordereauId}
-                                title={!(document as any).bordereauId ? 'Bordereau introuvable pour ce dossier' : 'Retourner ce dossier au Service Scan'}
+                                disabled={!(doc as any).bordereauId}
+                                title={!(doc as any).bordereauId ? 'Bordereau introuvable pour ce dossier' : 'Retourner ce dossier au Service Scan'}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   handleCloseActionsMenu();
-                                  const bordereauId = (document as any).bordereauId;
+                                  const bordereauId = (doc as any).bordereauId;
                                   if (bordereauId) handleRetourScan(bordereauId);
                                 }}
                                 onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}

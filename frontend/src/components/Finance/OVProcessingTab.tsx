@@ -314,18 +314,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       const validAdherents = groupedResults.filter(r => r.status === 'ok' || r.status === 'warning');
       
       if (validAdherents.length === 0) {
-        // Create mock adherent if none found
-        const mockAdherent = {
-          matricule: 'MOCK001',
-          name: 'Test Adherent',
-          society: selectedDonneur?.nom || 'Test Society',
-          rib: '12345678901234567890',
-          amount: 100,
-          status: 'ok' as const,
-          notes: 'Mock data for testing',
-          memberId: 'mock-001'
-        };
-        validAdherents.push(mockAdherent);
+        throw new Error('Aucune ligne valide à enregistrer. Les lignes en erreur doivent être corrigées avant la création de l\'OV.');
       }
       
       const virementData = validAdherents.map(r => ({
@@ -1204,26 +1193,35 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   <Button
                     variant="contained"
                     onClick={async () => {
+                      if (processing) return;
+                      setProcessing(true);
                       if (!uploadedPdfFile) {
                         alert('Le téléchargement du bordereau PDF est obligatoire!');
+                        setProcessing(false);
                         return;
                       }
-                      
-                      // EXACT SPEC: Create OV and notify RESPONSABLE_DEPARTEMENT
-                      const createdOvId = await createOVRecord();
-                      
-                      // Update status to EN_COURS_VALIDATION
-                      if (createdOvId) {
-                        const { financeService } = await import('../../services/financeService');
-                        await financeService.updateOVStatus(createdOvId, {
-                          etatVirement: 'EN_COURS_VALIDATION'
-                        });
+                      try {
+                        // EXACT SPEC: Create OV and notify RESPONSABLE_DEPARTEMENT
+                        const createdOvId = await createOVRecord();
+
+                        // Update status to EN_COURS_VALIDATION
+                        if (createdOvId) {
+                          const { financeService } = await import('../../services/financeService');
+                          await financeService.updateOVStatus(createdOvId, {
+                            etatVirement: 'EN_COURS_VALIDATION'
+                          });
+                        }
+
+                        alert('OV créé avec succès! Une notification a été envoyée au Responsable de Département pour validation.');
+
+                        // Redirect to dashboard to see updated status
+                        window.location.href = '/ARS/finance?tab=0';
+                      } catch (error: any) {
+                        console.error('Failed to create OV:', error);
+                        alert(`OV non créé: ${error?.response?.data?.message || error?.message || 'Erreur inconnue'}`);
+                      } finally {
+                        setProcessing(false);
                       }
-                      
-                      alert('OV créé avec succès! Une notification a été envoyée au Responsable de Département pour validation.');
-                      
-                      // Redirect to dashboard to see updated status
-                      window.location.href = '/ARS/finance?tab=0';
                     }}
                     disabled={processing || !uploadedFile || !uploadedPdfFile}
                     startIcon={<CheckCircleIcon />}

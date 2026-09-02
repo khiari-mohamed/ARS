@@ -127,6 +127,17 @@ const TrackingTab: React.FC = () => {
   const [editDialog, setEditDialog] = useState<{ open: boolean, record: BordereauTraite | null }>({
     open: false, record: null
   });
+  const [recoveryDialog, setRecoveryDialog] = useState<{ open: boolean, record: BordereauTraite | null }>({
+    open: false, record: null
+  });
+  const [recoveryForm, setRecoveryForm] = useState({
+    dateTraitementVirement: '',
+    motifObservation: '',
+    demandeRecuperation: false,
+    dateDemandeRecuperation: '',
+    montantRecupere: false,
+    dateMontantRecupere: ''
+  });
   const [createDialog, setCreateDialog] = useState(false);
   const [editForm, setEditForm] = useState({
     statutVirement: '',
@@ -302,30 +313,6 @@ const TrackingTab: React.FC = () => {
   useEffect(() => {
     let filtered = bordereauxTraites;
 
-    if (user?.role === 'FINANCE') {
-      filtered = filtered.filter(r =>
-        ['VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
-      );
-    }
-
-    if (user?.role === 'COMPTABILITE') {
-      filtered = filtered.filter(r =>
-        ['VIREMENT_AUTORISE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
-      );
-    }
-
-    if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
-      filtered = filtered.filter(r =>
-        ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'].includes(r.statutVirement)
-      );
-    }
-
-    if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
-      filtered = filtered.filter(r =>
-        ['NON_EXECUTE', 'EN_COURS_VALIDATION'].includes(r.statutVirement)
-      );
-    }
-
     if (filters.society) {
       filtered = filtered.filter(r => r.clientSociete.toLowerCase().includes(filters.society.toLowerCase()));
     }
@@ -371,30 +358,6 @@ const TrackingTab: React.FC = () => {
 
   useEffect(() => {
     let filtered = manualOVs;
-
-    if (user?.role === 'FINANCE') {
-      filtered = filtered.filter(r =>
-        ['VIREMENT_DEPOSE', 'VIREMENT_AUTORISE', 'BLOQUE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
-      );
-    }
-
-    if (user?.role === 'COMPTABILITE') {
-      filtered = filtered.filter(r =>
-        ['VIREMENT_AUTORISE', 'EXECUTE', 'REJETE'].includes(r.statutVirement)
-      );
-    }
-
-    if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
-      filtered = filtered.filter(r =>
-        ['VIREMENT_NON_VALIDE', 'VIREMENT_DEPOSE'].includes(r.statutVirement)
-      );
-    }
-
-    if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
-      filtered = filtered.filter(r =>
-        ['NON_EXECUTE', 'EN_COURS_VALIDATION'].includes(r.statutVirement)
-      );
-    }
 
     if (filters.society) {
       filtered = filtered.filter(r => r.clientSociete.toLowerCase().includes(filters.society.toLowerCase()));
@@ -496,7 +459,42 @@ const TrackingTab: React.FC = () => {
     setEditDialog({ open: true, record });
   };
 
-  const handleReinject = async (recordId: string, excelFile: File, pdfFile: File) => {
+  const handleRecoveryEditClick = (record: BordereauTraite) => {
+    setRecoveryForm({
+      dateTraitementVirement: record.dateTraitementVirement || '',
+      motifObservation: record.motifObservation || record.observation || '',
+      demandeRecuperation: record.demandeRecuperation || false,
+      dateDemandeRecuperation: record.dateDemandeRecuperation || '',
+      montantRecupere: record.montantRecupere || false,
+      dateMontantRecupere: record.dateMontantRecupere || ''
+    });
+    setRecoveryDialog({ open: true, record });
+  };
+
+  const handleSaveRecoveryInfo = async () => {
+    if (!recoveryDialog.record) return;
+
+    try {
+      const financeService = await import('../../services/financeService');
+      await financeService.financeService.updateRecoveryInfo(recoveryDialog.record.id, {
+        dateTraitementVirement: recoveryForm.dateTraitementVirement || null,
+        motifObservation: recoveryForm.motifObservation,
+        demandeRecuperation: recoveryForm.demandeRecuperation,
+        dateDemandeRecuperation: recoveryForm.demandeRecuperation ? recoveryForm.dateDemandeRecuperation : null,
+        montantRecupere: recoveryForm.montantRecupere,
+        dateMontantRecupere: recoveryForm.montantRecupere ? recoveryForm.dateMontantRecupere : null
+      });
+      setRecoveryDialog({ open: false, record: null });
+      await loadBordereauxTraites();
+      await loadManualOVs();
+      alert('Informations de récupération mises à jour avec succès!');
+    } catch (error: any) {
+      console.error('Failed to update recovery info:', error);
+      alert('Erreur lors de la mise à jour: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleReinject = async (recordId: string, excelFile: File, pdfFile: File): Promise<boolean> => {
     setReinjectLoading(true);
     setReinjectError(null);
     try {
@@ -510,9 +508,11 @@ const TrackingTab: React.FC = () => {
       setReinjectSuccess(true);
       await loadBordereauxTraites();
       await loadManualOVs();
+      return true;
     } catch (error: any) {
       const msg = error?.response?.data?.message || error?.message || 'Erreur lors de la réinjection';
       setReinjectError(Array.isArray(msg) ? msg.join(', ') : msg);
+      return false;
     } finally {
       setReinjectLoading(false);
     }
@@ -619,34 +619,6 @@ const TrackingTab: React.FC = () => {
   };
 
   const getAvailableStatuses = () => {
-    if (user?.role === 'FINANCE') {
-      return [
-        { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
-        { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
-        { value: 'BLOQUE', label: '⏸️ Virement bloqué' },
-        { value: 'EXECUTE', label: '✅ Virement exécuté' },
-        { value: 'REJETE', label: '❌ Virement rejeté' },
-      ];
-    }
-    if (user?.role === 'COMPTABILITE') {
-      return [
-        { value: 'VIREMENT_AUTORISE', label: '✅ Virement autorisé' },
-        { value: 'EXECUTE', label: '✅ Virement exécuté' },
-        { value: 'REJETE', label: '❌ Virement rejeté' },
-      ];
-    }
-    if (user?.role === 'RESPONSABLE_DEPARTEMENT') {
-      return [
-        { value: 'VIREMENT_NON_VALIDE', label: '❌ Virement non validé' },
-        { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
-      ];
-    }
-    if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
-      return [
-        { value: 'NON_EXECUTE', label: '⏳ Virement non créé' },
-        { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
-      ];
-    }
     return [
       { value: 'NON_EXECUTE', label: '⏳ Virement non créé' },
       { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
@@ -678,7 +650,7 @@ const TrackingTab: React.FC = () => {
         { value: 'VIREMENT_DEPOSE', label: '💼 Virement déposé' },
       ];
     }
-    if (!user || user.role === 'SUPER_ADMIN') {
+    if (!user || user.role === 'SUPER_ADMIN' || user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
       return [
         { value: 'NON_EXECUTE', label: '⏳ Virement non créé' },
         { value: 'EN_COURS_VALIDATION', label: '📝 En cours de validation' },
@@ -1461,6 +1433,20 @@ const TrackingTab: React.FC = () => {
                               </Button>
                             )}
 
+                            {user?.role === 'COMPTABILITE' && record.statutVirement === 'EXECUTE' && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="warning"
+                                startIcon={<EditIcon sx={{ fontSize: '0.8rem !important' }} />}
+                                onClick={() => handleRecoveryEditClick(record)}
+                                title="Modifier les informations de récupération, même après exécution"
+                                sx={{ fontSize: '0.68rem', py: 0.3, px: 0.8, minWidth: 0, whiteSpace: 'nowrap' }}
+                              >
+                                Récupération
+                              </Button>
+                            )}
+
                             {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'SUPER_ADMIN') && (
                               <Button
                                 size="small"
@@ -1810,6 +1796,20 @@ const TrackingTab: React.FC = () => {
                             </Button>
                           )}
 
+                          {user?.role === 'COMPTABILITE' && record.statutVirement === 'EXECUTE' && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              startIcon={<EditIcon sx={{ fontSize: '0.8rem !important' }} />}
+                              onClick={() => handleRecoveryEditClick(record)}
+                              title="Modifier les informations de récupération, même après exécution"
+                              sx={{ fontSize: '0.68rem', py: 0.3, px: 0.8, minWidth: 0, whiteSpace: 'nowrap' }}
+                            >
+                              Récupération
+                            </Button>
+                          )}
+
                           {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'SUPER_ADMIN') && (
                             <Button
                               size="small"
@@ -2043,6 +2043,102 @@ const TrackingTab: React.FC = () => {
           <Button onClick={handleSaveEdit} variant="contained" disabled={!canModifyStatus()}>
             Sauvegarder
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={recoveryDialog.open}
+        onClose={() => setRecoveryDialog({ open: false, record: null })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid #e0e7ef', bgcolor: '#f4f7fb' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e3a5f' }}>
+            Modifier les informations de récupération
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {recoveryDialog.record?.referenceOV} — disponible même après exécution
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <TextField
+              label="Mode de récupération"
+              value={recoveryDialog.record?.modeRecuperation || 'Non renseigné'}
+              fullWidth
+              InputProps={{ readOnly: true }}
+              sx={{ bgcolor: '#f5f5f5' }}
+            />
+            <TextField
+              label="Date de traitement du virement"
+              type="date"
+              value={recoveryForm.dateTraitementVirement}
+              onChange={(e) => setRecoveryForm({ ...recoveryForm, dateTraitementVirement: e.target.value })}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+            <TextField
+              label="Motif / Observation"
+              multiline
+              rows={3}
+              value={recoveryForm.motifObservation}
+              onChange={(e) => setRecoveryForm({ ...recoveryForm, motifObservation: e.target.value })}
+              fullWidth
+              placeholder="Saisir le motif ou observation..."
+              helperText="Champ libre, modifiable après exécution"
+            />
+            <Box sx={{ p: 2, bgcolor: '#f0f4ff', border: '1px solid #d0dff5', borderRadius: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: '#1e3a5f' }}>Demande de récupération</Typography>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Button
+                  variant={recoveryForm.demandeRecuperation ? 'contained' : 'outlined'}
+                  color={recoveryForm.demandeRecuperation ? 'warning' : 'inherit'}
+                  size="small"
+                  onClick={() => setRecoveryForm({ ...recoveryForm, demandeRecuperation: !recoveryForm.demandeRecuperation })}
+                >
+                  {recoveryForm.demandeRecuperation ? 'Oui' : 'Non'}
+                </Button>
+                {recoveryForm.demandeRecuperation && (
+                  <TextField
+                    label="Date de la demande"
+                    type="date"
+                    value={recoveryForm.dateDemandeRecuperation}
+                    onChange={(e) => setRecoveryForm({ ...recoveryForm, dateDemandeRecuperation: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
+                )}
+              </Stack>
+            </Box>
+            <Box sx={{ p: 2, bgcolor: '#f0f4ff', border: '1px solid #d0dff5', borderRadius: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: '#1e3a5f' }}>Montant récupéré</Typography>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Button
+                  variant={recoveryForm.montantRecupere ? 'contained' : 'outlined'}
+                  color={recoveryForm.montantRecupere ? 'success' : 'inherit'}
+                  size="small"
+                  onClick={() => setRecoveryForm({ ...recoveryForm, montantRecupere: !recoveryForm.montantRecupere })}
+                >
+                  {recoveryForm.montantRecupere ? 'Oui' : 'Non'}
+                </Button>
+                {recoveryForm.montantRecupere && (
+                  <TextField
+                    label="Date de récupération"
+                    type="date"
+                    value={recoveryForm.dateMontantRecupere}
+                    onChange={(e) => setRecoveryForm({ ...recoveryForm, dateMontantRecupere: e.target.value })}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
+                )}
+              </Stack>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #e0e7ef', bgcolor: '#fafbfc', gap: 1 }}>
+          <Button onClick={() => setRecoveryDialog({ open: false, record: null })} variant="outlined">Annuler</Button>
+          <Button onClick={handleSaveRecoveryInfo} variant="contained" color="warning">Sauvegarder</Button>
         </DialogActions>
       </Dialog>
 
@@ -2286,34 +2382,18 @@ const TrackingTab: React.FC = () => {
                 alert('Les deux fichiers sont obligatoires!');
                 return;
               }
-              try {
-                const { LocalAPI } = await import('../../services/axios');
-
-                const formData = new FormData();
-                formData.append('files', reinjectFiles.excel);
-                formData.append('files', reinjectFiles.pdf);
-
-                await LocalAPI.put(`/finance/ordres-virement/${reinjectDialog.record!.id}/reinject`, formData, {
-                  headers: {
-                    'Content-Type': 'multipart/form-data'
-                  }
-                });
-
+              const succeeded = await handleReinject(reinjectDialog.record!.id, reinjectFiles.excel, reinjectFiles.pdf);
+              if (succeeded) {
                 alert('OV réinjecté avec succès! Notification envoyée au Responsable.');
                 setReinjectDialog({ open: false, record: null });
                 setReinjectFiles({ excel: null, pdf: null });
-                await loadBordereauxTraites();
-                await loadManualOVs();
-              } catch (error: any) {
-                console.error('Erreur lors de la réinjection:', error);
-                alert('Erreur lors de la réinjection: ' + (error.response?.data?.message || error.message));
               }
             }}
             variant="contained"
             color="error"
-            disabled={!reinjectFiles.excel || !reinjectFiles.pdf}
+            disabled={!reinjectFiles.excel || !reinjectFiles.pdf || reinjectLoading}
           >
-            Réinjecter et Envoyer
+            {reinjectLoading ? 'Réinjection en cours...' : 'Réinjecter et Envoyer'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -598,7 +598,7 @@ const ContractsPage: React.FC = () => {
                           <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center', width: 60 }}>Alerte SCAN</TableCell>
                           <TableCell sx={HEAD_CELL_SX}>Numéro</TableCell>
                           <TableCell sx={HEAD_CELL_SX}>Client</TableCell>
-                          <TableCell sx={HEAD_CELL_SX}>Chef d'équipe</TableCell>
+                          <TableCell sx={HEAD_CELL_SX}>Chef d'équipe / Gestionnaire senior</TableCell>
                           <TableCell sx={HEAD_CELL_SX}>Période</TableCell>
                           <TableCell sx={HEAD_CELL_SX}>SLA</TableCell>
                           <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'center' }}>Statut</TableCell>
@@ -647,7 +647,17 @@ const ContractsPage: React.FC = () => {
                                 {contract.client?.name}
                               </TableCell>
                               <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: 'nowrap', color: '#546e7a' }}>
-                                {contract.teamLeader?.fullName || (
+                                {contract.teamLeader?.fullName ? (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                    <Chip
+                                      label={contract.teamLeader.role === 'GESTIONNAIRE_SENIOR' ? 'Senior' : 'Chef d’équipe'}
+                                      size="small"
+                                      color={contract.teamLeader.role === 'GESTIONNAIRE_SENIOR' ? 'primary' : 'warning'}
+                                      sx={{ fontSize: '0.65rem', height: 20, fontWeight: 700 }}
+                                    />
+                                    <span>{contract.teamLeader.fullName}</span>
+                                  </Box>
+                                ) : (
                                   <Typography variant="caption" sx={{ color: '#90a4ae', fontStyle: 'italic' }}>Non affecté</Typography>
                                 )}
                               </TableCell>
@@ -1272,7 +1282,7 @@ const ContractsPage: React.FC = () => {
       >
         <DialogTitle sx={{ borderBottom: '1px solid #e0e7ef', bgcolor: '#f4f7fb' }}>
           <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e3a5f' }}>
-            Réaffecter le contrat à un autre Chef d'équipe
+            Réaffecter le contrat à un Chef d'équipe ou un Gestionnaire senior
           </Typography>
         </DialogTitle>
         <DialogContent>
@@ -1288,32 +1298,17 @@ const ContractsPage: React.FC = () => {
               )}
             </Box>
             <FormControl fullWidth>
-              <InputLabel>Nouveau Chef d'équipe</InputLabel>
+              <InputLabel>Nouvel responsable</InputLabel>
               <Select
                 value={selectedNewChef}
                 onChange={(e) => setSelectedNewChef(e.target.value)}
-                label="Nouveau Chef d'équipe"
+                label="Nouvel responsable"
                 MenuProps={{ style: { zIndex: 10002 } }}
               >
                 {availableUsers
                   .filter(u => {
-                    // Current team leader's role
-                    const currentRole = selectedContract?.teamLeader?.role;
-                    
                     // Don't show current chef in list
                     if (u.id === selectedContract?.teamLeader?.id) return false;
-                    
-                    // If current is CHEF_EQUIPE → only show other CHEF_EQUIPE
-                    if (currentRole === 'CHEF_EQUIPE') {
-                      return u.role === 'CHEF_EQUIPE';
-                    }
-                    
-                    // If current is GESTIONNAIRE_SENIOR → show both CHEF_EQUIPE and GESTIONNAIRE_SENIOR
-                    if (currentRole === 'GESTIONNAIRE_SENIOR') {
-                      return u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR';
-                    }
-                    
-                    // Default: show both if no current chef
                     return u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR';
                   })
                   .map(chef => (
@@ -1332,13 +1327,10 @@ const ContractsPage: React.FC = () => {
               </Select>
             </FormControl>
             {availableUsers.filter(u => {
-              const currentRole = selectedContract?.teamLeader?.role;
-              if (currentRole === 'CHEF_EQUIPE') return u.role === 'CHEF_EQUIPE' && u.id !== selectedContract?.teamLeader?.id;
-              if (currentRole === 'GESTIONNAIRE_SENIOR') return (u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR') && u.id !== selectedContract?.teamLeader?.id;
               return (u.role === 'CHEF_EQUIPE' || u.role === 'GESTIONNAIRE_SENIOR') && u.id !== selectedContract?.teamLeader?.id;
             }).length === 0 && (
               <Alert severity="warning" sx={{ mt: 1.5, borderRadius: 1.5 }}>
-                Aucun {selectedContract?.teamLeader?.role === 'CHEF_EQUIPE' ? 'Chef d\'équipe' : 'Chef d\'équipe ou Senior'} disponible
+                Aucun Chef d'équipe ou Gestionnaire senior disponible
               </Alert>
             )}
           </Box>
@@ -1348,7 +1340,7 @@ const ContractsPage: React.FC = () => {
           <Button
             onClick={async () => {
               if (!selectedContract) { notify('Aucun contrat sélectionné', 'error'); return; }
-              if (!selectedNewChef) { notify("Veuillez sélectionner un chef d'équipe", 'error'); return; }
+              if (!selectedNewChef) { notify("Veuillez sélectionner un responsable", 'error'); return; }
               try {
                 await LocalAPI.post(`/contracts/${selectedContract.id}/reassign-chef`, { newChefId: selectedNewChef });
                 notify("Chef d'équipe réaffecté avec succès", 'success');

@@ -382,6 +382,9 @@ model Contract {
   Reclamation         Reclamation[]
 
   @@index([codeAssure])
+  @@index([clientId])
+  @@index([teamLeaderId])
+  @@index([assignedManagerId])
 }
 
 model ContractHistory {
@@ -775,6 +778,9 @@ model OrdreVirement {
   @@index([statutGlobal])
   @@index([demandeRecuperation, montantRecupere])
   @@index([referenceBordereau])
+  @@index([clientId])
+  @@index([bordereauId])
+  @@index([utilisateurSante])
 }
 
 model VirementItem {

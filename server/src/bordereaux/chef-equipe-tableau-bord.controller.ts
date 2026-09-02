@@ -310,6 +310,7 @@ export class ChefEquipeTableauBordController {
         gestionnaire: gestionnaireDisplay,
         gestionnaireRole: gestionnaireRole,
         documentCount: totalDocuments,
+        documentReferences: bordereau.documents.map(doc => doc.name),
         date: bordereau.dateReception.toLocaleDateString('fr-FR'),
         completionPercentage,
         dossierStates: states.length > 0 ? states : ['Nouveau']
