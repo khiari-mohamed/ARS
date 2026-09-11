@@ -47,7 +47,7 @@ export class FinanceService {
   private async getAccessibleClientIds(user: User): Promise<string[] | null> {
     if (!['CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'].includes(user.role)) return null;
 
-    const [directClients, contracts, bordereaux] = await Promise.all([
+    const [directClients, contracts] = await Promise.all([
       this.prisma.client.findMany({
         where: {
           OR: [
@@ -60,24 +60,12 @@ export class FinanceService {
       this.prisma.contract.findMany({
         where: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] },
         select: { clientId: true }
-      }),
-      this.prisma.bordereau.findMany({
-        where: {
-          OR: [
-            { currentHandlerId: user.id },
-            { assignedToUserId: user.id },
-            { teamId: user.id },
-            { chargeCompteId: user.id }
-          ]
-        },
-        select: { clientId: true }
       })
     ]);
 
     return [...new Set([
       ...directClients.map(client => client.id),
-      ...contracts.map(contract => contract.clientId),
-      ...bordereaux.map(bordereau => bordereau.clientId)
+      ...contracts.map(contract => contract.clientId)
     ])];
   }
 
@@ -1518,10 +1506,27 @@ Document généré automatiquement par ARS`;
         if (!where.bordereau) where.bordereau = {};
         
         if (filters.referenceBordereau) {
-          where.bordereau.reference = {
-            contains: filters.referenceBordereau,
-            mode: 'insensitive'
-          };
+          where.AND = [
+            ...(where.AND || []),
+            {
+              OR: [
+                {
+                  bordereau: {
+                    reference: {
+                      contains: filters.referenceBordereau,
+                      mode: 'insensitive'
+                    }
+                  }
+                },
+                {
+                  referenceBordereau: {
+                    contains: filters.referenceBordereau,
+                    mode: 'insensitive'
+                  }
+                }
+              ]
+            }
+          ];
         }
         
         if (filters.compagnie || filters.client) {
@@ -1568,13 +1573,19 @@ Document généré automatiquement par ARS`;
       const ordresVirement = await this.prisma.ordreVirement.findMany({
         where,
         select: {
-          id: true, reference: true, bordereauId: true, dateCreation: true,
+          id: true, reference: true, bordereauId: true, referenceBordereau: true, dateCreation: true,
           dateTraitement: true, etatVirement: true, montantTotal: true,
           demandeRecuperation: true, dateDemandeRecuperation: true,
           montantRecupere: true, dateMontantRecupere: true,
           validationComment: true, motifObservation: true, clientName: true,
           client: { select: { id: true, name: true } },
-          contract: { select: { modeRecuperation: true, codeAssure: true } },
+          contract: {
+            select: {
+              modeRecuperation: true,
+              codeAssure: true,
+              compagnieAssurance: { select: { nom: true } }
+            }
+          },
           donneurOrdre: { select: { nom: true } },
           bordereau: {
             select: {
@@ -1612,20 +1623,20 @@ Document généré automatiquement par ARS`;
           return {
             id: ov.id,
             reference: ov.reference,
-            referenceBordereau: ov.bordereau?.reference || null,
-            compagnieAssurance: ov.bordereau?.contract?.compagnieAssurance?.nom || ov.clientName || null,
-            client: ov.client?.name || ov.bordereau?.client?.name || ov.clientName || 'Entrée manuelle',
-            bordereau: ov.bordereauId ? ov.bordereau?.reference || 'Bordereau lié' : 'Entrée manuelle',
+            referenceBordereau: ov.bordereau?.reference || (ov.bordereauId ? null : (ov as any).referenceBordereau || null),
+            compagnieAssurance: ov.bordereau?.contract?.compagnieAssurance?.nom || ov.contract?.compagnieAssurance?.nom || null,
+            client: ov.bordereau?.client?.name || ov.client?.name || ov.clientName || 'Entrée manuelle',
+            bordereau: ov.bordereau?.reference || (ov as any).referenceBordereau || 'Entrée manuelle',
             montant: ov.montantTotal,
             statut: ov.etatVirement,
             dateCreation: ov.dateCreation,
-            dateExecution: ov.dateTraitement || ov.dateCreation,
+            dateExecution: ov.dateTraitement,
             demandeRecuperation: ov.demandeRecuperation,
             dateDemandeRecuperation: ov.dateDemandeRecuperation,
             montantRecupere: ov.montantRecupere,
             dateMontantRecupere: ov.dateMontantRecupere,
             motifObservation: ov.validationComment || ov.motifObservation || null,
-            modeRecuperation: ov.contract?.modeRecuperation || ov.bordereau?.contract?.modeRecuperation || null,
+            modeRecuperation: ov.bordereau?.contract?.modeRecuperation || ov.contract?.modeRecuperation || null,
             nomDonneur: ov.donneurOrdre?.nom || null,
             numeroContrat: firstItem?.adherent?.numeroContrat || ov.bordereau?.contract?.codeAssure || ov.contract?.codeAssure || null
           };

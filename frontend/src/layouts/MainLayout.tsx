@@ -8,6 +8,7 @@ import io from 'socket.io-client';
 import { getSocketUrl } from '../utils/getSocketUrl';
 import { Sidebar } from '../components/Sidebar';
 import OVValidationModal from '../components/Finance/OVValidationModal';
+import ValidationNotificationsBell from '../components/Finance/ValidationNotificationsBell';
 import NotificationDetailModal from '../components/notifications/NotificationDetailModal';
 
 import { IconButton, Badge, Menu, MenuItem, Typography, Box } from '@mui/material';
@@ -37,6 +38,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   const [notificationPageSize] = useState(50);
   const [notificationTotalPages, setNotificationTotalPages] = useState(1);
   const [notificationLoadingMore, setNotificationLoadingMore] = useState(false);
+  const notificationRequestId = React.useRef(0);
 
   const normalizeNotificationsResponse = (data: any): any[] => {
     if (Array.isArray(data)) return data;
@@ -57,6 +59,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
   const loadNotifications = async (pageNumber: number, append = false) => {
     if (!user?.id) return;
+    const requestId = ++notificationRequestId.current;
 
     if (append) {
       setNotificationLoadingMore(true);
@@ -64,6 +67,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
     try {
       const data = await fetchUserNotifications(user.id, pageNumber, notificationPageSize);
+      if (requestId !== notificationRequestId.current) return;
       const mappedItems = data.items.map(mapNotificationItem);
 
       if (append) {
@@ -163,9 +167,11 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const refreshNotifications = async () => {
       if (!user?.id) return;
+      const requestId = ++notificationRequestId.current;
 
       try {
         const data = await fetchUserNotifications(user.id, 1, notificationPageSize);
+        if (requestId !== notificationRequestId.current) return;
         const freshItems = data.items.map(mapNotificationItem);
         setNotifications(prev => {
           const olderItems = prev.filter(old => !freshItems.some(item => item.id === old.id));
@@ -305,6 +311,19 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
         <IconButton onClick={playNotificationSound} size="small" title="Test Sound">
           🔊
         </IconButton>
+        {userRole === 'RESPONSABLE_DEPARTEMENT' && user?.id && (
+          <ValidationNotificationsBell
+            userId={user.id}
+            onOpenValidation={notification => {
+              setSelectedOV({
+                id: notification.data?.ordreVirementId || '',
+                reference: notification.data?.reference || 'N/A'
+              });
+              setValidationModalOpen(true);
+              setAnchorEl(null);
+            }}
+          />
+        )}
         <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
           <Badge badgeContent={unreadCount} color="error">
             <NotificationsIcon />
@@ -541,13 +560,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           ovReference={selectedOV.reference}
           onValidated={() => {
             if (user?.id) {
-              fetchUserNotifications(user.id, 1, notificationPageSize)
-                .then((data) => {
-                  setNotifications(data.items.map(mapNotificationItem));
-                  setNotificationPage(1);
-                  setNotificationTotalPages(data.totalPages);
-                })
-                .catch(() => {});
+              loadNotifications(1, false).catch(() => {});
             }
           }}
         />

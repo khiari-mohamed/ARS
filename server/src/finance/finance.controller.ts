@@ -82,8 +82,7 @@ export class FinanceController {
         OR: [
           { gestionnaires: { some: { id: user.id } } },
           { chargeCompteId: user.id },
-          { contracts: { some: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] } } },
-          { bordereaux: { some: { OR: [{ currentHandlerId: user.id }, { assignedToUserId: user.id }, { teamId: user.id }, { chargeCompteId: user.id }] } } }
+            { contracts: { some: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] } } }
         ]
       },
       select: { id: true, name: true }
@@ -828,18 +827,29 @@ export class FinanceController {
   async getOrdresVirement(@Query() filters: any, @Req() req?: any) {
     const user = req ? getUserFromRequest(req) : undefined;
     
-    // GESTIONNAIRE_SENIOR & CHEF_EQUIPE: filter by their complete client portfolio
+    // GESTIONNAIRE_SENIOR & CHEF_EQUIPE: filter by current client/contract assignments
     if (user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'CHEF_EQUIPE') {
-      const clients = await this.prisma.client.findMany({
-        where: { OR: [
-          { gestionnaires: { some: { id: user.id } } },
-          { chargeCompteId: user.id },
-          { contracts: { some: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] } } },
-          { bordereaux: { some: { OR: [{ currentHandlerId: user.id }, { assignedToUserId: user.id }, { teamId: user.id }, { chargeCompteId: user.id }] } } }
-        ] },
-        select: { id: true }
-      });
-      if (!filters.clientId) filters.clientIds = clients.map(client => client.id);
+      const [directClients, contracts] = await Promise.all([
+        this.prisma.client.findMany({
+          where: {
+            OR: [
+              { gestionnaires: { some: { id: user.id } } },
+              { chargeCompteId: user.id }
+            ]
+          },
+          select: { id: true }
+        }),
+        this.prisma.contract.findMany({
+          where: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] },
+          select: { clientId: true }
+        })
+      ]);
+      if (!filters.clientId) {
+        filters.clientIds = [...new Set([
+          ...directClients.map(client => client.id),
+          ...contracts.map(contract => contract.clientId)
+        ])];
+      }
     }
     // Restrict Finance role to only see VIREMENT_DEPOSE entries in the tracker
     if (user?.role === 'FINANCE') {
@@ -1230,8 +1240,10 @@ export class FinanceController {
         userId: user.id,
         type: { in: ['NOUVEAU_VIREMENT', 'VIREMENT_UPDATE'] }
       },
-      orderBy: { createdAt: 'desc' },
-      take: 20
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' }
+      ]
     });
 
     return notifications;
@@ -1870,9 +1882,9 @@ export class FinanceController {
       bordereauId: null  // Only manual entries without bordereau
     };
     
-    // Senior and team-lead users see manual OVs in their complete client portfolio.
+    // Senior and team-lead users see manual OVs for current client/contract assignments.
     if (user.role === 'GESTIONNAIRE_SENIOR' || user.role === 'CHEF_EQUIPE') {
-      const [directClients, contracts, bordereaux] = await Promise.all([
+      const [directClients, contracts] = await Promise.all([
         this.prisma.client.findMany({
           where: {
             OR: [
@@ -1885,37 +1897,34 @@ export class FinanceController {
         this.prisma.contract.findMany({
           where: { OR: [{ teamLeaderId: user.id }, { assignedManagerId: user.id }] },
           select: { clientId: true }
-        }),
-        this.prisma.bordereau.findMany({
-          where: {
-            OR: [
-              { currentHandlerId: user.id },
-              { assignedToUserId: user.id },
-              { teamId: user.id },
-              { chargeCompteId: user.id }
-            ]
-          },
-          select: { clientId: true }
         })
       ]);
       const accessibleClientIds = [...new Set([
         ...directClients.map(client => client.id),
-        ...contracts.map(contract => contract.clientId),
-        ...bordereaux.map(bordereau => bordereau.clientId)
+        ...contracts.map(contract => contract.clientId)
       ])];
-      where.OR = [
-        { clientId: { in: accessibleClientIds } },
-        { contract: { clientId: { in: accessibleClientIds } } },
-        { items: { some: { adherent: { clientId: { in: accessibleClientIds } } } } },
-        { utilisateurSante: user.id }
+      where.AND = [
+        ...(where.AND || []),
+        {
+          OR: [
+            { clientId: { in: accessibleClientIds } },
+            { contract: { clientId: { in: accessibleClientIds } } },
+            { items: { some: { adherent: { clientId: { in: accessibleClientIds } } } } },
+            { utilisateurSante: user.id }
+          ]
+        }
       ];
     }
     
     if (filters.client || (filters as any).society) {
-      where.OR = [
-        ...(where.OR || []),
-        { clientName: { contains: filters.client || (filters as any).society, mode: 'insensitive' } },
-        { client: { name: { contains: filters.client || (filters as any).society, mode: 'insensitive' } } }
+      where.AND = [
+        ...(where.AND || []),
+        {
+          OR: [
+            { clientName: { contains: filters.client || (filters as any).society, mode: 'insensitive' } },
+            { client: { name: { contains: filters.client || (filters as any).society, mode: 'insensitive' } } }
+          ]
+        }
       ];
     }
     
@@ -2109,7 +2118,63 @@ export class FinanceController {
   }
 
   // === OV VALIDATION ENDPOINTS ===
+  @Get('validation/notifications')
+  @Roles(UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
+  async getValidationNotifications(@Req() req: any) {
+    const user = getUserFromRequest(req);
+
+    const notifications = await this.prisma.notification.findMany({
+      where: {
+        userId: user.id,
+        type: 'OV_PENDING_VALIDATION'
+      },
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' }
+      ]
+    });
+
+    const ordreVirementIds = notifications
+      .map(notification => {
+        const data = notification.data as { ordreVirementId?: string } | null;
+        return data?.ordreVirementId;
+      })
+      .filter((id): id is string => Boolean(id));
+
+    const ordresVirement = await this.prisma.ordreVirement.findMany({
+      where: { id: { in: ordreVirementIds } },
+      select: {
+        id: true,
+        validationStatus: true,
+        etatVirement: true
+      }
+    });
+
+    const ordreVirementById = new Map(ordresVirement.map(ordre => [ordre.id, ordre]));
+
+    return notifications.map(notification => {
+      const data = notification.data as { ordreVirementId?: string } | null;
+      const ordreVirement = data?.ordreVirementId
+        ? ordreVirementById.get(data.ordreVirementId)
+        : undefined;
+      const alreadyValidated = ordreVirement?.validationStatus === 'VALIDE' ||
+        ordreVirement?.validationStatus === 'REJETE_VALIDATION' ||
+        ordreVirement?.etatVirement === 'VIREMENT_DEPOSE' ||
+        ordreVirement?.etatVirement === 'VIREMENT_NON_VALIDE';
+
+      return {
+        ...notification,
+        validationState: {
+          alreadyValidated,
+          validationStatus: ordreVirement?.validationStatus || null,
+          etatVirement: ordreVirement?.etatVirement || null
+        }
+      };
+    });
+  }
+
   @Get('validation/pending')
+  @Roles(UserRole.RESPONSABLE_DEPARTEMENT, UserRole.SUPER_ADMIN)
   async getPendingValidationOVs(@Req() req: any) {
     const user = getUserFromRequest(req);
     
@@ -2126,8 +2191,10 @@ export class FinanceController {
         dateCreation: true,
         utilisateurSante: true
       },
-      orderBy: { dateCreation: 'desc' },
-      take: 20
+      orderBy: [
+        { dateCreation: 'desc' },
+        { id: 'desc' }
+      ]
     });
     
     return pendingOVs.map(ov => ({
