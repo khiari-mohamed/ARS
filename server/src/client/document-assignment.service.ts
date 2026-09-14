@@ -130,7 +130,7 @@ export class DocumentAssignmentService {
       data: {
         assignedToUserId: newAssignedToUserId,
         assignedByUserId: currentUserId,
-        assignedAt: new Date()
+        assignedAt: new Date(),
       },
       include: {
         assignedTo: {

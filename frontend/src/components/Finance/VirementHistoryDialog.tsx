@@ -72,6 +72,9 @@ const ACTION_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
   'DEMANDE_RECUPERATION': { label: 'Demande de récupération', icon: <SendIcon />, color: '#ff9800' },
   'MONTANT_RECUPERE': { label: 'Montant récupéré', icon: <CheckCircleIcon />, color: '#4caf50' },
   'CHANGEMENT_STATUT': { label: 'Changement de statut', icon: <EditIcon />, color: '#607d8b' },
+  'CHANGEMENT_ETAT': { label: 'Changement de statut', icon: <EditIcon />, color: '#607d8b' },
+  'RECOUVREMENT_AUTORISE': { label: 'Autorisé à exécuter', icon: <VerifiedIcon />, color: '#9c27b0' },
+  'RECOUVREMENT_NON_AUTORISE': { label: 'Recouvrement non autorisé', icon: <BlockIcon />, color: '#f44336' },
   'CORRECTION': { label: 'Correction', icon: <EditIcon />, color: '#ff5722' },
   'RELANCE_TRAITEMENT': { label: 'Relance du traitement', icon: <ReplayIcon />, color: '#9c27b0' },
 };
@@ -125,6 +128,13 @@ const VirementHistoryDialog: React.FC<VirementHistoryDialogProps> = ({
       icon: <EditIcon />, 
       color: '#757575' 
     };
+  };
+
+  const getEntryActionConfig = (entry: VirementHistoryEntry) => {
+    if (entry.newState === 'VIREMENT_AUTORISE' || entry.newState === 'AUTORISE') {
+      return ACTION_CONFIG.RECOUVREMENT_AUTORISE;
+    }
+    return getActionConfig(entry.action);
   };
 
   const formatDate = (dateString: string) => {
@@ -194,7 +204,7 @@ const VirementHistoryDialog: React.FC<VirementHistoryDialogProps> = ({
         ) : (
           <Timeline position="right" sx={{ p: 0, m: 0 }}>
             {history.map((entry, index) => {
-              const config = getActionConfig(entry.action);
+              const config = getEntryActionConfig(entry);
               const isLast = index === history.length - 1;
 
               return (
@@ -356,7 +366,7 @@ const VirementHistoryDialog: React.FC<VirementHistoryDialogProps> = ({
                 ['Date', 'Action', 'Intervenant', 'Rôle', 'Ancien Statut', 'Nouveau Statut', 'Commentaire'],
                 ...history.map(entry => [
                   formatDate(entry.createdAt),
-                  getActionConfig(entry.action).label,
+                  getEntryActionConfig(entry).label,
                   entry.user.name,
                   ROLE_LABELS[entry.user.role] || entry.user.role,
                   entry.previousState || '',

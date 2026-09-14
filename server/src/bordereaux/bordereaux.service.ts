@@ -872,8 +872,17 @@ export class BordereauxService {
         select: { id: true }
       });
       if (teamMembers.length > 0) {
-        where.assignedToUserId = { in: teamMembers.map(m => m.id) };
-        console.log('✅ Applying chefEquipeId filter - team members:', teamMembers.length);
+        where.AND = [
+          ...(where.AND || []),
+          {
+            OR: [
+              { teamId: filters.chefEquipeId },
+              { assignedToUserId: { in: teamMembers.map(m => m.id) } },
+              { contract: { teamLeaderId: filters.chefEquipeId } },
+            ],
+          },
+        ];
+        console.log('✅ Applying chefEquipeId filter - chef/team members/contracts:', teamMembers.length);
       }
     }
     // Handle statut filter (can be statut or statut[])
@@ -912,6 +921,13 @@ export class BordereauxService {
     if (filters.documentStatus) {
       where.documentStatus = filters.documentStatus;
     }
+    if (filters.virementStatus) {
+      if (filters.virementStatus === 'NONE') {
+        where.ordresVirement = { none: {} };
+      } else {
+        where.ordresVirement = { some: { etatVirement: filters.virementStatus } };
+      }
+    }
     
     // ✅ AUTO-FIX: throttled to run at most once per minute, not on every read
     await this.throttledAutoFixBordereauStatus();
@@ -931,16 +947,22 @@ export class BordereauxService {
     
     // Build include clause - ALWAYS include documents AND BulletinSoin for accurate DTO calculation
     const include: any = {
-      client: true,
+      client: {
+        include: {
+          chargeCompte: { select: { id: true, fullName: true, role: true, active: true } },
+        },
+      },
       contract: { 
         include: { 
-          teamLeader: true,
-          assignedManager: true
+          teamLeader: { select: { id: true, fullName: true, role: true, active: true } },
+          assignedManager: { select: { id: true, fullName: true, role: true, active: true } },
         } 
       },
+      chargeCompte: { select: { id: true, fullName: true, role: true, active: true } },
+      team: { select: { id: true, fullName: true, role: true, active: true } },
       documents: { select: { id: true, status: true, uploadedAt: true } }, // just the fields required by DTO
       BulletinSoin: { select: { id: true, etat: true, updatedAt: true } },
-      currentHandler: { select: { id: true, fullName: true, role: true } },
+      currentHandler: { select: { id: true, fullName: true, role: true, active: true } },
       ordresVirement: {
         select: { dateTraitement: true, dateEtatFinal: true, etatVirement: true },
         orderBy: { dateEtatFinal: 'desc' },
@@ -982,6 +1004,7 @@ export class BordereauxService {
         }),
         this.prisma.bordereau.count({ where })
       ]);
+      await this.attachAssignedUsers(bordereaux);
       
       return {
         items: bordereaux.map(bordereau => {
@@ -1001,6 +1024,7 @@ export class BordereauxService {
       include,
       orderBy,
     });
+    await this.attachAssignedUsers(bordereaux);
     
     // Post-filter for overdue if requested
     let filteredBordereaux = bordereaux;
@@ -1023,6 +1047,26 @@ export class BordereauxService {
       return dto;
     });
     return result;
+  }
+
+  private async attachAssignedUsers(bordereaux: any[]): Promise<void> {
+    const assignedUserIds = [...new Set(
+      bordereaux.map((bordereau) => bordereau.assignedToUserId).filter(Boolean),
+    )];
+
+    if (assignedUserIds.length === 0) return;
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: assignedUserIds } },
+      select: { id: true, fullName: true, role: true, active: true },
+    });
+    const usersById = new Map(users.map((user) => [user.id, user]));
+
+    bordereaux.forEach((bordereau) => {
+      bordereau.assignedToUser = bordereau.assignedToUserId
+        ? usersById.get(bordereau.assignedToUserId) ?? null
+        : null;
+    });
   }
 
   // Archive (soft-delete) a bordereau
@@ -1124,6 +1168,8 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
 
     if (!bordereau) throw new NotFoundException('Bordereau not found');
 
+    await this.attachAssignedUsers([bordereau]);
+
     const dto = BordereauResponseDto.fromEntity(bordereau);
 
     // ✅ FIX: never let a real, stored nombreBS get overwritten by 0 just
@@ -1218,7 +1264,10 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     const updateData: any = {
       statut: Statut.ASSIGNE,
     };
-    if (assignedToUserId) updateData.assignedToUserId = assignedToUserId;
+    if (assignedToUserId) {
+      updateData.assignedToUserId = assignedToUserId;
+      updateData.currentHandlerId = assignedToUserId;
+    }
     if (teamId) updateData.teamId = teamId;
 
     const updatedBordereau = await this.prisma.bordereau.update({
@@ -1486,8 +1535,8 @@ async updateBordereauStatus(bordereauId: string): Promise<void> {
     return csvRows.join('\n');
   }
 
-  async exportExcel(filters: any = {}): Promise<Buffer> {
-    return this.bordereauxExcelService.exportExcel(filters);
+  async exportExcel(filters: any = {}, user?: any): Promise<Buffer> {
+    return this.bordereauxExcelService.exportExcel(filters, user);
   }
 
   async exportPDF() {

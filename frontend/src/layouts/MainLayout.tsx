@@ -39,6 +39,7 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
   const [notificationTotalPages, setNotificationTotalPages] = useState(1);
   const [notificationLoadingMore, setNotificationLoadingMore] = useState(false);
   const notificationRequestId = React.useRef(0);
+  const notificationRefreshInFlight = React.useRef(false);
 
   const normalizeNotificationsResponse = (data: any): any[] => {
     if (Array.isArray(data)) return data;
@@ -112,13 +113,21 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
 
   // Fetch managers with role 'MANAGER' (adjust endpoint/role as needed)
   useEffect(() => {
+    if (!user?.id || !['SUPER_ADMIN', 'ADMINISTRATEUR', 'CHEF_EQUIPE', 'BO'].includes(userRole || '')) {
+      return;
+    }
+
     LocalAPI.get('/users', { params: { role: 'MANAGER' } })
       .then(res => setManagers(res.data || []))
       .catch(() => setManagers([]));
-  }, []);
+  }, [user?.id, userRole]);
 
   // Aggregate notifications from various sources
   useEffect(() => {
+    if (!user?.id || !['BO', 'SCAN_TEAM', 'GESTIONNAIRE', 'CHEF_EQUIPE', 'ADMINISTRATEUR', 'SUPER_ADMIN'].includes(userRole || '')) {
+      return;
+    }
+
     let mounted = true;
     // Polling for reclamation alerts
     const fetchReclamationAlerts = async () => {
@@ -161,12 +170,14 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
       mounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [user?.id, userRole]);
 
   // Poll for notifications every 30 seconds and keep older pages loaded
   useEffect(() => {
     const refreshNotifications = async () => {
       if (!user?.id) return;
+      if (notificationRefreshInFlight.current) return;
+      notificationRefreshInFlight.current = true;
       const requestId = ++notificationRequestId.current;
 
       try {
@@ -182,11 +193,13 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
         setPreviousUnreadCount(data.items.filter(n => !n.read).length);
       } catch (error) {
         // keep current notifications if refresh fails
+      } finally {
+        notificationRefreshInFlight.current = false;
       }
     };
 
     refreshNotifications();
-    const interval = setInterval(refreshNotifications, 3000);
+    const interval = setInterval(refreshNotifications, 30000);
 
     return () => clearInterval(interval);
   }, [user?.id, notificationPageSize]);
@@ -202,7 +215,6 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
           await LocalAPI.patch(`/users/${user?.id}/notifications/${notification.id}/read`);
         }
       } catch (error) {
-        // console.log('Failed to mark notification as read');
       }
     }
     setNotifications(prev => prev.map((n, i) => i === index ? {...n, read: true} : n));
@@ -356,7 +368,6 @@ const MainLayout = ({ children }: { children: ReactNode }) => {
                       
                       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
                     } catch (error) {
-                      // console.log('Failed to mark all as read');
                     }
                   }}
                   sx={{ borderBottom: '1px solid #e0e0e0', backgroundColor: '#f5f5f5' }}

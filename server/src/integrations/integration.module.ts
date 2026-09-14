@@ -2,14 +2,13 @@ import { Module, OnModuleInit } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TuniclaimService } from './tuniclaim.service';
 import { TuniclaimController } from './tuniclaim.controller';
-import { PrismaService } from '../prisma/prisma.service';
 import { OutlookService } from './outlook.service';
 import { OutlookController } from './outlook.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot()],
   controllers: [TuniclaimController, OutlookController],
-  providers: [TuniclaimService, PrismaService, OutlookService],
+  providers: [TuniclaimService, OutlookService],
   exports: [TuniclaimService, OutlookService],
 })
 export class IntegrationModule implements OnModuleInit {
@@ -19,18 +18,6 @@ export class IntegrationModule implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Test SMTP connection on startup
-    try {
-      const isConnected = await this.outlookService.testConnection();
-      if (isConnected) {
-        console.log('✅ SMTP connection established successfully');
-      } else {
-        console.warn('⚠️ SMTP connection failed - email notifications disabled');
-      }
-    } catch (error : any) {
-      console.error('❌ SMTP initialization error:', error.message);
-    }
-
     // Start automatic sync every hour
     setInterval(() => {
       this.tuniclaimService.syncBordereaux().catch(error => {

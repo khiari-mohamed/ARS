@@ -43,6 +43,9 @@ interface Dossier {
   joursEnCours?: number;
 }
 
+const isExecutedBordereau = (dossier: Partial<Dossier> | null | undefined): boolean =>
+  dossier?.statut === 'VIREMENT_EXECUTE' || (dossier as any)?.statutRaw === 'VIREMENT_EXECUTE' || (dossier as any)?.bordereauStatutRaw === 'VIREMENT_EXECUTE';
+
 // ────────────────────────────────────────────────────────────────────────────
 // "Registre" design tokens — inline CSS overrides applied throughout.
 // Logic, state, handlers, effects, and component structure are unchanged.
@@ -1008,6 +1011,7 @@ function ChefEquipeDashboard() {
               </thead>
               <tbody>
                 {filteredMergedBordereaux.slice((mergedPage - 1) * mergedPerPage, mergedPage * mergedPerPage).map((dossier, index) => {
+                  const locked = isExecutedBordereau(dossier);
                   const completionPercentage = dossier.completionPercentage || 0;
                   const dossierStates = dossier.dossierStates || [dossier.statut];
                   const statutPair = getStatutPair(dossier.statut);
@@ -1049,8 +1053,8 @@ function ChefEquipeDashboard() {
                       <td style={{ ...tdStyle, fontFamily: T.mono }}>{dossier.date}</td>
                       <td style={tdStyle}>
                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                          <button onClick={() => handleRetourScan(dossier.id)} style={linkBtnStyle(T.purple)} title="Retour Scan">Retour Scan</button>
-                          <button onClick={() => handleAddDocument(dossier.id)} style={linkBtnStyle(T.ok)} title="Ajouter Document(s)">+ Doc</button>
+                          <button onClick={() => handleRetourScan(dossier.id)} disabled={locked} style={{ ...linkBtnStyle(T.purple), opacity: locked ? 0.45 : 1, cursor: locked ? 'not-allowed' : 'pointer' }} title={locked ? 'Désactivé: virement exécuté' : 'Retour Scan'}>Retour Scan</button>
+                          <button onClick={() => handleAddDocument(dossier.id)} disabled={locked} style={{ ...linkBtnStyle(T.ok), opacity: locked ? 0.45 : 1, cursor: locked ? 'not-allowed' : 'pointer' }} title={locked ? 'Désactivé: virement exécuté' : 'Ajouter Document(s)'}>+ Doc</button>
                         </div>
                       </td>
                     </tr>

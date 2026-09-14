@@ -94,8 +94,7 @@ export class ScanWorkflowService {
         where: { id: bordereauId },
         data: {
           statut: 'SCAN_EN_COURS',
-          dateDebutScan: new Date(),
-          currentHandlerId: userId
+          dateDebutScan: new Date()
         },
         include: { client: true }
       });

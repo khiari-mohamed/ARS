@@ -73,9 +73,9 @@ export class BordereauxController {
   }
 
   @Get('export/excel')
-  @Roles(UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
-  async exportExcel(@Query() filters: any, @Res() res: any) {
-    const buffer = await this.bordereauxService.exportExcel(filters);
+  @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
+  async exportExcel(@Query() filters: any, @Res() res: any, @Req() req: any) {
+    const buffer = await (this.bordereauxService as any).exportExcel(filters, req.user);
     const filename = `bordereaux_${new Date().toISOString().split('T')[0]}.xlsx`;
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -146,7 +146,8 @@ export class BordereauxController {
   }
 
   @Post(':id/return')
-  returnBordereau(@Param('id') id: string, @Body('reason') reason: string) {
+  async returnBordereau(@Param('id') id: string, @Body('reason') reason: string) {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.returnBordereau(id, reason);
   }
 
@@ -211,15 +212,17 @@ export class BordereauxController {
   }
 
   @Patch(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @Body() updateBordereauDto: UpdateBordereauDto,
   ): Promise<BordereauResponseDto> {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.update(id, updateBordereauDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string): Promise<BordereauResponseDto> {
+  async remove(@Param('id') id: string): Promise<BordereauResponseDto> {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.remove(id);
   }
 
@@ -248,27 +251,32 @@ export class BordereauxController {
   }
 
   @Post(':id/process')
-  processBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+  async processBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.markAsProcessed(id);
   }
 
   @Post(':id/start-scan')
-  startScan(@Param('id') id: string): Promise<BordereauResponseDto> {
+  async startScan(@Param('id') id: string): Promise<BordereauResponseDto> {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.startScan(id);
   }
 
   @Post(':id/complete-scan')
-  completeScan(@Param('id') id: string): Promise<BordereauResponseDto> {
+  async completeScan(@Param('id') id: string): Promise<BordereauResponseDto> {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.completeScan(id);
   }
 
   @Post(':id/mark-processed')
-  markAsProcessed(@Param('id') id: string): Promise<BordereauResponseDto> {
+  async markAsProcessed(@Param('id') id: string): Promise<BordereauResponseDto> {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.markAsProcessed(id);
   }
 
   @Post(':id/close')
-  closeBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+  async closeBordereau(@Param('id') id: string): Promise<BordereauResponseDto> {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.closeBordereau(id);
   }
 
@@ -292,18 +300,20 @@ export class BordereauxController {
   }
 
   @Post(':id/bs')
-  createBS(@Param('id') id: string, @Body() createBSDto: CreateBSDto) {
+  async createBS(@Param('id') id: string, @Body() createBSDto: CreateBSDto) {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.createBS(id, createBSDto);
   }
 
   @Post(':id/bs/upload-multiple')
-  @UseInterceptors(FilesInterceptor('files', 20))
+  @UseInterceptors(FilesInterceptor('files'))
   @Roles(UserRole.SCAN_TEAM, UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async uploadMultipleBS(
     @Param('id') bordereauId: string,
     @UploadedFiles() files: Express.Multer.File[]
   ) {
     try {
+      await this.ensureBordereauNotVirementExecuted(bordereauId);
       //console.log('📤 Multiple BS Upload - Bordereau ID:', bordereauId);
       //console.log('📤 Files received:', files?.length || 0);
       
@@ -391,6 +401,7 @@ export class BordereauxController {
     @Body() data: { updates: { bsId: string; data: any }[] }
   ) {
     try {
+      await this.ensureBordereauNotVirementExecuted(bordereauId);
       const results: any[] = [];
       for (const update of data.updates) {
         const result = await this.bordereauxService.updateBS(update.bsId, update.data as any);
@@ -412,6 +423,8 @@ export class BordereauxController {
 
   @Patch('bs/:bsId')
   async updateBS(@Param('bsId') bsId: string, @Body() updateBSDto: UpdateBulletinSoinDto) {
+    const bs = await this.prisma.bulletinSoin.findUnique({ where: { id: bsId }, select: { bordereauId: true } });
+    await this.ensureBordereauNotVirementExecuted(bs?.bordereauId);
     return this.bordereauxService.updateBS(bsId, updateBSDto);
   }
 
@@ -469,13 +482,14 @@ export class BordereauxController {
 
   @Post(':id/documents')
   @UseInterceptors(FileInterceptor('file'))
-  uploadDocument(
+  async uploadDocument(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
     @Body() documentData: any,
     @Req() req
   ) {
     const data = { ...documentData, file };
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.uploadDocument(id, data, req.user?.role);
   }
 
@@ -789,6 +803,7 @@ export class BordereauxController {
   @Post(':id/progress')
   @Roles(UserRole.GESTIONNAIRE, UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async progressToNextStage(@Param('id') id: string) {
+    await this.ensureBordereauNotVirementExecuted(id);
     return this.bordereauxService.progressToNextStage(id);
   }
   
@@ -820,6 +835,9 @@ export class BordereauxController {
   @Post('batch/update-status')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async batchUpdateStatus(@Body() data: { bordereauIds: string[]; status: string }) {
+    for (const id of data.bordereauIds) {
+      await this.ensureBordereauNotVirementExecuted(id);
+    }
     return this.bordereauxService.batchUpdateStatus(data.bordereauIds, data.status as any);
   }
   
@@ -1005,17 +1023,7 @@ export class BordereauxController {
       console.log('👑 Super Admin/Admin - no filtering');
     }
     
-    const activeUnassignedStatuses = [
-      'EN_ATTENTE',
-      'A_SCANNER',
-      'SCAN_EN_COURS',
-      'SCANNE',
-      'A_AFFECTER',
-      'ASSIGNE',
-      'EN_COURS',
-      'EN_DIFFICULTE',
-      'REJETE'
-    ];
+    const activeUnassignedStatuses = ['A_AFFECTER', 'SCANNE'];
 
     const [nonAffectes, enCours, traites] = await Promise.all([
       this.prisma.bordereau.findMany({
@@ -2042,6 +2050,7 @@ export class BordereauxController {
     const [documents, bordereaux] = await Promise.all([
       this.prisma.document.findMany({
         where: {
+          status: { not: 'RETOURNER_AU_SCAN' },
           bordereau: {
             archived: false,
             OR: [
@@ -2151,6 +2160,83 @@ export class BordereauxController {
     return dossiers;
   }
 
+  @Get('gestionnaire-senior/returned-items')
+  @Roles(UserRole.GESTIONNAIRE_SENIOR)
+  async getGestionnaireSeniorReturnedItems(@Req() req) {
+    const user = req.user;
+    const portfolioFilter = {
+      archived: false,
+      OR: [
+        { client: { chargeCompteId: user.id } },
+        { contract: { teamLeaderId: user.id } }
+      ]
+    };
+
+    const [returnedDocuments, returnedBordereaux] = await Promise.all([
+      this.prisma.document.findMany({
+        where: {
+          status: 'RETOURNER_AU_SCAN',
+          bordereau: portfolioFilter
+        },
+        include: {
+          assignmentHistory: {
+            where: { action: 'RETURNED' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { createdAt: true }
+          },
+          bordereau: {
+            select: {
+              id: true,
+              reference: true,
+              client: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: { uploadedAt: 'desc' }
+      }),
+      this.prisma.bordereau.findMany({
+        where: {
+          ...portfolioFilter,
+          documentStatus: 'RETOURNER_AU_SCAN'
+        },
+        include: {
+          client: { select: { name: true } },
+          BordereauAuditLog: {
+            where: { action: 'RETOUR_SCAN' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { createdAt: true }
+          }
+        },
+        orderBy: { updatedAt: 'desc' }
+      })
+    ]);
+
+    return [
+      ...returnedBordereaux.map(bordereau => ({
+        id: bordereau.id,
+        returnType: 'BORDEREAU',
+        reference: bordereau.reference,
+        clientName: bordereau.client?.name || 'N/A',
+        documentName: null,
+        documentType: 'Bordereau',
+        returnedAt: bordereau.BordereauAuditLog[0]?.createdAt || bordereau.updatedAt
+      })),
+      ...returnedDocuments.map(document => ({
+        id: document.id,
+        returnType: 'DOCUMENT',
+        reference: document.bordereau?.reference || 'N/A',
+        clientName: document.bordereau?.client?.name || 'N/A',
+        documentName: document.name,
+        documentType: this.getDocumentTypeLabel(document.type),
+        returnedAt: document.assignmentHistory[0]?.createdAt || document.uploadedAt
+      }))
+    ].sort((left, right) =>
+      new Date(right.returnedAt).getTime() - new Date(left.returnedAt).getTime()
+    );
+  }
+
   @Get('gestionnaire-senior/gestionnaire-assignments')
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
   async getGestionnaireSeniorAssignments(@Req() req) {
@@ -2161,14 +2247,54 @@ export class BordereauxController {
   // Gestionnaire Senior: Return bordereau to Scan
   @Post('gestionnaire-senior/return-to-scan')
   @Roles(UserRole.GESTIONNAIRE_SENIOR)
-  async returnToScanSenior(@Body() body: { dossierId: string; reason?: string }, @Req() req) {
-    const { dossierId, reason } = body;
+  async returnToScanSenior(@Body() body: { dossierId: string; documentId?: string; reason?: string }, @Req() req) {
+    const { dossierId, documentId, reason } = body;
     if (!reason || !reason.trim()) {
       throw new BadRequestException('Veuillez indiquer une raison pour le retour vers le Scan.');
     }
 
+    if (documentId) {
+      const document = await this.prisma.document.findFirst({
+        where: { id: documentId, bordereauId: dossierId },
+        select: { id: true, status: true, bordereauId: true }
+      });
+      if (!document) throw new NotFoundException('Document introuvable dans ce bordereau');
+
+      await this.prisma.document.update({
+        where: { id: document.id },
+        data: { status: 'RETOURNER_AU_SCAN' as any, assignedToUserId: null }
+      });
+
+      await this.prisma.documentAssignmentHistory.create({
+        data: {
+          documentId: document.id,
+          assignedByUserId: req.user?.id,
+          action: 'RETURNED',
+          reason: reason.trim()
+        }
+      });
+
+      const scanUsers = await this.prisma.user.findMany({
+        where: { role: 'SCAN_TEAM', active: true },
+        select: { id: true }
+      });
+      if (scanUsers.length > 0) {
+        await this.prisma.notification.createMany({
+          data: scanUsers.map(scanUser => ({
+            userId: scanUser.id,
+            type: 'DOSSIER_RETURNED_TO_SCAN',
+            title: 'Document retourné pour re-scan',
+            message: `Document retourné par le Gestionnaire Senior: ${reason.trim()}`,
+            data: { dossierId, documentId: document.id, reason: reason.trim() }
+          }))
+        });
+      }
+
+      return { success: true, message: "Document retourné vers l'équipe Scan avec succès" };
+    }
+
     const bordereau = await this.prisma.bordereau.findUnique({
-      where: { id: dossierId }, select: { id: true, statut: true }
+      where: { id: dossierId }, select: { id: true, reference: true, statut: true }
     });
     if (!bordereau) throw new NotFoundException('Bordereau introuvable');
     if (bordereau.statut === 'VIREMENT_EXECUTE') {
@@ -2185,6 +2311,23 @@ export class BordereauxController {
     await this.prisma.bordereauAuditLog.create({
       data: { bordereauId: dossierId, action: 'RETOUR_SCAN', userId: req.user?.id, details: reason },
     });
+
+    const scanUsers = await this.prisma.user.findMany({
+      where: { role: 'SCAN_TEAM', active: true },
+      select: { id: true },
+    });
+    if (scanUsers.length > 0) {
+      await this.prisma.notification.createMany({
+        data: scanUsers.map((scanUser) => ({
+          userId: scanUser.id,
+          type: 'DOSSIER_RETURNED_TO_SCAN',
+          title: 'Bordereau retourné pour re-scan',
+          message: `Le bordereau ${bordereau.reference} a été retourné par le Gestionnaire Senior: ${reason.trim()}`,
+          data: { dossierId, reference: bordereau.reference, reason: reason.trim(), returnType: 'bordereau' },
+          read: false,
+        })),
+      });
+    }
 
     return { success: true, message: "Bordereau retourné vers l'équipe Scan avec succès" };
   }

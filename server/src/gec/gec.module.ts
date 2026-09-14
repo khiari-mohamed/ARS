@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { GecService } from './gec.service';
 import { GecController } from './gec.controller';
-import { PrismaService } from '../prisma/prisma.service';
 import { GedModule } from '../ged/ged.module';
 import { OutlookService } from '../integrations/outlook.service';
 import { TemplateService } from './template.service';
@@ -14,7 +13,7 @@ import { GecTemplatesService } from './gec-templates.service';
 
 @Module({
   controllers: [GecController, NotificationController, GecTemplatesController],
-  providers: [GecService, PrismaService, OutlookService, TemplateService, MailTrackingService, GecTemplatesService, AITemplateAutoFillService],
+  providers: [GecService, OutlookService, TemplateService, MailTrackingService, GecTemplatesService, AITemplateAutoFillService],
   imports: [GedModule, ScheduleModule.forRoot()],
   exports: [GecService, TemplateService, AITemplateAutoFillService]
 })

@@ -30,7 +30,8 @@ export class GecService {
 
   private async initializeEmailTransporter() {
     try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+      if (!process.env.SMTP_USER || !smtpPassword) {
         this.logger.warn('⚠️ SMTP credentials not configured - email notifications disabled');
         return;
       }
@@ -44,7 +45,7 @@ export class GecService {
         secure: isSecure,
         auth: {
           user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
+          pass: smtpPassword
         },
         connectionTimeout: 10000,
         greetingTimeout: 10000,

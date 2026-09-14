@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Param, UseGuards, Req, Res, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, UseGuards, Req, Res, StreamableFile, BadRequestException } from '@nestjs/common';
 import { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -690,6 +690,13 @@ export class ChefEquipeTableauBordController {
       throw new Error('Dossier non trouvé');
     }
 
+    const parentBordereau = document.bordereauId
+      ? await this.prisma.bordereau.findUnique({ where: { id: document.bordereauId }, select: { statut: true } })
+      : null;
+    if (parentBordereau?.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
+
     // Update document type
     await this.prisma.document.update({
       where: { id: body.dossierId },
@@ -713,6 +720,17 @@ export class ChefEquipeTableauBordController {
   @Post('return-to-scan')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
   async returnToScan(@Body() body: { dossierId: string; reason: string; documentIds?: string[] }, @Req() req: any) {
+    const lockedBordereau = await this.prisma.bordereau.findUnique({
+      where: { id: body.dossierId },
+      select: { statut: true }
+    });
+    if (!lockedBordereau) {
+      throw new BadRequestException('Bordereau non trouvé');
+    }
+    if (lockedBordereau.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
+
     // If documentIds provided, return only specific documents
     if (body.documentIds && body.documentIds.length > 0) {
       // Return specific documents only
@@ -721,15 +739,6 @@ export class ChefEquipeTableauBordController {
         data: { 
           status: 'RETOURNER_AU_SCAN' as any,
           assignedToUserId: null
-        }
-      });
-
-      // CRITICAL FIX: Update bordereau statut to SCAN_EN_COURS for document-level returns
-      await this.prisma.bordereau.update({
-        where: { id: body.dossierId },
-        data: { 
-          statut: 'SCAN_EN_COURS',
-          documentStatus: 'RETOURNER_AU_SCAN'
         }
       });
 
@@ -974,7 +983,15 @@ export class ChefEquipeTableauBordController {
   @Post('modify-dossier-status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CHEF_EQUIPE, UserRole.SUPER_ADMIN, UserRole.GESTIONNAIRE, UserRole.GESTIONNAIRE_SENIOR, UserRole.RESPONSABLE_DEPARTEMENT)
-  async modifyDossierStatus(@Body() body: { dossierId: string; newStatus: string }, @Req() req: any) {
+  async modifyDossierStatus(@Body() body: { dossierId: string; newStatus: string; reason?: string }, @Req() req: any) {
+    const lockedBordereau = await this.prisma.bordereau.findUnique({
+      where: { id: body.dossierId },
+      select: { statut: true }
+    });
+    if (lockedBordereau?.statut === 'VIREMENT_EXECUTE') {
+      throw new BadRequestException('Action impossible: le virement a déjà été exécuté pour ce bordereau.');
+    }
+
     const documentStatusMapping = {
       'Nouveau': 'UPLOADED',
       'En cours': 'EN_COURS',
@@ -1018,8 +1035,9 @@ export class ChefEquipeTableauBordController {
         if (document.assignedToUserId !== req.user.id) {
           return { success: false, message: 'Accès refusé: Ce document ne vous est pas assigné' };
         }
-        
-        // REMOVED: statusModifiedByGestionnaire check - gestionnaires can now modify after reassignment
+        if (document.status === 'RETOUR_ADMIN') {
+          return { success: false, message: 'Ce BS est retourné au chef d’équipe et doit être réaffecté avant traitement' };
+        }
       }
       
       // Update document status and set flag if gestionnaire
@@ -1073,7 +1091,7 @@ export class ChefEquipeTableauBordController {
               documentId: body.dossierId,
               assignedByUserId: req.user.id,
               action: 'RETURNED',
-              reason: `Retourné par ${req.user.fullName || 'Gestionnaire'}`
+              reason: body.reason?.trim() || `Retourné par ${req.user.fullName || 'Gestionnaire'}`
             }
           });
         }

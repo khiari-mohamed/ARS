@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Grid,
@@ -319,6 +319,7 @@ const ScanDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery]           = useState('');
   const [filterClient, setFilterClient]         = useState('');
   const [bypassingScan, setBypassingScan]       = useState<string | null>(null);
+  const dashboardLoadInFlight = useRef(false);
 
   const filteredHistoryData = historyData
     .filter((b: any) => {
@@ -339,7 +340,7 @@ const ScanDashboard: React.FC = () => {
     loadAvailableClients();
     const interval = setInterval(() => {
       if (activeDialog !== 'scan-history') loadDashboard();
-    }, 10000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [activeDialog]);
 
@@ -355,6 +356,9 @@ const ScanDashboard: React.FC = () => {
   };
 
   const loadDashboard = async () => {
+    if (dashboardLoadInFlight.current) return;
+    dashboardLoadInFlight.current = true;
+
     try {
       const [
         statusData, activityData, queueData, overloadData,
@@ -397,6 +401,7 @@ const ScanDashboard: React.FC = () => {
     } catch (err) {
       console.error('Failed to load scan dashboard:', err);
     } finally {
+      dashboardLoadInFlight.current = false;
       setLoading(false);
     }
   };

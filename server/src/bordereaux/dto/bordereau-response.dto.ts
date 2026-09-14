@@ -92,7 +92,7 @@ export class BordereauResponseDto {
   client?: User;
   contract?: Contract;
   bulletinSoins?: any[];
-  assignedToUser?: { id: string; fullName: string };
+  assignedToUser?: { id: string; fullName: string; role: string; active: boolean };
 
   constructor(partial: Partial<BordereauResponseDto>) {
     Object.assign(this, partial);

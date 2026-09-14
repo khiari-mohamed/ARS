@@ -131,23 +131,43 @@ export class ExcelValidationService {
     const columnMap = this.detectColumns(worksheet.getRow(1));
     console.log('Detected columns:', columnMap);
 
+    const effectiveClientId = bordereauClientId || actualClientId;
+    const matricules = new Set<string>();
+    for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+      if (!row.hasValues || columnMap.matricule <= 0) continue;
+      const matricule = (row.getCell(columnMap.matricule).text || row.getCell(columnMap.matricule).value?.toString() || '').trim();
+      if (matricule) matricules.add(matricule);
+    }
+
+    const adherentByMatricule = new Map<string, any>();
+    if (matricules.size > 0) {
+      const adherents = await this.prisma.adherent.findMany({
+        where: {
+          clientId: effectiveClientId,
+          matricule: { in: [...matricules] }
+        },
+        include: { client: true }
+      });
+      for (const adherent of adherents) {
+        adherentByMatricule.set(adherent.matricule, adherent);
+      }
+    }
+
     const results: VirementValidationItem[] = [];
     const errors: ValidationError[] = [];
-    const matriculeMap = new Map<string, number>();
 
     // Process all rows
     const rowPromises: Promise<{item?: VirementValidationItem, error?: ValidationError}>[] = [];
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
-      rowPromises.push(this.processRow(worksheet.getRow(rowNumber), rowNumber, actualClientId, columnMap, bordereauClientName, bordereauClientId));
+      rowPromises.push(this.processRow(worksheet.getRow(rowNumber), rowNumber, effectiveClientId, columnMap, bordereauClientName, bordereauClientId, adherentByMatricule));
     }
     
     const rowResults = await Promise.all(rowPromises);
     
     console.log(`Received ${rowResults.length} row results`);
     for (const result of rowResults) {
-      console.log(`Result:`, JSON.stringify(result));
       if (result && result.item) {
-        console.log(`Adding item: matricule=${result.item.matricule}, status=${result.item.status}`);
         results.push(result.item);
       }
       if (result && result.error) {
@@ -155,7 +175,7 @@ export class ExcelValidationService {
       }
     }
     
-    console.log(`Total items: ${results.length}`);
+    console.log(`Excel validation completed: ${results.length} items, ${errors.length} row errors`);
 
     // 🚨 LEVEL 2: Recent Payment Detection (Warn about recent payments)
     if (bordereauClientId || actualClientId) {
@@ -286,7 +306,7 @@ export class ExcelValidationService {
     return map;
   }
 
-  private async processRow(row: ExcelJS.Row, rowNumber: number, clientId: string, columnMap: any, bordereauClientName?: string | null, bordereauClientId?: string | null): Promise<{item?: VirementValidationItem, error?: ValidationError}> {
+  private async processRow(row: ExcelJS.Row, rowNumber: number, clientId: string, columnMap: any, bordereauClientName?: string | null, bordereauClientId?: string | null, adherentByMatricule?: Map<string, any>): Promise<{item?: VirementValidationItem, error?: ValidationError}> {
     if (!row.hasValues) {
       return {};
     }
@@ -315,11 +335,8 @@ export class ExcelValidationService {
         }
       }
       
-      console.log(`Row ${rowNumber}: matricule="${matricule}", montantRaw="${montantRaw}", montant=${montant}`);
-      
       // Skip empty rows (both matricule and montant empty)
       if (!matricule && isNaN(montant)) {
-        console.log(`Row ${rowNumber}: Skipped (empty)`);
         return {};
       }
       
@@ -328,16 +345,17 @@ export class ExcelValidationService {
       let adherent: any = null;
       if (matricule) {
         const searchClientId = bordereauClientId || clientId;
+
+        adherent = adherentByMatricule
+          ? adherentByMatricule.get(matricule) || null
+          : await this.prisma.adherent.findFirst({
+              where: {
+                matricule,
+                clientId: searchClientId
+              },
+              include: { client: true }
+            });
         
-        adherent = await this.prisma.adherent.findFirst({
-          where: {
-            matricule: matricule,
-            clientId: searchClientId
-          },
-          include: { client: true }
-        });
-        
-        console.log(`Row ${rowNumber}: Searching adherent with matricule=${matricule}, clientId=${searchClientId}, found=${!!adherent}`);
       }
       
       // Use adherent data if found, otherwise try Excel columns
@@ -356,10 +374,8 @@ export class ExcelValidationService {
           if (ribCell.text && ribCell.text.trim() && !/[eE]/.test(ribCell.text)) {
             // Use text if available and not in scientific notation
             excelRib = ribCell.text.trim().replace(/\s/g, '');
-            console.log(`Row ${rowNumber}: RIB from cell.text: ${excelRib}`);
           } else if (typeof rawValue === 'string') {
             excelRib = rawValue.trim().replace(/\s/g, '');
-            console.log(`Row ${rowNumber}: RIB from string value: ${excelRib}`);
           } else if (typeof rawValue === 'number') {
             // CRITICAL: Use BigInt-like string manipulation to preserve precision
             const numStr = rawValue.toString();
@@ -383,10 +399,8 @@ export class ExcelValidationService {
                 excelRib = excelRib.substring(0, 20);
               }
               
-              console.log(`Row ${rowNumber}: RIB from scientific: ${rawValue} -> ${excelRib}`);
             } else {
               excelRib = numStr;
-              console.log(`Row ${rowNumber}: RIB from number: ${excelRib}`);
             }
           }
           
@@ -395,11 +409,8 @@ export class ExcelValidationService {
           
           // Validate RIB is exactly 20 digits
           if (excelRib.length !== 20 || !/^\d{20}$/.test(excelRib)) {
-            console.log(`Row ${rowNumber}: Invalid RIB length: ${excelRib} (length: ${excelRib.length})`);
             // If from DB, try to use DB RIB as fallback
             excelRib = ''; // Clear invalid RIB
-          } else {
-            console.log(`Row ${rowNumber}: ✅ Valid RIB: ${excelRib}`);
           }
         }
       }
@@ -411,7 +422,6 @@ export class ExcelValidationService {
       
       // EXACT FIX: RIB logic with validation
       let rib = '';
-      let ribSource = '';
       const ribErrors: string[] = [];
       
       // CRITICAL: Detect if Excel RIB lost precision (ends with 8+ zeros)
@@ -419,40 +429,29 @@ export class ExcelValidationService {
       
       if (excelLostPrecision && adherent?.rib) {
         rib = adherent.rib;
-        ribSource = 'DB (Excel lost precision)';
         ribErrors.push(`RIB Excel imprécis (${excelRib}), RIB DB utilisé (${adherent.rib})`);
-        console.log(`Row ${rowNumber}: ⚠️ Excel RIB lost precision (${excelRib}), using DB RIB`);
       } else if (excelRib && excelRib.length === 20) {
         rib = excelRib;
-        ribSource = excelLostPrecision ? 'Excel (precision lost)' : 'Excel';
         
         if (excelLostPrecision && !adherent) {
           ribErrors.push(`⚠️ RIB Excel peut être imprécis (${excelRib}). Veuillez vérifier ou formater la colonne RIB comme TEXTE dans Excel.`);
-          console.log(`Row ${rowNumber}: ⚠️ Using Excel RIB with possible precision loss (no DB to verify): ${rib}`);
         } else if (adherent?.rib && adherent.rib !== excelRib) {
-          console.log(`Row ${rowNumber}: ⚠️ RIB mismatch - Excel: ${excelRib}, DB: ${adherent.rib}`);
           ribErrors.push(`RIB Excel (${excelRib}) différent du RIB DB (${adherent.rib})`);
         }
         
-        console.log(`Row ${rowNumber}: Using Excel RIB: ${rib}`);
       } else if (!excelRib && adherent?.rib) {
         // Case 2: Excel has NO RIB column - use DB RIB ONLY if from correct client
         if (bordereauClientId && adherent.clientId === bordereauClientId) {
           rib = adherent.rib;
-          ribSource = 'DB (correct client)';
-          console.log(`Row ${rowNumber}: Using DB RIB from correct client (${bordereauClientName}): ${rib}`);
         } else if (bordereauClientId) {
-          console.log(`Row ${rowNumber}: ❌ Adherent found but from wrong client. Expected: ${bordereauClientName}, Got: ${adherent.client?.name}`);
           ribErrors.push(`Adhérent trouvé pour client ${adherent.client?.name} au lieu de ${bordereauClientName}`);
         } else {
           // No bordereau context - use DB RIB with warning
           rib = adherent.rib;
-          ribSource = 'DB (no bordereau context)';
-          console.log(`Row ${rowNumber}: Using DB RIB (no bordereau context): ${rib}`);
         }
       } else if (excelRib && excelRib.length !== 20) {
         // Case 3: Excel has invalid RIB
-        console.log(`Row ${rowNumber}: ❌ Invalid Excel RIB: ${excelRib} (length: ${excelRib.length})`);        ribErrors.push(`RIB Excel invalide: ${excelRib} (doit être 20 chiffres)`);
+        ribErrors.push(`RIB Excel invalide: ${excelRib} (doit être 20 chiffres)`);
       }
 
       const validationItem: VirementValidationItem = {
@@ -496,7 +495,6 @@ export class ExcelValidationService {
         }
       }
       
-      console.log(`Row ${rowNumber}: Final - RIB=${rib} (source: ${ribSource}), Status=${validationItem.status}, Errors=${validationItem.erreurs.length}`);
       return { item: validationItem };
 
     } catch (error : any) {

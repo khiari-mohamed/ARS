@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -11,6 +11,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Chip,
   Alert,
   Dialog,
@@ -23,14 +24,23 @@ import {
   Select,
   MenuItem,
   Grid,
-  TextField
+  TextField,
+  Divider,
+  Stack,
+  IconButton,
+  CircularProgress,
+  Tooltip
 } from '@mui/material';
 import {
   AutoFixHigh,
   Visibility,
   CheckCircle,
   Warning,
-  Edit
+  Edit,
+  Close,
+  Add,
+  Description,
+  FilterList
 } from '@mui/icons-material';
 
 interface ReturnedBordereauHandlerProps {
@@ -52,12 +62,15 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
   const [documentNameFilter, setDocumentNameFilter] = useState('');
   const [documentStatusFilter, setDocumentStatusFilter] = useState('');
   const [addingBS, setAddingBS] = useState(false);
+  
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   useEffect(() => {
     loadReturnedBordereaux();
     loadClients();
-    // Auto-refresh every 10 seconds
-    const interval = setInterval(loadReturnedBordereaux, 10000);
+    const interval = setInterval(loadReturnedBordereaux, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -74,35 +87,8 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
   const loadReturnedBordereaux = async () => {
     try {
       const { LocalAPI } = await import('../../services/axios');
-      // Load bordereaux with SCAN_EN_COURS status and documentStatus RETOUR_SCAN
-      const response = await LocalAPI.get('/bordereaux', {
-        params: {
-          statut: 'SCAN_EN_COURS',
-          documentStatus: 'RETOURNER_AU_SCAN'
-        }
-      });
-      const bordereaux = Array.isArray(response.data) ? response.data : response.data.items || [];
-      
-      // Load documents for each bordereau
-      const bordereauxWithDocs = await Promise.all(
-        bordereaux.map(async (b: any) => {
-          try {
-            const detailsRes = await LocalAPI.get(`/bordereaux/${b.id}`, {
-              params: { include: 'documents,client' }
-            });
-            return {
-              ...b,
-              documents: detailsRes.data.documents || [],
-              client: detailsRes.data.client || b.client,
-              returnType: 'BORDEREAU'
-            };
-          } catch (err) {
-            return { ...b, documents: [], returnType: 'BORDEREAU' };
-          }
-        })
-      );
-      
-      setReturnedBordereaux(bordereauxWithDocs);
+      const response = await LocalAPI.get('/scan/returned-bordereaux');
+      setReturnedBordereaux(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Failed to load returned bordereaux:', error);
     } finally {
@@ -112,7 +98,6 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
 
   const handleCorrectBordereau = async (bordereau: any) => {
     try {
-      // Load full bordereau details with documents
       const { LocalAPI } = await import('../../services/axios');
       const response = await LocalAPI.get(`/scan/bordereau/${bordereau.id}`);
       setSelectedBordereau(response.data);
@@ -141,7 +126,6 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
           });
           
           alert('✅ Document remplacé avec succès');
-          // Reload bordereau details
           const updatedResponse = await LocalAPI.get(`/scan/bordereau/${selectedBordereau.id}`);
           setSelectedBordereau(updatedResponse.data);
         } catch (error: any) {
@@ -175,7 +159,6 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
           });
           
           alert('✅ Document manquant ajouté avec succès');
-          // Reload bordereau details
           const updatedResponse = await LocalAPI.get(`/scan/bordereau/${selectedBordereau.id}`);
           setSelectedBordereau(updatedResponse.data);
           setSelectedDocumentType('');
@@ -285,112 +268,237 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
     }
   };
 
+  // Paginated data
+  const paginatedBordereaux = useMemo(() => {
+    const start = page * rowsPerPage;
+    return returnedBordereaux.slice(start, start + rowsPerPage);
+  }, [returnedBordereaux, page, rowsPerPage]);
+
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
   if (loading) {
     return (
-      <Card>
-        <CardContent>
-          <Typography>Chargement des bordereaux retournés...</Typography>
+      <Card sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 6, gap: 2 }}>
+          <CircularProgress size={24} color="warning" />
+          <Typography color="text.secondary">Chargement des bordereaux retournés...</Typography>
         </CardContent>
       </Card>
     );
   }
 
   if (returnedBordereaux.length === 0) {
-    return null; // Don't show the component if no returned bordereaux
+    return null;
   }
 
   return (
     <Box sx={{ mb: 4 }}>
-      <Card sx={{ border: '2px solid #ff9800', bgcolor: '#fff3e0' }}>
-        <CardContent>
-          <Box display="flex" alignItems="center" gap={1} mb={2}>
-            <Warning color="warning" />
-            <Typography variant="h6" color="warning.main">
-              🔄 Bordereaux Retournés pour Correction
-            </Typography>
-            <Chip 
-              label={`${returnedBordereaux.length} bordereau(x)`}
-              color="warning"
-              size="small"
-            />
+      <Card
+        sx={{
+          borderRadius: 3,
+          overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(255, 152, 0, 0.15)',
+          border: '1px solid rgba(255, 152, 0, 0.2)'
+        }}
+      >
+        {/* Gradient Header */}
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+            px: 3,
+            py: 2.5,
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Box display="flex" alignItems="center" gap={1.5}>
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: '12px',
+                bgcolor: 'rgba(255,255,255,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backdropFilter: 'blur(10px)'
+              }}
+            >
+              <Warning sx={{ color: 'white', fontSize: 24 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                Bordereaux Retournés pour Correction
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                Rejetés par le chef d'équipe — Action requise
+              </Typography>
+            </Box>
           </Box>
-          
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Ces bordereaux ont été rejetés par le chef d'équipe et nécessitent une correction des documents.
+          <Chip 
+            label={`${returnedBordereaux.length} bordereau${returnedBordereaux.length > 1 ? 'x' : ''}`}
+            sx={{ 
+              bgcolor: 'rgba(255,255,255,0.25)', 
+              color: 'white', 
+              fontWeight: 700,
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.3)'
+            }}
+          />
+        </Box>
+
+        <CardContent sx={{ p: 3, bgcolor: '#fffaf3' }}>
+          <Alert 
+            severity="warning" 
+            sx={{ 
+              mb: 3, 
+              borderRadius: 2,
+              border: '1px solid #ffcc80',
+              '& .MuiAlert-icon': { fontSize: 24 }
+            }}
+          >
+            Ces bordereaux ont été rejetés et nécessitent une correction des documents avant re-soumission.
           </Alert>
 
-          <TableContainer>
-            <Table size="small">
+          <TableContainer 
+            component={Paper} 
+            sx={{ 
+              borderRadius: 2, 
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              border: '1px solid #f0f0f0'
+            }}
+          >
+            <Table size="medium">
               <TableHead>
-                <TableRow>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Référence</TableCell>
-                  <TableCell>Client</TableCell>
-                  <TableCell>Document Retourné</TableCell>
-                  <TableCell>Date Retour</TableCell>
-                  <TableCell>Actions</TableCell>
+                <TableRow sx={{ bgcolor: '#fff3e0' }}>
+                  <TableCell sx={{ fontWeight: 700, color: '#e65100', fontSize: '0.8rem' }}>TYPE</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#e65100', fontSize: '0.8rem' }}>RÉFÉRENCE</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#e65100', fontSize: '0.8rem' }}>CLIENT</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#e65100', fontSize: '0.8rem' }}>DOCUMENT RETOURNÉ</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#e65100', fontSize: '0.8rem' }}>DATE RETOUR</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#e65100', fontSize: '0.8rem' }} align="center">ACTIONS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {returnedBordereaux.map((item: any) => (
-                  <TableRow key={`${item.id}-${item.returnType}-${item.returnedDocument?.id || 'all'}`}>
+                {paginatedBordereaux.map((item: any, idx: number) => (
+                  <TableRow 
+                    key={`${item.id}-${item.returnType}-${item.returnedDocument?.id || 'all'}`}
+                    sx={{ 
+                      bgcolor: idx % 2 === 0 ? 'white' : '#fafafa',
+                      transition: 'background-color 0.2s',
+                      '&:hover': { bgcolor: '#fff8e1' }
+                    }}
+                  >
                     <TableCell>
                       <Chip 
-                        label={item.returnType === 'BORDEREAU' ? '🔴 Bordereau' : '🟠 Document'}
+                        label={item.returnType === 'BORDEREAU'
+                          ? '🔴 Bordereau'
+                          : `🟠 ${item.returnedDocument?.type || 'Document'}`}
                         color={item.returnType === 'BORDEREAU' ? 'error' : 'warning'}
                         size="small"
+                        sx={{ fontWeight: 600 }}
                       />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight="bold">
+                      <Typography variant="body2" fontWeight="700" color="text.primary">
                         {item.reference}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">
+                      <Typography variant="body2" color="text.secondary">
                         {item.client?.name || 'N/A'}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       {item.returnedDocument ? (
-                        <Chip label={item.returnedDocument.name} color="warning" size="small" />
+                        <Chip 
+                          label={item.returnedDocument.name} 
+                          color="warning" 
+                          size="small" 
+                          variant="outlined"
+                          sx={{ fontWeight: 500 }}
+                        />
                       ) : (
-                        <Chip label={`${item.documents?.length || 0} doc(s)`} color="error" size="small" />
+                        <Chip 
+                          label={`${item.documents?.length || 0} doc(s)`} 
+                          color="error" 
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontWeight: 500 }}
+                        />
                       )}
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">
-                        {new Date(item.updatedAt).toLocaleDateString()}
+                      <Typography variant="body2" color="text.secondary">
+                        {new Date(item.returnedAt || item.updatedAt).toLocaleDateString('fr-FR')}
                       </Typography>
                     </TableCell>
-                    <TableCell>
-                      <Box display="flex" gap={1}>
+                    <TableCell align="center">
+                      <Stack direction="row" spacing={1} justifyContent="center">
                         <Button
                           size="small"
                           variant="contained"
                           color="warning"
-                          startIcon={<AutoFixHigh />}
+                          startIcon={<AutoFixHigh sx={{ fontSize: 16 }} />}
                           onClick={() => handleCorrectBordereau(item)}
-                          sx={{ fontSize: '0.7rem' }}
+                          sx={{ 
+                            fontSize: '0.72rem', 
+                            fontWeight: 600, 
+                            textTransform: 'none',
+                            borderRadius: 2,
+                            boxShadow: '0 2px 6px rgba(255,152,0,0.3)',
+                            '&:hover': { boxShadow: '0 4px 10px rgba(255,152,0,0.4)' }
+                          }}
                         >
-                          {item.returnType === 'DOCUMENT' ? 'Corriger Document' : 'Corriger Bordereau'}
+                          {item.returnType === 'DOCUMENT' ? 'Corriger Document' : 'Corriger'}
                         </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          startIcon={<Edit />}
-                          onClick={() => handleOpenModifyDialog(item)}
-                          sx={{ fontSize: '0.7rem' }}
-                        >
-                          Modifier
-                        </Button>
-                      </Box>
+                        <Tooltip title="Modifier les informations du bordereau">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<Edit sx={{ fontSize: 16 }} />}
+                            onClick={() => handleOpenModifyDialog(item)}
+                            sx={{ 
+                              fontSize: '0.72rem', 
+                              fontWeight: 600, 
+                              textTransform: 'none',
+                              borderRadius: 2
+                            }}
+                          >
+                            Modifier
+                          </Button>
+                        </Tooltip>
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              component="div"
+              count={returnedBordereaux.length}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              labelRowsPerPage="Lignes par page:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+              sx={{
+                borderTop: '1px solid #f0f0f0',
+                '& .MuiTablePagination-toolbar': { minHeight: 52 }
+              }}
+            />
           </TableContainer>
         </CardContent>
       </Card>
@@ -405,157 +513,236 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
         }}
         maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, overflow: 'hidden' }
+        }}
       >
-        <DialogTitle sx={{ bgcolor: '#fff3e0', color: '#e65100', borderBottom: '2px solid #ff9800' }}>
-          🔄 Correction Documents - {selectedBordereau?.reference}
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Bordereau rejeté par le chef d'équipe - Correction requise
-          </Typography>
+        <DialogTitle 
+          sx={{ 
+            background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+            color: 'white',
+            p: 3,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start'
+          }}
+        >
+          <Box>
+            <Typography variant="h6" fontWeight={700}>
+              🔄 Correction Documents
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+              {selectedBordereau?.reference} — Rejeté par le chef d'équipe
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={() => {
+              setCorrectionDialogOpen(false);
+              setSelectedBordereau(null);
+              setSelectedDocumentType('');
+            }}
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ p: 3, bgcolor: '#fafafa' }}>
           {selectedBordereau && (
             <Box>
-              <Typography variant="h6" gutterBottom sx={{ color: '#e65100', mb: 2 }}>
-                Documents de ce bordereau:
-              </Typography>
-              
-              {/* Filters */}
-              <Paper sx={{ p: 2, mb: 2, bgcolor: '#f5f5f5' }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Filtrer par nom de document"
-                      placeholder="Ex: moadhcv.pdf"
-                      value={documentNameFilter}
-                      onChange={(e) => setDocumentNameFilter(e.target.value)}
-                    />
+              {/* Documents Section */}
+              <Paper sx={{ p: 2.5, mb: 3, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <Description sx={{ color: '#e65100' }} />
+                  <Typography variant="h6" sx={{ color: '#e65100', fontWeight: 700 }}>
+                    Documents de ce bordereau
+                  </Typography>
+                </Box>
+                
+                {/* Filters */}
+                <Paper 
+                  variant="outlined"
+                  sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: '#f8f9fa', border: '1px solid #e0e0e0' }}
+                >
+                  <Box display="flex" alignItems="center" gap={1} mb={1.5}>
+                    <FilterList fontSize="small" sx={{ color: 'text.secondary' }} />
+                    <Typography variant="caption" fontWeight={600} color="text.secondary">
+                      FILTRES
+                    </Typography>
+                  </Box>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Nom du document"
+                        placeholder="Ex: moadhcv.pdf"
+                        value={documentNameFilter}
+                        onChange={(e) => setDocumentNameFilter(e.target.value)}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Statut</InputLabel>
+                        <Select
+                          value={documentStatusFilter}
+                          onChange={(e) => setDocumentStatusFilter(e.target.value)}
+                          label="Statut"
+                        >
+                          <MenuItem value="">Tous les statuts</MenuItem>
+                          <MenuItem value="UPLOADED">UPLOADED</MenuItem>
+                          <MenuItem value="SCANNE">SCANNE</MenuItem>
+                          <MenuItem value="RETOURNER_AU_SCAN">RETOURNER_AU_SCAN</MenuItem>
+                          <MenuItem value="TRAITE">TRAITE</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
                   </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Filtrer par statut</InputLabel>
-                      <Select
-                        value={documentStatusFilter}
-                        onChange={(e) => setDocumentStatusFilter(e.target.value)}
-                        label="Filtrer par statut"
-                      >
-                        <MenuItem value="">Tous</MenuItem>
-                        <MenuItem value="UPLOADED">UPLOADED</MenuItem>
-                        <MenuItem value="SCANNE">SCANNE</MenuItem>
-                        <MenuItem value="RETOURNER_AU_SCAN">RETOURNER_AU_SCAN</MenuItem>
-                        <MenuItem value="TRAITE">TRAITE</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                </Grid>
-              </Paper>
-              
-              {selectedBordereau.documents && selectedBordereau.documents.length > 0 ? (
-                <Box sx={{ mb: 3 }}>
-                  <Paper sx={{ p: 2, bgcolor: '#fafafa', border: '1px solid #e0e0e0' }}>
+                </Paper>
+                
+                {selectedBordereau.documents && selectedBordereau.documents.length > 0 ? (
+                  <Stack spacing={1.5}>
                     {selectedBordereau.documents
                       .filter((doc: any) => {
                         const nameMatch = !documentNameFilter || doc.name.toLowerCase().includes(documentNameFilter.toLowerCase());
                         const statusMatch = !documentStatusFilter || doc.status === documentStatusFilter;
                         return nameMatch && statusMatch;
                       })
-                      .map((doc: any, index: number) => (
-                      <Box key={doc.id} sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between',
-                        py: 1.5,
-                        px: 2,
-                        mb: index < selectedBordereau.documents.length - 1 ? 1 : 0,
-                        bgcolor: 'white',
-                        border: '1px solid #ddd',
-                        borderRadius: 1
-                      }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="body1" fontWeight="bold" sx={{ color: '#333' }}>
-                            {doc.name}
-                          </Typography>
-                          <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                            <Chip 
-                              label={doc.type} 
-                              size="small" 
-                              variant="outlined"
-                              sx={{ fontSize: '0.7rem' }}
-                            />
-                            <Chip 
-                              label={doc.status} 
-                              size="small" 
-                              color={doc.status === 'SCANNE' ? 'success' : 'warning'}
-                              sx={{ fontSize: '0.7rem' }}
-                            />
+                      .map((doc: any) => (
+                        <Paper
+                          key={doc.id}
+                          variant="outlined"
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            transition: 'all 0.2s',
+                            '&:hover': { 
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                              borderColor: '#ff9800'
+                            }
+                          }}
+                        >
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="body1" fontWeight="700" sx={{ color: '#212121', mb: 0.5 }}>
+                              {doc.name}
+                            </Typography>
+                            <Stack direction="row" spacing={1}>
+                              <Chip 
+                                label={doc.type} 
+                                size="small" 
+                                variant="outlined"
+                                sx={{ fontSize: '0.7rem', fontWeight: 500 }}
+                              />
+                              <Chip 
+                                label={doc.status} 
+                                size="small" 
+                                color={doc.status === 'SCANNE' ? 'success' : 'warning'}
+                                sx={{ fontSize: '0.7rem', fontWeight: 600 }}
+                              />
+                            </Stack>
                           </Box>
-                        </Box>
-                        <Box display="flex" gap={1}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            startIcon={<Visibility />}
-                            onClick={async () => {
-                              try {
-                                const { LocalAPI } = await import('../../services/axios');
-                                const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${doc.id}`);
-                                
-                                if (response.data.success && response.data.pdfUrl) {
-                                  const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
-                                  let pdfUrl = response.data.pdfUrl;
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              startIcon={<Visibility sx={{ fontSize: 16 }} />}
+                              onClick={async () => {
+                                try {
+                                  const { LocalAPI } = await import('../../services/axios');
+                                  const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${doc.id}`);
                                   
-                                  // Extract uploads path
-                                  const uploadsIndex = pdfUrl.indexOf('/uploads/');
-                                  if (uploadsIndex !== -1) {
-                                    pdfUrl = pdfUrl.substring(uploadsIndex);
+                                  if (response.data.success && response.data.pdfUrl) {
+                                    const serverBaseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5000';
+                                    let pdfUrl = response.data.pdfUrl;
+                                    
+                                    const uploadsIndex = pdfUrl.indexOf('/uploads/');
+                                    if (uploadsIndex !== -1) {
+                                      pdfUrl = pdfUrl.substring(uploadsIndex);
+                                    }
+                                    
+                                    const cleanedPdfUrl = pdfUrl.replace(/\/\/+/g, '/');
+                                    const fullPdfUrl = `${serverBaseUrl}${cleanedPdfUrl}`;
+                                    
+                                    window.open(fullPdfUrl, '_blank');
+                                  } else {
+                                    alert(response.data.error || `PDF non disponible pour le document: ${doc.name}`);
                                   }
-                                  
-                                  const cleanedPdfUrl = pdfUrl.replace(/\/\/+/g, '/');
-                                  const fullPdfUrl = `${serverBaseUrl}${cleanedPdfUrl}`;
-                                  
-                                  window.open(fullPdfUrl, '_blank');
-                                } else {
-                                  alert(response.data.error || `PDF non disponible pour le document: ${doc.name}`);
+                                } catch (error) {
+                                  console.error('Failed to open PDF:', error);
+                                  alert('❌ Erreur lors de l\'ouverture du PDF');
                                 }
-                              } catch (error) {
-                                console.error('Failed to open PDF:', error);
-                                alert('❌ Erreur lors de l\'ouverture du PDF');
-                              }
-                            }}
-                            sx={{ fontSize: '0.7rem', minWidth: 'auto' }}
-                          >
-                            Voir PDF
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="warning"
-                            startIcon={<AutoFixHigh />}
-                            onClick={() => handleReplaceDocument(doc.name)}
-                            sx={{ fontSize: '0.7rem', minWidth: 'auto' }}
-                          >
-                            Remplacer
-                          </Button>
-                        </Box>
-                      </Box>
-                    ))}
-                  </Paper>
+                              }}
+                              sx={{ fontSize: '0.7rem', textTransform: 'none', borderRadius: 2 }}
+                            >
+                              Voir PDF
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="warning"
+                              startIcon={<AutoFixHigh sx={{ fontSize: 16 }} />}
+                              onClick={() => handleReplaceDocument(doc.name)}
+                              sx={{ 
+                                fontSize: '0.7rem', 
+                                textTransform: 'none', 
+                                borderRadius: 2,
+                                boxShadow: '0 2px 6px rgba(255,152,0,0.3)'
+                              }}
+                            >
+                              Remplacer
+                            </Button>
+                          </Stack>
+                        </Paper>
+                      ))}
+                  </Stack>
+                ) : (
+                  <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                    Aucun document trouvé pour ce bordereau
+                  </Alert>
+                )}
+              </Paper>
+
+              <Divider sx={{ my: 3 }}>
+                <Chip label="ACTIONS D'AJOUT" size="small" sx={{ fontWeight: 700, color: 'text.secondary' }} />
+              </Divider>
+
+              {/* Add BS Section */}
+              <Paper 
+                sx={{ 
+                  p: 3, 
+                  mb: 3, 
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
+                  border: '1px solid #90caf9'
+                }}
+              >
+                <Box display="flex" alignItems="center" gap={1.5} mb={1.5}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      bgcolor: '#1976d2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Add sx={{ color: 'white' }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ color: '#0d47a1', fontWeight: 700 }}>
+                      Ajouter des Bulletins de Soins
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#1565c0' }}>
+                      Ajout unitaire ou en masse
+                    </Typography>
+                  </Box>
                 </Box>
-              ) : (
-                <Alert severity="warning" sx={{ mb: 3 }}>
-                  ⚠️ Aucun document trouvé pour ce bordereau
-                </Alert>
-              )}
-              
-              {/* Add Missing Document Section */}
-              <Paper sx={{ p: 3, bgcolor: '#e3f2fd', border: '2px solid #1976d2', mb: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ color: '#1565c0' }}>
-                  Ajouter des Bulletins de Soins (BS)
-                </Typography>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Sélectionnez un seul fichier pour ajouter un BS à l'unité ou plusieurs fichiers pour un ajout en masse.
+                <Alert severity="info" sx={{ mb: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.7)' }}>
                   Les statuts existants (Traité / En cours) ne seront pas modifiés.
                 </Alert>
                 <Button
@@ -564,20 +751,55 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                   fullWidth
                   disabled={addingBS}
                   onClick={handleAddBulletins}
+                  startIcon={addingBS ? <CircularProgress size={16} color="inherit" /> : <Add />}
+                  sx={{ 
+                    py: 1.2, 
+                    borderRadius: 2, 
+                    fontWeight: 700, 
+                    textTransform: 'none',
+                    boxShadow: '0 4px 12px rgba(25,118,210,0.3)'
+                  }}
                 >
-                  {addingBS ? 'Ajout des BS en cours...' : '➕ Sélectionner et Ajouter'}
+                  {addingBS ? 'Ajout des BS en cours...' : 'Sélectionner et Ajouter'}
                 </Button>
               </Paper>
 
               {/* Add Missing Document Section */}
-              <Paper sx={{ p: 3, bgcolor: '#e8f5e8', border: '2px solid #4caf50' }}>
-                <Typography variant="h6" gutterBottom sx={{ color: '#2e7d32', display: 'flex', alignItems: 'center', gap: 1 }}>
-                  ➕ Ajouter un document manquant
-                </Typography>
+              <Paper 
+                sx={{ 
+                  p: 3, 
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+                  border: '1px solid #a5d6a7'
+                }}
+              >
+                <Box display="flex" alignItems="center" gap={1.5} mb={2}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      bgcolor: '#2e7d32',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Description sx={{ color: 'white' }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700 }}>
+                      Ajouter un document manquant
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#2e7d32' }}>
+                      Sélectionner le type puis le fichier
+                    </Typography>
+                  </Box>
+                </Box>
                 
                 <Grid container spacing={2} alignItems="center">
                   <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth size="small">
+                    <FormControl fullWidth size="small" sx={{ bgcolor: 'white', borderRadius: 1 }}>
                       <InputLabel>Type de document</InputLabel>
                       <Select
                         value={selectedDocumentType}
@@ -599,15 +821,22 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
                       fullWidth
                       disabled={!selectedDocumentType}
                       onClick={handleAddMissingDocument}
-                      sx={{ fontSize: '0.8rem' }}
+                      startIcon={<Add />}
+                      sx={{ 
+                        py: 1, 
+                        borderRadius: 2, 
+                        fontWeight: 700, 
+                        textTransform: 'none',
+                        boxShadow: '0 4px 12px rgba(46,125,50,0.3)'
+                      }}
                     >
-                      ➕ Sélectionner et Ajouter
+                      Sélectionner et Ajouter
                     </Button>
                   </Grid>
                   {selectedDocumentType && (
                     <Grid item xs={12}>
-                      <Alert severity="success" sx={{ mt: 1 }}>
-                        ✓ Type sélectionné: <strong>{selectedDocumentType}</strong> - Cliquez sur "Sélectionner et Ajouter" pour choisir le fichier
+                      <Alert severity="success" sx={{ borderRadius: 2, bgcolor: 'rgba(255,255,255,0.7)' }}>
+                        Type sélectionné: <strong>{selectedDocumentType}</strong>
                       </Alert>
                     </Grid>
                   )}
@@ -616,7 +845,7 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ bgcolor: '#f5f5f5', borderTop: '1px solid #ddd' }}>
+        <DialogActions sx={{ bgcolor: 'white', borderTop: '1px solid #e0e0e0', p: 2 }}>
           <Button 
             onClick={() => {
               setCorrectionDialogOpen(false);
@@ -626,6 +855,7 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
               setDocumentStatusFilter('');
             }}
             color="inherit"
+            sx={{ textTransform: 'none', fontWeight: 600 }}
           >
             Fermer
           </Button>
@@ -634,8 +864,15 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
             variant="contained"
             color="success"
             startIcon={<CheckCircle />}
+            sx={{ 
+              textTransform: 'none', 
+              fontWeight: 700, 
+              px: 3, 
+              borderRadius: 2,
+              boxShadow: '0 4px 12px rgba(46,125,50,0.3)'
+            }}
           >
-            ✅ Corrections Terminées
+            Corrections Terminées
           </Button>
         </DialogActions>
       </Dialog>
@@ -649,9 +886,37 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
         }}
         maxWidth="sm"
         fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, overflow: 'hidden' }
+        }}
       >
-        <DialogTitle sx={{ bgcolor: '#e3f2fd', color: '#1565c0', borderBottom: '2px solid #2196f3' }}>
-          ✏️ Modifier Bordereau - {modifyBordereau?.reference}
+        <DialogTitle 
+          sx={{ 
+            background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+            color: 'white',
+            p: 3,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start'
+          }}
+        >
+          <Box>
+            <Typography variant="h6" fontWeight={700}>
+              ✏️ Modifier Bordereau
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
+              {modifyBordereau?.reference}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={() => {
+              setModifyDialogOpen(false);
+              setModifyBordereau(null);
+            }}
+            sx={{ color: 'white' }}
+          >
+            <Close />
+          </IconButton>
         </DialogTitle>
         <DialogContent sx={{ p: 3, mt: 2 }}>
           {modifyBordereau && (
@@ -695,13 +960,14 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ bgcolor: '#f5f5f5', borderTop: '1px solid #ddd' }}>
+        <DialogActions sx={{ bgcolor: '#f8f9fa', borderTop: '1px solid #e0e0e0', p: 2 }}>
           <Button 
             onClick={() => {
               setModifyDialogOpen(false);
               setModifyBordereau(null);
             }}
             color="inherit"
+            sx={{ textTransform: 'none', fontWeight: 600 }}
           >
             Annuler
           </Button>
@@ -710,8 +976,15 @@ const ReturnedBordereauHandler: React.FC<ReturnedBordereauHandlerProps> = ({ onC
             variant="contained"
             color="primary"
             startIcon={<CheckCircle />}
+            sx={{ 
+              textTransform: 'none', 
+              fontWeight: 700, 
+              px: 3, 
+              borderRadius: 2,
+              boxShadow: '0 4px 12px rgba(25,118,210,0.3)'
+            }}
           >
-            💾 Enregistrer
+            Enregistrer
           </Button>
         </DialogActions>
       </Dialog>

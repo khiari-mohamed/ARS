@@ -228,7 +228,7 @@ function GestionnaireDashboardNew() {
   const [documents, setDocuments] = useState<Dossier[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<Dossier[]>([]);
   const [filteredDossiers, setFilteredDossiers] = useState<Dossier[]>([]);
-  const [selectedDossiers, setSelectedDossiers] = useState<string[]>([]);
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState('Tous');
   const [societeFilter, setSocieteFilter] = useState('Toutes');
   const [statutFilter, setStatutFilter] = useState('Tous');
@@ -239,6 +239,8 @@ function GestionnaireDashboardNew() {
   const [currentPDFUrl, setCurrentPDFUrl] = useState('');
   const [currentDossier, setCurrentDossier] = useState<any>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
@@ -246,8 +248,6 @@ function GestionnaireDashboardNew() {
   const [bordereauxEnCoursPage, setBordereauxEnCoursPage] = useState(1);
   const [dossiersIndividuelsPage, setDossiersIndividuelsPage] = useState(1);
   const [gestionnaireAssignments, setGestionnaireAssignments] = useState<GestionnaireAssignment[]>([]);
-  const [gestionnaireFilter, setGestionnaireFilter] = useState('Tous');
-  const [availableGestionnaires, setAvailableGestionnaires] = useState<string[]>([]);
   const [reassignedDocs, setReassignedDocs] = useState<any[]>([]);
   const [loadingReassigned, setLoadingReassigned] = useState(false);
   const [reassignedDocsPage, setReassignedDocsPage] = useState(1);
@@ -273,6 +273,12 @@ function GestionnaireDashboardNew() {
     loadDashboardData();
     loadReassignedDocuments();
   }, []);;
+
+  useEffect(() => {
+    if (user?.role === 'GESTIONNAIRE' && user.fullName) {
+      setFilterDocuments(previous => ({ ...previous, gestionnaire: user.fullName }));
+    }
+  }, [user?.fullName, user?.role]);
 
   useEffect(() => {
     applyFilters();
@@ -316,9 +322,7 @@ function GestionnaireDashboardNew() {
     setDossiersIndividuelsPage(1);
   }, [filterDerniers, filterBordereaux, filterDocuments, dossiers, documents]);
   
-  // useEffect(() => {
-  //   console.log('🔍 filteredDocuments updated:', filteredDocuments.length);
-  // }, [filteredDocuments]);
+
 
   const loadReassignedDocuments = async () => {
     if (!user?.id) return;
@@ -403,8 +407,6 @@ function GestionnaireDashboardNew() {
       
       if (assignmentsResponse.data) {
         setGestionnaireAssignments(assignmentsResponse.data);
-        const uniqueGestionnaires = [...new Set(assignmentsResponse.data.map((a: any) => a.gestionnaire))].sort() as string[];
-        setAvailableGestionnaires(uniqueGestionnaires);
       }
     } catch (error: any) {
       console.error('❌ Error loading gestionnaire dashboard data:', error);
@@ -473,18 +475,36 @@ function GestionnaireDashboardNew() {
     setFilteredDocuments(filteredDocs);
   };
 
-  const handleSelectAll = () => {
-    if (selectedDossiers.length === filteredDossiers.length) {
-      setSelectedDossiers([]);
-    } else {
-      setSelectedDossiers(filteredDossiers.map(d => d.id));
-    }
+  const handleReturnSelectedDocuments = async () => {
+    if (selectedDocuments.length === 0) return;
+    setReturnReason('');
+    setShowReturnModal(true);
   };
 
-  const handleSelectDossier = (id: string) => {
-    setSelectedDossiers(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+  const confirmReturnSelectedDocuments = async () => {
+    if (!returnReason.trim() || selectedDocuments.length === 0) return;
+
+    try {
+      const results = await Promise.all(selectedDocuments.map(documentId =>
+        LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
+          dossierId: documentId,
+          newStatus: 'Retourné',
+          reason: returnReason.trim(),
+        })
+      ));
+      const failed = results.filter(result => !result.data?.success);
+      if (failed.length > 0) {
+        alert(`${failed.length} retour(s) n'ont pas pu être effectué(s).`);
+      } else {
+        alert(`${selectedDocuments.length} BS retourné(s) au chef d'équipe.`);
+      }
+      setSelectedDocuments([]);
+      setShowReturnModal(false);
+      setReturnReason('');
+      await loadDashboardData();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Erreur lors du retour des BS');
+    }
   };
 
   const handleExport = () => {
@@ -526,30 +546,6 @@ function GestionnaireDashboardNew() {
     setShowPDFModal(false);
     setCurrentPDFUrl('');
     setCurrentDossier(null);
-  };
-
-  const handleStatusChangeInModal = async (newStatus: string) => {
-    if (!currentDossier) return;
-    
-    try {
-      // Use chef d'équipe endpoint for status modification
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-        dossierId: currentDossier.id,
-        newStatus
-      });
-      
-      if (response.data.success) {
-        alert('Statut modifié avec succès');
-        loadDashboardData();
-        closePDFModal();
-      } else {
-        alert('Erreur lors de la modification du statut');
-      }
-    } catch (error: any) {
-      console.error('Status modification error:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la modification du statut';
-      alert(errorMessage);
-    }
   };
 
   const handleModifyStatus = (dossierId: string) => {
@@ -600,52 +596,6 @@ function GestionnaireDashboardNew() {
     } catch (error: any) {
       console.error('Status modification error:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la modification du statut';
-      alert(errorMessage);
-    }
-  };
-
-  const handleMarkAsTraite = async (bordereauId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Traité ?')) return;
-    
-    try {
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-        dossierId: bordereauId,
-        newStatus: 'Traité'
-      });
-      
-      if (response.data.success) {
-        alert('Bordereau marqué comme Traité avec succès');
-        loadDashboardData();
-      } else {
-        alert(response.data.message || 'Erreur lors de la modification du statut');
-      }
-    } catch (error: any) {
-      console.error('Mark as traité error:', error);
-      console.error('Error response:', error.response?.data);
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Erreur lors de la modification du statut';
-      alert(errorMessage);
-    }
-  };
-
-  const handleMarkAsRetourne = async (bordereauId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir marquer ce bordereau comme Retourné ?')) return;
-    
-    try {
-      const response = await LocalAPI.post('/bordereaux/chef-equipe/tableau-bord/modify-dossier-status', {
-        dossierId: bordereauId,
-        newStatus: 'Retourné'
-      });
-      
-      if (response.data.success) {
-        alert('Bordereau marqué comme Retourné avec succès');
-        loadDashboardData();
-      } else {
-        alert(response.data.message || 'Erreur lors de la modification du statut');
-      }
-    } catch (error: any) {
-      console.error('Mark as retourné error:', error);
-      console.error('Error response:', error.response?.data);
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Erreur lors de la modification du statut';
       alert(errorMessage);
     }
   };
@@ -871,7 +821,7 @@ function GestionnaireDashboardNew() {
               Exporter
             </button>
             <span style={{ fontSize: 13, color: T.ink500, fontFamily: T.sans }}>
-              {selectedDossiers.length > 0 ? `${selectedDossiers.length} dossier(s) sélectionné(s)` : 'Mes dossiers assignés uniquement'}
+              Mes dossiers assignés uniquement
             </span>
           </div>
         </div>
@@ -1166,8 +1116,16 @@ function GestionnaireDashboardNew() {
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: T.ink700, margin: 0, fontFamily: T.sans }}>Dossiers Individuels</h3>
                 <p style={{ fontSize: 12, color: T.ink500, margin: '4px 0 0 0', fontFamily: T.sans }}>Affichage par dossier (non par bordereau)</p>
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <span style={{ fontSize: 12, color: T.ink500, fontFamily: T.sans }}>Total: {filteredDocumentsTable.length} dossiers</span>
+                <button
+                  type="button"
+                  onClick={handleReturnSelectedDocuments}
+                  disabled={selectedDocuments.length === 0}
+                  style={btnStyle('danger', selectedDocuments.length === 0)}
+                >
+                  Retourner {selectedDocuments.length > 0 ? `(${selectedDocuments.length})` : ''} au chef
+                </button>
               </div>
             </div>
           </div>
@@ -1193,6 +1151,17 @@ function GestionnaireDashboardNew() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: T.ink900 }}>
+                  <th style={thBrandStyle}>
+                    <input
+                      type="checkbox"
+                      aria-label="Sélectionner tous les BS traitables affichés"
+                      checked={filteredDocumentsTable.filter(d => d.statut !== 'Retourné').length > 0 && filteredDocumentsTable.filter(d => d.statut !== 'Retourné').every(d => selectedDocuments.includes(d.id))}
+                      onChange={(event) => {
+                        const selectableIds = filteredDocumentsTable.filter(d => d.statut !== 'Retourné').map(d => d.id);
+                        setSelectedDocuments(event.target.checked ? selectableIds : []);
+                      }}
+                    />
+                  </th>
                   <th style={thBrandStyle}>Réf. Dossier</th>
                   <th style={thBrandStyle}>Réf. Bordereau</th>
                   <th style={thBrandStyle}>Client</th>
@@ -1206,9 +1175,10 @@ function GestionnaireDashboardNew() {
               <tbody>
                 {filteredDocumentsTable.slice((dossiersIndividuelsPage - 1) * 20, dossiersIndividuelsPage * 20).map((document, index) => {
                   const isGestionnaire = user?.role === 'GESTIONNAIRE';
+                  const isReturned = document.statut === 'Retourné' || document.statut === 'RETOUR_ADMIN';
                   const canModify = isGestionnaire 
-                    ? (!document.statusModifiedByGestionnaire && document.gestionnaire === user?.fullName)
-                    : (document.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN');
+                    ? (!isReturned && document.gestionnaire === user?.fullName)
+                    : (!isReturned && (document.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN'));
                   const statutPair = getStatusPair(document.statut);
                   const isHighlighted = highlightedDocId === document.id;
                   return (
@@ -1220,6 +1190,19 @@ function GestionnaireDashboardNew() {
                       transition: 'background-color 0.3s ease',
                       boxShadow: isHighlighted ? `0 0 0 1px ${T.ok} inset` : 'none'
                     }}>
+                      <td style={tdStyle}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Sélectionner ${document.reference}`}
+                          checked={selectedDocuments.includes(document.id)}
+                          disabled={isReturned}
+                          onChange={() => setSelectedDocuments(previous =>
+                            previous.includes(document.id)
+                              ? previous.filter(id => id !== document.id)
+                              : [...previous, document.id]
+                          )}
+                        />
+                      </td>
                       <td style={refCellStyle}>{document.reference}</td>
                       <td style={{ ...refCellStyle, color: T.purple }}>{(document as any).bordereauReference || 'N/A'}</td>
                       <td style={tdStyle}>{document.client}</td>
@@ -1232,14 +1215,11 @@ function GestionnaireDashboardNew() {
                       <td style={tdStyle}>{document.gestionnaire || 'Non assigné'}</td>
                       <td style={{ ...tdStyle, color: T.ink500 }}>il y a 2 heures</td>
                       <td style={tdStyle}>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          <button 
-                            onClick={() => handleViewPDF(document.id)}
-                            style={linkBtnStyle(T.info)}
-                            title="Voir PDF du dossier"
-                          >
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <button onClick={() => handleViewPDF(document.id)} style={linkBtnStyle(T.info)} title="Voir PDF du dossier">
                             Voir PDF
                           </button>
+                          {isReturned && <span style={statusPillStyle(T.dangerBg, T.danger)}>Lecture seule - réaffectation requise</span>}
                         </div>
                       </td>
                     </tr>
@@ -1505,6 +1485,26 @@ function GestionnaireDashboardNew() {
         </div>
       )}
       
+      {showReturnModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1002, backgroundColor: 'rgba(15,27,45,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="return-documents-title" style={{ backgroundColor: T.surface, borderRadius: 10, padding: '24px', maxWidth: '520px', width: '100%', boxShadow: '0 16px 40px rgba(15,27,45,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 id="return-documents-title" style={{ margin: 0, color: T.ink900, fontSize: 18, fontWeight: 700, fontFamily: T.sans }}>Retourner les BS au chef d'équipe</h3>
+                <p style={{ margin: '6px 0 0', color: T.ink500, fontSize: 13, fontFamily: T.sans }}>{selectedDocuments.length} bulletin(s) sélectionné(s)</p>
+              </div>
+              <button type="button" aria-label="Fermer la fenêtre de retour" onClick={() => setShowReturnModal(false)} style={{ background: 'none', border: 'none', color: T.ink500, fontSize: 24, cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+            <label htmlFor="return-reason" style={{ display: 'block', color: T.ink700, fontSize: 13, fontWeight: 700, marginBottom: '7px', fontFamily: T.sans }}>Motif du retour</label>
+            <textarea id="return-reason" value={returnReason} onChange={(event) => setReturnReason(event.target.value)} placeholder="Expliquez pourquoi ces BS sont retournés..." rows={5} autoFocus style={{ ...inputStyle, width: '100%', resize: 'vertical', lineHeight: 1.5 }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+              <button type="button" onClick={() => setShowReturnModal(false)} style={btnStyle('neutral')}>Annuler</button>
+              <button type="button" onClick={confirmReturnSelectedDocuments} disabled={!returnReason.trim()} style={btnStyle('danger', !returnReason.trim())}>Confirmer le retour</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status Modification Modal */}
       {showStatusModal && currentDossier && (
         <div style={{

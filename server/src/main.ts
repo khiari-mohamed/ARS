@@ -37,14 +37,7 @@ async function bootstrap() {
   // Serve static files from uploads directory at Express level
   // Upload writers use process.cwd()/uploads in both source and compiled runs.
   const uploadsPath = path.resolve(process.cwd(), 'uploads');
-  console.log(`📁 Setting up static files from: ${uploadsPath}`);
   expressApp.use('/uploads', express.static(uploadsPath));
-  
-  // Add logging middleware for uploads requests
-  expressApp.use('/uploads', (req, res, next) => {
-    console.log(`📄 Static file request: ${req.url}`);
-    next();
-  });
   
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
   app.enableCors();
@@ -60,11 +53,7 @@ async function bootstrap() {
   });
 
   io.on('connection', (socket) => {
-    console.log('Socket.io client connected:', socket.id);
     socket.emit('hello', { message: 'Socket.io is working!' });
-    socket.on('disconnect', () => {
-      console.log('Socket.io client disconnected:', socket.id);
-    });
   });
   
   const port = parseInt(process.env.PORT ?? '5000', 10);

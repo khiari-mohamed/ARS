@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Log a virement history entry
@@ -11,6 +9,7 @@ const prisma = new PrismaClient();
  * @param options - Optional parameters
  */
 export async function logVirementHistory(
+  prisma: PrismaService,
   virementId: string,
   action: string,
   userId: string,
@@ -43,7 +42,6 @@ export async function logVirementHistory(
       },
     });
     
-    console.log(`✅ History logged: ${action} for virement ${virementId} by user ${userId}`);
   } catch (error) {
     console.error('❌ Failed to log virement history:', error);
     // Don't throw - history logging should not break the main flow

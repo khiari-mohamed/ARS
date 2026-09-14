@@ -80,6 +80,7 @@ function GestionnaireSeniorDashboard() {
   const [showRetourScanModal, setShowRetourScanModal] = useState(false);
   const [retourScanReason, setRetourScanReason] = useState('');
   const [selectedDossierForRetour, setSelectedDossierForRetour] = useState<string | null>(null);
+  const [selectedDocumentForRetour, setSelectedDocumentForRetour] = useState<string | null>(null);
   const [showAddDocumentModal, setShowAddDocumentModal] = useState(false);
   const [selectedBordereauForDoc, setSelectedBordereauForDoc] = useState<string | null>(null);
   const [uploadingDocument, setUploadingDocument] = useState(false);
@@ -95,6 +96,11 @@ function GestionnaireSeniorDashboard() {
   const [seniorAssignments, setSeniorAssignments] = useState<any[]>([]);
   const [reassignedDocuments, setReassignedDocuments] = useState<any[]>([]);
   const [loadingReassigned, setLoadingReassigned] = useState(false);
+  const [returnedItems, setReturnedItems] = useState<any[]>([]);
+  const [returnedPage, setReturnedPage] = useState(1);
+  const returnedPerPage = 10;
+  const [reassignedPage, setReassignedPage] = useState(1);
+  const reassignedPerPage = 5;
   const { user } = useAuth();
 
   // Actions menu states
@@ -127,6 +133,23 @@ function GestionnaireSeniorDashboard() {
   const uniqueTypes = useMemo(() =>
     [...new Set([...dossiers, ...documents].map((d: any) => d.type).filter(Boolean))].sort(),
     [dossiers, documents]
+  );
+
+  const reassignedTotalPages = Math.max(1, Math.ceil(reassignedDocuments.length / reassignedPerPage));
+  const paginatedReassignedDocuments = useMemo(
+    () => reassignedDocuments.slice(
+      (reassignedPage - 1) * reassignedPerPage,
+      reassignedPage * reassignedPerPage
+    ),
+    [reassignedDocuments, reassignedPage]
+  );
+  const returnedTotalPages = Math.max(1, Math.ceil(returnedItems.length / returnedPerPage));
+  const paginatedReturnedItems = useMemo(
+    () => returnedItems.slice(
+      (returnedPage - 1) * returnedPerPage,
+      returnedPage * returnedPerPage
+    ),
+    [returnedItems, returnedPage]
   );
 
   // Filtered tables are derived with useMemo instead of an effect + setState pair:
@@ -189,8 +212,9 @@ function GestionnaireSeniorDashboard() {
     }
   }, [showActionsMenu]);
 
-  const handleRetourScan = useCallback((dossierId: string) => {
+  const handleRetourScan = useCallback((dossierId: string, documentId?: string) => {
     setSelectedDossierForRetour(dossierId);
+    setSelectedDocumentForRetour(documentId || null);
     setRetourScanReason('');
     setShowRetourScanModal(true);
   }, []);
@@ -204,7 +228,8 @@ function GestionnaireSeniorDashboard() {
     try {
       const response = await LocalAPI.post('/bordereaux/gestionnaire-senior/return-to-scan', {
         dossierId: selectedDossierForRetour,
-        reason: retourScanReason
+        reason: retourScanReason,
+        documentId: selectedDocumentForRetour || undefined
       });
 
       if (response.data.success) {
@@ -212,6 +237,7 @@ function GestionnaireSeniorDashboard() {
         setShowRetourScanModal(false);
         setRetourScanReason('');
         setSelectedDossierForRetour(null);
+        setSelectedDocumentForRetour(null);
         loadDashboardData();
       } else {
         alert(response.data.message || 'Erreur lors du retour vers Scan');
@@ -454,11 +480,12 @@ function GestionnaireSeniorDashboard() {
       setLoading(true);
 
       const timestamp = Date.now();
-      const [statsResponse, dossiersResponse, corbeilleResponse, seniorAssignmentsResponse] = await Promise.all([
+      const [statsResponse, dossiersResponse, corbeilleResponse, seniorAssignmentsResponse, returnedItemsResponse] = await Promise.all([
         LocalAPI.get(`/bordereaux/gestionnaire-senior/dashboard-stats?t=${timestamp}`),
         LocalAPI.get(`/bordereaux/gestionnaire-senior/dashboard-dossiers?t=${timestamp}`),
         LocalAPI.get(`/bordereaux/gestionnaire-senior/corbeille?t=${timestamp}`),
-        LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments?t=${timestamp}`)
+        LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/gestionnaire-senior-assignments?t=${timestamp}`),
+        LocalAPI.get(`/bordereaux/gestionnaire-senior/returned-items?t=${timestamp}`)
       ]);
 
       if (statsResponse.data) setStats(statsResponse.data);
@@ -480,6 +507,9 @@ function GestionnaireSeniorDashboard() {
         setSeniorAssignments(seniorAssignmentsResponse.data);
       }
 
+      setReturnedItems(Array.isArray(returnedItemsResponse.data) ? returnedItemsResponse.data : []);
+      setReturnedPage(1);
+
       if (user?.id) {
         loadReassignedDocuments();
       }
@@ -499,6 +529,7 @@ function GestionnaireSeniorDashboard() {
       const response = await LocalAPI.get(`/super-admin/gestionnaire-senior/reassigned-documents?userId=${user.id}`);
       if (response.data.success) {
         setReassignedDocuments(response.data.documents || []);
+        setReassignedPage(1);
       }
     } catch (error) {
       console.error('Failed to load reassigned documents:', error);
@@ -660,11 +691,14 @@ function GestionnaireSeniorDashboard() {
                         <th>Assigné le</th>
                         <th>Statut</th>
                         <th>Délai</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {reassignedDocuments.map((doc) => (
-                        <tr key={doc.id}>
+                      {paginatedReassignedDocuments.map((doc) => {
+                        const locked = doc.bordereauStatus === 'VIREMENT_EXECUTE';
+                        return (
+                        <tr key={doc.id} className={locked ? 'gsd-row--locked' : undefined}>
                           <td className="gsd-cell--ref">{doc.name}</td>
                           <td><span className="gsd-chip gsd-chip--blue">{doc.type}</span></td>
                           <td className="gsd-muted">{doc.bordereauReference}</td>
@@ -684,15 +718,204 @@ function GestionnaireSeniorDashboard() {
                               <span className="gsd-muted">—</span>
                             )}
                           </td>
+                          <td onClick={(event) => event.stopPropagation()}>
+                            <div className="gsd-doc-actions" onClick={(event) => event.stopPropagation()}>
+                              <button
+                                type="button"
+                                className="gsd-btn gsd-btn--sm gsd-btn--blue"
+                                disabled={loadingPdfDocId === doc.id}
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setLoadingPdfDocId(doc.id);
+                                  try {
+                                    const response = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${doc.id}?t=${Date.now()}`);
+                                    if (response.data.success && response.data.hasDocument) {
+                                      const serverBaseUrl = (process.env.REACT_APP_API_URL || '').replace(/\/api\/?$/, '') || window.location.origin;
+                                      const pdfPath = response.data.pdfUrl || '';
+                                      setPdfUrl(pdfPath.startsWith('http') ? pdfPath : `${serverBaseUrl}${pdfPath}`);
+                                      setCurrentDossier({
+                                        ...doc,
+                                        reference: doc.name,
+                                        client: doc.clientName,
+                                        statut: doc.status,
+                                        bordereauStatutRaw: doc.bordereauStatus,
+                                        isDocument: true
+                                      });
+                                      setShowPdfModal(true);
+                                    } else {
+                                      alert(response.data?.error || 'PDF non disponible pour ce document.');
+                                    }
+                                  } catch (error: any) {
+                                    console.error('Reassigned PDF view error:', error);
+                                    alert(error.response?.data?.message || 'Erreur lors de l\'ouverture du PDF.');
+                                  } finally {
+                                    setLoadingPdfDocId(null);
+                                  }
+                                }}
+                              >
+                                {loadingPdfDocId === doc.id ? '⏳ Chargement…' : '📄 Voir PDF'}
+                              </button>
+                              <div className="gsd-actions-menu-wrap" data-actions-menu onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  disabled={locked}
+                                  className="gsd-btn gsd-btn--sm gsd-btn--purple gsd-btn--block"
+                                  title={locked ? 'Virement déjà exécuté — actions désactivées' : undefined}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    e.nativeEvent.stopImmediatePropagation();
+                                    const isOpen = showActionsMenu === doc.id;
+                                    if (isOpen) {
+                                      setShowActionsMenu(null);
+                                      setSelectedDocForAction(null);
+                                    } else {
+                                      handleOpenActionsMenu(doc, e);
+                                    }
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    e.nativeEvent.stopImmediatePropagation();
+                                  }}
+                                >
+                                  ⚙ Actions ▾
+                                </button>
+                                {showActionsMenu === doc.id && !locked && (
+                                  <div className={`gsd-dropdown gsd-dropdown--${actionsMenuPosition}`} onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      disabled={!doc.bordereauId}
+                                      className="gsd-dropdown__item gsd-dropdown__item--purple"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleCloseActionsMenu();
+                                        if (doc.bordereauId) handleRetourScan(doc.bordereauId, doc.id);
+                                      }}
+                                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    >
+                                      <span>↩</span><span>Retourner au Scan</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="gsd-dropdown__item gsd-dropdown__item--danger"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRetirerFromMenu(); }}
+                                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    >
+                                      <span>🗑</span><span>Retirer</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="gsd-dropdown__item gsd-dropdown__item--blue"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemplacerClick(); }}
+                                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    >
+                                      <span>↻</span><span>Remplacer</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="gsd-dropdown__item gsd-dropdown__item--purple"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReaffecterClick(); }}
+                                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    >
+                                      <span>▤</span><span>Réaffecter</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                {reassignedDocuments.length > 0 && (
+                  <div className="gsd-pagination">
+                    <button
+                      disabled={reassignedPage === 1}
+                      onClick={() => setReassignedPage(page => Math.max(1, page - 1))}
+                    >
+                      ← Précédent
+                    </button>
+                    <span>Page {reassignedPage} sur {reassignedTotalPages}</span>
+                    <button
+                      disabled={reassignedPage >= reassignedTotalPages}
+                      onClick={() => setReassignedPage(page => Math.min(reassignedTotalPages, page + 1))}
+                    >
+                      Suivant →
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
         </div>
+
+        {/* Returned items tracking */}
+        {returnedItems.length > 0 && (
+          <section className="gsd-panel gsd-panel--blue">
+            <div className="gsd-panel__head">
+              <div>
+                <h3><span className="gsd-panel__icon">↩</span> Retours envoyés au Scan</h3>
+                <p className="gsd-panel__subtitle">Documents et bordereaux exclus des dossiers actifs</p>
+              </div>
+              <span className="gsd-chip gsd-chip--blue">{returnedItems.length} retour(s)</span>
+            </div>
+            <div className="gsd-table-scroll">
+              <table className="gsd-table gsd-table--returned">
+                <thead>
+                  <tr>
+                    <th>Type de retour</th>
+                    <th>Référence bordereau</th>
+                    <th>Client</th>
+                    <th>Document</th>
+                    <th>Type document</th>
+                    <th>Date du retour</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedReturnedItems.map(item => (
+                    <tr key={`${item.returnType}-${item.id}`}>
+                      <td>
+                        <span className={`gsd-tag ${item.returnType === 'BORDEREAU' ? 'gsd-tag--danger' : 'gsd-tag--warn'}`}>
+                          {item.returnType === 'BORDEREAU' ? 'Bordereau' : 'Document'}
+                        </span>
+                      </td>
+                      <td className="gsd-cell--ref">{item.reference}</td>
+                      <td>{item.clientName}</td>
+                      <td>{item.documentName || 'Tous les documents du bordereau'}</td>
+                      <td><span className="gsd-chip gsd-chip--blue">{item.documentType}</span></td>
+                      <td className="gsd-muted">
+                        {new Date(item.returnedAt).toLocaleString('fr-FR')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {returnedItems.length > 0 && (
+              <div className="gsd-pagination">
+                <button
+                  disabled={returnedPage === 1}
+                  onClick={() => setReturnedPage(page => Math.max(1, page - 1))}
+                >
+                  ← Précédent
+                </button>
+                <span>Page {returnedPage} sur {returnedTotalPages}</span>
+                <button
+                  disabled={returnedPage >= returnedTotalPages}
+                  onClick={() => setReturnedPage(page => Math.min(returnedTotalPages, page + 1))}
+                >
+                  Suivant →
+                </button>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Corbeille Stats */}
         {corbeille && (
@@ -1046,7 +1269,7 @@ function GestionnaireSeniorDashboard() {
                                   e.stopPropagation();
                                   handleCloseActionsMenu();
                                   const bordereauId = (doc as any).bordereauId;
-                                  if (bordereauId) handleRetourScan(bordereauId);
+                                  if (bordereauId) handleRetourScan(bordereauId, doc.id);
                                 }}
                                 onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                 className="gsd-dropdown__item gsd-dropdown__item--purple"
@@ -1530,6 +1753,8 @@ const GSD_STYLES = `
   .gsd-table { width: 100%; border-collapse: collapse; min-width: 720px; }
   .gsd-table thead tr { background: var(--ink-900); }
   .gsd-table--blue thead tr { background: var(--info); }
+  .gsd-table--returned thead tr { background: #0b3d62; box-shadow: inset 0 -3px 0 #f59e0b; }
+  .gsd-table--returned thead th { color: #fff; border-right: 1px solid rgba(255,255,255,0.22); }
   .gsd-table--brand thead tr { background: var(--brand); }
   .gsd-table th { padding: 10px 10px; text-align: left; font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: #fff; white-space: nowrap; }
   .gsd-table td { padding: 11px 10px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -1589,7 +1814,7 @@ const GSD_STYLES = `
   .gsd-link--purple { color: #6E4A9E; }
   .gsd-link--green { color: var(--ok); }
 
-  .gsd-doc-actions { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+  .gsd-doc-actions { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
   .gsd-actions-menu-wrap { position: relative; }
   .gsd-dropdown { position: absolute; left: 0; z-index: 1000; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(15,27,45,0.16); min-width: 180px; overflow: hidden; }
   .gsd-dropdown--bottom { top: 100%; margin-top: 4px; }

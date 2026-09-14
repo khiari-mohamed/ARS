@@ -46,8 +46,14 @@ import {
   LayersOutlined,
   Search,
   FilterList,
-  Close
+  Close,
+  LockReset,
+  ToggleOn,
+  ToggleOff,
+  Visibility,
+  VisibilityOff
 } from '@mui/icons-material';
+import InputAdornment from '@mui/material/InputAdornment';
 import { fetchAllUsers, bulkCreateUsers, bulkUpdateUsers, bulkDeleteUsers, getRoleTemplates, createUserFromTemplate } from '../services/superAdminService';
 import { LocalAPI } from '../services/axios';
 
@@ -252,6 +258,9 @@ const AdvancedUserManagement: React.FC = () => {
     phone: '',
     teamLeaderId: '',
     capacity: 50,
+    active: true,
+    newPassword: '',
+    oldPassword: '',
   });
 
   const [filterText, setFilterText] = useState('');
@@ -340,7 +349,7 @@ const AdvancedUserManagement: React.FC = () => {
       await LocalAPI.post('/users', userData);
       await loadData();
       setTemplateDialogOpen(false);
-      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50 });
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50, active: true, newPassword: '', oldPassword: '' });
     } catch (error: any) {
       const msg = error?.response?.data?.message || error?.message || "Erreur lors de la création de l'utilisateur";
       setCreateError(Array.isArray(msg) ? msg.join(', ') : msg);
@@ -349,6 +358,8 @@ const AdvancedUserManagement: React.FC = () => {
 
   const handleEditUser = (user: any) => {
     setSelectedUser(user);
+    setShowOldPassword(false);
+    setShowNewPassword(false);
     setNewUserData({
       fullName: user.fullName,
       email: user.email,
@@ -358,10 +369,15 @@ const AdvancedUserManagement: React.FC = () => {
       phone: user.phone || '',
       teamLeaderId: user.teamLeaderId || '',
       capacity: user.capacity || 50,
+      active: user.active !== false,
+      newPassword: '',
+      oldPassword: '',
     });
     setEditDialogOpen(true);
   };
 
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   const handleUpdateUser = async () => {
@@ -372,6 +388,7 @@ const AdvancedUserManagement: React.FC = () => {
         email: newUserData.email,
         capacity: newUserData.capacity,
         role: newUserData.role,
+        active: newUserData.active,
       };
       if (newUserData.role === 'GESTIONNAIRE') {
         updateData.teamLeaderId = newUserData.teamLeaderId || null;
@@ -379,10 +396,18 @@ const AdvancedUserManagement: React.FC = () => {
         updateData.teamLeaderId = null;
       }
       await LocalAPI.put(`/users/${selectedUser.id}`, updateData);
+
+      // Change password if filled
+      if (newUserData.newPassword.trim()) {
+        await LocalAPI.post(`/users/${selectedUser.id}/reset-password`, { password: newUserData.newPassword.trim() });
+      }
+
       await loadData();
       setEditDialogOpen(false);
       setSelectedUser(null);
-      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50 });
+      setShowOldPassword(false);
+      setShowNewPassword(false);
+      setNewUserData({ fullName: '', email: '', password: '', role: 'GESTIONNAIRE', department: '', phone: '', teamLeaderId: '', capacity: 50, active: true, newPassword: '', oldPassword: '' });
     } catch (error: any) {
       console.error('Failed to update user:', error);
       const msg = error?.response?.data?.message || error?.message || 'Erreur lors de la mise à jour';
@@ -1127,6 +1152,81 @@ const AdvancedUserManagement: React.FC = () => {
                 </FormControl>
               </Grid>
             )}
+
+            {/* ── Status toggle ── */}
+            <Grid item xs={12} sm={6}>
+              <Box
+                sx={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  border: `1px solid ${newUserData.active ? '#a5d6a7' : '#cfd8dc'}`,
+                  borderRadius: '6px', px: 1.5, py: 1,
+                  background: newUserData.active ? '#e6f4ed' : '#f5f5f5',
+                  cursor: 'pointer', userSelect: 'none',
+                }}
+                onClick={() => setNewUserData(prev => ({ ...prev, active: !prev.active }))}
+              >
+                <Box>
+                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: newUserData.active ? '#1b6b3a' : '#546e7a' }}>
+                    Statut du compte
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.72rem', color: newUserData.active ? '#1b6b3a' : '#546e7a' }}>
+                    {newUserData.active ? 'Actif' : 'Inactif'}
+                  </Typography>
+                </Box>
+                {newUserData.active
+                  ? <ToggleOn sx={{ fontSize: 32, color: '#1b6b3a' }} />
+                  : <ToggleOff sx={{ fontSize: 32, color: '#90a4ae' }} />}
+              </Box>
+            </Grid>
+
+            {/* ── Old password ── */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Ancien mot de passe"
+                type={showOldPassword ? 'text' : 'password'}
+                size="small"
+                value={newUserData.oldPassword}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, oldPassword: e.target.value }))}
+                placeholder="Laisser vide pour ne pas changer"
+                helperText="Requis uniquement si vous changez le mot de passe"
+                InputProps={{
+                  startAdornment: <LockReset sx={{ fontSize: 16, color: T.textDisabled, mr: 0.5 }} />,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setShowOldPassword(p => !p)} edge="end" sx={{ p: 0.3 }}>
+                        {showOldPassword ? <VisibilityOff sx={{ fontSize: 16 }} /> : <Visibility sx={{ fontSize: 16 }} />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+
+            {/* ── New password ── */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Nouveau mot de passe"
+                type={showNewPassword ? 'text' : 'password'}
+                size="small"
+                value={newUserData.newPassword}
+                onChange={(e) => setNewUserData(prev => ({ ...prev, newPassword: e.target.value }))}
+                placeholder="Laisser vide pour ne pas changer"
+                helperText={newUserData.newPassword.length > 0 && newUserData.newPassword.length < 8 ? 'Min 8 caractères' : 'Optionnel — laisser vide pour conserver'}
+                error={newUserData.newPassword.length > 0 && newUserData.newPassword.length < 8}
+                InputProps={{
+                  startAdornment: <LockReset sx={{ fontSize: 16, color: T.textDisabled, mr: 0.5 }} />,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setShowNewPassword(p => !p)} edge="end" sx={{ p: 0.3 }}>
+                        {showNewPassword ? <VisibilityOff sx={{ fontSize: 16 }} /> : <Visibility sx={{ fontSize: 16 }} />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ px: 2.5, pb: 2, gap: 1 }}>

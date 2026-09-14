@@ -521,6 +521,7 @@ export class FinanceService {
         
         // Log history for status change
         await logVirementHistory(
+          this.prisma,
           id,
           VIREMENT_ACTIONS.CHANGEMENT_STATUT,
           user.id,
@@ -1143,6 +1144,7 @@ Document généré automatiquement par ARS`;
       // Log history for recovery actions
       if (data.demandeRecuperation && updateData.demandeRecuperation) {
         await logVirementHistory(
+          this.prisma,
           id,
           VIREMENT_ACTIONS.DEMANDE_RECUPERATION,
           user.id,
@@ -1154,6 +1156,7 @@ Document généré automatiquement par ARS`;
       
       if (data.montantRecupere && updateData.montantRecupere) {
         await logVirementHistory(
+          this.prisma,
           id,
           VIREMENT_ACTIONS.MONTANT_RECUPERE,
           user.id,
@@ -1435,6 +1438,7 @@ Document généré automatiquement par ARS`;
       
       // ✅ STEP 6: Log history
       await logVirementHistory(
+        this.prisma,
         id,
         VIREMENT_ACTIONS.REINJECTION,
         user.id,
@@ -1967,6 +1971,10 @@ Document généré automatiquement par ARS`;
     if (!['RESPONSABLE_DEPARTEMENT', 'SUPER_ADMIN'].includes(user.role)) {
       throw new ForbiddenException('Only RESPONSABLE_DEPARTEMENT and SUPER_ADMIN can validate OVs');
     }
+
+    if (!approved && !comment?.trim()) {
+      throw new BadRequestException('Une observation est obligatoire pour non valider le virement.');
+    }
     
     try {
       const ov = await this.prisma.ordreVirement.findUnique({
@@ -2013,6 +2021,7 @@ Document généré automatiquement par ARS`;
 
       // Record the Responsable Département decision in the visible virement history.
       await logVirementHistory(
+        this.prisma,
         id,
         approved ? VIREMENT_ACTIONS.VALIDATION : VIREMENT_ACTIONS.REJET,
         user.id,

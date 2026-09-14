@@ -985,9 +985,9 @@ const OVValidationModal: React.FC<OVValidationModalProps> = ({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="lg"
       fullWidth
-      PaperProps={{ sx: { height: '92vh', borderRadius: 3, overflow: 'hidden' } }}
+      fullScreen
+      PaperProps={{ sx: { borderRadius: 0, overflow: 'hidden' } }}
     >
       <DialogTitle sx={{ p: 0 }}>
         <Box

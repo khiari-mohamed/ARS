@@ -17,7 +17,8 @@ export class OutlookIntegrationService {
 
   async readEmailsAndCreateReclamations() {
     // Skip if email credentials not configured
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+    if (!process.env.SMTP_USER || !smtpPassword) {
       return;
     }
 
@@ -42,14 +43,15 @@ export class OutlookIntegrationService {
 
   private async fetchEmailsFromOutlook(emailAddress: string): Promise<any[]> {
     // Skip email fetching if credentials not configured
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+    if (!process.env.SMTP_USER || !smtpPassword) {
       return [];
     }
 
     return new Promise((resolve, reject) => {
       const imap = new Imap({
         user: process.env.SMTP_USER || '',
-        password: process.env.SMTP_PASS || '',
+        password: smtpPassword,
         host: process.env.SMTP_HOST || 'outlook.office365.com',
         port: 993,
         tls: true,

@@ -6,7 +6,6 @@ import { EnhancedDashboardController } from './enhanced-dashboard.controller';
 import { DashboardAiController } from './dashboard-ai.controller';
 import { DashboardAiService } from './dashboard-ai.service';
 import { TraitementService } from '../traitement/traitement.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationModule } from '../integrations/integration.module';
 import { NotificationService } from '../reclamations/notification.service';
 import { ReclamationsModule } from '../reclamations/reclamations.module';
@@ -24,7 +23,6 @@ import { SharedModule } from '../shared/shared.module';
     EnhancedDashboardService,
     DashboardAiService,
     TraitementService,
-    PrismaService,
     NotificationService,
   ],
   exports: [DashboardService, EnhancedDashboardService, DashboardAiService],

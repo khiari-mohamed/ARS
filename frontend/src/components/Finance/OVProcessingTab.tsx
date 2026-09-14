@@ -13,7 +13,6 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
 import AddIcon from '@mui/icons-material/Add';
 import DownloadIcon from '@mui/icons-material/Download';
 
@@ -90,7 +89,6 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const [ovId, setOvId] = useState<string | null>(null);
   const [validationStatus, setValidationStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
   const [validationComment, setValidationComment] = useState('');
-  const [canValidate, setCanValidate] = useState(false);
   const [statutGlobal, setStatutGlobal] = useState<string>('EN_ATTENTE');
   const [selectedBordereauId, setSelectedBordereauId] = useState<string | null>(null);
   const [isManualOV, setIsManualOV] = useState(false);
@@ -107,6 +105,8 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
   const [fileInputKey, setFileInputKey] = useState(Date.now());
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [sageDownloading, setSageDownloading] = useState(false);
+  const [nonValidationDialogOpen, setNonValidationDialogOpen] = useState(false);
+  const [nonValidationObservation, setNonValidationObservation] = useState('');
   
   // Read selected bordereau from sessionStorage on mount
   useEffect(() => {
@@ -117,12 +117,6 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     
     if (isManual) {
       console.log('🔧 Manual OV mode detected');
-      // Load manual OV data
-      const manualData = sessionStorage.getItem('manualOVData');
-      if (manualData) {
-        const data = JSON.parse(manualData);
-        console.log('📝 Manual OV data loaded:', data);
-      }
     } else {
       // Normal flow: load selected bordereau
       const selectedBordereaux = sessionStorage.getItem('selectedBordereaux');
@@ -300,11 +294,9 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     };
     loadDonneurs();
     
-    // Check if user can validate
-    setCanValidate(user?.role === 'RESPONSABLE_DEPARTEMENT' || user?.role === 'SUPER_ADMIN');
   }, [user]);
 
-  const createOVRecord = async () => {
+  const createOVRecord = async (allowEmptyForNonValidation = false, notifyForValidation = true) => {
     if (ovId) return ovId; // Already created
     
     try {
@@ -313,7 +305,7 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       const groupedResults = groupValidationResults(validationResults);
       const validAdherents = groupedResults.filter(r => r.status === 'ok' || r.status === 'warning');
       
-      if (validAdherents.length === 0) {
+      if (validAdherents.length === 0 && !allowEmptyForNonValidation) {
         throw new Error('Aucune ligne valide à enregistrer. Les lignes en erreur doivent être corrigées avant la création de l\'OV.');
       }
       
@@ -365,19 +357,19 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
         uploadedPdfPath: manualOVPdfPath || undefined,
         clientName: clientName || undefined,
         clientId,
-        contractId
+        contractId,
+        allowEmptyForNonValidation
       };
       
       const ovRecord = await processOV(ovData);
       setOvId(ovRecord.id);
       
-      // EXACT SPEC: Set validation status to pending and notify RESPONSABLE_DEPARTEMENT
-      setValidationStatus('pending');
-      
-      // Notify RESPONSABLE_DEPARTEMENT users for validation
-      await notifyResponsableEquipe(ovRecord.id, ovRecord.reference);
-      
-      console.log('✅ OV created and RESPONSABLE_DEPARTEMENT notified:', ovRecord.reference);
+      if (notifyForValidation) {
+        // Set validation status to pending and notify RESPONSABLE_DEPARTEMENT.
+        setValidationStatus('pending');
+        await notifyResponsableEquipe(ovRecord.id, ovRecord.reference);
+        console.log('✅ OV created and RESPONSABLE_DEPARTEMENT notified:', ovRecord.reference);
+      }
       
       return ovRecord.id;
     } catch (error) {
@@ -404,22 +396,32 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     }
   };
 
-  const handleValidation = async (approved: boolean) => {
-    if (!ovId || !canValidate) return;
-    
+  const handleNonValidation = async () => {
+    const observation = nonValidationObservation.trim();
+    if (!observation) {
+      alert('Une observation est obligatoire pour non valider le virement.');
+      return;
+    }
+
+    if (processing) return;
+    setProcessing(true);
     try {
-      setProcessing(true);
-      const { financeService } = await import('../../services/financeService');
-      
-      await financeService.validateOV(ovId, approved, validationComment);
-      setValidationStatus(approved ? 'approved' : 'rejected');
-      
-      if (approved) {
-        setActiveStep(4); // Move to generation step
-      }
-    } catch (error) {
-      console.error('Validation failed:', error);
-      alert('Erreur lors de la validation');
+      // Create the OV once so its generated sequential reference is retained.
+      const currentOvId = ovId || await createOVRecord(true, false);
+      const financeModule = await import('../../services/financeService');
+      await financeModule.financeService.updateOVStatus(currentOvId, {
+        etatVirement: 'VIREMENT_NON_VALIDE',
+        motifObservation: observation,
+      });
+      setOvId(currentOvId);
+      setStatutGlobal('EN_ATTENTE');
+      setNonValidationDialogOpen(false);
+      setNonValidationObservation('');
+      alert('Virement non validé. Vous pourrez le réinjecter depuis Suivi & Statut après correction.');
+      onSwitchToTab?.(1);
+    } catch (error: any) {
+      console.error('Failed to mark OV as non-valid:', error);
+      alert(`Virement non validé: ${error?.response?.data?.message || error?.message || 'Erreur inconnue'}`);
     } finally {
       setProcessing(false);
     }
@@ -607,8 +609,6 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     
     setProcessing(true);
     try {
-      const { financeService } = await import('../../services/financeService');
-      
       // Use the correct validation endpoint
       const formData = new FormData();
       formData.append('file', file);
@@ -623,48 +623,45 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       const manualOVData = sessionStorage.getItem('manualOVData');
       let clientId = 'default';
       let clientName: string | null = null;
+      let manualClientId: string | undefined;
       
       if (manualOVData) {
         try {
           const parsedData = JSON.parse(manualOVData);
           clientName = parsedData.clientName;
+          manualClientId = parsedData.clientId || undefined;
           console.log('📝 Manual OV client name:', clientName);
         } catch (e) {
           console.error('Failed to parse manual OV data:', e);
         }
       }
-      
-      const clientsResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/clients`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+
+      if (selectedBordereauId) {
+        // The backend resolves the client from the bordereau. Do not fetch the full client graph here.
+        clientId = 'from-bordereau';
+        console.log('✅ BRDX flow: clientId will be resolved from bordereauId:', selectedBordereauId);
+      } else if (manualClientId) {
+        clientId = manualClientId;
+        console.log('✅ Using manual OV clientId for validation:', clientId, '(', clientName, ')');
+      } else if (clientName) {
+        // Legacy manual entries may only contain a name, so keep a narrow fallback lookup.
+        const clientsResponse = await fetch(
+          `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/clients?name=${encodeURIComponent(clientName)}`,
+          { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+        );
+        const clients = clientsResponse.ok ? await clientsResponse.json() : [];
+        const matchedClient = clients.find((client: any) => client.name === clientName);
+        if (matchedClient) {
+          clientId = matchedClient.id;
+        } else {
+          setProcessing(false);
+          alert(`❌ Client "${clientName}" introuvable dans la base. Veuillez vérifier le nom du client dans l'entrée manuelle.`);
+          return;
         }
-      });
-      
-      if (clientsResponse.ok) {
-        const clients = await clientsResponse.json();
-        if (clients && clients.length > 0) {
-          if (clientName) {
-            // Manual OV: must find exact client by name — no fallback
-            const matchedClient = clients.find((c: any) => c.name === clientName);
-            if (matchedClient) {
-              clientId = matchedClient.id;
-              console.log('✅ Using manual OV clientId for validation:', clientId, '(', clientName, ')');
-            } else {
-              setProcessing(false);
-              alert(`❌ Client "${clientName}" introuvable dans la base. Veuillez vérifier le nom du client dans l'entrée manuelle.`);
-              return;
-            }
-          } else if (selectedBordereauId) {
-            // BRDX flow: clientId will be resolved server-side from bordereauId — use placeholder
-            clientId = 'from-bordereau';
-            console.log('✅ BRDX flow: clientId will be resolved from bordereauId:', selectedBordereauId);
-          } else {
-            // No client context at all — block
-            setProcessing(false);
-            alert('❌ Aucun client sélectionné. Veuillez sélectionner un bordereau ou créer une entrée manuelle avec un client.');
-            return;
-          }
-        }
+      } else {
+        setProcessing(false);
+        alert('❌ Aucun client sélectionné. Veuillez sélectionner un bordereau ou créer une entrée manuelle avec un client.');
+        return;
       }
       
       // Append clientId ONCE at the end
@@ -1162,6 +1159,18 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                   >
                     Corriger
                   </Button>
+                  {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR') &&
+                    validationResults.some((result) => result.status === 'error' || result.status === 'warning') && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={() => setNonValidationDialogOpen(true)}
+                      disabled={processing}
+                      startIcon={<CancelIcon />}
+                    >
+                      Non valider
+                    </Button>
+                  )}
                   <Button
                     variant="outlined"
                     color="error"
@@ -1528,6 +1537,45 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
           </Grid>
         )}
       </Grid>
+
+      <Dialog
+        open={nonValidationDialogOpen}
+        onClose={() => !processing && setNonValidationDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Non valider le virement</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mt: 1, mb: 2 }}>
+            Le numéro de virement sera conservé. Le virement apparaîtra dans Suivi &amp; Statut pour être réinjecté après correction.
+          </Alert>
+          <TextField
+            fullWidth
+            required
+            autoFocus
+            multiline
+            minRows={3}
+            label="Observation obligatoire"
+            placeholder="Ex. : RIB manquant ou invalide"
+            value={nonValidationObservation}
+            onChange={(event) => setNonValidationObservation(event.target.value)}
+            disabled={processing}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNonValidationDialogOpen(false)} disabled={processing}>
+            Annuler
+          </Button>
+          <Button
+            onClick={handleNonValidation}
+            variant="contained"
+            color="error"
+            disabled={processing || !nonValidationObservation.trim()}
+          >
+            {processing ? 'Enregistrement...' : 'Confirmer Non valider'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       
       {/* EXACT SPEC: Link to Bordereau Dialog (Manual OV only) */}
       <Dialog open={linkBordereauDialog} onClose={() => setLinkBordereauDialog(false)} maxWidth="md" fullWidth>

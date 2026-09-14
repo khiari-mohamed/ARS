@@ -14,7 +14,8 @@ export class NotificationController {
   
   private async initializeTransporter() {
     try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+      if (!process.env.SMTP_USER || !smtpPassword) {
         return;
       }
 
@@ -27,7 +28,7 @@ export class NotificationController {
         secure: isSecure,
         auth: {
           user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
+          pass: smtpPassword
         },
         tls: {
           rejectUnauthorized: false,

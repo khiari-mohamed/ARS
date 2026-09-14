@@ -16,6 +16,7 @@ export interface CreateOrdreVirementDto {
   clientId?: string;
   contractId?: string | null;
   motifObservation?: string;
+  allowEmptyForNonValidation?: boolean;
 }
 
 export interface UpdateEtatVirementDto {
@@ -96,7 +97,7 @@ export class OrdreVirementService {
     // Calculate totals - handle undefined virementData
     const virementData = dto.virementData || [];
     const validItems = virementData.filter(v => v.statut === 'VALIDE');
-    if (validItems.length === 0) {
+    if (validItems.length === 0 && !dto.allowEmptyForNonValidation) {
       throw new BadRequestException('Aucune ligne valide à enregistrer. Les lignes en erreur ne peuvent pas créer un OV.');
     }
     const montantTotal = validItems.reduce((sum, item) => sum + item.montant, 0);
@@ -153,7 +154,7 @@ export class OrdreVirementService {
         utilisateurSante: dto.utilisateurSante,
         montantTotal,
         nombreAdherents,
-        etatVirement: 'EN_COURS_VALIDATION',
+        etatVirement: dto.allowEmptyForNonValidation ? 'NON_EXECUTE' : 'EN_COURS_VALIDATION',
         validationStatus: 'EN_ATTENTE_VALIDATION',
         motifObservation: dto.motifObservation?.trim() || null,
         uploadedPdfPath,
@@ -219,36 +220,39 @@ export class OrdreVirementService {
       });
     }
 
-    // Generate files
-    const { pdfPath, txtPath } = await this.fileGenerationService.generateFiles({
-      ordreVirementId: ordreVirement.id,
-      donneurOrdreId: dto.donneurOrdreId,
-      virementData: dto.virementData
-    });
+    let updatedOrdre = ordreVirement;
+    if (validItems.length > 0) {
+      const { pdfPath, txtPath } = await this.fileGenerationService.generateFiles({
+        ordreVirementId: ordreVirement.id,
+        donneurOrdreId: dto.donneurOrdreId,
+        virementData: dto.virementData
+      });
 
-    // Update with file paths
-    const updatedOrdre = await this.prisma.ordreVirement.update({
-      where: { id: ordreVirement.id },
-      data: {
-        fichierPdf: pdfPath,
-        fichierTxt: txtPath
-      },
-      include: {
-        donneurOrdre: true,
-        items: {
-          include: {
-            adherent: {
-              include: {
-                client: true
+      // Update with file paths only when there are valid payment rows.
+      updatedOrdre = await this.prisma.ordreVirement.update({
+        where: { id: ordreVirement.id },
+        data: {
+          fichierPdf: pdfPath,
+          fichierTxt: txtPath
+        },
+        include: {
+          donneurOrdre: true,
+          items: {
+            include: {
+              adherent: {
+                include: {
+                  client: true
+                }
               }
             }
           }
         }
-      }
-    });
+      });
+    }
 
     // Create history entry
     await logVirementHistory(
+      this.prisma,
       ordreVirement.id,
       VIREMENT_ACTIONS.CREATION,
       dto.utilisateurSante,
@@ -306,6 +310,7 @@ export class OrdreVirementService {
     }
     
     await logVirementHistory(
+      this.prisma,
       ordreVirementId,
       action,
       dto.utilisateurFinance,

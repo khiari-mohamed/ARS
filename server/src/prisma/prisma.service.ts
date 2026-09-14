@@ -43,14 +43,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   }
 
   async onModuleInit() {
-    (this as any).$on('query', (e: any) => {
-      if (e.query && e.query.includes('colonne')) {
-        console.log('\n\n🎯🎯🎯 FOUND IT — QUERY WITH colonne:');
-        console.log(e.query);
-        console.log('PARAMS:', e.params);
-        console.log('🎯🎯🎯\n\n');
-      }
-    });
     await this.$connect();
   }
 

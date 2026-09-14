@@ -65,13 +65,6 @@ export class ManualScanController {
       throw new BadRequestException('No files uploaded');
     }
 
-    // DEBUG: Log received data
-    console.log('📥 Backend received:');
-    console.log('  Files:', files.length);
-    console.log('  FileTypes raw:', fileTypes);
-    console.log('  FileTypes type:', typeof fileTypes);
-    console.log('  Body:', req.body);
-
     // Parse fileTypes - handle both string and array from FormData
     let parsedFileTypes: string[] = [];
     if (Array.isArray(fileTypes)) {
@@ -81,8 +74,6 @@ export class ManualScanController {
     } else if (fileTypes) {
       parsedFileTypes = [String(fileTypes)];
     }
-    console.log('  Parsed fileTypes:', parsedFileTypes);
-
     const dto: ManualScanDto = {
       bordereauId,
       files,
@@ -122,12 +113,6 @@ export class ManualScanController {
     }
 
     // DEBUG: Log received data
-    console.log('📥 Backend received (additional):');
-    console.log('  Files:', files.length);
-    console.log('  FileTypes raw:', fileTypes);
-    console.log('  FileTypes type:', typeof fileTypes);
-    console.log('  Body:', req.body);
-
     // Parse fileTypes - handle both string and array from FormData
     let parsedFileTypes: string[] = [];
     if (Array.isArray(fileTypes)) {
@@ -137,8 +122,6 @@ export class ManualScanController {
     } else if (fileTypes) {
       parsedFileTypes = [String(fileTypes)];
     }
-    console.log('  Parsed fileTypes:', parsedFileTypes);
-
     const dto: ManualScanDto = {
       bordereauId,
       files,

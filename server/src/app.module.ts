@@ -30,7 +30,7 @@ import { BulletinSoinModule } from './bulletin-soin/bulletin-soin.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { IntegrationModule } from './integrations/integration.module';
 //import { FeedbackModule } from './feedback/feedback.module';
-import { PrismaService } from './prisma/prisma.service';
+import { PrismaModule } from './prisma/prisma.module';
 //import { SeedController } from './seed.controller';
 import { SuperAdminController } from './super-admin.controller';
 import { BsAssignmentController } from './bs-assignment.controller';
@@ -38,7 +38,7 @@ import { BsAssignmentService } from './bs-assignment.service';
 
 
 @Module({
-  imports: [AuthModule, UsersModule, ContractsModule, BordereauxModule, TraitementModule, ReclamationsModule, GedModule, GecModule, FinanceModule, WireTransferModule, OcrModule, AnalyticsModule, AlertsModule, SharedModule, ConfigModule,
+  imports: [PrismaModule, AuthModule, UsersModule, ContractsModule, BordereauxModule, TraitementModule, ReclamationsModule, GedModule, GecModule, FinanceModule, WireTransferModule, OcrModule, AnalyticsModule, AlertsModule, SharedModule, ConfigModule,
         DashboardModule,
     IntegrationModule,
     //FeedbackModule,
@@ -49,6 +49,6 @@ import { BsAssignmentService } from './bs-assignment.service';
     BulletinSoinModule
   ],
   controllers: [AppController, /*SeedController,*/ SuperAdminController, BsAssignmentController],
-  providers: [AppService, PrismaService, BsAssignmentService],
+  providers: [AppService, BsAssignmentService],
 })
 export class AppModule {}

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AlertsService } from './alerts.service';
 import { AlertsController } from './alerts.controller';
-import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationModule } from '../integrations/integration.module';
 import { EnhancedAlertsService } from './enhanced-alerts.service';
 import { EscalationEngineService } from './escalation-engine.service';
@@ -15,7 +14,6 @@ import { ScheduleModule } from '@nestjs/schedule';
   controllers: [AlertsController],
   providers: [
     AlertsService, 
-    PrismaService,
     EnhancedAlertsService,
     EscalationEngineService,
     MultiChannelNotificationsService,

@@ -144,6 +144,7 @@ class FinanceService {
     clientName?: string;
     uploadedPdfPath?: string;
     virementData: any[];
+    allowEmptyForNonValidation?: boolean;
   }) {
     const { data } = await LocalAPI.post('/finance/ordres-virement', ordre);
     return data;
@@ -550,7 +551,17 @@ class FinanceService {
     return result;
   }
 
-  async reinjectOV(id: string) {
+  async reinjectOV(id: string, excelFile?: File, pdfFile?: File) {
+    if (excelFile && pdfFile) {
+      const formData = new FormData();
+      formData.append('files', excelFile);
+      formData.append('files', pdfFile);
+      const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/reinject`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return data;
+    }
+
     const { data } = await LocalAPI.put(`/finance/ordres-virement/${id}/reinject`);
     return data;
   }

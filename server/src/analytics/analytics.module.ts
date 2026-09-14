@@ -12,7 +12,6 @@ import { ScheduledReportsService } from './scheduled-reports.service';
 import { ScheduledReportsController } from './scheduled-reports.controller';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
-import { PrismaService } from '../prisma/prisma.service';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
@@ -26,8 +25,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     OVAnalyticsService,
     AdvancedFilteringService,
     ScheduledReportsService,
-    ReportsService,
-    PrismaService
+    ReportsService
   ],
   exports: [AnalyticsService, DocumentTypesService],
 })

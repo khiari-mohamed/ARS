@@ -202,6 +202,74 @@ export class ChefEquipeDashboardController {
     return dossiers;
   }
 
+  @Get('returned-items')
+  @Roles(UserRole.CHEF_EQUIPE)
+  async getChefEquipeReturnedItems(@Req() req) {
+    const accessFilter = this.buildAccessFilter(req.user);
+    const [returnedDocuments, returnedBordereaux] = await Promise.all([
+      this.prisma.document.findMany({
+        where: {
+          status: 'RETOURNER_AU_SCAN',
+          bordereau: accessFilter
+        },
+        include: {
+          assignmentHistory: {
+            where: { action: 'RETURNED' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { createdAt: true }
+          },
+          bordereau: {
+            select: {
+              reference: true,
+              client: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: { uploadedAt: 'desc' }
+      }),
+      this.prisma.bordereau.findMany({
+        where: {
+          ...accessFilter,
+          documentStatus: 'RETOURNER_AU_SCAN'
+        },
+        include: {
+          client: { select: { name: true } },
+          BordereauAuditLog: {
+            where: { action: 'RETOUR_SCAN' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { createdAt: true }
+          }
+        },
+        orderBy: { updatedAt: 'desc' }
+      })
+    ]);
+
+    return [
+      ...returnedBordereaux.map(bordereau => ({
+        id: bordereau.id,
+        returnType: 'BORDEREAU',
+        reference: bordereau.reference,
+        clientName: bordereau.client?.name || 'N/A',
+        documentName: null,
+        documentType: 'Bordereau',
+        returnedAt: bordereau.BordereauAuditLog[0]?.createdAt || bordereau.updatedAt
+      })),
+      ...returnedDocuments.map(document => ({
+        id: document.id,
+        returnType: 'DOCUMENT',
+        reference: document.bordereau?.reference || 'N/A',
+        clientName: document.bordereau?.client?.name || 'N/A',
+        documentName: document.name,
+        documentType: this.mapDocumentType(document.type),
+        returnedAt: document.assignmentHistory[0]?.createdAt || document.uploadedAt
+      }))
+    ].sort((left, right) =>
+      new Date(right.returnedAt).getTime() - new Date(left.returnedAt).getTime()
+    );
+  }
+
   private mapDocumentType(type: string): string {
     const mapping = {
       BULLETIN_SOIN: 'Bulletin de soins',

@@ -246,13 +246,18 @@ export class ScanService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [pendingScan, scanningInProgress, processedToday, errorCount, scanners] = await Promise.all([
-      this.prisma.bordereau.count({ where: { statut: 'A_SCANNER' } }),
-      this.prisma.bordereau.count({ where: { statut: 'SCAN_EN_COURS' } }),
+    const [statusCounts, processedToday, errorCount, scanners] = await Promise.all([
+      this.prisma.bordereau.groupBy({
+        by: ['statut'],
+        where: { statut: { in: ['A_SCANNER', 'SCAN_EN_COURS'] } },
+        _count: { id: true },
+      }),
       this.prisma.bordereau.count({ where: { statut: 'SCANNE', dateFinScan: { gte: today } } }),
       this.prisma.bordereau.count({ where: { statut: 'EN_DIFFICULTE', updatedAt: { gte: today } } }),
       this.detectScanners(),
     ]);
+    const pendingScan = statusCounts.find(item => item.statut === 'A_SCANNER')?._count.id || 0;
+    const scanningInProgress = statusCounts.find(item => item.statut === 'SCAN_EN_COURS')?._count.id || 0;
 
     return {
       foldersMonitored: 3,
@@ -301,7 +306,9 @@ export class ScanService {
         action: { in: ['SCAN_STARTED', 'SCAN_COMPLETED', 'MANUAL_SCAN_STARTED', 'MANUAL_SCAN_COMPLETED', 'OCR_COMPLETED'] },
         timestamp: { gte: last24Hours },
       },
+      select: { timestamp: true },
       orderBy: { timestamp: 'asc' },
+      take: 1000,
     });
 
     const hourlyData = new Map<string, number>();
@@ -572,6 +579,37 @@ export class ScanService {
         .catch((err) => {
           this.logger.warn('Failed to create completion audit log:', err);
         });
+
+      const seniorUsers = await this.prisma.user.findMany({
+        where: {
+          role: 'GESTIONNAIRE_SENIOR',
+          active: true,
+          OR: [
+            { clientsManaged: { some: { id: bordereau.client.id } } },
+            { contractsAsTeamLeader: { some: { bordereaux: { some: { id: bordereauId } } } } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (seniorUsers.length > 0) {
+        await this.prisma.notification.createMany({
+          data: seniorUsers.map((senior) => ({
+            userId: senior.id,
+            type: 'BORDEREAU_SCAN_FINALIZED',
+            title: 'Scan finalisé',
+            message: `Le scan du bordereau ${bordereau.reference} est finalisé et prêt pour traitement.`,
+            data: {
+              bordereauId,
+              reference: bordereau.reference,
+              clientId: bordereau.client.id,
+              clientName: bordereau.client.name,
+              status: finalStatus,
+            },
+            read: false,
+          })),
+        });
+      }
 
       return { success: true, bordereauId, status: finalStatus };
     } catch (error) {
@@ -874,6 +912,12 @@ export class ScanService {
     const returnedDocuments = await this.prisma.document.findMany({
       where: { status: 'RETOURNER_AU_SCAN' },
       include: {
+        assignmentHistory: {
+          where: { action: 'RETURNED' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true },
+        },
         bordereau: {
           include: {
             client: {
@@ -904,18 +948,32 @@ export class ScanService {
         contract: doc.bordereau?.contract,
         documents: doc.bordereau?.documents || [],
         dateReception: doc.bordereau?.dateReception,
-        updatedAt: doc.uploadedAt,
+        returnedAt: doc.assignmentHistory[0]?.createdAt || doc.uploadedAt,
         returnType: 'DOCUMENT',
         returnedDocument: {
           id: doc.id,
           name: doc.name,
-          type: doc.type,
+          type: this.getDocumentTypeLabel(doc.type),
           status: doc.status,
           uploadedAt: doc.uploadedAt,
         },
         scanStatus: 'SCAN_EN_COURS',
       })),
     ];
+  }
+
+  private getDocumentTypeLabel(type: string): string {
+    const typeMapping: Record<string, string> = {
+      BULLETIN_SOIN: 'Prestation',
+      COMPLEMENT_INFORMATION: "Complément d'information",
+      ADHESION: 'Adhésion',
+      RECLAMATION: 'Réclamation',
+      CONTRAT_AVENANT: 'Avenant',
+      DEMANDE_RESILIATION: 'Résiliation',
+      CONVENTION_TIERS_PAYANT: 'Convention tiers payant',
+    };
+
+    return typeMapping[type] || type;
   }
 
   async startScanning(bordereauId: string, userId: string) {
@@ -1030,6 +1088,37 @@ export class ScanService {
         this.logger.warn('Failed to create traitement history:', err);
       });
 
+    const seniorUsers = await this.prisma.user.findMany({
+      where: {
+        role: 'GESTIONNAIRE_SENIOR',
+        active: true,
+        OR: [
+          { clientsManaged: { some: { id: bordereau.client.id } } },
+          { contractsAsTeamLeader: { some: { bordereaux: { some: { id: bordereauId } } } } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (seniorUsers.length > 0) {
+      await this.prisma.notification.createMany({
+        data: seniorUsers.map((senior) => ({
+          userId: senior.id,
+          type: 'BORDEREAU_SCAN_FINALIZED',
+          title: 'Scan finalisé',
+          message: `Le scan du bordereau ${bordereau.reference} est finalisé et prêt pour traitement.`,
+          data: {
+            bordereauId,
+            reference: bordereau.reference,
+            clientId: bordereau.client.id,
+            clientName: bordereau.client.name,
+            status: 'SCANNE',
+          },
+          read: false,
+        })),
+      });
+    }
+
     return {
       success: true,
       message: 'Scanning validated and completed',
@@ -1038,10 +1127,13 @@ export class ScanService {
   }
 
   async checkScanOverload() {
-    const [pendingCount, inProgressCount] = await Promise.all([
-      this.prisma.bordereau.count({ where: { statut: 'A_SCANNER' } }),
-      this.prisma.bordereau.count({ where: { statut: 'SCAN_EN_COURS' } }),
-    ]);
+    const statusCounts = await this.prisma.bordereau.groupBy({
+      by: ['statut'],
+      where: { statut: { in: ['A_SCANNER', 'SCAN_EN_COURS'] } },
+      _count: { id: true },
+    });
+    const pendingCount = statusCounts.find(item => item.statut === 'A_SCANNER')?._count.id || 0;
+    const inProgressCount = statusCounts.find(item => item.statut === 'SCAN_EN_COURS')?._count.id || 0;
 
     const totalWorkload = pendingCount + inProgressCount;
     const overloadThreshold = 20;

@@ -36,6 +36,7 @@ import BordereauCorbeilleModal from '../../components/BordereauCorbeilleModal';
 import BordereauReassignModal from '../../components/BordereauReassignModal';
 import BordereauEditModal from '../../components/BordereauEditModal';
 import BordereauSLAIndicators from '../../components/BordereauSLAIndicators';
+import ManagerAssignmentInfoPopup from '../../components/ManagerAssignmentInfoPopup';
 import type { BordereauSLAIndicators as BordereauSLAIndicatorsType } from '../../types/sla';
 
 const BordereauxDashboard: React.FC = () => {
@@ -84,6 +85,7 @@ const BordereauxDashboard: React.FC = () => {
   const [selectedBordereauForAlerts, setSelectedBordereauForAlerts] = useState<any>(null);
   const [alertsData, setAlertsData] = useState<any[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showManagerAssignmentInfo, setShowManagerAssignmentInfo] = useState(false);
   const [selectedBordereauForEdit, setSelectedBordereauForEdit] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -167,6 +169,7 @@ const BordereauxDashboard: React.FC = () => {
     if (selectedChefEquipe) newFilters.chefEquipeId = selectedChefEquipe;
     if (referenceFilter) newFilters.reference = referenceFilter;
     if (statusFilter) newFilters.statut = statusFilter;
+    if (virementFilter) newFilters.virementStatus = virementFilter;
     
     setFilters(newFilters);
   };
@@ -887,7 +890,20 @@ const BordereauxDashboard: React.FC = () => {
                     </th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Client / Prestataire</th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Référence Bordereau</th>
-                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Gestionnaire</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        Gestionnaire
+                        <button
+                          type="button"
+                          aria-label="Voir comment le gestionnaire est déterminé"
+                          title="Comment le gestionnaire est-il déterminé ?"
+                          onClick={() => setShowManagerAssignmentInfo(true)}
+                          style={{ width: '22px', height: '22px', border: '1px solid #1976d2', borderRadius: '50%', background: '#e3f2fd', color: '#1976d2', fontWeight: 800, cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                        >
+                          i
+                        </button>
+                      </span>
+                    </th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date réception BO</th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Bulletin de soins</th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold', color: '#6c757d', borderBottom: '1px solid #dee2e6' }}>Date fin de Scannérisation</th>
@@ -929,37 +945,47 @@ const BordereauxDashboard: React.FC = () => {
                         </td>
                         <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
                           {(() => {
-                            // Check for Gestionnaire Senior first (priority)
-                            if (bordereau.contract?.assignedManager) {
+                            const eligibleRoles = ['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'];
+                            const contractCandidates = [
+                              bordereau.contract?.assignedManager,
+                              bordereau.contract?.teamLeader,
+                            ];
+                            const candidates = [
+                              ...contractCandidates.filter(candidate => candidate?.role === 'GESTIONNAIRE_SENIOR'),
+                              bordereau.assignedToUser,
+                              bordereau.currentHandler,
+                              bordereau.chargeCompte,
+                              ...contractCandidates.filter(candidate => candidate?.role === 'CHEF_EQUIPE'),
+                              bordereau.client?.chargeCompte,
+                            ];
+                            const gestionnaire = candidates.find(candidate =>
+                              candidate && eligibleRoles.includes(candidate.role)
+                            );
+
+                            if (gestionnaire) {
+                              const isSenior = gestionnaire.role === 'GESTIONNAIRE_SENIOR';
+                              const isChef = gestionnaire.role === 'CHEF_EQUIPE';
+                              const isInactive = gestionnaire.active === false;
+                              const bgColor = isInactive ? '#f3f4f6' : isSenior ? '#e8f5e9' : isChef ? '#fff7ed' : '#e3f2fd';
+                              const textColor = isInactive ? '#6b7280' : isSenior ? '#2e7d32' : isChef ? '#c2410c' : '#1976d2';
                               return (
-                                <span style={{ 
-                                  background: '#e8f5e9', 
-                                  color: '#2e7d32', 
-                                  padding: '4px 8px', 
-                                  borderRadius: '12px', 
-                                  fontSize: '11px', 
-                                  fontWeight: 'bold',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}>
-                                  👨‍💼 {bordereau.contract.assignedManager.fullName}
+                                <span
+                                  style={{ background: bgColor, color: textColor, padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                >
+                                  <span style={{ fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', opacity: 0.8 }}>
+                                    {isSenior ? 'Senior' : isChef ? 'Chef équipe' : 'Gestionnaire'}
+                                  </span>
+                                  {gestionnaire.fullName}{isInactive ? ' (inactif)' : ''}
                                 </span>
                               );
                             }
-                            // Then check for regular Gestionnaire
-                            if (bordereau.currentHandler && (bordereau.currentHandler.role === 'GESTIONNAIRE' || bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR')) {
-                              const icon = bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR' ? '👨💼' : '👤';
-                              const bgColor = bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR' ? '#e8f5e9' : '#e3f2fd';
-                              const textColor = bordereau.currentHandler.role === 'GESTIONNAIRE_SENIOR' ? '#2e7d32' : '#1976d2';
-                              return (
-                                <span style={{ background: bgColor, color: textColor, padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  {icon} {bordereau.currentHandler.fullName}
-                                </span>
-                              );
-                            }
-                            // Not assigned
-                            return <span style={{ color: '#999', fontSize: '12px' }}>Non assigné</span>;
+                            return (
+                              <span
+                                style={{ color: '#999', fontSize: '12px' }}
+                              >
+                                Non assigné
+                              </span>
+                            );
                           })()}
                         </td>
                         <td style={{ padding: '12px 8px', fontSize: '14px', borderBottom: '1px solid #dee2e6' }}>
@@ -1539,6 +1565,11 @@ const BordereauxDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ManagerAssignmentInfoPopup
+        open={showManagerAssignmentInfo}
+        onClose={() => setShowManagerAssignmentInfo(false)}
+      />
 
       {/* Edit Modal */}
       {showEditModal && selectedBordereauForEdit && (

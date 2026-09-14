@@ -1,7 +1,7 @@
 
 
 import { useEffect, useState } from "react";
-import { fetchUnassignedBordereaux, fetchTeamBordereaux, assignBordereau, fetchUserBordereaux } from "../../services/bordereauxService";
+import { fetchUnassignedBordereaux, fetchTeamBordereaux, assignBordereau, fetchUserBordereaux, exportBordereauxExcel } from "../../services/bordereauxService";
 import { fetchUsers } from "../../services/userService";
 import BordereauCard from "../../components/BordereauCard";
 import { useAuth } from '../../contexts/AuthContext';
@@ -251,6 +251,15 @@ function ChefEquipeBordereaux() {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      await exportBordereauxExcel({ archived: false });
+    } catch (error) {
+      console.error('Error exporting bordereaux:', error);
+      alert('Erreur lors de l\'export Excel des bordereaux');
     }
   };
 
@@ -543,7 +552,7 @@ function ChefEquipeBordereaux() {
         )}
 
         {/* Corbeille Globale - COMMENTED OUT (unchanged: still gated behind `false`) */}
-        {false && !isGestionnaire && (
+        {!isGestionnaire && (
           <div className="gsd-panel gsd-panel--flush">
             <div className="gsd-panel-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -553,6 +562,9 @@ function ChefEquipeBordereaux() {
                   <p className="gsd-modal-sub">Gestion et affectation des dossiers</p>
                 </div>
               </div>
+              <button className="gsd-btn gsd-btn--info" onClick={handleExportExcel}>
+                📊 Exporter Excel
+              </button>
             </div>
 
             <div className="gsd-tabs">

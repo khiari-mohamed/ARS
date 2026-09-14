@@ -60,6 +60,15 @@ const SuiviVirementTab: React.FC = () => {
     montantTotal: 0,
     nombreAdherents: 0
   });
+  const [reinjectDialog, setReinjectDialog] = useState<{ open: boolean; record: SuiviVirement | null }>({
+    open: false,
+    record: null
+  });
+  const [reinjectFiles, setReinjectFiles] = useState<{ excel: File | null; pdf: File | null }>({
+    excel: null,
+    pdf: null
+  });
+  const [reinjectLoading, setReinjectLoading] = useState(false);
 
   useEffect(() => {
     loadSuiviVirements();
@@ -213,17 +222,25 @@ const SuiviVirementTab: React.FC = () => {
     return user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN' || user?.role === 'GESTIONNAIRE_SENIOR';
   };
   
-  const handleReinject = async (suivi: SuiviVirement) => {
-    if (suivi.etatVirement !== 'REJETE') {
-      alert('Seuls les virements rejetés peuvent être réinjectés');
+  const handleReinject = async (suivi: SuiviVirement, excelFile: File, pdfFile: File) => {
+    if (suivi.etatVirement !== 'REJETE' && suivi.etatVirement !== 'VIREMENT_NON_VALIDE') {
+      alert('Seuls les virements non validés ou rejetés peuvent être réinjectés');
       return;
     }
     
     try {
-      await financeService.reinjectOV(suivi.id);
+      setReinjectLoading(true);
+      await financeService.reinjectOV(suivi.id, excelFile, pdfFile);
+      setReinjectDialog({ open: false, record: null });
+      setReinjectFiles({ excel: null, pdf: null });
       loadSuiviVirements();
+      alert('Virement réinjecté avec succès. Le numéro de virement a été conservé.');
     } catch (error) {
       console.error('Failed to reinject OV:', error);
+      const message = (error as any)?.response?.data?.message || (error as any)?.message || 'Erreur inconnue';
+      alert('Erreur lors de la réinjection: ' + message);
+    } finally {
+      setReinjectLoading(false);
     }
   };
 
@@ -411,11 +428,11 @@ const SuiviVirementTab: React.FC = () => {
                         Modifier
                       </Button>
                     )}
-                    {canReinject() && suivi.etatVirement === 'REJETE' && (
+                    {canReinject() && (suivi.etatVirement === 'REJETE' || suivi.etatVirement === 'VIREMENT_NON_VALIDE') && (
                       <Button
                         size="small"
                         startIcon={<Replay />}
-                        onClick={() => handleReinject(suivi)}
+                        onClick={() => setReinjectDialog({ open: true, record: suivi })}
                         color="warning"
                       >
                         Réinjecter
@@ -434,6 +451,61 @@ const SuiviVirementTab: React.FC = () => {
           </Alert>
         )}
       </Paper>
+
+      <Dialog
+        open={reinjectDialog.open}
+        onClose={() => !reinjectLoading && setReinjectDialog({ open: false, record: null })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Réinjecter le virement</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mt: 1, mb: 2 }}>
+            {reinjectDialog.record?.motifObservation || 'Corrigez les fichiers avant de réinjecter le virement.'}
+          </Alert>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Button component="label" variant="outlined" fullWidth disabled={reinjectLoading}>
+                {reinjectFiles.excel ? reinjectFiles.excel.name : 'Sélectionner le fichier Excel corrigé'}
+                <input
+                  hidden
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(event) => setReinjectFiles((current) => ({ ...current, excel: event.target.files?.[0] || null }))}
+                />
+              </Button>
+            </Grid>
+            <Grid item xs={12}>
+              <Button component="label" variant="outlined" color="error" fullWidth disabled={reinjectLoading}>
+                {reinjectFiles.pdf ? reinjectFiles.pdf.name : 'Sélectionner le fichier PDF corrigé'}
+                <input
+                  hidden
+                  type="file"
+                  accept=".pdf"
+                  onChange={(event) => setReinjectFiles((current) => ({ ...current, pdf: event.target.files?.[0] || null }))}
+                />
+              </Button>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReinjectDialog({ open: false, record: null })} disabled={reinjectLoading}>
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={!reinjectFiles.excel || !reinjectFiles.pdf || reinjectLoading || !reinjectDialog.record}
+            onClick={() => {
+              if (reinjectDialog.record && reinjectFiles.excel && reinjectFiles.pdf) {
+                handleReinject(reinjectDialog.record, reinjectFiles.excel, reinjectFiles.pdf);
+              }
+            }}
+          >
+            {reinjectLoading ? 'Réinjection en cours...' : 'Réinjecter et envoyer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Details Dialog */}
       <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth>

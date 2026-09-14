@@ -2005,7 +2005,7 @@ export class FinanceController {
         dateMontantRecupere: ov.dateMontantRecupere,
         modeRecuperation: resolvedContract?.modeRecuperation || null,
         nomDonneur: ov.donneurOrdre?.nom || null,
-        numeroContrat: resolvedContract?.codeAssure || null,
+        numeroContrat: resolvedContract?.clientName || resolvedContract?.codeAssure || null,
         statutGlobal: ov.statutGlobal || null
       };
     });
@@ -2270,6 +2270,12 @@ export class FinanceController {
           console.error('❌ Role validation failed:', error);
           throw new BadRequestException(error);
         }
+      } else if (user.role === 'CHEF_EQUIPE' || user.role === 'GESTIONNAIRE_SENIOR') {
+        if (body.etatVirement !== 'VIREMENT_NON_VALIDE') {
+          throw new BadRequestException(
+            'Le Chef d\'équipe et le Gestionnaire Senior peuvent uniquement définir le statut Virement non validé.'
+          );
+        }
       } else if (user.role === 'FINANCE') {
         const allowedStatuses = ['VIREMENT_AUTORISE', 'BLOQUE'];
 
@@ -2290,6 +2296,10 @@ export class FinanceController {
         const error = `Votre rôle ne peut pas modifier le statut d'un virement.`;
         console.error('❌ Role validation failed:', error);
         throw new BadRequestException(error);
+      }
+
+      if (body.etatVirement === 'VIREMENT_NON_VALIDE' && !body.motifObservation?.trim()) {
+        throw new BadRequestException('Une observation est obligatoire pour définir le statut Virement non validé.');
       }
 
       console.log('🔍 Database before update:', currentOV);
@@ -2358,6 +2368,7 @@ export class FinanceController {
       }
 
       await logVirementHistory(
+        this.prisma,
         id,
         action,
         user.id,
@@ -2983,24 +2994,37 @@ export class FinanceController {
     @Param('id') id: string,
     @Req() req: any
   ) {
-    const user = getUserFromRequest(req);
-    
     try {
-      const history = await this.prisma.virementHistory.findMany({
-        where: { virementId: id },
-        include: {
-          user: {
-            select: {
-              id: true,
-              fullName: true,
-              role: true
+      const [history, legacyHistory] = await Promise.all([
+        this.prisma.virementHistory.findMany({
+          where: { virementId: id },
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                role: true
+              }
             }
-          }
-        },
-        orderBy: { createdAt: 'asc' }
-      });
-      
-      return history.map(entry => ({
+          },
+          orderBy: { createdAt: 'asc' }
+        }),
+        this.prisma.virementHistorique.findMany({
+          where: { ordreVirementId: id },
+          orderBy: { dateAction: 'asc' }
+        })
+      ]);
+
+      const legacyUserIds = [...new Set(legacyHistory.map(entry => entry.utilisateurId).filter(Boolean))] as string[];
+      const legacyUsers = legacyUserIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: legacyUserIds } },
+            select: { id: true, fullName: true, role: true }
+          })
+        : [];
+      const usersById = new Map(legacyUsers.map(legacyUser => [legacyUser.id, legacyUser]));
+
+      const currentEntries = history.map(entry => ({
         id: entry.id,
         action: entry.action,
         previousState: entry.previousState,
@@ -3013,6 +3037,28 @@ export class FinanceController {
           role: entry.user.role
         }
       }));
+
+      const legacyEntries = legacyHistory.map(entry => {
+        const entryUser = entry.utilisateurId ? usersById.get(entry.utilisateurId) : undefined;
+        return {
+          id: entry.id,
+          action: entry.action,
+          previousState: entry.ancienEtat,
+          newState: entry.nouvelEtat,
+          comment: entry.commentaire,
+          createdAt: entry.dateAction,
+          user: {
+            id: entryUser?.id || entry.utilisateurId || 'system',
+            name: entryUser?.fullName || 'Système',
+            role: entryUser?.role || 'SYSTEM'
+          }
+        };
+      });
+
+      const mergedHistory = [...currentEntries, ...legacyEntries]
+        .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+
+      return mergedHistory;
     } catch (error: any) {
       console.error('Failed to fetch virement history:', error);
       throw new BadRequestException('Failed to fetch history: ' + error.message);
@@ -3178,6 +3224,7 @@ async reDownloadSageTxt(
       // Log history
       const { logVirementHistory, VIREMENT_ACTIONS } = await import('./virement-history.helper');
       await logVirementHistory(
+        this.prisma,
         id,
         VIREMENT_ACTIONS.CHANGEMENT_STATUT,
         user.id,

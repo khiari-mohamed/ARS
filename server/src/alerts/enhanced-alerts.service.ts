@@ -53,8 +53,9 @@ export class EnhancedAlertsService {
 
   private setupEmailTransporter() {
     const smtpUser = process.env.SMTP_USER?.replace(/^mailto:mailto:/, '').replace(/^mailto:/, '');
+    const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
     
-    if (!process.env.SMTP_HOST || !smtpUser) {
+    if (!process.env.SMTP_HOST || !smtpUser || !smtpPassword) {
       this.logger.warn('SMTP configuration incomplete. Email notifications disabled.');
       this.emailTransporter = null;
       return;
@@ -69,7 +70,7 @@ export class EnhancedAlertsService {
       secure: isSecure,
       auth: {
         user: smtpUser,
-        pass: process.env.SMTP_PASS
+        pass: smtpPassword
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,

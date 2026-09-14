@@ -7,8 +7,8 @@ import { calculateAllSLAs, SLAColor } from '../utils/sla-calculator';
 export class BordereauxExcelService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async exportExcel(filters: any = {}): Promise<Buffer> {
-    const where = this.buildWhereClause(filters);
+  async exportExcel(filters: any = {}, user?: any): Promise<Buffer> {
+    const where = this.buildWhereClause(filters, user);
 
     const bordereaux = await this.prisma.bordereau.findMany({
       where,
@@ -194,7 +194,7 @@ export class BordereauxExcelService {
     else if (status === 'GREEN') cell.font = { color: { argb: 'FF2E7D32' }, bold: true };
   }
 
-  private buildWhereClause(filters: any): any {
+  private buildWhereClause(filters: any, user?: any): any {
     const where: any = {
       archived: filters.archived === true || filters.archived === 'true',
     };
@@ -219,6 +219,10 @@ export class BordereauxExcelService {
     }
     if (filters.statut) {
       where.statut = filters.statut;
+    }
+
+    if (user?.role === 'CHEF_EQUIPE') {
+      where.contract = { ...(where.contract || {}), teamLeaderId: user.id };
     }
 
     return where;

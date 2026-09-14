@@ -2896,6 +2896,7 @@ const effectiveAvailable = bestTarget.availableCapacityPerDay > 0
       include: {
         bordereau: {
           select: {
+              id: true,
             reference: true,
             dateReception: true,
             dateLimiteTraitement: true,
@@ -2931,6 +2932,7 @@ const effectiveAvailable = bestTarget.availableCapacityPerDay > 0
           name: doc.name,
           type: doc.type,
           status: doc.status,
+          bordereauId: bordereau?.id || null,
           bordereauReference: bordereau?.reference || 'N/A',
           clientName,
           assignedAt: doc.assignedAt,

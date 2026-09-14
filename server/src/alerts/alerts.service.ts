@@ -123,7 +123,11 @@ export class AlertsService implements OnModuleInit {
       // Background failure — log and move on. The existing cache (if any)
       // simply ages out after AI_PREDICTIONS_CACHE_TTL, at which point the
       // dashboard falls back to defaults rather than ever blocking.
-      this.logger.warn(`Background AI predictions refresh failed: ${error.message}`);
+      if (error.message?.includes('circuit breaker open')) {
+        this.logger.debug('AI predictions refresh skipped while the circuit breaker is open');
+      } else {
+        this.logger.warn(`Background AI predictions refresh failed: ${error.message}`);
+      }
     } finally {
       this.aiRefreshInFlight = false;
     }

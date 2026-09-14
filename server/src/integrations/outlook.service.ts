@@ -12,7 +12,8 @@ export class OutlookService { // Updated for TypeScript compilation
 
   private async initializeTransporter() {
     try {
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+      if (!process.env.SMTP_USER || !smtpPassword) {
         this.logger.warn('⚠️ SMTP credentials not configured - email notifications disabled');
         return;
       }
@@ -26,7 +27,7 @@ export class OutlookService { // Updated for TypeScript compilation
         secure: isSecure,
         auth: {
           user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
+          pass: smtpPassword
         },
         tls: {
           rejectUnauthorized: false,
@@ -38,7 +39,7 @@ export class OutlookService { // Updated for TypeScript compilation
       await this.transporter.verify();
       this.logger.log('✅ SMTP transporter initialized and verified successfully');
     } catch (error : any) {
-      this.logger.warn(`⚠️ SMTP initialization failed: ${error.message} - Email notifications will be disabled`);
+      this.logger.error(`SMTP initialization failed: ${error.message} - Email notifications will be disabled`);
       this.transporter = null;
     }
   }
