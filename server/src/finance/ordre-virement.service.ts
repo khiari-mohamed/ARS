@@ -265,6 +265,9 @@ export class OrdreVirementService {
     // Notify finance team
     await this.notifyFinanceTeam(updatedOrdre);
 
+    // Create the validation notification server-side with the OV creation flow.
+    await this.notifyResponsableDepartementForValidation(updatedOrdre);
+
     return updatedOrdre;
   }
 
@@ -656,6 +659,47 @@ export class OrdreVirementService {
       }
     } catch (error : any ) {
       this.logger.error(`Failed to notify finance team: ${error.message}`);
+    }
+  }
+
+  private async notifyResponsableDepartementForValidation(ordreVirement: {
+    id: string;
+    reference: string;
+    utilisateurSante: string;
+  }) {
+    try {
+      const responsableUsers = await this.prisma.user.findMany({
+        where: { role: 'RESPONSABLE_DEPARTEMENT', active: true }
+      });
+
+      if (responsableUsers.length === 0) {
+        this.logger.warn(
+          `No RESPONSABLE_DEPARTEMENT users found - OV ${ordreVirement.reference} will not appear in validation bell`
+        );
+        return;
+      }
+
+      await this.prisma.notification.createMany({
+        data: responsableUsers.map(responsable => ({
+          userId: responsable.id,
+          type: 'OV_PENDING_VALIDATION',
+          title: 'Nouvel OV à valider',
+          message: `Nouvel OV ${ordreVirement.reference} créé et en attente de validation`,
+          data: {
+            ordreVirementId: ordreVirement.id,
+            reference: ordreVirement.reference,
+            createdBy: ordreVirement.utilisateurSante
+          }
+        }))
+      });
+
+      this.logger.log(
+        `Notified ${responsableUsers.length} RESPONSABLE_DEPARTEMENT users for OV ${ordreVirement.reference}`
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `CRITICAL: Failed to notify RESPONSABLE_DEPARTEMENT for OV ${ordreVirement.reference}: ${error.message}`
+      );
     }
   }
 

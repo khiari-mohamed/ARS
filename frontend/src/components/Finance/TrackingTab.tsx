@@ -610,6 +610,14 @@ const TrackingTab: React.FC = () => {
     return user?.role === 'FINANCE' || user?.role === 'COMPTABILITE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'RESPONSABLE_DEPARTEMENT';
   };
 
+  const canEditRecord = (record: BordereauTraite) => {
+    if (!canModifyStatus()) return false;
+    if (user?.role === 'COMPTABILITE') {
+      return record.statutVirement === 'VIREMENT_AUTORISE';
+    }
+    return !isLocked(record);
+  };
+
   const canBulkUpdate = () => {
     return user?.role === 'FINANCE' || user?.role === 'COMPTABILITE' || user?.role === 'SUPER_ADMIN' || user?.role === 'RESPONSABLE_DEPARTEMENT';
   };
@@ -1425,11 +1433,19 @@ const TrackingTab: React.FC = () => {
                                 variant="outlined"
                                 startIcon={<EditIcon sx={{ fontSize: '0.8rem !important' }} />}
                                 onClick={() => handleEditClick(record)}
-                                disabled={isLocked(record)}
-                                title={isLocked(record) ? 'Virement exécuté — modification verrouillée' : 'Modifier'}
+                                disabled={!canEditRecord(record)}
+                                title={
+                                  user?.role === 'COMPTABILITE' && record.statutVirement !== 'VIREMENT_AUTORISE'
+                                    ? 'La Comptabilité peut modifier uniquement les virements autorisés'
+                                    : isLocked(record)
+                                      ? 'Virement exécuté — modification verrouillée'
+                                      : 'Modifier'
+                                }
                                 sx={{ fontSize: '0.68rem', py: 0.3, px: 0.8, minWidth: 0, whiteSpace: 'nowrap' }}
                               >
-                                {isLocked(record) ? '🔒 Verrouillé' : 'Modifier'}
+                                {!canEditRecord(record)
+                                  ? '🔒 Verrouillé'
+                                  : 'Modifier'}
                               </Button>
                             )}
 
@@ -1782,17 +1798,25 @@ const TrackingTab: React.FC = () => {
                             Historique
                           </Button>
 
-                          {canModifyStatus() && (
+                            {canModifyStatus() && (
                             <Button
                               size="small"
                               variant="outlined"
                               startIcon={<EditIcon sx={{ fontSize: '0.8rem !important' }} />}
-                              onClick={() => handleEditClick(record)}
-                              disabled={isLocked(record)}
-                              title={isLocked(record) ? 'Virement exécuté — modification verrouillée' : 'Modifier'}
+                                onClick={() => handleEditClick(record)}
+                                disabled={!canEditRecord(record)}
+                                title={
+                                  user?.role === 'COMPTABILITE' && record.statutVirement !== 'VIREMENT_AUTORISE'
+                                    ? 'La Comptabilité peut modifier uniquement les virements autorisés'
+                                    : isLocked(record)
+                                      ? 'Virement exécuté — modification verrouillée'
+                                      : 'Modifier'
+                                }
                               sx={{ fontSize: '0.68rem', py: 0.3, px: 0.8, minWidth: 0, whiteSpace: 'nowrap' }}
                             >
-                              {isLocked(record) ? '🔒 Verrouillé' : 'Modifier'}
+                                {!canEditRecord(record)
+                                  ? '🔒 Verrouillé'
+                                  : 'Modifier'}
                             </Button>
                           )}
 

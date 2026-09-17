@@ -14,6 +14,7 @@ import {
   Req,
   Res,
   BadRequestException,
+  HttpException,
   ForbiddenException,
   UseGuards
 } from '@nestjs/common';
@@ -3076,12 +3077,15 @@ export class FinanceController {
     try {
       // Use the service's existing API which generates and persists the file
       const userId: string = req.user?.id ?? 'system';
-      const result = await this.sageTxtGenerationService.generateForOrdreVirement(id, userId, templateId);
+      const result = await this.sageTxtGenerationService.generateForDownload(id, userId, templateId);
 
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
       return res.send(result.content);
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new BadRequestException(error.message);
     }
   }
@@ -3098,7 +3102,7 @@ async downloadSageTxtBatch(
  
   const userId: string = req.user?.id ?? 'system';
  
-  const result = await this.sageTxtGenerationService.generateBatch(
+  const result = await this.sageTxtGenerationService.generateDownloadBatch(
     body.ordreVirementIds,
     userId,
     body.templateId,

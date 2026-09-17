@@ -755,6 +755,7 @@ model OrdreVirement {
   recouvrementComment     String?              // SR comment/reason
   recouvrementRecouvre    Boolean              @default(false) // Is payment recovered?
   dateRecouvrementRecouvre DateTime?           // When payment was recovered
+  downloadedAt             DateTime?            // First successful Sage TXT download
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
   bordereau               Bordereau?           @relation(fields: [bordereauId], references: [id])

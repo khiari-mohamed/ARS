@@ -34,7 +34,7 @@
  *   - 2026ORDRE_DE_VIRMENTBTK580-17042026-12_34.TXT
  */
 
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StatutGlobalService } from './statut-global.service';
 
@@ -94,6 +94,46 @@ export class SageTxtGenerationService {
   }
 
   /**
+   * Generate the Sage TXT for the Recouvrement download action.
+   * The first caller claims the OV permanently; later downloads are rejected.
+   * This is intentionally separate from generateForOrdreVirement because the
+   * latter is also used by the Sage API integration flow.
+   */
+  async generateForDownload(
+    ordreVirementId: string,
+    generatedById: string,
+    templateId?: string,
+  ): Promise<SageGenerationResult> {
+    const ov = await this.loadOrdreVirement(ordreVirementId);
+
+    if (ov.downloadedAt) {
+      throw new ConflictException('Sage TXT déjà téléchargé pour cet ordre de virement.');
+    }
+
+    const claimedAt = new Date();
+    const claim = await this.prisma.ordreVirement.updateMany({
+      where: { id: ordreVirementId, downloadedAt: null },
+      data: { downloadedAt: claimedAt },
+    });
+
+    if (claim.count !== 1) {
+      throw new ConflictException('Sage TXT déjà téléchargé pour cet ordre de virement.');
+    }
+
+    try {
+      const result = await this.buildSageContent([ov], templateId);
+      await this.persistGeneration(ordreVirementId, result, generatedById);
+      return result;
+    } catch (error) {
+      await this.prisma.ordreVirement.updateMany({
+        where: { id: ordreVirementId, downloadedAt: claimedAt },
+        data: { downloadedAt: null },
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Generate Sage accounting TXT for a batch of OrdreVirements.
    * All orders must share the same DonneurOrdre (same bank/journal code).
    * Saves history for each OV individually.
@@ -129,6 +169,46 @@ export class SageTxtGenerationService {
     );
 
     return result;
+  }
+
+  /** Generate a one-time Sage TXT batch for the Recouvrement download action. */
+  async generateDownloadBatch(
+    ordreVirementIds: string[],
+    generatedById: string,
+    templateId?: string,
+  ): Promise<SageGenerationResult> {
+    if (!ordreVirementIds.length) {
+      throw new BadRequestException('ordreVirementIds must not be empty');
+    }
+
+    const ovs = await Promise.all(ordreVirementIds.map((id) => this.loadOrdreVirement(id)));
+    const claimedAt = new Date();
+    const claims = await Promise.all(
+      ordreVirementIds.map((id) => this.prisma.ordreVirement.updateMany({
+        where: { id, downloadedAt: null },
+        data: { downloadedAt: claimedAt },
+      })),
+    );
+
+    if (claims.some((claim) => claim.count !== 1)) {
+      await this.prisma.ordreVirement.updateMany({
+        where: { id: { in: ordreVirementIds }, downloadedAt: claimedAt },
+        data: { downloadedAt: null },
+      });
+      throw new ConflictException('Un ou plusieurs ordres de virement ont déjà été téléchargés.');
+    }
+
+    try {
+      const result = await this.buildSageContent(ovs, templateId);
+      await Promise.all(ordreVirementIds.map((id) => this.persistGeneration(id, result, generatedById)));
+      return result;
+    } catch (error) {
+      await this.prisma.ordreVirement.updateMany({
+        where: { id: { in: ordreVirementIds }, downloadedAt: claimedAt },
+        data: { downloadedAt: null },
+      });
+      throw error;
+    }
   }
 
   /**

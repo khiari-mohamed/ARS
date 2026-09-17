@@ -1778,9 +1778,9 @@ Document généré automatiquement par ARS`;
   }
 
   async updateBordereauTraite(id: string, data: any, user: User) {
-    // EXACT SPEC: Only Finance and Super Admin
-    if (!['FINANCE', 'SUPER_ADMIN'].includes(user.role)) {
-      throw new ForbiddenException('Only Finance service can update bordereau traité');
+    // Finance, Comptabilité, and Super Admin may update this record.
+    if (!['FINANCE', 'COMPTABILITE', 'SUPER_ADMIN'].includes(user.role)) {
+      throw new ForbiddenException('Only Finance, Comptabilité, or Super Admin can update bordereau traité');
     }
     
     try {
@@ -1836,6 +1836,15 @@ Document généré automatiquement par ARS`;
       const updateData: any = {};
       
       if (data.statutVirement) {
+        if (user.role === 'COMPTABILITE') {
+          if (ordreVirement.etatVirement !== 'VIREMENT_AUTORISE') {
+            throw new ForbiddenException('La Comptabilité peut modifier uniquement les virements autorisés');
+          }
+          if (!['EXECUTE', 'REJETE'].includes(data.statutVirement)) {
+            throw new ForbiddenException('La Comptabilité peut uniquement passer un virement à Exécuté ou Rejeté');
+          }
+        }
+
         updateData.etatVirement = data.statutVirement;
         updateData.utilisateurFinance = user.id;
         updateData.dateTraitement = new Date();

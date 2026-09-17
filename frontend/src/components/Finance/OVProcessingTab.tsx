@@ -1,3 +1,4 @@
+// D:\ARS\frontend\src\components\Finance\OVProcessingTab.tsx
 import React, { useState, useEffect } from 'react';
 import { 
   Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem,
@@ -365,34 +366,21 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
       setOvId(ovRecord.id);
       
       if (notifyForValidation) {
-        // Set validation status to pending and notify RESPONSABLE_DEPARTEMENT.
+        // NOTE: The OV_PENDING_VALIDATION notification is now created
+        // server-side, atomically, inside createOrdreVirement() on the
+        // backend (ordre-virement.service.ts). We no longer fire a
+        // second, separate network request here — that second call was
+        // the root cause of notifications silently going missing for
+        // random OVs in bulk creation (its failure was caught and
+        // swallowed with only a console.error).
         setValidationStatus('pending');
-        await notifyResponsableEquipe(ovRecord.id, ovRecord.reference);
-        console.log('✅ OV created and RESPONSABLE_DEPARTEMENT notified:', ovRecord.reference);
+        console.log('✅ OV created, RESPONSABLE_DEPARTEMENT notified server-side:', ovRecord.reference);
       }
       
       return ovRecord.id;
     } catch (error) {
       console.error('Failed to create OV record:', error);
       throw error;
-    }
-  };
-
-  const notifyResponsableEquipe = async (ovId: string, reference: string) => {
-    try {
-      const { financeService } = await import('../../services/financeService');
-      
-      // Send notification to RESPONSABLE_DEPARTEMENT users
-      await financeService.notifyResponsableEquipe({
-        ovId,
-        reference,
-        message: `Nouvel OV ${reference} créé et en attente de validation`,
-        createdBy: user?.fullName || 'Utilisateur'
-      });
-      
-      console.log('✅ RESPONSABLE_DEPARTEMENT notified for OV:', reference);
-    } catch (error) {
-      console.error('❌ Failed to notify RESPONSABLE_DEPARTEMENT:', error);
     }
   };
 
@@ -431,6 +419,8 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
     setSelectedDonneur(donneur);
     setActiveStep(1);
   };
+
+  const canCorrectOV = ['SUPER_ADMIN', 'CHEF_EQUIPE', 'GESTIONNAIRE_SENIOR'].includes(user?.role ?? '');
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1153,12 +1143,14 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                       Export RIB Rejetés ({validationResults.filter(r => r.status === 'error' || r.status === 'warning').length})
                     </Button>
                   )}
-                  <Button
-                    variant="outlined"
-                    onClick={() => setActiveStep(1)}
-                  >
-                    Corriger
-                  </Button>
+                  {canCorrectOV && (
+                    <Button
+                      variant="outlined"
+                      onClick={() => setActiveStep(1)}
+                    >
+                      Corriger
+                    </Button>
+                  )}
                   {(user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR') &&
                     validationResults.some((result) => result.status === 'error' || result.status === 'warning') && (
                     <Button

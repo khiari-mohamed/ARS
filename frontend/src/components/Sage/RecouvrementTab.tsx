@@ -44,6 +44,7 @@ interface OrdreVirement {
   recouvrementRecouvre: boolean;
   dateRecouvrementRecouvre: string | null;
   recouvrementComment: string | null;
+  downloadedAt: string | null;
   statutGlobal: 'EN_ATTENTE' | 'VALIDE_INTERNE' | 'VALIDE_RECOUVREMENT' | 'BLOQUE_RECOUVREMENT' | 'COMPTABILISE' | 'INTEGRE_SAGE';
   client: { name?: string; nom?: string };
   contract?: {
@@ -75,6 +76,7 @@ const RecouvrementTab: React.FC = () => {
   const [commentDialog, setCommentDialog] = useState(false);
   const [comment, setComment] = useState('');
   const [action, setAction] = useState<'AUTORISE' | 'NON_AUTORISE'>('AUTORISE');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { user } = useAuth();
 
   // ── New filter state ──────────────────────────────────────────────────────
@@ -108,23 +110,38 @@ const RecouvrementTab: React.FC = () => {
 
   const loadOVs = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const url = filter !== 'ALL'
         ? `${API}/finance/recouvrement/all?status=${filter}`
         : `${API}/finance/recouvrement/all`;
 
       const res = await fetch(url, { headers: headers() });
-      let data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (recouvrementFilter === 'RECOUVRE') {
-        data = data.filter((ov: OrdreVirement) => ov.recouvrementRecouvre);
-      } else if (recouvrementFilter === 'NON_RECOUVRE') {
-        data = data.filter((ov: OrdreVirement) => !ov.recouvrementRecouvre);
+      if (!res.ok) {
+        const message = data?.message || `Erreur de chargement des ordres (${res.status})`;
+        throw new Error(message);
       }
 
-      setOvs(data);
+      if (!Array.isArray(data)) {
+        throw new Error('Réponse invalide du serveur : la liste des ordres est introuvable.');
+      }
+
+      let filteredData = data;
+
+      if (recouvrementFilter === 'RECOUVRE') {
+        filteredData = filteredData.filter((ov: OrdreVirement) => ov.recouvrementRecouvre);
+      } else if (recouvrementFilter === 'NON_RECOUVRE') {
+        filteredData = filteredData.filter((ov: OrdreVirement) => !ov.recouvrementRecouvre);
+      }
+
+      setOvs(filteredData);
       setPage(0);
-    } catch (error) {
+    } catch (error: any) {
+      setOvs([]);
+      setSelected([]);
+      setLoadError(error?.message || 'Impossible de charger les ordres de recouvrement.');
       console.error('Error loading OVs:', error);
     }
     setLoading(false);
@@ -342,6 +359,7 @@ const RecouvrementTab: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
+      await loadOVs();
     } catch (error: any) {
       alert(`Erreur génération TXT Sage: ${error.message}`);
     } finally {
@@ -773,8 +791,8 @@ const RecouvrementTab: React.FC = () => {
                         <TableCell padding="checkbox" sx={{ ...HEAD_CELL_SX, px: 1 }}>
                           <Checkbox
                             sx={{ color: 'rgba(255,255,255,0.7)', '&.Mui-checked': { color: '#fff' } }}
-                            checked={selected.length === filteredOvs.length && filteredOvs.length > 0}
-                            onChange={(e) => setSelected(e.target.checked ? filteredOvs.map(ov => ov.id) : [])}
+                            checked={selected.length === filteredOvs.filter(ov => !ov.downloadedAt).length && filteredOvs.some(ov => !ov.downloadedAt)}
+                            onChange={(e) => setSelected(e.target.checked ? filteredOvs.filter(ov => !ov.downloadedAt).map(ov => ov.id) : [])}
                           />
                         </TableCell>
                         <TableCell sx={HEAD_CELL_SX}>N° Ordre</TableCell>
@@ -808,6 +826,7 @@ const RecouvrementTab: React.FC = () => {
                             <Checkbox
                               size="small"
                               checked={selected.includes(ov.id)}
+                              disabled={Boolean(ov.downloadedAt)}
                               onChange={(e) => setSelected(e.target.checked ? [...selected, ov.id] : selected.filter(id => id !== ov.id))}
                             />
                           </TableCell>
@@ -896,7 +915,9 @@ const RecouvrementTab: React.FC = () => {
                           <TableCell sx={{ ...BODY_CELL_SX, textAlign: 'center' }}>
                             <Tooltip 
                               title={
-                                ov.recouvrementStatus === 'NON_AUTORISE' 
+                                ov.downloadedAt
+                                  ? '🔒 Déjà téléchargé - téléchargement définitif verrouillé'
+                                  : ov.recouvrementStatus === 'NON_AUTORISE' 
                                   ? '🔒 Bloqué par le recouvrement - Paiement non reçu. Seul le Super Admin peut débloquer.'
                                   : ov.recouvrementStatus === 'ATTENTE_RECOUVREMENT'
                                   ? '⏳ En attente de validation par le service recouvrement'
@@ -909,18 +930,18 @@ const RecouvrementTab: React.FC = () => {
                                   variant="outlined"
                                   startIcon={downloading === ov.id ? <CircularProgress size={14} /> : <DownloadIcon />}
                                   onClick={() => handleDownloadSingle(ov.id)}
-                                  disabled={downloading === ov.id || ov.recouvrementStatus === 'NON_AUTORISE' || ov.recouvrementStatus === 'ATTENTE_RECOUVREMENT'}
+                                  disabled={downloading === ov.id || Boolean(ov.downloadedAt) || ov.recouvrementStatus === 'NON_AUTORISE' || ov.recouvrementStatus === 'ATTENTE_RECOUVREMENT'}
                                   sx={{
                                     fontWeight: 600,
                                     fontSize: '0.7rem',
-                                    borderColor: ov.recouvrementStatus === 'AUTORISE' ? '#6A1B9A' : '#ccc',
-                                    color: ov.recouvrementStatus === 'AUTORISE' ? '#6A1B9A' : '#999',
-                                    '&:hover': ov.recouvrementStatus === 'AUTORISE' ? { borderColor: '#4A148C', bgcolor: 'rgba(106,27,154,0.04)' } : {},
+                                    borderColor: ov.downloadedAt ? '#bdbdbd' : ov.recouvrementStatus === 'AUTORISE' ? '#6A1B9A' : '#ccc',
+                                    color: ov.downloadedAt ? '#9e9e9e' : ov.recouvrementStatus === 'AUTORISE' ? '#6A1B9A' : '#999',
+                                    '&:hover': !ov.downloadedAt && ov.recouvrementStatus === 'AUTORISE' ? { borderColor: '#4A148C', bgcolor: 'rgba(106,27,154,0.04)' } : {},
                                     whiteSpace: 'nowrap',
                                     minWidth: 90
                                   }}
                                 >
-                                  {downloading === ov.id ? 'En cours...' : ov.recouvrementStatus === 'AUTORISE' ? 'TXT Sage' : '🔒 Bloqué'}
+                                  {downloading === ov.id ? 'En cours...' : ov.downloadedAt ? '🔒 Téléchargé' : ov.recouvrementStatus === 'AUTORISE' ? 'TXT Sage' : '🔒 Bloqué'}
                                 </Button>
                               </span>
                             </Tooltip>
