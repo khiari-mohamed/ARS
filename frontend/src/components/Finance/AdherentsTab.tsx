@@ -416,6 +416,7 @@ const AdherentsTab: React.FC = () => {
   };
 
   const duplicateRibCount = adherents.filter(a => a.duplicateRib).length;
+  const canExportAdherentData = ['SUPER_ADMIN', 'RESPONSABLE_DEPARTEMENT'].includes(user?.role || '');
 
   const handleExportExcel = async () => {
     const XLSX = await import('xlsx');
@@ -445,6 +446,35 @@ const AdherentsTab: React.FC = () => {
     XLSX.writeFile(workbook, `adherents_export_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const handleExportRejectedRibs = async () => {
+    const XLSX = await import('xlsx');
+    const rejectedAdherents = adherents.filter((adherent) => adherent.duplicateRib);
+
+    if (rejectedAdherents.length === 0) {
+      alert('Aucun RIB rejeté à exporter.');
+      return;
+    }
+
+    const rows = rejectedAdherents.map((adherent) => ({
+      Matricule: adherent.matricule,
+      Société: adherent.society,
+      Nom: adherent.name,
+      Prénom: adherent.surname,
+      RIB: adherent.rib,
+      'Type d\'anomalie': 'RIB dupliqué - approbation compte conjoint requise',
+      Statut: 'Rejeté / en attente de validation',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet['!cols'] = [
+      { wch: 16 }, { wch: 30 }, { wch: 20 }, { wch: 20 },
+      { wch: 24 }, { wch: 58 }, { wch: 32 },
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'RIB rejetés');
+    XLSX.writeFile(workbook, `ribs_rejetes_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const handleDownloadTemplate = async () => {
     const XLSX = await import('xlsx');
 
@@ -467,7 +497,7 @@ const AdherentsTab: React.FC = () => {
   };
 
 // ── Import-result Excel export — styled file generated server-side (exceljs) ──
-  const handleExportImportResultExcel = async (rows: any[]) => {
+  const handleExportImportResultExcel = async (rows: any[], filenamePrefix = 'import_adherents_details') => {
     if (!rows || rows.length === 0) return;
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/finance/adherents/import/export-excel`, {
@@ -488,7 +518,7 @@ const AdherentsTab: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `import_adherents_details_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.download = `${filenamePrefix}_${new Date().toISOString().split('T')[0]}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -497,6 +527,15 @@ const AdherentsTab: React.FC = () => {
       console.error('Failed to export import result Excel:', error);
       alert('Erreur lors du téléchargement du détail Excel: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     }
+  };
+
+  const handleExportRejectedImportExcel = async (rows: any[]) => {
+    const rejectedRows = (rows || []).filter((row) => row.status === 'BLOCKED_DUPLICATE');
+    if (rejectedRows.length === 0) {
+      alert('Aucun RIB rejeté dans cet import.');
+      return;
+    }
+    await handleExportImportResultExcel(rejectedRows, 'ribs_rejetes');
   };
 
   const handleImportFile = async () => {
@@ -611,15 +650,29 @@ const AdherentsTab: React.FC = () => {
               {selectAllMode ? `✓ Tous sélectionnés (${filteredAdherents.length})` : `Sélectionner tous (${filteredAdherents.length})`}
             </Button>
           )}
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportExcel}
-            disabled={filteredAdherents.length === 0}
-            sx={{ fontWeight: 600, borderColor: '#2e7d32', color: '#2e7d32', '&:hover': { borderColor: '#1b5e20', bgcolor: '#f1f8e9' } }}
-          >
-            Export Excel ({filteredAdherents.length})
-          </Button>
+          {canExportAdherentData && (
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={handleExportExcel}
+                disabled={filteredAdherents.length === 0}
+                sx={{ fontWeight: 600, borderColor: '#2e7d32', color: '#2e7d32', '&:hover': { borderColor: '#1b5e20', bgcolor: '#f1f8e9' } }}
+              >
+                Export Excel ({filteredAdherents.length})
+              </Button>
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={<DownloadIcon />}
+                onClick={handleExportRejectedRibs}
+                disabled={duplicateRibCount === 0}
+                sx={{ fontWeight: 600 }}
+              >
+                Export RIB rejetés ({duplicateRibCount})
+              </Button>
+            </>
+          )}
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -1613,6 +1666,19 @@ const AdherentsTab: React.FC = () => {
                 >
                   Télécharger le détail Excel
                 </Button>
+                {canExportAdherentData && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="warning"
+                    startIcon={<DownloadIcon />}
+                    onClick={() => handleExportRejectedImportExcel(duplicateRibDialog.data.rows || [])}
+                    disabled={!duplicateRibDialog.data.rows?.some((row: any) => row.status === 'BLOCKED_DUPLICATE')}
+                    sx={{ fontWeight: 600 }}
+                  >
+                    Exporter les RIB rejetés
+                  </Button>
+                )}
               </Box>
 
               {duplicateRibDialog.data.rows && duplicateRibDialog.data.rows.length > 0 ? (

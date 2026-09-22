@@ -696,6 +696,7 @@ export class UsersService {
         'NEW_BORDEREAU_SCAN',
         'BORDEREAU_READY_SCAN',
         'BORDEREAU_SCANNED',
+        'BORDEREAU_SCAN_FINALIZED',
         'BORDEREAU_READY_ASSIGNMENT',
         'BORDEREAU_ASSIGNED',
         'SCAN_STARTED',

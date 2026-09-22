@@ -116,6 +116,7 @@ interface DocumentsViewerProps {
   onDocumentSelect?: (documentId: string, checked: boolean) => void;
   onBulkSelect?: (documentIds: string[]) => void;
   onReassignClick?: (documentId: string) => void;
+  allowAssignedSelection?: boolean;
 }
 
 const DocumentsViewer: React.FC<DocumentsViewerProps> = ({ 
@@ -123,7 +124,8 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
   selectedDocuments = [], 
   onDocumentSelect,
   onBulkSelect,
-  onReassignClick
+  onReassignClick,
+  allowAssignedSelection = false
 }) => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -202,13 +204,13 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onDocumentSelect && (
-            <Checkbox
-              checked={documents.length > 0 && documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
-              indeterminate={documents.some(doc => selectedDocuments.includes(doc.id) && !doc.assignedToUserId) && 
-                            !documents.filter(doc => !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
+              <Checkbox
+                checked={documents.length > 0 && documents.filter(doc => allowAssignedSelection ? doc.status !== 'RETOUR_ADMIN' : !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
+                indeterminate={documents.some(doc => selectedDocuments.includes(doc.id) && (allowAssignedSelection ? doc.status !== 'RETOUR_ADMIN' : !doc.assignedToUserId)) && 
+                            !documents.filter(doc => allowAssignedSelection ? doc.status !== 'RETOUR_ADMIN' : !doc.assignedToUserId).every(doc => selectedDocuments.includes(doc.id))}
               onChange={(e) => {
                 documents.forEach(doc => {
-                  if (!doc.assignedToUserId) {
+                  if (allowAssignedSelection ? doc.status !== 'RETOUR_ADMIN' : !doc.assignedToUserId) {
                     onDocumentSelect(doc.id, e.target.checked);
                   }
                 });
@@ -259,7 +261,7 @@ const DocumentsViewer: React.FC<DocumentsViewerProps> = ({
                 {onDocumentSelect && (
                   <Checkbox
                     checked={selectedDocuments.includes(doc.id)}
-                    disabled={!!doc.assignedToUserId && doc.status !== 'RETOUR_ADMIN'}
+                    disabled={(!allowAssignedSelection && !!doc.assignedToUserId && doc.status !== 'RETOUR_ADMIN') || doc.status === 'RETOUR_ADMIN'}
                     onChange={(e) => onDocumentSelect(doc.id, e.target.checked)}
                   />
                 )}
@@ -596,7 +598,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
     const allDocuments = dossiers.flatMap(d => d.documents || []);
     const document = allDocuments.find(doc => doc.id === bsId);
     
-    if (document?.assignedToUserId && document.status !== 'RETOUR_ADMIN' && checked) {
+    if (user?.role !== 'CHEF_EQUIPE' && document?.assignedToUserId && document.status !== 'RETOUR_ADMIN' && checked) {
       message.warning('Ce document est déjà assigné à un gestionnaire');
       return;
     }
@@ -839,6 +841,7 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           onDocumentSelect={handleSelectBS}
           onBulkSelect={handleBulkSelectInBordereau}
           onReassignClick={handleReassignDocument}
+          allowAssignedSelection={user?.role === 'CHEF_EQUIPE'}
         />
       </div>
     );
@@ -1234,6 +1237,16 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
           >
             Assigner
           </Button>
+          {user?.role === 'CHEF_EQUIPE' && (
+            <Button
+              type="default"
+              icon={<UserOutlined />}
+              disabled={isReadOnly || selectedBS.length === 0}
+              onClick={() => setAssignModalVisible(true)}
+            >
+              Réaffecter des documents
+            </Button>
+          )}
           <Button
             icon={<CheckOutlined />}
             disabled={isReadOnly || selectedDossiers.length === 0}
@@ -1285,14 +1298,14 @@ const DossiersList: React.FC<DossiersListProps> = ({ params, onParamsChange }) =
 
       {/* Assignment Modal */}
       <Modal
-        title="Assigner les dossiers sélectionnés"
+        title={user?.role === 'CHEF_EQUIPE' && selectedBS.length > 0 ? 'Réaffecter des documents sélectionnés' : 'Assigner les dossiers sélectionnés'}
         open={assignModalVisible}
         onOk={handleBulkAssign}
         onCancel={() => {
           setAssignModalVisible(false);
           setSelectedAssignee('');
         }}
-        okText="Assigner"
+        okText={user?.role === 'CHEF_EQUIPE' && selectedBS.length > 0 ? 'Réaffecter' : 'Assigner'}
         cancelText="Annuler"
       >
         <div style={{ marginBottom: 16 }}>

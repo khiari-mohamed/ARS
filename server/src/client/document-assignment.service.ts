@@ -121,7 +121,7 @@ export class DocumentAssignmentService {
     // Get current assignment
     const currentDocument = await this.prisma.document.findUnique({
       where: { id: documentId },
-      select: { assignedToUserId: true }
+      select: { assignedToUserId: true, status: true }
     });
 
     // Update document
@@ -131,6 +131,9 @@ export class DocumentAssignmentService {
         assignedToUserId: newAssignedToUserId,
         assignedByUserId: currentUserId,
         assignedAt: new Date(),
+        ...(currentDocument?.status === 'RETOUR_ADMIN'
+          ? { status: 'SCANNE', statusModifiedByGestionnaire: false }
+          : {}),
       },
       include: {
         assignedTo: {

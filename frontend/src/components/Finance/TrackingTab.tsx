@@ -610,6 +610,14 @@ const TrackingTab: React.FC = () => {
     return user?.role === 'FINANCE' || user?.role === 'COMPTABILITE' || user?.role === 'SUPER_ADMIN' || user?.role === 'CHEF_EQUIPE' || user?.role === 'GESTIONNAIRE_SENIOR' || user?.role === 'RESPONSABLE_DEPARTEMENT';
   };
 
+  const canManageRecovery = (record: BordereauTraite) => {
+    const recoveryMode = record.modeRecuperation?.trim().toUpperCase();
+
+    if (user?.role === 'COMPTABILITE') return recoveryMode === 'VIREMENT';
+    if (user?.role === 'FINANCE') return recoveryMode === 'FEUILLE_CAISSE';
+    return user?.role === 'SUPER_ADMIN' || user?.role === 'RESPONSABLE_DEPARTEMENT';
+  };
+
   const canEditRecord = (record: BordereauTraite) => {
     if (!canModifyStatus()) return false;
     if (user?.role === 'COMPTABILITE') {
@@ -1449,7 +1457,7 @@ const TrackingTab: React.FC = () => {
                               </Button>
                             )}
 
-                            {user?.role === 'COMPTABILITE' && record.statutVirement === 'EXECUTE' && (
+                            {canManageRecovery(record) && record.statutVirement === 'EXECUTE' && (
                               <Button
                                 size="small"
                                 variant="outlined"
@@ -1820,7 +1828,7 @@ const TrackingTab: React.FC = () => {
                             </Button>
                           )}
 
-                          {user?.role === 'COMPTABILITE' && record.statutVirement === 'EXECUTE' && (
+                          {canManageRecovery(record) && record.statutVirement === 'EXECUTE' && (
                             <Button
                               size="small"
                               variant="outlined"

@@ -517,8 +517,8 @@ function ChefEquipeBordereaux() {
               <div className="gsd-stat-icon-badge" style={{ background: 'var(--warn-bg)' }}>📋</div>
               <div>
                 <div className="gsd-stat-num" style={{ color: 'var(--warn)' }}>{unassignedBordereaux.length}</div>
-                <div className="gsd-stat-label">Non affectés</div>
-                <div className="gsd-stat-hint">Cliquer pour voir</div>
+                <div className="gsd-stat-label">Non assignés</div>
+                <div className="gsd-stat-hint">À affecter aux gestionnaires</div>
               </div>
             </div>
             <div className="gsd-stat-card" onClick={() => openStatsModal('en-cours')}>
@@ -569,7 +569,7 @@ function ChefEquipeBordereaux() {
 
             <div className="gsd-tabs">
               <button className={`gsd-tab ${activeTab === 'non-affectes' ? 'active' : ''}`} onClick={() => setActiveTab('non-affectes')}>
-                Non affectés ({unassignedBordereaux.length})
+                Non assignés ({unassignedBordereaux.length})
               </button>
               <button className={`gsd-tab ${activeTab === 'en-cours' ? 'active' : ''}`} onClick={() => setActiveTab('en-cours')}>
                 En cours ({teamBordereaux.filter(b => ['EN_COURS', 'ASSIGNE'].includes(b.statut)).length})
@@ -587,10 +587,10 @@ function ChefEquipeBordereaux() {
             ) : tabData.length === 0 ? (
               <div className="gsd-empty">
                 <div className="gsd-empty-icon">📋</div>
-                <h3>Aucun dossier {activeTab === 'non-affectes' ? 'non affecté' : activeTab === 'en-cours' ? 'en cours' : 'traité'}</h3>
+                  <h3>Aucun dossier {activeTab === 'non-affectes' ? 'non assigné' : activeTab === 'en-cours' ? 'en cours' : 'traité'}</h3>
                 <p>
                   {activeTab === 'non-affectes'
-                    ? 'Tous les dossiers ont été affectés à vos gestionnaires.'
+                    ? 'Tous les dossiers sont déjà assignés à vos gestionnaires.'
                     : activeTab === 'en-cours'
                     ? 'Aucun dossier n\'est actuellement en cours de traitement.'
                     : 'Aucun dossier n\'a encore été traité par votre équipe.'}
@@ -984,7 +984,7 @@ function ChefEquipeBordereaux() {
           <div className="gsd-modal gsd-modal--xl">
             <div className="gsd-modal-header">
               <h2 className="gsd-modal-title">
-                Dossiers {statsModalType === 'non-affectes' ? 'Non Affectés' : statsModalType === 'en-cours' ? 'En Cours' : statsModalType === 'traites' ? 'Traités' : 'Retournés'} ({statsModalData.length})
+                Dossiers {statsModalType === 'non-affectes' ? 'Non Assignés' : statsModalType === 'en-cours' ? 'En Cours' : statsModalType === 'traites' ? 'Traités' : 'Retournés'} ({statsModalData.length})
               </h2>
               <button className="gsd-btn gsd-btn--danger" onClick={() => setShowStatsModal(false)}>
                 Fermer
@@ -995,7 +995,7 @@ function ChefEquipeBordereaux() {
               {statsModalData.length === 0 ? (
                 <div className="gsd-empty">
                   <div className="gsd-empty-icon">📋</div>
-                  <p>Aucun dossier {statsModalType === 'non-affectes' ? 'non affecté' : statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'}</p>
+                  <p>Aucun dossier {statsModalType === 'non-affectes' ? 'non assigné' : statsModalType === 'en-cours' ? 'en cours' : statsModalType === 'traites' ? 'traité' : 'retourné'}</p>
                 </div>
               ) : (
                 <div className="gsd-table-scroll">

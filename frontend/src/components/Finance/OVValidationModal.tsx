@@ -145,7 +145,14 @@ const DocumentPanel: React.FC<DocumentPanelProps> = ({
 
     {loading && <LinearProgress sx={{ height: 2 }} />}
 
-    <Box sx={{ flex: 1, minHeight: 420, position: 'relative', bgcolor: '#EEF1F5' }}>
+    <Box
+      sx={{
+        flex: 1,
+        minHeight: { xs: 560, md: 'clamp(620px, calc(100vh - 300px), 1200px)' },
+        position: 'relative',
+        bgcolor: '#EEF1F5'
+      }}
+    >
       {loading && !url && (
         <Box
           sx={{
@@ -193,7 +200,7 @@ const DocumentPanel: React.FC<DocumentPanelProps> = ({
         <iframe
           src={url}
           title={title}
-          style={{ width: '100%', height: '100%', minHeight: 420, border: 'none', display: 'block' }}
+          style={{ width: '100%', height: '100%', minHeight: '100%', border: 'none', display: 'block' }}
         />
       )}
     </Box>

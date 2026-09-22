@@ -1202,21 +1202,18 @@ const OVProcessingTab: React.FC<OVProcessingTabProps> = ({ onSwitchToTab }) => {
                         return;
                       }
                       try {
-                        // EXACT SPEC: Create OV and notify RESPONSABLE_DEPARTEMENT
+                        // Creation already sets EN_COURS_VALIDATION and notifies the
+                        // Responsable de Département on the backend.
                         const createdOvId = await createOVRecord();
 
-                        // Update status to EN_COURS_VALIDATION
-                        if (createdOvId) {
-                          const { financeService } = await import('../../services/financeService');
-                          await financeService.updateOVStatus(createdOvId, {
-                            etatVirement: 'EN_COURS_VALIDATION'
-                          });
+                        if (!createdOvId) {
+                          throw new Error('La création de l\'OV n\'a pas retourné d\'identifiant.');
                         }
 
-                        alert('OV créé avec succès! Une notification a été envoyée au Responsable de Département pour validation.');
+                        alert('OV créé avec succès et envoyé au Responsable de Département pour validation.');
 
-                        // Redirect to dashboard to see updated status
-                        window.location.href = '/ARS/finance?tab=0';
+                        // The requested destination is Suivi & Statut, not the dashboard.
+                        onSwitchToTab?.(1);
                       } catch (error: any) {
                         console.error('Failed to create OV:', error);
                         alert(`OV non créé: ${error?.response?.data?.message || error?.message || 'Erreur inconnue'}`);

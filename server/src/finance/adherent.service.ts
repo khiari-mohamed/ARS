@@ -23,6 +23,11 @@ export interface UpdateAdherentDto {
   statut?: string;
 }
 
+type PendingDuplicateRibData = CreateAdherentDto & {
+  operation?: 'CREATE' | 'UPDATE';
+  targetAdherentId?: string;
+};
+
 @Injectable()
 export class AdherentService {
   private readonly logger = new Logger(AdherentService.name);
@@ -90,7 +95,7 @@ export class AdherentService {
             rib: duplicateRib.rib,
             clientName: duplicateRib.client.name
           },
-          pendingData: { ...dto, clientId: client.id }  // ensure clientId is always the UUID
+          pendingData: { ...dto, clientId: client.id, operation: 'CREATE' }  // ensure clientId is always the UUID
         }],
         0,
         1
@@ -210,7 +215,9 @@ export class AdherentService {
                 codeAssure: (dto.codeAssure || current.codeAssure) || undefined,
                 numeroContrat: (dto.numeroContrat || current.numeroContrat) || undefined,
                 assurance: (dto.assurance || current.assurance) || undefined,
-                statut: dto.statut || current.statut
+                statut: dto.statut || current.statut,
+                operation: 'UPDATE',
+                targetAdherentId: current.id
               }
             }],
             0,
@@ -408,7 +415,7 @@ export class AdherentService {
     const blockedDuplicates: Array<{ 
       newAdherent: { matricule: string; nom: string; prenom: string; rib: string; clientId: string; clientName: string; codeAssure?: string; numeroContrat?: string };
       existingAdherent: { id: string; matricule: string; nom: string; prenom: string; rib: string; clientName: string };
-      pendingData: CreateAdherentDto;
+      pendingData: PendingDuplicateRibData;
     }> = [];
     
     for (const adherent of adherents) {
@@ -494,7 +501,7 @@ export class AdherentService {
     blockedDuplicates: Array<{ 
       newAdherent: { matricule: string; nom: string; prenom: string; rib: string; clientId: string; clientName: string; codeAssure?: string; numeroContrat?: string };
       existingAdherent: { id: string; matricule: string; nom: string; prenom: string; rib: string; clientName: string };
-      pendingData: CreateAdherentDto;
+      pendingData: PendingDuplicateRibData;
     }>,
     successCount: number,
     errorCount: number
@@ -566,6 +573,8 @@ export class AdherentService {
                 clientName: dup.existingAdherent.clientName
               },
               pendingData: dup.pendingData,
+              operation: dup.pendingData.operation || 'CREATE',
+              targetAdherentId: dup.pendingData.targetAdherentId || null,
               approvedBy: null,
               approvedAt: null,
               rejectedBy: null,
@@ -598,14 +607,19 @@ export class AdherentService {
       throw new BadRequestException('Duplicate not found or already processed');
     }
 
-    // Create the adherent (handles duplicate matricule check internally)
+    // Apply the approved operation to the original target when this request
+    // came from editing an existing adherent; creation requests keep the
+    // original conjoint flow.
     let created;
     try {
-      created = await this.createAdherentWithDuplicateRib(
-        duplicate.pendingData,
-        userId,
-        justification
-      );
+      created = duplicate.operation === 'UPDATE' && duplicate.targetAdherentId
+        ? await this.updateAdherentWithApprovedDuplicateRib(
+            duplicate.targetAdherentId,
+            duplicate.pendingData.rib,
+            userId,
+            justification,
+          )
+        : await this.createAdherentWithDuplicateRib(duplicate.pendingData, userId, justification);
     } catch (error: any) {
       throw new BadRequestException(`Impossible de créer l'adhérent: ${error.message}`);
     }
@@ -668,11 +682,18 @@ export class AdherentService {
     for (const duplicate of data.duplicates) {
       if (duplicate.status === 'PENDING') {
         try {
-          const created = await this.createAdherentWithDuplicateRib(
-            duplicate.pendingData,
-            userId,
-            justification || 'Approved in bulk'
-          );
+          const created = duplicate.operation === 'UPDATE' && duplicate.targetAdherentId
+            ? await this.updateAdherentWithApprovedDuplicateRib(
+                duplicate.targetAdherentId,
+                duplicate.pendingData.rib,
+                userId,
+                justification || 'Approved in bulk',
+              )
+            : await this.createAdherentWithDuplicateRib(
+                duplicate.pendingData,
+                userId,
+                justification || 'Approved in bulk',
+              );
 
           duplicate.status = 'APPROVED';
           duplicate.approvedBy = userId;
@@ -696,6 +717,80 @@ export class AdherentService {
       approved: results.filter(r => r.success).length,
       failed: results.filter(r => !r.success).length,
       results
+    };
+  }
+
+  private async updateAdherentWithApprovedDuplicateRib(
+    adherentId: string,
+    newRib: string,
+    userId: string,
+    justification?: string,
+  ) {
+    const current = await this.prisma.adherent.findUnique({
+      where: { id: adherentId },
+      include: { client: true },
+    });
+
+    if (!current) {
+      throw new BadRequestException('Adherent ciblé introuvable pour la mise à jour du RIB');
+    }
+
+    if (!/^\d{20}$/.test(newRib)) {
+      throw new BadRequestException('RIB must be exactly 20 digits');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (current.rib !== newRib) {
+        await tx.adherentRibHistory.create({
+          data: {
+            adherentId,
+            oldRib: current.rib,
+            newRib,
+            updatedById: userId,
+          },
+        });
+
+        await tx.adherentHistory.create({
+          data: {
+            adherentId,
+            field: 'rib',
+            oldValue: current.rib,
+            newValue: newRib,
+            updatedById: userId,
+          },
+        });
+      }
+
+      await tx.adherentHistory.create({
+        data: {
+          adherentId,
+          field: 'duplicate_rib_approved',
+          oldValue: current.rib,
+          newValue: justification || 'Compte conjoint approuvé',
+          updatedById: userId,
+        },
+      });
+
+      return tx.adherent.update({
+        where: { id: adherentId },
+        data: { rib: newRib, updatedById: userId },
+        include: { client: true },
+      });
+    });
+
+    return {
+      id: updated.id,
+      matricule: updated.matricule,
+      nom: updated.nom,
+      prenom: updated.prenom,
+      rib: updated.rib,
+      codeAssure: updated.codeAssure,
+      numeroContrat: updated.numeroContrat,
+      assurance: updated.assurance,
+      statut: updated.statut,
+      duplicateRib: true,
+      societe: updated.client.name,
+      client: { id: updated.client.id, name: updated.client.name },
     };
   }
 

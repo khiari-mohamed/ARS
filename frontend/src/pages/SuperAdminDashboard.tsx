@@ -280,7 +280,7 @@ const SuperAdminDashboard: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={activeTab} index={3}>
-          <AdvancedUserManagement />
+          {activeTab === 3 && <AdvancedUserManagement />}
         </TabPanel>
 
         <TabPanel value={activeTab} index={4}>

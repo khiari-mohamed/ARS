@@ -1155,9 +1155,11 @@ function GestionnaireDashboardNew() {
                     <input
                       type="checkbox"
                       aria-label="Sélectionner tous les BS traitables affichés"
-                      checked={filteredDocumentsTable.filter(d => d.statut !== 'Retourné').length > 0 && filteredDocumentsTable.filter(d => d.statut !== 'Retourné').every(d => selectedDocuments.includes(d.id))}
+                      checked={filteredDocumentsTable.filter(d => d.statut !== 'Retourné' && (!user || d.gestionnaire === user.fullName)).length > 0 && filteredDocumentsTable.filter(d => d.statut !== 'Retourné' && (!user || d.gestionnaire === user.fullName)).every(d => selectedDocuments.includes(d.id))}
                       onChange={(event) => {
-                        const selectableIds = filteredDocumentsTable.filter(d => d.statut !== 'Retourné').map(d => d.id);
+                        const selectableIds = filteredDocumentsTable
+                          .filter(d => d.statut !== 'Retourné' && (!user || d.gestionnaire === user.fullName))
+                          .map(d => d.id);
                         setSelectedDocuments(event.target.checked ? selectableIds : []);
                       }}
                     />
@@ -1176,6 +1178,7 @@ function GestionnaireDashboardNew() {
                 {filteredDocumentsTable.slice((dossiersIndividuelsPage - 1) * 20, dossiersIndividuelsPage * 20).map((document, index) => {
                   const isGestionnaire = user?.role === 'GESTIONNAIRE';
                   const isReturned = document.statut === 'Retourné' || document.statut === 'RETOUR_ADMIN';
+                  const isAssignedToCurrentUser = !isGestionnaire || document.gestionnaire === user?.fullName;
                   const canModify = isGestionnaire 
                     ? (!isReturned && document.gestionnaire === user?.fullName)
                     : (!isReturned && (document.gestionnaire === user?.fullName || user?.role === 'CHEF_EQUIPE' || user?.role === 'SUPER_ADMIN'));
@@ -1195,7 +1198,7 @@ function GestionnaireDashboardNew() {
                           type="checkbox"
                           aria-label={`Sélectionner ${document.reference}`}
                           checked={selectedDocuments.includes(document.id)}
-                          disabled={isReturned}
+                          disabled={isReturned || !isAssignedToCurrentUser}
                           onChange={() => setSelectedDocuments(previous =>
                             previous.includes(document.id)
                               ? previous.filter(id => id !== document.id)

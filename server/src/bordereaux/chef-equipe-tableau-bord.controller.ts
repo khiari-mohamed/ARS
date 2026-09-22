@@ -1045,6 +1045,12 @@ export class ChefEquipeTableauBordController {
       if (req.user?.role === 'GESTIONNAIRE') {
         updateData.statusModifiedByGestionnaire = true;
       }
+      if (req.user?.role === 'GESTIONNAIRE' && body.newStatus === 'Retourné') {
+        updateData.assignedToUserId = null;
+        updateData.assignedByUserId = null;
+        updateData.assignedAt = null;
+        updateData.statusModifiedByGestionnaire = false;
+      }
       
       await this.prisma.document.update({
         where: { id: body.dossierId },

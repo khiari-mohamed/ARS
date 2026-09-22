@@ -54,6 +54,7 @@ import {
   VisibilityOff
 } from '@mui/icons-material';
 import InputAdornment from '@mui/material/InputAdornment';
+import CircularProgress from '@mui/material/CircularProgress';
 import { fetchAllUsers, bulkCreateUsers, bulkUpdateUsers, bulkDeleteUsers, getRoleTemplates, createUserFromTemplate } from '../services/superAdminService';
 import { LocalAPI } from '../services/axios';
 
@@ -498,6 +499,15 @@ const AdvancedUserManagement: React.FC = () => {
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  if (loading) {
+    return (
+      <Box sx={{ p: { xs: 2, md: 3 }, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 2 }}>
+        <CircularProgress size={36} sx={{ color: T.primaryDark }} />
+        <Typography sx={{ fontSize: '0.88rem', color: T.textSecondary }}>Chargement des utilisateurs...</Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
 
@@ -893,6 +903,17 @@ const AdvancedUserManagement: React.FC = () => {
                   </TableRow>
                 ))}
 
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={9}>
+                      <Box sx={{ py: 5, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1.5 }}>
+                        <CircularProgress size={22} sx={{ color: T.primaryDark }} />
+                        <Typography sx={{ fontSize: '0.85rem', color: T.textSecondary }}>Chargement...</Typography>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                )}
+
                 {filteredUsers.length === 0 && !loading && (
                   <TableRow>
                     <TableCell colSpan={9}>
@@ -1213,8 +1234,8 @@ const AdvancedUserManagement: React.FC = () => {
                 value={newUserData.newPassword}
                 onChange={(e) => setNewUserData(prev => ({ ...prev, newPassword: e.target.value }))}
                 placeholder="Laisser vide pour ne pas changer"
-                helperText={newUserData.newPassword.length > 0 && newUserData.newPassword.length < 8 ? 'Min 8 caractères' : 'Optionnel — laisser vide pour conserver'}
-                error={newUserData.newPassword.length > 0 && newUserData.newPassword.length < 8}
+                helperText={newUserData.newPassword.length > 0 && !(/(?=.{8,})(?=.*[A-Z])(?=.*[a-z])(?=.*\d)/).test(newUserData.newPassword) ? 'Min 8 caractères, 1 majuscule, 1 minuscule, 1 chiffre' : 'Optionnel — laisser vide pour conserver'}
+                error={newUserData.newPassword.length > 0 && !(/(?=.{8,})(?=.*[A-Z])(?=.*[a-z])(?=.*\d)/).test(newUserData.newPassword)}
                 InputProps={{
                   startAdornment: <LockReset sx={{ fontSize: 16, color: T.textDisabled, mr: 0.5 }} />,
                   endAdornment: (
@@ -1237,7 +1258,10 @@ const AdvancedUserManagement: React.FC = () => {
           <Button
             onClick={handleUpdateUser}
             variant="contained"
-            disabled={!newUserData.fullName || !newUserData.email}
+            disabled={
+              !newUserData.fullName || !newUserData.email ||
+              (newUserData.newPassword.length > 0 && !(/(?=.{8,})(?=.*[A-Z])(?=.*[a-z])(?=.*\d)/).test(newUserData.newPassword))
+            }
             sx={{
               textTransform: 'none', fontSize: '0.81rem', borderRadius: '6px',
               background: T.primaryDark, '&:hover': { background: T.primaryMid }, boxShadow: 'none',

@@ -136,7 +136,9 @@ export class ExcelValidationService {
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
       const row = worksheet.getRow(rowNumber);
       if (!row.hasValues || columnMap.matricule <= 0) continue;
-      const matricule = (row.getCell(columnMap.matricule).text || row.getCell(columnMap.matricule).value?.toString() || '').trim();
+      const matricule = this.normalizeMatricule(
+        row.getCell(columnMap.matricule).text || row.getCell(columnMap.matricule).value?.toString() || ''
+      );
       if (matricule) matricules.add(matricule);
     }
 
@@ -144,13 +146,12 @@ export class ExcelValidationService {
     if (matricules.size > 0) {
       const adherents = await this.prisma.adherent.findMany({
         where: {
-          clientId: effectiveClientId,
-          matricule: { in: [...matricules] }
+          clientId: effectiveClientId
         },
         include: { client: true }
       });
       for (const adherent of adherents) {
-        adherentByMatricule.set(adherent.matricule, adherent);
+        adherentByMatricule.set(this.normalizeMatricule(adherent.matricule), adherent);
       }
     }
 
@@ -313,7 +314,9 @@ export class ExcelValidationService {
 
     try {
       // Use detected column positions
-      const matricule = columnMap.matricule > 0 ? (row.getCell(columnMap.matricule).text || row.getCell(columnMap.matricule).value?.toString() || '').trim() : '';
+      const matricule = columnMap.matricule > 0
+        ? this.normalizeMatricule(row.getCell(columnMap.matricule).text || row.getCell(columnMap.matricule).value?.toString() || '')
+        : '';
       
       // Handle montant - if column not detected, search all columns for first number
       let montant: number = NaN;
@@ -507,6 +510,14 @@ export class ExcelValidationService {
         }
       };
     }
+  }
+
+  private normalizeMatricule(value: unknown): string {
+    return String(value ?? '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/^(?:\u00D4\u00C7\u00EE|\u00E2\u20AC\u0152|\u00EF\u00BB\u00BF)+/g, '')
+      .trim()
+      .replace(/\.0+$/, '');
   }
   
   private async findOrCreateAdherent(item: VirementValidationItem, clientId: string): Promise<string> {

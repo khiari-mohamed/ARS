@@ -24,6 +24,11 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
 
 interface NotificationDetailModalProps {
   open: boolean;
@@ -161,23 +166,23 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
 
   const getNotificationIcon = (type: string, level?: string) => {
     switch (type) {
-      case 'NEW_BORDEREAU_SCAN': return '📄';
-      case 'BORDEREAU_READY_ASSIGNMENT': return '📋';
-      case 'BORDEREAU_RETURNED': return '↩️';
-      case 'TEAM_OVERLOAD_ALERT': return '⚠️';
-      case 'ASSIGNMENT_FAILURE': return '❌';
-      case 'SLA_BREACH': return '🔴';
-      case 'OV_PENDING_VALIDATION': return '💰';
-      case 'OV_VALIDATED': return '✅';
-      case 'OV_REJECTED': return '❌';
-      case 'VIREMENT_UPDATE': return '💰';
-      case 'DUPLICATE_RIB_APPROVAL_REQUIRED': return '🚨';
-      case 'WORKFLOW_ASSIGNMENT': return '📋';
+      case 'NEW_BORDEREAU_SCAN': return <AssignmentTurnedInIcon fontSize="small" />;
+      case 'BORDEREAU_READY_ASSIGNMENT': return <AssignmentTurnedInIcon fontSize="small" />;
+      case 'BORDEREAU_RETURNED': return <NotificationsActiveOutlinedIcon fontSize="small" />;
+      case 'TEAM_OVERLOAD_ALERT': return <WarningAmberIcon fontSize="small" />;
+      case 'ASSIGNMENT_FAILURE': return <CancelIcon fontSize="small" />;
+      case 'SLA_BREACH': return <WarningAmberIcon fontSize="small" color="error" />;
+      case 'OV_PENDING_VALIDATION': return <InfoOutlinedIcon fontSize="small" />;
+      case 'OV_VALIDATED': return <TaskAltIcon fontSize="small" color="success" />;
+      case 'OV_REJECTED': return <CancelIcon fontSize="small" color="error" />;
+      case 'VIREMENT_UPDATE': return <AssignmentTurnedInIcon fontSize="small" />;
+      case 'DUPLICATE_RIB_APPROVAL_REQUIRED': return <WarningAmberIcon fontSize="small" color="warning" />;
+      case 'WORKFLOW_ASSIGNMENT': return <AssignmentTurnedInIcon fontSize="small" />;
       case 'reclamation': 
-        if (level === 'error') return '🚨';
-        if (level === 'warning') return '⚠️';
-        return '📝';
-      default: return '🔔';
+        if (level === 'error') return <WarningAmberIcon fontSize="small" color="error" />;
+        if (level === 'warning') return <WarningAmberIcon fontSize="small" color="warning" />;
+        return <InfoOutlinedIcon fontSize="small" />;
+      default: return <NotificationsActiveOutlinedIcon fontSize="small" />;
     }
   };
 
@@ -214,11 +219,20 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: 1 }}>
-        <span style={{ fontSize: '24px' }}>
+        <Box sx={{
+          width: 40,
+          height: 40,
+          borderRadius: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: notification._type === 'DUPLICATE_RIB_APPROVAL_REQUIRED' ? 'warning.light' : 'primary.light',
+          color: notification._type === 'DUPLICATE_RIB_APPROVAL_REQUIRED' ? 'warning.dark' : 'primary.dark'
+        }}>
           {getNotificationIcon(notification._type || 'default', notification.data?.level)}
-        </span>
+        </Box>
         <Box sx={{ flex: 1 }}>
-          <Typography variant="h6" component="div">
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700 }}>
             {notification.title || 'Notification'}
           </Typography>
           <Chip 
@@ -233,33 +247,33 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
       <DialogContent>
         {isDuplicateRibNotification ? (
           <Box>
-            <Alert severity="warning" sx={{ mb: 2 }}>
+            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }} icon={<WarningAmberIcon />}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {localData?.importedByName} ({localData?.importedByRole}) a tenté d'importer {localData?.blockedCount} adhérent(s) avec des RIB dupliqués.
               </Typography>
-              <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                Date: {localData?.importDate ? new Date(localData.importDate).toLocaleString('fr-FR') : 'N/A'}
+              <Typography variant="caption" display="block" sx={{ mt: 1, opacity: 0.8 }}>
+                Date : {localData?.importDate ? new Date(localData.importDate).toLocaleString('fr-FR') : 'N/A'}
               </Typography>
             </Alert>
 
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              📊 <strong>Résumé:</strong> {localData?.successCount} importés, {localData?.blockedCount} bloqués, {pendingCount} en attente d'approbation
+            <Typography variant="body2" sx={{ mb: 2, color: 'text.primary' }}>
+              <strong>Résumé :</strong> {localData?.successCount} importés, {localData?.blockedCount} bloqués, {pendingCount} en attente d'approbation.
             </Typography>
 
             {pendingCount > 0 && (
-              <Box sx={{ mb: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  💡 Justification pour approbation en masse:
+              <Box sx={{ mb: 3, p: 2.25, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+                  Justification pour approbation en masse
                 </Typography>
                 <TextField
                   fullWidth
                   multiline
                   rows={2}
-                  placeholder="Ex: Compte conjoint mari/femme, Compte familial, etc."
+                  placeholder="Ex : Compte conjoint mari/femme, compte familial, etc."
                   value={justification}
                   onChange={(e) => setJustification(e.target.value)}
                   size="small"
-                  sx={{ mb: 1 }}
+                  sx={{ mb: 1.5 }}
                 />
                 <Button
                   variant="contained"
@@ -269,18 +283,18 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
                   disabled={processing || !justification.trim()}
                   startIcon={processing ? <CircularProgress size={16} /> : <CheckCircleIcon />}
                 >
-                  ✅ Approuver tous les {pendingCount} RIB(s) en attente
+                  Approuver les {pendingCount} demandes en attente
                 </Button>
               </Box>
             )}
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
-              📋 Liste des RIB dupliqués ({duplicates.length}):
+            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>
+              Liste des RIB dupliqués ({duplicates.length})
             </Typography>
 
-            <Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
+            <Box sx={{ maxHeight: 420, overflowY: 'auto', pr: 0.5 }}>
               {duplicates.map((dup: any, index: number) => (
                 <Box
                   key={dup.id}
@@ -289,19 +303,20 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
                     p: 2,
                     border: '1px solid',
                     borderColor: dup.status === 'APPROVED' ? 'success.main' : dup.status === 'REJECTED' ? 'error.main' : 'warning.main',
-                    borderRadius: 1,
+                    borderRadius: 2,
                     bgcolor: dup.status === 'APPROVED' ? 'success.light' : dup.status === 'REJECTED' ? 'error.light' : 'warning.light',
-                    opacity: dup.status !== 'PENDING' ? 0.7 : 1
+                    opacity: dup.status !== 'PENDING' ? 0.78 : 1
                   }}
                 >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.25 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                       #{index + 1} - {dup.newAdherent.fullName}
                     </Typography>
                     <Chip
-                      label={dup.status === 'APPROVED' ? '✅ Approuvé' : dup.status === 'REJECTED' ? '❌ Rejeté' : '⏳ En attente'}
+                      label={dup.status === 'APPROVED' ? 'Approuvé' : dup.status === 'REJECTED' ? 'Rejeté' : 'En attente'}
                       color={dup.status === 'APPROVED' ? 'success' : dup.status === 'REJECTED' ? 'error' : 'warning'}
                       size="small"
+                      icon={dup.status === 'APPROVED' ? <TaskAltIcon fontSize="small" /> : dup.status === 'REJECTED' ? <CancelIcon fontSize="small" /> : <WarningAmberIcon fontSize="small" />}
                     />
                   </Box>
 
@@ -311,18 +326,18 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
                     sx={{ mb: 1 }}
                   >
                     {expandedDup === dup.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    <Typography variant="caption" sx={{ ml: 1 }}>
+                    <Typography variant="caption" sx={{ ml: 1, fontWeight: 600 }}>
                       {expandedDup === dup.id ? 'Masquer' : 'Voir'} les détails
                     </Typography>
                   </IconButton>
 
                   <Collapse in={expandedDup === dup.id}>
-                    <Table size="small" sx={{ mb: 2 }}>
+                    <Table size="small" sx={{ mb: 2, '& .MuiTableCell-root': { py: 1 } }}>
                       <TableHead>
                         <TableRow>
-                          <TableCell><strong>Champ</strong></TableCell>
-                          <TableCell><strong>Nouvel Adhérent</strong></TableCell>
-                          <TableCell><strong>Adhérent Existant</strong></TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Champ</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Nouvel adhérent</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Adhérent existant</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -332,13 +347,13 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
                           <TableCell>{dup.existingAdherent.matricule}</TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell>Nom Complet</TableCell>
+                          <TableCell>Nom complet</TableCell>
                           <TableCell>{dup.newAdherent.fullName}</TableCell>
                           <TableCell>{dup.existingAdherent.fullName}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>RIB</TableCell>
-                          <TableCell colSpan={2} sx={{ fontFamily: 'monospace', color: 'error.main', fontWeight: 600 }}>
+                          <TableCell colSpan={2} sx={{ fontFamily: 'monospace', color: 'error.main', fontWeight: 700 }}>
                             {dup.newAdherent.rib}
                           </TableCell>
                         </TableRow>
@@ -351,8 +366,8 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
                     </Table>
 
                     {dup.justification && (
-                      <Alert severity="info" sx={{ mb: 1 }}>
-                        <strong>Justification:</strong> {dup.justification}
+                      <Alert severity="info" sx={{ mb: 1, borderRadius: 2 }}>
+                        <strong>Justification :</strong> {dup.justification}
                       </Alert>
                     )}
                   </Collapse>
@@ -365,13 +380,13 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
                         size="small"
                         fullWidth
                         onClick={() => {
-                          const reason = prompt('Justification (optionnelle):', 'Compte conjoint');
+                          const reason = prompt('Justification (optionnelle) :', 'Compte conjoint');
                           if (reason !== null) handleApproveDuplicate(dup.id, reason);
                         }}
                         disabled={processing}
                         startIcon={<CheckCircleIcon />}
                       >
-                        ✅ Approuver
+                        Approuver
                       </Button>
                       <Button
                         variant="outlined"
@@ -379,13 +394,13 @@ const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({
                         size="small"
                         fullWidth
                         onClick={() => {
-                          const reason = prompt('Raison du rejet:', 'Erreur de saisie');
+                          const reason = prompt('Raison du rejet :', 'Erreur de saisie');
                           if (reason) handleRejectDuplicate(dup.id, reason);
                         }}
                         disabled={processing}
                         startIcon={<CancelIcon />}
                       >
-                        ❌ Rejeter
+                        Rejeter
                       </Button>
                     </Box>
                   )}

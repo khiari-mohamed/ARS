@@ -747,16 +747,29 @@ export class BordereauxController {
   @Post('bulk-assign-documents')
   @Roles(UserRole.CHEF_EQUIPE, UserRole.GESTIONNAIRE_SENIOR, UserRole.ADMINISTRATEUR, UserRole.SUPER_ADMIN)
   async bulkAssignDocuments(@Body() data: { documentIds: string[]; userId: string }, @Req() req) {
-    const targetUser = await this.prisma.user.findUnique({ where: { id: data.userId }, select: { role: true } });
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { id: true, role: true, teamLeaderId: true, active: true }
+    });
     if (!targetUser) throw new BadRequestException('Utilisateur cible introuvable');
+    if (!targetUser.active) throw new BadRequestException('Le gestionnaire cible est inactif');
     if (req.user?.role === UserRole.GESTIONNAIRE_SENIOR && targetUser.role !== UserRole.GESTIONNAIRE_SENIOR) {
       throw new BadRequestException('Un Gestionnaire Senior ne peut affecter qu\'un autre Gestionnaire Senior');
     }
     if (!['GESTIONNAIRE', 'GESTIONNAIRE_SENIOR', 'CHEF_EQUIPE'].includes(targetUser.role)) {
       throw new BadRequestException('Utilisateur cible non autorisé pour cette assignation');
     }
+    if (req.user?.role === UserRole.CHEF_EQUIPE && targetUser.teamLeaderId !== req.user.id) {
+      throw new BadRequestException('Le gestionnaire cible doit appartenir à votre équipe');
+    }
     // Ensure none of the documents belong to a bordereau with VIREMENT_EXECUTE
-    const docs = await this.prisma.document.findMany({ where: { id: { in: data.documentIds } }, select: { id: true, bordereauId: true } });
+    const docs = await this.prisma.document.findMany({
+      where: { id: { in: data.documentIds } },
+      select: { id: true, bordereauId: true, assignedToUserId: true, status: true }
+    });
+    if (docs.length !== data.documentIds.length) {
+      throw new BadRequestException('Un ou plusieurs documents sélectionnés sont introuvables');
+    }
     const bordereauIds = Array.from(new Set(docs.map(d => d.bordereauId).filter(Boolean)));
     for (const bid of bordereauIds) {
       await this.ensureBordereauNotVirementExecuted(bid as string);
@@ -764,7 +777,26 @@ export class BordereauxController {
 
     await this.prisma.document.updateMany({
       where: { id: { in: data.documentIds } },
-      data: { assignedToUserId: data.userId }
+      data: { assignedToUserId: data.userId, assignedByUserId: req.user?.id, assignedAt: new Date() }
+    });
+    // A returned BS is read-only until reassigned. Reassignment reopens it
+    // for the new gestionnaire without changing already processed documents.
+    await this.prisma.document.updateMany({
+      where: { id: { in: data.documentIds }, status: 'RETOUR_ADMIN' },
+      data: { status: 'SCANNE', statusModifiedByGestionnaire: false, assignedAt: new Date() }
+    });
+
+    await this.prisma.documentAssignmentHistory.createMany({
+      data: docs.map((document) => ({
+        documentId: document.id,
+        assignedToUserId: data.userId,
+        assignedByUserId: req.user?.id,
+        fromUserId: document.assignedToUserId,
+        action: document.assignedToUserId ? 'REASSIGNED' : 'ASSIGNED',
+        reason: document.assignedToUserId
+          ? 'Réaffectation par le chef d’équipe depuis la liste des dossiers'
+          : 'Assignation par le chef d’équipe depuis la liste des dossiers'
+      }))
     });
     
     return {
@@ -1024,13 +1056,35 @@ export class BordereauxController {
     }
     
     const activeUnassignedStatuses = ['A_AFFECTER', 'SCANNE'];
+    let teamGestionnaireIds: string[] = [];
+
+    if (user.role === UserRole.CHEF_EQUIPE) {
+      const teamGestionnaires = await this.prisma.user.findMany({
+        where: {
+          role: 'GESTIONNAIRE',
+          active: true,
+          teamLeaderId: user.id,
+        },
+        select: { id: true },
+      });
+      teamGestionnaireIds = teamGestionnaires.map((gestionnaire) => gestionnaire.id);
+    }
 
     const [nonAffectes, enCours, traites] = await Promise.all([
       this.prisma.bordereau.findMany({
         where: {
           ...whereClause,
           statut: { in: activeUnassignedStatuses },
-          assignedToUserId: null
+          ...(user.role === UserRole.CHEF_EQUIPE
+            ? teamGestionnaireIds.length > 0
+              ? {
+                  OR: [
+                    { assignedToUserId: null },
+                    { assignedToUserId: { notIn: teamGestionnaireIds } },
+                  ],
+                }
+              : {}
+            : { assignedToUserId: null }),
         },
         include: {
           client: true,
