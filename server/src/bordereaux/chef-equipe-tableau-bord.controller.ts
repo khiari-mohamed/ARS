@@ -10,6 +10,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../auth/user-role.enum';
 import { RedisService } from '../shared/redis.service';
+import { getUploadDirectories, getUploadRelativePath } from './upload-path';
 
 @Controller('bordereaux/chef-equipe/tableau-bord')
 export class ChefEquipeTableauBordController {
@@ -1159,36 +1160,42 @@ export class ChefEquipeTableauBordController {
   async getDossierPDF(@Param('dossierId') dossierId: string, @Req() req: any) {
     const document = await this.prisma.document.findUnique({
       where: { id: dossierId },
-      include: {
-        bordereau: { include: { client: true } }
-      }
+      include: { bordereau: { include: { client: true } } }
     });
 
     if (!document) {
-      return { 
-        success: false, 
-        error: 'Document non trouvé',
-        hasDocument: false
-      };
+      return { success: false, error: 'Document non trouvé', hasDocument: false };
     }
 
-    // Check if document has a valid file path
     if (!document.path || document.path.includes('placeholder')) {
-      return { 
-        success: false, 
-        error: 'PDF non disponible pour ce dossier',
-        hasDocument: false
-      };
+      return { success: false, error: 'PDF non disponible pour ce dossier', hasDocument: false };
     }
 
-    // Clean the path to remove leading slash and construct proper URL
-    const cleanPath = document.path.startsWith('/') ? document.path.substring(1) : document.path;
-    const pdfUrl = `/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/${cleanPath}`;
+    const relativePath = getUploadRelativePath(document.path);
+    if (!relativePath) {
+      return { success: false, error: 'Chemin du document invalide', hasDocument: false };
+    }
 
-    // Return PDF URL or path for viewing
+    const fileExists = getUploadDirectories().some((uploadsDirectory) => {
+      const filePath = path.resolve(uploadsDirectory, relativePath);
+      return filePath.startsWith(`${path.resolve(uploadsDirectory)}${path.sep}`)
+        && fs.existsSync(filePath)
+        && fs.statSync(filePath).isFile();
+    });
+    if (!fileExists) {
+      return { success: false, error: 'Fichier introuvable dans les répertoires uploads', hasDocument: false };
+    }
+
+    const uploadsRelative = `/uploads/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
+
+    // Build a full absolute URL using SERVER_URL env var so the frontend
+    // never has to guess the backend origin (works in both dev and prod)
+    const serverUrl = (process.env.SERVER_URL ?? 'http://localhost:5000').replace(/\/$/, '');
+    const pdfUrl = `${serverUrl}${uploadsRelative}`;
+
     return {
       success: true,
-      pdfUrl: pdfUrl,
+      pdfUrl,
       hasDocument: true,
       documentInfo: {
         name: document.name,
@@ -1242,11 +1249,7 @@ export class ChefEquipeTableauBordController {
   }
 
   private async findFileInUploads(filename: string): Promise<string | null> {
-    // Search in BOTH upload directories (old and new)
-    const uploadsDirs = [
-      path.join(process.cwd(), 'uploads'),           // New: /home/yourapp/server/uploads
-      '/home/yourapp/uploads'                         // Old: /home/yourapp/uploads
-    ];
+    const uploadsDirs = getUploadDirectories();
 
     const searchInDirectory = (dir: string): string | null => {
       if (!fs.existsSync(dir)) return null;

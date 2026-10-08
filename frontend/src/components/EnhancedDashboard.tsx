@@ -520,16 +520,7 @@ const EnhancedDashboard: React.FC = () => {
     try {
       const res = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${documentId}`);
       if (res.data.success && res.data.pdfUrl) {
-        const base = process.env.REACT_APP_API_URL?.replace('/api', '') ?? window.location.origin;
-        let url = res.data.pdfUrl;
-        const idx = url.indexOf('/uploads/');
-        if (idx !== -1) url = url.substring(idx);
-        else {
-          url = url.replace('/api/bordereaux/chef-equipe/tableau-bord/serve-pdf/', '');
-          url = url.replace('/serve-pdf/', '');
-          if (!url.startsWith('/')) url = '/' + url;
-        }
-        window.open(`${base}${url.replace(/\/\/+/g, '/')}`, '_blank');
+        window.open(res.data.pdfUrl, '_blank');
       } else {
         alert(res.data.error ?? `PDF non disponible : ${documentName}`);
       }
@@ -563,8 +554,7 @@ const EnhancedDashboard: React.FC = () => {
     try {
       const res = await LocalAPI.get(`/bordereaux/chef-equipe/tableau-bord/dossier-pdf/${dossier.id}`);
       if (res.data.success && res.data.pdfUrl) {
-        const base = process.env.REACT_APP_API_URL?.replace('/api', '') ?? window.location.origin;
-        window.open(`${base}${res.data.pdfUrl}`, '_blank');
+        window.open(res.data.pdfUrl, '_blank');
       } else {
         alert(res.data.error ?? 'PDF non disponible');
       }
@@ -797,8 +787,7 @@ const EnhancedDashboard: React.FC = () => {
 
     const handlePDFModal = (ev: any) => {
       const { pdfUrl, document: doc } = ev.detail;
-      const base = process.env.REACT_APP_API_URL?.replace('/api', '') ?? window.location.origin;
-      setCurrentSuperAdminPDFUrl(`${base}${pdfUrl}`);
+      setCurrentSuperAdminPDFUrl(pdfUrl);
       setCurrentSuperAdminDossier(doc);
       setShowSuperAdminPDFModal(true);
     };

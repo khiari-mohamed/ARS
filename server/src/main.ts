@@ -7,7 +7,7 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import * as express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import * as path from 'path';
+import { getUploadDirectories } from './bordereaux/upload-path';
 
 async function bootstrap() {
   const expressApp = express();
@@ -34,10 +34,12 @@ async function bootstrap() {
   expressApp.use(express.json({ limit: '10gb' }));
   expressApp.use(express.urlencoded({ limit: '10gb', extended: true }));
   
-  // Serve static files from uploads directory at Express level
-  // Upload writers use process.cwd()/uploads in both source and compiled runs.
-  const uploadsPath = path.resolve(process.cwd(), 'uploads');
-  expressApp.use('/uploads', express.static(uploadsPath));
+  // Serve current and legacy upload roots under the same stable public URL.
+  // Older files may still live under server/uploads while the API runs from
+  // the project root, so each directory acts as a fallback for the others.
+  for (const uploadsPath of getUploadDirectories()) {
+    expressApp.use('/uploads', express.static(uploadsPath));
+  }
   
   const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
   app.enableCors();
