@@ -16,7 +16,7 @@ shap==0.43.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
-torch==2.1.0
+torch==2.13.0
 transformers==4.35.0
 asyncopg==0.29.0
 psycopg2-binary==2.9.7
